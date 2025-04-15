@@ -43,10 +43,10 @@ func ScanDirectory(rootDir string) ([]Book, error) {
 		ext := strings.ToLower(filepath.Ext(path))
 		for _, supportedExt := range config.AppConfig.SupportedExtensions {
 			if ext == supportedExt {
-				relPath, err := filepath.Rel(rootDir, path)
-				if err != nil {
-					relPath = path
-				}
+				// Calculate relative path for informational purposes if needed later
+				// We're not using the relative path right now, but keeping the calculation
+				// in case it's needed in the future
+				_, _ = filepath.Rel(rootDir, path)
 
 				books = append(books, Book{
 					FilePath: path,
@@ -89,13 +89,17 @@ func ProcessBooks(books []Book) error {
 		books[i].Position = position
 
 		// Save to database
-		saveBookToDatabase(&books[i])
+		if err := saveBookToDatabase(&books[i]); err != nil {
+			fmt.Printf("Warning: Failed to save book to database: %v\n", err)
+		}
 
 		bar.Add(1)
 	}
 
 	// After processing all books, try to match series using external APIs for uncertain cases
-	identifySeriesUsingExternalAPIs(books)
+	if err := identifySeriesUsingExternalAPIs(books); err != nil {
+		fmt.Printf("Warning: Error identifying series using external APIs: %v\n", err)
+	}
 
 	return nil
 }
