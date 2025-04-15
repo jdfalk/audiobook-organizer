@@ -133,7 +133,7 @@ var organizeCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("scan error: %w", err)
 		}
-		fmt.Printf("Found %d audiobooks\n", len(books)
+		fmt.Printf("Found %d audiobooks\n", len(books))
 
 		// Step 2: Process books and identify series
 		fmt.Println("Processing audiobooks and identifying series...")
