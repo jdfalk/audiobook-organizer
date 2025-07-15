@@ -1,0 +1,23 @@
+# file: .github/workflows/stale.yml
+# version: 1.0.0
+# guid: 336b7a2d-c53a-4ef2-927e-3bdfd733c528
+
+name: Handle Stale Issues
+
+permissions:
+  issues: write
+  pull-requests: write
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+jobs:
+  call-stale:
+    uses: ./.github/workflows/reusable-stale.yml
+    with:
+      days-before-stale: 90
+      days-before-close: 14
+    secrets:
+      github-token: ${{ secrets.JF_CI_GH_PAT }}

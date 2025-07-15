@@ -1,0 +1,191 @@
+# file: .github/workflows/reusable-semantic-versioning.yml
+# version: 1.1.0
+# guid: a1b2c3d4-e5f6-7890-1234-567890abcdef
+
+name: Reusable - Semantic Versioning
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: "Run in dry-run mode (no changes will be made)"
+        required: false
+        default: false
+        type: boolean
+      version-files:
+        description: 'JSON array of files to update with new version (e.g. ["package.json", "version.txt"])'
+        required: false
+        default: "[]"
+        type: string
+      version-pattern:
+        description: "Regex pattern to find version in files"
+        required: false
+        default: '"version":\s*"[^"]*"'
+        type: string
+      tag-prefix:
+        description: 'Prefix for git tags (e.g. "v" for v1.0.0)'
+        required: false
+        default: "v"
+        type: string
+      update-pr-title:
+        description: "Update PR title with version bump type"
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      version:
+        description: "The calculated version"
+        value: ${{ jobs.version.outputs.version }}
+      version-tag:
+        description: "The version tag (with prefix)"
+        value: ${{ jobs.version.outputs.version-tag }}
+      release-type:
+        description: "The type of release (major, minor, patch)"
+        value: ${{ jobs.version.outputs.release-type }}
+      should-release:
+        description: "Whether a release should be created"
+        value: ${{ jobs.version.outputs.should-release }}
+
+# Explicit permissions required for this reusable workflow
+permissions:
+  contents: write # For creating commits, tags, and releases
+  issues: write # For updating issues referenced in commits
+  pull-requests: write # For updating PR titles and descriptions
+  actions: read # For workflow access
+  checks: write # For workflow status
+
+jobs:
+  version:
+    name: Calculate and Update Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.semantic.outputs.new_release_version }}
+      version-tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+      release-type: ${{ steps.semantic.outputs.new_release_type }}
+      should-release: ${{ steps.semantic.outputs.new_release_published }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release@^23.0.0 \
+            @semantic-release/changelog@^6.0.0 \
+            @semantic-release/git@^10.0.0 \
+            @semantic-release/github@^10.0.0 \
+            @semantic-release/exec@^6.0.0
+
+      - name: Create semantic-release config
+        env:
+          TAG_PREFIX: ${{ inputs.tag-prefix }}
+          VERSION_FILES: ${{ inputs.version-files }}
+        run: |
+          cat > .releaserc.json << EOF
+          {
+            "branches": ["main", "master"],
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              [
+                "@semantic-release/changelog",
+                {
+                  "changelogFile": "CHANGELOG.md"
+                }
+              ],
+              [
+                "@semantic-release/exec",
+                {
+                  "prepareCmd": "echo 'VERSION=\${nextRelease.version}' >> \$GITHUB_ENV && echo 'TAG=${TAG_PREFIX}\${nextRelease.version}' >> \$GITHUB_ENV"
+                }
+              ],
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["CHANGELOG.md", "${VERSION_FILES}"],
+                  "message": "chore(release): \${nextRelease.version} [skip ci]\\n\\n\${nextRelease.notes}"
+                }
+              ],
+              [
+                "@semantic-release/github",
+                {
+                  "successComment": false,
+                  "failTitle": false,
+                  "labels": false,
+                  "releasedLabels": false
+                }
+              ]
+            ]
+          }
+          EOF
+
+      - name: Run semantic-release
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          if [ "${DRY_RUN}" = "true" ]; then
+            npx semantic-release --dry-run --no-ci
+          else
+            npx semantic-release --no-ci
+          fi
+
+      - name: Update version files
+        if: steps.semantic.outputs.new_release_published == 'true' && inputs.version-files != '[]'
+        run: |
+          VERSION="${{ steps.semantic.outputs.new_release_version }}"
+          FILES='${{ inputs.version-files }}'
+          PATTERN='${{ inputs.version-pattern }}'
+
+          echo "$FILES" | jq -r '.[]' | while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Updating version in $file"
+              if [[ "$file" == *.json ]]; then
+                jq --arg version "$VERSION" '.version = $version' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+              else
+                sed -i.bak "s|$PATTERN|\"version\": \"$VERSION\"|g" "$file" && rm -f "${file}.bak"
+              fi
+            fi
+          done
+
+      - name: Update PR title
+        if: github.event_name == 'pull_request' && inputs.update-pr-title == true && steps.semantic.outputs.new_release_type != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TYPE="${{ steps.semantic.outputs.new_release_type }}"
+          PR_NUMBER="${{ github.event.number }}"
+          CURRENT_TITLE="${{ github.event.pull_request.title }}"
+
+          # Remove any existing release type prefix
+          CLEAN_TITLE=$(echo "$CURRENT_TITLE" | sed -E 's/^(feat|fix|perf|docs|style|refactor|test|chore|build|ci|revert|breaking)(\([^)]*\))?: //')
+
+          # Add new release type prefix
+          case "$RELEASE_TYPE" in
+            "major")
+              NEW_TITLE="feat!: $CLEAN_TITLE"
+              ;;
+            "minor")
+              NEW_TITLE="feat: $CLEAN_TITLE"
+              ;;
+            "patch")
+              NEW_TITLE="fix: $CLEAN_TITLE"
+              ;;
+            *)
+              NEW_TITLE="$CURRENT_TITLE"
+              ;;
+          esac
+
+          if [ "$NEW_TITLE" != "$CURRENT_TITLE" ]; then
+            gh pr edit "$PR_NUMBER" --title "$NEW_TITLE"
+          fi

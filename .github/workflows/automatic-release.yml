@@ -1,0 +1,339 @@
+# file: .github/workflows/automatic-release.yml
+name: Automatic Release
+
+on:
+  workflow_call:
+    inputs:
+      release-type:
+        description: "Type of release (auto, major, minor, patch)"
+        required: false
+        default: "auto"
+        type: string
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "Create draft release"
+        required: false
+        default: false
+        type: boolean
+      generate-notes:
+        description: "Auto-generate release notes"
+        required: false
+        default: true
+        type: boolean
+      include-artifacts:
+        description: "Include build artifacts in release"
+        required: false
+        default: true
+        type: boolean
+      artifact-patterns:
+        description: "Glob patterns for artifacts to include (JSON array)"
+        required: false
+        default: '["*.tar.gz", "*.zip", "*.deb", "*.rpm", "checksums.txt"]'
+        type: string
+      container-image:
+        description: "Container image to include in release notes"
+        required: false
+        default: ""
+        type: string
+      slack-webhook:
+        description: "Slack webhook URL for notifications"
+        required: false
+        default: ""
+        type: string
+      teams-webhook:
+        description: "Microsoft Teams webhook URL for notifications"
+        required: false
+        default: ""
+        type: string
+    outputs:
+      release-id:
+        description: "The release ID"
+        value: ${{ jobs.release.outputs.release-id }}
+      release-url:
+        description: "The release URL"
+        value: ${{ jobs.release.outputs.release-url }}
+      release-tag:
+        description: "The release tag"
+        value: ${{ jobs.release.outputs.release-tag }}
+      release-upload-url:
+        description: "The release upload URL"
+        value: ${{ jobs.release.outputs.release-upload-url }}
+
+jobs:
+  release:
+    name: Create Automatic Release
+    runs-on: ubuntu-latest
+    outputs:
+      release-id: ${{ steps.create-release.outputs.id }}
+      release-url: ${{ steps.create-release.outputs.html_url }}
+      release-tag: ${{ steps.version.outputs.tag }}
+      release-upload-url: ${{ steps.create-release.outputs.upload_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use GH_SYNC_TOKEN if set, otherwise fallback to GITHUB_TOKEN
+          token: ${{ secrets.GH_SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Check for Python tests
+        id: check-python-tests
+        run: |
+          if ls test/**/*.py 2>/dev/null | grep -q .; then
+            echo "has_python_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_python_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          npm install -g conventional-changelog-cli@^4.0.0
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Calculate version
+        id: version
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Remove 'v' prefix if present
+          CURRENT_VERSION=$(echo "$LATEST_TAG" | sed 's/^v//')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Parse version components
+          IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+          MAJOR=${VERSION_PARTS[0]:-0}
+          MINOR=${VERSION_PARTS[1]:-0}
+          PATCH=${VERSION_PARTS[2]:-0}
+
+          # Determine version bump based on commit messages
+          if [ "${{ inputs.release-type }}" = "auto" ]; then
+            # Get commits since last tag
+            COMMITS=$(git log "$LATEST_TAG"..HEAD --oneline --pretty=format:"%s" 2>/dev/null || git log --oneline --pretty=format:"%s")
+
+            # Check for breaking changes
+            if echo "$COMMITS" | grep -E "(BREAKING CHANGE|!:)" > /dev/null; then
+              RELEASE_TYPE="major"
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            # Check for features
+            elif echo "$COMMITS" | grep -E "^feat(\(.*\))?:" > /dev/null; then
+              RELEASE_TYPE="minor"
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            # Check for fixes or other changes
+            elif echo "$COMMITS" | grep -E "^(fix|perf|revert)(\(.*\))?:" > /dev/null; then
+              RELEASE_TYPE="patch"
+              PATCH=$((PATCH + 1))
+            else
+              # No conventional commits found, default to patch
+              RELEASE_TYPE="patch"
+              PATCH=$((PATCH + 1))
+            fi
+          else
+            RELEASE_TYPE="${{ inputs.release-type }}"
+            case "$RELEASE_TYPE" in
+              "major")
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              "minor")
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              "patch")
+                PATCH=$((PATCH + 1))
+                ;;
+            esac
+          fi
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          NEW_TAG="v$NEW_VERSION"
+
+          echo "release-type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "previous-tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release-notes
+        if: inputs.generate-notes == true
+        run: |
+          PREVIOUS_TAG="${{ steps.version.outputs.previous-tag }}"
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+
+          # Generate conventional changelog
+          if [ "$PREVIOUS_TAG" != "v0.0.0" ]; then
+            RANGE="$PREVIOUS_TAG..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          # Create release notes
+          cat > release-notes.md << EOF
+          # Release $NEW_TAG
+
+          ## What's Changed
+
+          EOF
+
+          # Add conventional changelog
+          conventional-changelog -p angular -r 1 >> release-notes.md || {
+            echo "## Changes" >> release-notes.md
+            git log "$RANGE" --oneline --pretty=format:"* %s (%h)" >> release-notes.md
+          }
+
+          # Add container image info if provided
+          if [ -n "${{ inputs.container-image }}" ]; then
+            cat >> release-notes.md << EOF
+
+          ## Container Image
+
+          \`\`\`
+          docker pull ${{ inputs.container-image }}
+          \`\`\`
+          EOF
+          fi
+
+          # Add checksums if available
+          if [ -f "checksums.txt" ]; then
+            cat >> release-notes.md << EOF
+
+          ## Checksums
+
+          \`\`\`
+          $(cat checksums.txt)
+          \`\`\`
+          EOF
+          fi
+
+          echo "notes-file=release-notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create Git tag
+        run: |
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
+
+      - name: Collect artifacts
+        id: artifacts
+        if: inputs.include-artifacts == true
+        run: |
+          PATTERNS='${{ inputs.artifact-patterns }}'
+          ARTIFACTS_DIR="./release-artifacts"
+          mkdir -p "$ARTIFACTS_DIR"
+
+          # Download artifacts from current workflow
+          if command -v gh > /dev/null 2>&1; then
+            gh run download "${{ github.run_id }}" --dir "$ARTIFACTS_DIR" || echo "No artifacts to download from current run"
+          fi
+
+          # Find additional artifacts based on patterns
+          echo "$PATTERNS" | jq -r '.[]' | while read -r pattern; do
+            find . -name "$pattern" -type f -not -path "./$ARTIFACTS_DIR/*" -exec cp {} "$ARTIFACTS_DIR/" \; || true
+          done
+
+          # List collected artifacts
+          if [ -d "$ARTIFACTS_DIR" ] && [ "$(ls -A "$ARTIFACTS_DIR")" ]; then
+            echo "Collected artifacts:"
+            ls -la "$ARTIFACTS_DIR"
+            echo "artifacts-dir=$ARTIFACTS_DIR" >> $GITHUB_OUTPUT
+            echo "has-artifacts=true" >> $GITHUB_OUTPUT
+          else
+            echo "No artifacts found"
+            echo "has-artifacts=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        id: create-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+          RELEASE_NOTES_FILE="${{ steps.release-notes.outputs.notes-file }}"
+
+          # Prepare release command
+          RELEASE_CMD="gh release create '$NEW_TAG' --title 'Release $NEW_TAG'"
+
+          if [ "${{ inputs.draft }}" = "true" ]; then
+            RELEASE_CMD="$RELEASE_CMD --draft"
+          fi
+
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            RELEASE_CMD="$RELEASE_CMD --prerelease"
+          fi
+
+          if [ -f "$RELEASE_NOTES_FILE" ]; then
+            RELEASE_CMD="$RELEASE_CMD --notes-file '$RELEASE_NOTES_FILE'"
+          else
+            RELEASE_CMD="$RELEASE_CMD --generate-notes"
+          fi
+
+          # Add artifacts if available
+          if [ "${{ steps.artifacts.outputs.has-artifacts }}" = "true" ]; then
+            ARTIFACTS_DIR="${{ steps.artifacts.outputs.artifacts-dir }}"
+            find "$ARTIFACTS_DIR" -type f -exec echo "$RELEASE_CMD '{}'" \; | head -1 | sh
+
+            # Upload remaining artifacts
+            find "$ARTIFACTS_DIR" -type f -exec gh release upload "$NEW_TAG" {} \;
+          else
+            eval "$RELEASE_CMD"
+          fi
+
+          # Get release information
+          RELEASE_INFO=$(gh release view "$NEW_TAG" --json id,htmlUrl,uploadUrl)
+          echo "id=$(echo "$RELEASE_INFO" | jq -r '.id')" >> $GITHUB_OUTPUT
+          echo "html_url=$(echo "$RELEASE_INFO" | jq -r '.htmlUrl')" >> $GITHUB_OUTPUT
+          echo "upload_url=$(echo "$RELEASE_INFO" | jq -r '.uploadUrl')" >> $GITHUB_OUTPUT
+
+      - name: Generate security attestation
+        if: steps.create-release.outputs.id != ''
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          # Install cosign
+          curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+          sudo chmod +x /usr/local/bin/cosign
+
+          # Create attestation for release
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+
+          cat > release-attestation.json << EOF
+          {
+            "releaseType": "github-release",
+            "tag": "$NEW_TAG",
+            "repository": "${{ github.repository }}",
+            "commit": "${{ github.sha }}",
+            "releaseId": "${{ steps.create-release.outputs.id }}",
+            "releaseUrl": "${{ steps.create-release.outputs.html_url }}",
+            "buildTimestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
+            "actor": "${{ github.actor }}",
+            "workflow": "${{ github.workflow }}"
+          }
+          EOF
+
+          # Sign the attestation
+          cosign attest --predicate release-attestation.json --type custom "${{ github.server_url }}/${{ github.repository }}@${{ github.sha }}" --yes || echo "Attestation signing failed"
+
+      # Example of a conditional pytest/coverage step (add this where your Python test step is):
+      # - name: Run Python tests with coverage
+      #   if: steps.check-python-tests.outputs.has_python_tests == 'true'
+      #   run: |
+      #     python -m pytest test/ -v --cov=scripts

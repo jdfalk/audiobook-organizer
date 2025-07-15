@@ -1,0 +1,70 @@
+# file: .github/workflows/intelligent-sync-to-repos.yml
+# version: 1.0.0
+# guid: b2c3d4e5-f6a7-8901-2345-6789abcdef01
+
+name: Intelligent Sync Files to Repos
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repos:
+        description: "Comma-separated list of target repos (e.g. jdfalk/subtitle-manager,jdfalk/gcommon,jdfalk/codex-cli)"
+        required: false
+        default: "jdfalk/subtitle-manager,jdfalk/gcommon,jdfalk/codex-cli"
+      branch_name:
+        description: "Branch name to push changes to in target repos"
+        required: false
+        default: "sync-github-structure"
+      dry_run:
+        description: "Dry run mode (show what would be done without executing)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  intelligent-sync:
+    name: Intelligent Sync to Target Repos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout ghcommon
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run intelligent sync script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            python scripts/intelligent_sync_to_repos.py \
+              --repos "${{ github.event.inputs.target_repos }}" \
+              --branch "${{ github.event.inputs.branch_name }}" \
+              --dry-run
+          else
+            python scripts/intelligent_sync_to_repos.py \
+              --repos "${{ github.event.inputs.target_repos }}" \
+              --branch "${{ github.event.inputs.branch_name }}"
+          fi
+
+      - name: Show sync summary
+        if: always()
+        run: |
+          if [ -f intelligent-sync-summary.log ]; then
+            echo "=== SYNC SUMMARY ==="
+            cat intelligent-sync-summary.log
+          else
+            echo "No summary generated."
+          fi
+
+      - name: Upload sync summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-summary
+          path: intelligent-sync-summary.log
+          retention-days: 30

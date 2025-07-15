@@ -68,3 +68,8 @@ For more detailed information, see the [Technical Design Document](docs/technica
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+## Repository Automation
+
+This project uses standard workflows and scripts from [ghcommon](https://github.com/jdfalk/ghcommon).
