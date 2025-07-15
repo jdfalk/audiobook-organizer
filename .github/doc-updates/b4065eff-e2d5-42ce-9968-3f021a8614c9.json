@@ -1,0 +1,16 @@
+{
+  "file": "docs/technical_design.md",
+  "mode": "insert-after",
+  "content": "6. **Library Organization**:\n   - Optionally create a structured library using hard links, reflinks, or copies\n   - Support multiple layout styles including iTunes-compatible organization",
+  "guid": "b4065eff-e2d5-42ce-9968-3f021a8614c9",
+  "created_at": "2025-07-15T03:37:37Z",
+  "options": {
+    "section": null,
+    "after": "-   - Smart playlist generation based on listening habits",
+    "before": null,
+    "task_id": null,
+    "badge_name": null,
+    "priority": null,
+    "category": null
+  }
+}
