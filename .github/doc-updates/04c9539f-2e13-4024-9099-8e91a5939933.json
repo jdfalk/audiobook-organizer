@@ -1,0 +1,16 @@
+{
+  "file": "README.md",
+  "mode": "insert-after",
+  "content": "- **Library organization**: Optionally create hard links, reflinks, or copies in a structured library compatible with iTunes and other layouts",
+  "guid": "04c9539f-2e13-4024-9099-8e91a5939933",
+  "created_at": "2025-07-15T03:37:28Z",
+  "options": {
+    "section": null,
+    "after": "- **Metadata tagging**: Updates audio files with series information",
+    "before": null,
+    "task_id": null,
+    "badge_name": null,
+    "priority": null,
+    "category": null
+  }
+}

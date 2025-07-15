@@ -1,0 +1,16 @@
+{
+  "file": "docs/ai_helper.md",
+  "mode": "insert-after",
+  "content": "8. **Library Organization**: Allow creation of a separate library using hard links, reflinks, or copies with layouts compatible with iTunes and popular structures",
+  "guid": "7d00b787-b30f-4cc0-9e7e-ed206c80d142",
+  "created_at": "2025-07-15T03:37:49Z",
+  "options": {
+    "section": null,
+    "after": "7. **Smart Playlists**: Generate playlists based on genre, narrator, or other criteria",
+    "before": null,
+    "task_id": null,
+    "badge_name": null,
+    "priority": null,
+    "category": null
+  }
+}
