@@ -1,0 +1,19 @@
+{
+  "_fileHeader": {
+    "file": ".github/linters/.stylelintrc.json",
+    "version": "1.0.0",
+    "guid": "4e5f6a7b-8c9d-0e1f-2a3b-4c5d6e7f8a9b"
+  },
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "no-duplicate-selectors": true,
+    "selector-max-id": 0,
+    "rule-empty-line-before": [
+      "always",
+      {
+        "except": ["first-nested"],
+        "ignore": ["after-comment"]
+      }
+    ]
+  }
+}

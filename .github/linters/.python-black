@@ -1,0 +1,20 @@
+# file: .github/linters/.python-black
+# version: 1.0.0
+# guid: d1e2f3a4-b5c6-789d-ef01-23456789abcd
+
+[tool.black]
+line-length = 80
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.tox
+  | \.mypy_cache
+  | \.pytest_cache
+  | __pycache__
+  | build
+  | dist
+)/
+'''
