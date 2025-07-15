@@ -1,0 +1,16 @@
+{
+  "file": "README.md",
+  "mode": "append",
+  "content": "\n## Repository Automation\n\nThis project uses standard workflows and scripts from [ghcommon](https://github.com/jdfalk/ghcommon).\n",
+  "guid": "08e97299-da16-4029-a936-a4c7fe9c6ac2",
+  "created_at": "2025-07-14T13:22:44Z",
+  "options": {
+    "section": null,
+    "after": null,
+    "before": null,
+    "task_id": null,
+    "badge_name": null,
+    "priority": null,
+    "category": null
+  }
+}

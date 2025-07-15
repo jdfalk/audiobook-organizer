@@ -1,0 +1,16 @@
+{
+  "file": "TODO.md",
+  "mode": "task-add",
+  "content": "- [ ] 🟡 **General**: Configure GitHub workflows",
+  "guid": "6658d073-9e90-4364-9028-9bcd0370699e",
+  "created_at": "2025-07-14T13:21:11Z",
+  "options": {
+    "section": null,
+    "after": null,
+    "before": null,
+    "task_id": null,
+    "badge_name": null,
+    "priority": null,
+    "category": null
+  }
+}

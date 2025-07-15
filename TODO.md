@@ -1,0 +1,2 @@
+
+- [ ] 🟡 **General**: Configure GitHub workflows
