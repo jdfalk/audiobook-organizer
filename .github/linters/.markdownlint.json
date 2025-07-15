@@ -1,0 +1,10 @@
+{
+  "extends": "markdownlint/style/all",
+  "MD007": { "indent": 4 },
+  "MD013": { "line_length": 100 },
+  "MD033": false,
+  "MD041": false,
+  "MD046": { "style": "fenced" },
+  "MD040": true,
+  "MD024": { "siblings_only": true }
+}

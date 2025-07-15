@@ -1,0 +1,387 @@
+# file: .github/workflows/reusable-ai-rebase.yml
+# version: 1.2.0
+# guid: 8baaa277-345e-4c24-8659-47c93e0f3a8d
+
+name: Reusable - AI Rebase Conflicted PRs
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        description: "Branch to rebase onto"
+        required: false
+        default: "main"
+        type: string
+      model:
+        description: "Model to use for inference"
+        required: false
+        default: "openai/gpt-4o"
+        type: string
+    secrets:
+      github-token:
+        description: "GitHub token with write access"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  models: read
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.find.outputs.list }}
+    steps:
+      - uses: actions/github-script@v7
+        id: find
+        with:
+          github-token: ${{ secrets.github-token }}
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+            const conflicted = [];
+            for (const pr of prs) {
+              let full = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+              });
+
+              // GitHub may return 'unknown' mergeable_state on first request
+              if (full.data.mergeable_state === 'unknown') {
+                await new Promise(r => setTimeout(r, 2000));
+                full = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                });
+              }
+
+              const state = full.data.mergeable_state;
+              core.info(`PR #${pr.number} state: ${state}`);
+              if (state === 'dirty' || state === 'behind') {
+                conflicted.push({ number: pr.number, branch: pr.head.ref });
+              }
+            }
+            core.setOutput('list', JSON.stringify(conflicted));
+            core.info(`Found ${conflicted.length} conflicted PR(s)`);
+
+  rebase:
+    runs-on: ubuntu-latest
+    needs: find
+    if: needs.find.outputs.list != '[]'
+    strategy:
+      matrix:
+        pr: ${{ fromJson(needs.find.outputs.list) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare branch
+        env:
+          PR_BRANCH: ${{ matrix.pr.branch }}
+          BASE_BRANCH: ${{ inputs.base-branch }}
+        run: |
+          source .github/scripts/ci-status.sh
+          print_status "Fetching and rebasing branch $PR_BRANCH onto $BASE_BRANCH"
+          git fetch origin "${PR_BRANCH}"
+          git checkout -B "${PR_BRANCH}" "origin/${PR_BRANCH}"
+          git rebase "origin/${BASE_BRANCH}" || print_error "Rebase failed, continuing for conflict detection"
+
+      - name: Detect conflicts
+        id: conflicts
+        run: |
+          source .github/scripts/ci-status.sh
+          if git ls-files -u | grep -q .; then
+            print_status "Conflicts detected"
+            echo "has_conflict=true" >> "$GITHUB_OUTPUT"
+          else
+            print_success "No conflicts detected"
+            echo "has_conflict=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect conflict information
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        id: conflict_info
+        run: |
+          source .github/scripts/ci-status.sh
+          print_status "Collecting conflict information"
+          echo "=== Conflicted Files ===" > conflict_summary.txt
+          conflicted_files=$(git ls-files -u | cut -f2 | sort -u)
+          echo "$conflicted_files" >> conflict_summary.txt
+          echo "" >> conflict_summary.txt
+
+          echo "=== Conflict Count ===" >> conflict_summary.txt
+          echo "Total conflicted files: $(echo "$conflicted_files" | wc -l)" >> conflict_summary.txt
+          echo "" >> conflict_summary.txt
+
+          # Instead of dumping full file contents, create manageable conflict context
+          echo "=== Conflict Preview ===" >> conflict_summary.txt
+          for file in $conflicted_files; do
+            echo "--- File: $file ---" >> conflict_summary.txt
+            # Only include conflict markers and surrounding context (max 50 lines per file)
+            if [ -f "$file" ]; then
+              grep -n -A 3 -B 3 "^<<<<<<< |^======= |^>>>>>>> " "$file" 2>/dev/null | head -50 >> conflict_summary.txt || true
+            fi
+            echo "" >> conflict_summary.txt
+          done
+
+          print_status "Conflict summary written to conflict_summary.txt"
+          echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+          echo "conflict_count=$(echo "$conflicted_files" | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare repository context
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        run: |
+          # Create repository context file by combining template with actual repo content
+          if [ -f ".github/prompts/ai-rebase-context.md" ]; then
+            echo "Using repository-specific AI rebase context"
+            cp .github/prompts/ai-rebase-context.md repo_context.txt
+          else
+            echo "Creating minimal context from repository files"
+            # Create minimal context if repo-specific file doesn't exist
+            cat <<EOF > repo_context.txt
+          # Repository Context
+
+          ## Project: ${{ github.repository }}
+
+          ## Project Overview
+          EOF
+
+            # Add project description from README
+            if [ -f "README.md" ]; then
+              echo "### README.md (excerpt)" >> repo_context.txt
+              # Extract the first paragraph after the title
+              sed -n '1,/^##/p' README.md | head -20 >> repo_context.txt
+              echo "" >> repo_context.txt
+            fi
+
+            # Add coding standards
+            if [ -f ".github/instructions/general-coding.instructions.md" ]; then
+              echo "### Coding Standards" >> repo_context.txt
+              head -30 .github/instructions/general-coding.instructions.md >> repo_context.txt
+              echo "" >> repo_context.txt
+            fi
+
+            # Add commit message guidelines
+            if [ -f ".github/commit-messages.md" ]; then
+              echo "### Commit Message Format" >> repo_context.txt
+              head -20 .github/commit-messages.md >> repo_context.txt
+              echo "" >> repo_context.txt
+            fi
+
+            # Add language-specific information
+            echo "### Project Structure" >> repo_context.txt
+            if [ -f "go.mod" ]; then
+              echo "- Go project with modules" >> repo_context.txt
+              echo "- Main module: $(head -1 go.mod)" >> repo_context.txt
+            fi
+            if [ -f "package.json" ]; then
+              echo "- Node.js/JavaScript project" >> repo_context.txt
+            fi
+            if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+              echo "- Python project" >> repo_context.txt
+            fi
+            if [ -f "Dockerfile" ]; then
+              echo "- Dockerized application" >> repo_context.txt
+            fi
+            echo "" >> repo_context.txt
+
+            # Add important directories
+            echo "### Key Directories" >> repo_context.txt
+            for dir in src pkg cmd internal lib app components; do
+              if [ -d "$dir" ]; then
+                echo "- \`$dir/\` - $(find "$dir" -name "*.go" -o -name "*.js" -o -name "*.py" -o -name "*.ts" | wc -l | tr -d ' ') source files" >> repo_context.txt
+              fi
+            done
+            echo "" >> repo_context.txt
+          fi
+
+      - name: Prepare system prompt
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        run: |
+          # Combine system prompt with repository context
+          cat .github/prompts/ai-rebase-system.prompt.md > system_prompt.txt
+          echo "" >> system_prompt.txt
+          echo "## Repository Context" >> system_prompt.txt
+          cat repo_context.txt >> system_prompt.txt
+
+      - name: Prepare AI prompt
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        env:
+          PR_BRANCH: ${{ matrix.pr.branch }}
+          BASE_BRANCH: ${{ inputs.base-branch }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Create a focused prompt with file-based conflict details
+          cat <<EOF > prompt.txt
+          I need help resolving merge conflicts that occurred during a rebase operation.
+
+          **Context:**
+          - Branch: ${PR_BRANCH}
+          - Base: ${BASE_BRANCH}
+          - Repository: ${REPOSITORY}
+          - Conflicted files: ${{ steps.conflict_info.outputs.conflict_count }}
+
+          **Conflict Information:**
+          EOF
+
+          # Append the conflict summary from file (not env var)
+          cat conflict_summary.txt >> prompt.txt
+
+          cat <<'EOF' >> prompt.txt
+
+          **Detailed Conflict Analysis:**
+          EOF
+
+          # Add detailed conflict content for each file (controlled size)
+          for file in $(git ls-files -u | cut -f2 | sort -u); do
+            echo "### File: $file" >> prompt.txt
+            if [ -f "$file" ]; then
+              # Show the actual conflicted content with context
+              echo '```' >> prompt.txt
+              head -200 "$file" >> prompt.txt
+              if [ $(wc -l < "$file") -gt 200 ]; then
+                echo "[... file truncated at 200 lines ...]" >> prompt.txt
+              fi
+              echo '```' >> prompt.txt
+            fi
+            echo "" >> prompt.txt
+          done
+
+          cat <<'EOF' >> prompt.txt
+
+          **Instructions:**
+          1. Analyze the conflicts in each file
+          2. Resolve them by combining changes intelligently
+          3. Provide a unified diff patch that can be applied with git apply
+          4. Ensure the patch resolves ALL conflicts
+          5. Make sure the resulting code follows the project's coding standards
+
+          **Expected Output:**
+          Provide ONLY the git patch in unified diff format, starting with the file headers.
+          Do not include any explanatory text before or after the patch.
+
+          The patch should start with:
+          diff --git a/filename b/filename
+          index oldindex..newindex mode
+          --- a/filename
+          +++ b/filename
+          @@ line numbers @@
+          EOF
+
+      - name: Generate patch with AI
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        id: ai
+        uses: actions/ai-inference@v1.1.0
+        with:
+          token: ${{ secrets.github-token }}
+          model: ${{ inputs.model }}
+          system-prompt-file: system_prompt.txt
+          prompt-file: prompt.txt
+          max-tokens: 4000
+
+      - name: Apply AI patch
+        if: steps.conflicts.outputs.has_conflict == 'true'
+        id: apply_patch
+        env:
+          PR_BRANCH: ${{ matrix.pr.branch }}
+          AI_RESPONSE: ${{ steps.ai.outputs.response }}
+        run: |
+          source .github/scripts/ci-status.sh
+          print_status "Applying AI-generated patch"
+          echo "$AI_RESPONSE" > ai_patch.patch
+
+          if git apply --check ai_patch.patch 2>/dev/null; then
+            print_success "Patch validation successful, applying patch"
+            git apply ai_patch.patch
+            git add -A
+            print_success "Applied AI-generated patch successfully"
+          else
+            print_error "Patch validation failed, attempting manual resolution"
+            for file in $(git ls-files -u | cut -f2 | sort -u); do
+              print_status "Resolving conflicts in $file..."
+              git checkout --ours "$file" || git checkout --theirs "$file" || true
+            done
+            git add -A
+          fi
+
+          if git ls-files -u | grep -q .; then
+            print_error "Some conflicts remain unresolved"
+            exit 1
+          fi
+
+          git rebase --continue || print_status "Rebase completed with conflicts resolved"
+
+      - name: Push updated branch
+        if: steps.conflicts.outputs.has_conflict == 'false' || steps.apply_patch.conclusion == 'success'
+        env:
+          PR_BRANCH: ${{ matrix.pr.branch }}
+        run: |
+          source .github/scripts/ci-status.sh
+          print_status "Pushing updated branch $PR_BRANCH"
+          git push --force-with-lease origin "${PR_BRANCH}"
+
+      - name: Handle failed AI resolution
+        if: steps.conflicts.outputs.has_conflict == 'true' && steps.apply_patch.conclusion == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+          PR_BRANCH: ${{ matrix.pr.branch }}
+        run: |
+          source .github/scripts/ci-status.sh
+          print_error "AI resolution failed, leaving PR for manual resolution"
+          gh pr comment ${{ matrix.pr.number }} --body "🤖 AI rebase workflow encountered conflicts that couldn't be automatically resolved. Manual intervention required.
+
+          **Conflicted files:**
+          $(git ls-files -u | cut -f2 | sort -u | sed 's/^/- /')
+
+          **Next steps:**
+          1. Check out the branch: \`git checkout $PR_BRANCH\`
+          2. Resolve conflicts manually
+          3. Complete the rebase: \`git rebase --continue\`
+          4. Push the resolved branch: \`git push --force-with-lease origin $PR_BRANCH\`
+
+          The rebase was attempted against: \`${{ inputs.base-branch }}\`" || true
+
+      - name: Auto-merge PR (if applicable)
+        if: steps.conflicts.outputs.has_conflict == 'false' || steps.apply_patch.conclusion == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+        run: |
+          source .github/scripts/ci-status.sh
+          if [ "${{ steps.conflicts.outputs.has_conflict }}" = "false" ] || [ "${{ steps.apply_patch.conclusion }}" = "success" ]; then
+            print_status "Attempting to auto-merge PR #${{ matrix.pr.number }}"
+            gh pr merge ${{ matrix.pr.number }} --auto --squash || print_error "Auto-merge failed - PR may need review"
+          else
+            print_status "Skipping auto-merge due to unresolved conflicts"
+          fi
+
+      - name: Comment with results
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.github-token }}
+        run: |
+          source .github/scripts/ci-status.sh
+          if [ "${{ steps.conflicts.outputs.has_conflict }}" = "false" ]; then
+            print_success "AI rebase workflow completed successfully - no conflicts found."
+            gh pr comment ${{ matrix.pr.number }} --body "✅ AI rebase workflow completed successfully - no conflicts found." || true
+          elif [ "${{ steps.apply_patch.conclusion }}" = "success" ]; then
+            print_success "AI rebase workflow resolved merge conflicts and updated the branch."
+            gh pr comment ${{ matrix.pr.number }} --body "✅ AI rebase workflow resolved merge conflicts and updated the branch." || true
+          else
+            print_error "Error case already handled by previous step"
+          fi
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [find, rebase]
+    steps:
+      - name: Print summary
+        run: |
+          echo "Processed PRs: ${{ needs.find.outputs.list }}"

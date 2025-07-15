@@ -1,0 +1,317 @@
+# file: .github/workflows/reusable-super-linter.yml
+# version: 1.3.0
+# guid: b2c3d4e5-f6a7-89bc-def0-123456789bcd
+
+name: Reusable - Super Linter
+
+on:
+  workflow_call:
+    inputs:
+      validate-all-codebase:
+        description: "Validate entire codebase instead of just changed files"
+        required: false
+        default: false
+        type: boolean
+      default-branch:
+        description: "The default branch of the repository"
+        required: false
+        default: "main"
+        type: string
+      config-file:
+        description: "Path to Super Linter configuration file"
+        required: false
+        default: ".github/super-linter.env"
+        type: string
+      filter-regex-exclude:
+        description: "Regex to exclude files from linting"
+        required: false
+        default: ".*\\.git/.*|.*\\.github/copilot/.*|.*\\.vscode/.*|.*node_modules/.*|.*\\.cache/.*"
+        type: string
+      run-python:
+        description: "Enable Python linting"
+        required: false
+        default: true
+        type: boolean
+      run-shell:
+        description: "Enable shell script linting"
+        required: false
+        default: true
+        type: boolean
+      run-markdown:
+        description: "Enable Markdown linting"
+        required: false
+        default: true
+        type: boolean
+      run-yaml:
+        description: "Enable YAML linting"
+        required: false
+        default: true
+        type: boolean
+      run-json:
+        description: "Enable JSON linting"
+        required: false
+        default: true
+        type: boolean
+      run-javascript:
+        description: "Enable JavaScript/TypeScript linting"
+        required: false
+        default: true
+        type: boolean
+      run-go:
+        description: "Enable Go linting"
+        required: false
+        default: true
+        type: boolean
+      run-css:
+        description: "Enable CSS linting"
+        required: false
+        default: true
+        type: boolean
+      run-html:
+        description: "Enable HTML linting"
+        required: false
+        default: true
+        type: boolean
+      run-protobuf:
+        description: "Enable Protobuf linting"
+        required: false
+        default: true
+        type: boolean
+      run-github-actions:
+        description: "Enable GitHub Actions linting"
+        required: false
+        default: true
+        type: boolean
+      run-security:
+        description: "Enable security scanning (secrets, Dockerfile)"
+        required: false
+        default: true
+        type: boolean
+      enable-auto-fix:
+        description: "Enable auto-fixing for supported linters and formatters"
+        required: false
+        default: true
+        type: boolean
+      auto-commit-fixes:
+        description: "Automatically commit and push fixes when running on main branch or PRs"
+        required: false
+        default: true
+        type: boolean
+      commit-message:
+        description: "Commit message for auto-fixes"
+        required: false
+        default: "style: auto-fix linting issues [skip ci]"
+        type: string
+    secrets:
+      github-token:
+        description: "GitHub token with necessary permissions for linting and auto-fix"
+        required: true
+
+permissions:
+  contents: write # Required for auto-committing fixes
+  statuses: write # Required for status updates
+  checks: write # Required for check runs
+  pull-requests: write # Required for PR comments and updates
+  packages: read # Required for package access
+  security-events: write # Required for security scanning
+  actions: write # Required for uploading artifacts
+  id-token: write # Required for attestation and artifact uploads
+
+jobs:
+  super-linter:
+    name: Super Linter
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Full git history is needed to get list of changed files
+          fetch-depth: 0
+          token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup Super Linter environment
+        run: |
+          echo "Super Linter environment will be configured in the Run Super Linter step"
+
+      - name: Load custom configuration
+        run: |
+          # Check for various config file locations
+          CONFIG_FILES=(
+            ".github/super-linter.env"
+            ".super-linter.env"
+            "super-linter.env"
+          )
+
+          CONFIG_FOUND=""
+          for config_file in "${CONFIG_FILES[@]}"; do
+            if [ -f "${config_file}" ]; then
+              CONFIG_FOUND="${config_file}"
+              echo "Found configuration file: ${config_file}"
+              break
+            fi
+          done
+
+          if [ -n "${CONFIG_FOUND}" ]; then
+            echo "Loading configuration from ${CONFIG_FOUND}"
+            echo "Configuration contents:"
+            cat "${CONFIG_FOUND}"
+            echo ""
+            echo "Exporting configuration to environment..."
+            # Export variables to GITHUB_ENV so they persist to next steps
+            cat "${CONFIG_FOUND}" | grep -E '^[A-Z_].*=' >> $GITHUB_ENV || true
+          else
+            echo "No custom configuration file found, using workflow defaults"
+          fi
+
+      - name: Run Super Linter
+        uses: super-linter/super-linter@v7
+        env:
+          # Authentication
+          GITHUB_TOKEN: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+
+          # Core settings
+          DEFAULT_BRANCH: ${{ inputs.default-branch }}
+          VALIDATE_ALL_CODEBASE: ${{ inputs.validate-all-codebase }}
+
+          # Filter settings
+          FILTER_REGEX_EXCLUDE: ${{ inputs.filter-regex-exclude }}
+
+          # Logging and output
+          CREATE_LOG_FILE: true
+          LOG_FILE: super-linter.log
+          SAVE_SUPER_LINTER_OUTPUT: true
+          SUPER_LINTER_OUTPUT_DIRECTORY_NAME: super-linter-output
+
+          # Performance settings
+          MULTI_STATUS: true
+          PARALLEL: true
+
+          # Use slim image for better performance
+          SLIM_IMAGE: true
+
+      - name: Check for auto-fixes
+        if: inputs.enable-auto-fix == true
+        id: check-fixes
+        run: |
+          # Check if there are any changes made by Super Linter auto-fix
+          if git diff --quiet; then
+            echo "has_fixes=false" >> $GITHUB_OUTPUT
+            echo "No auto-fixes applied"
+          else
+            echo "has_fixes=true" >> $GITHUB_OUTPUT
+            echo "Auto-fixes applied, changes detected:"
+            git diff --name-only
+          fi
+
+      - name: Commit and push auto-fixes
+        if: steps.check-fixes.outputs.has_fixes == 'true' && inputs.auto-commit-fixes == true
+        run: |
+          # Configure git
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action - Super Linter Auto-fix"
+
+          # Add all changes
+          git add .
+
+          # Commit changes
+          git commit -m "${{ inputs.commit-message }}"
+
+          # Push changes
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, push to the PR branch
+            git push origin HEAD:${{ github.head_ref }}
+            echo "✅ Auto-fixes committed and pushed to PR branch: ${{ github.head_ref }}"
+          else
+            # For push events, push to the current branch
+            git push origin HEAD
+            echo "✅ Auto-fixes committed and pushed to branch: ${{ github.ref_name }}"
+          fi
+
+      - name: Prepare Super Linter outputs
+        if: always()
+        run: |
+          echo "Checking for Super Linter output files..."
+
+          # Create a report directory with proper permissions
+          mkdir -p super-linter-reports
+
+          # Critical: Fix all Docker-created files recursively FIRST
+          # Super Linter runs as Docker and creates files with root ownership and restricted permissions
+          echo "Fixing permissions on all Docker-created files..."
+          sudo find . -type d -exec chmod 755 {} \; 2>/dev/null || true
+          sudo find . -type f -exec chmod 644 {} \; 2>/dev/null || true
+          sudo chown -R $(whoami):$(whoami) . 2>/dev/null || true
+
+          # Look for log files in different possible locations
+          if [ -f "super-linter.log" ]; then
+            cp super-linter.log super-linter-reports/ || true
+            echo "Found super-linter.log"
+          fi
+
+          if [ -f "/tmp/super-linter.log" ]; then
+            sudo chown $(whoami):$(whoami) /tmp/super-linter.log 2>/dev/null || true
+            sudo chmod 644 /tmp/super-linter.log 2>/dev/null || true
+            cp /tmp/super-linter.log super-linter-reports/super-linter.log || true
+            echo "Found /tmp/super-linter.log"
+          fi
+
+          # Look for output directories and copy safely
+          for output_dir in "super-linter-output" "/tmp/super-linter-output"; do
+            if [ -d "$output_dir" ]; then
+              echo "Found output directory: $output_dir"
+              # Fix permissions recursively on the source directory
+              sudo find "$output_dir" -type d -exec chmod 755 {} \; 2>/dev/null || true
+              sudo find "$output_dir" -type f -exec chmod 644 {} \; 2>/dev/null || true
+              sudo chown -R $(whoami):$(whoami) "$output_dir" 2>/dev/null || true
+
+              # Use tar to copy preserving structure but with correct ownership
+              if [ -n "$(ls -A "$output_dir" 2>/dev/null)" ]; then
+                (cd "$output_dir" && tar cf - .) | (cd super-linter-reports && tar xf -) 2>/dev/null || true
+              fi
+            fi
+          done
+
+          # Create a summary report from any available logs
+          if [ -f "super-linter-reports/super-linter.log" ]; then
+            echo "Creating summary report from log..."
+            tail -n 100 super-linter-reports/super-linter.log > super-linter-reports/super-linter.report || true
+          else
+            echo "No log file found, creating basic report..."
+            echo "Super Linter completed - no detailed log available" > super-linter-reports/super-linter.report
+          fi
+
+          # Final permission fix on output directory - ensure everything is accessible
+          sudo find super-linter-reports -type d -exec chmod 755 {} \; 2>/dev/null || true
+          sudo find super-linter-reports -type f -exec chmod 644 {} \; 2>/dev/null || true
+          sudo chown -R $(whoami):$(whoami) super-linter-reports/ 2>/dev/null || true
+
+          # List what we found with detailed permissions
+          echo "Files in super-linter-reports:"
+          ls -la super-linter-reports/ || echo "No files found"
+
+          # Debug: Show detailed permissions on all files
+          echo "Detailed permissions check:"
+          find super-linter-reports -ls 2>/dev/null || echo "No files to check"
+
+      - name: Upload Super Linter results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: super-linter-results
+          path: super-linter-reports/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Comment PR with linting results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          HAS_AUTO_FIXES: ${{ steps.check-fixes.outputs.has_fixes }}
+          AUTO_FIX_ENABLED: ${{ inputs.enable-auto-fix }}
+          AUTO_COMMIT_ENABLED: ${{ inputs.auto-commit-fixes }}
+        with:
+          github-token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const script = require('./.github/scripts/super-linter-pr-comment.js');
+            return await script({ github, context, core });

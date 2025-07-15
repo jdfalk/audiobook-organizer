@@ -1,0 +1,600 @@
+# file: .github/workflows/reusable-docs-update.yml
+# version: 2.0.0
+# guid: 25b987e1-9e34-4618-8182-53e12c7307e0
+
+name: Reusable Documentation Updates
+
+on:
+  workflow_call:
+    inputs:
+      updates-directory:
+        description: "Directory with documentation update files"
+        required: false
+        default: ".github/doc-updates"
+        type: string
+      dry_run:
+        description: "Run in dry-run mode (no changes)"
+        required: false
+        type: boolean
+        default: false
+      python_version:
+        description: "Python version to use"
+        required: false
+        type: string
+        default: "3.11"
+      cleanup_processed_files:
+        description: "Whether to clean up processed files after successful application"
+        required: false
+        type: boolean
+        default: true
+      create_pr:
+        description: "Create pull request for changes instead of direct commit"
+        required: false
+        type: boolean
+        default: false
+      auto_merge:
+        description: "Auto-merge created PR (requires create_pr=true)"
+        required: false
+        type: boolean
+        default: false
+      continue_on_error:
+        description: "Continue processing even if some updates fail"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      github-token:
+        description: "GitHub token with enhanced permissions for cross-repo operations"
+        required: false
+    outputs:
+      files_processed:
+        description: "Number of files processed"
+        value: ${{ jobs.docs-update.outputs.files_processed }}
+      changes_made:
+        description: "Whether any changes were made"
+        value: ${{ jobs.docs-update.outputs.changes_made }}
+      pr_created:
+        description: "Whether a PR was created"
+        value: ${{ jobs.docs-update.outputs.pr_created }}
+      pr_number:
+        description: "PR number if created"
+        value: ${{ jobs.docs-update.outputs.pr_number }}
+      files_changed:
+        description: "Comma-separated list of files that were modified"
+        value: ${{ jobs.docs-update.outputs.files_changed }}
+      update_summary:
+        description: "Comprehensive summary of updates performed"
+        value: ${{ jobs.docs-update.outputs.update_summary }}
+      action_breakdown:
+        description: "Types of documentation actions performed"
+        value: ${{ jobs.docs-update.outputs.action_breakdown }}
+      lines_added:
+        description: "Total lines added across all files"
+        value: ${{ jobs.docs-update.outputs.lines_added }}
+      lines_deleted:
+        description: "Total lines deleted across all files"
+        value: ${{ jobs.docs-update.outputs.lines_deleted }}
+
+jobs:
+  docs-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      repository-projects: write
+    outputs:
+      files_processed: ${{ steps.process-updates.outputs.files_processed }}
+      changes_made: ${{ steps.process-updates.outputs.changes_made }}
+      pr_created: ${{ steps.set-outputs.outputs.pr_created }}
+      pr_number: ${{ steps.set-outputs.outputs.pr_number }}
+      files_changed: ${{ steps.capture-changes.outputs.files_changed }}
+      update_summary: ${{ steps.capture-changes.outputs.update_summary }}
+      action_breakdown: ${{ steps.capture-changes.outputs.action_breakdown }}
+      lines_added: ${{ steps.capture-changes.outputs.lines_added }}
+      lines_deleted: ${{ steps.capture-changes.outputs.lines_deleted }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use enhanced PAT for cross-repo operations and project management
+          token: ${{ secrets.github-token || secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jq pyyaml
+
+      - name: Download documentation update manager
+        run: |
+          # Download the enhanced doc update manager from ghcommon
+          curl -sSL https://raw.githubusercontent.com/jdfalk/ghcommon/main/scripts/doc_update_manager.py \
+            -o doc_update_manager.py
+          chmod +x doc_update_manager.py
+
+      - name: Validate update files
+        id: validate
+        env:
+          UPDATES_DIR: ${{ inputs.updates-directory }}
+        run: |
+          echo "🔍 Validating documentation update files..."
+
+          if [[ ! -d "${UPDATES_DIR}" ]]; then
+            echo "📝 No update directory found: ${UPDATES_DIR}"
+            echo "files_found=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files_count=$(find "${UPDATES_DIR}" -name "*.json" -type f | wc -l)
+          echo "files_found=$files_count" >> "$GITHUB_OUTPUT"
+          echo "📊 Found $files_count update files"
+
+          # Validate JSON format
+          for file in "${UPDATES_DIR}"/*.json; do
+            if [[ -f "$file" ]]; then
+              if ! jq empty "$file" 2>/dev/null; then
+                echo "❌ Invalid JSON in $file"
+                exit 1
+              fi
+              echo "✅ Valid JSON: $(basename "$file")"
+            fi
+          done
+
+      - name: Process documentation updates
+        id: process-updates
+        if: steps.validate.outputs.files_found > 0
+        env:
+          UPDATES_DIR: ${{ inputs.updates-directory }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          CLEANUP_PROCESSED: ${{ inputs.cleanup_processed_files }}
+          CONTINUE_ON_ERROR: ${{ inputs.continue_on_error }}
+        run: |
+          echo "🔄 Processing documentation updates..."
+          echo "📂 Update directory: ${UPDATES_DIR}"
+          echo "🧪 Dry run mode: ${DRY_RUN}"
+          echo "🗑️ Cleanup processed files: ${CLEANUP_PROCESSED}"
+          echo ""
+
+          # List update files to be processed
+          echo "📋 Update files to process:"
+          find "${UPDATES_DIR}" -name "*.json" -type f | while read file; do
+            echo "  - $(basename "$file")"
+            echo "    📄 Contents preview: $(jq -r '.action // .operation // "unknown"' "$file" 2>/dev/null || echo "invalid JSON")"
+          done
+          echo ""
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "🧪 Running in dry-run mode"
+            dry_run_flag="--dry-run"
+          else
+            dry_run_flag=""
+          fi
+
+          if [[ "${CONTINUE_ON_ERROR}" == "true" ]]; then
+            ignore_errors_flag="--ignore-errors"
+          else
+            ignore_errors_flag=""
+          fi
+
+          # Set environment for enhanced visibility
+          export PYTHONUNBUFFERED=1
+
+          echo "🚀 Executing doc_update_manager.py..."
+          python doc_update_manager.py \
+            --updates-dir "${UPDATES_DIR}" \
+            --cleanup="${CLEANUP_PROCESSED}" \
+            $dry_run_flag \
+            $ignore_errors_flag \
+            --verbose || {
+              echo "❌ Documentation update manager failed with exit code $?"
+              echo "📋 Operation failed - no additional stats available"
+              exit 1
+            }
+
+          echo ""
+          echo "✅ Documentation update manager completed successfully"
+
+          # Set default outputs
+          echo "files_processed=0" >> "$GITHUB_OUTPUT"
+          echo "changes_made=false" >> "$GITHUB_OUTPUT"
+
+          echo "📈 Summary: Documentation update completed (detailed stats disabled)"
+          else
+            echo "⚠️ No stats file generated"
+            echo "files_processed=0" >> "$GITHUB_OUTPUT"
+            echo "changes_made=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate update summary
+        if: steps.validate.outputs.files_found > 0
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          CREATE_PR: ${{ inputs.create_pr }}
+          UPDATES_DIR: ${{ inputs.updates-directory }}
+        run: |
+          echo "📋 Documentation Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "===============================" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Enhanced statistics with more detail
+          echo "📊 **Execution Statistics:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Update files found: ${{ steps.validate.outputs.files_found }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Documentation update completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Dry run mode: ${DRY_RUN}" >> $GITHUB_STEP_SUMMARY
+          echo "- Repository: \`${{ github.repository }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflow run: [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Show detailed changed files if any
+          changed_files=$(git diff --name-only HEAD 2>/dev/null || echo "")
+          if [[ -n "$changed_files" ]]; then
+            # Calculate change statistics
+            total_additions=$(git diff --numstat HEAD | awk '{sum += $1} END {print sum+0}')
+            total_deletions=$(git diff --numstat HEAD | awk '{sum += $2} END {print sum+0}')
+            file_count=$(echo "$changed_files" | wc -l)
+
+            echo "� **Change Statistics:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Files modified: **$file_count**" >> $GITHUB_STEP_SUMMARY
+            echo "- Lines added: **+$total_additions**" >> $GITHUB_STEP_SUMMARY
+            echo "- Lines deleted: **-$total_deletions**" >> $GITHUB_STEP_SUMMARY
+            echo "- Net change: **$((total_additions - total_deletions))** lines" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            echo "�📝 **Files Modified:**" >> $GITHUB_STEP_SUMMARY
+            echo "$changed_files" | while read file; do
+              if [[ -n "$file" ]]; then
+                # Get file-specific stats
+                file_stats=$(git diff --numstat HEAD -- "$file" | awk '{print $1 "," $2}')
+                additions=$(echo "$file_stats" | cut -d',' -f1)
+                deletions=$(echo "$file_stats" | cut -d',' -f2)
+                echo "- [\`$file\`](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/$file) (+$additions/-$deletions)" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            # Show condensed diff for key files
+            echo "� **Key Changes Preview:**" >> $GITHUB_STEP_SUMMARY
+            echo '```diff' >> $GITHUB_STEP_SUMMARY
+            git diff --stat HEAD 2>/dev/null | head -10 || echo "Diff not available"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Show original update files processed with more detail
+          if [[ -d "${UPDATES_DIR}" ]]; then
+            echo "📂 **Update Files Processed:**" >> $GITHUB_STEP_SUMMARY
+            update_count=0
+            find "${UPDATES_DIR}" -name "*.json" -type f 2>/dev/null | while read file; do
+              if [[ -f "$file" ]]; then
+                update_count=$((update_count + 1))
+                # Extract update details from JSON
+                action=$(jq -r '.action // .operation // "unknown"' "$file" 2>/dev/null || echo "unknown")
+                target_file=$(jq -r '.target_file // .file // "unknown"' "$file" 2>/dev/null || echo "unknown")
+                echo "- \`$(basename "$file")\` → **$action** on \`$target_file\`" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Error handling section removed - stats file no longer generated
+
+          # Enhanced next steps with actionable URLs
+          if [[ "${CREATE_PR}" == "true" ]]; then
+            echo "🔄 **Next Steps:** A pull request will be created with these changes" >> $GITHUB_STEP_SUMMARY
+            if [[ -n "$changed_files" ]]; then
+              echo "- Review the changes in the Files Changed tab above" >> $GITHUB_STEP_SUMMARY
+              echo "- Check the PR once it's created for automated tests" >> $GITHUB_STEP_SUMMARY
+              echo "- Merge the PR when ready to apply changes" >> $GITHUB_STEP_SUMMARY
+            fi
+          elif [[ "${DRY_RUN}" == "true" ]]; then
+            echo "🧪 **Dry Run Complete:** No changes were committed (dry run mode)" >> $GITHUB_STEP_SUMMARY
+            echo "- To apply these changes, re-run the workflow with \`dry_run: false\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Review the change preview above to verify expected updates" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "💾 **Changes Committed:** Updates have been applied directly to the repository" >> $GITHUB_STEP_SUMMARY
+            echo "- View the commit: [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+            echo "- Changes are now live in the \`${{ github.ref_name }}\` branch" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "📝 Changes detected in repository"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "✅ No changes to commit"
+          fi
+
+      - name: Capture changes summary
+        id: capture-changes
+        if: always()
+        run: |
+          echo "🔍 Capturing comprehensive changes summary..."
+
+          # Initialize summary variables
+          files_changed=""
+          update_summary=""
+          action_details=""
+
+          # Get list of changed files with detailed analysis
+          changed_files=$(git diff --name-only HEAD 2>/dev/null || echo "")
+          if [[ -n "$changed_files" ]]; then
+            echo "📝 Files modified:"
+            file_count=0
+            action_types=""
+
+            # Analyze each changed file
+            while IFS= read -r file; do
+              if [[ -n "$file" ]]; then
+                echo "  - $file"
+                file_count=$((file_count + 1))
+
+                # Determine file type and likely action
+                case "$file" in
+                  "README.md")
+                    action_types="$action_types,readme-update"
+                    ;;
+                  "CHANGELOG.md")
+                    action_types="$action_types,changelog-entry"
+                    ;;
+                  "TODO.md")
+                    action_types="$action_types,task-management"
+                    ;;
+                  *.md)
+                    action_types="$action_types,documentation"
+                    ;;
+                  *.json|*.yaml|*.yml)
+                    action_types="$action_types,configuration"
+                    ;;
+                  *)
+                    action_types="$action_types,other"
+                    ;;
+                esac
+              fi
+            done <<< "$changed_files"
+
+            # Create comma-separated list for output
+            files_list=$(echo "$changed_files" | tr '\n' ',' | sed 's/,$//')
+            echo "files_changed=$files_list" >> "$GITHUB_OUTPUT"
+
+            # Create comprehensive summary with action breakdown
+            unique_actions=$(echo "$action_types" | tr ',' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+            summary="Successfully modified $file_count file(s) with actions: $unique_actions. Files: $(echo "$changed_files" | head -3 | tr '\n' ', ' | sed 's/,$//')$(if [[ $file_count -gt 3 ]]; then echo " + $((file_count - 3)) more"; fi)"
+            echo "update_summary=$summary" >> "$GITHUB_OUTPUT"
+
+            # Detailed action breakdown
+            echo "action_breakdown=$unique_actions" >> "$GITHUB_OUTPUT"
+
+            # Calculate change statistics
+            total_additions=$(git diff --numstat HEAD | awk '{sum += $1} END {print sum+0}')
+            total_deletions=$(git diff --numstat HEAD | awk '{sum += $2} END {print sum+0}')
+            echo "lines_added=$total_additions" >> "$GITHUB_OUTPUT"
+            echo "lines_deleted=$total_deletions" >> "$GITHUB_OUTPUT"
+
+            echo "📊 Change statistics: +$total_additions/-$total_deletions lines across $file_count files"
+            echo "🏷️  Action types: $unique_actions"
+          else
+            echo "✅ No files were modified"
+            echo "files_changed=" >> "$GITHUB_OUTPUT"
+            echo "update_summary=No changes made - all documentation is up to date" >> "$GITHUB_OUTPUT"
+            echo "action_breakdown=" >> "$GITHUB_OUTPUT"
+            echo "lines_added=0" >> "$GITHUB_OUTPUT"
+            echo "lines_deleted=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        id: create-pr
+        if: steps.check-changes.outputs.has_changes == 'true' && inputs.create_pr == true && inputs.dry_run == false
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.github-token || secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+          title: "docs: apply documentation updates"
+          body: |
+            ## 📋 Documentation Updates
+
+            This PR applies automated documentation updates from **${{ steps.process-updates.outputs.files_processed }}** update file(s).
+
+            ### 📊 Change Summary
+
+            - **Files modified:** ${{ steps.capture-changes.outputs.files_changed || 'none' }}
+            - **Lines added:** +${{ steps.capture-changes.outputs.lines_added || 0 }}
+            - **Lines deleted:** -${{ steps.capture-changes.outputs.lines_deleted || 0 }}
+            - **Action types:** ${{ steps.capture-changes.outputs.action_breakdown || 'none' }}
+
+            ### 📝 Update Details
+
+            ${{ steps.capture-changes.outputs.update_summary || 'No detailed summary available' }}
+
+            ### 🔍 Files Changed
+
+            See the **Files Changed** tab above for detailed modifications and diffs.
+
+            ### 🚀 Next Steps
+
+            - Review the changes in the Files Changed tab
+            - Verify that the updates are correct and complete
+            - Merge this PR to apply the documentation updates
+            - Check that any cross-references or links still work correctly
+
+            ### 🤖 Automation Info
+
+            - **Workflow run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - **Repository:** `${{ github.repository }}`
+            - **Branch:** `${{ github.ref_name }}`
+            - **Generated:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+            ---
+            *This PR was automatically created by the documentation update workflow.*
+          branch: docs/automated-updates-${{ github.run_number }}
+          commit-message: |
+            docs: apply documentation updates
+
+            Apply automated documentation updates from ${{ steps.process-updates.outputs.files_processed }} update file(s).
+
+            Files changed:
+            ${{ steps.capture-changes.outputs.files_changed }}
+
+            Change summary: ${{ steps.capture-changes.outputs.update_summary }}
+            Lines: +${{ steps.capture-changes.outputs.lines_added }}/-${{ steps.capture-changes.outputs.lines_deleted }}
+            Action types: ${{ steps.capture-changes.outputs.action_breakdown }}
+
+            Workflow run: ${{ github.run_id }}
+            Repository: ${{ github.repository }}
+          delete-branch: true
+          draft: false
+
+      - name: Auto-merge PR
+        if: steps.create-pr.outputs.pull-request-number && inputs.auto_merge == true
+        run: |
+          echo "🔄 Auto-merging PR #${{ steps.create-pr.outputs.pull-request-number }}"
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.github-token || secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Commit changes directly
+        if: steps.check-changes.outputs.has_changes == 'true' && inputs.create_pr == false && inputs.dry_run == false
+        run: |
+          echo "💾 Committing documentation changes directly"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Get comprehensive information about changes
+          changed_files=$(git diff --name-only HEAD)
+          file_count=$(echo "$changed_files" | wc -l)
+          total_additions=$(git diff --numstat HEAD | awk '{sum += $1} END {print sum+0}')
+          total_deletions=$(git diff --numstat HEAD | awk '{sum += $2} END {print sum+0}')
+
+          echo "📝 Committing changes to $file_count file(s):"
+          echo "$changed_files" | while read file; do
+            if [[ -n "$file" ]]; then
+              file_stats=$(git diff --numstat HEAD -- "$file" | awk '{print $1 "," $2}')
+              additions=$(echo "$file_stats" | cut -d',' -f1)
+              deletions=$(echo "$file_stats" | cut -d',' -f2)
+              echo "  - $file (+$additions/-$deletions)"
+            fi
+          done
+
+          # Determine action types based on changed files
+          action_types=""
+          for file in $changed_files; do
+            case "$file" in
+              "README.md") action_types="$action_types,readme-update" ;;
+              "CHANGELOG.md") action_types="$action_types,changelog-entry" ;;
+              "TODO.md") action_types="$action_types,task-management" ;;
+              *.md) action_types="$action_types,documentation" ;;
+              *.json|*.yaml|*.yml) action_types="$action_types,configuration" ;;
+              *) action_types="$action_types,other" ;;
+            esac
+          done
+          unique_actions=$(echo "$action_types" | tr ',' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+
+          # Create enhanced commit message with comprehensive details
+          commit_body="Apply automated documentation updates from ${{ steps.process-updates.outputs.files_processed }} update file(s).
+
+          📊 Change Summary:
+          - Files modified: $file_count
+          - Lines added: +$total_additions
+          - Lines deleted: -$total_deletions
+          - Net change: $((total_additions - total_deletions)) lines
+          - Action types: $unique_actions
+          - Workflow run: ${{ github.run_id }}
+          - Repository: ${{ github.repository }}
+
+          📝 Files modified:"
+
+          echo "$changed_files" | while read file; do
+            if [[ -n "$file" ]]; then
+              file_stats=$(git diff --numstat HEAD -- "$file" | awk '{print $1 "," $2}')
+              additions=$(echo "$file_stats" | cut -d',' -f1)
+              deletions=$(echo "$file_stats" | cut -d',' -f2)
+              commit_body="$commit_body
+          - Updated documentation: [$file](${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/$file) (+$additions/-$deletions)"
+            fi
+          done
+
+          git add -A
+          git commit -m "docs: apply documentation updates
+
+          $commit_body"
+
+          echo "🚀 Pushing changes to repository..."
+          git push
+          echo "✅ Changes committed and pushed successfully"
+          echo "🔗 View changes: ${{ github.server_url }}/${{ github.repository }}/commit/$(git rev-parse HEAD)"
+
+      - name: Set outputs
+        id: set-outputs
+        if: always()
+        run: |
+          if [[ "${{ steps.create-pr.outputs.pull-request-number }}" != "" ]]; then
+            echo "pr_created=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=${{ steps.create-pr.outputs.pull-request-number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_created=false" >> "$GITHUB_OUTPUT"
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Workflow completion summary
+        if: always()
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          echo ""
+          echo "🏁 Documentation Update Workflow Complete"
+          echo "=========================================="
+          echo ""
+          echo "📊 Final Status Summary:"
+          echo "  - Update files found: ${{ steps.validate.outputs.files_found || 0 }}"
+          echo "  - Files processed: ${{ steps.process-updates.outputs.files_processed || 0 }}"
+          echo "  - Changes made: ${{ steps.process-updates.outputs.changes_made || false }}"
+          echo "  - Files modified: ${{ steps.capture-changes.outputs.files_changed || 'none' }}"
+          echo "  - Lines added: ${{ steps.capture-changes.outputs.lines_added || 0 }}"
+          echo "  - Lines deleted: ${{ steps.capture-changes.outputs.lines_deleted || 0 }}"
+          echo "  - Action types: ${{ steps.capture-changes.outputs.action_breakdown || 'none' }}"
+          echo "  - PR created: ${{ steps.set-outputs.outputs.pr_created || false }}"
+          if [[ "${{ steps.set-outputs.outputs.pr_number }}" != "" ]]; then
+            echo "  - PR number: #${{ steps.set-outputs.outputs.pr_number }}"
+            echo "  - PR URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.set-outputs.outputs.pr_number }}"
+          fi
+          echo "  - Repository: ${{ github.repository }}"
+          echo "  - Workflow run: ${{ github.run_id }}"
+          echo "  - Dry run mode: ${DRY_RUN}"
+          echo ""
+
+          if [[ "${{ steps.capture-changes.outputs.update_summary }}" != "" ]]; then
+            echo "📋 Update Summary:"
+            echo "   ${{ steps.capture-changes.outputs.update_summary }}"
+          else
+            echo "📋 Summary: No documentation updates were needed"
+          fi
+          echo ""
+
+          # Display next steps based on workflow results
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "🧪 Next Steps: This was a dry run - no changes were committed"
+            echo "   To apply changes, run the workflow again with dry_run=false"
+          elif [[ "${{ steps.set-outputs.outputs.pr_created }}" == "true" ]]; then
+            echo "🔄 Next Steps: Review and merge PR #${{ steps.set-outputs.outputs.pr_number }}"
+            echo "   PR URL: ${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.set-outputs.outputs.pr_number }}"
+          elif [[ "${{ steps.process-updates.outputs.changes_made }}" == "true" ]]; then
+            echo "✅ Next Steps: Changes have been committed and pushed to the repository"
+            echo "   View changes: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          else
+            echo "✨ Next Steps: No action needed - documentation is up to date"
+          fi
+          echo ""
+          echo "✅ Workflow completed successfully"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Clean up temporary files
+          rm -f doc_update_manager.py
