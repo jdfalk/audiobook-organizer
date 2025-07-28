@@ -1,6 +1,6 @@
 # file: .github/workflows/pr-automation.yml
-# version: 1.0.0
-# guid: b8c9d0e1-f2a3-4567-89ab-123456789017
+# version: 2.0.0
+# guid: f6a7b8c9-d0e1-2345-f678-90123456789a
 
 name: PR Automation
 
@@ -11,7 +11,7 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
   checks: write
@@ -20,36 +20,14 @@ permissions:
   actions: read
 
 jobs:
-  # Main unified automation orchestrator
-  unified-automation:
-    name: Unified PR Automation
-    uses: jdfalk/ghcommon/.github/workflows/reusable-unified-automation.yml@main
-    with:
-      operation: "all"
-      # Issue management settings
-      im_operations: "auto"
-      im_dry_run: false
-      im_force_update: false
-      im_cleanup_issue_updates: true
-      # Documentation settings
-      docs_dry_run: false
-      docs_cleanup_processed_files: true
-      docs_create_pr: false
-      docs_auto_merge: false
-      docs_continue_on_error: true
-      # Labeler settings
-      labeler_sync_labels: true
-      labeler_dot: true
-    secrets: inherit
-
-  # Enhanced super linter for code quality
+  # Enhanced super linter with Python support
   super-linter:
     name: Code Quality Check
     uses: jdfalk/ghcommon/.github/workflows/reusable-super-linter.yml@main
     with:
       validate-all-codebase: false
       default-branch: ${{ github.event.repository.default_branch }}
-      filter-regex-exclude: ".*\\.git/.*|.*\\.github/copilot/.*|.*\\.vscode/.*|.*node_modules/.*|.*\\.cache/.*|.*__pycache__/.*|.*dist/.*"
+      filter-regex-exclude: ".*\\.git/.*|.*\\.github/copilot/.*|.*\\.vscode/.*|.*node_modules/.*|.*\\.cache/.*|.*vendor/.*|.*dist/.*"
       run-python: true
       run-shell: true
       run-markdown: true
@@ -60,7 +38,26 @@ jobs:
       run-github-actions: true
       run-security: true
       enable-auto-fix: true
-      auto-commit-fixes: false
+      auto-commit-fixes: true
+    secrets: inherit
+
+  # Unified automation for issue management and docs
+  unified-automation:
+    name: Unified PR Automation
+    uses: jdfalk/ghcommon/.github/workflows/reusable-unified-automation.yml@main
+    with:
+      operation: "all"
+      im_operations: "auto"
+      im_dry_run: false
+      im_force_update: false
+      im_cleanup_issue_updates: true
+      docs_dry_run: false
+      docs_cleanup_processed_files: true
+      docs_create_pr: false
+      docs_auto_merge: false
+      docs_continue_on_error: true
+      labeler_sync_labels: true
+      labeler_dot: true
     secrets: inherit
 
   # Intelligent issue labeling for PRs
@@ -81,93 +78,3 @@ jobs:
       sync-labels: true
       dot: true
     secrets: inherit
-
-  # Post results summary
-  post-results:
-    name: Post Results Summary
-    if: always()
-    needs:
-      [unified-automation, super-linter, intelligent-labeling, standard-labeler]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create PR summary
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const results = {
-              'Unified Automation': '${{ needs.unified-automation.result }}',
-              'Super Linter': '${{ needs.super-linter.result }}',
-              'Intelligent Labeling': '${{ needs.intelligent-labeling.result }}',
-              'Standard Labeler': '${{ needs.standard-labeler.result }}'
-            };
-
-            let summary = '## 🔍 PR Automation Results\\n\\n';
-            summary += '| Job | Status | Description |\\n';
-            summary += '|-----|--------|-------------|\\n';
-
-            for (const [job, status] of Object.entries(results)) {
-              const icon = status === 'success' ? '✅' :
-                          status === 'failure' ? '❌' :
-                          status === 'skipped' ? '⏭️' : '⏸️';
-              const statusText = status.charAt(0).toUpperCase() + status.slice(1);
-
-              let description = '';
-              switch(job) {
-                case 'Unified Automation':
-                  description = 'Issue management, docs updates, and workflow orchestration';
-                  break;
-                case 'Super Linter':
-                  description = 'Code quality, style checks, and best practices validation';
-                  break;
-                case 'Intelligent Labeling':
-                  description = 'AI-powered content analysis and intelligent label assignment';
-                  break;
-                case 'Standard Labeler':
-                  description = 'File pattern-based automatic labeling';
-                  break;
-              }
-
-              summary += `| ${job} | ${icon} ${statusText} | ${description} |\\n`;
-            }
-
-            const failedJobs = Object.entries(results).filter(([_, status]) => status === 'failure');
-
-            summary += '\\n### Summary\\n\\n';
-            if (failedJobs.length === 0) {
-              summary += '🎉 **All automation checks passed!** This PR is ready for review.\\n';
-            } else {
-              summary += `⚠️ **${failedJobs.length} automation check(s) failed.** Please review and address the issues before merging.\\n\\n`;
-              summary += 'Failed checks:\\n';
-              failedJobs.forEach(([job, _]) => {
-                summary += `- ${job}\\n`;
-              });
-            }
-
-            summary += '\\n---\\n*Automated by PR Automation workflow*';
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const existingComment = comments.find(c =>
-              c.user.type === 'Bot' && c.body.includes('PR Automation Results')
-            );
-
-            if (existingComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: summary
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: summary
-              });
-            }
