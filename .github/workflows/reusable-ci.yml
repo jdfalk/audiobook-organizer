@@ -497,7 +497,7 @@ jobs:
 
       # Component Detection for all languages including Docker
       - name: Component Detection Dependency Submission
-        uses: advanced-security/component-detection-dependency-submission-action@v0.0.7
+        uses: advanced-security/component-detection-dependency-submission-action@v0.1.0
         continue-on-error: true
         with:
           detectorArgs: ${{ steps.docker-build.outputs.docker_image_available == 'true' && format('Verbosity=Verbose --DockerImagesToScan {0}', steps.docker-build.outputs.docker_image_name) || 'Verbosity=Verbose' }}
