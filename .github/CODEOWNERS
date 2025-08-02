@@ -1,0 +1,23 @@
+# Global ownership
+* @jdfalk
+
+# Go application code
+*.go @jdfalk
+cmd/ @jdfalk
+internal/ @jdfalk
+
+# Documentation
+*.md @jdfalk
+docs/ @jdfalk
+
+# Scripts and automation
+scripts/ @jdfalk
+*.py @jdfalk
+*.sh @jdfalk
+
+# Build and CI configuration
+.github/workflows/ @jdfalk
+
+# Go modules and configuration
+go.mod @jdfalk
+go.sum @jdfalk
