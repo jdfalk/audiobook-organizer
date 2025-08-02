@@ -2,10 +2,10 @@
 <!-- version: 1.0.0 -->
 <!-- guid: 8f4a3c5d-6e7b-5d9f-0a1b-2c3d4e5f6a7b -->
 
-applyTo: "\*\*/\*.go"
+---
+applyTo: "**/*.go"
 description: |
-Go language-specific coding, documentation, and testing rules for Copilot/AI agents and VS Code Copilot customization. These rules extend the general instructions in `general-coding.instructions.md` and merge all unique content from the Google Go Style Guide.
-
+  Go language-specific coding, documentation, and testing rules for Copilot/AI agents and VS Code Copilot customization. These rules extend the general instructions in `general-coding.instructions.md` and merge all unique content from the Google Go Style Guide.
 ---
 
 # Go Coding Instructions
