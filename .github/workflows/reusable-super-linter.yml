@@ -165,7 +165,7 @@ jobs:
           fi
 
       - name: Run Super Linter
-        uses: super-linter/super-linter@v7
+        uses: super-linter/super-linter@v8
         env:
           # Authentication
           GITHUB_TOKEN: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
