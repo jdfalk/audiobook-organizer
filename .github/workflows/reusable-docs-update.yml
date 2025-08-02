@@ -393,7 +393,7 @@ jobs:
       - name: Create Pull Request
         id: create-pr
         if: steps.check-changes.outputs.has_changes == 'true' && inputs.create_pr == true && inputs.dry_run == false
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.github-token || secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
           title: "docs: apply documentation updates"
