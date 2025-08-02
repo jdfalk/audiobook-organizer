@@ -347,7 +347,7 @@ jobs:
 
       - name: Gradle Dependency Submission
         if: hashFiles('**/build.gradle', '**/build.gradle.kts') != ''
-        uses: gradle/actions/dependency-submission@v3
+        uses: gradle/actions/dependency-submission@v4
         continue-on-error: true
 
       # Maven dependency submission
@@ -509,7 +509,7 @@ jobs:
           echo "✅ Dependency submission step completed"
           echo ""
           echo "📝 Language-specific dependency submission actions used:"
-          echo "  - Gradle: gradle/actions/dependency-submission@v3"
+          echo "  - Gradle: gradle/actions/dependency-submission@v4"
           echo "  - Maven: advanced-security/maven-dependency-submission-action@v4"
           echo "  - Mill: ckipp01/mill-dependency-submission@v1"
           echo "  - Mix (Elixir): erlef/mix-dependency-submission@v1"
