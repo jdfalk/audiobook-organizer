@@ -1,78 +1,81 @@
 # Smart Dependabot configuration for audiobook-organizer
-# Audiobook organization and management tool
-# Automatically detected: Go, GitHub Actions, Python scripts
+# Automatically detected: go, python, nodejs, github-actions
 
 version: 2
 updates:
-  # Go dependencies (go.mod found at root)
-  - package-ecosystem: "gomod"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/New_York"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "go"
-      include: "scope"
-    labels:
-      - "dependencies"
-    allow:
-      - dependency-type: "direct"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  # Python dependencies (scripts/*.py found)
-  - package-ecosystem: "pip"
-    directory: "/scripts"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-      timezone: "America/New_York"
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: "python"
-      include: "scope"
-    labels:
-      - "dependencies"
-    allow:
-      - dependency-type: "direct"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  # GitHub Actions dependencies (.github/workflows/*.yml found)
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "09:00"
-      timezone: "America/New_York"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "actions"
-      include: "scope"
-    labels:
-      - "dependencies"
-      - "ci/cd"
-    groups:
-      ci-dependencies:
-        patterns:
-          - "actions/*"
-          - "github/*"
-        update-types:
-          - "minor"
-          - "patch"
-      external-actions:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "actions/*"
-          - "github/*"
-        update-types:
-          - "minor"
-          - "patch"
+- package-ecosystem: npm
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:00
+    timezone: America/New_York
+  open-pull-requests-limit: 8
+  commit-message:
+    prefix: npm
+    include: scope
+  labels:
+  - dependencies
+  - priority-low
+  allow:
+  - dependency-type: direct
+  - dependency-type: indirect
+  ignore:
+  - dependency-name: '*'
+    update-types:
+    - version-update:semver-major
+  groups:
+    dev-dependencies:
+      patterns:
+      - '*eslint*'
+      - '*prettier*'
+      - '*commitlint*'
+      - '@types/*'
+      update-types:
+      - minor
+      - patch
+- package-ecosystem: pip
+  directory: /
+  schedule:
+    interval: weekly
+    day: tuesday
+    time: 09:00
+    timezone: America/New_York
+  open-pull-requests-limit: 3
+  commit-message:
+    prefix: python
+    include: scope
+  labels:
+  - dependencies
+  - priority-medium
+  allow:
+  - dependency-type: direct
+  - dependency-type: indirect
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
+    day: wednesday
+    time: 09:00
+    timezone: America/New_York
+  open-pull-requests-limit: 5
+  commit-message:
+    prefix: go
+    include: scope
+  labels:
+  - dependencies
+  - priority-medium
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: friday
+    time: 09:00
+    timezone: America/New_York
+  open-pull-requests-limit: 5
+  commit-message:
+    prefix: ci
+    include: scope
+  labels:
+  - dependencies
+  - priority-high

@@ -1,30 +1,31 @@
 <!-- file: .github/instructions/python.instructions.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: 2a5b7c8d-9e1f-4a2b-8c3d-6e9f1a5b7c8d -->
+<!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
+<!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
-applyTo: "\*\*/\*.py"ile: .github/instructions/python.instructions.md -->
-<!-- version: 1.0.0 -->
-
-## <!-- guid: 2a5b7c8d-9e1f-4a2b-8c3d-6e9f1a5b7c8d -->
-
-applyTo: "\*_/_.py"
+---
+applyTo: "**/*.py"
 description: |
-Python language-specific coding, documentation, and testing rules for Copilot/AI agents and VS Code Copilot customization. These rules extend the general instructions in `general-coding.instructions.md` and merge all unique content from the Google Python Style Guide.
-
+  Python language-specific coding, documentation, and testing rules for Copilot/AI agents and VS Code Copilot customization. These rules extend the general instructions in `general-coding.instructions.md` and merge all unique content from the Google Python Style Guide.
 ---
 
 # Python Coding Instructions
 
 - Follow the [general coding instructions](general-coding.instructions.md).
-- Follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html) for additional best practices.
-- All Python files must begin with the required file header (see general instructions for details and Python example).
+- Follow the
+  [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)
+  for additional best practices.
+- All Python files must begin with the required file header (see general
+  instructions for details and Python example).
 
 ## Core Principles
 
 - Be consistent: Follow the established patterns in your codebase
 - Readability counts: Code is read more often than it is written
 - Simple is better than complex: Prefer clarity over cleverness
-- Use tools: Leverage formatters like `ruff`, `black`, and `isort` for consistency
+- Use tools: Leverage formatters like `ruff`, `black`, and `isort` for
+  consistency
 
 ## Language Rules
 
@@ -56,7 +57,9 @@ Python language-specific coding, documentation, and testing rules for Copilot/AI
 
 ## Required File Header
 
-All Python files must begin with a standard header as described in the [general coding instructions](general-coding.instructions.md). Example for Python:
+All Python files must begin with a standard header as described in the
+[general coding instructions](general-coding.instructions.md). Example for
+Python:
 
 ```python
 #!/usr/bin/env python3

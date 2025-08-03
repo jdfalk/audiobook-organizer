@@ -4,10 +4,13 @@
 
 # GitHub Actions Workflow Usage Instructions (Pointer)
 
-All workflow usage, best practices, and configuration rules are now found in the canonical instructions system:
+All workflow usage, best practices, and configuration rules are now found in the
+canonical instructions system:
 
-- See `.github/instructions/general-coding.instructions.md` for the full, up-to-date workflow usage and best practices.
-- All language/framework-specific rules are in `.github/instructions/*.instructions.md`.
+- See `.github/instructions/general-coding.instructions.md` for the full,
+  up-to-date workflow usage and best practices.
+- All language/framework-specific rules are in
+  `.github/instructions/*.instructions.md`.
 
 ## Quick Reference
 
