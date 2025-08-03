@@ -1,23 +1,29 @@
 <!-- file: .github/instructions/github-actions.instructions.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: 9f8e7d6c-5b4a-3c2d-1e0f-9a8b7c6d5e4f -->
+<!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
+<!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
-applyTo: ".github/workflows/\*.{yml,yaml}"
+---
+applyTo: ".github/workflows/*.{yml,yaml}"
 description: |
-Coding, documentation, and workflow rules for GitHub Actions workflow files, following Google and project-specific style guides. Reference the general instructions for all Copilot/AI agents and VS Code Copilot customization. For details, see the main documentation in `.github/copilot-instructions.md`.
-
+  Coding, documentation, and workflow rules for GitHub Actions workflow files, following Google and project-specific style guides. Reference the general instructions for all Copilot/AI agents and VS Code Copilot customization. For details, see the main documentation in `.github/copilot-instructions.md`.
 ---
 
 # GitHub Actions Workflow Coding Instructions
 
 - Follow the [general coding instructions](general-coding.instructions.md).
-- Follow the [Google GitHub Actions/YAML Style Guide](https://github.com/google/styleguide/blob/gh-pages/docguide/style.md) for additional best practices.
-- All workflow files must begin with the required file header (see general instructions for details and YAML example).
+- Follow the
+  [Google GitHub Actions/YAML Style Guide](https://github.com/google/styleguide/blob/gh-pages/docguide/style.md)
+  for additional best practices.
+- All workflow files must begin with the required file header (see general
+  instructions for details and YAML example).
 
 ## Workflow File Structure
 
 - Use `.github/workflows/` directory for all workflow files
-- Use descriptive names for workflow files (e.g., `ci.yml`, `deploy-production.yml`)
+- Use descriptive names for workflow files (e.g., `ci.yml`,
+  `deploy-production.yml`)
 - Use lowercase, hyphen-separated names for workflow files
 - Include file extension `.yml` (preferred) or `.yaml`
 
@@ -84,7 +90,8 @@ jobs:
 
 ### Actions References
 
-- Always pin actions to specific versions using SHA hashes for critical workflows
+- Always pin actions to specific versions using SHA hashes for critical
+  workflows
 - Use major version references (`@v4`) for general usage
 - Avoid using `@master` or `@main` references
 
@@ -126,7 +133,7 @@ jobs:
 
 ```yaml
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: '20'
 
 jobs:
   build:
@@ -135,7 +142,7 @@ jobs:
     steps:
       - name: Use specific variable
         env:
-          SPECIFIC_VAR: "value"
+          SPECIFIC_VAR: 'value'
         run: echo $SPECIFIC_VAR
 ```
 
@@ -220,7 +227,8 @@ permissions:
 
 ## Required File Header
 
-All workflow files must begin with a standard header as described in the [general coding instructions](general-coding.instructions.md). Example for YAML:
+All workflow files must begin with a standard header as described in the
+[general coding instructions](general-coding.instructions.md). Example for YAML:
 
 ```yaml
 # file: .github/workflows/ci.yml

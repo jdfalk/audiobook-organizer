@@ -1,6 +1,8 @@
 <!-- file: .github/instructions/go.instructions.md -->
-<!-- version: 1.0.0 -->
-<!-- guid: 8f4a3c5d-6e7b-5d9f-0a1b-2c3d4e5f6a7b -->
+<!-- version: 1.2.0 -->
+<!-- guid: 4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c -->
+<!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
+<!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
 ---
 applyTo: "**/*.go"
@@ -11,8 +13,11 @@ description: |
 # Go Coding Instructions
 
 - Follow the [general coding instructions](general-coding.instructions.md).
-- Follow the [Google Go Style Guide](https://google.github.io/styleguide/go/index.html) for additional best practices.
-- All Go files must begin with the required file header (see general instructions for details and Go example).
+- Follow the
+  [Google Go Style Guide](https://google.github.io/styleguide/go/index.html) for
+  additional best practices.
+- All Go files must begin with the required file header (see general
+  instructions for details and Go example).
 
 ## Core Principles
 
@@ -25,7 +30,8 @@ description: |
 
 - Use short, concise, evocative package names (lowercase, no underscores)
 - Use camelCase for unexported names, PascalCase for exported names
-- Use short names for short-lived variables, descriptive names for longer-lived variables
+- Use short names for short-lived variables, descriptive names for longer-lived
+  variables
 - Use PascalCase for exported constants, camelCase for unexported constants
 - Single-method interfaces should end in "-er" (e.g., Reader, Writer)
 
@@ -71,7 +77,8 @@ description: |
 
 ## Required File Header
 
-All Go files must begin with a standard header as described in the [general coding instructions](general-coding.instructions.md). Example for Go:
+All Go files must begin with a standard header as described in the
+[general coding instructions](general-coding.instructions.md). Example for Go:
 
 ```go
 // file: path/to/file.go

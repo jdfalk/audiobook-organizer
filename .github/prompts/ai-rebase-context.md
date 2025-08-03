@@ -6,7 +6,9 @@
 
 ## Project Overview
 
-This is the **ghcommon** repository, which contains shared GitHub workflows, automation scripts, and common utilities for managing multiple repositories in the organization. It focuses on:
+This is the **ghcommon** repository, which contains shared GitHub workflows,
+automation scripts, and common utilities for managing multiple repositories in
+the organization. It focuses on:
 
 - Reusable GitHub Actions workflows
 - Documentation management automation
@@ -25,11 +27,13 @@ This is the **ghcommon** repository, which contains shared GitHub workflows, aut
 
 ### README.md
 
-The main project documentation explaining the repository's purpose and structure.
+The main project documentation explaining the repository's purpose and
+structure.
 
 ### .github/instructions/general-coding.instructions.md
 
-Contains the canonical coding standards and file header requirements that apply to all files.
+Contains the canonical coding standards and file header requirements that apply
+to all files.
 
 ### .github/commit-messages.md
 
@@ -37,7 +41,8 @@ Defines the conventional commit message format used across all repositories.
 
 ### .github/workflows/
 
-Contains reusable GitHub Actions workflows that can be used by other repositories.
+Contains reusable GitHub Actions workflows that can be used by other
+repositories.
 
 ## Common Conflict Patterns
 

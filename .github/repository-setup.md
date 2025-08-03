@@ -4,10 +4,13 @@
 
 # Repository Setup Guide (Pointer)
 
-All repository setup, workflow, and configuration rules are now found in the canonical instructions system:
+All repository setup, workflow, and configuration rules are now found in the
+canonical instructions system:
 
-- See `.github/instructions/general-coding.instructions.md` for the full, up-to-date setup and configuration rules.
-- All language/framework-specific rules are in `.github/instructions/*.instructions.md`.
+- See `.github/instructions/general-coding.instructions.md` for the full,
+  up-to-date setup and configuration rules.
+- All language/framework-specific rules are in
+  `.github/instructions/*.instructions.md`.
 - For reusable workflow usage, see `.github/workflow-usage.md` (pointer).
 
 ## Quick Reference
