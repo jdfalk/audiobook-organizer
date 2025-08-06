@@ -187,3 +187,7 @@ Updates metadata tags in audio files:
 3. Limited handling of books that belong to multiple series
 4. Fuzzy matching may produce false positives with similar titles
 5. No handling of cover art or other media assets
+
+6. **Library Organization**:
+   - Optionally create a structured library using hard links, reflinks, or copies
+   - Support multiple layout styles including iTunes-compatible organization

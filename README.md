@@ -20,6 +20,7 @@ Audiobook Organizer helps you manage your audiobook collection by:
 - **Database-backed**: All organization info stored in SQLite
 - **Playlist generation**: Creates iTunes-compatible playlists by series
 - **Metadata tagging**: Updates audio files with series information
+- **Library organization**: Optionally create hard links, reflinks, or copies in a structured library compatible with iTunes and other layouts
 
 ## Installation
 

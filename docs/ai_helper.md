@@ -171,6 +171,7 @@ When considering enhancements, these features are on the roadmap:
 5. **Cover Art Management**: Extract and organize cover art from audiobook files
 6. **User Feedback Loop**: Allow users to correct incorrect series matches to improve future matching
 7. **Smart Playlists**: Generate playlists based on genre, narrator, or other criteria
+8. **Library Organization**: Allow creation of a separate library using hard links, reflinks, or copies with layouts compatible with iTunes and popular structures
 
 ---
 
