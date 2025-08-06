@@ -360,7 +360,7 @@ jobs:
 
       - name: Maven Dependency Tree Submission
         if: hashFiles('**/pom.xml') != ''
-        uses: advanced-security/maven-dependency-submission-action@v4
+        uses: advanced-security/maven-dependency-submission-action@v5
         continue-on-error: true
 
       # Mill dependency submission
@@ -510,7 +510,7 @@ jobs:
           echo ""
           echo "📝 Language-specific dependency submission actions used:"
           echo "  - Gradle: gradle/actions/dependency-submission@v4"
-          echo "  - Maven: advanced-security/maven-dependency-submission-action@v4"
+          echo "  - Maven: advanced-security/maven-dependency-submission-action@v5"
           echo "  - Mill: ckipp01/mill-dependency-submission@v1"
           echo "  - Mix (Elixir): erlef/mix-dependency-submission@v1"
           echo "  - SBT (Scala): scalacenter/sbt-dependency-submission@v2"
