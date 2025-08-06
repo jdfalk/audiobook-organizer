@@ -1,3 +1,7 @@
+# file: .github/dependabot.yml
+# version: 1.0.0
+# guid: c2815597-017f-46ab-93d9-92a36143d6bc
+#
 # Smart Dependabot configuration for audiobook-organizer
 # Audiobook organization and management tool
 # Automatically detected: Go, GitHub Actions, Python scripts
@@ -17,7 +21,8 @@ updates:
       prefix: "go"
       include: "scope"
     labels:
-      - "dependencies"
+      - "type:maintenance"
+      - "module:config"
     allow:
       - dependency-type: "direct"
     ignore:
@@ -37,7 +42,8 @@ updates:
       prefix: "python"
       include: "scope"
     labels:
-      - "dependencies"
+      - "type:maintenance"
+      - "tech:python"
     allow:
       - dependency-type: "direct"
     ignore:
@@ -57,8 +63,9 @@ updates:
       prefix: "actions"
       include: "scope"
     labels:
-      - "dependencies"
-      - "ci/cd"
+      - "type:maintenance"
+      - "workflow:github-actions"
+      - "workflow:ci-cd"
     groups:
       ci-dependencies:
         patterns:
