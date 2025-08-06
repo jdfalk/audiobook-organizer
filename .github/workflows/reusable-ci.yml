@@ -399,7 +399,7 @@ jobs:
 
       - name: SBT Dependency Submission
         if: hashFiles('**/build.sbt') != ''
-        uses: scalacenter/sbt-dependency-submission@v2
+        uses: scalacenter/sbt-dependency-submission@v3
         continue-on-error: true
 
       # Build Docker image for scanning if Dockerfile exists
@@ -513,7 +513,7 @@ jobs:
           echo "  - Maven: advanced-security/maven-dependency-submission-action@v4"
           echo "  - Mill: ckipp01/mill-dependency-submission@v1"
           echo "  - Mix (Elixir): erlef/mix-dependency-submission@v1"
-          echo "  - SBT (Scala): scalacenter/sbt-dependency-submission@v2"
+          echo "  - SBT (Scala): scalacenter/sbt-dependency-submission@v3"
           echo "  - Component Detection: For Go, .NET, Node.js, Python, Ruby, PHP, Docker, etc."
           echo ""
           echo "📝 Note: Go dependencies handled by Component Detection due to cache conflicts"
