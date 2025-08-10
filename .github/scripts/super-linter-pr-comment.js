@@ -8,48 +8,48 @@
  * Creates or updates PR comments with linting results and auto-fix information
  */
 
-const fs = require("fs");
+const fs = require('fs');
 
 module.exports = async ({ github, context, core }) => {
   // Check if there are any linting errors
   let hasErrors = false;
-  let summary = "## 🔍 Super Linter Results\n\n";
+  let summary = '## 🔍 Super Linter Results\n\n';
 
   // Get input parameters from environment
-  const hasAutoFixes = process.env.HAS_AUTO_FIXES === "true";
-  const autoFixEnabled = process.env.AUTO_FIX_ENABLED === "true";
-  const autoCommitEnabled = process.env.AUTO_COMMIT_ENABLED === "true";
+  const hasAutoFixes = process.env.HAS_AUTO_FIXES === 'true';
+  const autoFixEnabled = process.env.AUTO_FIX_ENABLED === 'true';
+  const autoCommitEnabled = process.env.AUTO_COMMIT_ENABLED === 'true';
 
   if (autoFixEnabled) {
     if (hasAutoFixes && autoCommitEnabled) {
-      summary += "🔧 **Auto-fixes applied and committed!**\n\n";
-      summary += "The following issues were automatically fixed:\n";
-      summary += "- Code formatting (Black, Prettier, etc.)\n";
-      summary += "- Import sorting and organization\n";
-      summary += "- Basic syntax and style issues\n\n";
+      summary += '🔧 **Auto-fixes applied and committed!**\n\n';
+      summary += 'The following issues were automatically fixed:\n';
+      summary += '- Code formatting (Black, Prettier, etc.)\n';
+      summary += '- Import sorting and organization\n';
+      summary += '- Basic syntax and style issues\n\n';
     } else if (hasAutoFixes && !autoCommitEnabled) {
-      summary += "🔧 **Auto-fixes available but not committed**\n\n";
+      summary += '🔧 **Auto-fixes available but not committed**\n\n';
       summary +=
-        "Auto-fixes were applied but not committed due to configuration.\n\n";
+        'Auto-fixes were applied but not committed due to configuration.\n\n';
     } else if (!hasAutoFixes) {
-      summary += "✨ **No auto-fixes needed**\n\n";
+      summary += '✨ **No auto-fixes needed**\n\n';
     }
   }
 
   try {
     // Try different locations for the report file
-    let reportContent = "";
+    let reportContent = '';
     let reportFound = false;
 
     const reportPaths = [
-      "super-linter-reports/super-linter.report",
-      "super-linter.report",
-      "super-linter-reports/super-linter.log",
+      'super-linter-reports/super-linter.report',
+      'super-linter.report',
+      'super-linter-reports/super-linter.log',
     ];
 
     for (const reportPath of reportPaths) {
       if (fs.existsSync(reportPath)) {
-        reportContent = fs.readFileSync(reportPath, "utf8");
+        reportContent = fs.readFileSync(reportPath, 'utf8');
         reportFound = true;
         core.info(`Found report at: ${reportPath}`);
         break;
@@ -57,42 +57,42 @@ module.exports = async ({ github, context, core }) => {
     }
 
     if (reportFound) {
-      if (reportContent.includes("ERROR") || reportContent.includes("FATAL")) {
+      if (reportContent.includes('ERROR') || reportContent.includes('FATAL')) {
         hasErrors = true;
-        summary += "❌ **Linting failed** - Please fix the issues below:\n\n";
+        summary += '❌ **Linting failed** - Please fix the issues below:\n\n';
         // Truncate very long reports
         if (reportContent.length > 4000) {
           reportContent =
-            reportContent.substring(0, 4000) + "\n... (truncated)";
+            reportContent.substring(0, 4000) + '\n... (truncated)';
         }
-        summary += "```\n" + reportContent + "\n```\n\n";
+        summary += '```\n' + reportContent + '\n```\n\n';
       } else {
-        summary += "✅ **All linting checks passed!**\n\n";
+        summary += '✅ **All linting checks passed!**\n\n';
       }
     } else {
-      summary += "⚠️ **No linting report found**\n\n";
-      core.warning("No linting report found in any expected location");
+      summary += '⚠️ **No linting report found**\n\n';
+      core.warning('No linting report found in any expected location');
     }
   } catch (error) {
     summary +=
-      "⚠️ **Error reading linting results**: " + error.message + "\n\n";
+      '⚠️ **Error reading linting results**: ' + error.message + '\n\n';
     core.error(`Error reading linting results: ${error.message}`);
   }
 
   if (autoFixEnabled) {
-    summary += "### Auto-fix Configuration\n";
-    summary += `- **Auto-fix enabled**: ${autoFixEnabled ? "✅" : "❌"}\n`;
-    summary += `- **Auto-commit enabled**: ${autoCommitEnabled ? "✅" : "❌"}\n`;
+    summary += '### Auto-fix Configuration\n';
+    summary += `- **Auto-fix enabled**: ${autoFixEnabled ? '✅' : '❌'}\n`;
+    summary += `- **Auto-commit enabled**: ${autoCommitEnabled ? '✅' : '❌'}\n`;
     summary +=
-      "- **Supported formatters**: Black (Python), Prettier (JS/TS), stylelint (CSS), markdownlint, yamllint, gofmt\n\n";
+      '- **Supported formatters**: Black (Python), Prettier (JS/TS), stylelint (CSS), markdownlint, yamllint, gofmt\n\n';
   }
 
   summary +=
-    "View the [workflow run](" +
+    'View the [workflow run](' +
     context.payload.repository.html_url +
-    "/actions/runs/" +
+    '/actions/runs/' +
     context.runId +
-    ") for detailed results.";
+    ') for detailed results.';
 
   try {
     // Find existing comment
@@ -102,8 +102,8 @@ module.exports = async ({ github, context, core }) => {
       issue_number: context.issue.number,
     });
 
-    const existingComment = comments.data.find((comment) =>
-      comment.body.includes("🔍 Super Linter Results"),
+    const existingComment = comments.data.find(comment =>
+      comment.body.includes('🔍 Super Linter Results')
     );
 
     if (existingComment) {
@@ -114,7 +114,7 @@ module.exports = async ({ github, context, core }) => {
         comment_id: existingComment.id,
         body: summary,
       });
-      core.info("Updated existing PR comment");
+      core.info('Updated existing PR comment');
     } else {
       // Create new comment
       await github.rest.issues.createComment({
@@ -123,7 +123,7 @@ module.exports = async ({ github, context, core }) => {
         issue_number: context.issue.number,
         body: summary,
       });
-      core.info("Created new PR comment");
+      core.info('Created new PR comment');
     }
   } catch (error) {
     core.error(`Failed to create/update PR comment: ${error.message}`);

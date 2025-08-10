@@ -4,7 +4,8 @@
 
 # AGENTS.md
 
-> **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow instructions are in the [.github/](.github/) directory.
+> **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow
+> instructions are in the [.github/](.github/) directory.
 
 ## Key Copilot/Agent Documents
 

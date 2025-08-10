@@ -5,9 +5,8 @@
 Follow this structure when creating tests:
 
 ```markdown
-[Setup] - Prepare the test environment and inputs
-[Exercise] - Execute the functionality being tested
-[Verify] - Check that the results match expectations
+[Setup] - Prepare the test environment and inputs [Exercise] - Execute the
+functionality being tested [Verify] - Check that the results match expectations
 [Teardown] - Clean up any resources (if needed)
 ```
 
