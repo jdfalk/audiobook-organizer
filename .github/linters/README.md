@@ -6,7 +6,8 @@
 
 # Linter Configuration Files
 
-This directory contains configuration files for Super Linter, which provides comprehensive code quality checks across multiple languages.
+This directory contains configuration files for Super Linter, which provides
+comprehensive code quality checks across multiple languages.
 
 ## Configuration Files
 
@@ -26,7 +27,8 @@ These configurations enforce the coding standards defined in our style guides:
 
 - **Python**: Follows Google Python Style Guide with 80-character line length
 - **Shell**: Follows Google Shell Style Guide
-- **Markdown**: Follows Google Markdown Style Guide with 100-character line length
+- **Markdown**: Follows Google Markdown Style Guide with 100-character line
+  length
 - **JavaScript/TypeScript**: Modern ES2022 standards with TypeScript support
 - **CSS**: Standard CSS formatting with consistent spacing and naming
 - **YAML**: Standard YAML formatting with proper indentation
@@ -34,7 +36,8 @@ These configurations enforce the coding standards defined in our style guides:
 
 ## Usage
 
-These files are automatically used by the Super Linter workflow (`reusable-super-linter.yml`) when linting is enabled in CI/CD pipelines.
+These files are automatically used by the Super Linter workflow
+(`reusable-super-linter.yml`) when linting is enabled in CI/CD pipelines.
 
 ### Local Development
 
@@ -73,7 +76,8 @@ You can use these configurations locally by:
 
 ## Integration
 
-The Super Linter workflow integrates these configurations automatically and provides:
+The Super Linter workflow integrates these configurations automatically and
+provides:
 
 - ✅ Comprehensive multi-language linting
 - 🔧 **Auto-fixing for supported languages**
@@ -109,7 +113,7 @@ Auto-fixing is enabled by default but can be controlled with these inputs:
   with:
     enable-auto-fix: true # Enable auto-fixing
     auto-commit-fixes: true # Commit fixes automatically
-    commit-message: "style: auto-fix [skip ci]" # Custom commit message
+    commit-message: 'style: auto-fix [skip ci]' # Custom commit message
 ```
 
 ### When Auto-fixes Are Applied
@@ -126,4 +130,5 @@ To customize linting for specific projects:
 2. Modify the Super Linter environment file (`.github/super-linter.env`)
 3. Adjust inputs in your workflow that calls `reusable-super-linter.yml`
 
-For more information, see the [Super Linter documentation](https://github.com/super-linter/super-linter).
+For more information, see the
+[Super Linter documentation](https://github.com/super-linter/super-linter).

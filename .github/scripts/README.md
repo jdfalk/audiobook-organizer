@@ -6,9 +6,11 @@ This directory contains standalone scripts used by GitHub Actions workflows.
 
 ### super-linter-pr-comment.js
 
-Creates or updates PR comments with Super Linter results and auto-fix information.
+Creates or updates PR comments with Super Linter results and auto-fix
+information.
 
-**Usage**: Called by the `reusable-super-linter.yml` workflow via `actions/github-script`.
+**Usage**: Called by the `reusable-super-linter.yml` workflow via
+`actions/github-script`.
 
 **Environment Variables**:
 

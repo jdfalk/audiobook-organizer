@@ -1,4 +1,3 @@
-
 ## [Unreleased]
 
 ### Added
@@ -8,4 +7,3 @@
 ### Added
 
 - Setup standard ghcommon workflows and scripts
-

@@ -1,6 +1,7 @@
 # Audiobook Organizer
 
-A Go application to organize audiobook collections by identifying series and generating playlists.
+A Go application to organize audiobook collections by identifying series and
+generating playlists.
 
 ## Overview
 
@@ -20,7 +21,8 @@ Audiobook Organizer helps you manage your audiobook collection by:
 - **Database-backed**: All organization info stored in SQLite
 - **Playlist generation**: Creates iTunes-compatible playlists by series
 - **Metadata tagging**: Updates audio files with series information
-- **Library organization**: Optionally create hard links, reflinks, or copies in a structured library compatible with iTunes and other layouts
+- **Library organization**: Optionally create hard links, reflinks, or copies in
+  a structured library compatible with iTunes and other layouts
 
 ## Installation
 
@@ -51,26 +53,29 @@ go build -o audiobook-organizer
 
 ## Configuration
 
-Configuration can be provided via command-line flags, environment variables, or a config file:
+Configuration can be provided via command-line flags, environment variables, or
+a config file:
 
 ```yaml
 # $HOME/.audiobook-organizer.yaml
-root_dir: "/path/to/audiobooks"
-database_path: "audiobooks.db"
-playlist_dir: "playlists"
+root_dir: '/path/to/audiobooks'
+database_path: 'audiobooks.db'
+playlist_dir: 'playlists'
 api_keys:
-  goodreads: "your-api-key-if-available"
+  goodreads: 'your-api-key-if-available'
 ```
 
 ## Documentation
 
-For more detailed information, see the [Technical Design Document](docs/technical_design.md).
+For more detailed information, see the
+[Technical Design Document](docs/technical_design.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
+for details.
 
 ## Repository Automation
 
-This project uses standard workflows and scripts from [ghcommon](https://github.com/jdfalk/ghcommon).
+This project uses standard workflows and scripts from
+[ghcommon](https://github.com/jdfalk/ghcommon).

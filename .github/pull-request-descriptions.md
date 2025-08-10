@@ -21,8 +21,12 @@ Brief overview of the entire PR and its purpose
 
 **Files Modified:**
 
-- [`path/to/file1.ext`](./path/to/file1.ext) - Description of changes | [[diff]](../../pull/PR_NUMBER/files#diff-hash) [[repo]](../../blob/main/path/to/file1.ext)
-- [`path/to/file2.ext`](./path/to/file2.ext) - Description of changes | [[diff]](../../pull/PR_NUMBER/files#diff-hash) [[repo]](../../blob/main/path/to/file2.ext)
+- [`path/to/file1.ext`](./path/to/file1.ext) - Description of changes |
+  [[diff]](../../pull/PR_NUMBER/files#diff-hash)
+  [[repo]](../../blob/main/path/to/file1.ext)
+- [`path/to/file2.ext`](./path/to/file2.ext) - Description of changes |
+  [[diff]](../../pull/PR_NUMBER/files#diff-hash)
+  [[repo]](../../blob/main/path/to/file2.ext)
 
 ### type(scope): description (#issue-number)
 
@@ -30,9 +34,12 @@ Brief overview of the entire PR and its purpose
 
 **Files Modified:**
 
-- [`path/to/file3.ext`](./path/to/file3.ext) - Description of changes | [[diff]](../../pull/PR_NUMBER/files#diff-hash) [[repo]](../../blob/main/path/to/file3.ext)
+- [`path/to/file3.ext`](./path/to/file3.ext) - Description of changes |
+  [[diff]](../../pull/PR_NUMBER/files#diff-hash)
+  [[repo]](../../blob/main/path/to/file3.ext)
 
-_Note: Omit issue numbers from section headers if not working on specific issues. Use `type(scope): description` format instead._
+_Note: Omit issue numbers from section headers if not working on specific
+issues. Use `type(scope): description` format instead._
 
 ## Testing
 
@@ -62,7 +69,8 @@ Closes #123, #456, #789
 ### Issues Addressed Section
 
 - **Group changes by issue/feature**, not by file
-- Use conventional commit format: `type(scope): description (#issue-number)` when working on specific issues
+- Use conventional commit format: `type(scope): description (#issue-number)`
+  when working on specific issues
 - Use `type(scope): description` format when not working on specific issues
 - Each issue gets its own subsection with:
   - Conventional commit header
@@ -85,7 +93,8 @@ Closes #123, #456, #789
 
 Each file entry should include:
 
-- **File path link**: `[path/to/file.ext](./path/to/file.ext)` - Links to the file in the PR
+- **File path link**: `[path/to/file.ext](./path/to/file.ext)` - Links to the
+  file in the PR
 - **Description**: What was changed in this file
 - **Additional links**:
   - `[[diff]]` - Link to the diff view for this specific file
@@ -100,7 +109,8 @@ Each file entry should include:
 
 ### Related Issues
 
-- Use GitHub's automatic closing keywords: `Closes #123`, `Fixes #456`, `Resolves #789`
+- Use GitHub's automatic closing keywords: `Closes #123`, `Fixes #456`,
+  `Resolves #789`
 - Link related but not closed issues with: `Related to #999`
 
 ## Example
@@ -108,42 +118,62 @@ Each file entry should include:
 ```markdown
 ## Summary
 
-This PR implements user authentication, adds profile management, and updates documentation to support the new auth system.
+This PR implements user authentication, adds profile management, and updates
+documentation to support the new auth system.
 
 ## Issues Addressed
 
 ### feat(auth): implement JWT token validation (#123)
 
-**Description:** Added JWT middleware to secure API endpoints and protect user data. Implemented token generation, validation, and refresh functionality.
+**Description:** Added JWT middleware to secure API endpoints and protect user
+data. Implemented token generation, validation, and refresh functionality.
 
 **Files Modified:**
 
-- [`src/middleware/auth.js`](./src/middleware/auth.js) - JWT validation logic and middleware | [[diff]](../../pull/456/files#diff-abc123) [[repo]](../../blob/main/src/middleware/auth.js)
-- [`src/routes/api.js`](./src/routes/api.js) - Applied auth middleware to protected routes | [[diff]](../../pull/456/files#diff-def456) [[repo]](../../blob/main/src/routes/api.js)
-- [`tests/auth.test.js`](./tests/auth.test.js) - Comprehensive test coverage for auth flow | [[diff]](../../pull/456/files#diff-ghi789) [[repo]](../../blob/main/tests/auth.test.js)
+- [`src/middleware/auth.js`](./src/middleware/auth.js) - JWT validation logic
+  and middleware | [[diff]](../../pull/456/files#diff-abc123)
+  [[repo]](../../blob/main/src/middleware/auth.js)
+- [`src/routes/api.js`](./src/routes/api.js) - Applied auth middleware to
+  protected routes | [[diff]](../../pull/456/files#diff-def456)
+  [[repo]](../../blob/main/src/routes/api.js)
+- [`tests/auth.test.js`](./tests/auth.test.js) - Comprehensive test coverage for
+  auth flow | [[diff]](../../pull/456/files#diff-ghi789)
+  [[repo]](../../blob/main/tests/auth.test.js)
 
 ### feat(ui): add user profile page (#456)
 
-**Description:** Created new user profile interface with edit capabilities, avatar upload, and preference management.
+**Description:** Created new user profile interface with edit capabilities,
+avatar upload, and preference management.
 
 **Files Modified:**
 
-- [`src/components/UserProfile.jsx`](./src/components/UserProfile.jsx) - Main profile component with edit functionality | [[diff]](../../pull/456/files#diff-jkl012) [[repo]](../../blob/main/src/components/UserProfile.jsx)
-- [`src/styles/profile.css`](./src/styles/profile.css) - Responsive styling for profile page | [[diff]](../../pull/456/files#diff-mno345) [[repo]](../../blob/main/src/styles/profile.css)
+- [`src/components/UserProfile.jsx`](./src/components/UserProfile.jsx) - Main
+  profile component with edit functionality |
+  [[diff]](../../pull/456/files#diff-jkl012)
+  [[repo]](../../blob/main/src/components/UserProfile.jsx)
+- [`src/styles/profile.css`](./src/styles/profile.css) - Responsive styling for
+  profile page | [[diff]](../../pull/456/files#diff-mno345)
+  [[repo]](../../blob/main/src/styles/profile.css)
 
 ### docs(readme): update installation instructions (#789)
 
-**Description:** Updated README with current installation steps and added troubleshooting section for auth setup.
+**Description:** Updated README with current installation steps and added
+troubleshooting section for auth setup.
 
 **Files Modified:**
 
-- [`README.md`](./README.md) - Updated installation and auth setup documentation | [[diff]](../../pull/456/files#diff-pqr678) [[repo]](../../blob/main/README.md)
+- [`README.md`](./README.md) - Updated installation and auth setup documentation
+  | [[diff]](../../pull/456/files#diff-pqr678)
+  [[repo]](../../blob/main/README.md)
 
 ## Testing
 
-- **Unit Tests**: Added 15 new tests for auth middleware and profile components (95% coverage)
-- **Integration Tests**: Tested complete auth flow from login to protected resource access
-- **Manual Testing**: Verified UI functionality across Chrome, Firefox, and Safari
+- **Unit Tests**: Added 15 new tests for auth middleware and profile components
+  (95% coverage)
+- **Integration Tests**: Tested complete auth flow from login to protected
+  resource access
+- **Manual Testing**: Verified UI functionality across Chrome, Firefox, and
+  Safari
 - **Edge Cases**: Tested token expiration, invalid tokens, and network failures
 
 ## Breaking Changes
@@ -159,14 +189,14 @@ This PR implements user authentication, adds profile management, and updates doc
 
 ## Related Issues
 
-Closes #123, #456, #789
-Related to #999 (future OAuth implementation)
+Closes #123, #456, #789 Related to #999 (future OAuth implementation)
 ```
 
 ## Best Practices
 
 1. **One issue per section** - Don't mix unrelated changes
-2. **Accurate file descriptions** - Explain what changed, not just what the file does
+2. **Accurate file descriptions** - Explain what changed, not just what the file
+   does
 3. **Complete file coverage** - List every modified file with its purpose
 4. **Proper linking** - Ensure all links work and point to correct locations
 5. **Clear testing** - Explain how each feature/fix was verified

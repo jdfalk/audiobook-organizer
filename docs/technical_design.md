@@ -2,11 +2,17 @@
 
 ## Overview
 
-Audiobook Organizer is a command-line application designed to help users organize their audiobook collections by identifying series, generating playlists, and updating audio file metadata. The application scans audiobook files, extracts metadata, uses pattern matching and fuzzy logic to identify series relationships, and stores this information in a SQLite database without modifying the original file structure.
+Audiobook Organizer is a command-line application designed to help users
+organize their audiobook collections by identifying series, generating
+playlists, and updating audio file metadata. The application scans audiobook
+files, extracts metadata, uses pattern matching and fuzzy logic to identify
+series relationships, and stores this information in a SQLite database without
+modifying the original file structure.
 
 ## Architecture
 
-The application follows a modular architecture with clear separation of concerns:
+The application follows a modular architecture with clear separation of
+concerns:
 
 ```
 audiobook-organizer/
@@ -39,6 +45,7 @@ Uses Cobra and Viper to provide a flexible and powerful CLI:
 ### Configuration (internal/config)
 
 Manages application settings using Viper:
+
 - Loads from config files, environment variables, and command-line flags
 - Supports paths to audiobook directories, database, playlist output
 - Configures supported file extensions and external API keys
@@ -46,15 +53,18 @@ Manages application settings using Viper:
 ### Database (internal/database)
 
 SQLite3-based persistence layer:
+
 - **authors**: Stores author information
 - **series**: Stores series information with author relationships
-- **books**: Stores book information with paths, formats, and series relationships
+- **books**: Stores book information with paths, formats, and series
+  relationships
 - **playlists**: Stores generated playlist information
 - **playlist_items**: Stores the composition of playlists
 
 ### Scanner (internal/scanner)
 
 Responsible for discovering and processing audiobook files:
+
 - Walks directory structures to find supported audio files
 - Extracts metadata and identifies series relationships
 - Maps files to database entities
@@ -62,6 +72,7 @@ Responsible for discovering and processing audiobook files:
 ### Metadata (internal/metadata)
 
 Extracts and processes metadata from audio files:
+
 - Uses the `dhowden/tag` library to read standard tags
 - Falls back to filename and path analysis when tags are missing
 - Handles various audio formats including M4B, MP3, and others
@@ -69,6 +80,7 @@ Extracts and processes metadata from audio files:
 ### Matcher (internal/matcher)
 
 Implements series identification algorithms:
+
 - Pattern matching using regular expressions
 - Directory structure analysis
 - Fuzzy matching for similar titles using `lithammer/fuzzysearch`
@@ -77,6 +89,7 @@ Implements series identification algorithms:
 ### Playlist (internal/playlist)
 
 Generates playlists for audio applications:
+
 - Creates M3U format playlists compatible with iTunes and other players
 - Orders books by series sequence or title
 - Sanitizes filenames and paths for cross-platform compatibility
@@ -84,8 +97,10 @@ Generates playlists for audio applications:
 ### Tagger (internal/tagger)
 
 Updates metadata tags in audio files:
+
 - Adds or updates series information using format-specific tools
-- Supports M4B/M4A/AAC (via AtomicParsley), MP3 (via eyeD3), and FLAC (via metaflac)
+- Supports M4B/M4A/AAC (via AtomicParsley), MP3 (via eyeD3), and FLAC (via
+  metaflac)
 - Currently implemented as mock operations with actual commands commented
 
 ## Database Schema
@@ -161,7 +176,8 @@ Updates metadata tags in audio files:
 ## Future Enhancements
 
 1. **External API Integration**:
-   - Integration with Goodreads or similar services for better series identification
+   - Integration with Goodreads or similar services for better series
+     identification
    - Book database lookups to supplement metadata
 
 2. **Improved Tag Writing**:
@@ -189,5 +205,6 @@ Updates metadata tags in audio files:
 5. No handling of cover art or other media assets
 
 6. **Library Organization**:
-   - Optionally create a structured library using hard links, reflinks, or copies
+   - Optionally create a structured library using hard links, reflinks, or
+     copies
    - Support multiple layout styles including iTunes-compatible organization

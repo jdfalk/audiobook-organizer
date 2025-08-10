@@ -8,183 +8,183 @@
 
 # TYPE LABELS
 type:documentation:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*.md"
-                      - "docs/**/*"
-                      - ".github/**/*.md"
-                      - "README*"
-                      - "CHANGELOG*"
-                      - "TODO*"
-                      - "CONTRIBUTING*"
-                      - "templates/**/*.md"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**/*"
+          - ".github/**/*.md"
+          - "README*"
+          - "CHANGELOG*"
+          - "TODO*"
+          - "CONTRIBUTING*"
+          - "templates/**/*.md"
 
 type:testing:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*test*"
-                      - "tests/**"
-                      - "test/**"
-                      - "**/test_*"
-                      - "**/*_test.py"
-                      - ".github/workflows/*test*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*test*"
+          - "tests/**"
+          - "test/**"
+          - "**/test_*"
+          - "**/*_test.py"
+          - ".github/workflows/*test*"
 
 type:maintenance:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - ".gitignore"
-                      - ".gitattributes"
-                      - "requirements.txt"
-                      - "package.json"
-                      - "package-lock.json"
-                      - "Makefile"
-                      - "cleanup*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".gitignore"
+          - ".gitattributes"
+          - "requirements.txt"
+          - "package.json"
+          - "package-lock.json"
+          - "Makefile"
+          - "cleanup*"
 
 # TECHNOLOGY LABELS
 tech:python:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*.py"
-                      - "requirements.txt"
-                      - "pyproject.toml"
-                      - "setup.py"
-                      - "**/python/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.py"
+          - "requirements.txt"
+          - "pyproject.toml"
+          - "setup.py"
+          - "**/python/**"
 
 tech:javascript:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*.js"
-                      - "**/*.jsx"
-                      - "**/*.ts"
-                      - "**/*.tsx"
-                      - "package.json"
-                      - "package-lock.json"
-                      - "node_modules/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.js"
+          - "**/*.jsx"
+          - "**/*.ts"
+          - "**/*.tsx"
+          - "package.json"
+          - "package-lock.json"
+          - "node_modules/**"
 
 tech:shell:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*.sh"
-                      - "**/*.bash"
-                      - "scripts/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.sh"
+          - "**/*.bash"
+          - "scripts/**"
 
 # WORKFLOW LABELS
 workflow:github-actions:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - ".github/workflows/**"
-                      - ".github/actions/**"
-                      - "action.yml"
-                      - "action.yaml"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+          - "action.yml"
+          - "action.yaml"
 
 workflow:automation:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "scripts/**"
-                      - "**/automation/**"
-                      - "**/*automation*"
-                      - "**/auto-*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/**"
+          - "**/automation/**"
+          - "**/*automation*"
+          - "**/auto-*"
 
 workflow:ci-cd:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - ".github/workflows/ci*"
-                      - ".github/workflows/cd*"
-                      - ".github/workflows/deploy*"
-                      - ".github/workflows/build*"
-                      - ".github/workflows/test*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/ci*"
+          - ".github/workflows/cd*"
+          - ".github/workflows/deploy*"
+          - ".github/workflows/build*"
+          - ".github/workflows/test*"
 
 workflow:deployment:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - ".github/workflows/deploy*"
-                      - ".github/workflows/release*"
-                      - "docker*"
-                      - "Dockerfile*"
-                      - "docker-compose*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/deploy*"
+          - ".github/workflows/release*"
+          - "docker*"
+          - "Dockerfile*"
+          - "docker-compose*"
 
 # MODULE LABELS
 module:config:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "**/*.yml"
-                      - "**/*.yaml"
-                      - "**/*.json"
-                      - "**/*.toml"
-                      - "**/*.ini"
-                      - "**/*.conf"
-                      - "config/**"
-                      - "**/config/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.yml"
+          - "**/*.yaml"
+          - "**/*.json"
+          - "**/*.toml"
+          - "**/*.ini"
+          - "**/*.conf"
+          - "config/**"
+          - "**/config/**"
 
 # PROJECT-SPECIFIC LABELS
 # GitHub project management and workflows
 project:github-management:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "scripts/unified_github_*"
-                      - "**/*github*project*"
-                      - "**/project*manager*"
-                      - "labels.json"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/unified_github_*"
+          - "**/*github*project*"
+          - "**/project*manager*"
+          - "labels.json"
 
 # Shorter aliases for common labels
 github-actions:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - ".github/workflows/**"
-                      - ".github/actions/**"
-                      - "action.yml"
-                      - "action.yaml"
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/actions/**"
+          - "action.yml"
+          - "action.yaml"
 
 automation:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "scripts/**"
-                      - "**/automation/**"
-                      - "**/*automation*"
-                      - "**/auto-*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/**"
+          - "**/automation/**"
+          - "**/*automation*"
+          - "**/auto-*"
 
 # Issue management
 project:issue-management:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "scripts/*issue*"
-                      - "**/issue*manager*"
-                      - "**/issue*update*"
-                      - "templates/issue*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/*issue*"
+          - "**/issue*manager*"
+          - "**/issue*update*"
+          - "templates/issue*"
 
 issue-management:
-      - changed-files:
-              - any-glob-to-any-file:
-                      - "scripts/*issue*"
-                      - "**/issue*manager*"
-                      - "**/issue*update*"
-                      - "templates/issue*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "scripts/*issue*"
+          - "**/issue*manager*"
+          - "**/issue*update*"
+          - "templates/issue*"
 
 # SIZE LABELS (based on file count/complexity)
 size:small:
-      - changed-files:
-              - all-globs-to-all-files:
-                      - "**/*"
-              - count: 1-3
+  - changed-files:
+      - all-globs-to-all-files:
+          - "**/*"
+      - count: 1-3
 
 # AI/AUTOMATION LABELS
 codex:
-      - head-branch: ["^feature/codex-.*", "^codex/.*", "^ai/.*", "^automated/.*"]
+  - head-branch: ["^feature/codex-.*", "^codex/.*", "^ai/.*", "^automated/.*"]
 
 size:medium:
-      - changed-files:
-              - all-globs-to-all-files:
-                      - "**/*"
-              - count: 4-10
+  - changed-files:
+      - all-globs-to-all-files:
+          - "**/*"
+      - count: 4-10
 
 size:large:
-      - changed-files:
-              - all-globs-to-all-files:
-                      - "**/*"
-              - count: 11-25
+  - changed-files:
+      - all-globs-to-all-files:
+          - "**/*"
+      - count: 11-25
 
 size:epic:
-      - changed-files:
-              - all-globs-to-all-files:
-                      - "**/*"
-              - count: 26+
+  - changed-files:
+      - all-globs-to-all-files:
+          - "**/*"
+      - count: 26+
