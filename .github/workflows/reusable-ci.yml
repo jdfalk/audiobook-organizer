@@ -82,7 +82,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           # Ensure we have the base ref for comparison
@@ -115,7 +115,7 @@ jobs:
       run:
         working-directory: ${{ inputs.backend-path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # --- Go Setup & Test ---
@@ -175,7 +175,7 @@ jobs:
       run:
         working-directory: ${{ inputs.frontend-path }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # --- Node.js/TypeScript/JSX Setup & Test ---
@@ -206,7 +206,7 @@ jobs:
     needs: [super-linter]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # --- Go Setup & Test ---
@@ -330,7 +330,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

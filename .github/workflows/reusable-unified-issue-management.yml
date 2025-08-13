@@ -107,7 +107,7 @@ jobs:
       event_name: ${{ steps.context.outputs.event_name }}
       triggered_by: ${{ steps.context.outputs.triggered_by }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -164,7 +164,7 @@ jobs:
         operation: ${{ fromJson(needs.determine-operations.outputs.operations) }}
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -512,7 +512,7 @@ jobs:
     needs: [determine-operations, issue-management]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download collect results script
         run: |
