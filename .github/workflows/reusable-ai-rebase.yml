@@ -79,7 +79,7 @@ jobs:
         pr: ${{ fromJson(needs.find.outputs.list) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 

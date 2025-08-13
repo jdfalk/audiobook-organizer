@@ -95,7 +95,7 @@ jobs:
       lines_deleted: ${{ steps.capture-changes.outputs.lines_deleted }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           # Use enhanced PAT for cross-repo operations and project management
