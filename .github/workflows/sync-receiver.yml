@@ -1,0 +1,93 @@
+# file: .github/workflows/sync-receiver.yml
+# version: 1.0.0
+# guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
+
+name: Sync Receiver
+
+on:
+  repository_dispatch:
+    types: [sync-from-ghcommon]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  sync-from-ghcommon:
+    name: Sync Files from ghcommon
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout ghcommon
+        uses: actions/checkout@v5
+        with:
+          repository: jdfalk/ghcommon
+          path: ghcommon-source
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync files based on type
+        run: |
+          sync_type="${{ github.event.client_payload.sync_type }}"
+          echo "Performing sync of type: $sync_type"
+
+          # Create directories if they don't exist
+          mkdir -p .github/workflows
+          mkdir -p .github/instructions
+
+          case "$sync_type" in
+            "all"|"workflows")
+              echo "Syncing workflows..."
+              # Copy specific workflows (not sync workflows to avoid recursion)
+              cp ghcommon-source/.github/workflows/pr-automation.yml .github/workflows/ 2>/dev/null || true
+              cp ghcommon-source/.github/workflows/release*.yml .github/workflows/ 2>/dev/null || true
+              ;;&
+            "all"|"instructions")
+              echo "Syncing instructions..."
+              cp ghcommon-source/.github/copilot-instructions.md .github/ 2>/dev/null || true
+              cp ghcommon-source/.github/instructions/* .github/instructions/ 2>/dev/null || true
+              ;;&
+            "all"|"labels")
+              echo "Syncing labels..."
+              cp ghcommon-source/labels.json . 2>/dev/null || true
+              cp ghcommon-source/labels.md . 2>/dev/null || true
+              ;;
+          esac
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected:"
+            git diff --name-only
+          fi
+
+      - name: Commit and push changes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "sync: update files from ghcommon
+
+          Source: ${{ github.event.client_payload.source_repo }}
+          SHA: ${{ github.event.client_payload.source_sha }}
+          Sync type: ${{ github.event.client_payload.sync_type }}"
+          git push
+
+      - name: Summary
+        run: |
+          echo "## Sync Receiver Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Sync Type:** ${{ github.event.client_payload.sync_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source Repo:** ${{ github.event.client_payload.source_repo }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source SHA:** ${{ github.event.client_payload.source_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Changes Made:** ${{ steps.changes.outputs.has_changes }}" >> $GITHUB_STEP_SUMMARY

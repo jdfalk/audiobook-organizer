@@ -4,7 +4,7 @@
 
 name: Reusable - Label Synchronization
 
-on:
+# DISABLED - on:
   workflow_call:
     inputs:
       config-file:
