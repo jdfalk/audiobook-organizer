@@ -1,6 +1,6 @@
 module github.com/jdfalk/audiobook-organizer
 
-go 1.21.0
+go 1.23.0
 
 require (
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
