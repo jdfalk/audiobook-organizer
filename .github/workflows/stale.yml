@@ -1,5 +1,5 @@
 # file: .github/workflows/stale.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: 336b7a2d-c53a-4ef2-927e-3bdfd733c528
 
 name: Handle Stale Issues
@@ -14,10 +14,25 @@ on:
   workflow_dispatch:
 
 jobs:
-  call-stale:
-    uses: ./.github/workflows/reusable-stale.yml
-    with:
-      days-before-stale: 90
-      days-before-close: 14
-    secrets:
-      github-token: ${{ secrets.JF_CI_GH_PAT }}
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale issues and PRs
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-stale: 90
+          days-before-close: 14
+          stale-issue-message: >-
+            This issue has been automatically marked as stale because it has not had
+            recent activity. It will be closed if no further activity occurs.
+          stale-pr-message: >-
+            This pull request has been automatically marked as stale due to inactivity.
+            It will be closed if no further activity occurs.
+          close-issue-message: >-
+            Closing as stale. Feel free to reopen with additional context or updates.
+          close-pr-message: >-
+            Closing as stale. Please reopen if you plan to continue work here.
+          exempt-issue-labels: "pinned,security,dependencies"
+          exempt-pr-labels: "pinned,security,dependencies"
+          operations-per-run: 200
