@@ -1,5 +1,5 @@
 # file: .github/workflows/pr-automation.yml
-# version: 2.0.0
+# version: 2.0.1
 # guid: f6a7b8c9-d0e1-2345-f678-90123456789a
 
 name: PR Automation
