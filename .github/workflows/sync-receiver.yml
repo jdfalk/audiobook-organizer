@@ -1,5 +1,5 @@
 # file: .github/workflows/sync-receiver.yml
-# version: 1.5.0
+# version: 1.6.0
 # guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
 
 # ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
@@ -78,6 +78,9 @@ jobs:
           fi
 
       - name: Sync files based on type
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sync_type="${{ steps.params.outputs.sync_type }}"
           verbose="${{ steps.params.outputs.verbose_logging }}"
@@ -202,17 +205,19 @@ jobs:
               # Copy the GitHub labels sync script
               copy_with_logging "ghcommon-source/scripts/sync-github-labels.py" "scripts/" "GitHub labels sync script"
 
-              # Optional: Actually sync GitHub repository labels if GITHUB_TOKEN is available
-              if [ -n "$GITHUB_TOKEN" ] && [ "${{ steps.params.outputs.sync_type }}" = "labels" ]; then
+              # Optional: Actually sync GitHub repository labels if token is available
+              # Try PAT_TOKEN first for enhanced permissions, fallback to GITHUB_TOKEN
+              if [ "${{ steps.params.outputs.sync_type }}" = "labels" ] || [ "${{ steps.params.outputs.sync_type }}" = "all" ]; then
                 echo "🏷️  Attempting to sync GitHub repository labels..."
                 if python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }} 2>&1; then
                   echo "✅ Successfully synced GitHub repository labels"
                 else
                   echo "⚠️  GitHub label sync failed, but file sync completed"
+                  echo "💡 This may be due to insufficient token permissions"
+                  echo "💡 Consider setting up PAT_TOKEN secret for enhanced permissions"
                 fi
               else
-                echo "ℹ️  Copied label files and sync script. To sync GitHub labels, run:"
-                echo "   GITHUB_TOKEN=<token> python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }}"
+                echo "ℹ️  Copied label files and sync script only (sync_type != 'labels' or 'all')"
               fi
               ;;
           esac
