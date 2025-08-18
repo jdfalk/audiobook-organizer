@@ -1,5 +1,5 @@
 # file: .github/workflows/sync-receiver.yml
-# version: 1.1.0
+# version: 1.2.0
 # guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
 
 name: Sync Receiver
@@ -74,8 +74,8 @@ jobs:
           case "$sync_type" in
             "all"|"workflows")
               echo "Syncing workflows..."
-              # Copy specific workflows (not sync workflows to avoid recursion)
-              cp ghcommon-source/.github/workflows/pr-automation.yml .github/workflows/ 2>/dev/null || true
+              # Copy specific workflows (excluding workflows that require special permissions)
+              # Skip pr-automation.yml and other restricted workflows
               cp ghcommon-source/.github/workflows/release*.yml .github/workflows/ 2>/dev/null || true
               ;;&
             "all"|"instructions")
@@ -111,6 +111,9 @@ jobs:
             ln -sf ../.github/linters .vscode/linters
             echo "Created symlink: .vscode/linters -> ../.github/linters"
           fi
+
+          # Clean up the source directory to prevent embedded git repository issues
+          rm -rf ghcommon-source
 
       - name: Check for changes
         id: changes
