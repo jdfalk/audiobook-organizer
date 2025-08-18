@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: .github/scripts/sync-receiver-sync-files.py
-# version: 1.0.0
+# version: 1.1.0
 # guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 """
@@ -123,12 +123,21 @@ def sync_scripts():
     # Copy root scripts
     copy_directory_safe("ghcommon-source/scripts", "scripts")
 
-    # Copy GitHub scripts
+    # Scripts to exclude from sync (master dispatcher scripts)
+    excluded_scripts = {
+        "sync-determine-target-repos.py",
+        "sync-dispatch-events.py",
+        "sync-generate-summary.py",
+    }
+
+    # Copy GitHub scripts (excluding master dispatcher scripts)
     src_dir = Path("ghcommon-source/.github/scripts")
     if src_dir.exists():
         for script_file in src_dir.glob("*"):
-            if script_file.is_file():
+            if script_file.is_file() and script_file.name not in excluded_scripts:
                 copy_file_safe(str(script_file), f".github/scripts/{script_file.name}")
+            elif script_file.name in excluded_scripts:
+                print(f"⚠️  Skipping master dispatcher script: {script_file.name}")
 
     # Make sync scripts executable
     make_scripts_executable("sync-*.sh")
