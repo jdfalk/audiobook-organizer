@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: .github/scripts/sync-receiver-sync-files.py
-# version: 1.1.0
+# version: 1.2.0
 # guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 """
@@ -91,37 +91,88 @@ def sync_workflows():
 
 def sync_instructions():
     """Sync instruction files."""
-    print("Syncing instructions...")
+    print("🔄 Processing instructions section...")
 
     # Copy main instructions file
-    copy_file_safe(
+    print(
+        "ℹ️  Copying main copilot-instructions.md: ghcommon-source/.github/copilot-instructions.md -> .github/"
+    )
+    if copy_file_safe(
         "ghcommon-source/.github/copilot-instructions.md",
         ".github/copilot-instructions.md",
-    )
+    ):
+        print("✅ Successfully copied main copilot-instructions.md")
+    else:
+        print("❌ Failed to copy main copilot-instructions.md")
 
     # Copy instructions directory
     src_dir = Path("ghcommon-source/.github/instructions")
     if src_dir.exists():
-        for instruction_file in src_dir.glob("*"):
+        instruction_files = list(src_dir.glob("*"))
+        print(f"📋 Copying {len(instruction_files)} instruction files...")
+
+        success_count = 0
+        for instruction_file in instruction_files:
             if instruction_file.is_file():
-                copy_file_safe(
+                if copy_file_safe(
                     str(instruction_file),
                     f".github/instructions/{instruction_file.name}",
-                )
+                ):
+                    success_count += 1
+                else:
+                    print(f"❌ Failed to copy instruction file {instruction_file.name}")
+
+        print(f"✅ Copied {success_count}/{len(instruction_files)} instruction files")
+    else:
+        print(f"⚠️  Source not found for instruction files: {src_dir}/*")
 
 
 def sync_prompts():
     """Sync prompt files."""
-    print("Syncing prompts...")
-    copy_directory_safe("ghcommon-source/.github/prompts", ".github/prompts")
+    print("🔄 Processing prompts section...")
+
+    # List prompts files to copy first
+    src_dir = Path("ghcommon-source/.github/prompts")
+    if src_dir.exists():
+        print("📋 Prompts files to copy:")
+        import subprocess
+
+        subprocess.run(["ls", "-la", str(src_dir)], check=False)
+
+        for prompt_file in src_dir.glob("*"):
+            if prompt_file.is_file():
+                print(
+                    f"ℹ️  Copying prompt file {prompt_file.name}: {prompt_file} -> .github/prompts/"
+                )
+                if copy_file_safe(
+                    str(prompt_file), f".github/prompts/{prompt_file.name}"
+                ):
+                    print(f"✅ Successfully copied prompt file {prompt_file.name}")
+                else:
+                    print(f"❌ Failed to copy prompt file {prompt_file.name}")
+    else:
+        print(f"⚠️  Source not found for prompts files: {src_dir}/*")
 
 
 def sync_scripts():
     """Sync script files."""
-    print("Syncing scripts...")
+    print("🔄 Processing scripts section...")
+
+    # Show initial .github tree structure
+    print("📁 Current .github structure:")
+    import subprocess
+
+    subprocess.run(["tree", ".github", "-I", "logs|*.tmp"], check=False)
+    print()
 
     # Copy root scripts
-    copy_directory_safe("ghcommon-source/scripts", "scripts")
+    src_dir = Path("ghcommon-source/scripts")
+    if src_dir.exists():
+        print("📋 Copying root scripts...")
+        copy_directory_safe("ghcommon-source/scripts", "scripts")
+        print("✅ Root scripts copied")
+    else:
+        print(f"⚠️  Source not found for root scripts: {src_dir}/*")
 
     # Scripts to exclude from sync (master dispatcher scripts)
     excluded_scripts = {
@@ -130,14 +181,31 @@ def sync_scripts():
         "sync-generate-summary.py",
     }
 
-    # Copy GitHub scripts (excluding master dispatcher scripts)
+    # Copy GitHub scripts individually
     src_dir = Path("ghcommon-source/.github/scripts")
     if src_dir.exists():
-        for script_file in src_dir.glob("*"):
-            if script_file.is_file() and script_file.name not in excluded_scripts:
-                copy_file_safe(str(script_file), f".github/scripts/{script_file.name}")
-            elif script_file.name in excluded_scripts:
-                print(f"⚠️  Skipping master dispatcher script: {script_file.name}")
+        script_files = [
+            f
+            for f in src_dir.glob("*")
+            if f.is_file() and f.name not in excluded_scripts
+        ]
+        print(f"📋 Copying {len(script_files)} GitHub scripts...")
+
+        success_count = 0
+        for script_file in script_files:
+            if copy_file_safe(str(script_file), f".github/scripts/{script_file.name}"):
+                success_count += 1
+            else:
+                print(f"❌ Failed to copy GitHub script {script_file.name}")
+
+        excluded_count = len(
+            [f for f in src_dir.glob("*") if f.is_file() and f.name in excluded_scripts]
+        )
+        print(
+            f"✅ Copied {success_count}/{len(script_files)} GitHub scripts ({excluded_count} excluded)"
+        )
+    else:
+        print(f"⚠️  Source not found for GitHub scripts: {src_dir}/*")
 
     # Make sync scripts executable
     make_scripts_executable("sync-*.sh")
@@ -146,15 +214,53 @@ def sync_scripts():
 
 def sync_linters():
     """Sync linter configuration files."""
-    print("Syncing linters...")
-    copy_directory_safe("ghcommon-source/.github/linters", ".github/linters")
+    print("🔄 Processing linters section...")
+
+    # List linter files to copy first
+    src_dir = Path("ghcommon-source/.github/linters")
+    if src_dir.exists():
+        linter_files = list(src_dir.glob("*"))
+        print(f"📋 Copying {len(linter_files)} linter files...")
+        copy_directory_safe("ghcommon-source/.github/linters", ".github/linters")
+        print("✅ Linter files copied")
+    else:
+        print(f"⚠️  Source not found for linter files: {src_dir}/*")
 
 
 def sync_labels():
     """Sync label files."""
-    print("Syncing labels...")
-    copy_file_safe("ghcommon-source/labels.json", "labels.json")
-    copy_file_safe("ghcommon-source/labels.md", "labels.md")
+    print("🔄 Processing labels section...")
+
+    success_count = 0
+    total_files = 3
+
+    print("ℹ️  Copying labels.json: ghcommon-source/labels.json -> .")
+    if copy_file_safe("ghcommon-source/labels.json", "labels.json"):
+        print("✅ Successfully copied labels.json")
+        success_count += 1
+    else:
+        print("❌ Failed to copy labels.json")
+
+    print("ℹ️  Copying labels.md: ghcommon-source/labels.md -> .")
+    if copy_file_safe("ghcommon-source/labels.md", "labels.md"):
+        print("✅ Successfully copied labels.md")
+        success_count += 1
+    else:
+        print("❌ Failed to copy labels.md")
+
+    # Copy GitHub labels sync script
+    print(
+        "ℹ️  Copying GitHub labels sync script: ghcommon-source/scripts/sync-github-labels.py -> scripts/"
+    )
+    if copy_file_safe(
+        "ghcommon-source/scripts/sync-github-labels.py", "scripts/sync-github-labels.py"
+    ):
+        print("✅ Successfully copied GitHub labels sync script")
+        success_count += 1
+    else:
+        print("❌ Failed to copy GitHub labels sync script")
+
+    print(f"📊 Labels sync: {success_count}/{total_files} files copied")
 
 
 def main():
