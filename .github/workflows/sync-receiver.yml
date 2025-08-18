@@ -1,6 +1,10 @@
 # file: .github/workflows/sync-receiver.yml
-# version: 1.3.0
+# version: 1.5.0
 # guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
+
+# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
+# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
+# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/sync-receiver.yml
 
 name: Sync Receiver
 
@@ -22,6 +26,16 @@ on:
           - scripts
           - linters
           - labels
+      force_sync:
+        description: "Force sync even if no changes detected"
+        required: false
+        default: false
+        type: boolean
+      verbose_logging:
+        description: "Enable verbose logging to see all file operations"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -53,78 +67,198 @@ jobs:
             echo "sync_type=${{ github.event.client_payload.sync_type }}" >> $GITHUB_OUTPUT
             echo "source_repo=${{ github.event.client_payload.source_repo }}" >> $GITHUB_OUTPUT
             echo "source_sha=${{ github.event.client_payload.source_sha }}" >> $GITHUB_OUTPUT
+            echo "force_sync=${{ github.event.client_payload.force_sync || 'false' }}" >> $GITHUB_OUTPUT
+            echo "verbose_logging=${{ github.event.client_payload.verbose_logging || 'true' }}" >> $GITHUB_OUTPUT
           else
             echo "sync_type=${{ inputs.sync_type }}" >> $GITHUB_OUTPUT
             echo "source_repo=jdfalk/ghcommon" >> $GITHUB_OUTPUT
             echo "source_sha=manual-dispatch" >> $GITHUB_OUTPUT
+            echo "force_sync=${{ inputs.force_sync }}" >> $GITHUB_OUTPUT
+            echo "verbose_logging=${{ inputs.verbose_logging }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Sync files based on type
         run: |
           sync_type="${{ steps.params.outputs.sync_type }}"
-          echo "Performing sync of type: $sync_type"
+          verbose="${{ steps.params.outputs.verbose_logging }}"
+          echo "🔄 Performing sync of type: $sync_type"
+          echo "📊 Verbose logging: $verbose"
+          echo "📁 Source directory contents:"
+          ls -la ghcommon-source/
+
+          # Helper function for verbose logging
+          log_verbose() {
+            if [ "$verbose" = "true" ]; then
+              echo "ℹ️  $1"
+            fi
+          }
+
+          # Helper function to copy files with logging
+          copy_with_logging() {
+            local source="$1"
+            local dest="$2"
+            local description="$3"
+
+            if [ -e "$source" ]; then
+              log_verbose "Copying $description: $source -> $dest"
+              if cp -r "$source" "$dest" 2>&1; then
+                echo "✅ Successfully copied $description"
+                if [ "$verbose" = "true" ]; then
+                  ls -la "$dest" | head -10
+                fi
+              else
+                echo "❌ Failed to copy $description"
+                return 1
+              fi
+            else
+              echo "⚠️  Source not found for $description: $source"
+            fi
+          }
 
           # Create directories if they don't exist
-          mkdir -p .github/workflows
-          mkdir -p .github/instructions
-          mkdir -p .github/prompts
-          mkdir -p scripts
-          mkdir -p .github/linters
+          echo "📁 Creating directory structure..."
+          mkdir -p .github/workflows .github/instructions .github/prompts scripts .github/linters .github/scripts
+
+          echo "📋 Available source files:"
+          find ghcommon-source -type f -name "*.yml" -o -name "*.md" -o -name "*.json" -o -name "*.sh" | head -20
 
           case "$sync_type" in
             "all"|"workflows")
-              echo "Syncing workflows..."
+              echo "🔄 Processing workflows section..."
               # Skip all workflow files - GitHub App lacks 'workflows' permission
               # Workflow files require special permissions that the GitHub App token doesn't have
-              echo "Skipping workflow files due to GitHub App permission limitations"
+              echo "⚠️  Skipping workflow files due to GitHub App permission limitations"
+              if [ "$verbose" = "true" ]; then
+                echo "📋 Available workflow files in source:"
+                ls -la ghcommon-source/.github/workflows/ || echo "No workflows directory found"
+              fi
               ;;&
             "all"|"instructions")
-              echo "Syncing instructions..."
-              cp ghcommon-source/.github/copilot-instructions.md .github/ 2>/dev/null || true
-              cp ghcommon-source/.github/instructions/* .github/instructions/ 2>/dev/null || true
+              echo "🔄 Processing instructions section..."
+              copy_with_logging "ghcommon-source/.github/copilot-instructions.md" ".github/" "copilot-instructions.md"
+
+              if [ -d "ghcommon-source/.github/instructions" ]; then
+                echo "📋 Instructions files to copy:"
+                ls -la ghcommon-source/.github/instructions/
+                for file in ghcommon-source/.github/instructions/*; do
+                  if [ -f "$file" ]; then
+                    copy_with_logging "$file" ".github/instructions/" "instruction file $(basename "$file")"
+                  fi
+                done
+              else
+                echo "⚠️  No instructions directory found in source"
+              fi
               ;;&
             "all"|"prompts")
-              echo "Syncing prompts..."
-              cp -r ghcommon-source/.github/prompts/* .github/prompts/ 2>/dev/null || true
+              echo "🔄 Processing prompts section..."
+              if [ -d "ghcommon-source/.github/prompts" ]; then
+                echo "📋 Prompts files to copy:"
+                ls -la ghcommon-source/.github/prompts/ || echo "Prompts directory empty"
+                copy_with_logging "ghcommon-source/.github/prompts/*" ".github/prompts/" "prompts files"
+              else
+                echo "⚠️  No prompts directory found in source"
+              fi
               ;;&
-            "all"|"scripts")
-              echo "Syncing scripts..."
-              cp -r ghcommon-source/scripts/* scripts/ 2>/dev/null || true
+            "all"|"scripts"|"github-scripts")
+              echo "🔄 Processing scripts section..."
+              if [ "$sync_type" = "scripts" ] || [ "$sync_type" = "all" ]; then
+                if [ -d "ghcommon-source/scripts" ]; then
+                  echo "📋 Scripts files to copy:"
+                  ls -la ghcommon-source/scripts/ | head -10
+                  for item in ghcommon-source/scripts/*; do
+                    if [ -e "$item" ]; then
+                      copy_with_logging "$item" "scripts/" "script $(basename "$item")"
+                    fi
+                  done
+                else
+                  echo "⚠️  No scripts directory found in source"
+                fi
+              fi
+              if [ "$sync_type" = "github-scripts" ] || [ "$sync_type" = "all" ]; then
+                if [ -d "ghcommon-source/.github/scripts" ]; then
+                  echo "📋 GitHub scripts files to copy:"
+                  ls -la ghcommon-source/.github/scripts/
+                  copy_with_logging "ghcommon-source/.github/scripts/*" ".github/scripts/" "GitHub scripts"
+                else
+                  echo "⚠️  No .github/scripts directory found in source"
+                fi
+              fi
               ;;&
             "all"|"linters")
-              echo "Syncing linters..."
-              cp -r ghcommon-source/.github/linters/* .github/linters/ 2>/dev/null || true
+              echo "🔄 Processing linters section..."
+              if [ -d "ghcommon-source/.github/linters" ]; then
+                echo "📋 Linter files to copy:"
+                ls -la ghcommon-source/.github/linters/
+                copy_with_logging "ghcommon-source/.github/linters/*" ".github/linters/" "linter files"
+              else
+                echo "⚠️  No linters directory found in source"
+              fi
               ;;&
             "all"|"labels")
-              echo "Syncing labels..."
-              cp ghcommon-source/labels.json . 2>/dev/null || true
-              cp ghcommon-source/labels.md . 2>/dev/null || true
+              echo "🔄 Processing labels section..."
+              copy_with_logging "ghcommon-source/labels.json" "." "labels.json"
+              copy_with_logging "ghcommon-source/labels.md" "." "labels.md"
+
+              # Copy the GitHub labels sync script
+              copy_with_logging "ghcommon-source/scripts/sync-github-labels.py" "scripts/" "GitHub labels sync script"
+
+              # Optional: Actually sync GitHub repository labels if GITHUB_TOKEN is available
+              if [ -n "$GITHUB_TOKEN" ] && [ "${{ steps.params.outputs.sync_type }}" = "labels" ]; then
+                echo "🏷️  Attempting to sync GitHub repository labels..."
+                if python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }} 2>&1; then
+                  echo "✅ Successfully synced GitHub repository labels"
+                else
+                  echo "⚠️  GitHub label sync failed, but file sync completed"
+                fi
+              else
+                echo "ℹ️  Copied label files and sync script. To sync GitHub labels, run:"
+                echo "   GITHUB_TOKEN=<token> python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }}"
+              fi
               ;;
           esac
 
           # Create symlinks for linters
-          # Create .vscode directory if it doesn't exist
+          echo "🔗 Setting up linter symlinks..."
           mkdir -p .vscode
-
-          # Create symlink to linters directory if it exists and .vscode/linters doesn't already exist
           if [ -d ".github/linters" ] && [ ! -e ".vscode/linters" ]; then
             ln -sf ../.github/linters .vscode/linters
-            echo "Created symlink: .vscode/linters -> ../.github/linters"
+            echo "✅ Created symlink: .vscode/linters -> ../.github/linters"
+          else
+            log_verbose "Linter symlink already exists or linters directory not found"
           fi
 
           # Clean up the source directory to prevent embedded git repository issues
+          echo "🧹 Cleaning up source directory..."
           rm -rf ghcommon-source
+
+          echo "✅ Sync operation completed"
 
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet; then
+          force_sync="${{ steps.params.outputs.force_sync }}"
+
+          echo "🔍 Checking for changes..."
+          echo "🔧 Force sync enabled: $force_sync"
+
+          if git diff --quiet && [ "$force_sync" != "true" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes detected"
+            echo "ℹ️  No changes detected and force sync not enabled"
+            echo "📊 Git status:"
+            git status --porcelain
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected:"
+            if [ "$force_sync" = "true" ]; then
+              echo "🔧 Force sync enabled - proceeding with commit"
+            else
+              echo "✅ Changes detected - proceeding with commit"
+            fi
+            echo "📋 Files that will be committed:"
             git diff --name-only
+            echo "📊 Detailed git status:"
+            git status --porcelain
+            echo "📝 Git diff summary:"
+            git diff --stat
           fi
 
       - name: Commit and push changes
@@ -142,8 +276,18 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Sync Receiver Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Sync Receiver Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Sync Type:** ${{ steps.params.outputs.sync_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Source Repo:** ${{ steps.params.outputs.source_repo }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Source SHA:** ${{ steps.params.outputs.source_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Force Sync:** ${{ steps.params.outputs.force_sync }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Verbose Logging:** ${{ steps.params.outputs.verbose_logging }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Changes Made:** ${{ steps.changes.outputs.has_changes }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.changes.outputs.has_changes }}" = "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📋 Files Modified:" >> $GITHUB_STEP_SUMMARY
+            git diff --name-only | while read file; do
+              echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
