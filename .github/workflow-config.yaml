@@ -1,0 +1,86 @@
+# file: .github/workflow-config.yaml
+# version: 1.0.0
+# guid: a7b8c9d0-e1f2-3456-7890-123456789abc
+
+# Repository-Specific Workflow Configuration for audiobook-organizer
+# This file configures the workflow system for this specific repository
+
+build:
+  # Language version matrices
+  go_versions:
+    - "1.23"
+    - "1.24"
+  
+  # Platform support
+  platforms:
+    - "linux/amd64"
+    - "linux/arm64"
+  
+  operating_systems:
+    - "ubuntu-latest"
+    - "macos-latest"
+  
+  # Feature flags specific to audiobook-organizer
+  enable_protobuf: false
+  enable_docker: true
+  enable_cross_compile: true
+  enable_coverage: true
+  enable_security_scan: true
+
+# Repository information
+repository:
+  name: "audiobook-organizer"
+  type: "go"
+  main_language: "go"
+  has_docker: true
+  has_protobuf: false
+  has_database: false
+
+# Build configuration
+build_config:
+  docker:
+    enabled: true
+    multi_stage: true
+    platforms:
+      - "linux/amd64"
+      - "linux/arm64"
+  
+  protobuf:
+    enabled: false
+  
+  testing:
+    coverage_threshold: 75
+    run_integration_tests: true
+    run_docker_tests: false
+
+# Quality gates
+quality:
+  coverage_threshold: 75
+  security_scan_required: true
+  lint_required: true
+  tests_required: true
+  
+  # Go-specific quality rules
+  go_vet_required: true
+  staticcheck_required: true
+  golangci_lint_required: true
+
+# Development settings
+development:
+  debug_mode: false
+  verbose_logging: false
+  
+  # Go-specific settings
+  go_mod_tidy_check: true
+  go_fmt_check: true
+  go_imports_check: true
+
+# Performance settings
+performance:
+  cache_enabled: true
+  parallel_jobs: 2
+  timeout_minutes: 20
+  
+  # Go-specific performance
+  go_build_cache: true
+  go_test_cache: true
