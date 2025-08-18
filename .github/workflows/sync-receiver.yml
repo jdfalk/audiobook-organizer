@@ -1,5 +1,5 @@
 # file: .github/workflows/sync-receiver.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
 
 name: Sync Receiver
@@ -7,6 +7,21 @@ name: Sync Receiver
 on:
   repository_dispatch:
     types: [sync-from-ghcommon]
+  workflow_dispatch:
+    inputs:
+      sync_type:
+        description: "Type of sync to perform"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - workflows
+          - instructions
+          - prompts
+          - scripts
+          - linters
+          - labels
 
 permissions:
   contents: write
@@ -31,9 +46,22 @@ jobs:
           path: ghcommon-source
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set sync parameters
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "sync_type=${{ github.event.client_payload.sync_type }}" >> $GITHUB_OUTPUT
+            echo "source_repo=${{ github.event.client_payload.source_repo }}" >> $GITHUB_OUTPUT
+            echo "source_sha=${{ github.event.client_payload.source_sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "sync_type=${{ inputs.sync_type }}" >> $GITHUB_OUTPUT
+            echo "source_repo=jdfalk/ghcommon" >> $GITHUB_OUTPUT
+            echo "source_sha=manual-dispatch" >> $GITHUB_OUTPUT
+          fi
+
       - name: Sync files based on type
         run: |
-          sync_type="${{ github.event.client_payload.sync_type }}"
+          sync_type="${{ steps.params.outputs.sync_type }}"
           echo "Performing sync of type: $sync_type"
 
           # Create directories if they don't exist
@@ -104,15 +132,15 @@ jobs:
           git add .
           git commit -m "sync: update files from ghcommon
 
-          Source: ${{ github.event.client_payload.source_repo }}
-          SHA: ${{ github.event.client_payload.source_sha }}
-          Sync type: ${{ github.event.client_payload.sync_type }}"
+          Source: ${{ steps.params.outputs.source_repo }}
+          SHA: ${{ steps.params.outputs.source_sha }}
+          Sync type: ${{ steps.params.outputs.sync_type }}"
           git push
 
       - name: Summary
         run: |
           echo "## Sync Receiver Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Sync Type:** ${{ github.event.client_payload.sync_type }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Source Repo:** ${{ github.event.client_payload.source_repo }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Source SHA:** ${{ github.event.client_payload.source_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Sync Type:** ${{ steps.params.outputs.sync_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source Repo:** ${{ steps.params.outputs.source_repo }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source SHA:** ${{ steps.params.outputs.source_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Changes Made:** ${{ steps.changes.outputs.has_changes }}" >> $GITHUB_STEP_SUMMARY
