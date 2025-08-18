@@ -10,16 +10,16 @@ build:
   go_versions:
     - "1.23"
     - "1.24"
-  
+
   # Platform support
   platforms:
     - "linux/amd64"
     - "linux/arm64"
-  
+
   operating_systems:
     - "ubuntu-latest"
     - "macos-latest"
-  
+
   # Feature flags specific to audiobook-organizer
   enable_protobuf: false
   enable_docker: true
@@ -44,10 +44,10 @@ build_config:
     platforms:
       - "linux/amd64"
       - "linux/arm64"
-  
+
   protobuf:
     enabled: false
-  
+
   testing:
     coverage_threshold: 75
     run_integration_tests: true
@@ -59,7 +59,7 @@ quality:
   security_scan_required: true
   lint_required: true
   tests_required: true
-  
+
   # Go-specific quality rules
   go_vet_required: true
   staticcheck_required: true
@@ -69,7 +69,7 @@ quality:
 development:
   debug_mode: false
   verbose_logging: false
-  
+
   # Go-specific settings
   go_mod_tidy_check: true
   go_fmt_check: true
@@ -80,7 +80,7 @@ performance:
   cache_enabled: true
   parallel_jobs: 2
   timeout_minutes: 20
-  
+
   # Go-specific performance
   go_build_cache: true
   go_test_cache: true
