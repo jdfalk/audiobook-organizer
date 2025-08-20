@@ -1,0 +1,299 @@
+# file: .github/workflows/matrix-build.yml
+# version: 2.0.0
+# guid: c3d4e5f6-a7b8-9012-cdef-34567890123a
+
+name: Matrix Build System
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      build_target:
+        description: "Build target"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - go
+          - python
+          - frontend
+          - docker
+          - protobuf
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Detect what needs to be built
+  detect-matrix:
+    name: Detect Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      go-matrix: ${{ steps.detect.outputs.go-matrix }}
+      python-matrix: ${{ steps.detect.outputs.python-matrix }}
+      frontend-matrix: ${{ steps.detect.outputs.frontend-matrix }}
+      docker-matrix: ${{ steps.detect.outputs.docker-matrix }}
+      protobuf-needed: ${{ steps.detect.outputs.protobuf-needed }}
+      has-go: ${{ steps.detect.outputs.has-go }}
+      has-python: ${{ steps.detect.outputs.has-python }}
+      has-frontend: ${{ steps.detect.outputs.has-frontend }}
+      has-docker: ${{ steps.detect.outputs.has-docker }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Detect build requirements
+        id: detect
+        run: |
+          python3 .github/scripts/detect-build-matrix.py
+
+  # Protobuf generation (runs first as dependency)
+  protobuf:
+    name: Generate Protobuf
+    runs-on: ubuntu-latest
+    needs: detect-matrix
+    if: needs.detect-matrix.outputs.protobuf-needed == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate protobuf code
+        run: |
+          if [ -f "buf.gen.yaml" ]; then
+            buf generate
+          else
+            echo "No buf.gen.yaml found, skipping generation"
+          fi
+
+      - name: Upload protobuf artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: protobuf-generated
+          path: |
+            pkg/
+            gen/
+            proto/
+          retention-days: 1
+
+  # Go matrix build
+  build-go:
+    name: Build Go (${{ matrix.go-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [detect-matrix, protobuf]
+    if: always() && needs.detect-matrix.outputs.has-go == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-matrix.outputs.go-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: needs.detect-matrix.outputs.protobuf-needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: protobuf-generated
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Build Go project
+        run: |
+          go mod download
+          go build -v ./...
+
+      - name: Test Go project
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage (primary only)
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-${{ matrix.os }}-${{ matrix.go-version }}
+          path: coverage.out
+
+  # Python matrix build
+  build-python:
+    name: Build Python (${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [detect-matrix, protobuf]
+    if: always() && needs.detect-matrix.outputs.has-python == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-matrix.outputs.python-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: needs.detect-matrix.outputs.protobuf-needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: protobuf-generated
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
+
+      - name: Test Python project
+        run: |
+          if [ -f pytest.ini ] || [ -f pyproject.toml ]; then
+            python -m pytest --cov=. --cov-report=xml
+          else
+            python -m unittest discover
+          fi
+
+      - name: Upload coverage (primary only)
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-${{ matrix.os }}-${{ matrix.python-version }}
+          path: coverage.xml
+
+  # Frontend matrix build
+  build-frontend:
+    name: Build Frontend (Node ${{ matrix.node-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: [detect-matrix, protobuf]
+    if: always() && needs.detect-matrix.outputs.has-frontend == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-matrix.outputs.frontend-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: needs.detect-matrix.outputs.protobuf-needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: protobuf-generated
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Upload build artifacts (primary only)
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/
+
+  # Docker matrix build
+  build-docker:
+    name: Build Docker (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    needs: [detect-matrix, protobuf]
+    if: always() && needs.detect-matrix.outputs.has-docker == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect-matrix.outputs.docker-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: needs.detect-matrix.outputs.protobuf-needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: protobuf-generated
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Final status check
+  build-status:
+    name: Build Status
+    runs-on: ubuntu-latest
+    needs: [detect-matrix, protobuf, build-go, build-python, build-frontend, build-docker]
+    if: always()
+    steps:
+      - name: Check build status
+        run: |
+          echo "# 🔧 Build Matrix Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Go | ${{ needs.build-go.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python | ${{ needs.build-python.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.build-frontend.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker | ${{ needs.build-docker.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Protobuf | ${{ needs.protobuf.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+
+          # Check for any failures
+          if [[ "${{ needs.build-go.result }}" == "failure" ||
+                "${{ needs.build-python.result }}" == "failure" ||
+                "${{ needs.build-frontend.result }}" == "failure" ||
+                "${{ needs.build-docker.result }}" == "failure" ]]; then
+            echo "❌ Some builds failed"
+            exit 1
+          else
+            echo "✅ All builds completed successfully"
+          fi
