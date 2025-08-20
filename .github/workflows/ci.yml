@@ -1,0 +1,715 @@
+# file: .github/workflows/ci.yml
+# version: 1.5.0
+# guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
+
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+  RUST_VERSION: "1.76"
+  COVERAGE_THRESHOLD: "80"
+  CACHE_VERSION: "v1"
+
+permissions:
+  contents: write
+  actions: write
+  checks: write
+  packages: write
+
+jobs:
+  # Check for commit override flags
+  check-overrides:
+    name: Check Commit Overrides
+    uses: jdfalk/gcommon/.github/workflows/commit-override-handler.yml@main
+
+  # Detect what files changed to optimize workflow execution
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      python: ${{ steps.filter.outputs.python }}
+      rust: ${{ steps.filter.outputs.rust }}
+      docker: ${{ steps.filter.outputs.docker }}
+      docs: ${{ steps.filter.outputs.docs }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      should-lint: ${{ steps.determine.outputs.should-lint }}
+      should-test: ${{ steps.determine.outputs.should-test }}
+      should-build: ${{ steps.determine.outputs.should-build }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '**/go.mod'
+              - '**/go.sum'
+            frontend:
+              - '**/*.js'
+              - '**/*.jsx'
+              - '**/*.ts'
+              - '**/*.tsx'
+              - '**/*.vue'
+              - '**/*.svelte'
+              - '**/*.css'
+              - '**/*.scss'
+              - '**/*.sass'
+              - '**/*.html'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'yarn.lock'
+              - 'pnpm-lock.yaml'
+              - '**/package.json'
+              - '**/package-lock.json'
+              - '**/yarn.lock'
+              - 'webui/**'
+              - 'frontend/**'
+            python:
+              - '**/*.py'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+              - 'setup.py'
+              - 'setup.cfg'
+              - 'Pipfile'
+              - 'poetry.lock'
+              - '**/requirements.txt'
+              - '**/pyproject.toml'
+              - '**/setup.py'
+              - '**/Pipfile'
+            rust:
+              - '**/*.rs'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+            docker:
+              - 'Dockerfile*'
+              - '**/Dockerfile*'
+              - 'docker-compose*.yml'
+              - 'docker-compose*.yaml'
+              - '**/docker-compose*.yml'
+              - '**/docker-compose*.yaml'
+              - '.dockerignore'
+              - '**/.dockerignore'
+            docs:
+              - '**/*.md'
+              - 'docs/**'
+              - '**/docs/**'
+              - '**/*.rst'
+              - '**/*.txt'
+            workflows:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+
+      - name: Determine workflow execution
+        id: determine
+        run: |
+          echo "should-lint=true" >> $GITHUB_OUTPUT
+
+          if [[ "${{ steps.filter.outputs.go }}" == "true" ||
+                "${{ steps.filter.outputs.frontend }}" == "true" ||
+                "${{ steps.filter.outputs.python }}" == "true" ||
+                "${{ steps.filter.outputs.rust }}" == "true" ]]; then
+            echo "should-test=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-test=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [[ "${{ steps.filter.outputs.go }}" == "true" ||
+                "${{ steps.filter.outputs.frontend }}" == "true" ||
+                "${{ steps.filter.outputs.rust }}" == "true" ||
+                "${{ steps.filter.outputs.docker }}" == "true" ]]; then
+            echo "should-build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-build=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Comprehensive linting for all file types
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.should-lint == 'true'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        if: needs.detect-changes.outputs.go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Node.js
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            **/package-lock.json
+            webui/package-lock.json
+
+      - name: Set up Python
+        if: needs.detect-changes.outputs.python == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Set up Rust
+        if: needs.detect-changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Run Super Linter
+        uses: github/super-linter/slim@v7
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+          FILTER_REGEX_EXCLUDE: ".*\\.git/.*|.*\\.github/copilot/.*|.*\\.vscode/.*|.*node_modules/.*|.*\\.cache/.*|.*vendor/.*|.*dist/.*"
+
+          # Auto-fix settings - use FIX_ instead of VALIDATE_ whenever possible
+          FIX_GO: ${{ needs.detect-changes.outputs.go }}
+          FIX_GO_MODULES: ${{ needs.detect-changes.outputs.go }}
+          FIX_JAVASCRIPT_ES: ${{ needs.detect-changes.outputs.frontend }}
+          FIX_JAVASCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
+          FIX_JSX_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
+          FIX_TYPESCRIPT_ES: ${{ needs.detect-changes.outputs.frontend }}
+          FIX_TYPESCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
+          FIX_PYTHON_BLACK: ${{ needs.detect-changes.outputs.python }}
+          FIX_PYTHON_ISORT: ${{ needs.detect-changes.outputs.python }}
+          FIX_PYTHON_RUFF: ${{ needs.detect-changes.outputs.python }}
+          FIX_RUST_2015: ${{ needs.detect-changes.outputs.rust }}
+          FIX_RUST_2018: ${{ needs.detect-changes.outputs.rust }}
+          FIX_RUST_2021: ${{ needs.detect-changes.outputs.rust }}
+          FIX_RUST_CLIPPY: ${{ needs.detect-changes.outputs.rust }}
+
+          # Auto-fix these always
+          FIX_MARKDOWN_PRETTIER: true
+          FIX_JSON_PRETTIER: true
+          FIX_SHELL_SHFMT: true
+          FIX_CSS_PRETTIER: true
+          FIX_GITHUB_ACTIONS_ZIZMOR: true
+          FIX_HTML_PRETTIER: true
+          FIX_JSONC_PRETTIER: true
+          FIX_PROTOBUF: true
+          FIX_YAML_PRETTIER: true
+
+          # Only validate these (no FIX_ option available)
+          #   VALIDATE_YAML: true
+          #   VALIDATE_GITHUB_ACTIONS: true
+          VALIDATE_DOCKERFILE_HADOLINT: ${{ needs.detect-changes.outputs.docker }}
+          VALIDATE_GITLEAKS: true
+
+      - name: Check for auto-fixes
+        id: check-fixes
+        run: |
+          if ! git diff --quiet; then
+            echo "has_fixes=true" >> $GITHUB_OUTPUT
+            echo "✨ Auto-fixes were applied by Super Linter"
+          else
+            echo "has_fixes=false" >> $GITHUB_OUTPUT
+            echo "✅ No auto-fixes needed"
+          fi
+
+      - name: Commit auto-fixes
+        if: steps.check-fixes.outputs.has_fixes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "style: auto-fix linting issues [skip ci]
+
+          Auto-formatting and fixes applied by Super Linter.
+
+          - Fixed formatting issues
+          - Applied code style corrections
+          - Resolved linting violations"
+          git push
+
+  # Go testing with multiple versions and modules
+  test-go:
+    name: Test Go
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint]
+    if: needs.detect-changes.outputs.go == 'true'
+    strategy:
+      matrix:
+        go-version: ["1.22", "1.23", "1.24"]
+        include:
+          - go-version: "1.24"
+            primary: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Check coverage
+        if: matrix.primary
+        run: |
+          total=$(go tool cover -func coverage.out | tail -n 1 | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Coverage: $total%"
+          if (( $(echo "$total < $COVERAGE_THRESHOLD" | bc -l) )); then
+            echo "❌ Coverage $total% is below threshold $COVERAGE_THRESHOLD%"
+            exit 1
+          fi
+          echo "✅ Coverage $total% meets threshold $COVERAGE_THRESHOLD%"
+
+      - name: Upload coverage
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: |
+            coverage.out
+            coverage.html
+
+  # Frontend testing (Node.js)
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    needs: [detect-changes, lint]
+    if: needs.detect-changes.outputs.frontend == 'true'
+    strategy:
+      matrix:
+        node-version: ["20", "22", "24"]
+        include:
+          - node-version: "22"
+            primary: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            **/package-lock.json
+            webui/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          if [ -f "webui/package.json" ]; then
+            cd webui && npm ci --legacy-peer-deps
+          elif [ -f "package.json" ]; then
+            npm ci --legacy-peer-deps
+          fi
+
+      - name: Run tests
+        run: |
+          if [ -f "webui/package.json" ]; then
+            cd webui && npm test -- --coverage --watchAll=false
+          elif [ -f "package.json" ]; then
+            npm test -- --coverage --watchAll=false
+          fi
+
+      - name: Upload coverage
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            webui/coverage/
+            coverage/
+
+  # Python testing
+  test-python:
+    name: Test Python
+    runs-on: ubuntu-latest
+    needs: [check-overrides, detect-changes, lint]
+    if: needs.detect-changes.outputs.python == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.12"
+            primary: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -f pyproject.toml ]; then
+            pip install -e .
+          fi
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          pytest --cov --cov-report=xml --cov-report=html
+
+      - name: Upload coverage
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: |
+            htmlcov/
+            coverage.xml
+
+  # Rust testing
+  test-rust:
+    name: Test Rust
+    runs-on: ubuntu-latest
+    needs: [check-overrides, detect-changes, lint]
+    if: needs.detect-changes.outputs.rust == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
+    strategy:
+      matrix:
+        rust-version: ["1.75", "1.76", "1.77"]
+        include:
+          - rust-version: "1.76"
+            primary: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust-version }}
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: rust-${{ matrix.rust-version }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            rust-${{ matrix.rust-version }}-
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests
+        run: |
+          cargo test --verbose
+          cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Generate coverage
+        if: matrix.primary
+        run: |
+          cargo install cargo-tarpaulin || true
+          cargo tarpaulin --out xml --output-dir target/coverage/ || true
+
+      - name: Upload coverage
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-coverage
+          path: target/coverage/
+        continue-on-error: true
+
+  # Security scanning with CodeQL
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [check-overrides, detect-changes]
+    if: needs.check-overrides.outputs.skip-validation != 'true'
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      matrix:
+        language: ["go", "javascript", "python", "rust"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql.yml
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+
+  # Build artifacts
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [check-overrides, detect-changes, test-go, test-frontend, test-rust]
+    if: always() && needs.detect-changes.outputs.should-build == 'true' && needs.check-overrides.outputs.skip-build != 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        if: needs.detect-changes.outputs.go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up Node.js
+        if: needs.detect-changes.outputs.frontend == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            **/package-lock.json
+            webui/package-lock.json
+
+      - name: Set up Rust
+        if: needs.detect-changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Build Go binary
+        if: needs.detect-changes.outputs.go == 'true'
+        run: |
+          go build -v -o bin/ ./...
+
+      - name: Build frontend assets
+        if: needs.detect-changes.outputs.frontend == 'true'
+        run: |
+          if [ -f "webui/package.json" ]; then
+            cd webui
+            npm ci --legacy-peer-deps
+            npm run build
+          elif [ -f "package.json" ]; then
+            npm ci --legacy-peer-deps
+            npm run build
+          fi
+
+      - name: Build Rust binary
+        if: needs.detect-changes.outputs.rust == 'true'
+        run: |
+          cargo build --release
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            bin/
+            target/release/
+            webui/dist/
+            dist/
+            build/
+
+  # Generate comprehensive coverage report
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test-go, test-frontend, test-python, test-rust]
+    if: always() && (needs.test-go.result == 'success' || needs.test-frontend.result == 'success' || needs.test-python.result == 'success' || needs.test-rust.result == 'success')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: coverage-artifacts
+
+      - name: Combine coverage reports
+        run: |
+          echo "# 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Go coverage
+          if [ -f "coverage-artifacts/go-coverage/coverage.out" ]; then
+            go_coverage=$(go tool cover -func coverage-artifacts/go-coverage/coverage.out | tail -n 1 | awk '{print substr($3, 1, length($3)-1)}')
+            echo "- **Go**: ${go_coverage}%" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Frontend coverage
+          if [ -d "coverage-artifacts/frontend-coverage" ]; then
+            echo "- **Frontend**: Coverage reports available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Python coverage
+          if [ -f "coverage-artifacts/python-coverage/coverage.xml" ]; then
+            echo "- **Python**: Coverage reports available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Rust coverage
+          if [ -d "coverage-artifacts/rust-coverage" ]; then
+            echo "- **Rust**: Coverage reports available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload combined coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-coverage-report
+          path: coverage-artifacts/
+
+  # Run matrix build workflow if needed
+  matrix-build:
+    name: Matrix Build
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.should-build == 'true'
+    uses: ./.github/workflows/matrix-build.yml
+    secrets: inherit
+
+  # Final status check
+  ci-status:
+    name: CI Status
+    runs-on: ubuntu-latest
+    needs:
+      [
+        check-overrides,
+        detect-changes,
+        lint,
+        test-go,
+        test-frontend,
+        test-python,
+        test-rust,
+        security-scan,
+        build,
+        matrix-build,
+      ]
+    if: always() && needs.check-overrides.outputs.skip-ci != 'true'
+    steps:
+      - name: Check CI status
+        run: |
+          echo "# 🚀 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.lint.result }}" == "success" ]]; then
+            echo "✅ **Linting**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Linting**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.test-go.result }}" == "success" ]]; then
+            echo "✅ **Go Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.test-go.result }}" == "skipped" ]]; then
+            echo "⏭️ **Go Tests**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Go Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.test-frontend.result }}" == "success" ]]; then
+            echo "✅ **Frontend Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.test-frontend.result }}" == "skipped" ]]; then
+            echo "⏭️ **Frontend Tests**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Frontend Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.test-python.result }}" == "success" ]]; then
+            echo "✅ **Python Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.test-python.result }}" == "skipped" ]]; then
+            echo "⏭️ **Python Tests**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Python Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.test-rust.result }}" == "success" ]]; then
+            echo "✅ **Rust Tests**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.test-rust.result }}" == "skipped" ]]; then
+            echo "⏭️ **Rust Tests**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Rust Tests**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.security-scan.result }}" == "success" ]]; then
+            echo "✅ **Security Scan**: Passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Security Scan**: Issues found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.build.result }}" == "success" ]]; then
+            echo "✅ **Build**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.build.result }}" == "skipped" ]]; then
+            echo "⏭️ **Build**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Build**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.matrix-build.result }}" == "success" ]]; then
+            echo "✅ **Matrix Build**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.matrix-build.result }}" == "skipped" ]]; then
+            echo "⏭️ **Matrix Build**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Matrix Build**: Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check if any critical jobs failed
+          if [[ "${{ needs.lint.result }}" == "failure" ||
+                "${{ needs.test-go.result }}" == "failure" ||
+                "${{ needs.test-frontend.result }}" == "failure" ||
+                "${{ needs.test-python.result }}" == "failure" ||
+                "${{ needs.test-rust.result }}" == "failure" ||
+                "${{ needs.matrix-build.result }}" == "failure" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Overall Status**: FAILED - Critical issues found" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Overall Status**: PASSED - All checks successful" >> $GITHUB_STEP_SUMMARY
+          fi
