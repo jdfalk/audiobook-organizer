@@ -245,6 +245,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.detect-matrix.outputs.docker-matrix) }}
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -255,11 +258,23 @@ jobs:
         with:
           name: protobuf-generated
 
+      - name: Detect Docker configuration
+        id: docker-detect
+        run: |
+          python3 .github/scripts/docker-detect.py
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
+        if: steps.docker-detect.outputs.should-build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -274,18 +289,124 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix={{branch}}-
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=Container for ${{ github.repository }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ steps.docker-detect.outputs.dockerfile-path }}
           platforms: ${{ matrix.platform }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ steps.docker-detect.outputs.should-build == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  # Docker security scanning and testing
+  docker-security:
+    name: Docker Security & Testing
+    runs-on: ubuntu-latest
+    needs: [detect-matrix, build-docker]
+    if: always() && needs.detect-matrix.outputs.has-docker == 'true' && needs.build-docker.result == 'success'
+    permissions:
+      security-events: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install security tools
+        run: |
+          # Install Trivy
+          sudo apt-get update
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+          # Install syft for SBOM generation
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run vulnerability scanning
+        run: |
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          python3 .github/scripts/docker-security.py scan-image "$IMAGE_REF"
+
+      - name: Run filesystem scanning
+        run: |
+          python3 .github/scripts/docker-security.py scan-filesystem .
+
+      - name: Generate SBOM
+        run: |
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          python3 .github/scripts/docker-security.py generate-sbom "$IMAGE_REF"
+
+      - name: Test image functionality
+        run: |
+          IMAGE_REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          python3 .github/scripts/docker-security.py test-image "$IMAGE_REF"
+
+      - name: Validate Docker Compose files
+        run: |
+          # Check for compose files and validate them
+          if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ] || [ -f "docker-stack.yml" ] || [ -f "docker-stack-jf.yml" ]; then
+            COMPOSE_FILES=""
+            for file in docker-compose.yml docker-compose.yaml docker-stack.yml docker-stack-jf.yml; do
+              if [ -f "$file" ]; then
+                COMPOSE_FILES="$COMPOSE_FILES $file"
+              fi
+            done
+            if [ -n "$COMPOSE_FILES" ]; then
+              python3 .github/scripts/docker-security.py validate-compose $COMPOSE_FILES
+            fi
+          fi
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Attest SBOM
+        if: needs.build-docker.outputs.image-digest != ''
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ needs.build-docker.outputs.image-digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-security-results
+          path: |
+            trivy-results.sarif
+            trivy-fs-results.txt
+            sbom.spdx.json
 
   # Final status check
   build-status:
