@@ -179,15 +179,23 @@ def detect_build_requirements():
         check_file_exists("Dockerfile*")
         or check_file_exists("docker-compose*.yml")
         or check_file_exists("docker-compose*.yaml")
+        or check_file_exists("docker-stack*.yml")
     ):
         print("Docker project detected")
         flags["has_docker"] = True
-        matrices["docker"] = {
-            "include": [
-                {"platform": "linux/amd64", "os": "ubuntu-latest", "primary": True},
-                {"platform": "linux/arm64", "os": "ubuntu-latest"},
-            ]
-        }
+        # Use docker-detect.py script for detailed Docker configuration
+        success, output = run_command("python3 .github/scripts/docker-detect.py")
+        if success:
+            print("Docker detection script completed successfully")
+            # The docker-detect.py script will set its own outputs
+        else:
+            print("Docker detection script failed, using basic matrix")
+            matrices["docker"] = {
+                "include": [
+                    {"platform": "linux/amd64", "os": "ubuntu-latest", "primary": True},
+                    {"platform": "linux/arm64", "os": "ubuntu-latest"},
+                ]
+            }
 
     # Check for protobuf
     if any(
