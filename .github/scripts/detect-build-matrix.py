@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: .github/scripts/detect-build-matrix.py
-# version: 1.0.0
+# version: 1.1.0
 # guid: a1b2c3d4-e5f6-7890-1234-56789abcdef0
 
 """
@@ -88,18 +88,91 @@ def detect_build_requirements():
         }
 
     # Check for frontend projects
-    if any(os.path.exists(f) for f in ["package.json", "yarn.lock", "pnpm-lock.yaml"]):
-        print("Frontend project detected")
-        flags["has_frontend"] = True
-        matrices["frontend"] = {
-            "include": [
-                {"node-version": "20", "os": "ubuntu-latest"},
-                {"node-version": "22", "os": "ubuntu-latest", "primary": True},
-                {"node-version": "24", "os": "ubuntu-latest"},
-                {"node-version": "22", "os": "macos-latest"},
-                {"node-version": "22", "os": "windows-latest"},
+    if os.path.exists("package.json"):
+        # Read package.json to determine if this is actually a frontend project
+        try:
+            with open("package.json", "r") as f:
+                import json as json_lib
+
+                pkg_data = json_lib.load(f)
+
+            # Check for frontend indicators
+            frontend_indicators = [
+                # Dependencies that indicate frontend development
+                "react",
+                "vue",
+                "angular",
+                "@angular/core",
+                "svelte",
+                "solid-js",
+                "next",
+                "nuxt",
+                "gatsby",
+                "vite",
+                "webpack",
+                "rollup",
+                "parcel",
+                "typescript",
+                "@types/node",
+                "eslint",
+                "prettier",
+                # Build frameworks
+                "create-react-app",
+                "vue-cli",
+                "@vue/cli",
+                "@angular/cli",
+                # UI libraries
+                "bootstrap",
+                "tailwindcss",
+                "@mui/material",
+                "antd",
+                # Testing frameworks for frontend
+                "jest",
+                "cypress",
+                "@testing-library/react",
+                "vitest",
             ]
-        }
+
+            # Build script indicators
+            build_scripts = pkg_data.get("scripts", {})
+            script_indicators = ["build", "serve", "dev", "start"]
+
+            # Check dependencies and devDependencies
+            all_deps = {
+                **pkg_data.get("dependencies", {}),
+                **pkg_data.get("devDependencies", {}),
+            }
+
+            has_frontend_deps = any(
+                indicator in all_deps for indicator in frontend_indicators
+            )
+            has_build_scripts = any(
+                script in build_scripts
+                for script in script_indicators
+                if script not in ["commitlint", "commitlint-ci", "lint", "test"]
+            )
+
+            # Only treat as frontend if we have actual frontend dependencies or meaningful build scripts
+            if has_frontend_deps or has_build_scripts:
+                print("Frontend project detected")
+                flags["has_frontend"] = True
+                matrices["frontend"] = {
+                    "include": [
+                        {"node-version": "20", "os": "ubuntu-latest"},
+                        {"node-version": "22", "os": "ubuntu-latest", "primary": True},
+                        {"node-version": "24", "os": "ubuntu-latest"},
+                        {"node-version": "22", "os": "macos-latest"},
+                        {"node-version": "22", "os": "windows-latest"},
+                    ]
+                }
+            else:
+                print(
+                    "package.json found but no frontend project detected (likely build tooling only)"
+                )
+
+        except Exception as e:
+            print(f"Warning: Could not parse package.json: {e}")
+            # If we can't parse package.json, assume it's not a frontend project
 
     # Check for Docker projects
     if (

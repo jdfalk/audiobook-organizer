@@ -1,5 +1,5 @@
 # file: .github/workflows/matrix-build.yml
-# version: 2.0.0
+# version: 2.1.0
 # guid: c3d4e5f6-a7b8-9012-cdef-34567890123a
 
 name: Matrix Build System
@@ -67,14 +67,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install protobuf Go plugins
+        run: |
+          echo "Installing protobuf Go plugins..."
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+          # Verify installations
+          which protoc-gen-go
+          which protoc-gen-go-grpc
+          protoc-gen-go --version
+          protoc-gen-go-grpc --version
+
       - name: Generate protobuf code
         run: |
           if [ -f "buf.gen.yaml" ]; then
+            echo "Generating protobuf code with buf..."
             buf generate
           else
             echo "No buf.gen.yaml found, skipping generation"
