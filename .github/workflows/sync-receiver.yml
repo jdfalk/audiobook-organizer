@@ -1,5 +1,5 @@
 # file: .github/workflows/sync-receiver.yml
-# version: 1.6.0
+# version: 1.7.0
 # guid: f7g8h9i0-j1k2-l3m4-n5o6-p7q8r9s0t1u2
 
 # ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
@@ -128,12 +128,16 @@ jobs:
           case "$sync_type" in
             "all"|"workflows")
               echo "🔄 Processing workflows section..."
-              # Skip all workflow files - GitHub App lacks 'workflows' permission
-              # Workflow files require special permissions that the GitHub App token doesn't have
-              echo "⚠️  Skipping workflow files due to GitHub App permission limitations"
-              if [ "$verbose" = "true" ]; then
-                echo "📋 Available workflow files in source:"
-                ls -la ghcommon-source/.github/workflows/ || echo "No workflows directory found"
+              if [ -d "ghcommon-source/.github/workflows" ]; then
+                echo "📋 Workflow files to copy:"
+                ls -la ghcommon-source/.github/workflows/
+                for file in ghcommon-source/.github/workflows/*; do
+                  if [ -f "$file" ]; then
+                    copy_with_logging "$file" ".github/workflows/" "workflow file $(basename "$file")"
+                  fi
+                done
+              else
+                echo "⚠️  No workflows directory found in source"
               fi
               ;;&
             "all"|"instructions")
