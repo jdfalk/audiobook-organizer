@@ -1,0 +1,1212 @@
+[
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "1-1-1-migration"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "accessibility"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "advanced-features"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "ai"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "analytics"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "api"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "apps"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "architecture"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "area:community"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "audit"
+  },
+  {
+    "color": "0052cc",
+    "description": "Authentication and authorization",
+    "name": "auth"
+  },
+  {
+    "color": "B60205",
+    "description": "",
+    "name": "auto-generated"
+  },
+  {
+    "color": "1f883d",
+    "description": "Automation scripts and tools",
+    "name": "automation"
+  },
+  {
+    "color": "343a40",
+    "description": "Backend development",
+    "name": "backend"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "backup"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "benchmarking"
+  },
+  {
+    "color": "f8d7da",
+    "description": "Blocked by external dependencies",
+    "name": "blocked"
+  },
+  {
+    "color": "c5000b",
+    "description": "Introduces a breaking change",
+    "name": "breaking-change"
+  },
+  {
+    "color": "d73a49",
+    "description": "Something isn't working",
+    "name": "bug"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "bugfix"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "build"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "business-intelligence"
+  },
+  {
+    "color": "5319e7",
+    "description": "Caching and data storage",
+    "name": "cache"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "changelog"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "ci"
+  },
+  {
+    "color": "28a745",
+    "description": "Continuous integration and deployment",
+    "name": "ci-cd"
+  },
+  {
+    "color": "0052cc",
+    "description": "Continuous integration and deployment",
+    "name": "ci/cd"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "cleanup"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "cli"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "cockroachdb"
+  },
+  {
+    "color": "ff6b9d",
+    "description": "Created or modified by AI/automation agents",
+    "name": "codex"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "collaboration"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "community"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "compatibility"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "compilation-blocker"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "completed"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "compliance"
+  },
+  {
+    "color": "006b75",
+    "description": "Configuration management",
+    "name": "config"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "configuration"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "containerization"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "coordination"
+  },
+  {
+    "color": "d73a49",
+    "description": "Critical priority - immediate attention required",
+    "name": "critical"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "cross-platform"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "dashboard"
+  },
+  {
+    "color": "fd7e14",
+    "description": "Database related work",
+    "name": "database"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "db"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "debugging"
+  },
+  {
+    "color": "0366d6",
+    "description": "Pull requests that update a dependency file",
+    "name": "dependencies"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "dependency"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "deployment"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "devcontainer"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "developer-experience"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "developer-tools"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "devops"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "disaster-recovery"
+  },
+  {
+    "color": "2496ed",
+    "description": "Docker containerization",
+    "name": "docker"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "docs"
+  },
+  {
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation",
+    "name": "documentation"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "dogfooding"
+  },
+  {
+    "color": "cfd3d7",
+    "description": "This issue or pull request already exists",
+    "name": "duplicate"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "e2e"
+  },
+  {
+    "color": "a2eeef",
+    "description": "New feature or request",
+    "name": "enhancement"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "enterprise"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "epic"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "example"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "examples"
+  },
+  {
+    "color": "e4b429",
+    "description": "Depends on external systems or libraries",
+    "name": "external-dependency"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "feat"
+  },
+  {
+    "color": "0052cc",
+    "description": "New feature development",
+    "name": "feature"
+  },
+  {
+    "color": "6c757d",
+    "description": "Frontend development",
+    "name": "frontend"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "gcommon"
+  },
+  {
+    "color": "f9d0c4",
+    "description": "gcommon refactoring work",
+    "name": "gcommon-refactor"
+  },
+  {
+    "color": "2088ff",
+    "description": "GitHub Actions related work",
+    "name": "github-actions"
+  },
+  {
+    "color": "00add8",
+    "description": "Go programming language",
+    "name": "go"
+  },
+  {
+    "color": "30AEF6",
+    "description": "",
+    "name": "golang"
+  },
+  {
+    "color": "7057FF",
+    "description": "Good for newcomers to the project",
+    "name": "good first issue"
+  },
+  {
+    "color": "7057ff",
+    "description": "Good for newcomers",
+    "name": "good-first-issue"
+  },
+  {
+    "color": "bfd4f2",
+    "description": "gRPC service implementations",
+    "name": "grpc"
+  },
+  {
+    "color": "008672",
+    "description": "Extra attention is needed from the community",
+    "name": "help wanted"
+  },
+  {
+    "color": "008672",
+    "description": "Extra attention is needed",
+    "name": "help-wanted"
+  },
+  {
+    "color": "d93f0b",
+    "description": "High priority",
+    "name": "high"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "high-priority"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "i18n"
+  },
+  {
+    "color": "d4edda",
+    "description": "Work in progress",
+    "name": "in-progress"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "infrastructure"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "integration"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "integration-testing"
+  },
+  {
+    "color": "e4e669",
+    "description": "This doesn't seem right",
+    "name": "invalid"
+  },
+  {
+    "color": "e99695",
+    "description": "Issue tracking and management",
+    "name": "issue-management"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "issues"
+  },
+  {
+    "color": "f1e05a",
+    "description": "JavaScript programming language",
+    "name": "javascript"
+  },
+  {
+    "color": "326ce5",
+    "description": "Kubernetes orchestration",
+    "name": "kubernetes"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "language:go"
+  },
+  {
+    "color": "0e8a16",
+    "description": "Low priority",
+    "name": "low"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "machine-learning"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "maintenance"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "management"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "marketplace"
+  },
+  {
+    "color": "74c0fc",
+    "description": "Media processing and handling",
+    "name": "media"
+  },
+  {
+    "color": "fbca04",
+    "description": "Medium priority",
+    "name": "medium"
+  },
+  {
+    "color": "b60205",
+    "description": "Pull request has merge conflicts",
+    "name": "merge-conflict"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "metadata"
+  },
+  {
+    "color": "6f42c1",
+    "description": "Metrics collection and monitoring",
+    "name": "metrics"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "migration"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "missing-files"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "mobile"
+  },
+  {
+    "color": "0366d6",
+    "description": "API development and changes",
+    "name": "module:api"
+  },
+  {
+    "color": "0052cc",
+    "description": "Authentication and authorization",
+    "name": "module:auth"
+  },
+  {
+    "color": "343a40",
+    "description": "Backend development",
+    "name": "module:backend"
+  },
+  {
+    "color": "5319e7",
+    "description": "Caching and data storage",
+    "name": "module:cache"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:common"
+  },
+  {
+    "color": "006b75",
+    "description": "Configuration management",
+    "name": "module:config"
+  },
+  {
+    "color": "fd7e14",
+    "description": "Database related work",
+    "name": "module:database"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:db"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:deployment"
+  },
+  {
+    "color": "6c757d",
+    "description": "Frontend development",
+    "name": "module:frontend"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:grpc"
+  },
+  {
+    "color": "96CEB4",
+    "description": "Identity and Access Management module",
+    "name": "module:iam"
+  },
+  {
+    "color": "FFEAA7",
+    "description": "Financial ledger and accounting module",
+    "name": "module:ledger"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:log"
+  },
+  {
+    "color": "6f42c1",
+    "description": "Metrics collection and monitoring",
+    "name": "module:metrics"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:monitoring"
+  },
+  {
+    "color": "DDA0DD",
+    "description": "Notification and messaging module",
+    "name": "module:notification"
+  },
+  {
+    "color": "98D8C8",
+    "description": "Organization and tenant management module",
+    "name": "module:organization"
+  },
+  {
+    "color": "F7DC6F",
+    "description": "Payment processing and gateway module",
+    "name": "module:payment"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:plugins"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:proto"
+  },
+  {
+    "color": "e99695",
+    "description": "Message queuing and task management",
+    "name": "module:queue"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "module:security"
+  },
+  {
+    "color": "495057",
+    "description": "User interface development",
+    "name": "module:ui"
+  },
+  {
+    "color": "BB8FCE",
+    "description": "Digital wallet and balance management module",
+    "name": "module:wallet"
+  },
+  {
+    "color": "b60205",
+    "description": "Web services and HTTP handling",
+    "name": "module:web"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "monitor"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "monitoring"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "mysql"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "needs-info"
+  },
+  {
+    "color": "fff3cd",
+    "description": "Needs code review",
+    "name": "needs-review"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "needs-triage"
+  },
+  {
+    "color": "e0ae53",
+    "description": "",
+    "name": "npm"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "observability"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "ops"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "optimization"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "orchestration"
+  },
+  {
+    "color": "ff9500",
+    "description": "Performance improvements",
+    "name": "performance"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "planning"
+  },
+  {
+    "color": "b60205",
+    "description": "High priority issue",
+    "name": "priority-high"
+  },
+  {
+    "color": "0e8a16",
+    "description": "Low priority issue",
+    "name": "priority-low"
+  },
+  {
+    "color": "fbca04",
+    "description": "Medium priority issue",
+    "name": "priority-medium"
+  },
+  {
+    "color": "d73a49",
+    "description": "Critical priority - immediate attention required",
+    "name": "priority:critical"
+  },
+  {
+    "color": "d93f0b",
+    "description": "High priority",
+    "name": "priority:high"
+  },
+  {
+    "color": "0e8a16",
+    "description": "Low priority",
+    "name": "priority:low"
+  },
+  {
+    "color": "fbca04",
+    "description": "Medium priority",
+    "name": "priority:medium"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "project"
+  },
+  {
+    "color": "f9d0c4",
+    "description": "gcommon refactor initiative",
+    "name": "project:gcommon-refactor"
+  },
+  {
+    "color": "6f42c1",
+    "description": "GitHub project management and workflows",
+    "name": "project:github-management"
+  },
+  {
+    "color": "e99695",
+    "description": "Issue management and tracking workflows",
+    "name": "project:issue-management"
+  },
+  {
+    "color": "74c0fc",
+    "description": "Media processing and handling",
+    "name": "project:media"
+  },
+  {
+    "color": "c5def5",
+    "description": "Protocol buffer implementation work",
+    "name": "project:protobuf-implementation"
+  },
+  {
+    "color": "4c956c",
+    "description": "Subtitle processing and conversion",
+    "name": "project:subtitles"
+  },
+  {
+    "color": "ffa8a8",
+    "description": "Audio transcription features",
+    "name": "project:transcription"
+  },
+  {
+    "color": "ff6b6b",
+    "description": "Whisper ASR integration",
+    "name": "project:whisper"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "proto"
+  },
+  {
+    "color": "c5def5",
+    "description": "Protocol buffer definitions",
+    "name": "protobuf"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "providers"
+  },
+  {
+    "color": "3572a5",
+    "description": "Python programming language",
+    "name": "python"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "quality"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "quality-assurance"
+  },
+  {
+    "color": "d876e3",
+    "description": "Further information is requested",
+    "name": "question"
+  },
+  {
+    "color": "e99695",
+    "description": "Message queuing and task management",
+    "name": "queue"
+  },
+  {
+    "color": "c3e6cb",
+    "description": "Ready for implementation",
+    "name": "ready"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "real-time"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "rebase"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "refactor"
+  },
+  {
+    "color": "f9d0c4",
+    "description": "Code refactoring",
+    "name": "refactoring"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "release"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "reliability"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "scripts"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "sdk"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "search"
+  },
+  {
+    "color": "ee0701",
+    "description": "Security related issues",
+    "name": "security"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "severity-error"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "size/L"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "size/M"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "size/S"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "size/XL"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "size/XS"
+  },
+  {
+    "color": "d73a49",
+    "description": "Epic change (multiple days/weeks)",
+    "name": "size:epic"
+  },
+  {
+    "color": "f9d0c4",
+    "description": "Large change (1-2 days)",
+    "name": "size:large"
+  },
+  {
+    "color": "bfd4f2",
+    "description": "Medium change (half day)",
+    "name": "size:medium"
+  },
+  {
+    "color": "c2e0c6",
+    "description": "Small change (1-2 hours)",
+    "name": "size:small"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "sprint"
+  },
+  {
+    "color": "f8d7da",
+    "description": "Blocked by external dependencies",
+    "name": "status:blocked"
+  },
+  {
+    "color": "6f42c1",
+    "description": "Duplicate issue",
+    "name": "status:duplicate"
+  },
+  {
+    "color": "d4edda",
+    "description": "Work in progress",
+    "name": "status:in-progress"
+  },
+  {
+    "color": "fff3cd",
+    "description": "Needs code review",
+    "name": "status:needs-review"
+  },
+  {
+    "color": "c3e6cb",
+    "description": "Ready for implementation",
+    "name": "status:ready"
+  },
+  {
+    "color": "9B59B6",
+    "description": "Task is ready for review",
+    "name": "status:review"
+  },
+  {
+    "color": "ffffff",
+    "description": "To do - not started",
+    "name": "status:todo"
+  },
+  {
+    "color": "6c757d",
+    "description": "This will not be worked on",
+    "name": "status:wontfix"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "teamwork"
+  },
+  {
+    "color": "2496ed",
+    "description": "Docker containerization",
+    "name": "tech:docker"
+  },
+  {
+    "color": "00add8",
+    "description": "Go programming language",
+    "name": "tech:go"
+  },
+  {
+    "color": "bfd4f2",
+    "description": "gRPC service implementations",
+    "name": "tech:grpc"
+  },
+  {
+    "color": "f1e05a",
+    "description": "JavaScript programming language",
+    "name": "tech:javascript"
+  },
+  {
+    "color": "326ce5",
+    "description": "Kubernetes orchestration",
+    "name": "tech:kubernetes"
+  },
+  {
+    "color": "c5def5",
+    "description": "Protocol buffer definitions",
+    "name": "tech:protobuf"
+  },
+  {
+    "color": "3572a5",
+    "description": "Python programming language",
+    "name": "tech:python"
+  },
+  {
+    "color": "89e051",
+    "description": "Shell scripting (bash, sh)",
+    "name": "tech:shell"
+  },
+  {
+    "color": "3178c6",
+    "description": "TypeScript programming language",
+    "name": "tech:typescript"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "templates"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "test"
+  },
+  {
+    "color": "1d76db",
+    "description": "Testing related work",
+    "name": "testing"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "tests"
+  },
+  {
+    "color": "ffa8a8",
+    "description": "Audio transcription features",
+    "name": "transcription"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "troubleshooting"
+  },
+  {
+    "color": "d73a49",
+    "description": "Something isn't working",
+    "name": "type:bug"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "type:ci"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "type:docs"
+  },
+  {
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation",
+    "name": "type:documentation"
+  },
+  {
+    "color": "a2eeef",
+    "description": "Improvement to existing feature",
+    "name": "type:enhancement"
+  },
+  {
+    "color": "0052cc",
+    "description": "New feature development",
+    "name": "type:feature"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "type:infrastructure"
+  },
+  {
+    "color": "6c757d",
+    "description": "Maintenance and housekeeping",
+    "name": "type:maintenance"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "type:protobuf"
+  },
+  {
+    "color": "f1c232",
+    "description": "Code refactoring without feature changes",
+    "name": "type:refactor"
+  },
+  {
+    "color": "ee0701",
+    "description": "Security related issues",
+    "name": "type:security"
+  },
+  {
+    "color": "1d76db",
+    "description": "Testing related work",
+    "name": "type:testing"
+  },
+  {
+    "color": "495057",
+    "description": "User interface development",
+    "name": "ui"
+  },
+  {
+    "color": "e99695",
+    "description": "User interface and user experience",
+    "name": "ui/ux"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "validation"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "version-control"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "versioning"
+  },
+  {
+    "color": "b60205",
+    "description": "Web services and HTTP handling",
+    "name": "web"
+  },
+  {
+    "color": "ff6b6b",
+    "description": "Whisper ASR integration",
+    "name": "whisper"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "widgets"
+  },
+  {
+    "color": "ffffff",
+    "description": "This will not be worked on",
+    "name": "wontfix"
+  },
+  {
+    "color": "0366d6",
+    "description": "GitHub workflow improvements",
+    "name": "workflow"
+  },
+  {
+    "color": "1f883d",
+    "description": "Automation and tooling",
+    "name": "workflow:automation"
+  },
+  {
+    "color": "28a745",
+    "description": "Continuous integration and deployment",
+    "name": "workflow:ci-cd"
+  },
+  {
+    "color": "0366d6",
+    "description": "Deployment and release management",
+    "name": "workflow:deployment"
+  },
+  {
+    "color": "2088ff",
+    "description": "GitHub Actions workflows",
+    "name": "workflow:github-actions"
+  },
+  {
+    "color": "ededed",
+    "description": "",
+    "name": "workflows"
+  }
+]
