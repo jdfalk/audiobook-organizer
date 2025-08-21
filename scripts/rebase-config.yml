@@ -1,0 +1,138 @@
+# Rebase Automation Configuration
+# file: scripts/rebase-config.yml
+
+# Conflict resolution strategies by file pattern
+conflict_strategies:
+  # Documentation files - prefer incoming (main branch usually has latest docs)
+  documentation:
+    patterns:
+      - "*.md"
+      - "docs/**/*"
+      - "README*"
+      - "CHANGELOG*"
+      - "TODO*"
+    strategy: "incoming"
+    reason: "Documentation on main branch is typically more up-to-date"
+
+  # Build and CI configuration - prefer incoming
+  build_config:
+    patterns:
+      - ".github/**/*"
+      - "Dockerfile*"
+      - "docker-compose*"
+      - "Makefile"
+      - ".dockerignore"
+      - ".gitignore"
+      - "*.yml"
+      - "*.yaml"
+    strategy: "incoming"
+    reason: "Build configuration should match main branch standards"
+
+  # Package management - prefer incoming
+  package_management:
+    patterns:
+      - "go.mod"
+      - "go.sum"
+      - "package.json"
+      - "package-lock.json"
+      - "requirements.txt"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "composer.json"
+      - "composer.lock"
+    strategy: "incoming"
+    reason: "Package versions should match main branch"
+
+  # Configuration files - smart merge
+  configuration:
+    patterns:
+      - "*.json"
+      - "*.toml"
+      - "*.ini"
+      - "*.conf"
+      - "config/**/*"
+    strategy: "smart_merge"
+    reason: "Configuration files often need careful merging"
+
+  # Source code - save both versions
+  source_code:
+    patterns:
+      - "*.go"
+      - "*.js"
+      - "*.ts"
+      - "*.py"
+      - "*.java"
+      - "*.cpp"
+      - "*.c"
+      - "*.h"
+      - "*.rs"
+      - "*.php"
+      - "*.rb"
+      - "*.swift"
+    strategy: "save_both"
+    reason: "Code conflicts need manual review"
+
+  # Test files - save both versions
+  tests:
+    patterns:
+      - "*_test.go"
+      - "*.test.js"
+      - "test/**/*"
+      - "tests/**/*"
+      - "__tests__/**/*"
+    strategy: "save_both"
+    reason: "Test changes need careful review"
+
+  # Data files - keep current
+  data:
+    patterns:
+      - "*.sql"
+      - "*.csv"
+      - "*.xml"
+      - "data/**/*"
+      - "testdata/**/*"
+    strategy: "current"
+    reason: "Data files are often environment-specific"
+
+# Special handling for specific files
+special_files:
+  "issue_updates.json":
+    strategy: "smart_merge"
+    reason: "Issue updates need intelligent merging"
+
+  "announcements.json":
+    strategy: "smart_merge"
+    reason: "Announcements should be merged intelligently"
+
+  ".env":
+    strategy: "current"
+    reason: "Environment files are environment-specific"
+
+  ".env.example":
+    strategy: "incoming"
+    reason: "Example env files should match main branch"
+
+# Commit message templates
+commit_templates:
+  auto_rebase: "chore: auto-rebase onto {target_branch}"
+  conflict_resolution: "fix: resolve conflicts during rebase onto {target_branch}"
+  backup_creation: "chore: create backup before rebase"
+
+# Codex-specific settings
+codex:
+  auto_commit: true
+  force_push: true
+  create_backup: true
+  generate_summary: true
+  cleanup_redundant_files: true
+
+  # Maximum number of conflict resolution attempts
+  max_resolution_attempts: 3
+
+  # Files to exclude from conflict resolution
+  exclude_patterns:
+    - "*.log"
+    - "*.tmp"
+    - ".DS_Store"
+    - "node_modules/**/*"
+    - "vendor/**/*"

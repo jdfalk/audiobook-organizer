@@ -33,6 +33,7 @@ attr-rgx=[a-z_][a-z0-9_]{2,30}$
 argument-rgx=[a-z_][a-z0-9_]{2,30}$
 variable-rgx=[a-z_][a-z0-9_]{2,30}$
 module-rgx=(([a-z_][a-z0-9_]*)|([A-Z][a-zA-Z0-9]+))$
+inlinevar-rgx=[A-Za-z_][A-Za-z0-9_]*$
 
 [DESIGN]
 max-args=7
@@ -42,11 +43,8 @@ max-branches=12
 max-statements=50
 max-parents=7
 max-attributes=7
-min-public-methods=1
+min-public-methods=2
 max-public-methods=20
-
-[IMPORTS]
-deprecated-modules=optparse
 
 [EXCEPTIONS]
 overgeneral-exceptions=Exception

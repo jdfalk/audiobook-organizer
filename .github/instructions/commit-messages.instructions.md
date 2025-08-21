@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/commit-messages.instructions.md -->
-<!-- version: 1.3.0 -->
+<!-- version: 1.4.0 -->
 <!-- guid: msg12345-e89b-12d3-a456-426614174000 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -34,16 +34,16 @@ For more details and the full system, see
 **IMPORTANT**: Only include issue numbers if you are working on a specific
 GitHub issue. Do not use placeholder numbers like #123.
 
-### Multi-Area Changes Format
+### Multi-Change Format
 
-When committing files from different functional areas (e.g., frontend, backend, docs), group them by area and provide a conventional commit header for each area:
+**CRITICAL**: When making multiple distinct changes that each deserve their own conventional commit header, structure the commit as follows:
 
 ```text
-type(scope): primary description of the overall change
+feat(scope): primary description of the main change
 
 Brief description of the overall changes and their purpose.
 
-Areas Modified:
+Changes Made:
 
 feat(frontend): description of frontend changes
 - path/to/frontend1.ext - Description of changes
@@ -55,7 +55,13 @@ fix(backend): description of backend changes
 
 docs(readme): description of documentation changes
 - path/to/docs1.ext - Description of changes
+
+refactor(core): description of refactoring changes
+- path/to/core1.ext - Description of changes
+- path/to/core2.ext - Description of changes
 ```
+
+**Important**: Each distinct change gets its own conventional commit header. Use this format when you have multiple types of changes (feat, fix, docs, refactor, etc.) in a single commit.
 
 ### Multi-Issue Format
 
@@ -133,11 +139,12 @@ Files changed:
 
 ### Body Structure
 
-- **Single Area Changes**: Use "Files changed:" section
-- **Multi-Area Changes**: Use "Areas Modified:" with subsections grouped by functional area
-- **Multiple Issues**: Use "Issues Addressed:" with subsections
-- Group files logically by area or issue they address
+- **Single Change**: Use "Files changed:" section for one logical change
+- **Multiple Distinct Changes**: Use "Changes Made:" with subsections, each having their own conventional commit header
+- **Multiple Issues**: Use "Issues Addressed:" with subsections grouped by issue
+- Group files logically by the type of change they represent
 - Include brief context about the overall changes
+- **CRITICAL**: Each distinct functional change (feat, fix, refactor, docs, etc.) gets its own conventional commit header
 
 ### Conventional Commit Types
 
@@ -173,7 +180,7 @@ Files changed:
 
 ## Examples
 
-### Multi-Area Commit Example
+### Multi-Change Commit Example
 
 ```text
 feat(system): implement user dashboard with backend API
@@ -181,7 +188,7 @@ feat(system): implement user dashboard with backend API
 Added complete user dashboard functionality including frontend components,
 backend API endpoints, and updated documentation.
 
-Areas Modified:
+Changes Made:
 
 feat(frontend): add user dashboard components
 - [src/components/Dashboard.jsx](src/components/Dashboard.jsx) - Main dashboard component with data visualization

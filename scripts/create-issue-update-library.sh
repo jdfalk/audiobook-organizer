@@ -1,10 +1,11 @@
 #!/bin/bash
 # file: scripts/create-issue-update-library.sh
-# version: 1.2.0
+# version: 2.0.1
 # guid: 4a81c3e0-5f7b-4e2a-b92d-6c8a7c1d3e5f
 #
-# Library of functions for creating GitHub issue update files
+# Enhanced Library for creating GitHub issue update files with enhanced timestamp format v2.0
 # This file is meant to be sourced by other scripts, not executed directly
+#
 
 # Function to generate legacy GUID for backward compatibility
 generate_legacy_guid() {
@@ -43,11 +44,26 @@ generate_uuid() {
 # Function to check if issue already exists on GitHub
 check_github_issue_exists() {
     local title="$1"
-    local repo="${GITHUB_REPOSITORY:-$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/')}"
-    local token="${GITHUB_TOKEN:-${GH_TOKEN}}"
+    local repo=""
 
+    # Determine repository from environment or git remote if available
+    if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+        repo="$GITHUB_REPOSITORY"
+    else
+        repo=$(git remote get-url origin 2>/dev/null | \
+            sed 's/.*github.com[:/]\(.*\)\.git/\1/') || true
+    fi
+
+    local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+
+    # If we don't have the necessary info, skip the GitHub check gracefully
     if [[ -z "$token" ]]; then
         echo "Warning: No GitHub token found. Skipping GitHub issue check." >&2
+        return 1
+    fi
+
+    if [[ -z "$repo" ]]; then
+        echo "Warning: No git remote 'origin' found. Skipping GitHub issue check." >&2
         return 1
     fi
 
@@ -194,23 +210,27 @@ create_issue_file() {
             local repo="$7"
             local guid="$uuid"  # Use the passed-in UUID as the GUID
             local legacy_guid
+            local timestamp
+            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
-            # Check if issue already exists on GitHub
-            if check_github_issue_exists "$title"; then
-                echo "❌ Skipping creation: Issue with this title already exists on GitHub" >&2
-                return 1
-            fi
+            # Note: GitHub duplicate check is handled by the workflow processing the JSON files
+            # This script should only create JSON files, not make API calls
 
             legacy_guid=$(generate_legacy_guid "create" "$title")
 
-            # Build JSON with optional parent_issue field
+            # Build JSON with enhanced timestamp format v2.0
             local json_content="{
   \"action\": \"create\",
   \"title\": \"$title\",
   \"body\": \"$body\",
   \"labels\": [$(echo "$labels" | sed 's/,/", "/g' | sed 's/^/"/;s/$/"/')],
   \"guid\": \"$guid\",
-  \"legacy_guid\": \"$legacy_guid\""
+  \"legacy_guid\": \"$legacy_guid\",
+  \"created_at\": \"$timestamp\",
+  \"processed_at\": null,
+  \"failed_at\": null,
+  \"sequence\": 0,
+  \"parent_guid\": null"
 
             # Add parent_issue if provided
             if [[ -n "$parent_issue" ]]; then
@@ -236,6 +256,8 @@ create_issue_file() {
             local repo="$7"
             local guid="$uuid"  # Use the passed-in UUID as the GUID
             local legacy_guid
+            local timestamp
+            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
             legacy_guid=$(generate_legacy_guid "update" "$number")
 
             local num_field
@@ -245,7 +267,7 @@ create_issue_file() {
                 num_field="$number"
             fi
 
-            local json_content="{\n  \"action\": \"update\",\n  \"number\": $num_field,\n  \"body\": \"$body\",\n  \"labels\": [$(echo "$labels" | sed 's/,/\", \"/g' | sed 's/^/\"/;s/$/\"/')],\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\""
+            local json_content="{\n  \"action\": \"update\",\n  \"number\": $num_field,\n  \"body\": \"$body\",\n  \"labels\": [$(echo "$labels" | sed 's/,/\", \"/g' | sed 's/^/\"/;s/$/\"/')],\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\",\n  \"created_at\": \"$timestamp\",\n  \"processed_at\": null,\n  \"failed_at\": null,\n  \"sequence\": 0,\n  \"parent_guid\": null"
 
             if [[ -n "$parent_guid" ]]; then
                 json_content+=" ,\n  \"parent\": \"$parent_guid\""
@@ -266,6 +288,8 @@ create_issue_file() {
             local repo="$6"
             local guid="$uuid"  # Use the passed-in UUID as the GUID
             local legacy_guid
+            local timestamp
+            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
             legacy_guid=$(generate_legacy_guid "comment" "$number")
 
             local num_field
@@ -275,7 +299,7 @@ create_issue_file() {
                 num_field="$number"
             fi
 
-            local json_content="{\n  \"action\": \"comment\",\n  \"number\": $num_field,\n  \"body\": \"$body\",\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\""
+            local json_content="{\n  \"action\": \"comment\",\n  \"number\": $num_field,\n  \"body\": \"$body\",\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\",\n  \"created_at\": \"$timestamp\",\n  \"processed_at\": null,\n  \"failed_at\": null,\n  \"sequence\": 0,\n  \"parent_guid\": null"
 
             if [[ -n "$parent_guid" ]]; then
                 json_content+=" ,\n  \"parent\": \"$parent_guid\""
@@ -296,6 +320,8 @@ create_issue_file() {
             local repo="$6"
             local guid="$uuid"  # Use the passed-in UUID as the GUID
             local legacy_guid
+            local timestamp
+            timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
             legacy_guid=$(generate_legacy_guid "close" "$number")
 
             local num_field
@@ -305,7 +331,7 @@ create_issue_file() {
                 num_field="$number"
             fi
 
-            local json_content="{\n  \"action\": \"close\",\n  \"number\": $num_field,\n  \"state_reason\": \"$state_reason\",\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\""
+            local json_content="{\n  \"action\": \"close\",\n  \"number\": $num_field,\n  \"state_reason\": \"$state_reason\",\n  \"guid\": \"$guid\",\n  \"legacy_guid\": \"$legacy_guid\",\n  \"created_at\": \"$timestamp\",\n  \"processed_at\": null,\n  \"failed_at\": null,\n  \"sequence\": 0,\n  \"parent_guid\": null"
 
             if [[ -n "$parent_guid" ]]; then
                 json_content+=" ,\n  \"parent\": \"$parent_guid\""

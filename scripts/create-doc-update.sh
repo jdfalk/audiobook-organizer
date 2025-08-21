@@ -1,15 +1,21 @@
 #!/bin/bash
 # file: scripts/create-doc-update.sh
-# version: 2.0.0
+# version: 3.0.0
 # guid: 4db28a8c-33e2-4853-9f0c-1d8283720bd1
 
 set -euo pipefail
 
-# Enhanced Documentation Update Script
+# Enhanced Documentation Update Script v3.0 with Enhanced Timestamp Format v2.0
 #
 # This script creates structured JSON files for documentation updates that can be
 # processed by the reusable-docs-update.yml workflow. It supports multiple modes
 # of operation and provides templates for common documentation updates.
+#
+# Enhanced Features:
+# - Enhanced timestamp format v2.0 with lifecycle tracking (created_at, processed_at, failed_at)
+# - Chronological processing support with sequence numbers
+# - Parent GUID tracking for dependency management
+# - Full backwards compatibility with existing workflows
 #
 # Usage examples:
 #   ./scripts/create-doc-update.sh README.md "## New Feature\nAdded amazing functionality" append
@@ -258,7 +264,7 @@ create_update() {
   mkdir -p "$dir"
   local path="$dir/${uuid}.json"
 
-  # Create comprehensive update file
+  # Create comprehensive update file with enhanced timestamp format v2.0
   jq -n \
     --arg file "$file" \
     --arg mode "$mode" \
@@ -278,6 +284,10 @@ create_update() {
       content: $content,
       guid: $guid,
       created_at: $timestamp,
+      processed_at: null,
+      failed_at: null,
+      sequence: 0,
+      parent_guid: null,
       options: {
         section: (if $section != "" then $section else null end),
         after: (if $after != "" then $after else null end),

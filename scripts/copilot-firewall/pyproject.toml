@@ -1,0 +1,68 @@
+[build-system]
+# file: scripts/copilot-firewall/pyproject.toml
+# version: 1.1.0
+# guid: 7f8e9d1c-2a3b-4c5d-6e7f-8a9b0c1d2e3f
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "copilot-firewall"
+version = "1.1.0"
+description = "Interactive GitHub Copilot firewall allowlist manager"
+authors = [
+    {name = "jdfalk", email = "your.email@example.com"},
+]
+readme = "README.md"
+requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "inquirer>=3.1.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+copilot-firewall = "copilot_firewall.main:main"
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "B", "A", "C4", "EM", "PIE", "T20", "RET", "SIM", "ARG", "PTH", "PL", "TRY"]
+ignore = ["E501", "PLR0913", "PLR0915"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --strict-markers"

@@ -1,0 +1,200 @@
+# file: .github/linters/.golangci.yml
+# version: 1.0.0
+# guid: 4d5e6f7a-8b9c-0123-def4-56789abcdef0
+
+# GolangCI-Lint configuration following Google Go Style Guide
+# https://google.github.io/styleguide/go/
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  skip-dirs:
+    - vendor
+    - node_modules
+    - .git
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_gen\\.go$"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters-settings:
+  # Cyclomatic complexity
+  cyclop:
+    max-complexity: 15
+    package-average: 10.0
+
+  # Error handling
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  # Function complexity
+  funlen:
+    lines: 60
+    statements: 40
+
+  # Cognitive complexity
+  gocognit:
+    min-complexity: 15
+
+  # Cyclomatic complexity
+  gocyclo:
+    min-complexity: 15
+
+  # Line length
+  lll:
+    line-length: 100
+
+  # Naming conventions (Google Go Style)
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: false
+      - name: package-comments
+        severity: warning
+        disabled: false
+      - name: var-naming
+        severity: warning
+        disabled: false
+        arguments:
+          - ["ID", "API", "URL", "HTTP", "JSON", "XML", "HTML", "CSS", "JS", "SQL", "DB", "OS", "UI", "UUID", "URI"]
+      - name: exported
+        arguments: [checkPrivateReceivers, disableStutteringCheck]
+
+  # Unused parameters
+  unparam:
+    check-exported: false
+
+  # Unused code
+  unused:
+    check-exported: false
+
+  # Go vet settings
+  govet:
+    check-shadowing: true
+    settings:
+      printf:
+        funcs:
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Infof
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
+          - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
+
+  # Import organization
+  goimports:
+    local-prefixes: github.com/jdfalk/gcommon
+
+  # Whitespace
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+linters:
+  enable:
+    - bodyclose
+    - cyclop
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - funlen
+    - gci
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gofmt
+    - gofumpt
+    - goheader
+    - goimports
+    - gomnd
+    - gomodguard
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - nilerr
+    - nlreturn
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - staticcheck
+    - structcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - varcheck
+    - whitespace
+    - wsl
+
+  disable:
+    - deadcode  # deprecated
+    - golint    # deprecated
+    - interfacer # deprecated
+    - maligned  # deprecated
+    - scopelint # deprecated
+    - varnamelen # too strict for short variable names
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - gomnd
+        - funlen
+        - gocognit
+        - cyclop
+
+    # Exclude some linters from running on generated files
+    - path: ".*\\.pb\\.go$"
+      linters:
+        - lll
+        - gocyclo
+        - gofmt
+        - goimports
+
+    # Exclude known linter issues
+    - text: "weak cryptographic primitive"
+      linters:
+        - gosec
+
+    # Exclude shadow checking for common variable names in tests
+    - path: _test\.go
+      text: "shadow: declaration of \"err\" shadows declaration at"
+      linters:
+        - govet
+
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
+
+severity:
+  default-severity: error
+  case-sensitive: false

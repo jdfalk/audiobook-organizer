@@ -1,0 +1,75 @@
+# file: .github/linters/rustfmt.toml
+# version: 1.0.0
+# guid: 5e6f7a8b-9c0d-1234-ef56-789abcdef012
+
+# Rust formatting configuration following Rust Style Guide
+# https://doc.rust-lang.org/nightly/style-guide/
+
+# Edition and version
+edition = "2021"
+version = "Two"
+
+# Basic formatting
+max_width = 100
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Unix"
+
+# Imports
+imports_layout = "Vertical"
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+reorder_modules = true
+
+# Functions
+fn_params_layout = "Tall"
+brace_style = "SameLineWhere"
+control_brace_style = "AlwaysSameLine"
+
+# Strings and comments
+format_strings = true
+format_macro_matchers = true
+normalize_comments = true
+normalize_doc_attributes = true
+wrap_comments = true
+comment_width = 80
+
+# Expressions and statements
+chain_width = 60
+single_line_if_else_max_width = 50
+where_single_line = true
+force_explicit_abi = true
+
+# Whitespace and indentation
+blank_lines_upper_bound = 1
+blank_lines_lower_bound = 0
+empty_item_single_line = true
+struct_lit_single_line = true
+fn_single_line = false
+
+# Advanced options
+use_small_heuristics = "Default"
+binop_separator = "Front"
+combine_control_expr = true
+condense_wildcard_suffixes = false
+force_multiline_blocks = false
+format_code_in_doc_comments = false
+hex_literal_case = "Preserve"
+ignore = []
+license_template_path = ""
+merge_derives = true
+overflow_delimited_expr = false
+remove_nested_parens = true
+short_array_element = 10
+spaces_around_ranges = false
+struct_field_align_threshold = 0
+trailing_comma = "Vertical"
+trailing_semicolon = true
+type_punctuation_density = "Wide"
+unstable_features = false
+use_field_init_shorthand = false
+use_try_shorthand = false
+match_arm_blocks = true
+match_block_trailing_comma = false
+spaces_within_parens_and_brackets = false

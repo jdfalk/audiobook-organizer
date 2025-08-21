@@ -1,0 +1,12 @@
+# file: scripts/requirements-notifications.txt
+# version: 1.0.0
+# guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
+
+# Requirements for GitHub notifications cleanup script
+# Install with: pip install -r scripts/requirements-notifications.txt
+
+# HTTP library for GitHub API calls
+requests>=2.31.0
+
+# Environment variable management
+python-dotenv>=1.0.0
