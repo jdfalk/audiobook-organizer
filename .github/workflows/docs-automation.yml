@@ -1,0 +1,341 @@
+# file: .github/workflows/docs-automation.yml
+# version: 1.0.0
+# guid: e4f5a6b7-c8d9-e0f1-a2b3-c4d5e6f7a8b9
+
+# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
+# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
+# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/docs-automation.yml
+
+name: Documentation Automation
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "**.md"
+      - ".github/doc-updates/**"
+      - "docs/**"
+  pull_request:
+    paths:
+      - "**.md"
+      - ".github/doc-updates/**"
+      - "docs/**"
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: "Force update all documentation"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Process pending documentation updates
+  process-doc-updates:
+    name: Process Documentation Updates
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.force_update == 'true'
+    outputs:
+      updates_processed: ${{ steps.process.outputs.updates_processed }}
+      files_updated: ${{ steps.process.outputs.files_updated }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+          # Install common doc processing tools
+          pip install pyyaml jinja2 markdown
+
+      - name: Check for pending doc updates
+        id: check
+        run: |
+          if [ -d ".github/doc-updates" ] && [ "$(find .github/doc-updates -name '*.json' | wc -l)" -gt 0 ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "Found pending documentation updates"
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No pending documentation updates"
+          fi
+
+      - name: Process documentation updates
+        id: process
+        if: steps.check.outputs.has_updates == 'true' || github.event.inputs.force_update == 'true'
+        run: |
+          if [ -f "doc_update_manager.py" ]; then
+            python doc_update_manager.py --process-all
+            echo "updates_processed=true" >> $GITHUB_OUTPUT
+          else
+            echo "No doc_update_manager.py found, skipping automated processing"
+            echo "updates_processed=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Count updated files
+          files_updated=$(git diff --name-only | wc -l)
+          echo "files_updated=$files_updated" >> $GITHUB_OUTPUT
+
+      - name: Commit documentation updates
+        if: steps.process.outputs.updates_processed == 'true'
+        run: |
+          if ! git diff --quiet; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "Documentation Bot"
+            git add .
+            git commit -m "docs: automated documentation updates
+
+            - Processed ${{ steps.process.outputs.files_updated }} documentation files
+            - Applied pending updates from .github/doc-updates/
+
+            [skip ci]"
+            git push
+          fi
+
+  # Generate documentation index and navigation
+  generate-docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    needs: process-doc-updates
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Generate documentation index
+        run: |
+          # Create docs directory if it doesn't exist
+          mkdir -p docs
+
+          # Generate documentation index
+          cat > docs/README.md << 'EOF'
+          # Documentation Index
+
+          This directory contains auto-generated documentation for this project.
+
+          ## Available Documentation
+
+          EOF
+
+          # Find all markdown files and create index
+          find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | sort | while read -r file; do
+            # Extract title from first heading or use filename
+            title=$(grep -m1 "^# " "$file" 2>/dev/null | sed 's/^# //' || basename "$file" .md)
+            relative_path=$(echo "$file" | sed 's|^\./||')
+            echo "- [$title]($relative_path)" >> docs/README.md
+          done
+
+          echo "" >> docs/README.md
+          echo "_Generated on $(date)_" >> docs/README.md
+
+      - name: Generate table of contents for long documents
+        run: |
+          # Process README.md and other long documents
+          for file in README.md CONTRIBUTING.md CHANGELOG.md; do
+            if [ -f "$file" ] && [ "$(wc -l < "$file")" -gt 50 ]; then
+              echo "Generating TOC for $file"
+
+              # Extract headings and create TOC
+              temp_file=$(mktemp)
+              echo "## Table of Contents" > "$temp_file"
+              echo "" >> "$temp_file"
+
+              grep -n "^##*" "$file" | while IFS=: read -r line_num heading; do
+                level=$(echo "$heading" | sed 's/[^#].*$//' | wc -c)
+                title=$(echo "$heading" | sed 's/^##* //')
+                anchor=$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/-$//')
+
+                indent=$(printf "%*s" $((($level - 2) * 2)) "")
+                echo "${indent}- [$title](#$anchor)" >> "$temp_file"
+              done
+
+              echo "" >> "$temp_file"
+
+              # Check if TOC already exists, if so replace it
+              if grep -q "## Table of Contents" "$file"; then
+                # Replace existing TOC
+                awk '
+                  /^## Table of Contents/ {
+                    system("cat '"$temp_file"'");
+                    skip=1;
+                    next
+                  }
+                  /^##/ && skip { skip=0 }
+                  !skip { print }
+                ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+              else
+                # Insert TOC after first heading
+                awk '
+                  NR==1 { print; getline; print; system("cat '"$temp_file"'"); print "" }
+                  NR>2 { print }
+                ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+              fi
+
+              rm "$temp_file"
+            fi
+          done
+
+      - name: Validate documentation links
+        run: |
+          echo "# 📖 Documentation Validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          broken_links=0
+          total_links=0
+
+          # Find all markdown files and check internal links
+          find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" | while read -r file; do
+            echo "Checking links in $file..."
+
+            # Extract markdown links [text](url)
+            grep -o '\[.*\](.*\.md[^)]*)' "$file" 2>/dev/null | while read -r link; do
+              url=$(echo "$link" | sed 's/.*](\([^)]*\)).*/\1/')
+
+              # Skip external links
+              if [[ "$url" =~ ^https?:// ]]; then
+                continue
+              fi
+
+              total_links=$((total_links + 1))
+
+              # Resolve relative path
+              if [[ "$url" =~ ^/ ]]; then
+                target_file=".$url"
+              else
+                dir=$(dirname "$file")
+                target_file="$dir/$url"
+              fi
+
+              if [ ! -f "$target_file" ]; then
+                echo "❌ Broken link in $file: $url" >> $GITHUB_STEP_SUMMARY
+                broken_links=$((broken_links + 1))
+              fi
+            done
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Results**: $total_links links checked, $broken_links broken" >> $GITHUB_STEP_SUMMARY
+
+      - name: Commit generated documentation
+        run: |
+          if ! git diff --quiet; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "Documentation Generator"
+            git add docs/ README.md CONTRIBUTING.md CHANGELOG.md
+            git commit -m "docs: update generated documentation
+
+            - Updated documentation index
+            - Generated table of contents for long documents
+            - Validated internal links
+
+            [skip ci]" || echo "No changes to commit"
+            git push || echo "No changes to push"
+          fi
+
+  # Documentation quality check for PRs
+  doc-quality-check:
+    name: Documentation Quality Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Check documentation requirements
+        run: |
+          echo "# 📝 Documentation Quality Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          issues=0
+
+          # Check if PR affects code but has no doc updates
+          code_changes=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(go|js|ts|py|rs|java|cpp|c)$' | wc -l)
+          doc_changes=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.md$' | wc -l)
+
+          if [ "$code_changes" -gt 0 ] && [ "$doc_changes" -eq 0 ]; then
+            echo "⚠️ **Warning**: Code changes detected but no documentation updates" >> $GITHUB_STEP_SUMMARY
+            echo "Consider updating relevant documentation files" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            issues=$((issues + 1))
+          fi
+
+          # Check for required documentation files
+          required_files=("README.md" "CONTRIBUTING.md" "CHANGELOG.md")
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ **Missing**: $file" >> $GITHUB_STEP_SUMMARY
+              issues=$((issues + 1))
+            else
+              echo "✅ **Found**: $file" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$issues" -eq 0 ]; then
+            echo "🎉 **All documentation checks passed!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📋 **Found $issues documentation issues**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Sync documentation across repositories
+  sync-docs:
+    name: Sync Documentation
+    runs-on: ubuntu-latest
+    needs: [process-doc-updates, generate-docs]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Sync shared documentation
+        run: |
+          echo "# 🔄 Documentation Sync" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Syncing shared documentation files across repositories..." >> $GITHUB_STEP_SUMMARY
+
+          # This would integrate with repo-sync workflow
+          # For now, just log what would be synced
+          shared_files=(".github/copilot-instructions.md" "CONTRIBUTING.md" "CODE_OF_CONDUCT.md")
+
+          for file in "${shared_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "📄 Would sync: $file" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+      - name: Create documentation summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Updates processed: ${{ needs.process-doc-updates.outputs.updates_processed }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Files updated: ${{ needs.process-doc-updates.outputs.files_updated }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Documentation generated and validated" >> $GITHUB_STEP_SUMMARY

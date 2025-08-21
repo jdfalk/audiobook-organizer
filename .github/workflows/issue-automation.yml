@@ -1,0 +1,390 @@
+# file: .github/workflows/issue-automation.yml
+# version: 1.0.0
+# guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
+
+# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
+# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
+# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/issue-automation.yml
+
+name: Issue Automation
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled]
+  issue_comment:
+    types: [created, edited]
+  schedule:
+    # Run stale issue check daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      force_triage:
+        description: "Force re-triage all open issues"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  # Intelligent issue labeling
+  intelligent-labeling:
+    name: AI-Powered Issue Labeling
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Analyze issue content
+        id: analyze
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const text = `${title} ${body}`;
+
+            const labels = [];
+
+            // Bug detection
+            if (/\b(bug|error|broken|crash|fail|issue|problem|incorrect)\b/.test(text)) {
+              labels.push('bug');
+            }
+
+            // Feature request detection
+            if (/\b(feature|enhancement|improve|add|new|request|suggest)\b/.test(text)) {
+              labels.push('enhancement');
+            }
+
+            // Documentation issues
+            if (/\b(doc|documentation|readme|guide|tutorial|help)\b/.test(text)) {
+              labels.push('documentation');
+            }
+
+            // Priority detection
+            if (/\b(urgent|critical|blocker|asap|immediately)\b/.test(text)) {
+              labels.push('priority:high');
+            } else if (/\b(low|minor|nice.?to.?have|eventually)\b/.test(text)) {
+              labels.push('priority:low');
+            } else {
+              labels.push('priority:medium');
+            }
+
+            // Component detection
+            if (/\b(ci|continuous.?integration|github.?actions|workflow)\b/.test(text)) {
+              labels.push('area:ci');
+            }
+            if (/\b(docker|container|dockerfile)\b/.test(text)) {
+              labels.push('area:docker');
+            }
+            if (/\b(test|testing|spec)\b/.test(text)) {
+              labels.push('area:testing');
+            }
+            if (/\b(security|vulnerability|cve)\b/.test(text)) {
+              labels.push('security');
+            }
+
+            // Good first issue detection
+            if (/\b(typo|spelling|simple|easy|beginner)\b/.test(text)) {
+              labels.push('good first issue');
+            }
+
+            // Apply labels directly here instead of using outputs
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+
+              console.log(`Applied labels: ${labels.join(', ')}`);
+            }
+
+            return labels;
+
+      - name: Add to project board
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // This would add the issue to a project board
+            // Implementation depends on GitHub Projects setup
+            console.log('Issue would be added to project board');
+
+  # Issue triage and management
+  issue-triage:
+    name: Issue Triage
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'issues' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Triage issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+
+            // Get all open issues
+            const issues = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            let triaged = 0;
+
+            for (const issue of issues.data) {
+              if (issue.pull_request) continue; // Skip PRs
+
+              const labels = issue.labels.map(l => l.name);
+              const hasTypeLabel = labels.some(l => ['bug', 'enhancement', 'documentation', 'question'].includes(l));
+              const hasPriorityLabel = labels.some(l => l.startsWith('priority:'));
+
+              // Add missing labels
+              const labelsToAdd = [];
+
+              if (!hasTypeLabel) {
+                labelsToAdd.push('needs-triage');
+              }
+
+              if (!hasPriorityLabel && hasTypeLabel) {
+                labelsToAdd.push('priority:medium');
+              }
+
+              // Check if issue needs more information
+              const hasTemplate = issue.body && issue.body.length > 50;
+              if (!hasTemplate && !labels.includes('needs-info')) {
+                labelsToAdd.push('needs-info');
+              }
+
+              if (labelsToAdd.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: issue.number,
+                  labels: labelsToAdd
+                });
+                triaged++;
+              }
+            }
+
+            console.log(`Triaged ${triaged} issues`);
+            core.summary.addHeading('Issue Triage Summary');
+            core.summary.addRaw(`Triaged ${triaged} issues`);
+            core.summary.write();
+
+  # Stale issue management
+  stale-issues:
+    name: Stale Issue Management
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Mark/close stale issues
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had
+            recent activity. It will be closed if no further activity occurs.
+
+            If this issue is still relevant, please:
+            - Add a comment to keep it open
+            - Add the `keep-open` label
+            - Remove the `stale` label
+
+            Thank you for your contributions!
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity.
+
+            If you believe this issue is still relevant, please reopen it with
+            updated information or create a new issue referencing this one.
+          stale-issue-label: "stale"
+          exempt-issue-labels: "keep-open,priority:high,security,good first issue"
+          days-before-stale: 60
+          days-before-close: 7
+          operations-per-run: 100
+          ascending: true
+
+  # Issue metrics and reporting
+  issue-metrics:
+    name: Issue Metrics
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Generate issue metrics
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const now = new Date();
+            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+            // Get issues from last 30 days
+            const issues = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'all',
+              since: thirtyDaysAgo.toISOString(),
+              per_page: 100
+            });
+
+            const metrics = {
+              total: issues.data.filter(i => !i.pull_request).length,
+              open: issues.data.filter(i => !i.pull_request && i.state === 'open').length,
+              closed: issues.data.filter(i => !i.pull_request && i.state === 'closed').length,
+              bugs: issues.data.filter(i => !i.pull_request && i.labels.some(l => l.name === 'bug')).length,
+              enhancements: issues.data.filter(i => !i.pull_request && i.labels.some(l => l.name === 'enhancement')).length,
+              stale: issues.data.filter(i => !i.pull_request && i.labels.some(l => l.name === 'stale')).length
+            };
+
+            // Calculate average time to close
+            const closedIssues = issues.data.filter(i => !i.pull_request && i.state === 'closed');
+            let avgTimeToClose = 0;
+            if (closedIssues.length > 0) {
+              const totalTime = closedIssues.reduce((sum, issue) => {
+                const created = new Date(issue.created_at);
+                const closed = new Date(issue.closed_at);
+                return sum + (closed - created);
+              }, 0);
+              avgTimeToClose = Math.round(totalTime / closedIssues.length / (1000 * 60 * 60 * 24)); // days
+            }
+
+            // Create summary
+            core.summary.addHeading('📊 Issue Metrics (Last 30 Days)');
+            core.summary.addTable([
+              ['Metric', 'Count'],
+              ['Total Issues', metrics.total.toString()],
+              ['Open Issues', metrics.open.toString()],
+              ['Closed Issues', metrics.closed.toString()],
+              ['Bug Reports', metrics.bugs.toString()],
+              ['Enhancement Requests', metrics.enhancements.toString()],
+              ['Stale Issues', metrics.stale.toString()],
+              ['Avg. Time to Close', `${avgTimeToClose} days`]
+            ]);
+
+            // Label distribution
+            const labelCounts = {};
+            issues.data.forEach(issue => {
+              if (!issue.pull_request) {
+                issue.labels.forEach(label => {
+                  labelCounts[label.name] = (labelCounts[label.name] || 0) + 1;
+                });
+              }
+            });
+
+            const topLabels = Object.entries(labelCounts)
+              .sort(([,a], [,b]) => b - a)
+              .slice(0, 10);
+
+            if (topLabels.length > 0) {
+              core.summary.addHeading('🏷️ Top Labels');
+              core.summary.addTable([
+                ['Label', 'Count'],
+                ...topLabels.map(([label, count]) => [label, count.toString()])
+              ]);
+            }
+
+            core.summary.write();
+
+  # Response automation
+  issue-responses:
+    name: Automated Responses
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    steps:
+      - name: Welcome new contributors
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Check if this is the user's first issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              creator: context.payload.issue.user.login,
+              state: 'all'
+            });
+
+            const isFirstIssue = issues.data.filter(i => !i.pull_request).length === 1;
+
+            if (isFirstIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `👋 Welcome to the project! Thank you for opening your first issue.
+
+                A maintainer will review this issue soon. In the meantime:
+                - Make sure you've provided all the necessary information
+                - Check if there are any similar existing issues
+                - Consider contributing to the discussion or even submitting a PR!
+
+                We appreciate your contribution to the community! 🎉`
+              });
+            }
+
+      - name: Check for issue template compliance
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Check for common issue template sections
+            const hasStepsToReproduce = /steps to reproduce|reproduction|reproduce/i.test(body);
+            const hasExpectedBehavior = /expected behavior|expected result/i.test(body);
+            const hasActualBehavior = /actual behavior|actual result|what happened/i.test(body);
+            const hasEnvironment = /environment|version|os|browser/i.test(body);
+
+            const missingInfo = [];
+            if (!hasStepsToReproduce && issue.labels.some(l => l.name === 'bug')) {
+              missingInfo.push('Steps to reproduce');
+            }
+            if (!hasExpectedBehavior && issue.labels.some(l => l.name === 'bug')) {
+              missingInfo.push('Expected behavior');
+            }
+            if (!hasActualBehavior && issue.labels.some(l => l.name === 'bug')) {
+              missingInfo.push('Actual behavior');
+            }
+            if (!hasEnvironment && issue.labels.some(l => l.name === 'bug')) {
+              missingInfo.push('Environment information');
+            }
+
+            if (missingInfo.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `🤖 **Issue Template Assistant**
+
+                Thank you for opening this issue! To help us resolve it quickly, please consider adding the following information:
+
+                ${missingInfo.map(info => `- ${info}`).join('\n')}
+
+                This will help maintainers understand and reproduce the issue more effectively.`
+              });
+
+              // Add needs-info label
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['needs-info']
+              });
+            }

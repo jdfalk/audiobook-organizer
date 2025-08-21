@@ -1,0 +1,334 @@
+# file: .github/workflows/release.yml
+# version: 3.0.0
+# guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
+
+name: Release Coordinator
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type (auto, major, minor, patch)"
+        required: false
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - major
+          - minor
+          - patch
+      build_target:
+        description: "Build target"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - go
+          - python
+          - frontend
+          - docker
+          - protobuf
+      prerelease:
+        description: "Create as prerelease"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "Create as draft"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Detect what languages/technologies are present
+  detect-languages:
+    name: Detect Project Languages
+    runs-on: ubuntu-latest
+    outputs:
+      has-go: ${{ steps.detect.outputs.has-go }}
+      has-python: ${{ steps.detect.outputs.has-python }}
+      has-frontend: ${{ steps.detect.outputs.has-frontend }}
+      has-docker: ${{ steps.detect.outputs.has-docker }}
+      has-rust: ${{ steps.detect.outputs.has-rust }}
+      protobuf-needed: ${{ steps.detect.outputs.protobuf-needed }}
+      primary-language: ${{ steps.detect.outputs.primary-language }}
+      go-matrix: ${{ steps.detect.outputs.go-matrix }}
+      python-matrix: ${{ steps.detect.outputs.python-matrix }}
+      frontend-matrix: ${{ steps.detect.outputs.frontend-matrix }}
+      docker-matrix: ${{ steps.detect.outputs.docker-matrix }}
+      registry: ${{ steps.env-setup.outputs.registry }}
+      image-name: ${{ steps.env-setup.outputs.image-name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Detect project languages and generate matrices
+        id: detect
+        run: |
+          # Enhanced detection logic with matrix generation
+          python3 -c "
+          import os, json, sys
+
+          # Language detection
+          has_go = os.path.exists('go.mod') or os.path.exists('main.go')
+          has_python = os.path.exists('pyproject.toml') or os.path.exists('requirements.txt') or os.path.exists('setup.py') or os.path.exists('tests/test_*.py')
+          has_frontend = os.path.exists('package.json') or os.path.exists('yarn.lock') or os.path.exists('pnpm-lock.yaml')
+          has_docker = os.path.exists('Dockerfile') or os.path.exists('docker-compose.yml') or os.path.exists('docker-compose.yaml')
+          has_rust = os.path.exists('Cargo.toml')
+          protobuf_needed = os.path.exists('buf.gen.yaml') or os.path.exists('buf.yaml') or os.path.exists('proto/')
+
+          # Determine primary language
+          if has_rust:
+              primary = 'rust'
+          elif has_go:
+              primary = 'go'
+          elif has_python:
+              primary = 'python'
+          elif has_frontend:
+              primary = 'frontend'
+          else:
+              primary = 'unknown'
+
+          # Generate matrices (incorporating our matrix-build improvements)
+          go_matrix = {
+              'include': [
+                  {'os': 'ubuntu-latest', 'go-version': '1.23', 'primary': True},
+                  {'os': 'ubuntu-latest', 'go-version': '1.22', 'primary': False},
+                  {'os': 'macos-latest', 'go-version': '1.23', 'primary': False},
+                  {'os': 'windows-latest', 'go-version': '1.23', 'primary': False}
+              ]
+          } if has_go else {'include': []}
+
+          python_matrix = {
+              'include': [
+                  {'os': 'ubuntu-latest', 'python-version': '3.12', 'primary': True},
+                  {'os': 'ubuntu-latest', 'python-version': '3.11', 'primary': False},
+                  {'os': 'ubuntu-latest', 'python-version': '3.13', 'primary': False},
+                  {'os': 'macos-latest', 'python-version': '3.12', 'primary': False},
+                  {'os': 'windows-latest', 'python-version': '3.12', 'primary': False}
+              ]
+          } if has_python else {'include': []}
+
+          frontend_matrix = {
+              'include': [
+                  {'os': 'ubuntu-latest', 'node-version': '20', 'primary': True},
+                  {'os': 'ubuntu-latest', 'node-version': '18', 'primary': False},
+                  {'os': 'ubuntu-latest', 'node-version': '22', 'primary': False},
+                  {'os': 'macos-latest', 'node-version': '20', 'primary': False},
+                  {'os': 'windows-latest', 'node-version': '20', 'primary': False}
+              ]
+          } if has_frontend else {'include': []}
+
+          docker_matrix = {
+              'include': [
+                  {'platform': 'linux/amd64', 'os': 'ubuntu-latest', 'primary': True},
+                  {'platform': 'linux/arm64', 'os': 'ubuntu-latest', 'primary': False}
+              ]
+          } if has_docker else {'include': []}
+
+          # Output results
+          print(f'has-go={str(has_go).lower()}')
+          print(f'has-python={str(has_python).lower()}')
+          print(f'has-frontend={str(has_frontend).lower()}')
+          print(f'has-docker={str(has_docker).lower()}')
+          print(f'has-rust={str(has_rust).lower()}')
+          print(f'protobuf-needed={str(protobuf_needed).lower()}')
+          print(f'primary-language={primary}')
+          print(f'project-type={primary}')
+          print(f'go-matrix={json.dumps(go_matrix)}')
+          print(f'python-matrix={json.dumps(python_matrix)}')
+          print(f'frontend-matrix={json.dumps(frontend_matrix)}')
+          print(f'docker-matrix={json.dumps(docker_matrix)}')
+          " >> $GITHUB_OUTPUT
+
+      - name: Setup environment variables
+        id: env-setup
+        run: |
+          echo "registry=ghcr.io" >> $GITHUB_OUTPUT
+          echo "image-name=${{ github.repository }}" >> $GITHUB_OUTPUT
+
+  # Protobuf generation (if needed, runs first as dependency)
+  generate-protobuf:
+    name: Generate Protobuf
+    runs-on: ubuntu-latest
+    needs: detect-languages
+    if: needs.detect-languages.outputs.protobuf-needed == 'true'
+    outputs:
+      artifacts-available: ${{ steps.set-output.outputs.artifacts-available }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        if: needs.detect-languages.outputs.has-go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: false
+
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install protobuf Go plugins
+        if: needs.detect-languages.outputs.has-go == 'true'
+        run: |
+          echo "Installing protobuf Go plugins..."
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+          # Verify installations
+          which protoc-gen-go
+          which protoc-gen-go-grpc
+          protoc-gen-go --version
+          protoc-gen-go-grpc --version
+
+      - name: Generate protobuf code
+        run: |
+          python3 -c "
+          import os, subprocess
+          if os.path.exists('buf.gen.yaml'):
+              print('Generating protobuf code with buf...')
+              result = subprocess.run(['buf', 'generate'], capture_output=True, text=True)
+              if result.returncode != 0:
+                  print('buf generate failed:', result.stderr)
+                  exit(1)
+              print('Generated protobuf code successfully')
+          else:
+              print('No buf.gen.yaml found, skipping generation')
+          "
+
+      - name: Upload workflow info
+        if: needs.detect-languages.outputs.has-go == 'true' || needs.detect-languages.outputs.has-python == 'true' || needs.detect-languages.outputs.has-frontend == 'true' || needs.detect-languages.outputs.has-docker == 'true' || needs.detect-languages.outputs.has-rust == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-info
+          path: |
+            detected-languages.json
+            build-matrix.json
+
+      - name: Set artifacts output
+        id: set-output
+        if: needs.detect-languages.outputs.has-go == 'true' || needs.detect-languages.outputs.has-python == 'true' || needs.detect-languages.outputs.has-frontend == 'true' || needs.detect-languages.outputs.has-docker == 'true' || needs.detect-languages.outputs.has-rust == 'true'
+        run: echo "artifacts-available=true" >> $GITHUB_OUTPUT
+
+      - name: Set artifacts available
+        run: echo "artifacts-available=true" >> $GITHUB_OUTPUT
+
+  # Call Go workflow if Go is detected
+  build-go:
+    name: Build Go Project
+    needs: [detect-languages, generate-protobuf]
+    if: always() && needs.detect-languages.outputs.has-go == 'true'
+    uses: ./.github/workflows/release-go.yml
+    with:
+      go-matrix: ${{ needs.detect-languages.outputs.go-matrix }}
+      protobuf-artifacts: ${{ needs.generate-protobuf.outputs.artifacts-available || 'false' }}
+    secrets: inherit
+
+  # Call Python workflow if Python is detected
+  build-python:
+    name: Build Python Project
+    needs: [detect-languages, generate-protobuf]
+    if: always() && needs.detect-languages.outputs.has-python == 'true'
+    uses: ./.github/workflows/release-python.yml
+    with:
+      python-matrix: ${{ needs.detect-languages.outputs.python-matrix }}
+      protobuf-artifacts: ${{ needs.generate-protobuf.outputs.artifacts-available || 'false' }}
+    secrets: inherit
+
+  # Call Frontend workflow if Frontend is detected
+  build-frontend:
+    name: Build Frontend Project
+    needs: [detect-languages, generate-protobuf]
+    if: always() && needs.detect-languages.outputs.has-frontend == 'true'
+    uses: ./.github/workflows/release-frontend.yml
+    with:
+      frontend-matrix: ${{ needs.detect-languages.outputs.frontend-matrix }}
+      protobuf-artifacts: ${{ needs.generate-protobuf.outputs.artifacts-available || 'false' }}
+    secrets: inherit
+
+  # Call Docker workflow if Docker is detected
+  build-docker:
+    name: Build Docker Project
+    needs: [detect-languages, generate-protobuf]
+    if: always() && needs.detect-languages.outputs.has-docker == 'true'
+    uses: ./.github/workflows/release-docker.yml
+    with:
+      docker-matrix: ${{ needs.detect-languages.outputs.docker-matrix }}
+      protobuf-artifacts: ${{ needs.generate-protobuf.outputs.artifacts-available || 'false' }}
+      registry: ${{ needs.detect-languages.outputs.registry }}
+      image-name: ${{ needs.detect-languages.outputs.image-name }}
+    secrets: inherit
+
+  # Call Rust workflow if Rust is detected
+  build-rust:
+    name: Build Rust Project
+    needs: [detect-languages, generate-protobuf]
+    if: always() && needs.detect-languages.outputs.has-rust == 'true'
+    uses: ./.github/workflows/release-rust.yml
+    with:
+      protobuf-artifacts: ${{ needs.generate-protobuf.outputs.artifacts-available || 'false' }}
+    secrets: inherit
+
+  # Final status check
+  build-status:
+    name: Build Status Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        detect-languages,
+        generate-protobuf,
+        build-go,
+        build-python,
+        build-frontend,
+        build-docker,
+        build-rust,
+      ]
+    if: always()
+    steps:
+      - name: Generate build summary
+        run: |
+          echo "# 🚀 Release Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Project Type:** ${{ needs.detect-languages.outputs.primary-language }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Go | ${{ needs.build-go.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python | ${{ needs.build-python.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ needs.build-frontend.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker | ${{ needs.build-docker.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rust | ${{ needs.build-rust.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Protobuf | ${{ needs.generate-protobuf.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+
+          # Check for any failures
+          if [[ "${{ needs.build-go.result }}" == "failure" ||
+                "${{ needs.build-python.result }}" == "failure" ||
+                "${{ needs.build-frontend.result }}" == "failure" ||
+                "${{ needs.build-docker.result }}" == "failure" ||
+                "${{ needs.build-rust.result }}" == "failure" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Some builds failed**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **All builds completed successfully**" >> $GITHUB_STEP_SUMMARY
+          fi

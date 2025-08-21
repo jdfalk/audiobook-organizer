@@ -51,14 +51,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Checkout ghcommon
         uses: actions/checkout@v5
         with:
           repository: jdfalk/ghcommon
           path: ghcommon-source
-          token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set sync parameters
         id: params
@@ -79,7 +79,7 @@ jobs:
 
       - name: Sync files based on type
         env:
-          PAT_TOKEN: ${{ secrets.JF_CI_GH_PAT }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sync_type="${{ steps.params.outputs.sync_type }}"
@@ -89,142 +89,106 @@ jobs:
           echo "📁 Source directory contents:"
           ls -la ghcommon-source/
 
-          # Helper function for verbose logging
-          log_verbose() {
-            if [ "$verbose" = "true" ]; then
-              echo "ℹ️  $1"
-            fi
-          }
+          # Use the Python sync script for better file handling
+          echo "🔄 Running Python sync script..."
+          python3 .github/scripts/sync-receiver-sync-files.py "$sync_type" || {
+            echo "❌ Python sync script failed, trying manual sync..."
+            
+            # Fallback to manual sync if Python script fails
+            echo "📁 Creating directory structure..."
+            mkdir -p .github/workflows .github/instructions .github/prompts scripts .github/linters .github/scripts
 
-          # Helper function to copy files with logging
-          copy_with_logging() {
-            local source="$1"
-            local dest="$2"
-            local description="$3"
-
-            if [ -e "$source" ]; then
-              log_verbose "Copying $description: $source -> $dest"
-              if cp -r "$source" "$dest" 2>&1; then
-                echo "✅ Successfully copied $description"
-                if [ "$verbose" = "true" ]; then
-                  ls -la "$dest" | head -10
+            case "$sync_type" in
+              "all"|"workflows")
+                echo "🔄 Processing workflows section..."
+                echo "⚠️  Skipping workflow files due to GitHub App permission limitations"
+                ;;&
+              "all"|"instructions")
+                echo "🔄 Processing instructions section..."
+                if [ -f "ghcommon-source/.github/copilot-instructions.md" ]; then
+                  cp "ghcommon-source/.github/copilot-instructions.md" ".github/"
+                  echo "✅ Copied copilot-instructions.md"
                 fi
-              else
-                echo "❌ Failed to copy $description"
-                return 1
-              fi
-            else
-              echo "⚠️  Source not found for $description: $source"
-            fi
-          }
 
-          # Create directories if they don't exist
-          echo "📁 Creating directory structure..."
-          mkdir -p .github/workflows .github/instructions .github/prompts scripts .github/linters .github/scripts
-
-          echo "📋 Available source files:"
-          find ghcommon-source -type f -name "*.yml" -o -name "*.md" -o -name "*.json" -o -name "*.sh" | head -20
-
-          case "$sync_type" in
-            "all"|"workflows")
-              echo "🔄 Processing workflows section..."
-              if [ -d "ghcommon-source/.github/workflows" ]; then
-                echo "📋 Workflow files to copy:"
-                ls -la ghcommon-source/.github/workflows/
-                for file in ghcommon-source/.github/workflows/*; do
-                  if [ -f "$file" ]; then
-                    copy_with_logging "$file" ".github/workflows/" "workflow file $(basename "$file")"
-                  fi
-                done
-              else
-                echo "⚠️  No workflows directory found in source"
-              fi
-              ;;&
-            "all"|"instructions")
-              echo "🔄 Processing instructions section..."
-              copy_with_logging "ghcommon-source/.github/copilot-instructions.md" ".github/" "copilot-instructions.md"
-
-              if [ -d "ghcommon-source/.github/instructions" ]; then
-                echo "📋 Instructions files to copy:"
-                ls -la ghcommon-source/.github/instructions/
-                for file in ghcommon-source/.github/instructions/*; do
-                  if [ -f "$file" ]; then
-                    copy_with_logging "$file" ".github/instructions/" "instruction file $(basename "$file")"
-                  fi
-                done
-              else
-                echo "⚠️  No instructions directory found in source"
-              fi
-              ;;&
-            "all"|"prompts")
-              echo "🔄 Processing prompts section..."
-              if [ -d "ghcommon-source/.github/prompts" ]; then
-                echo "📋 Prompts files to copy:"
-                ls -la ghcommon-source/.github/prompts/ || echo "Prompts directory empty"
-                copy_with_logging "ghcommon-source/.github/prompts/*" ".github/prompts/" "prompts files"
-              else
-                echo "⚠️  No prompts directory found in source"
-              fi
-              ;;&
-            "all"|"scripts"|"github-scripts")
-              echo "🔄 Processing scripts section..."
-              if [ "$sync_type" = "scripts" ] || [ "$sync_type" = "all" ]; then
-                if [ -d "ghcommon-source/scripts" ]; then
-                  echo "📋 Scripts files to copy:"
-                  ls -la ghcommon-source/scripts/ | head -10
-                  for item in ghcommon-source/scripts/*; do
-                    if [ -e "$item" ]; then
-                      copy_with_logging "$item" "scripts/" "script $(basename "$item")"
+                if [ -d "ghcommon-source/.github/instructions" ]; then
+                  for file in ghcommon-source/.github/instructions/*; do
+                    if [ -f "$file" ]; then
+                      cp "$file" ".github/instructions/"
+                      echo "✅ Copied $(basename "$file")"
                     fi
                   done
-                else
-                  echo "⚠️  No scripts directory found in source"
                 fi
-              fi
-              if [ "$sync_type" = "github-scripts" ] || [ "$sync_type" = "all" ]; then
+                ;;&
+              "all"|"prompts")
+                echo "🔄 Processing prompts section..."
+                if [ -d "ghcommon-source/.github/prompts" ]; then
+                  for file in ghcommon-source/.github/prompts/*; do
+                    if [ -f "$file" ]; then
+                      cp "$file" ".github/prompts/"
+                      echo "✅ Copied $(basename "$file")"
+                    fi
+                  done
+                fi
+                ;;&
+              "all"|"scripts"|"github-scripts")
+                echo "🔄 Processing scripts section..."
+                if [ -d "ghcommon-source/scripts" ]; then
+                  for file in ghcommon-source/scripts/*; do
+                    if [ -f "$file" ]; then
+                      cp "$file" "scripts/"
+                      echo "✅ Copied $(basename "$file")"
+                    fi
+                  done
+                fi
+                
                 if [ -d "ghcommon-source/.github/scripts" ]; then
-                  echo "📋 GitHub scripts files to copy:"
-                  ls -la ghcommon-source/.github/scripts/
-                  copy_with_logging "ghcommon-source/.github/scripts/*" ".github/scripts/" "GitHub scripts"
-                else
-                  echo "⚠️  No .github/scripts directory found in source"
+                  for file in ghcommon-source/.github/scripts/*; do
+                    if [ -f "$file" ]; then
+                      cp "$file" ".github/scripts/"
+                      echo "✅ Copied $(basename "$file")"
+                    fi
+                  done
                 fi
-              fi
-              ;;&
-            "all"|"linters")
-              echo "🔄 Processing linters section..."
-              if [ -d "ghcommon-source/.github/linters" ]; then
-                echo "📋 Linter files to copy:"
-                ls -la ghcommon-source/.github/linters/
-                copy_with_logging "ghcommon-source/.github/linters/*" ".github/linters/" "linter files"
-              else
-                echo "⚠️  No linters directory found in source"
-              fi
-              ;;&
-            "all"|"labels")
-              echo "🔄 Processing labels section..."
-              copy_with_logging "ghcommon-source/labels.json" "." "labels.json"
-              copy_with_logging "ghcommon-source/labels.md" "." "labels.md"
-
-              # Copy the GitHub labels sync script
-              copy_with_logging "ghcommon-source/scripts/sync-github-labels.py" "scripts/" "GitHub labels sync script"
-
-              # Optional: Actually sync GitHub repository labels if token is available
-              # Try PAT_TOKEN first for enhanced permissions, fallback to GITHUB_TOKEN
-              if [ "${{ steps.params.outputs.sync_type }}" = "labels" ] || [ "${{ steps.params.outputs.sync_type }}" = "all" ]; then
-                echo "🏷️  Attempting to sync GitHub repository labels..."
-                if python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }} 2>&1; then
-                  echo "✅ Successfully synced GitHub repository labels"
-                else
-                  echo "⚠️  GitHub label sync failed, but file sync completed"
-                  echo "💡 This may be due to insufficient token permissions"
-                  echo "💡 Consider setting up PAT_TOKEN secret for enhanced permissions"
+                ;;&
+              "all"|"linters")
+                echo "🔄 Processing linters section..."
+                if [ -d "ghcommon-source/.github/linters" ]; then
+                  for file in ghcommon-source/.github/linters/*; do
+                    if [ -f "$file" ]; then
+                      cp "$file" ".github/linters/"
+                      echo "✅ Copied $(basename "$file")"
+                    fi
+                  done
                 fi
-              else
-                echo "ℹ️  Copied label files and sync script only (sync_type != 'labels' or 'all')"
-              fi
-              ;;
-          esac
+                ;;&
+              "all"|"labels")
+                echo "🔄 Processing labels section..."
+                if [ -f "ghcommon-source/labels.json" ]; then
+                  cp "ghcommon-source/labels.json" "."
+                  echo "✅ Copied labels.json"
+                fi
+                if [ -f "ghcommon-source/labels.md" ]; then
+                  cp "ghcommon-source/labels.md" "."
+                  echo "✅ Copied labels.md"
+                fi
+                if [ -f "ghcommon-source/scripts/sync-github-labels.py" ]; then
+                  cp "ghcommon-source/scripts/sync-github-labels.py" "scripts/"
+                  echo "✅ Copied sync-github-labels.py"
+                fi
+
+                # Optional: Actually sync GitHub repository labels if token is available
+                if [ "$sync_type" = "labels" ] || [ "$sync_type" = "all" ]; then
+                  echo "🏷️  Attempting to sync GitHub repository labels..."
+                  if python3 scripts/sync-github-labels.py ${{ github.repository_owner }} ${{ github.event.repository.name }} 2>&1; then
+                    echo "✅ Successfully synced GitHub repository labels"
+                  else
+                    echo "⚠️  GitHub label sync failed, but file sync completed"
+                    echo "💡 This may be due to insufficient token permissions"
+                  fi
+                fi
+                ;;
+            esac
+          }
 
           # Create symlinks for linters
           echo "🔗 Setting up linter symlinks..."
@@ -232,11 +196,9 @@ jobs:
           if [ -d ".github/linters" ] && [ ! -e ".vscode/linters" ]; then
             ln -sf ../.github/linters .vscode/linters
             echo "✅ Created symlink: .vscode/linters -> ../.github/linters"
-          else
-            log_verbose "Linter symlink already exists or linters directory not found"
           fi
 
-          # Clean up the source directory to prevent embedded git repository issues
+          # Clean up the source directory
           echo "🧹 Cleaning up source directory..."
           rm -rf ghcommon-source
 

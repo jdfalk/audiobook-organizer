@@ -1,0 +1,62 @@
+# file: .github/workflows/release-frontend.yml
+# version: 1.0.0
+# guid: f3a4b5c6-d7e8-9f0a-1b2c-3d4e5f6a7b8c
+
+name: Frontend Release Build
+
+on:
+  workflow_call:
+    inputs:
+      frontend-matrix:
+        description: "Frontend build matrix configuration"
+        required: true
+        type: string
+      protobuf-artifacts:
+        description: "Whether protobuf artifacts are available"
+        required: false
+        type: string
+        default: "false"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Frontend matrix build with all our improvements from matrix-build.yml
+  build-frontend:
+    name: Build Frontend (Node ${{ matrix.node-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.frontend-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: inputs.protobuf-artifacts == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: protobuf-generated
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Upload build artifacts (primary only)
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: dist/

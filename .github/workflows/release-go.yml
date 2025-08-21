@@ -1,0 +1,62 @@
+# file: .github/workflows/release-go.yml
+# version: 1.0.0
+# guid: e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b
+
+name: Go Release Build
+
+on:
+  workflow_call:
+    inputs:
+      go-matrix:
+        description: "Go build matrix configuration"
+        required: true
+        type: string
+      protobuf-artifacts:
+        description: "Whether protobuf artifacts are available"
+        required: false
+        type: string
+        default: "false"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Go matrix build with all our improvements from matrix-build.yml
+  build-go:
+    name: Build Go (${{ matrix.go-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.go-matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: inputs.protobuf-artifacts == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: protobuf-generated
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Build Go project
+        run: |
+          go mod download
+          go build -v ./...
+
+      - name: Test Go project
+        run: |
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage (primary only)
+        if: matrix.primary
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage-${{ matrix.os }}-${{ matrix.go-version }}
+          path: coverage.out
