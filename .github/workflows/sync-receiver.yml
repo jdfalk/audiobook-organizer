@@ -51,14 +51,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Checkout ghcommon
         uses: actions/checkout@v5
         with:
           repository: jdfalk/ghcommon
           path: ghcommon-source
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Set sync parameters
         id: params
@@ -79,7 +79,7 @@ jobs:
 
       - name: Sync files based on type
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PAT_TOKEN: ${{ secrets.JF_CI_GH_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sync_type="${{ steps.params.outputs.sync_type }}"
