@@ -1,81 +1,81 @@
+# file: .github/dependabot.yml
+# version: 1.0.0
+# guid: b9694b1e-0b81-4642-84a6-4fecb2d9099d
+
 # Smart Dependabot configuration for audiobook-organizer
-# Automatically detected: go, python, nodejs, github-actions
+# Supports: github-actions, go, python-scripts
 
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: 09:00
-      timezone: America/New_York
-    open-pull-requests-limit: 8
-    commit-message:
-      prefix: npm
-      include: scope
-    labels:
-      - dependencies
-      - priority-low
-    allow:
-      - dependency-type: direct
-      - dependency-type: indirect
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - version-update:semver-major
-    groups:
-      dev-dependencies:
-        patterns:
-          - "*eslint*"
-          - "*prettier*"
-          - "*commitlint*"
-          - "@types/*"
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-      day: tuesday
-      time: 09:00
-      timezone: America/New_York
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: python
-      include: scope
-    labels:
-      - dependencies
-      - priority-medium
-    allow:
-      - dependency-type: direct
-      - dependency-type: indirect
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: weekly
-      day: wednesday
-      time: 09:00
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: go
-      include: scope
-    labels:
-      - dependencies
-      - priority-medium
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: friday
-      time: 09:00
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
-      include: scope
-    labels:
-      - dependencies
-      - priority-high
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: wednesday
+    time: '10:00'
+    timezone: America/New_York
+  open-pull-requests-limit: 5
+  commit-message:
+    prefix: ci
+    include: scope
+  labels:
+  - dependencies
+  - github-actions
+  - ci-cd
+  groups:
+    ci-dependencies:
+      patterns:
+      - actions/*
+      - github/*
+      update-types:
+      - minor
+      - patch
+    external-actions:
+      patterns:
+      - '*'
+      exclude-patterns:
+      - actions/*
+      - github/*
+      update-types:
+      - minor
+      - patch
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:00
+    timezone: America/New_York
+  open-pull-requests-limit: 5
+  commit-message:
+    prefix: go
+    include: scope
+  labels:
+  - dependencies
+  - tech:go
+  allow:
+  - dependency-type: direct
+  ignore:
+  - dependency-name: '*'
+    update-types:
+    - version-update:semver-major
+- package-ecosystem: pip
+  directory: /scripts
+  schedule:
+    interval: weekly
+    day: tuesday
+    time: '12:00'
+    timezone: America/New_York
+  open-pull-requests-limit: 3
+  commit-message:
+    prefix: python
+    include: scope
+  labels:
+  - dependencies
+  - tech:python
+  allow:
+  - dependency-type: direct
+  ignore:
+  - dependency-name: '*'
+    update-types:
+    - version-update:semver-major
