@@ -1,0 +1,666 @@
+# file: .github/workflows/release-consolidated.yml
+# version: 1.0.0
+# guid: f5a6b7c8-d9e0-f1a2-b3c4-d5e6f7a8b9c0
+
+# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
+# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
+# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/release.yml
+
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "CHANGELOG.md"
+      - "version.txt"
+      - "package.json"
+      - "Cargo.toml"
+      - "go.mod"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: "Is this a prerelease?"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "Create as draft?"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Detect project type and version info
+  detect-project:
+    name: Detect Project Type
+    runs-on: ubuntu-latest
+    outputs:
+      project_type: ${{ steps.detect.outputs.project_type }}
+      current_version: ${{ steps.detect.outputs.current_version }}
+      should_release: ${{ steps.detect.outputs.should_release }}
+      has_go: ${{ steps.detect.outputs.has_go }}
+      has_node: ${{ steps.detect.outputs.has_node }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_rust: ${{ steps.detect.outputs.has_rust }}
+      has_docker: ${{ steps.detect.outputs.has_docker }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect project type and version
+        id: detect
+        run: |
+          # Detect project languages/frameworks
+          has_go="false"
+          has_node="false"
+          has_python="false"
+          has_rust="false"
+          has_docker="false"
+          project_type=""
+          current_version=""
+
+          if [ -f "go.mod" ]; then
+            has_go="true"
+            project_type="go"
+            # Extract version from git tags
+            current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          fi
+
+          if [ -f "package.json" ]; then
+            has_node="true"
+            if [ -z "$project_type" ]; then
+              project_type="node"
+            fi
+            # Extract version from package.json
+            if [ -f "package.json" ] && command -v jq >/dev/null 2>&1; then
+              pkg_version=$(jq -r '.version // "0.0.0"' package.json)
+              if [ -z "$current_version" ]; then
+                current_version="v$pkg_version"
+              fi
+            fi
+          fi
+
+          if [ -f "Cargo.toml" ]; then
+            has_rust="true"
+            if [ -z "$project_type" ]; then
+              project_type="rust"
+            fi
+            # Extract version from Cargo.toml
+            if command -v grep >/dev/null 2>&1; then
+              cargo_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+              if [ -z "$current_version" ]; then
+                current_version="v$cargo_version"
+              fi
+            fi
+          fi
+
+          if [ -f "setup.py" ] || [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
+            has_python="true"
+            if [ -z "$project_type" ]; then
+              project_type="python"
+            fi
+          fi
+
+          if [ -f "Dockerfile" ] || [ -f "docker-compose.yml" ]; then
+            has_docker="true"
+          fi
+
+          # Check if we should create a release
+          should_release="false"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            should_release="true"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            # Check if CHANGELOG.md was modified
+            if git diff --name-only HEAD~1 HEAD | grep -q "CHANGELOG.md"; then
+              should_release="true"
+            fi
+          fi
+
+          # Default version if none found
+          if [ -z "$current_version" ]; then
+            current_version="v0.1.0"
+          fi
+
+          echo "project_type=$project_type" >> $GITHUB_OUTPUT
+          echo "current_version=$current_version" >> $GITHUB_OUTPUT
+          echo "should_release=$should_release" >> $GITHUB_OUTPUT
+          echo "has_go=$has_go" >> $GITHUB_OUTPUT
+          echo "has_node=$has_node" >> $GITHUB_OUTPUT
+          echo "has_python=$has_python" >> $GITHUB_OUTPUT
+          echo "has_rust=$has_rust" >> $GITHUB_OUTPUT
+          echo "has_docker=$has_docker" >> $GITHUB_OUTPUT
+
+          echo "Project type: $project_type"
+          echo "Current version: $current_version"
+          echo "Should release: $should_release"
+
+  # Calculate next version
+  calculate-version:
+    name: Calculate Next Version
+    runs-on: ubuntu-latest
+    needs: detect-project
+    if: needs.detect-project.outputs.should_release == 'true'
+    outputs:
+      next_version: ${{ steps.version.outputs.next_version }}
+      release_notes: ${{ steps.notes.outputs.release_notes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Calculate next version
+        id: version
+        run: |
+          current="${{ needs.detect-project.outputs.current_version }}"
+          release_type="${{ github.event.inputs.release_type || 'patch' }}"
+
+          # Remove 'v' prefix if present
+          current_clean=$(echo "$current" | sed 's/^v//')
+
+          # Split version into components
+          IFS='.' read -r major minor patch <<< "$current_clean"
+
+          # Calculate next version based on type
+          case "$release_type" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          next_version="v${major}.${minor}.${patch}"
+          echo "next_version=$next_version" >> $GITHUB_OUTPUT
+          echo "Next version: $next_version"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Extract latest changes from CHANGELOG.md
+          if [ -f "CHANGELOG.md" ]; then
+            # Get changes between ## headings
+            awk '/^## \[/{if(found) exit; found=1; next} found && /^## \[/{exit} found' CHANGELOG.md > latest_changes.md
+            if [ -s latest_changes.md ]; then
+              echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+              cat latest_changes.md >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "release_notes=Automated release for ${{ steps.version.outputs.next_version }}" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "release_notes=Automated release for ${{ steps.version.outputs.next_version }}" >> $GITHUB_OUTPUT
+          fi
+
+  # Build release artifacts
+  build-artifacts:
+    name: Build Artifacts
+    runs-on: ubuntu-latest
+    needs: [detect-project, calculate-version]
+    if: needs.detect-project.outputs.should_release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+            goos: linux
+          - os: ubuntu-latest
+            arch: arm64
+            goos: linux
+          - os: macos-latest
+            arch: amd64
+            goos: darwin
+          - os: macos-latest
+            arch: arm64
+            goos: darwin
+          - os: windows-latest
+            arch: amd64
+            goos: windows
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        if: needs.detect-project.outputs.has_go == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        if: needs.detect-project.outputs.has_node == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Set up Rust
+        if: needs.detect-project.outputs.has_rust == 'true'
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.goos == 'linux' && 'x86_64-unknown-linux-gnu' || matrix.goos == 'darwin' && 'x86_64-apple-darwin' || 'x86_64-pc-windows-msvc' }}
+
+      - name: Build Go binary
+        if: needs.detect-project.outputs.has_go == 'true'
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          # Determine binary name and extension
+          binary_name=$(basename "$(pwd)")
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary_name="${binary_name}.exe"
+          fi
+
+          # Build binary
+          go build -v -ldflags="-X main.version=${{ needs.calculate-version.outputs.next_version }}" -o "bin/${binary_name}" .
+
+          # Create archive
+          cd bin
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip "../${binary_name}-${{ needs.calculate-version.outputs.next_version }}-${{ matrix.goos }}-${{ matrix.arch }}.zip" "${binary_name}"
+          else
+            tar -czf "../${binary_name}-${{ needs.calculate-version.outputs.next_version }}-${{ matrix.goos }}-${{ matrix.arch }}.tar.gz" "${binary_name}"
+          fi
+
+      - name: Build Rust binary
+        if: needs.detect-project.outputs.has_rust == 'true'
+        run: |
+          target_triple=""
+          case "${{ matrix.goos }}-${{ matrix.arch }}" in
+            linux-amd64) target_triple="x86_64-unknown-linux-gnu" ;;
+            linux-arm64) target_triple="aarch64-unknown-linux-gnu" ;;
+            darwin-amd64) target_triple="x86_64-apple-darwin" ;;
+            darwin-arm64) target_triple="aarch64-apple-darwin" ;;
+            windows-amd64) target_triple="x86_64-pc-windows-msvc" ;;
+          esac
+
+          if [ -n "$target_triple" ]; then
+            rustup target add "$target_triple"
+            cargo build --release --target "$target_triple"
+
+            # Copy and archive binary
+            binary_name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+            if [ "${{ matrix.goos }}" = "windows" ]; then
+              binary_name="${binary_name}.exe"
+            fi
+
+            mkdir -p bin
+            cp "target/${target_triple}/release/${binary_name}" "bin/"
+
+            cd bin
+            if [ "${{ matrix.goos }}" = "windows" ]; then
+              zip "../${binary_name}-${{ needs.calculate-version.outputs.next_version }}-${{ matrix.goos }}-${{ matrix.arch }}.zip" "${binary_name}"
+            else
+              tar -czf "../${binary_name}-${{ needs.calculate-version.outputs.next_version }}-${{ matrix.goos }}-${{ matrix.arch }}.tar.gz" "${binary_name}"
+            fi
+          fi
+
+      - name: Build Node.js package
+        if: needs.detect-project.outputs.has_node == 'true' && matrix.goos == 'linux' && matrix.arch == 'amd64'
+        run: |
+          npm ci
+          npm run build
+          npm pack
+          mv *.tgz "package-${{ needs.calculate-version.outputs.next_version }}.tgz"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.goos }}-${{ matrix.arch }}
+          path: |
+            *.tar.gz
+            *.zip
+            *.tgz
+
+  # Create GitHub release
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [detect-project, calculate-version, build-artifacts]
+    if: needs.detect-project.outputs.should_release == 'true'
+    outputs:
+      release_id: ${{ steps.create.outputs.release-id }}
+      release_url: ${{ steps.create.outputs.release-url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -name "*.tar.gz" -o -name "*.zip" -o -name "*.tgz" | while read file; do
+            cp "$file" release-assets/
+          done
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const tag_name = '${{ needs.calculate-version.outputs.next_version }}';
+            const release_name = `Release ${tag_name}`;
+            const body = `${{ needs.calculate-version.outputs.release_notes }}`;
+            const prerelease = ${{ github.event.inputs.prerelease || false }};
+            const draft = ${{ github.event.inputs.draft || false }};
+
+            // Create release
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag_name,
+              name: release_name,
+              body: body,
+              draft: draft,
+              prerelease: prerelease
+            });
+
+            core.setOutput('release-id', release.data.id);
+            core.setOutput('release-url', release.data.html_url);
+
+            // Upload assets
+            const assetDir = 'release-assets';
+            if (fs.existsSync(assetDir)) {
+              const files = fs.readdirSync(assetDir);
+              for (const file of files) {
+                const filePath = path.join(assetDir, file);
+                const fileContent = fs.readFileSync(filePath);
+
+                await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.data.id,
+                  name: file,
+                  data: fileContent
+                });
+
+                console.log(`Uploaded ${file}`);
+              }
+            }
+
+            return release.data;
+
+  # Update package versions
+  update-versions:
+    name: Update Package Versions
+    runs-on: ubuntu-latest
+    needs: [detect-project, calculate-version, create-release]
+    if: needs.detect-project.outputs.should_release == 'true' && github.event.inputs.draft != 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update version files
+        run: |
+          next_version="${{ needs.calculate-version.outputs.next_version }}"
+          version_clean=$(echo "$next_version" | sed 's/^v//')
+
+          # Update package.json if exists
+          if [ -f "package.json" ] && command -v jq >/dev/null 2>&1; then
+            jq --arg version "$version_clean" '.version = $version' package.json > package.json.tmp
+            mv package.json.tmp package.json
+            echo "Updated package.json to $version_clean"
+          fi
+
+          # Update Cargo.toml if exists
+          if [ -f "Cargo.toml" ]; then
+            sed -i.bak "s/^version = \".*\"/version = \"$version_clean\"/" Cargo.toml
+            rm -f Cargo.toml.bak
+            echo "Updated Cargo.toml to $version_clean"
+          fi
+
+          # Create/update version.txt
+          echo "$next_version" > version.txt
+          echo "Updated version.txt to $next_version"
+
+      - name: Commit version updates
+        run: |
+          if ! git diff --quiet; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit -m "chore: bump version to ${{ needs.calculate-version.outputs.next_version }} [skip ci]"
+            git push
+          fi
+
+  # GoReleaser for Go projects
+  goreleaser:
+    name: GoReleaser Build and Release
+    runs-on: ubuntu-latest
+    needs: [detect-project, calculate-version]
+    if: needs.detect-project.outputs.has_go == 'true' && needs.detect-project.outputs.should_release == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Create or update .goreleaser.yml
+        run: |
+          if [ ! -f ".goreleaser.yml" ] && [ ! -f ".goreleaser.yaml" ]; then
+            cat > .goreleaser.yml << 'EOF'
+          project_name: ${{ github.event.repository.name }}
+
+          builds:
+            - env:
+                - CGO_ENABLED=0
+              goos:
+                - linux
+                - windows
+                - darwin
+              goarch:
+                - amd64
+                - arm64
+              binary: ${{ github.event.repository.name }}
+              main: ./
+
+          archives:
+            - format: tar.gz
+              name_template: >-
+                {{ .ProjectName }}_
+                {{- title .Os }}_
+                {{- if eq .Arch "amd64" }}x86_64
+                {{- else if eq .Arch "386" }}i386
+                {{- else }}{{ .Arch }}{{ end }}
+                {{- if .Arm }}v{{ .Arm }}{{ end }}
+              format_overrides:
+                - goos: windows
+                  format: zip
+
+          checksum:
+            name_template: 'checksums.txt'
+
+          snapshot:
+            name_template: "{{ incpatch .Version }}-next"
+
+          changelog:
+            sort: asc
+            filters:
+              exclude:
+                - '^docs:'
+                - '^test:'
+                - '^ci:'
+                - Merge pull request
+                - Merge branch
+
+          release:
+            prerelease: auto
+            name_template: "Release v{{ .Version }}"
+          EOF
+          fi
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload GoReleaser artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: goreleaser-artifacts
+          path: |
+            dist/
+            !dist/**/*.tar.gz
+            !dist/**/*.zip
+          retention-days: 30
+
+  # Semantic versioning for complex projects
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    needs: [detect-project, calculate-version]
+    if: >
+      needs.detect-project.outputs.should_release == 'true' &&
+      needs.detect-project.outputs.has_node == 'true'
+    outputs:
+      version: ${{ steps.semantic.outputs.new_release_version }}
+      released: ${{ steps.semantic.outputs.new_release_published }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release@^23.0.0 \
+            @semantic-release/changelog@^6.0.0 \
+            @semantic-release/git@^10.0.0 \
+            @semantic-release/github@^10.0.0 \
+            @semantic-release/exec@^6.0.0
+
+      - name: Create semantic-release config
+        run: |
+          cat > .releaserc.json << 'EOF'
+          {
+            "branches": ["main", "master"],
+            "plugins": [
+              "@semantic-release/commit-analyzer",
+              "@semantic-release/release-notes-generator",
+              [
+                "@semantic-release/changelog",
+                {
+                  "changelogFile": "CHANGELOG.md"
+                }
+              ],
+              [
+                "@semantic-release/git",
+                {
+                  "assets": ["CHANGELOG.md", "package.json", "version.txt"],
+                  "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+                }
+              ],
+              "@semantic-release/github"
+            ]
+          }
+          EOF
+
+      - name: Run semantic-release
+        id: semantic
+        run: |
+          npx semantic-release --dry-run=false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Post-release notifications and cleanup
+  post-release:
+    name: Post-Release Tasks
+    runs-on: ubuntu-latest
+    needs: [calculate-version, create-release, update-versions, goreleaser, semantic-release]
+    if: always() && (needs.create-release.result == 'success' || needs.goreleaser.result == 'success' || needs.semantic-release.result == 'success')
+    steps:
+      - name: Create release summary
+        run: |
+          echo "# 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.calculate-version.outputs.next_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Release URL**: ${{ needs.create-release.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Notes" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.calculate-version.outputs.release_notes }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cleanup old releases (keep last 10)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            // Keep only the latest 10 releases, delete older ones
+            const releasesToDelete = releases.data
+              .filter(release => !release.prerelease)
+              .slice(10);
+
+            for (const release of releasesToDelete) {
+              console.log(`Deleting old release: ${release.tag_name}`);
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id
+              });
+            }

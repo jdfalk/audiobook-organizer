@@ -1,0 +1,169 @@
+# file: .github/workflows/manager-sync-dispatcher.yml
+# version: 1.1.0
+# guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
+
+# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
+# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
+# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/manager-sync-dispatcher.yml
+
+name: Manager Sync Dispatcher
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - ".github/instructions/**"
+      - ".github/prompts/**"
+      - ".github/scripts/**"
+      - "scripts/**"
+      - ".github/linters/**"
+      - "labels.json"
+      - "labels.md"
+  workflow_dispatch:
+    inputs:
+      sync_type:
+        description: "Type of sync to perform"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - workflows
+          - instructions
+          - prompts
+          - scripts
+          - github-scripts
+          - linters
+          - labels
+      target_repos:
+        description: "Target repositories (comma-separated)"
+        required: false
+        default: "auto"
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  # Use PAT for cross-repository dispatch, fallback to GITHUB_TOKEN
+  DISPATCH_TOKEN: ${{ secrets.JF_CI_GH_PAT || secrets.GITHUB_TOKEN }}
+  SOURCE_REPO: ${{ github.repository }}
+  SOURCE_SHA: ${{ github.sha }}
+  EVENT_NAME: ${{ github.event_name }}
+  ACTOR: ${{ github.actor }}
+  BEFORE_SHA: ${{ github.event.before }}
+  INPUT_SYNC_TYPE: ${{ github.event.inputs.sync_type }}
+  INPUT_TARGET_REPOS: ${{ github.event.inputs.target_repos }}
+
+jobs:
+  dispatch-sync:
+    name: Dispatch Sync to Repositories
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create repositories list
+        id: repos
+        run: |
+          # Default repository list - include all target repositories except ghcommon itself
+          DEFAULT_REPOS="jdfalk/subtitle-manager,jdfalk/audiobook-organizer,jdfalk/copilot-agent-util-rust,jdfalk/apt-cacher-go"
+
+          if [ "$INPUT_TARGET_REPOS" = "auto" ] || [ -z "$INPUT_TARGET_REPOS" ]; then
+            echo "repos=$DEFAULT_REPOS" >> $GITHUB_OUTPUT
+            echo "Using default repository list: $DEFAULT_REPOS"
+          else
+            echo "repos=$INPUT_TARGET_REPOS" >> $GITHUB_OUTPUT
+            echo "Using custom repository list: $INPUT_TARGET_REPOS"
+          fi
+
+      - name: Determine sync type
+        id: sync-type
+        run: |
+          SYNC_TYPE="$INPUT_SYNC_TYPE"
+
+          if [ -z "$SYNC_TYPE" ] || [ "$SYNC_TYPE" = "all" ]; then
+            # Auto-detect based on changed files for push events
+            if [ "$EVENT_NAME" = "push" ]; then
+              echo "Auto-detecting sync type based on changed files..."
+
+              # Get changed files
+              CHANGED_FILES=$(git diff --name-only $BEFORE_SHA..$SOURCE_SHA)
+              echo "Changed files: $CHANGED_FILES"
+
+              if echo "$CHANGED_FILES" | grep -q "^\.github/workflows/"; then
+                SYNC_TYPE="workflows"
+              elif echo "$CHANGED_FILES" | grep -q "^\.github/instructions/"; then
+                SYNC_TYPE="instructions"
+              elif echo "$CHANGED_FILES" | grep -q "^\.github/prompts/"; then
+                SYNC_TYPE="prompts"
+              elif echo "$CHANGED_FILES" | grep -q "^\.github/scripts/"; then
+                SYNC_TYPE="github-scripts"
+              elif echo "$CHANGED_FILES" | grep -q "^scripts/"; then
+                SYNC_TYPE="scripts"
+              elif echo "$CHANGED_FILES" | grep -q "^\.github/linters/"; then
+                SYNC_TYPE="linters"
+              elif echo "$CHANGED_FILES" | grep -q "labels\."; then
+                SYNC_TYPE="labels"
+              else
+                SYNC_TYPE="all"
+              fi
+            else
+              SYNC_TYPE="all"
+            fi
+          fi
+
+          echo "sync_type=$SYNC_TYPE" >> $GITHUB_OUTPUT
+          echo "Sync type determined: $SYNC_TYPE"
+
+      - name: Dispatch sync events
+        run: |
+          IFS=',' read -ra REPOS <<< "${{ steps.repos.outputs.repos }}"
+          SYNC_TYPE="${{ steps.sync-type.outputs.sync_type }}"
+
+          echo "Dispatching sync events to repositories..."
+          echo "Sync type: $SYNC_TYPE"
+          echo "Target repositories: ${{ steps.repos.outputs.repos }}"
+
+          for repo in "${REPOS[@]}"; do
+            # Trim whitespace
+            repo=$(echo "$repo" | xargs)
+
+            echo "Dispatching to $repo..."
+
+            # Create repository dispatch event using the PAT
+            curl -X POST \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: token $DISPATCH_TOKEN" \
+              "https://api.github.com/repos/$repo/dispatches" \
+              -d "{
+                \"event_type\": \"sync-from-ghcommon\",
+                \"client_payload\": {
+                  \"sync_type\": \"$SYNC_TYPE\",
+                  \"source_repo\": \"$SOURCE_REPO\",
+                  \"source_sha\": \"$SOURCE_SHA\",
+                  \"triggered_by\": \"$EVENT_NAME\",
+                  \"actor\": \"$ACTOR\"
+                }
+              }" || echo "Failed to dispatch to $repo (repository may not exist or may not have sync-receiver workflow)"
+
+            # Small delay between requests
+            sleep 1
+          done
+
+      - name: Summary
+        run: |
+          echo "## 🔄 Sync Dispatch Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Sync Type:** ${{ steps.sync-type.outputs.sync_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Repositories:** ${{ steps.repos.outputs.repos }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source SHA:** $SOURCE_SHA" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By:** $EVENT_NAME" >> $GITHUB_STEP_SUMMARY
+          echo "- **Actor:** $ACTOR" >> $GITHUB_STEP_SUMMARY

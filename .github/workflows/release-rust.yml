@@ -1,0 +1,130 @@
+# file: .github/workflows/release-rust.yml
+# version: 1.0.0
+# guid: b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e
+
+name: Rust Release Build
+
+on:
+  workflow_call:
+    inputs:
+      protobuf-artifacts:
+        description: "Whether protobuf artifacts are available"
+        required: false
+        type: string
+        default: "false"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # Rust cross-platform build with comprehensive support
+  build-rust:
+    name: Build Rust (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: linux-x86_64
+            primary: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: linux-arm64
+            primary: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            name: linux-x86_64-musl
+            primary: false
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: macos-x86_64
+            primary: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: macos-arm64
+            primary: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: windows-x86_64
+            primary: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: inputs.protobuf-artifacts == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: protobuf-generated
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+          components: rustfmt, clippy
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run Clippy
+        if: matrix.primary
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        if: matrix.primary
+        run: cargo test --verbose
+
+      - name: Build release binary
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/$(basename $(pwd)) dist/$(basename $(pwd))-${{ matrix.name }}
+          chmod +x dist/$(basename $(pwd))-${{ matrix.name }}
+
+      - name: Prepare binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir dist
+          copy target\\${{ matrix.target }}\\release\\$(Split-Path -Leaf $(Get-Location)).exe dist\\$(Split-Path -Leaf $(Get-Location))-${{ matrix.name }}.exe
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-${{ matrix.name }}
+          path: dist/

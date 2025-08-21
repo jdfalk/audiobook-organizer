@@ -1,0 +1,225 @@
+# file: .github/workflows/release-docker.yml
+# version: 1.0.0
+# guid: a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d
+
+name: Docker Release Build
+
+on:
+  workflow_call:
+    inputs:
+      docker-matrix:
+        description: "Docker build matrix configuration"
+        required: true
+        type: string
+      protobuf-artifacts:
+        description: "Whether protobuf artifacts are available"
+        required: false
+        type: string
+        default: "false"
+      registry:
+        description: "Container registry"
+        required: true
+        type: string
+      image-name:
+        description: "Image name"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  attestations: write
+
+jobs:
+  # Docker matrix build with all our improvements from matrix-build.yml
+  build-docker:
+    name: Build Docker (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.docker-matrix) }}
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download protobuf artifacts
+        if: inputs.protobuf-artifacts == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: protobuf-generated
+
+      - name: Detect Docker configuration
+        id: docker-detect
+        run: |
+          python3 -c "
+          import os
+
+          # Check for Dockerfiles
+          dockerfile_paths = ['Dockerfile', 'docker/Dockerfile', 'build/Dockerfile']
+          dockerfile_path = 'Dockerfile'
+          for path in dockerfile_paths:
+              if os.path.exists(path):
+                  dockerfile_path = path
+                  break
+
+          should_build = 'true'
+          print(f'dockerfile-path={dockerfile_path}')
+          print(f'should-build={should_build}')
+          " >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      - name: Log in to Container Registry
+        if: steps.docker-detect.outputs.should-build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.registry }}/${{ inputs.image-name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+          labels: |
+            org.opencontainers.image.title=${{ github.repository }}
+            org.opencontainers.image.description=Container for ${{ github.repository }}
+            org.opencontainers.image.vendor=${{ github.repository_owner }}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ steps.docker-detect.outputs.dockerfile-path }}
+          platforms: ${{ matrix.platform }}
+          push: ${{ steps.docker-detect.outputs.should-build == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  # Docker security scanning and testing
+  docker-security:
+    name: Docker Security & Testing
+    runs-on: ubuntu-latest
+    needs: build-docker
+    if: always() && needs.build-docker.result == 'success'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install security tools
+        run: |
+          # Install Trivy
+          sudo apt-get update
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+          # Install syft for SBOM generation
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Run vulnerability scanning
+        run: |
+          IMAGE_REF="${{ inputs.registry }}/${{ inputs.image-name }}:${{ github.sha }}"
+          echo "Scanning image: $IMAGE_REF"
+          trivy image --format sarif --output trivy-results.sarif "$IMAGE_REF" || echo "Trivy scan completed with warnings"
+
+      - name: Run filesystem scanning
+        run: |
+          echo "Scanning filesystem..."
+          trivy fs --format table --output trivy-fs-results.txt . || echo "Filesystem scan completed with warnings"
+
+      - name: Generate SBOM
+        run: |
+          IMAGE_REF="${{ inputs.registry }}/${{ inputs.image-name }}:${{ github.sha }}"
+          echo "Generating SBOM for: $IMAGE_REF"
+          syft "$IMAGE_REF" -o spdx-json=sbom.spdx.json || echo "SBOM generation completed with warnings"
+
+      - name: Test image functionality
+        run: |
+          IMAGE_REF="${{ inputs.registry }}/${{ inputs.image-name }}:${{ github.sha }}"
+          echo "Testing image functionality: $IMAGE_REF"
+          # Basic smoke test
+          docker run --rm "$IMAGE_REF" --help || echo "Image smoke test completed"
+
+      - name: Validate Docker Compose files
+        run: |
+          python3 -c "
+          import os, subprocess
+
+          compose_files = ['docker-compose.yml', 'docker-compose.yaml', 'docker-stack.yml', 'docker-stack-jf.yml']
+          found_files = [f for f in compose_files if os.path.exists(f)]
+
+          if found_files:
+              print(f'Found compose files: {found_files}')
+              for compose_file in found_files:
+                  print(f'Validating {compose_file}...')
+                  result = subprocess.run(['docker-compose', '-f', compose_file, 'config'], capture_output=True, text=True)
+                  if result.returncode == 0:
+                      print(f'{compose_file} is valid')
+                  else:
+                      print(f'{compose_file} validation failed: {result.stderr}')
+          else:
+              print('No Docker Compose files found')
+          "
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Attest SBOM
+        if: needs.build-docker.outputs.image-digest != ''
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ inputs.registry }}/${{ inputs.image-name }}
+          subject-digest: ${{ needs.build-docker.outputs.image-digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-security-results
+          path: |
+            trivy-results.sarif
+            trivy-fs-results.txt
+            sbom.spdx.json

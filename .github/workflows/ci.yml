@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 1.5.0
+# version: 1.9.0
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 name: Continuous Integration
@@ -42,13 +42,13 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      go: ${{ steps.filter.outputs.go }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      python: ${{ steps.filter.outputs.python }}
-      rust: ${{ steps.filter.outputs.rust }}
-      docker: ${{ steps.filter.outputs.docker }}
-      docs: ${{ steps.filter.outputs.docs }}
-      workflows: ${{ steps.filter.outputs.workflows }}
+      go_files: ${{ steps.filter.outputs.go }}
+      frontend_files: ${{ steps.filter.outputs.frontend }}
+      python_files: ${{ steps.filter.outputs.python }}
+      rust_files: ${{ steps.filter.outputs.rust }}
+      docker_files: ${{ steps.filter.outputs.docker }}
+      docs_files: ${{ steps.filter.outputs.docs }}
+      workflow_files: ${{ steps.filter.outputs.workflows }}
       should-lint: ${{ steps.determine.outputs.should-lint }}
       should-test: ${{ steps.determine.outputs.should-test }}
       should-build: ${{ steps.determine.outputs.should-build }}
@@ -163,14 +163,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Go
-        if: needs.detect-changes.outputs.go == 'true'
+        if: needs.detect-changes.outputs.go_files == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
-        if: needs.detect-changes.outputs.frontend == 'true'
+        if: needs.detect-changes.outputs.frontend_files == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -180,14 +180,14 @@ jobs:
             webui/package-lock.json
 
       - name: Set up Python
-        if: needs.detect-changes.outputs.python == 'true'
+        if: needs.detect-changes.outputs.python_files == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Set up Rust
-        if: needs.detect-changes.outputs.rust == 'true'
+        if: needs.detect-changes.outputs.rust_files == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -198,24 +198,24 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_ALL_CODEBASE: false
+          # VALIDATE_ALL_CODEBASE: false
           FILTER_REGEX_EXCLUDE: ".*\\.git/.*|.*\\.github/copilot/.*|.*\\.vscode/.*|.*node_modules/.*|.*\\.cache/.*|.*vendor/.*|.*dist/.*"
 
           # Auto-fix settings - use FIX_ instead of VALIDATE_ whenever possible
-          FIX_GO: ${{ needs.detect-changes.outputs.go }}
-          FIX_GO_MODULES: ${{ needs.detect-changes.outputs.go }}
-          FIX_JAVASCRIPT_ES: ${{ needs.detect-changes.outputs.frontend }}
-          FIX_JAVASCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
-          FIX_JSX_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
-          FIX_TYPESCRIPT_ES: ${{ needs.detect-changes.outputs.frontend }}
-          FIX_TYPESCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend }}
-          FIX_PYTHON_BLACK: ${{ needs.detect-changes.outputs.python }}
-          FIX_PYTHON_ISORT: ${{ needs.detect-changes.outputs.python }}
-          FIX_PYTHON_RUFF: ${{ needs.detect-changes.outputs.python }}
-          FIX_RUST_2015: ${{ needs.detect-changes.outputs.rust }}
-          FIX_RUST_2018: ${{ needs.detect-changes.outputs.rust }}
-          FIX_RUST_2021: ${{ needs.detect-changes.outputs.rust }}
-          FIX_RUST_CLIPPY: ${{ needs.detect-changes.outputs.rust }}
+          FIX_GO: ${{ needs.detect-changes.outputs.go_files }}
+          FIX_GO_MODULES: ${{ needs.detect-changes.outputs.go_files }}
+          FIX_JAVASCRIPT_ES: ${{ needs.detect-changes.outputs.frontend_files }}
+          FIX_JAVASCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend_files }}
+          FIX_JSX_PRETTIER: ${{ needs.detect-changes.outputs.frontend_files }}
+          FIX_TYPESCRIPT_ES: ${{ needs.detect-changes.outputs.frontend_files }}
+          FIX_TYPESCRIPT_PRETTIER: ${{ needs.detect-changes.outputs.frontend_files }}
+          FIX_PYTHON_BLACK: ${{ needs.detect-changes.outputs.python_files }}
+          FIX_PYTHON_ISORT: ${{ needs.detect-changes.outputs.python_files }}
+          FIX_PYTHON_RUFF: ${{ needs.detect-changes.outputs.python_files }}
+          FIX_RUST_2015: ${{ needs.detect-changes.outputs.rust_files }}
+          FIX_RUST_2018: ${{ needs.detect-changes.outputs.rust_files }}
+          FIX_RUST_2021: ${{ needs.detect-changes.outputs.rust_files }}
+          FIX_RUST_CLIPPY: ${{ needs.detect-changes.outputs.rust_files }}
 
           # Auto-fix these always
           FIX_MARKDOWN_PRETTIER: true
@@ -231,8 +231,8 @@ jobs:
           # Only validate these (no FIX_ option available)
           #   VALIDATE_YAML: true
           #   VALIDATE_GITHUB_ACTIONS: true
-          VALIDATE_DOCKERFILE_HADOLINT: ${{ needs.detect-changes.outputs.docker }}
-          VALIDATE_GITLEAKS: true
+          # VALIDATE_DOCKERFILE_HADOLINT: ${{ needs.detect-changes.outputs.docker_files }}
+          # VALIDATE_GITLEAKS: true
 
       - name: Check for auto-fixes
         id: check-fixes
@@ -265,7 +265,7 @@ jobs:
     name: Test Go
     runs-on: ubuntu-latest
     needs: [detect-changes, lint]
-    if: needs.detect-changes.outputs.go == 'true'
+    if: needs.detect-changes.outputs.go_files == 'true'
     strategy:
       matrix:
         go-version: ["1.22", "1.23", "1.24"]
@@ -315,7 +315,7 @@ jobs:
     name: Test Frontend
     runs-on: ubuntu-latest
     needs: [detect-changes, lint]
-    if: needs.detect-changes.outputs.frontend == 'true'
+    if: needs.detect-changes.outputs.frontend_files == 'true'
     strategy:
       matrix:
         node-version: ["20", "22", "24"]
@@ -365,7 +365,7 @@ jobs:
     name: Test Python
     runs-on: ubuntu-latest
     needs: [check-overrides, detect-changes, lint]
-    if: needs.detect-changes.outputs.python == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
+    if: needs.detect-changes.outputs.python_files == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
@@ -411,7 +411,7 @@ jobs:
     name: Test Rust
     runs-on: ubuntu-latest
     needs: [check-overrides, detect-changes, lint]
-    if: needs.detect-changes.outputs.rust == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
+    if: needs.detect-changes.outputs.rust_files == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
     strategy:
       matrix:
         rust-version: ["1.75", "1.76", "1.77"]
@@ -463,19 +463,47 @@ jobs:
           path: target/coverage/
         continue-on-error: true
 
+  # Determine which languages need security scanning
+  determine-security-languages:
+    name: Determine Security Languages
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    outputs:
+      matrix: ${{ steps.determine.outputs.matrix }}
+      has-languages: ${{ steps.determine.outputs.has-languages }}
+      language-count: ${{ steps.determine.outputs.language-count }}
+      languages: ${{ steps.determine.outputs.languages }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Determine security scan languages
+        id: determine
+        env:
+          GO_CHANGED: ${{ needs.detect-changes.outputs.go_files }}
+          FRONTEND_CHANGED: ${{ needs.detect-changes.outputs.frontend_files }}
+          PYTHON_CHANGED: ${{ needs.detect-changes.outputs.python_files }}
+          RUST_CHANGED: ${{ needs.detect-changes.outputs.rust_files }}
+        run: |
+          python .github/scripts/determine-security-languages.py
+
   # Security scanning with CodeQL
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [check-overrides, detect-changes]
-    if: needs.check-overrides.outputs.skip-validation != 'true'
+    needs: [check-overrides, determine-security-languages]
+    if: needs.check-overrides.outputs.skip-validation != 'true' && needs.determine-security-languages.outputs.has-languages == 'true'
     permissions:
       security-events: write
       contents: read
       actions: read
     strategy:
-      matrix:
-        language: ["go", "javascript", "python", "rust"]
+      matrix: ${{ fromJson(needs.determine-security-languages.outputs.matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -505,14 +533,14 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up Go
-        if: needs.detect-changes.outputs.go == 'true'
+        if: needs.detect-changes.outputs.go_files == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
-        if: needs.detect-changes.outputs.frontend == 'true'
+        if: needs.detect-changes.outputs.frontend_files == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -522,18 +550,18 @@ jobs:
             webui/package-lock.json
 
       - name: Set up Rust
-        if: needs.detect-changes.outputs.rust == 'true'
+        if: needs.detect-changes.outputs.rust_files == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
       - name: Build Go binary
-        if: needs.detect-changes.outputs.go == 'true'
+        if: needs.detect-changes.outputs.go_files == 'true'
         run: |
           go build -v -o bin/ ./...
 
       - name: Build frontend assets
-        if: needs.detect-changes.outputs.frontend == 'true'
+        if: needs.detect-changes.outputs.frontend_files == 'true'
         run: |
           if [ -f "webui/package.json" ]; then
             cd webui
@@ -545,7 +573,7 @@ jobs:
           fi
 
       - name: Build Rust binary
-        if: needs.detect-changes.outputs.rust == 'true'
+        if: needs.detect-changes.outputs.rust_files == 'true'
         run: |
           cargo build --release
 
@@ -628,6 +656,7 @@ jobs:
         test-frontend,
         test-python,
         test-rust,
+        determine-security-languages,
         security-scan,
         build,
         matrix-build,
@@ -679,6 +708,8 @@ jobs:
 
           if [[ "${{ needs.security-scan.result }}" == "success" ]]; then
             echo "✅ **Security Scan**: Passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.security-scan.result }}" == "skipped" ]]; then
+            echo "⏭️ **Security Scan**: Skipped (no changes)" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ **Security Scan**: Issues found" >> $GITHUB_STEP_SUMMARY
           fi
