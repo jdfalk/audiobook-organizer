@@ -1,9 +1,9 @@
 #!/bin/bash
 # file: scripts/create-issue-update.sh
-# version: 1.2.0
+# version: 2.0.0
 # guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 #
-# Helper script to create new issue update files with proper UUIDs
+# Enhanced helper script to create new issue update files with enhanced timestamp format v2.0
 #
 # Usage:
 #   ./scripts/create-issue-update.sh create "Issue Title" "Issue body" "label1,label2"

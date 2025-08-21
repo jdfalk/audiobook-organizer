@@ -1,0 +1,2165 @@
+[
+  {
+    "workflow_run": {
+      "id": "16887020804",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:12:10Z",
+      "updated_at": "2025-08-11T17:13:46Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020804",
+      "run_number": 374,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47837230608",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020804/job/47837230608",
+        "runner_name": "",
+        "started_at": "2025-08-11T17:12:13Z",
+        "completed_at": "2025-08-11T17:13:45Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T17:12:15Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T17:12:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:33Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T17:12:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T17:13:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8375921Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376300Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376584Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376913Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377379Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377968Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378362Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378791Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487165Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487482Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487966Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488813Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8489135Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8489471Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695112Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695437Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695708Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695957Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2696285Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.1660884Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.2015519Z 0daf3d7715b00da1e079532d3890ac3322391f7a\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.8393675Z 2025-08-11 17:13:36 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:37.1624677Z 2025-08-11 17:13:37 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:37.1657930Z 2025-08-11 17:13:37 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281379Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281700Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281973Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8282231Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8282568Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508392Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508665Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508853Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509174Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509551Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509551Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509934Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8510459Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8510871Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511220Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511220Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511518Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511844Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8512169Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8512435Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16887020237",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:12:09Z",
+      "updated_at": "2025-08-11T17:12:09Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020237",
+      "run_number": 130,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16886878924",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:05:54Z",
+      "updated_at": "2025-08-11T17:08:01Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878924",
+      "run_number": 373,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47836757733",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878924/job/47836757733",
+        "runner_name": "",
+        "started_at": "2025-08-11T17:06:27Z",
+        "completed_at": "2025-08-11T17:08:00Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T17:06:29Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T17:06:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:48Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T17:06:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T17:07:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16886878533",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:05:53Z",
+      "updated_at": "2025-08-11T17:05:53Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878533",
+      "run_number": 129,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16886839402",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:04:13Z",
+      "updated_at": "2025-08-11T17:04:13Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886839402",
+      "run_number": 128,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16885436312",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T16:03:10Z",
+      "updated_at": "2025-08-11T16:05:55Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885436312",
+      "run_number": 371,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47831840170",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885436312/job/47831840170",
+        "runner_name": "",
+        "started_at": "2025-08-11T16:04:22Z",
+        "completed_at": "2025-08-11T16:05:53Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T16:04:24Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T16:04:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:41Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T16:04:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T16:05:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:52Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:52Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T16:05:52Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16885435723",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T16:03:09Z",
+      "updated_at": "2025-08-11T16:03:09Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885435723",
+      "run_number": 127,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16882010429",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T13:49:28Z",
+      "updated_at": "2025-08-11T14:06:51Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882010429",
+      "run_number": 370,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47819970611",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882010429/job/47819970611",
+        "runner_name": "",
+        "started_at": "2025-08-11T14:05:11Z",
+        "completed_at": "2025-08-11T14:06:50Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T14:05:13Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T14:05:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:37Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T14:05:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:37Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T14:06:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:38Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T14:06:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:38Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T14:06:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T14:06:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16882009992",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T13:49:27Z",
+      "updated_at": "2025-08-11T13:49:27Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882009992",
+      "run_number": 126,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16870215589",
+      "name": "Handle Stale Issues",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "schedule",
+      "created_at": "2025-08-11T03:30:43Z",
+      "updated_at": "2025-08-11T03:30:53Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16870215589",
+      "run_number": 5,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47783426611",
+        "name": "call-stale / mark-stale",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16870215589/job/47783426611",
+        "runner_name": "",
+        "started_at": "2025-08-11T03:30:48Z",
+        "completed_at": "2025-08-11T03:30:52Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T03:30:49Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T03:30:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T03:30:50Z",
+            "conclusion": "failure",
+            "name": "Run stale action",
+            "number": 2,
+            "startedAt": "2025-08-11T03:30:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T03:30:50Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 3,
+            "startedAt": "2025-08-11T03:30:50Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "call-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9260110Z   include-only-assigned: false\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes",
+      "call-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\n"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16869629981",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "schedule",
+      "created_at": "2025-08-11T02:40:21Z",
+      "updated_at": "2025-08-11T02:42:12Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869629981",
+      "run_number": 63,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47781818244",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869629981/job/47781818244",
+        "runner_name": "",
+        "started_at": "2025-08-11T02:40:32Z",
+        "completed_at": "2025-08-11T02:42:06Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T02:40:34Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T02:40:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:53Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T02:40:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T02:41:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:04Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16869120564",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T01:54:47Z",
+      "updated_at": "2025-08-11T01:56:39Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120564",
+      "run_number": 369,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47780532536",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120564/job/47780532536",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:54:50Z",
+        "completed_at": "2025-08-11T01:56:38Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:54:53Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:54:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:14Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:54:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:56:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:26Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:26Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:56:26Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16869120437",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T01:54:46Z",
+      "updated_at": "2025-08-11T01:54:46Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120437",
+      "run_number": 125,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682031",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:12Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682031",
+      "run_number": 368,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417830",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682031/job/47779417830",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:36Z",
+        "completed_at": "2025-08-11T01:20:11Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:18:38Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:57Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:18:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:19:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:08Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682061",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:47Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682061",
+      "run_number": 165,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417868",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682061/job/47779417868",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:16Z",
+        "completed_at": "2025-08-11T01:20:46Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:18Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682022",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:31Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682022",
+      "run_number": 164,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417798",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682022/job/47779417798",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:58Z",
+        "completed_at": "2025-08-11T01:20:30Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:00Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682016",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request_target",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:34Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682016",
+      "run_number": 163,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417786",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682016/job/47779417786",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:57Z",
+        "completed_at": "2025-08-11T01:20:33Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:00Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:19Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682047",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:21:04Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682047",
+      "run_number": 61,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779483680",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682047/job/47779483680",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:20Z",
+        "completed_at": "2025-08-11T01:20:51Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:40Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682053",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:21:14Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682053",
+      "run_number": 62,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779486172",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682053/job/47779486172",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:24Z",
+        "completed_at": "2025-08-11T01:20:58Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:26Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:46Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:56Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868681599",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "push",
+      "created_at": "2025-08-11T01:16:12Z",
+      "updated_at": "2025-08-11T01:16:12Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868681599",
+      "run_number": 124,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  }
+]

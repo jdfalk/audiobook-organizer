@@ -1,0 +1,67 @@
+# file: .github/linters/clippy.toml
+# version: 1.0.0
+# guid: 6f7a8b9c-0d1e-2345-f678-9abcdef01234
+
+# Clippy configuration for Rust linting
+# Following Rust best practices and performance guidelines
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Cyclomatic complexity threshold  
+cyclomatic-complexity-threshold = 15
+
+# Documentation requirements
+missing-docs-in-crate-items = true
+
+# Avoid certain patterns
+avoid-breaking-exported-api = true
+disallowed-methods = [
+    "std::env::set_var",  # Prefer safer alternatives
+    "std::process::exit", # Use proper error handling
+]
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Vector initialization threshold
+vec-box-size-threshold = 4096
+
+# Arithmetic side effects
+arithmetic-side-effects-allowed = ["Size", "Offset"]
+
+# Enum variant size threshold
+enum-variant-size-threshold = 200
+
+# Large error types threshold
+large-error-types-threshold = 128
+
+# Large futures threshold
+large-futures-threshold = 16384
+
+# Large stack arrays threshold  
+large-stack-arrays-threshold = 512000
+
+# Large types passed by value threshold
+large-types-passed-by-value-threshold = 256
+
+# Literal representation threshold
+literal-representation-threshold = 10
+
+# Maximum trait bounds
+max-trait-bounds = 3
+
+# Maximum function lines
+max-fn-params-bools = 3
+
+# String literal threshold
+string-literal-chars-threshold = 120
+
+# Trivial copy size threshold
+trivial-copy-size-limit = 8
+
+# Upper case acronyms aggressive
+upper-case-acronyms-aggressive = false
+
+# Verbose bit mask threshold
+verbose-bit-mask-threshold = 1

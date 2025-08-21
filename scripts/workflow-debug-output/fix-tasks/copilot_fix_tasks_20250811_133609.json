@@ -1,0 +1,422 @@
+[
+  {
+    "id": "9e931453-9dae-4e63-9363-723bd4d3b501",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16887491259\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:32:56Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16887491259",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16887491259.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:16.959913"
+  },
+  {
+    "id": "b46b12fe-8f58-44c6-a9a4-a2476d88f142",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16887020804\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:12:10Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8375921Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376300Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376584Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376913Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377379Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377968Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378362Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378791Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487165Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487482Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487966Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16887020804",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16887020804.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:34:25.015320"
+  },
+  {
+    "id": "c84033ab-e1fd-4c38-a0fd-d43bafe10d96",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16887020237\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:12:09Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16887020237",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16887020237.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:26.088646"
+  },
+  {
+    "id": "7e95a2e3-51a1-4ad7-ac97-465202faf9bc",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886878924\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:05:54Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4255793Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256168Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256457Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256787Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256949Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256949Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4257248Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4257843Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4258241Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4258653Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4362409Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4362875Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4363672Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364070Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364410Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886878924",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886878924.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:34:35.513006"
+  },
+  {
+    "id": "3b46812b-600a-4929-be96-8c418ec5f47b",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886878533\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:05:53Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886878533",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886878533.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:36.648488"
+  },
+  {
+    "id": "67654d88-cb28-4319-beac-74361f74f5fe",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886839402\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:04:13Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886839402",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886839402.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:37.771615"
+  },
+  {
+    "id": "63210ebe-9bd3-4371-b534-f2027f571496",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16885436312\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T16:03:10Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594092Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594462Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594740Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595068Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595227Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595227Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595518Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596096Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596491Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596913Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5695011Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5695307Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696219Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696630Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696977Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16885436312",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16885436312.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:34:46.649395"
+  },
+  {
+    "id": "99192c0d-cefc-4b5a-9fd1-b9b5a46256e6",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16885435723\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T16:03:09Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16885435723",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16885435723.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:47.852704"
+  },
+  {
+    "id": "edc1944d-1711-4c2b-b44a-f1be22a0cc22",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16882010429\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T13:49:28Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9761770Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762153Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762431Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762760Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762922Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762922Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9763222Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9763811Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9764212Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9764626Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9868850Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869252Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869749Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869987Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9870185Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16882010429",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16882010429.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:34:56.543969"
+  },
+  {
+    "id": "1a68197b-b451-49c6-b808-59d59e03e438",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16882009992\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T13:49:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16882009992",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16882009992.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:34:57.605730"
+  },
+  {
+    "id": "e0f546ea-6f80-4040-b0e9-e54aecf0f52a",
+    "title": "Fix permissions issue in Handle Stale Issues",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Handle Stale Issues\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16870215589\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T03:30:43Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n\n**Failed Jobs**:\n- call-stale / mark-stale (failure)\n\n**Log Snippets**:\n```\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9260110Z   include-only-assigned: false\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16870215589",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Handle Stale Issues",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16870215589.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:00.011457"
+  },
+  {
+    "id": "6e32f754-0f63-4b05-ba4a-296b80ec3d4e",
+    "title": "Fix permissions issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869629981\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T02:40:21Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505054Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505366Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505634Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505883Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3506206Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1368557Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1368882Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369149Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369396Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369731Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593463Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593722Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593912Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594217Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594592Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869629981",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869629981.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:09.134276"
+  },
+  {
+    "id": "27fa1368-ed0c-4b4d-9afe-e05cf736d997",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869120564\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T01:54:47Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450067Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450440Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450714Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451042Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451198Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451198Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451486Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1452427Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1452835Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1453263Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1554329Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1554776Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1555602Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556007Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556352Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869120564",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869120564.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:17.734728"
+  },
+  {
+    "id": "ecbd2e0d-33b0-48ae-b5c0-bfbd9f38fa81",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869120437\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T01:54:46Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869120437",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869120437.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:35:18.785192"
+  },
+  {
+    "id": "2af71b85-eab2-4687-969f-8c6ad01beefb",
+    "title": "Fix permissions issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682031\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4469956Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470282Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470544Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470824Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4471156Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:00.4308250Z 88df7e2288fe38488c84cf6e2a297262a071f710\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:00.4376805Z 2025-08-11 01:20:00 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.0819961Z 2025-08-11 01:20:01 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.4380787Z 2025-08-11 01:20:01 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.4417415Z 2025-08-11 01:20:01 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650381Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650696Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650964Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6651212Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6651534Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682031",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682031.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:30.889576"
+  },
+  {
+    "id": "07ec8818-c13b-4c67-9c46-589e34f595a6",
+    "title": "Fix permissions issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682061\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8636607Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8636922Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637179Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637429Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637740Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:37.8371092Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:37.8439167Z 2025-08-11 01:20:37 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.4320084Z 2025-08-11 01:20:38 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.7605903Z 2025-08-11 01:20:38 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.7638178Z 2025-08-11 01:20:38 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4855707Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856018Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856274Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856524Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856838Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682061",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682061.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:37.253619"
+  },
+  {
+    "id": "8f317f94-ef6f-4497-851d-533453c71c3d",
+    "title": "Fix permissions issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682022\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304341Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304661Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304918Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9305162Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9305470Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.9064480Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.9132588Z 2025-08-11 01:20:20 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.5206350Z 2025-08-11 01:20:21 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.8514651Z 2025-08-11 01:20:21 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.8548173Z 2025-08-11 01:20:21 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6175780Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176099Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176356Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176599Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176926Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682022",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682022.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:43.748913"
+  },
+  {
+    "id": "740e27d7-53a8-47a0-b3dd-15a2177ccbd6",
+    "title": "Fix permissions issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682016\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4526839Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527161Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527431Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527685Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527999Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.3198932Z .git\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.3619892Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.9976992Z 2025-08-11 01:20:22 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:23.3347984Z 2025-08-11 01:20:23 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:23.3383068Z 2025-08-11 01:20:23 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056085Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056406Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056668Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056932Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3057250Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682016",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682016.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:50.457907"
+  },
+  {
+    "id": "74543e91-4ad8-480b-b4ff-5208aea1ae90",
+    "title": "Fix permissions issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682047\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587115Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587429Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587691Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587941Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1588258Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2536232Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2536742Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537009Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537259Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537588Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2761810Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762077Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762262Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762579Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762943Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682047",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682047.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:35:59.850228"
+  },
+  {
+    "id": "df535d7d-15e3-426e-bc23-291d91eab42d",
+    "title": "Fix permissions issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682053\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2472502Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2472836Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473109Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473360Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473701Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309324Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309645Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309917Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4310172Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4310498Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537287Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537582Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537769Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4538097Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4538482Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682053",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682053.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:36:09.198454"
+  }
+]

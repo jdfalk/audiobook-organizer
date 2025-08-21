@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/python.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.5.0 -->
 <!-- guid: 2a5b7c8d-9e1f-4a2b-8c3d-6e9f1a5b7c8d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -18,6 +18,17 @@ description: |
   for additional best practices.
 - All Python files must begin with the required file header (see general
   instructions for details and Python example).
+
+## Version Requirements
+
+- **MANDATORY**: All Python projects must use Python 3.13.0 or higher
+- **NO EXCEPTIONS**: Do not use older Python versions in any repository
+- Update `requirements.txt` files to specify `python>=3.13.0`
+- Update `pyproject.toml` files to specify `requires-python = ">=3.13.0"`
+- Update `setup.py` files to specify `python_requires=">=3.13.0"`
+- Update `.python-version` files to specify `3.13.0` or higher
+- Use `python --version` to verify your installation meets requirements
+- All Python file headers must use version 1.0.0 or higher (following semantic versioning)
 
 ## Core Principles
 

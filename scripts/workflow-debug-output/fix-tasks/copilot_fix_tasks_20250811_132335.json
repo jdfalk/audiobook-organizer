@@ -1,0 +1,336 @@
+[
+  {
+    "id": "f34e4e01-0776-4a06-ad9f-86e3334f0dd0",
+    "title": "Fix docker issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16887020804\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:12:10Z\n\n**Root Cause**: Detected permissions issue\n**Category**: docker\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n- permission_denied\n- build_failure\n- docker_issue\n- docker_issue\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8375921Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376300Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376584Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376913Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377379Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377968Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378362Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378791Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487165Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487482Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487966Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16887020804",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "docker",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16887020804.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:23:15.795520"
+  },
+  {
+    "id": "cec65a09-30d7-4d04-97c2-9e0d8d6555f1",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16887020237\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:12:09Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16887020237",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16887020237.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:16.883977"
+  },
+  {
+    "id": "ee03b5a4-bf3b-47ba-b3eb-f9ed08521539",
+    "title": "Fix unknown issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886878924\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:05:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886878924",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886878924.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:17.632068"
+  },
+  {
+    "id": "4f9dc60a-d602-42e9-b1af-dc95d35b8da9",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886878533\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:05:53Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886878533",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886878533.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:18.878770"
+  },
+  {
+    "id": "c31bae15-e18d-4fb1-baac-473ab411380c",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16886839402\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T17:04:13Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16886839402",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16886839402.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:20.053219"
+  },
+  {
+    "id": "de964333-b3fd-4a4a-ae2d-a109f9ade25a",
+    "title": "Fix unknown issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16885436312\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T16:03:10Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16885436312",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16885436312.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:20.793525"
+  },
+  {
+    "id": "e76cd16b-1829-4739-9d66-780965c87eb4",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16885435723\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T16:03:09Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16885435723",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16885435723.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:21.897414"
+  },
+  {
+    "id": "53eebb08-3e8f-44df-a1e5-e873c67a2aeb",
+    "title": "Fix unknown issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16882010429\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T13:49:28Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16882010429",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16882010429.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:22.661201"
+  },
+  {
+    "id": "f5bf5649-f911-4ec9-8ba6-32218bf44efb",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16882009992\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T13:49:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16882009992",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16882009992.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:23.859678"
+  },
+  {
+    "id": "b8ec5f46-ded2-4cdc-a3f1-ce7558c3ab58",
+    "title": "Fix permissions issue in Handle Stale Issues",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Handle Stale Issues\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16870215589\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T03:30:43Z\n\n**Root Cause**: Detected permissions issue\n**Category**: permissions\n**Severity**: high\n**Actionable**: True\n\n**Error Patterns Detected**:\n- permission_denied\n\n**Failed Jobs**:\n- call-stale / mark-stale (failure)\n\n**Log Snippets**:\n```\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9260110Z   include-only-assigned: false\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16870215589",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Handle Stale Issues",
+    "failure_type": "permissions",
+    "priority": "urgent",
+    "suggested_actions": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "code_changes_needed": [
+      {
+        "file": ".github/workflows/*.yml",
+        "change": "Add required permissions block",
+        "example": "permissions:\n  contents: read\n  pull-requests: write\n  issues: write"
+      }
+    ],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16870215589.log"
+    ],
+    "estimated_effort": "simple",
+    "created_at": "2025-08-11T13:23:26.580296"
+  },
+  {
+    "id": "7eacf57e-4afd-4fa8-988b-aaae9995db4e",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869629981\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T02:40:21Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869629981",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869629981.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:27.447138"
+  },
+  {
+    "id": "57909d78-7717-4f2d-9243-cce8a89d7090",
+    "title": "Fix unknown issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869120564\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T01:54:47Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869120564",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869120564.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:28.123915"
+  },
+  {
+    "id": "d736eaee-4a39-4dd0-8a34-f37785ed61f5",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16869120437\n**Branch**: main\n**Status**: failure\n**Created**: 2025-08-11T01:54:46Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16869120437",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16869120437.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:29.337279"
+  },
+  {
+    "id": "a74abc0d-5a2a-4d10-80f2-5388bbd1160c",
+    "title": "Fix unknown issue in CI",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: CI\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682031\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- ci / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682031",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "CI",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682031.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:30.182622"
+  },
+  {
+    "id": "ff7e4f8a-0506-4fa1-9779-189042d96c19",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682061\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682061",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682061.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:30.861571"
+  },
+  {
+    "id": "085483dd-10b7-42e4-8b42-fb9aa9412209",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682022\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682022",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682022.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:31.556522"
+  },
+  {
+    "id": "dfc7cb1d-f626-4b97-885f-2bafd43fd698",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682016\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682016",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682016.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:32.351581"
+  },
+  {
+    "id": "9837a384-a91d-4b50-a343-e5788d8adae3",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682047\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682047",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682047.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:33.091337"
+  },
+  {
+    "id": "a3d4e413-6baa-48b2-b165-d76a0c2ad2a3",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868682053\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:14Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868682053",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868682053.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:33.879142"
+  },
+  {
+    "id": "e070e8ed-7b0f-429d-9ba7-ec8989bfe5ed",
+    "title": "Fix unknown issue in .github/workflows/reusable-goreleaser.yml",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: .github/workflows/reusable-goreleaser.yml\n**Repository**: jdfalk/ghcommon\n**Run ID**: 16868681599\n**Branch**: codex/create-script-to-submit-codex-jobs\n**Status**: failure\n**Created**: 2025-08-11T01:16:12Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/ghcommon/actions/runs/16868681599",
+    "repository": "jdfalk/ghcommon",
+    "workflow_file": ".github/workflows/reusable-goreleaser.yml",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_ghcommon_16868681599.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:23:35.030254"
+  }
+]

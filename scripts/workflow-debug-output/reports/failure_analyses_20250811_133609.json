@@ -1,0 +1,2375 @@
+[
+  {
+    "workflow_run": {
+      "id": "16887491259",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:32:56Z",
+      "updated_at": "2025-08-11T17:32:56Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887491259",
+      "run_number": 131,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16887020804",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:12:10Z",
+      "updated_at": "2025-08-11T17:13:46Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020804",
+      "run_number": 374,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47837230608",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020804/job/47837230608",
+        "runner_name": "",
+        "started_at": "2025-08-11T17:12:13Z",
+        "completed_at": "2025-08-11T17:13:45Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T17:12:15Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T17:12:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:33Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T17:12:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T17:13:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:34Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T17:13:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:42Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T17:13:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:13:43Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T17:13:43Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8375921Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376300Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376584Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8376913Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377077Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377379Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8377968Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378362Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8378791Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487165Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487482Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8487966Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488203Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488417Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8488813Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8489135Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:12:30.8489471Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695112Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695437Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695708Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2695957Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:34.2696285Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.1660884Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.2015519Z 0daf3d7715b00da1e079532d3890ac3322391f7a\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:36.8393675Z 2025-08-11 17:13:36 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:37.1624677Z 2025-08-11 17:13:37 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:37.1657930Z 2025-08-11 17:13:37 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281379Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281700Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8281973Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8282231Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8282568Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508392Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508665Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8508853Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509174Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509551Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509551Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8509934Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8510459Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8510871Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511220Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511220Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511518Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8511844Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8512169Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:13:42.8512435Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16887020237",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:12:09Z",
+      "updated_at": "2025-08-11T17:12:09Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16887020237",
+      "run_number": 130,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16886878924",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:05:54Z",
+      "updated_at": "2025-08-11T17:08:01Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878924",
+      "run_number": 373,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47836757733",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878924/job/47836757733",
+        "runner_name": "",
+        "started_at": "2025-08-11T17:06:27Z",
+        "completed_at": "2025-08-11T17:08:00Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T17:06:29Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T17:06:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:48Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T17:06:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T17:07:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:49Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T17:07:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:57Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T17:07:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T17:07:58Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T17:07:58Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4255793Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256168Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256457Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256787Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256949Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4256949Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4257248Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4257843Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4258241Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4258653Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4362409Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4362875Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4363672Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364070Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364410Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364070Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4364410Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4365063Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4365497Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T17:06:38.4365875Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:49.0672551Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:49.0672881Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:49.0673157Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:49.0673405Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:49.0673729Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:50.9536043Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:50.9878546Z bad7da3c56a563687dc48f3d9f9b0abd6afd5fcd\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:51.6152872Z 2025-08-11 17:07:51 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:51.9425884Z 2025-08-11 17:07:51 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:51.9458291Z 2025-08-11 17:07:51 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.6857995Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.6858301Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.6858563Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.6858803Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.6859122Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7025917Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7026208Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7026406Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7026725Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7027097Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7027097Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7027469Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7027822Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7028404Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7028740Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7028740Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7029025Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7029343Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7029661Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T17:07:57.7029920Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16886878533",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:05:53Z",
+      "updated_at": "2025-08-11T17:05:53Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886878533",
+      "run_number": 129,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16886839402",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T17:04:13Z",
+      "updated_at": "2025-08-11T17:04:13Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16886839402",
+      "run_number": 128,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16885436312",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T16:03:10Z",
+      "updated_at": "2025-08-11T16:05:55Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885436312",
+      "run_number": 371,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47831840170",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885436312/job/47831840170",
+        "runner_name": "",
+        "started_at": "2025-08-11T16:04:22Z",
+        "completed_at": "2025-08-11T16:05:53Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T16:04:24Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T16:04:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:41Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T16:04:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T16:05:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:42Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T16:05:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:51Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:52Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T16:05:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T16:05:52Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T16:05:52Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594092Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594462Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5594740Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595068Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595227Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595227Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5595518Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596096Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596491Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5596913Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5695011Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5695307Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696219Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696630Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696977Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696630Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5696977Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5697641Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5698179Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T16:04:17.5698749Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:42.6633943Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:42.6634263Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:42.6634536Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:42.6634786Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:42.6635110Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:44.5440714Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:44.5783366Z 1c6580f120b0961785e5d17ff645643fa93c04fe\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:45.1944404Z 2025-08-11 16:05:45 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:45.5164050Z 2025-08-11 16:05:45 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:45.5197304Z 2025-08-11 16:05:45 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1769383Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1769702Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1769977Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1770243Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1770582Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1991040Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1991317Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1991509Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1991831Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1992209Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1992209Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1992596Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1992979Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1993573Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1993919Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1993919Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1994219Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1994554Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1994878Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T16:05:51.1995145Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16885435723",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T16:03:09Z",
+      "updated_at": "2025-08-11T16:03:09Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16885435723",
+      "run_number": 127,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16882010429",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T13:49:28Z",
+      "updated_at": "2025-08-11T14:06:51Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882010429",
+      "run_number": 370,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47819970611",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882010429/job/47819970611",
+        "runner_name": "",
+        "started_at": "2025-08-11T14:05:11Z",
+        "completed_at": "2025-08-11T14:06:50Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T14:05:13Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T14:05:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:37Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T14:05:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:37Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T14:06:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:38Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T14:06:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:38Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T14:06:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T14:06:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:46Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T14:06:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T14:06:47Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T14:06:47Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9761770Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762153Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762431Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762760Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762922Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9762922Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9763222Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9763811Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9764212Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9764626Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9868850Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869252Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869749Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869987Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9870185Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9869987Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9870185Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9870582Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9870894Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T14:05:06.9871465Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:38.0360364Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:38.0360683Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:38.0360955Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:38.0361202Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:38.0361523Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:39.8887840Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:39.9227525Z 55a8ecc2e1d1021bb21e57b5f2283ddf6586bbed\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:40.5347987Z 2025-08-11 14:06:40 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:40.8570494Z 2025-08-11 14:06:40 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:40.8603283Z 2025-08-11 14:06:40 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5567720Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5568036Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5568312Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5568564Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5569019Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5788272Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5788543Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5789011Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5789340Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5789725Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5789725Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5790110Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5790478Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5791073Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5791421Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5791421Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5791716Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5792044Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5792381Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T14:06:46.5792648Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16882009992",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T13:49:27Z",
+      "updated_at": "2025-08-11T13:49:27Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16882009992",
+      "run_number": 126,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16870215589",
+      "name": "Handle Stale Issues",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "schedule",
+      "created_at": "2025-08-11T03:30:43Z",
+      "updated_at": "2025-08-11T03:30:53Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16870215589",
+      "run_number": 5,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47783426611",
+        "name": "call-stale / mark-stale",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16870215589/job/47783426611",
+        "runner_name": "",
+        "started_at": "2025-08-11T03:30:48Z",
+        "completed_at": "2025-08-11T03:30:52Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T03:30:49Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T03:30:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T03:30:50Z",
+            "conclusion": "failure",
+            "name": "Run stale action",
+            "number": 2,
+            "startedAt": "2025-08-11T03:30:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T03:30:50Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 3,
+            "startedAt": "2025-08-11T03:30:50Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "call-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9260110Z   include-only-assigned: false\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes",
+      "call-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:49.9261187Z ##[endgroup]\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1065363Z ##[error]Error: Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1075556Z ##[error]Input required and not supplied: stale-pr-label\ncall-stale / mark-stale\tUNKNOWN STEP\t2025-08-11T03:30:50.1195450Z Cleaning up orphan processes\n"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16869629981",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "schedule",
+      "created_at": "2025-08-11T02:40:21Z",
+      "updated_at": "2025-08-11T02:42:12Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869629981",
+      "run_number": 63,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47781818244",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869629981/job/47781818244",
+        "runner_name": "",
+        "started_at": "2025-08-11T02:40:32Z",
+        "completed_at": "2025-08-11T02:42:06Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T02:40:34Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T02:40:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:53Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T02:40:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T02:41:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:41:54Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T02:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:03Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T02:42:04Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T02:42:03Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505054Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505366Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505634Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3505883Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:41:54.3506206Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1368557Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1368882Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369149Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369396Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1369731Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593463Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593722Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1593912Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594217Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594592Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594592Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1594971Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1595327Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1595737Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1596086Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1596086Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1596378Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1596696Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1597018Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1597277Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1649773Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1650087Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1650352Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1650598Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1650923Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1775544Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1775790Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1775986Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1776666Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1777791Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1778282Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1778559Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1778761Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1779056Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1779424Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1778761Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1779056Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1779424Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1779813Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1780164Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1780164Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1780538Z \u001b[36;1m      echo \"-------------------\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1780933Z \u001b[36;1m      grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1781265Z \u001b[36;1m    fi\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T02:42:03.1781596Z \u001b[36;1m  done < <(find super-linter-output -name \"*.log\" -type f -print0 2>/dev/null | sort -z)\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16869120564",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T01:54:47Z",
+      "updated_at": "2025-08-11T01:56:39Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120564",
+      "run_number": 369,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47780532536",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120564/job/47780532536",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:54:50Z",
+        "completed_at": "2025-08-11T01:56:38Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:54:53Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:54:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:14Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:54:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:56:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:15Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:56:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:24Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:56:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:25Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:26Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:56:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:56:26Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:56:26Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied",
+      "build_failure",
+      "docker_issue",
+      "docker_issue"
+    ],
+    "failure_category": "docker",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450067Z \u001b[36;1m  echo \"\ud83d\udcdd Docker image built from repository's Dockerfile with OCI annotations and SBOM\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450440Z \u001b[36;1melse\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1450714Z \u001b[36;1m  echo \"\ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451042Z \u001b[36;1mfi\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451198Z \u001b[36;1mecho \"\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451198Z \u001b[36;1mecho \"\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1451486Z \u001b[36;1mecho \"\ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1452427Z \u001b[36;1mecho \"\ud83d\udcdd Note: Permission errors (403) may occur if:\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1452835Z \u001b[36;1mecho \"  - Repository is private and dependency graph is not enabled\"\u001b[0m\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1453263Z \u001b[36;1mecho \"  - Running in a fork without proper permissions\"\u001b[0m",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1554329Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1554776Z \ud83d\udcdd Note: Go dependencies handled by Component Detection due to cache conflicts\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1555602Z \ud83d\udcdd No Docker image scanned (Dockerfile not found or build failed)\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556007Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556352Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions",
+      "ci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556007Z \nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556352Z \ud83d\udcdd Authentication: Using JF_CI_GH_PAT for enhanced permissions\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1556838Z \ud83d\udcdd Note: Permission errors (403) may occur if:\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1557157Z   - Repository is private and dependency graph is not enabled\nci / dependency-submission\tUNKNOWN STEP\t2025-08-11T01:55:01.1557507Z   - Running in a fork without proper permissions",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:15.8689817Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:15.8690138Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:15.8690425Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:15.8690679Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:15.8691008Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:17.8143155Z .git\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:17.8493404Z 33b383d3ff3fe7f9e1c3cdc716e295773a56fb05\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:18.5091836Z 2025-08-11 01:56:18 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:18.8411227Z 2025-08-11 01:56:18 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:18.8444807Z 2025-08-11 01:56:18 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7032504Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7032826Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7033090Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7033350Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7033696Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7267521Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7267791Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7267977Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7268295Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7268673Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7268673Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7269056Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7269428Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7270047Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7270398Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7270398Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7270694Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7271031Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7271381Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:56:24.7271652Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16869120437",
+      "name": ".github/workflows/reusable-goreleaser.yml",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "main",
+      "event": "push",
+      "created_at": "2025-08-11T01:54:46Z",
+      "updated_at": "2025-08-11T01:54:46Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16869120437",
+      "run_number": 125,
+      "attempt": 1
+    },
+    "failed_jobs": [],
+    "error_patterns": [],
+    "failure_category": "unknown",
+    "root_cause": "Unknown failure",
+    "suggested_fixes": [],
+    "log_snippets": [],
+    "severity": "medium",
+    "is_actionable": true,
+    "fix_complexity": "moderate"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682031",
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:12Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682031",
+      "run_number": 368,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417830",
+        "name": "ci / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682031/job/47779417830",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:36Z",
+        "completed_at": "2025-08-11T01:20:11Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:18:38Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:57Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:18:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:19:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:19:58Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:19:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:07Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:08Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:09Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:09Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4469956Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470282Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470544Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4470824Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:19:58.4471156Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:00.4308250Z 88df7e2288fe38488c84cf6e2a297262a071f710\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:00.4376805Z 2025-08-11 01:20:00 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.0819961Z 2025-08-11 01:20:01 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.4380787Z 2025-08-11 01:20:01 [INFO]   ----------------------------------------------\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:01.4417415Z 2025-08-11 01:20:01 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650381Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650696Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6650964Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6651212Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6651534Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6883477Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6883749Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6883943Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6884307Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6884702Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6884702Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6885091Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6885460Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6885879Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6886221Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6886221Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6886520Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6886846Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6887169Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6887437Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6940008Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6940323Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6940581Z   BASH_SEVERITY: error\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6940834Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.6941162Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7045615Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7045866Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7046072Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7046350Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7046824Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7047174Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7047443Z \u001b[36;1m\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7047700Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7048039Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7048492Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "ci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7047700Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7048039Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7048492Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7048930Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nci / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:07.7049734Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682061",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:47Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682061",
+      "run_number": 165,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417868",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682061/job/47779417868",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:16Z",
+        "completed_at": "2025-08-11T01:20:46Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:18Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:35Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:44Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:45Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:45Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8636607Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8636922Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637179Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637429Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:35.8637740Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:37.8371092Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:37.8439167Z 2025-08-11 01:20:37 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.4320084Z 2025-08-11 01:20:38 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.7605903Z 2025-08-11 01:20:38 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:38.7638178Z 2025-08-11 01:20:38 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4855707Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856018Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856274Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856524Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.4856838Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5079171Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5079454Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5079655Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5079978Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5080350Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5080350Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5080730Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5081087Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5081484Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5081837Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5081837Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5082122Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5082464Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5082778Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5083053Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5132329Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5132644Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5132916Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5133162Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5133483Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5234087Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5234339Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5234533Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5234810Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5235282Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5235621Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5235879Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236062Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236340Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236696Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236062Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236340Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5236696Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5237075Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:44.5237429Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682022",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:31Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682022",
+      "run_number": 164,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417798",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682022/job/47779417798",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:58Z",
+        "completed_at": "2025-08-11T01:20:30Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:00Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:18Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:27Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:28Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304341Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304661Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9304918Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9305162Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:18.9305470Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.9064480Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.9132588Z 2025-08-11 01:20:20 [INFO]   main doesn't exist, however origin/main exists. Setting DEFAULT_BRANCH to: origin/main\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.5206350Z 2025-08-11 01:20:21 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.8514651Z 2025-08-11 01:20:21 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:21.8548173Z 2025-08-11 01:20:21 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6175780Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176099Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176356Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176599Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6176926Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6400831Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6401097Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6401284Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6401858Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6402247Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6402247Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6402627Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6402984Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6403390Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6403749Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6403749Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6404039Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6404372Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6404706Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6404962Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6454629Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6454935Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6455202Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6455444Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6455764Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6556906Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6557159Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6557344Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6557619Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6558087Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6558435Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6558695Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6558874Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6559148Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6559500Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6558874Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6559148Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6559500Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6559883Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:27.6560235Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682016",
+      "name": "PR Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request_target",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:20:34Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682016",
+      "run_number": 163,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779417786",
+        "name": "Code Quality Check / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682016/job/47779417786",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:18:57Z",
+        "completed_at": "2025-08-11T01:20:33Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:00Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:18:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:19Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:20Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:29Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "skipped",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:30Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:30Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4526839Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527161Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527431Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527685Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:20.4527999Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.3198932Z .git\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.3619892Z 88df7e2288fe38488c84cf6e2a297262a071f710\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:22.9976992Z 2025-08-11 01:20:22 [WARN]   LOG_LEVEL is set to a deprecated value: VERBOSE. Set it to INFO instead. This warning may turn in a fatal error in the future.\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:23.3347984Z 2025-08-11 01:20:23 [INFO]   ----------------------------------------------\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:23.3383068Z 2025-08-11 01:20:23 [INFO]   User provided file:[/github/workspace/.github/linters/.stylelintrc.json] exists, setting rules file...",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056085Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056406Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056668Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3056932Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3057250Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3290338Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3290607Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3290798Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3291110Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3291483Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3291483Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3291862Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3292220Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3292627Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3292971Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3292971Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3293250Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3293576Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3293910Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3294163Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3347491Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3347797Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3348060Z   BASH_SEVERITY: error\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3348307Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3348642Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3456559Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3456804Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3456999Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3457267Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3457739Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458078Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458328Z \u001b[36;1m\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458517Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458783Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3459139Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "Code Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458517Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3458783Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3459139Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3459510Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nCode Quality Check / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:29.3459854Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682047",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:21:04Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682047",
+      "run_number": 61,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779483680",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682047/job/47779483680",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:20Z",
+        "completed_at": "2025-08-11T01:20:51Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:40Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:41Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:49Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:50Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:50Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587115Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587429Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587691Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1587941Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:41.1588258Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2536232Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2536742Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537009Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537259Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2537588Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2761810Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762077Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762262Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762579Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762943Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2762943Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2763320Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2763681Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2764247Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2764581Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2764581Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2764874Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2765202Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2765528Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2765791Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2816220Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2816749Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2817076Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2817328Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2817654Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2920682Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2920929Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2921122Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2921399Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2921856Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922200Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922466Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922649Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922925Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2923284Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922649Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2922925Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2923284Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2923653Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2924004Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2924004Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2924401Z \u001b[36;1m      echo \"-------------------\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2924798Z \u001b[36;1m      grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2925130Z \u001b[36;1m    fi\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:49.2925466Z \u001b[36;1m  done < <(find super-linter-output -name \"*.log\" -type f -print0 2>/dev/null | sort -z)\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  },
+  {
+    "workflow_run": {
+      "id": "16868682053",
+      "name": "Complete Unified Automation",
+      "status": "completed",
+      "conclusion": "failure",
+      "repository": "jdfalk/ghcommon",
+      "branch": "codex/create-script-to-submit-codex-jobs",
+      "event": "pull_request",
+      "created_at": "2025-08-11T01:16:14Z",
+      "updated_at": "2025-08-11T01:21:14Z",
+      "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682053",
+      "run_number": 62,
+      "attempt": 1
+    },
+    "failed_jobs": [
+      {
+        "id": "47779486172",
+        "name": "unified-automation / super-linter / Super Linter",
+        "status": "completed",
+        "conclusion": "failure",
+        "url": "https://github.com/jdfalk/ghcommon/actions/runs/16868682053/job/47779486172",
+        "runner_name": "",
+        "started_at": "2025-08-11T01:19:24Z",
+        "completed_at": "2025-08-11T01:20:58Z",
+        "steps": [
+          {
+            "completedAt": "2025-08-11T01:19:26Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2025-08-11T01:19:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:46Z",
+            "conclusion": "success",
+            "name": "Pull ghcr.io/super-linter/super-linter:v8.0.0",
+            "number": 2,
+            "startedAt": "2025-08-11T01:19:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Checkout Code",
+            "number": 3,
+            "startedAt": "2025-08-11T01:20:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Setup Super Linter environment",
+            "number": 4,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:47Z",
+            "conclusion": "success",
+            "name": "Load custom configuration",
+            "number": 5,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Run Super Linter",
+            "number": 6,
+            "startedAt": "2025-08-11T01:20:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Check for auto-fixes",
+            "number": 7,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "skipped",
+            "name": "Commit and push auto-fixes",
+            "number": 8,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "success",
+            "name": "Create Job Summary",
+            "number": 9,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:55Z",
+            "conclusion": "failure",
+            "name": "Prepare Super Linter outputs",
+            "number": 10,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:56Z",
+            "conclusion": "success",
+            "name": "Upload Super Linter results",
+            "number": 11,
+            "startedAt": "2025-08-11T01:20:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Comment PR with linting results",
+            "number": 12,
+            "startedAt": "2025-08-11T01:20:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "skipped",
+            "name": "Fail if linting errors remain",
+            "number": 13,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Post Checkout Code",
+            "number": 26,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2025-08-11T01:20:57Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 27,
+            "startedAt": "2025-08-11T01:20:57Z",
+            "status": "completed"
+          }
+        ]
+      }
+    ],
+    "error_patterns": [
+      "permission_denied",
+      "permission_denied"
+    ],
+    "failure_category": "permissions",
+    "root_cause": "Detected permissions issue",
+    "suggested_fixes": [
+      "Add required permissions to workflow file",
+      "Check GITHUB_TOKEN scope",
+      "Verify repository settings"
+    ],
+    "log_snippets": [
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2472502Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2472836Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473109Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473360Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:47.2473701Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309324Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309645Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4309917Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4310172Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4310498Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537287Z \u001b[36;1m  echo \"## Issues to Address\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537582Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4537769Z \u001b[36;1m  # Print all error lines from log files\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4538097Z \u001b[36;1m  if [ -d \"super-linter-output\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4538482Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4538482Z \u001b[36;1m    # Use process substitution to avoid subshell issues with piped while loop\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4539047Z \u001b[36;1m    while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4539414Z \u001b[36;1m      if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4539823Z \u001b[36;1m        linter_name=$(basename \"$logfile\" .log | sed 's/^.*-//')\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4540166Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4540166Z \u001b[36;1m        echo \"### $linter_name\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4540458Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4540800Z \u001b[36;1m        grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4541130Z \u001b[36;1m        echo '```' >> $GITHUB_STEP_SUMMARY\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4541395Z \u001b[36;1m        echo \"\" >> $GITHUB_STEP_SUMMARY\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4593237Z   PYTHON_PYLINT_LINTER_RULES: .github/linters/.pylintrc\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4593552Z   PYTHON_RUFF_LINTER_RULES: .github/linters/ruff.toml\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4593822Z   BASH_SEVERITY: error\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4594080Z   MARKDOWN_LINTER_RULES: .github/linters/.markdownlint.json\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4594404Z   YAML_LINTER_RULES: .github/linters/.yaml-lint.yml",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4698544Z \u001b[36;1mecho \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4698804Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4699005Z \u001b[36;1m# Extract actual errors and fixes applied\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4699285Z \u001b[36;1mif [ \"success\" = \"failure\" ]; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4699767Z \u001b[36;1m  echo \"Issues Found:\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700119Z \u001b[36;1m  echo \"=============\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700388Z \u001b[36;1m\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700581Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700861Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4701224Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700581Z \u001b[36;1m  # Include error lines from each log file\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4700861Z \u001b[36;1m  while IFS= read -r -d '' logfile; do\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4701224Z \u001b[36;1m    if [ -f \"$logfile\" ] && grep -q \"ERROR\\|FAIL\\|error:\" \"$logfile\" 2>/dev/null; then\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4701607Z \u001b[36;1m      echo \"\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4701958Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m",
+      "unified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4701958Z \u001b[36;1m      echo \"$(basename \"$logfile\")\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4702343Z \u001b[36;1m      echo \"-------------------\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4702754Z \u001b[36;1m      grep -E \"ERROR|FAIL|error:\" \"$logfile\" >> super-linter-output/summary.txt\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4703087Z \u001b[36;1m    fi\u001b[0m\nunified-automation / super-linter / Super Linter\tUNKNOWN STEP\t2025-08-11T01:20:55.4703423Z \u001b[36;1m  done < <(find super-linter-output -name \"*.log\" -type f -print0 2>/dev/null | sort -z)\u001b[0m"
+    ],
+    "severity": "high",
+    "is_actionable": true,
+    "fix_complexity": "simple"
+  }
+]

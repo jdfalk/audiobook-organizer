@@ -1,0 +1,322 @@
+[
+  {
+    "id": "11ddf5aa-4554-45a4-aa1d-0aee2c19cfa1",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726840\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726840",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726840.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:21.354273"
+  },
+  {
+    "id": "ed23d920-ea1a-4342-b49a-2a02aaf2fe63",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885727112\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885727112",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885727112.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:22.682121"
+  },
+  {
+    "id": "38a7aa70-72c8-471b-9483-be2393d28f4b",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885727110\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885727110",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885727110.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:23.905185"
+  },
+  {
+    "id": "7959380f-db92-4884-8ab4-0faf233a52e5",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726829\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726829",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726829.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:25.641206"
+  },
+  {
+    "id": "e157ac11-26a1-4b3d-91f6-1408a1590a79",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885727148\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885727148",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885727148.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:27.228403"
+  },
+  {
+    "id": "56f56672-cbcf-4d8f-80c4-a440c2cb1f50",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885727140\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- AI Rebase & Conflict Resolution / find (failure)\n- Code Quality Check / Super Linter (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885727140",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885727140.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:28.712829"
+  },
+  {
+    "id": "b2d6ffe2-6a95-4379-972f-5bad010dbc99",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726823\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:55Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726823",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726823.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:30.022009"
+  },
+  {
+    "id": "0788bf64-3be6-49de-8e7a-e265fb2cc76f",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726803\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726803",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726803.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:31.343257"
+  },
+  {
+    "id": "c1fe1a7e-223e-41a0-b288-5dacd3f1437a",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726788\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726788",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726788.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:32.630720"
+  },
+  {
+    "id": "b439dc53-46fa-4cf8-a966-537419d12d8c",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726807\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726807",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726807.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:34.027428"
+  },
+  {
+    "id": "ae362c37-2664-414c-9704-3e6e278b686c",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726806\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726806",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726806.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:35.327661"
+  },
+  {
+    "id": "adf23d39-df11-4865-877f-fa3a1c0674df",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726791\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726791",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726791.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:36.788429"
+  },
+  {
+    "id": "cdba5ce4-8661-4abd-9a34-6faa1d931e53",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726799\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726799",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726799.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:38.117348"
+  },
+  {
+    "id": "1bbd11e3-47f7-4ec3-8515-15a7ed17a61b",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885726795\n**Branch**: codex/implement-tasks-from-tasks/10-instructions\n**Status**: failure\n**Created**: 2025-08-11T16:14:54Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885726795",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885726795.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:39.416952"
+  },
+  {
+    "id": "e8c9b14a-20c5-4d2f-b9be-9b7d7c223c3c",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715820\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:28Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715820",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715820.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:40.571851"
+  },
+  {
+    "id": "74ddceb5-66b5-41d1-b5ed-259bbf5ac738",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715558\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- AI Rebase & Conflict Resolution / find (failure)\n- Code Quality Check / Super Linter (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715558",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715558.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:41.973767"
+  },
+  {
+    "id": "6c06a337-d00b-4432-ba1e-b06346fced27",
+    "title": "Fix unknown issue in PR Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: PR Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715774\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- Code Quality Check / Super Linter (failure)\n- AI Rebase & Conflict Resolution / find (failure)\n- Unified PR Automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715774",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "PR Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715774.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:43.320570"
+  },
+  {
+    "id": "010d12f3-2044-4a11-88f9-f09d206932f6",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715545\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715545",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715545.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:44.462690"
+  },
+  {
+    "id": "6c8210a7-8876-403e-8b39-8214a3d74b56",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715689\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715689",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715689.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:45.749356"
+  },
+  {
+    "id": "179f86d7-488e-4a22-a4eb-e67bb554acb3",
+    "title": "Fix unknown issue in Complete Unified Automation",
+    "description": "Workflow Failure Analysis\n========================\n\n**Workflow**: Complete Unified Automation\n**Repository**: jdfalk/gcommon\n**Run ID**: 16885715618\n**Branch**: codex/implement-missing-parts-in-tasks/4\n**Status**: failure\n**Created**: 2025-08-11T16:14:27Z\n\n**Root Cause**: Unknown failure\n**Category**: unknown\n**Severity**: medium\n**Actionable**: True\n\n**Error Patterns Detected**:\n\n\n**Failed Jobs**:\n- unified-automation / super-linter / Super Linter (failure)\n\n**Log Snippets**:\n```\n\n```\n\n**Workflow URL**: https://github.com/jdfalk/gcommon/actions/runs/16885715618",
+    "repository": "jdfalk/gcommon",
+    "workflow_file": "Complete Unified Automation",
+    "failure_type": "unknown",
+    "priority": "high",
+    "suggested_actions": [],
+    "code_changes_needed": [],
+    "related_logs": [
+      "logs/jdfalk_gcommon_16885715618.log"
+    ],
+    "estimated_effort": "moderate",
+    "created_at": "2025-08-11T13:02:47.009436"
+  }
+]
