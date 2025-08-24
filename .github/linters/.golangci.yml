@@ -65,7 +65,23 @@ linters-settings:
         severity: warning
         disabled: false
         arguments:
-          - ["ID", "API", "URL", "HTTP", "JSON", "XML", "HTML", "CSS", "JS", "SQL", "DB", "OS", "UI", "UUID", "URI"]
+          - [
+              "ID",
+              "API",
+              "URL",
+              "HTTP",
+              "JSON",
+              "XML",
+              "HTML",
+              "CSS",
+              "JS",
+              "SQL",
+              "DB",
+              "OS",
+              "UI",
+              "UUID",
+              "URI",
+            ]
       - name: exported
         arguments: [checkPrivateReceivers, disableStutteringCheck]
 
@@ -150,10 +166,10 @@ linters:
     - wsl
 
   disable:
-    - deadcode  # deprecated
-    - golint    # deprecated
+    - deadcode # deprecated
+    - golint # deprecated
     - interfacer # deprecated
-    - maligned  # deprecated
+    - maligned # deprecated
     - scopelint # deprecated
     - varnamelen # too strict for short variable names
 
@@ -186,7 +202,7 @@ issues:
 
     # Exclude shadow checking for common variable names in tests
     - path: _test\.go
-      text: "shadow: declaration of \"err\" shadows declaration at"
+      text: 'shadow: declaration of "err" shadows declaration at'
       linters:
         - govet
 
