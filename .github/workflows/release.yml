@@ -185,6 +185,7 @@ jobs:
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
         with:
+          version: 1.56.0
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install protobuf Go plugins
