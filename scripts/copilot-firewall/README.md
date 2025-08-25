@@ -6,9 +6,8 @@
 
 # GitHub Copilot Firewall Allowlist Manager
 
-An interactive Python tool for managing the
-`COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS` environment variable across
-multiple GitHub repositories.
+An interactive Python tool for managing the `COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS`
+environment variable across multiple GitHub repositories.
 
 ## Features
 
@@ -77,15 +76,14 @@ When you run the tool, you'll see several options:
 
 1. **🎯 Select specific repositories**: Choose individual repos with checkboxes
 2. **🌟 Select all repositories**: Apply to all repos at once
-3. **🔍 Filter and select repositories**: Filter by name/description, then
-   select
+3. **🔍 Filter and select repositories**: Filter by name/description, then select
 4. **❌ Cancel operation**: Exit without making changes
 
 ## What It Does
 
-The tool sets the `COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS` environment
-variable for GitHub Actions in your selected repositories. This variable
-contains a comprehensive list of allowed domains for GitHub Copilot agents.
+The tool sets the `COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS` environment variable for GitHub
+Actions in your selected repositories. This variable contains a comprehensive list of allowed
+domains for GitHub Copilot agents.
 
 ### Included Domains
 
@@ -183,11 +181,10 @@ pytest
 
 ## Security
 
-This tool only sets repository-level environment variables that are publicly
-visible in GitHub Actions. It does not handle secrets or sensitive information.
+This tool only sets repository-level environment variables that are publicly visible in GitHub
+Actions. It does not handle secrets or sensitive information.
 
-The GitHub CLI must be authenticated with appropriate permissions to modify
-repository settings.
+The GitHub CLI must be authenticated with appropriate permissions to modify repository settings.
 
 ## Troubleshooting
 
@@ -231,5 +228,4 @@ repository settings.
 
 ## License
 
-This project is part of the ghcommon repository and follows the same license
-terms.
+This project is part of the ghcommon repository and follows the same license terms.

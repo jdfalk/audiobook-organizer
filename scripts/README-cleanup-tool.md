@@ -1,6 +1,7 @@
 # Repository Cleanup Tool
 
-Automatically detects and cleans up archived or outdated GitHub repositories from your local filesystem.
+Automatically detects and cleans up archived or outdated GitHub repositories from your local
+filesystem.
 
 ## Features
 
@@ -121,9 +122,11 @@ Log file: /Users/jdfalk/logs/repo-cleanup-20250810_153045.log
 ## Log Files
 
 All operations are logged to timestamped files in `~/logs/`:
+
 - `repo-cleanup-YYYYMMDD_HHMMSS.log`
 
 Logs include:
+
 - Repository scan results
 - GitHub API responses
 - Actions taken or simulated
@@ -153,6 +156,7 @@ The tool handles various error conditions gracefully:
 ⚠️ **Important**: Always run with `--dry-run` first to see what would be removed!
 
 This tool permanently deletes local directories. While it has safety features, you should:
+
 1. Backup important work before running
 2. Review the dry-run output carefully
 3. Understand what each repository contains

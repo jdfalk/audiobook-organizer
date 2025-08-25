@@ -9,9 +9,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726840.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726840.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:21.354273"
   },
@@ -25,9 +23,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885727112.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885727112.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:22.682121"
   },
@@ -41,9 +37,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885727110.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885727110.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:23.905185"
   },
@@ -57,9 +51,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726829.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726829.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:25.641206"
   },
@@ -73,9 +65,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885727148.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885727148.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:27.228403"
   },
@@ -89,9 +79,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885727140.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885727140.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:28.712829"
   },
@@ -105,9 +93,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726823.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726823.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:30.022009"
   },
@@ -121,9 +107,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726803.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726803.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:31.343257"
   },
@@ -137,9 +121,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726788.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726788.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:32.630720"
   },
@@ -153,9 +135,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726807.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726807.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:34.027428"
   },
@@ -169,9 +149,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726806.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726806.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:35.327661"
   },
@@ -185,9 +163,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726791.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726791.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:36.788429"
   },
@@ -201,9 +177,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726799.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726799.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:38.117348"
   },
@@ -217,9 +191,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885726795.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885726795.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:39.416952"
   },
@@ -233,9 +205,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715820.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715820.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:40.571851"
   },
@@ -249,9 +219,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715558.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715558.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:41.973767"
   },
@@ -265,9 +233,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715774.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715774.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:43.320570"
   },
@@ -281,9 +247,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715545.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715545.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:44.462690"
   },
@@ -297,9 +261,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715689.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715689.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:45.749356"
   },
@@ -313,9 +275,7 @@
     "priority": "high",
     "suggested_actions": [],
     "code_changes_needed": [],
-    "related_logs": [
-      "logs/jdfalk_gcommon_16885715618.log"
-    ],
+    "related_logs": ["logs/jdfalk_gcommon_16885715618.log"],
     "estimated_effort": "moderate",
     "created_at": "2025-08-11T13:02:47.009436"
   }

@@ -918,9 +918,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -1085,10 +1083,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -1465,10 +1460,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -1641,10 +1633,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -1817,10 +1806,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -1993,10 +1979,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -2169,10 +2152,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [
@@ -2345,10 +2325,7 @@
         ]
       }
     ],
-    "error_patterns": [
-      "permission_denied",
-      "permission_denied"
-    ],
+    "error_patterns": ["permission_denied", "permission_denied"],
     "failure_category": "permissions",
     "root_cause": "Detected permissions issue",
     "suggested_fixes": [

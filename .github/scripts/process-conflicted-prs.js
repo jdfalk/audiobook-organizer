@@ -7,9 +7,16 @@
  * Process conflicted PRs and add helpful comments
  */
 
-async function processConflictedPRs(github, context, conflictedPRs, defaultBranch) {
+async function processConflictedPRs(
+  github,
+  context,
+  conflictedPRs,
+  defaultBranch
+) {
   for (const pr of conflictedPRs) {
-    console.log(`Processing conflicted PR #${pr.number} on branch ${pr.branch}`);
+    console.log(
+      `Processing conflicted PR #${pr.number} on branch ${pr.branch}`
+    );
 
     // Create a comment about the conflict
     await github.rest.issues.createComment({
@@ -27,8 +34,8 @@ async function processConflictedPRs(github, context, conflictedPRs, defaultBranc
         '',
         'For help with resolving conflicts, see: [Resolving Merge Conflicts](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/addressing-merge-conflicts/resolving-a-merge-conflict-using-the-command-line)',
         '',
-        '_This comment was generated automatically by the AI Rebase Assistant._'
-      ].join('\n')
+        '_This comment was generated automatically by the AI Rebase Assistant._',
+      ].join('\n'),
     });
   }
 }

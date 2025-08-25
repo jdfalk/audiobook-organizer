@@ -47,8 +47,8 @@ async function updatePRComment(github, context, linterOutcome, hasAutoFixes) {
     issue_number: context.issue.number,
   });
 
-  const existingComment = comments.find(c =>
-    c.user.type === 'Bot' && c.body.includes('Super Linter Results')
+  const existingComment = comments.find(
+    c => c.user.type === 'Bot' && c.body.includes('Super Linter Results')
   );
 
   if (existingComment) {
@@ -56,14 +56,14 @@ async function updatePRComment(github, context, linterOutcome, hasAutoFixes) {
       owner: context.repo.owner,
       repo: context.repo.repo,
       comment_id: existingComment.id,
-      body: summary
+      body: summary,
     });
   } else {
     await github.rest.issues.createComment({
       owner: context.repo.owner,
       repo: context.repo.repo,
       issue_number: context.issue.number,
-      body: summary
+      body: summary,
     });
   }
 }
