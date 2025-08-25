@@ -93,7 +93,7 @@ jobs:
           echo "🔄 Running Python sync script..."
           python3 .github/scripts/sync-receiver-sync-files.py "$sync_type" || {
             echo "❌ Python sync script failed, trying manual sync..."
-            
+
             # Fallback to manual sync if Python script fails
             echo "📁 Creating directory structure..."
             mkdir -p .github/workflows .github/instructions .github/prompts scripts .github/linters .github/scripts
@@ -140,7 +140,7 @@ jobs:
                     fi
                   done
                 fi
-                
+
                 if [ -d "ghcommon-source/.github/scripts" ]; then
                   for file in ghcommon-source/.github/scripts/*; do
                     if [ -f "$file" ]; then
@@ -237,7 +237,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
+
           # Pull latest changes first to avoid conflicts
           echo "🔄 Pulling latest changes from remote..."
           git pull origin main || {
@@ -253,14 +253,14 @@ jobs:
               }
             }
           }
-          
+
           git add .
           git commit -m "sync: update files from ghcommon
 
           Source: ${{ steps.params.outputs.source_repo }}
           SHA: ${{ steps.params.outputs.source_sha }}
           Sync type: ${{ steps.params.outputs.sync_type }}"
-          
+
           # Push with retry logic
           echo "⬆️  Pushing changes to remote..."
           for i in {1..3}; do
