@@ -40,7 +40,7 @@ async function findConflictedPRs(github, context, core) {
       conflicted.push({
         number: pr.number,
         branch: pr.head.ref,
-        state: state
+        state: state,
       });
     }
   }
@@ -56,5 +56,7 @@ module.exports = { findConflictedPRs };
 // For GitHub Actions script execution
 if (require.main === module) {
   // This would be called from GitHub Actions
-  console.log('This script should be called from GitHub Actions with proper context');
+  console.log(
+    'This script should be called from GitHub Actions with proper context'
+  );
 }
