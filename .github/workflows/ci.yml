@@ -211,7 +211,6 @@ jobs:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # VALIDATE_ALL_CODEBASE: false
-          VALIDATE_ANSIBLE: false
           VALIDATE_ARM: false
           VALIDATE_BASH: true
           VALIDATE_CHECKOV: false
@@ -499,18 +498,17 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
-  # Matrix build for multi-platform testing
-  matrix-build:
-    name: Matrix Build
-    uses: jdfalk/ghcommon/.github/workflows/matrix-build.yml@main
+  # Release build for multi-platform testing and artifacts
+  release-build:
+    name: Release Build
+    uses: ./.github/workflows/release.yml
     needs: [detect-changes, check-overrides]
     if: needs.check-overrides.outputs.skip_tests != 'true'
     with:
-      go_files: ${{ needs.detect-changes.outputs.go_files }}
-      frontend_files: ${{ needs.detect-changes.outputs.frontend_files }}
-      python_files: ${{ needs.detect-changes.outputs.python_files }}
-      rust_files: ${{ needs.detect-changes.outputs.rust_files }}
-      docker_files: ${{ needs.detect-changes.outputs.docker_files }}
+      release_type: auto
+      build_target: all
+      prerelease: true
+      draft: true
 
   # Docker testing
   test-docker:
@@ -622,7 +620,7 @@ jobs:
         test-rust,
         test-docker,
         test-docs,
-        matrix-build,
+        release-build,
         security-scan,
         performance-test,
       ]
@@ -645,7 +643,7 @@ jobs:
           echo "| Test Rust | ${{ needs.test-rust.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test Docker | ${{ needs.test-docker.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test Docs | ${{ needs.test-docs.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Matrix Build | ${{ needs.matrix-build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release Build | ${{ needs.release-build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Performance Test | ${{ needs.performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -666,7 +664,7 @@ jobs:
              [[ "${{ needs.test-python.result }}" == "failure" ]] ||
              [[ "${{ needs.test-rust.result }}" == "failure" ]] ||
              [[ "${{ needs.test-docker.result }}" == "failure" ]] ||
-             [[ "${{ needs.matrix-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.release-build.result }}" == "failure" ]]; then
             echo "❌ CI Pipeline failed"
             exit 1
           else
