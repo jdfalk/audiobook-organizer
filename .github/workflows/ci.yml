@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 1.13.0
+# version: 1.15.0
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 name: Continuous Integration
@@ -205,85 +205,32 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
+      - name: Load Super Linter Configuration
+        id: super-linter-config
+        run: |
+          # Load environment variables from super-linter.env file
+          if [ -f .github/linters/super-linter.env ]; then
+            echo "Loading Super Linter configuration from .github/linters/super-linter.env"
+            # Export all variables from the env file to GitHub environment
+            while IFS='=' read -r key value; do
+              # Skip comments and empty lines
+              if [[ ! "$key" =~ ^[[:space:]]*# && -n "$key" ]]; then
+                # Remove any quotes and whitespace
+                key=$(echo "$key" | xargs)
+                value=$(echo "$value" | xargs)
+                # Export to GitHub environment for use in subsequent steps
+                echo "$key=$value" >> $GITHUB_ENV
+              fi
+            done < .github/linters/super-linter.env
+          else
+            echo "Warning: .github/linters/super-linter.env not found"
+          fi
+
       - name: Run Super Linter
-        uses: github/super-linter/slim@v7
+        uses: super-linter/super-linter@v8.1.0
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # VALIDATE_ALL_CODEBASE: false
-          VALIDATE_ARM: false
-          VALIDATE_BASH: true
-          VALIDATE_CHECKOV: false
-          VALIDATE_CLANG_FORMAT: false
-          VALIDATE_CLOUDFORMATION: false
-          VALIDATE_CLOJURE: false
-          VALIDATE_COFFEESCRIPT: false
-          VALIDATE_CPP: false
-          VALIDATE_CSHARP: false
-          VALIDATE_CSS: true
-          VALIDATE_DART: false
-          VALIDATE_DOCKERFILE_HADOLINT: true
-          VALIDATE_EDITORCONFIG: true
-          VALIDATE_ENV: true
-          VALIDATE_GHERKIN: false
-          VALIDATE_GITHUB_ACTIONS: true
-          VALIDATE_GITLEAKS: false
-          VALIDATE_GO: true
-          VALIDATE_GO_MODULES: true
-          VALIDATE_GOOGLE_JAVA_FORMAT: false
-          VALIDATE_GROOVY: false
-          VALIDATE_HTML: true
-          VALIDATE_JAVA: false
-          VALIDATE_JAVASCRIPT_ES: true
-          VALIDATE_JAVASCRIPT_PRETTIER: false
-          VALIDATE_JAVASCRIPT_STANDARD: false
-          VALIDATE_JSCPD: false
-          VALIDATE_JSON: true
-          VALIDATE_JSX: true
-          VALIDATE_KOTLIN: false
-          VALIDATE_KUBERNETES_KUBECONFORM: false
-          VALIDATE_LATEX: false
-          VALIDATE_LUA: false
-          VALIDATE_MARKDOWN: true
-          VALIDATE_NATURAL_LANGUAGE: false
-          VALIDATE_OPENAPI: false
-          VALIDATE_PERL: false
-          VALIDATE_PHP_BUILTIN: false
-          VALIDATE_PHP_PHPCS: false
-          VALIDATE_PHP_PHPSTAN: false
-          VALIDATE_PHP_PSALM: false
-          VALIDATE_POWERSHELL: false
-          VALIDATE_PROTOBUF: true
-          VALIDATE_PYTHON_BLACK: true
-          VALIDATE_PYTHON_FLAKE8: true
-          VALIDATE_PYTHON_ISORT: true
-          VALIDATE_PYTHON_MYPY: false
-          VALIDATE_PYTHON_PYLINT: false
-          VALIDATE_R: false
-          VALIDATE_RAKU: false
-          VALIDATE_RUBY: false
-          VALIDATE_RUST_2015: false
-          VALIDATE_RUST_2018: false
-          VALIDATE_RUST_2021: true
-          VALIDATE_RUST_CLIPPY: true
-          VALIDATE_SCALAFMT: false
-          VALIDATE_SHELL_SHFMT: true
-          VALIDATE_SNAKEMAKE_LINT: false
-          VALIDATE_SNAKEMAKE_SNAKEFMT: false
-          VALIDATE_STATES: false
-          VALIDATE_SQL: false
-          VALIDATE_SQLFLUFF: false
-          VALIDATE_TEKTON: false
-          VALIDATE_TERRAFORM_FMT: false
-          VALIDATE_TERRAFORM_TFLINT: false
-          VALIDATE_TERRAFORM_TERRASCAN: false
-          VALIDATE_TERRAGRUNT: false
-          VALIDATE_TSX: true
-          VALIDATE_TYPESCRIPT_ES: true
-          VALIDATE_TYPESCRIPT_PRETTIER: false
-          VALIDATE_TYPESCRIPT_STANDARD: false
-          VALIDATE_XML: true
-          VALIDATE_YAML: true
 
       - name: Check for auto-fixes
         id: autofix
@@ -664,7 +611,7 @@ jobs:
              [[ "${{ needs.test-python.result }}" == "failure" ]] ||
              [[ "${{ needs.test-rust.result }}" == "failure" ]] ||
              [[ "${{ needs.test-docker.result }}" == "failure" ]] ||
-             [[ "${{ needs.release-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.matrix-build.result }}" == "failure" ]]; then
             echo "❌ CI Pipeline failed"
             exit 1
           else
