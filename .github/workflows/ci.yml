@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 1.15.0
+# version: 1.18.0
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 name: Continuous Integration
@@ -24,6 +24,12 @@ env:
   RUST_VERSION: "1.76"
   COVERAGE_THRESHOLD: "80"
   CACHE_VERSION: "v1"
+  # GitHub context variables (for security)
+  GITHUB_WORKFLOW: ${{ github.workflow }}
+  GITHUB_REF: ${{ github.ref }}
+  GITHUB_EVENT_NAME: ${{ github.event_name }}
+  GITHUB_REPOSITORY_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+  GITHUB_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
 
 permissions:
   contents: write
@@ -45,13 +51,13 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      go_files: ${{ steps.filter.outputs.go }}
-      frontend_files: ${{ steps.filter.outputs.frontend }}
-      python_files: ${{ steps.filter.outputs.python }}
-      rust_files: ${{ steps.filter.outputs.rust }}
-      docker_files: ${{ steps.filter.outputs.docker }}
-      docs_files: ${{ steps.filter.outputs.docs }}
-      workflows_files: ${{ steps.filter.outputs.workflows }}
+      gofiles: ${{ steps.filter.outputs.gofiles }}
+      frontendfiles: ${{ steps.filter.outputs.frontendfiles }}
+      pythonfiles: ${{ steps.filter.outputs.pythonfiles }}
+      rustfiles: ${{ steps.filter.outputs.rustfiles }}
+      dockerfiles: ${{ steps.filter.outputs.dockerfiles }}
+      docsfiles: ${{ steps.filter.outputs.docsfiles }}
+      workflowfiles: ${{ steps.filter.outputs.workflowfiles }}
 
     steps:
       - name: Checkout repository
@@ -64,32 +70,56 @@ jobs:
         id: filter
         with:
           filters: |
-            go:
+            gofiles:
               - '**/*.go'
               - 'go.mod'
               - 'go.sum'
               - '**/go.mod'
               - '**/go.sum'
-            frontend:
-              - '**/*.js'
-              - '**/*.jsx'
-              - '**/*.ts'
-              - '**/*.tsx'
-              - '**/*.vue'
-              - '**/*.html'
-              - '**/*.css'
-              - '**/*.scss'
-              - '**/*.sass'
-              - '**/*.less'
-              - 'package.json'
-              - 'package-lock.json'
-              - 'yarn.lock'
-              - 'pnpm-lock.yaml'
-              - '**/package.json'
-              - '**/package-lock.json'
-              - '**/yarn.lock'
-              - '**/pnpm-lock.yaml'
-            python:
+            frontendfiles:
+              - 'webui/**/*.js'
+              - 'webui/**/*.jsx'
+              - 'webui/**/*.ts'
+              - 'webui/**/*.tsx'
+              - 'webui/**/*.vue'
+              - 'webui/**/*.html'
+              - 'webui/**/*.css'
+              - 'webui/**/*.scss'
+              - 'webui/**/*.sass'
+              - 'webui/**/*.less'
+              - 'frontend/**/*.js'
+              - 'frontend/**/*.jsx'
+              - 'frontend/**/*.ts'
+              - 'frontend/**/*.tsx'
+              - 'frontend/**/*.vue'
+              - 'frontend/**/*.html'
+              - 'frontend/**/*.css'
+              - 'frontend/**/*.scss'
+              - 'frontend/**/*.sass'
+              - 'frontend/**/*.less'
+              - 'ui/**/*.js'
+              - 'ui/**/*.jsx'
+              - 'ui/**/*.ts'
+              - 'ui/**/*.tsx'
+              - 'ui/**/*.vue'
+              - 'ui/**/*.html'
+              - 'ui/**/*.css'
+              - 'ui/**/*.scss'
+              - 'ui/**/*.sass'
+              - 'ui/**/*.less'
+              - 'webui/package.json'
+              - 'webui/package-lock.json'
+              - 'webui/yarn.lock'
+              - 'webui/pnpm-lock.yaml'
+              - 'frontend/package.json'
+              - 'frontend/package-lock.json'
+              - 'frontend/yarn.lock'
+              - 'frontend/pnpm-lock.yaml'
+              - 'ui/package.json'
+              - 'ui/package-lock.json'
+              - 'ui/yarn.lock'
+              - 'ui/pnpm-lock.yaml'
+            pythonfiles:
               - '**/*.py'
               - 'requirements.txt'
               - 'pyproject.toml'
@@ -103,43 +133,43 @@ jobs:
               - '**/setup.cfg'
               - '**/Pipfile'
               - '**/poetry.lock'
-            rust:
+            rustfiles:
               - '**/*.rs'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - '**/Cargo.toml'
               - '**/Cargo.lock'
-            docker:
+            dockerfiles:
               - '**/Dockerfile*'
               - '**/*.dockerfile'
               - 'docker-compose*.yml'
               - 'docker-compose*.yaml'
               - '.dockerignore'
-            docs:
+            docsfiles:
               - '**/*.md'
               - '**/*.rst'
               - '**/*.txt'
               - 'docs/**'
               - '.github/**/*.md'
-            workflows:
+            workflowfiles:
               - '.github/workflows/**'
               - '.github/actions/**'
 
       - name: Debug outputs
         run: |
-          echo "Go files changed: ${{ steps.filter.outputs.go }}"
-          echo "Frontend files changed: ${{ steps.filter.outputs.frontend }}"
-          echo "Python files changed: ${{ steps.filter.outputs.python }}"
-          echo "Rust files changed: ${{ steps.filter.outputs.rust }}"
-          echo "Docker files changed: ${{ steps.filter.outputs.docker }}"
-          echo "Docs files changed: ${{ steps.filter.outputs.docs }}"
-          echo "Workflow files changed: ${{ steps.filter.outputs.workflows }}"
+          echo "Go files changed: ${{ steps.filter.outputs.gofiles }}"
+          echo "Frontend files changed: ${{ steps.filter.outputs.frontendfiles }}"
+          echo "Python files changed: ${{ steps.filter.outputs.pythonfiles }}"
+          echo "Rust files changed: ${{ steps.filter.outputs.rustfiles }}"
+          echo "Docker files changed: ${{ steps.filter.outputs.dockerfiles }}"
+          echo "Docs files changed: ${{ steps.filter.outputs.docsfiles }}"
+          echo "Workflow files changed: ${{ steps.filter.outputs.workflowfiles }}"
 
       - name: Determine workflow execution
         id: execution
         run: |
           # Check if we should skip CI based on commit message
-          if [[ "${{ github.event.head_commit.message }}" =~ \[skip\ ci\] ]] || [[ "${{ github.event.head_commit.message }}" =~ \[ci\ skip\] ]]; then
+          if [[ "$GITHUB_HEAD_COMMIT_MESSAGE" =~ \[skip\ ci\] ]] || [[ "$GITHUB_HEAD_COMMIT_MESSAGE" =~ \[ci\ skip\] ]]; then
             echo "skip_ci=true" >> $GITHUB_OUTPUT
             echo "Skipping CI due to commit message"
           else
@@ -148,18 +178,18 @@ jobs:
 
           # Set execution flags
           echo "should_lint=true" >> $GITHUB_OUTPUT
-          echo "should_test_go=${{ steps.filter.outputs.go }}" >> $GITHUB_OUTPUT
-          echo "should_test_frontend=${{ steps.filter.outputs.frontend }}" >> $GITHUB_OUTPUT
-          echo "should_test_python=${{ steps.filter.outputs.python }}" >> $GITHUB_OUTPUT
-          echo "should_test_rust=${{ steps.filter.outputs.rust }}" >> $GITHUB_OUTPUT
-          echo "should_test_docker=${{ steps.filter.outputs.docker }}" >> $GITHUB_OUTPUT
+          echo "should_test_go=${{ steps.filter.outputs.gofiles }}" >> $GITHUB_OUTPUT
+          echo "should_test_frontend=${{ steps.filter.outputs.frontendfiles }}" >> $GITHUB_OUTPUT
+          echo "should_test_python=${{ steps.filter.outputs.pythonfiles }}" >> $GITHUB_OUTPUT
+          echo "should_test_rust=${{ steps.filter.outputs.rustfiles }}" >> $GITHUB_OUTPUT
+          echo "should_test_docker=${{ steps.filter.outputs.dockerfiles }}" >> $GITHUB_OUTPUT
 
   # Code quality and linting
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.workflows_files == 'true' || needs.detect-changes.outputs.go_files == 'true' || needs.detect-changes.outputs.frontend_files == 'true' || needs.detect-changes.outputs.python_files == 'true' || needs.detect-changes.outputs.rust_files == 'true' || needs.detect-changes.outputs.docs_files == 'true'
+    if: needs.detect-changes.outputs.workflowfiles == 'true' || needs.detect-changes.outputs.gofiles == 'true' || needs.detect-changes.outputs.frontendfiles == 'true' || needs.detect-changes.outputs.pythonfiles == 'true' || needs.detect-changes.outputs.rustfiles == 'true' || needs.detect-changes.outputs.docsfiles == 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -167,14 +197,14 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        if: needs.detect-changes.outputs.go_files == 'true'
+        if: needs.detect-changes.outputs.gofiles == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Set up Node.js
-        if: needs.detect-changes.outputs.frontend_files == 'true'
+        if: needs.detect-changes.outputs.frontendfiles == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -185,7 +215,7 @@ jobs:
             **/pnpm-lock.yaml
 
       - name: Set up Python
-        if: needs.detect-changes.outputs.python_files == 'true'
+        if: needs.detect-changes.outputs.pythonfiles == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -195,22 +225,72 @@ jobs:
             **/pyproject.toml
 
       - name: Ensure pip cache directory
-        if: needs.detect-changes.outputs.python_files == 'true'
+        if: needs.detect-changes.outputs.pythonfiles == 'true'
         run: mkdir -p ~/.cache/pip
 
       - name: Set up Rust
-        if: needs.detect-changes.outputs.rust_files == 'true'
+        if: needs.detect-changes.outputs.rustfiles == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Load Super Linter Configuration
+      - name: Wait for PR Automation (for PR events)
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        run: |
+          echo "🔄 Waiting for PR automation to complete..."
+
+          # Wait up to 10 minutes for PR automation to complete
+          max_attempts=60
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            # Check if PR automation workflow has completed
+            echo "Checking for PR automation completion (attempt $((attempt + 1))/$max_attempts)..."
+
+            # Use GitHub API to check if pr-automation workflow has completed
+            pr_automation_status=$(gh api repos/${{ github.repository }}/actions/runs \
+              --jq '.workflow_runs[] | select(.head_sha == "${{ github.event.pull_request.head.sha || github.sha }}" and .name == "PR Automation") | .status' \
+              | head -1)
+
+            if [ "$pr_automation_status" = "completed" ]; then
+              echo "✅ PR automation has completed, proceeding with CI"
+              break
+            elif [ -z "$pr_automation_status" ]; then
+              echo "ℹ️  No PR automation workflow found, proceeding with CI"
+              break
+            else
+              echo "⏳ PR automation status: $pr_automation_status, waiting..."
+              sleep 10
+              attempt=$((attempt + 1))
+            fi
+          done
+
+          if [ $attempt -ge $max_attempts ]; then
+            echo "⚠️  Timeout waiting for PR automation, proceeding with CI anyway"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load CI Super Linter Configuration
         id: super-linter-config
         run: |
-          # Load environment variables from super-linter.env file
-          if [ -f .github/linters/super-linter.env ]; then
-            echo "Loading Super Linter configuration from .github/linters/super-linter.env"
+          # Load environment variables from CI-specific config file
+          if [ -f .github/linters/super-linter-ci.env ]; then
+            echo "Loading CI Super Linter configuration from .github/linters/super-linter-ci.env"
+            # Export all variables from the env file to GitHub environment
+            while IFS='=' read -r key value; do
+              # Skip comments and empty lines
+              if [[ ! "$key" =~ ^[[:space:]]*# && -n "$key" ]]; then
+                # Remove any quotes and whitespace
+                key=$(echo "$key" | xargs)
+                value=$(echo "$value" | xargs)
+                # Export to GitHub environment for use in subsequent steps
+                echo "$key=$value" >> $GITHUB_ENV
+              fi
+            done < .github/linters/super-linter-ci.env
+          elif [ -f .github/linters/super-linter.env ]; then
+            echo "CI config not found, falling back to .github/linters/super-linter.env"
             # Export all variables from the env file to GitHub environment
             while IFS='=' read -r key value; do
               # Skip comments and empty lines
@@ -223,46 +303,33 @@ jobs:
               fi
             done < .github/linters/super-linter.env
           else
-            echo "Warning: .github/linters/super-linter.env not found"
+            echo "Warning: No Super Linter configuration found"
           fi
 
-      - name: Run Super Linter
-        uses: super-linter/super-linter@v8.1.0
+      - name: Run Super Linter (Validation Only)
+        uses: super-linter/super-linter@v7
         env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DEFAULT_BRANCH: ${{ env.GITHUB_REPOSITORY_DEFAULT_BRANCH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check for auto-fixes
-        id: autofix
+      - name: Validation Summary
+        if: always()
         run: |
-          if git diff --quiet; then
-            echo "no_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "no_changes=false" >> $GITHUB_OUTPUT
-            echo "Found auto-fixable issues"
-            git diff --stat
-          fi
-
-      - name: Commit auto-fixes
-        if: steps.autofix.outputs.no_changes == 'false' && github.event_name == 'push'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git commit -m "style: apply automated linting fixes
-
-          Auto-fixes applied by Super Linter during CI workflow.
-
-          Files changed:
-          $(git diff --name-only HEAD~1)"
-          git push
+          echo "# 🔍 CI Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Code validation completed**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Mode**: Validation only (no auto-fixes)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Configuration**: super-linter-ci.env" >> $GITHUB_STEP_SUMMARY
+          echo "- **Event**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
 
   # Go testing
   test-go:
     name: Test Go
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.go_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.gofiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
     strategy:
       matrix:
         go-version: ["1.23", "1.24"]
@@ -308,7 +375,7 @@ jobs:
     name: Test Frontend
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.frontend_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.frontendfiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
 
     steps:
       - name: Checkout repository
@@ -362,7 +429,7 @@ jobs:
     name: Test Python
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.python_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.pythonfiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
@@ -413,7 +480,7 @@ jobs:
     name: Test Rust
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.rust_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.rustfiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
 
     steps:
       - name: Checkout repository
@@ -450,7 +517,7 @@ jobs:
     name: Release Build
     uses: ./.github/workflows/release.yml
     needs: [detect-changes, check-overrides]
-    if: needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.check-overrides.outputs.skip-tests != 'true'
     with:
       release_type: auto
       build_target: all
@@ -462,7 +529,7 @@ jobs:
     name: Test Docker
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.docker_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.dockerfiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
 
     steps:
       - name: Checkout repository
@@ -492,7 +559,7 @@ jobs:
     name: Test Documentation
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.docs_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.docsfiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
 
     steps:
       - name: Checkout repository
@@ -513,7 +580,7 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.check-overrides.outputs.skip-tests != 'true'
     permissions:
       security-events: write
 
@@ -523,8 +590,6 @@ jobs:
 
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        with:
-          languages: go, javascript, python
         continue-on-error: true
 
   # Performance testing
@@ -532,7 +597,7 @@ jobs:
     name: Performance Test
     runs-on: ubuntu-latest
     needs: [detect-changes, check-overrides]
-    if: needs.detect-changes.outputs.go_files == 'true' && needs.check-overrides.outputs.skip_tests != 'true'
+    if: needs.detect-changes.outputs.gofiles == 'true' && needs.check-overrides.outputs.skip-tests != 'true'
 
     steps:
       - name: Checkout repository
@@ -595,13 +660,13 @@ jobs:
           echo "| Performance Test | ${{ needs.performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 📁 Changed Files" >> $GITHUB_STEP_SUMMARY
-          echo "- Go: ${{ needs.detect-changes.outputs.go_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Frontend: ${{ needs.detect-changes.outputs.frontend_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Python: ${{ needs.detect-changes.outputs.python_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Rust: ${{ needs.detect-changes.outputs.rust_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Docker: ${{ needs.detect-changes.outputs.docker_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Docs: ${{ needs.detect-changes.outputs.docs_files }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Workflows: ${{ needs.detect-changes.outputs.workflows_files }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Go: ${{ needs.detect-changes.outputs.gofiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: ${{ needs.detect-changes.outputs.frontendfiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Python: ${{ needs.detect-changes.outputs.pythonfiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Rust: ${{ needs.detect-changes.outputs.rustfiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker: ${{ needs.detect-changes.outputs.dockerfiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Docs: ${{ needs.detect-changes.outputs.docsfiles }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflows: ${{ needs.detect-changes.outputs.workflowfiles }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Check overall status
         run: |
@@ -611,7 +676,7 @@ jobs:
              [[ "${{ needs.test-python.result }}" == "failure" ]] ||
              [[ "${{ needs.test-rust.result }}" == "failure" ]] ||
              [[ "${{ needs.test-docker.result }}" == "failure" ]] ||
-             [[ "${{ needs.matrix-build.result }}" == "failure" ]]; then
+             [[ "${{ needs.release-build.result }}" == "failure" ]]; then
             echo "❌ CI Pipeline failed"
             exit 1
           else

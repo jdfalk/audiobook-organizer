@@ -1,3 +1,7 @@
+# file: .github/linters/.eslintrc.yml
+# version: 1.0.0
+# guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
+
 extends:
   - eslint:recommended
   - "@typescript-eslint/recommended"
@@ -49,7 +53,10 @@ rules:
       objects: always-multiline
       imports: always-multiline
       exports: always-multiline
-      functions: never
+      functions: always-multiline
+  no-multi-spaces: error
+  keyword-spacing: error
+  space-before-blocks: error
   object-curly-spacing:
     - error
     - always
@@ -57,23 +64,6 @@ rules:
     - error
     - never
   computed-property-spacing:
-    - error
-    - never
-  func-call-spacing:
-    - error
-    - never
-  key-spacing:
-    - error
-    - beforeColon: false
-      afterColon: true
-  keyword-spacing:
-    - error
-    - before: true
-      after: true
-  space-before-blocks:
-    - error
-    - always
-  space-before-function-paren:
     - error
     - never
   space-in-parens:
@@ -84,12 +74,55 @@ rules:
     - error
     - words: true
       nonwords: false
+  arrow-spacing: error
+  block-spacing: error
+  brace-style:
+    - error
+    - 1tbs
+    - allowSingleLine: true
+  camelcase: error
+  comma-spacing:
+    - error
+    - before: false
+      after: true
+  comma-style:
+    - error
+    - last
+  dot-notation: error
+  func-call-spacing:
+    - error
+    - never
+  key-spacing:
+    - error
+    - beforeColon: false
+      afterColon: true
+  no-multiple-empty-lines:
+    - error
+    - max: 2
+      maxEOF: 1
+  no-whitespace-before-property: error
+  object-property-newline:
+    - error
+    - allowAllPropertiesOnSameLine: true
+  padded-blocks:
+    - error
+    - never
+  rest-spread-spacing:
+    - error
+    - never
+  semi-spacing:
+    - error
+    - before: false
+      after: true
+  space-before-function-paren:
+    - error
+    - anonymous: always
+      named: never
+      asyncArrow: always
   spaced-comment:
     - error
     - always
-  "@typescript-eslint/no-unused-vars":
+  switch-colon-spacing: error
+  template-curly-spacing:
     - error
-    - argsIgnorePattern: "^_"
-  "@typescript-eslint/explicit-function-return-type": off
-  "@typescript-eslint/explicit-module-boundary-types": off
-  "@typescript-eslint/no-explicit-any": warn
+    - never
