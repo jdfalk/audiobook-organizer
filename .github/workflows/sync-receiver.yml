@@ -77,6 +77,11 @@ jobs:
             echo "verbose_logging=${{ inputs.verbose_logging }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Install Python dependencies
+        run: |
+          echo "🐍 Installing Python dependencies for sync script..."
+          pip3 install pyyaml
+
       - name: Sync files based on type
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
