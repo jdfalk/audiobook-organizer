@@ -1,15 +1,26 @@
 # file: .github/workflow-config.yaml
-# version: 1.0.0
-# guid: a7b8c9d0-e1f2-3456-7890-123456789abc
+# version: 2.0.0
+# guid: e5f6a7b8-c9d0-1234-ef56-789012345678
 
-# Repository-Specific Workflow Configuration for audiobook-organizer
-# This file configures the workflow system for this specific repository
+# Modern Workflow Configuration
+# This file configures the modernized workflow system for cross-repository automation
 
 build:
   # Language version matrices
   go_versions:
+    - "1.22"
     - "1.23"
     - "1.24"
+
+  python_versions:
+    - "3.11"
+    - "3.12"
+    - "3.13"
+
+  node_versions:
+    - "20"
+    - "22"
+    - "24"
 
   # Platform support
   platforms:
@@ -19,68 +30,182 @@ build:
   operating_systems:
     - "ubuntu-latest"
     - "macos-latest"
+    # - "windows-latest"
 
-  # Feature flags specific to audiobook-organizer
-  enable_protobuf: false
+  # Feature flags
+  enable_protobuf: true
   enable_docker: true
   enable_cross_compile: true
-  enable_coverage: true
+  enable_coverage: false
   enable_security_scan: true
 
-# Repository information
-repository:
-  name: "audiobook-organizer"
-  type: "go"
-  main_language: "go"
-  has_docker: true
-  has_protobuf: false
-  has_database: false
+# Repository sync configuration
+repositories:
+  - name: "gcommon"
+    url: "https://github.com/jdfalk/gcommon"
+    sync_enabled: true
+    custom_build_config:
+      go_versions: ["1.23", "1.24"]
+      enable_protobuf: true
+      enable_docker: true
 
-# Build configuration
-build_config:
-  docker:
+  - name: "subtitle-manager"
+    url: "https://github.com/jdfalk/subtitle-manager"
+    sync_enabled: true
+    custom_build_config:
+      go_versions: ["1.23", "1.24"]
+      enable_protobuf: true
+      enable_docker: true
+
+  - name: "audiobook-organizer"
+    url: "https://github.com/jdfalk/audiobook-organizer"
+    sync_enabled: true
+    custom_build_config:
+      go_versions: ["1.23", "1.24"]
+      enable_protobuf: false
+      enable_docker: true
+
+  - name: "copilot-agent-util-rust"
+    url: "https://github.com/jdfalk/copilot-agent-util-rust"
+    sync_enabled: true
+    custom_build_config:
+      rust_versions: ["1.75", "1.76", "1.77"]
+      enable_protobuf: false
+      enable_docker: true
+
+# Sync configuration
+sync:
+  auto_sync: true
+  sync_on_push: true
+  sync_on_schedule: true
+
+  # Paths to sync across repositories
+  sync_paths:
+    - ".github/workflows/ci.yml"
+    - ".github/workflows/docs-automation.yml"
+    - ".github/workflows/release-go.yml"
+    - ".github/workflows/release-rust.yml"
+    - ".github/workflows/release-python.yml"
+    - ".github/workflows/release-javascript.yml"
+    - ".github/workflows/release-typescript.yml"
+    - ".github/workflows/release-docker.yml"
+    - ".github/workflows/release.yml"
+    - ".github/workflows/pr-automation.yml"
+    - ".github/workflows/commit-override-handler.yml"
+    - ".github/workflows/unified-automation.yml"
+    - ".github/workflows/security.yml"
+    - ".github/instructions/"
+    - ".github/prompts/"
+    - ".github/linters/"
+    - ".github/dependabot.yml"
+    - ".github/copilot-instructions.md"
+    - ".pre-commit-config.yaml"
+    - "doc_update_manager.py"
+    - "scripts/create-doc-update.sh"
+    - "scripts/workflow_manager.py"
+    - "labels.json"
+    - "labels.md"
+    - "COSIGN_VERIFICATION.md"
+    - "cosign.pub"
+
+  # Files to explicitly exclude from sync (repo-specific configs)
+  exclude_files:
+    - ".github/workflow-config.yaml" # Each repo has its own config
+    - ".github/linters/super-linter-ci.env" # Repo-specific linter config
+    - ".github/linters/.eslintrc.yml" # Repo-specific ESLint config
+    - ".github/unified-automation-config.json" # Repo-specific automation config
+    - "go.mod" # Language-specific dependency files
+    - "go.sum" # Language-specific dependency files
+    - "Cargo.toml" # Rust-specific config
+    - "Cargo.lock" # Rust-specific lockfile
+    - "package.json" # JavaScript/npm config
+    - "package-lock.json" # npm lockfile
+    - "requirements.txt" # Python dependencies (repo-specific)
+    - "pyproject.toml" # Python project config
+    - "buf.yaml" # Protocol buffer config (repo-specific)
+    - "buf.gen.yaml" # Protocol buffer generation config (repo-specific)
+    - ".github/doc-updates/" # Repository-specific documentation updates
+    - "proto/" # Protocol buffer definitions (repo-specific)
+    - "sdks/" # Generated SDK output (repo-specific)
+
+  # Exclusions to prevent sync loops
+  exclude_repos:
+    - "ghcommon" # Prevent self-syncing
+
+  # Sync schedule
+  schedule: "0 0 * * 0" # Weekly on Sunday
+
+# Automation features
+automation:
+  issue_management:
     enabled: true
-    multi_stage: true
-    platforms:
-      - "linux/amd64"
-      - "linux/arm64"
+    auto_process: true
+    migration_enabled: true
 
-  protobuf:
-    enabled: false
+  dependency_updates:
+    enabled: true
+    auto_merge_minor: false
+    schedule: "0 0 * * 1" # Weekly on Monday
 
-  testing:
-    coverage_threshold: 75
-    run_integration_tests: true
-    run_docker_tests: false
+  security_scanning:
+    enabled: true
+    auto_fix: false
+    schedule: "0 0 * * 2" # Weekly on Tuesday
 
 # Quality gates
 quality:
-  coverage_threshold: 75
+  coverage_threshold: 80
   security_scan_required: true
   lint_required: true
   tests_required: true
 
-  # Go-specific quality rules
-  go_vet_required: true
-  staticcheck_required: true
-  golangci_lint_required: true
+  # Branch protection rules
+  branch_protection:
+    required_status_checks:
+      - "Matrix Build System"
+      - "Lint Code"
+      - "Security Scan"
+
+    require_code_review: true
+    dismiss_stale_reviews: true
+    require_review_from_codeowners: true
+
+# Notification settings
+notifications:
+  slack:
+    enabled: false
+    webhook_url: "" # Set via secrets
+    channels:
+      success: "#ci-success"
+      failure: "#ci-failure"
+
+  email:
+    enabled: false
+    recipients: []
+
+  github:
+    enabled: true
+    use_step_summary: true
+    create_issues_on_failure: false
+
+# Performance settings
+performance:
+  cache_enabled: true
+  parallel_jobs: 4
+  timeout_minutes: 60
+
+  # Matrix job limits
+  max_go_jobs: 15
+  max_python_jobs: 15
+  max_frontend_jobs: 15
+  max_docker_jobs: 4
 
 # Development settings
 development:
   debug_mode: false
   verbose_logging: false
+  dry_run_default: false
 
-  # Go-specific settings
-  go_mod_tidy_check: true
-  go_fmt_check: true
-  go_imports_check: true
-
-# Performance settings
-performance:
-  cache_enabled: true
-  parallel_jobs: 2
-  timeout_minutes: 20
-
-  # Go-specific performance
-  go_build_cache: true
-  go_test_cache: true
+  # Local development
+  skip_slow_tests: false
+  use_local_cache: true
