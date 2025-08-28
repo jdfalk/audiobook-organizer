@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 1.18.0
+# version: 1.19.0
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 name: Continuous Integration
@@ -272,6 +272,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Debug Linter Files
+        run: |
+          echo "🔍 Debugging Super Linter file access issue..."
+          echo ""
+          echo "📁 Contents of .github/linters directory:"
+          ls -la .github/linters/ || echo "❌ Failed to list .github/linters/"
+          echo ""
+          echo "📋 Checking for .eslintrc.yml file:"
+          if [ -f .github/linters/.eslintrc.yml ]; then
+            echo "✅ .eslintrc.yml exists at .github/linters/.eslintrc.yml"
+            echo "📊 File size: $(stat -c%s .github/linters/.eslintrc.yml) bytes"
+            echo "🔒 File permissions: $(stat -c%A .github/linters/.eslintrc.yml)"
+            echo "📄 First 10 lines of .eslintrc.yml:"
+            head -10 .github/linters/.eslintrc.yml
+          else
+            echo "❌ .eslintrc.yml NOT found at .github/linters/.eslintrc.yml"
+          fi
+          echo ""
+          echo "🌍 Current working directory: $(pwd)"
+          echo "🗂️  Directory structure around .github:"
+          find .github -name "*.yml" -o -name "*.yaml" | head -20
+
       - name: Load CI Super Linter Configuration
         id: super-linter-config
         run: |
@@ -305,12 +327,63 @@ jobs:
           else
             echo "Warning: No Super Linter configuration found"
           fi
+          echo ""
+          echo "🔧 Super Linter Configuration Variables:"
+          echo "LINTER_RULES_PATH=${LINTER_RULES_PATH:-not set} (CRITICAL for container file access)"
+          echo "JAVASCRIPT_ES_CONFIG_FILE=${JAVASCRIPT_ES_CONFIG_FILE:-not set}"
+          echo "TYPESCRIPT_ES_CONFIG_FILE=${TYPESCRIPT_ES_CONFIG_FILE:-not set}"
+          echo "VALIDATE_JAVASCRIPT_ES=${VALIDATE_JAVASCRIPT_ES:-not set}"
+          echo "VALIDATE_TYPESCRIPT_ES=${VALIDATE_TYPESCRIPT_ES:-not set}"
+          echo "DEFAULT_BRANCH=${DEFAULT_BRANCH:-not set}"
+          echo ""
+          echo "🐳 Container file path mapping analysis:"
+          if [ -n "${LINTER_RULES_PATH}" ]; then
+            echo "✅ LINTER_RULES_PATH is set to: ${LINTER_RULES_PATH}"
+            echo "📁 Checking if path exists: $([ -d "${LINTER_RULES_PATH}" ] && echo 'YES' || echo 'NO')"
+            if [ -d "${LINTER_RULES_PATH}" ]; then
+              echo "📋 Contents of LINTER_RULES_PATH:"
+              ls -la "${LINTER_RULES_PATH}/"
+            fi
+          else
+            echo "❌ LINTER_RULES_PATH is not set - this may cause Super Linter to fail finding config files!"
+          fi
 
       - name: Run Super Linter (Validation Only)
         uses: super-linter/super-linter@v7
         env:
           DEFAULT_BRANCH: ${{ env.GITHUB_REPOSITORY_DEFAULT_BRANCH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Debug Super Linter Results
+        if: always()
+        run: |
+          echo "🐳 Super Linter Container Environment Debug:"
+          echo ""
+          echo "🌍 Active environment variables relevant to Super Linter:"
+          env | grep -E "(JAVASCRIPT|TYPESCRIPT|ESLINT|CONFIG|VALIDATE)" | sort
+          echo ""
+          echo "📊 Super Linter Log Files (if available):"
+          find . -name "*super-linter*" -type f 2>/dev/null || echo "No Super Linter log files found"
+          echo ""
+          echo "🔍 Checking if Super Linter created any logs in common locations:"
+          for log_path in "/tmp/lint.log" "./super-linter.log" "./.github/super-linter.log" "/github/workspace/super-linter.log"; do
+            if [ -f "$log_path" ]; then
+              echo "📄 Found log at: $log_path"
+              echo "Last 50 lines:"
+              tail -50 "$log_path" || echo "Failed to read $log_path"
+              echo "---"
+            fi
+          done
+          echo ""
+          echo "🗂️  Working directory contents:"
+          ls -la . | head -20
+          echo ""
+          echo "🔧 Container volume mapping debugging:"
+          echo "Current working directory inside runner: $(pwd)"
+          echo "Attempting to simulate Super Linter's view of files:"
+          echo "  - .github directory exists: $([ -d .github ] && echo 'YES' || echo 'NO')"
+          echo "  - .github/linters directory exists: $([ -d .github/linters ] && echo 'YES' || echo 'NO')"
+          echo "  - .eslintrc.yml exists: $([ -f .github/linters/.eslintrc.yml ] && echo 'YES' || echo 'NO')"
 
       - name: Validation Summary
         if: always()
