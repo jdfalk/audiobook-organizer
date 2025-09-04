@@ -208,7 +208,7 @@ jobs:
 
       - name: Attest SBOM
         if: needs.build-docker.outputs.image-digest != ''
-        uses: actions/attest-sbom@v2
+        uses: actions/attest-sbom@v3
         with:
           subject-name: ${{ inputs.registry }}/${{ inputs.image-name }}
           subject-digest: ${{ needs.build-docker.outputs.image-digest }}
