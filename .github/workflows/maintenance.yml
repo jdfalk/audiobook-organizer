@@ -203,7 +203,7 @@ jobs:
 
       - name: Set up Python
         if: matrix.language == 'python' && matrix.condition == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
