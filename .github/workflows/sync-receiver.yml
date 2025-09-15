@@ -6,11 +6,12 @@
 # All changes should be made in jdfalk/ghcommon and will be synced to other repositories
 # Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/sync-receiver.yml
 
-name: Sync Receiver
+name: Sync Receiver (DISABLED)
 
 on:
-  repository_dispatch:
-    types: [sync-from-ghcommon]
+  # DISABLED: Manual file management approach adopted
+  # repository_dispatch:
+  #   types: [sync-from-ghcommon]
   workflow_dispatch:
     inputs:
       sync_type:
