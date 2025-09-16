@@ -1,14 +1,18 @@
 <!-- file: .github/instructions/security.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: sec12345-e89b-12d3-a456-426614174000 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**/*.{yml,yaml} **/*.{sh,bash} **/*.{js,ts,py,go} **/Dockerfile* **/docker-compose*.yml"
 description: |
   Security guidelines and best practices for all Copilot/AI agents and VS Code Copilot customization. These rules apply to all code, configurations, and workflows to maintain security standards. For details, see the main documentation in `.github/copilot-instructions.md`.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # Security Instructions
 

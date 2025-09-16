@@ -1,14 +1,18 @@
 <!-- file: .github/instructions/pull-request-descriptions.instructions.md -->
-<!-- version: 1.3.0 -->
+<!-- version: 1.3.1 -->
 <!-- guid: pr2d3567-e89b-12d3-a456-426614174000 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**"
 description: |
   Pull request description format rules for all Copilot/AI agents and VS Code Copilot customization. These rules apply to all pull request descriptions and follow the project's documentation standards. For details, see the main documentation in `.github/copilot-instructions.md`.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # Pull Request Description Instructions
 

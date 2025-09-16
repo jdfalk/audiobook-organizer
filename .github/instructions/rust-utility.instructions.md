@@ -1,7 +1,9 @@
 <!-- file: .github/instructions/rust-utility.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: a1b2c3d4-e5f6-7890-1234-567890abcdef -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 
 applyTo: "\*\*"
@@ -9,6 +11,8 @@ description: |
 Instructions for using the copilot-agent-util Rust utility as the primary tool for development operations. This utility provides superior performance, memory safety, and comprehensive command coverage compared to manual terminal commands.
 
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # Copilot Agent Utility (Rust) - Installation and Command Reference
 

@@ -1,14 +1,18 @@
 <!-- file: .github/instructions/general-coding.instructions.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.0.1 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**"
 description: |
   General coding, documentation, and workflow rules for all Copilot/AI agents and VS Code Copilot customization. These rules apply to all files and languages unless overridden by a more specific instructions file. For details, see the main documentation in `.github/copilot-instructions.md`.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 ---
 

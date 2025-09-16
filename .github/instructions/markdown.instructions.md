@@ -1,14 +1,18 @@
 <!-- file: .github/instructions/markdown.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: e2f8a5b1-9c4d-4e2f-8a5b-4d9c8a5b1e2f -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**/*.md"
 description: |
   Markdown formatting, documentation, and style rules for Copilot/AI agents and VS Code Copilot customization. These rules extend the general instructions in `general-coding.instructions.md` and merge all unique content from the Google Markdown Style Guide.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # Markdown Coding Instructions
 

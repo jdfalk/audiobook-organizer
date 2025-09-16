@@ -1,14 +1,18 @@
 <!-- file: .github/instructions/html-css.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: 2d1e0f9a-8b7c-6d5e-4f3a-2b1c0d9e8f7a -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**/*.{html,css}"
 description: |
   Coding, documentation, and workflow rules for HTML and CSS files, following Google HTML/CSS style guide and general project rules. Reference this for all HTML and CSS code, documentation, and formatting in this repository. All unique content from the Google HTML/CSS Style Guide is merged here.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # HTML/CSS Coding Instructions
 
