@@ -1,9 +1,11 @@
 <!-- file: .github/instructions/javascript.instructions.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.2.1 -->
 <!-- guid: 8e7d6c5b-4a3c-2d1e-0f9a-8b7c6d5e4f3a -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**/*.{js,jsx}"
 description: |
@@ -11,6 +13,8 @@ description: |
 JavaScript Style Guide.
 
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # JavaScript Coding Instructions
 

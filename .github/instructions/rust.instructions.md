@@ -1,12 +1,16 @@
 <!-- file: .github/instructions/rust.instructions.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->
 <!-- guid: b2c3d4e5-f6a7-8901-2345-678901bcdef0 -->
 
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
 ---
 applyTo: "**/*.rs"
 description: |
   Rust coding style and best practices for all Rust source files. Follows official Rust conventions and community standards for safe, idiomatic, and performant Rust code.
 ---
+<!-- markdownlint-enable -->
+<!-- prettier-ignore-end -->
 
 # Rust Code Style Guide
 
