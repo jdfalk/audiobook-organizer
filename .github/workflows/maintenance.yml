@@ -297,7 +297,7 @@ jobs:
     if: needs.detect-project.outputs.should_run_cleanup == 'true'
     steps:
       - name: Cleanup old workflow runs
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -341,7 +341,7 @@ jobs:
             }
 
       - name: Cleanup old releases (keep latest 10)
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -381,7 +381,7 @@ jobs:
             }
 
       - name: Cleanup old artifacts
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -436,7 +436,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check for security advisories
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
