@@ -9,5 +9,4 @@
 
 # Generated files
 workflow-permissions-analysis.json
-**/doc-updates/*.json
-**/processed/*.json
+# Removed legacy doc-update artifacts (deprecated)

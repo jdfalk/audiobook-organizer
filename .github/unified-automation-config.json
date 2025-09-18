@@ -20,15 +20,7 @@
     "duplicate_selection_strategy": "oldest_with_most_activity"
   },
 
-  "docs_update": {
-    "updates_directory": ".github/doc-updates",
-    "dry_run": false,
-    "python_version": "3.11",
-    "cleanup_processed_files": true,
-    "create_pr": false,
-    "auto_merge": false,
-    "continue_on_error": true
-  },
+  
 
   "labeler": {
     "configuration_path": ".github/labeler.yml",
