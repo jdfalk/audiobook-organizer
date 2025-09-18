@@ -191,7 +191,7 @@ jobs:
 
       - name: Set up Go
         if: matrix.language == 'go' && matrix.condition == 'true'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
