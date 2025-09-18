@@ -1,0 +1,53 @@
+{
+  // file: .vscode/tasks.json
+  // version: 1.0.0
+  // guid: 7e9b6a24-3a91-4d3b-9f6c-3a75c4e4f9a2
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Git Add All",
+      "type": "shell",
+      "command": "copilot-agent-util",
+      "args": ["git", "add"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "isBackground": false
+    },
+    {
+      "label": "Git Add All Auto",
+      "type": "shell",
+      "command": "copilot-agent-util",
+      "args": ["git", "add", "."],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "isBackground": false
+    },
+    {
+      "label": "Git Commit Auto",
+      "type": "shell",
+      "command": "copilot-agent-util",
+      "args": ["git", "commit", "-m", "fix: systematic protobuf import fixes"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "isBackground": false
+    },
+    {
+      "label": "Git Push",
+      "type": "shell",
+      "command": "copilot-agent-util",
+      "args": ["git", "push"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "isBackground": false
+    },
+    {
+      "label": "Git Status",
+      "type": "shell",
+      "command": "copilot-agent-util",
+      "args": ["git", "status"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "isBackground": false
+    }
+  ]
+}
