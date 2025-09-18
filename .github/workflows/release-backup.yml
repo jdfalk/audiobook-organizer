@@ -373,7 +373,7 @@ jobs:
 
       - name: Create GitHub Release
         id: create
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -641,7 +641,7 @@ jobs:
           echo "${{ needs.calculate-version.outputs.release_notes }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup old releases (keep last 10)
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
