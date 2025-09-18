@@ -20,8 +20,6 @@
     "duplicate_selection_strategy": "oldest_with_most_activity"
   },
 
-  
-
   "labeler": {
     "configuration_path": ".github/labeler.yml",
     "sync_labels": false,
