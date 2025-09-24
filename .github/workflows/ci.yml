@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 1.18.0
+# version: 1.18.1
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 name: Continuous Integration
@@ -307,7 +307,7 @@ jobs:
           fi
 
       - name: Run Super Linter (Validation Only)
-        uses: super-linter/super-linter@v8
+        uses: super-linter/super-linter@v8.1.0
         env:
           DEFAULT_BRANCH: ${{ env.GITHUB_REPOSITORY_DEFAULT_BRANCH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
