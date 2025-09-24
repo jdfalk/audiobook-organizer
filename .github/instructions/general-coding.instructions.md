@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/general-coding.instructions.md -->
-<!-- version: 2.0.1 -->
+<!-- version: 2.1.0 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -13,8 +13,6 @@ description: |
 ---
 <!-- markdownlint-enable -->
 <!-- prettier-ignore-end -->
-
----
 
 # General Coding Instructions
 
@@ -36,6 +34,7 @@ Copilot customization.
   `.vscode/copilot/`.
 - **ALWAYS check before doing:** Before creating files, running operations, or executing scripts, always check current state first. Make all scripts and operations idempotent by checking if the desired state already exists before making changes.
 - **USE VS CODE TASKS FIRST:** ALWAYS use VS Code tasks when available instead of manual terminal commands. Tasks provide consistent logging, error handling, and automation. Only fall back to manual commands when no appropriate task exists.
+- **🚨 CRITICAL: Always increment file header versions when modifying any file.** When you change any file with a version header, you MUST update the version number according to semantic versioning rules (patch for fixes/typos, minor for features/additions, major for breaking changes). This is mandatory for all files including documentation, templates, workflows, and configuration files.
 
 For more details and the full system, see
 [copilot-instructions.md](../copilot-instructions.md).
