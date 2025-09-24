@@ -58,8 +58,6 @@ def detect_build_requirements():
         flags["has_go"] = True
         matrices["go"] = {
             "include": [
-                {"go-version": "1.22", "os": "ubuntu-latest", "arch": "amd64"},
-                {"go-version": "1.23", "os": "ubuntu-latest", "arch": "amd64"},
                 {
                     "go-version": "1.24",
                     "os": "ubuntu-latest",
@@ -79,11 +77,9 @@ def detect_build_requirements():
         flags["has_python"] = True
         matrices["python"] = {
             "include": [
-                {"python-version": "3.11", "os": "ubuntu-latest"},
-                {"python-version": "3.12", "os": "ubuntu-latest", "primary": True},
-                {"python-version": "3.13", "os": "ubuntu-latest"},
-                {"python-version": "3.12", "os": "macos-latest"},
-                {"python-version": "3.12", "os": "windows-latest"},
+                {"python-version": "3.13", "os": "ubuntu-latest", "primary": True},
+                {"python-version": "3.13", "os": "macos-latest", "primary": False},
+                {"python-version": "3.13", "os": "windows-latest", "primary": False},
             ]
         }
 
