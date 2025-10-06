@@ -1,8 +1,6 @@
-# file: scripts/copilot-firewall/README.md
-
-# version: 1.0.0
-
-# guid: a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p
+<!-- file: scripts/copilot-firewall/README.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p -->
 
 # GitHub Copilot Firewall Allowlist Manager
 

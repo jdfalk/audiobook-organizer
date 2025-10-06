@@ -1,8 +1,6 @@
-# file: scripts/README-notifications.md
-
-# version: 1.1.0
-
-# guid: d4e5f6a7-b8c9-0123-def0-456789012345
+<!-- file: scripts/README-notifications.md -->
+<!-- version: 1.1.0 -->
+<!-- guid: d4e5f6a7-b8c9-0123-def0-456789012345 -->
 
 # GitHub Notifications Cleanup Scripts
 
