@@ -180,7 +180,7 @@ jobs:
 
       - name: Upload Super Linter results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: super-linter-output-${{ github.run_id }}-${{ github.run_attempt }}
           path: super-linter-output/
