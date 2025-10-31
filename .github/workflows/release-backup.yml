@@ -337,7 +337,7 @@ jobs:
           mv *.tgz "package-${{ needs.calculate-version.outputs.next_version }}.tgz"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: artifacts-${{ matrix.goos }}-${{ matrix.arch }}
           path: |
@@ -549,7 +549,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload GoReleaser artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: always()
         with:
           name: goreleaser-artifacts

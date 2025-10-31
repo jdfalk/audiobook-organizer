@@ -85,7 +85,7 @@ jobs:
 
       - name: Upload coverage (primary only)
         if: matrix.primary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: python-coverage-${{ matrix.os }}-${{ matrix.python-version }}
           path: coverage.xml
