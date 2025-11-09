@@ -32,12 +32,14 @@ See our detailed planning documents:
 
 - **Safe File Operations**: Copy-first with SHA256 verification, automatic backups, rollback support
 - **File System API**: Directory browsing, .jabexclude management, disk space checking
+- **Real-time Updates**: Server-Sent Events (SSE) for operation progress, status, and logs
+- **Async Operation Queue**: Priority-based background processing with configurable workers
+- **Event Broadcasting**: Automatic client notification for operation updates
 
 ### 🚧 In Progress
 
-- **Real-time Updates**: WebSocket/SSE progress notifications for long operations
-- **Async Operation Queue**: Priority handling and background processing
 - **Enhanced Metadata**: Batch updates, validation, history tracking
+- **Database Backup/Restore**: Automated backup creation and restoration
 
 ### 📋 Planned
 

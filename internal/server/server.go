@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -21,6 +21,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -103,6 +105,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 func (s *Server) setupRoutes() {
 	// Health check endpoint
 	s.router.GET("/api/health", s.healthCheck)
+
+	// Real-time events (SSE)
+	s.router.GET("/api/events", s.handleEvents)
 
 	// API routes
 	api := s.router.Group("/api/v1")
@@ -476,12 +481,12 @@ func (s *Server) browseFilesystem(c *gin.Context) {
 	}
 
 	type FileInfo struct {
-		Name      string `json:"name"`
-		Path      string `json:"path"`
-		IsDir     bool   `json:"is_dir"`
-		Size      int64  `json:"size,omitempty"`
-		ModTime   int64  `json:"mod_time,omitempty"`
-		Excluded  bool   `json:"excluded"`
+		Name     string `json:"name"`
+		Path     string `json:"path"`
+		IsDir    bool   `json:"is_dir"`
+		Size     int64  `json:"size,omitempty"`
+		ModTime  int64  `json:"mod_time,omitempty"`
+		Excluded bool   `json:"excluded"`
 	}
 
 	items := []FileInfo{}
@@ -569,9 +574,9 @@ func (s *Server) createExclusion(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"path":    req.Path,
+		"path":     req.Path,
 		"excluded": true,
-		"file":    jabExcludePath,
+		"file":     jabExcludePath,
 	})
 }
 
@@ -659,17 +664,62 @@ func (s *Server) startScan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
 	var req struct {
 		FolderPath *string `json:"folder_path"`
+		Priority   *int    `json:"priority"`
 	}
 	_ = c.ShouldBindJSON(&req) // optional
+
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	_ = database.GlobalStore.UpdateOperationStatus(op.ID, "queued", 0, 0, "scan requested")
+
+	// Determine priority (default to normal)
+	priority := operations.PriorityNormal
+	if req.Priority != nil {
+		priority = *req.Priority
+	}
+
+	// Create operation function
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		// TODO: Implement actual scan logic here
+		// For now, simulate a scan operation
+		folderPath := "all folders"
+		if req.FolderPath != nil {
+			folderPath = *req.FolderPath
+		}
+
+		_ = progress.Log("info", fmt.Sprintf("Starting scan of %s", folderPath), nil)
+
+		// Simulate scan progress
+		for i := 0; i <= 10; i++ {
+			if progress.IsCanceled() {
+				_ = progress.Log("info", "Scan canceled", nil)
+				return fmt.Errorf("scan canceled")
+			}
+
+			_ = progress.UpdateProgress(i, 10, fmt.Sprintf("Scanning... %d/10", i))
+			time.Sleep(1 * time.Second)
+		}
+
+		_ = progress.Log("info", "Scan completed successfully", nil)
+		return nil
+	}
+
+	// Enqueue the operation
+	if err := operations.GlobalQueue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusAccepted, op)
 }
 
@@ -678,17 +728,62 @@ func (s *Server) startOrganize(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
 	var req struct {
 		FolderPath *string `json:"folder_path"`
+		Priority   *int    `json:"priority"`
 	}
 	_ = c.ShouldBindJSON(&req)
+
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "organize", req.FolderPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	_ = database.GlobalStore.UpdateOperationStatus(op.ID, "queued", 0, 0, "organize requested")
+
+	// Determine priority (default to normal)
+	priority := operations.PriorityNormal
+	if req.Priority != nil {
+		priority = *req.Priority
+	}
+
+	// Create operation function
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		// TODO: Implement actual organize logic here
+		// For now, simulate an organize operation
+		folderPath := "all folders"
+		if req.FolderPath != nil {
+			folderPath = *req.FolderPath
+		}
+
+		_ = progress.Log("info", fmt.Sprintf("Starting organize of %s", folderPath), nil)
+
+		// Simulate organize progress
+		for i := 0; i <= 10; i++ {
+			if progress.IsCanceled() {
+				_ = progress.Log("info", "Organize canceled", nil)
+				return fmt.Errorf("organize canceled")
+			}
+
+			_ = progress.UpdateProgress(i, 10, fmt.Sprintf("Organizing... %d/10", i))
+			time.Sleep(1 * time.Second)
+		}
+
+		_ = progress.Log("info", "Organize completed successfully", nil)
+		return nil
+	}
+
+	// Enqueue the operation
+	if err := operations.GlobalQueue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusAccepted, op)
 }
 
@@ -711,8 +806,15 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
 	id := c.Param("id")
-	if err := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "operation canceled by user"); err != nil {
+
+	// Cancel via queue (which will update database)
+	if err := operations.GlobalQueue.Cancel(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -753,6 +855,15 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
+}
+
+// handleEvents handles Server-Sent Events (SSE) for real-time updates
+func (s *Server) handleEvents(c *gin.Context) {
+	if realtime.GlobalHub == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "event hub not initialized"})
+		return
+	}
+	realtime.GlobalHub.HandleSSE(c)
 }
 
 // GetDefaultServerConfig returns default server configuration
