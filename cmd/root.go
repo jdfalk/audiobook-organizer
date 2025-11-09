@@ -1,3 +1,7 @@
+// file: cmd/root.go
+// version: 1.2.0
+// guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
+
 package cmd
 
 import (
@@ -9,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/jdfalk/audiobook-organizer/internal/server"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -17,6 +22,8 @@ import (
 var cfgFile string
 var rootDir string
 var databasePath string
+var databaseType string
+var enableSQLite bool
 var playlistDir string
 
 // rootCmd represents the base command when called without any subcommands
@@ -40,11 +47,12 @@ var scanCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := database.Initialize(config.AppConfig.DatabasePath); err != nil {
+		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.Close()
+		defer database.CloseStore()
 
+		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
 
 		// Start scanning
@@ -71,11 +79,12 @@ var playlistCmd = &cobra.Command{
 	Long:  `Generate iTunes-compatible playlists for each audiobook series.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := database.Initialize(config.AppConfig.DatabasePath); err != nil {
+		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.Close()
+		defer database.CloseStore()
 
+		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Println("Generating playlists for audiobook series...")
 
 		// Generate playlists
@@ -95,11 +104,12 @@ var tagCmd = &cobra.Command{
 	Long:  `Update the metadata tags of audio files to include series information.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := database.Initialize(config.AppConfig.DatabasePath); err != nil {
+		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.Close()
+		defer database.CloseStore()
 
+		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Println("Updating audio file tags with series information...")
 
 		// Update tags
@@ -122,12 +132,13 @@ var organizeCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := database.Initialize(config.AppConfig.DatabasePath); err != nil {
+		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.Close()
+		defer database.CloseStore()
 
 		// Step 1: Scan files
+		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
 		books, err := scanner.ScanDirectory(config.AppConfig.RootDir)
 		if err != nil {
@@ -161,6 +172,37 @@ var organizeCmd = &cobra.Command{
 	},
 }
 
+// serveCmd represents the serve command
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Start the web server",
+	Long:  `Start the web server to provide a web interface for audiobook management.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Initialize database
+		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+			return fmt.Errorf("failed to initialize database: %w", err)
+		}
+		defer database.CloseStore()
+
+		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
+		fmt.Println("Starting audiobook organizer web server...")
+
+		// Create and start server
+		srv := server.NewServer()
+		cfg := server.GetDefaultServerConfig()
+
+		// Override with command line flags if provided
+		if port := cmd.Flag("port").Value.String(); port != "" {
+			cfg.Port = port
+		}
+		if host := cmd.Flag("host").Value.String(); host != "" {
+			cfg.Host = host
+		}
+
+		return srv.Start(cfg)
+	},
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately
 func Execute() error {
 	return rootCmd.Execute()
@@ -171,17 +213,26 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.audiobook-organizer.yaml)")
 	rootCmd.PersistentFlags().StringVar(&rootDir, "dir", "", "root directory containing audiobooks")
-	rootCmd.PersistentFlags().StringVar(&databasePath, "db", "audiobooks.db", "path to SQLite database")
+	rootCmd.PersistentFlags().StringVar(&databasePath, "db", "audiobooks.pebble", "path to database (default: audiobooks.pebble for PebbleDB)")
+	rootCmd.PersistentFlags().StringVar(&databaseType, "db-type", "pebble", "database type: pebble (default) or sqlite")
+	rootCmd.PersistentFlags().BoolVar(&enableSQLite, "enable-sqlite3-i-know-the-risks", false, "enable SQLite3 database (WARNING: cross-compilation issues, PebbleDB recommended)")
 	rootCmd.PersistentFlags().StringVar(&playlistDir, "playlists", "playlists", "directory to store generated playlists")
 
 	viper.BindPFlag("root_dir", rootCmd.PersistentFlags().Lookup("dir"))
 	viper.BindPFlag("database_path", rootCmd.PersistentFlags().Lookup("db"))
+	viper.BindPFlag("database_type", rootCmd.PersistentFlags().Lookup("db-type"))
+	viper.BindPFlag("enable_sqlite3_i_know_the_risks", rootCmd.PersistentFlags().Lookup("enable-sqlite3-i-know-the-risks"))
 	viper.BindPFlag("playlist_dir", rootCmd.PersistentFlags().Lookup("playlists"))
 
 	rootCmd.AddCommand(scanCmd)
 	rootCmd.AddCommand(playlistCmd)
 	rootCmd.AddCommand(tagCmd)
 	rootCmd.AddCommand(organizeCmd)
+	rootCmd.AddCommand(serveCmd)
+
+	// Add serve command specific flags
+	serveCmd.Flags().String("port", "8080", "port to run the web server on")
+	serveCmd.Flags().String("host", "localhost", "host to bind the web server to")
 }
 
 func initConfig() {

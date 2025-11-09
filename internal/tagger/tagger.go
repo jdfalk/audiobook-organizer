@@ -1,3 +1,7 @@
+// file: internal/tagger/tagger.go
+// version: 1.1.0
+// guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
+
 package tagger
 
 import (

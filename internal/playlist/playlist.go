@@ -1,3 +1,7 @@
+// file: internal/playlist/playlist.go
+// version: 1.1.0
+// guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
+
 package playlist
 
 import (

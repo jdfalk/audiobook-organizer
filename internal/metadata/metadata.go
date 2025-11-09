@@ -1,3 +1,7 @@
+// file: internal/metadata/metadata.go
+// version: 1.1.0
+// guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
+
 package metadata
 
 import (
