@@ -9,9 +9,9 @@
 - [x] ✅ **Backend**: Async operation queue system with priority handling
 - [x] ✅ **Backend**: WebSocket/SSE for real-time operation updates
 - [x] ✅ **Backend**: Database backup and restore functionality
+- [x] ✅ **Backend**: Enhanced metadata API (batch updates, history, validation)
 
 - [ ] 🟡 **General**: Configure GitHub workflows
-- [ ] 🟡 **Backend**: Enhanced metadata API (batch updates, history, validation)
 - [ ] 🟡 **Frontend**: React app setup with TypeScript and Material-UI
 - [ ] 🟡 **Frontend**: Library browser with grid/list views
 - [ ] 🟡 **Frontend**: Metadata editor with inline editing

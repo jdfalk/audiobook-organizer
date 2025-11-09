@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	ulid "github.com/oklog/ulid/v2"
@@ -152,6 +153,12 @@ func (s *Server) setupRoutes() {
 		api.GET("/backup/list", s.listBackups)
 		api.POST("/backup/restore", s.restoreBackup)
 		api.DELETE("/backup/:filename", s.deleteBackup)
+
+		// Enhanced metadata routes
+		api.POST("/metadata/batch-update", s.batchUpdateMetadata)
+		api.POST("/metadata/validate", s.validateMetadata)
+		api.GET("/metadata/export", s.exportMetadata)
+		api.POST("/metadata/import", s.importMetadata)
 	}
 
 	// Serve static files (React frontend)
@@ -964,6 +971,132 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "backup deleted successfully"})
+}
+
+// batchUpdateMetadata handles batch metadata updates with validation
+func (s *Server) batchUpdateMetadata(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		Updates  []metadata.MetadataUpdate `json:"updates" binding:"required"`
+		Validate bool                      `json:"validate"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	errors, successCount := metadata.BatchUpdateMetadata(req.Updates, database.GlobalStore, req.Validate)
+
+	response := gin.H{
+		"success_count": successCount,
+		"total_count":   len(req.Updates),
+	}
+
+	if len(errors) > 0 {
+		errorMessages := make([]string, len(errors))
+		for i, err := range errors {
+			errorMessages[i] = err.Error()
+		}
+		response["errors"] = errorMessages
+		c.JSON(http.StatusPartialContent, response)
+	} else {
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+// validateMetadata validates metadata updates without applying them
+func (s *Server) validateMetadata(c *gin.Context) {
+	var req struct {
+		Updates map[string]interface{} `json:"updates" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	rules := metadata.DefaultValidationRules()
+	errors := metadata.ValidateMetadata(req.Updates, rules)
+
+	if len(errors) > 0 {
+		errorMessages := make([]string, len(errors))
+		for i, err := range errors {
+			errorMessages[i] = err.Error()
+		}
+		c.JSON(http.StatusBadRequest, gin.H{
+			"valid":  false,
+			"errors": errorMessages,
+		})
+	} else {
+		c.JSON(http.StatusOK, gin.H{
+			"valid":   true,
+			"message": "metadata is valid",
+		})
+	}
+}
+
+// exportMetadata exports all audiobook metadata
+func (s *Server) exportMetadata(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get all books
+	books, err := database.GlobalStore.GetAllBooks(0, 0) // No limit/offset
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Export metadata
+	exportData, err := metadata.ExportMetadata(books)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, exportData)
+}
+
+// importMetadata imports audiobook metadata
+func (s *Server) importMetadata(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		Data     map[string]interface{} `json:"data" binding:"required"`
+		Validate bool                   `json:"validate"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	importCount, errors := metadata.ImportMetadata(req.Data, database.GlobalStore, req.Validate)
+
+	response := gin.H{
+		"import_count": importCount,
+	}
+
+	if len(errors) > 0 {
+		errorMessages := make([]string, len(errors))
+		for i, err := range errors {
+			errorMessages[i] = err.Error()
+		}
+		response["errors"] = errorMessages
+		c.JSON(http.StatusPartialContent, response)
+	} else {
+		c.JSON(http.StatusOK, response)
+	}
 }
 
 // GetDefaultServerConfig returns default server configuration

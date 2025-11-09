@@ -79,9 +79,20 @@
   - Support for both PebbleDB (directory) and SQLite (file) databases
   - Automatic cleanup of old backups (configurable retention)
   - Backup API endpoints (create, list, restore, delete)
-- Enhanced server API (`internal/server/server.go` v1.6.0)
+- Enhanced server API (`internal/server/server.go` v1.6.0 → v1.7.0)
   - POST `/api/v1/backup/create` - Create new backup
   - GET `/api/v1/backup/list` - List all backups
   - POST `/api/v1/backup/restore` - Restore from backup
   - DELETE `/api/v1/backup/:filename` - Delete backup file
+  - POST `/api/v1/metadata/batch-update` - Batch update metadata with validation
+  - POST `/api/v1/metadata/validate` - Validate metadata without applying
+  - GET `/api/v1/metadata/export` - Export all metadata
+  - POST `/api/v1/metadata/import` - Import metadata with validation
+- **Enhanced metadata system** (`internal/metadata/enhanced.go`)
+  - Comprehensive validation rules (required fields, length, allowed values, custom validators)
+  - Batch metadata updates with automatic validation
+  - Metadata history tracking (placeholder for future database integration)
+  - Safe file metadata writing with backup support (stub for future audio tag libraries)
+  - Export/import functionality for bulk metadata operations
+  - Type-safe field extraction and conversion
 
