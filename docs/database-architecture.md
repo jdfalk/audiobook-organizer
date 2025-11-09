@@ -11,6 +11,14 @@ The audiobook organizer uses an abstraction layer to support multiple database b
 - **PebbleDB** (Default, Recommended): Pure Go LSM key-value store
 - **SQLite3** (Opt-in, Legacy): Traditional SQL database with cross-compilation challenges
 
+## PebbleDB Keyspace Specification
+
+For the complete prefix/key layout, JSON value schemas, indices, playback tracking, and migration strategy, see the dedicated schema document:
+
+**[PebbleDB Keyspace Schema](database-pebble-schema.md)**
+
+That document formalizes all keys (users, sessions, preferences, authors, series, books, segments, playlists, playback events, progress, stats, operations, migrations) and should be treated as canonical for any new feature touching persistence.
+
 ## Why PebbleDB?
 
 ### Advantages

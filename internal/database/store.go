@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -69,6 +69,42 @@ type Store interface {
 	GetPlaylistBySeriesID(seriesID int) (*Playlist, error)
 	AddPlaylistItem(playlistID, bookID, position int) error
 	GetPlaylistItems(playlistID int) ([]PlaylistItem, error)
+
+	// Advanced (Pebble extended keyspace) - optional no-op for SQLite implementation
+	// Users & Auth
+	CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error)
+	GetUserByID(id string) (*User, error)
+	GetUserByUsername(username string) (*User, error)
+	GetUserByEmail(email string) (*User, error)
+	UpdateUser(user *User) error
+
+	// Sessions
+	CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
+	GetSession(id string) (*Session, error)
+	RevokeSession(id string) error
+	ListUserSessions(userID string) ([]Session, error)
+
+	// Per-user preferences
+	SetUserPreferenceForUser(userID, key, value string) error
+	GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error)
+	GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error)
+
+	// Book segments & merge operations
+	CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error)
+	ListBookSegments(bookNumericID int) ([]BookSegment, error)
+	MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+
+	// Playback events & progress
+	AddPlaybackEvent(event *PlaybackEvent) error
+	ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error)
+	UpdatePlaybackProgress(progress *PlaybackProgress) error
+	GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error)
+
+	// Stats aggregation
+	IncrementBookPlayStats(bookNumericID int, seconds int) error
+	GetBookStats(bookNumericID int) (*BookStats, error)
+	IncrementUserListenStats(userID string, seconds int) error
+	GetUserStats(userID string) (*UserStats, error)
 }
 
 // Common data structures used by all store implementations
@@ -157,6 +193,98 @@ type UserPreference struct {
 	Key       string    `json:"key"`
 	Value     *string   `json:"value,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Extended models (Pebble only; SQLite may ignore)
+
+// User represents an application user (ULID IDs)
+type User struct {
+	ID              string    `json:"id"`
+	Username        string    `json:"username"`
+	Email           string    `json:"email"`
+	PasswordHashAlgo string   `json:"password_hash_algo"`
+	PasswordHash    string    `json:"password_hash"`
+	Roles           []string  `json:"roles"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	Version         int       `json:"version"`
+}
+
+// Session represents an authenticated session token
+type Session struct {
+	ID         string    `json:"id"`
+	UserID     string    `json:"user_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	IP         string    `json:"ip"`
+	UserAgent  string    `json:"user_agent"`
+	Revoked    bool      `json:"revoked"`
+	Version    int       `json:"version"`
+}
+
+// UserPreferenceKV represents per-user preference (key/value)
+type UserPreferenceKV struct {
+	UserID    string    `json:"user_id"`
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Version   int       `json:"version"`
+}
+
+// BookSegment represents a physical file segment of a book
+type BookSegment struct {
+	ID            string    `json:"id"`
+	BookID        int       `json:"book_id"` // link to numeric book ID (legacy)
+	FilePath      string    `json:"file_path"`
+	Format        string    `json:"format"`
+	SizeBytes     int64     `json:"size_bytes"`
+	DurationSec   int       `json:"duration_seconds"`
+	TrackNumber   *int      `json:"track_number,omitempty"`
+	TotalTracks   *int      `json:"total_tracks,omitempty"`
+	Active        bool      `json:"active"`
+	SupersededBy  *string   `json:"superseded_by,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       int       `json:"version"`
+}
+
+// PlaybackEvent immutable event
+type PlaybackEvent struct {
+	UserID        string    `json:"user_id"`
+	BookID        int       `json:"book_id"`
+	SegmentID     string    `json:"segment_id"`
+	PositionSec   int       `json:"position_seconds"`
+	EventType     string    `json:"event_type"` // progress|start|pause|complete
+	PlaySpeed     float64   `json:"play_speed"`
+	CreatedAt     time.Time `json:"created_at"`
+	Version       int       `json:"version"`
+}
+
+// PlaybackProgress latest snapshot
+type PlaybackProgress struct {
+	UserID        string    `json:"user_id"`
+	BookID        int       `json:"book_id"`
+	SegmentID     string    `json:"segment_id"`
+	PositionSec   int       `json:"position_seconds"`
+	Percent       float64   `json:"percent_complete"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       int       `json:"version"`
+}
+
+// BookStats aggregated counters
+type BookStats struct {
+	BookID        int       `json:"book_id"`
+	PlayCount     int       `json:"play_count"`
+	ListenSeconds int       `json:"listen_seconds"`
+	Version       int       `json:"version"`
+}
+
+// UserStats aggregated counters
+type UserStats struct {
+	UserID        string    `json:"user_id"`
+	ListenSeconds int       `json:"listen_seconds"`
+	Version       int       `json:"version"`
 }
 
 // Global store instance

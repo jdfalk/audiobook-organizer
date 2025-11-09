@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 package database
@@ -157,6 +157,36 @@ func (s *SQLiteStore) createTables() error {
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
+
+// ---- Extended interface no-op / minimal implementations for SQLite ----
+// These satisfy the expanded Store interface but SQLite mode does not yet
+// implement advanced features. They return informative errors or empty values.
+
+func (s *SQLiteStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error) {
+	return nil, fmt.Errorf("advanced user management not supported in SQLite mode")
+}
+func (s *SQLiteStore) GetUserByID(id string) (*User, error) { return nil, nil }
+func (s *SQLiteStore) GetUserByUsername(username string) (*User, error) { return nil, nil }
+func (s *SQLiteStore) GetUserByEmail(email string) (*User, error) { return nil, nil }
+func (s *SQLiteStore) UpdateUser(user *User) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) { return nil, fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetSession(id string) (*Session, error) { return nil, nil }
+func (s *SQLiteStore) RevokeSession(id string) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) ListUserSessions(userID string) ([]Session, error) { return []Session{}, nil }
+func (s *SQLiteStore) SetUserPreferenceForUser(userID, key, value string) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error) { return nil, nil }
+func (s *SQLiteStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) { return []UserPreferenceKV{}, nil }
+func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error) { return nil, fmt.Errorf("not supported") }
+func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) { return []BookSegment{}, nil }
+func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) AddPlaybackEvent(event *PlaybackEvent) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error) { return []PlaybackEvent{}, nil }
+func (s *SQLiteStore) UpdatePlaybackProgress(progress *PlaybackProgress) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error) { return nil, nil }
+func (s *SQLiteStore) IncrementBookPlayStats(bookNumericID int, seconds int) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetBookStats(bookNumericID int) (*BookStats, error) { return nil, nil }
+func (s *SQLiteStore) IncrementUserListenStats(userID string, seconds int) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetUserStats(userID string) (*UserStats, error) { return nil, nil }
 
 // Author operations
 
