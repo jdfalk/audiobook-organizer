@@ -94,7 +94,8 @@ api_keys:
 ## Documentation
 
 For more detailed information, see the
-[Technical Design Document](docs/technical_design.md).
+[Technical Design Document](docs/technical_design.md) and the
+[PebbleDB Keyspace Schema](docs/database-pebble-schema.md) for the database layout and persistence model.
 
 ## License
 
