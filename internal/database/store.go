@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -316,6 +316,11 @@ func InitializeStore(dbType, path string, enableSQLite bool) error {
 	// Maintain backwards compatibility with the global DB variable for SQLite
 	if sqliteStore, ok := GlobalStore.(*SQLiteStore); ok {
 		DB = sqliteStore.db
+	}
+
+	// Run migrations to ensure schema is up to date
+	if err := RunMigrations(GlobalStore); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return nil

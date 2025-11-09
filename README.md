@@ -13,21 +13,35 @@ See our detailed planning documents:
 - **[Progress Analysis](docs/current-progress-analysis.md)**: Current state assessment
 - **[Executive Summary](docs/mvp-summary.md)**: High-level project overview
 
-## 🌟 Planned MVP Features
+## 🌟 MVP Features
 
-### Web Interface (React + Material Design)
-- **Library Browser**: Grid/list view with advanced sorting, filtering, and search
-- **Metadata Editor**: Inline editing with batch operations and undo functionality
-- **Folder Management**: Server directory browsing with .jabexclude support
-- **Settings Dashboard**: Comprehensive configuration and preferences
-- **Status Monitor**: Real-time operation progress and system statistics
+### ✅ Completed Backend (Go 1.25)
 
-### Enhanced Backend (Go 1.25)
-- **Self-contained Binary**: Embedded React frontend, zero external dependencies
-- **Safe File Operations**: Copy-first operations with automatic backup system
-- **REST API**: Complete HTTP endpoints for web interface communication
-- **Real-time Updates**: WebSocket progress notifications for long operations
+- **REST API**: Complete HTTP endpoints including:
+  - Audiobooks CRUD (list, get, update, delete, batch operations)
+  - Authors and Series listing
+  - Library folder management (add, list, remove)
+  - Operation tracking (create, status, cancel, logs)
+  - Health check with database metrics
+- **Database Migration System**: Version tracking with sequential migrations
+- **PebbleDB Store**: Extended keyspace with users, sessions, playback tracking
+- **Configurable Server**: Timeout settings, CORS, graceful shutdown
 - **Comprehensive Format Support**: MP3, M4A, M4B, AAC, FLAC, OGG, WMA
+
+### 🚧 In Progress
+
+- **Safe File Operations**: Copy-first operations with automatic backup system
+- **Real-time Updates**: WebSocket/SSE progress notifications for long operations
+- **Async Operation Queue**: Priority handling and background processing
+
+### 📋 Planned
+
+- **Web Interface (React + Material Design)**:
+  - Library Browser with grid/list view and advanced filtering
+  - Metadata Editor with inline editing and batch operations
+  - Folder Management with server directory browsing
+  - Settings Dashboard and status monitoring
+- **Self-contained Binary**: Embedded React frontend, zero external dependencies
 
 ## 📋 Current CLI Features
 
