@@ -908,7 +908,7 @@ func (s *Server) createBackup(c *gin.Context) {
 // listBackups lists all available backups
 func (s *Server) listBackups(c *gin.Context) {
 	backupConfig := backup.DefaultBackupConfig()
-	
+
 	backups, err := backup.ListBackups(backupConfig.BackupDir)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

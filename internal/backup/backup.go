@@ -21,26 +21,26 @@ import (
 
 // BackupInfo contains information about a backup
 type BackupInfo struct {
-	Filename    string    `json:"filename"`
-	Path        string    `json:"path"`
-	Size        int64     `json:"size"`
-	Checksum    string    `json:"checksum"`
-	DatabaseType string   `json:"database_type"`
-	CreatedAt   time.Time `json:"created_at"`
+	Filename     string    `json:"filename"`
+	Path         string    `json:"path"`
+	Size         int64     `json:"size"`
+	Checksum     string    `json:"checksum"`
+	DatabaseType string    `json:"database_type"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // BackupConfig holds backup configuration
 type BackupConfig struct {
-	BackupDir       string
-	MaxBackups      int
+	BackupDir        string
+	MaxBackups       int
 	CompressionLevel int
 }
 
 // DefaultBackupConfig returns default backup configuration
 func DefaultBackupConfig() BackupConfig {
 	return BackupConfig{
-		BackupDir:       "backups",
-		MaxBackups:      10,
+		BackupDir:        "backups",
+		MaxBackups:       10,
 		CompressionLevel: gzip.BestCompression,
 	}
 }
@@ -105,12 +105,12 @@ func CreateBackup(databasePath, databaseType string, config BackupConfig) (*Back
 	}
 
 	info := &BackupInfo{
-		Filename:    backupFilename,
-		Path:        backupPath,
-		Size:        fileInfo.Size(),
-		Checksum:    checksum,
+		Filename:     backupFilename,
+		Path:         backupPath,
+		Size:         fileInfo.Size(),
+		Checksum:     checksum,
 		DatabaseType: databaseType,
-		CreatedAt:   time.Now(),
+		CreatedAt:    time.Now(),
 	}
 
 	// Clean up old backups
@@ -232,12 +232,12 @@ func ListBackups(backupDir string) ([]BackupInfo, error) {
 		}
 
 		backups = append(backups, BackupInfo{
-			Filename:    entry.Name(),
-			Path:        backupPath,
-			Size:        info.Size(),
-			Checksum:    checksum,
+			Filename:     entry.Name(),
+			Path:         backupPath,
+			Size:         info.Size(),
+			Checksum:     checksum,
 			DatabaseType: dbType,
-			CreatedAt:   info.ModTime(),
+			CreatedAt:    info.ModTime(),
 		})
 	}
 

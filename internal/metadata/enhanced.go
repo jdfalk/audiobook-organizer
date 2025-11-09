@@ -23,22 +23,22 @@ type MetadataUpdate struct {
 
 // MetadataHistory represents a historical metadata change
 type MetadataHistory struct {
-	ID        int                    `json:"id"`
-	BookID    int                    `json:"book_id"`
-	Field     string                 `json:"field"`
-	OldValue  string                 `json:"old_value"`
-	NewValue  string                 `json:"new_value"`
-	UpdatedAt time.Time              `json:"updated_at"`
-	UpdatedBy string                 `json:"updated_by,omitempty"`
+	ID        int       `json:"id"`
+	BookID    int       `json:"book_id"`
+	Field     string    `json:"field"`
+	OldValue  string    `json:"old_value"`
+	NewValue  string    `json:"new_value"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UpdatedBy string    `json:"updated_by,omitempty"`
 }
 
 // ValidationRule defines a validation constraint
 type ValidationRule struct {
-	Field       string
-	Required    bool
-	MinLength   int
-	MaxLength   int
-	AllowedValues []string
+	Field           string
+	Required        bool
+	MinLength       int
+	MaxLength       int
+	AllowedValues   []string
 	CustomValidator func(interface{}) error
 }
 
@@ -190,7 +190,7 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 func WriteMetadataToFile(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
 	// Determine file type
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".m4b", ".m4a":
 		return writeM4BMetadata(filePath, metadata, config)
@@ -247,7 +247,7 @@ func GetMetadataHistory(bookID int, store database.Store) ([]MetadataHistory, er
 // ExportMetadata exports book metadata to a structured format
 func ExportMetadata(books []database.Book) (map[string]interface{}, error) {
 	result := make(map[string]interface{})
-	
+
 	bookData := make([]map[string]interface{}, 0, len(books))
 	for _, book := range books {
 		bookData = append(bookData, map[string]interface{}{
