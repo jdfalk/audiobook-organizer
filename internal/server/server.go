@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	ulid "github.com/oklog/ulid/v2"
 )
 
 // webFS holds embedded web assets (will be populated when frontend is built)
@@ -127,10 +128,11 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/library/folders/:id", s.removeLibraryFolder)
 
 		// Operation routes
-		api.POST("/operations/scan", s.startScan)
-		api.POST("/operations/organize", s.startOrganize)
-		api.GET("/operations/:id/status", s.getOperationStatus)
-		api.DELETE("/operations/:id", s.cancelOperation)
+	api.POST("/operations/scan", s.startScan)
+	api.POST("/operations/organize", s.startOrganize)
+	api.GET("/operations/:id/status", s.getOperationStatus)
+	api.GET("/operations/:id/logs", s.getOperationLogs)
+	api.DELETE("/operations/:id", s.cancelOperation)
 
 		// System routes
 		api.GET("/system/status", s.getSystemStatus)
@@ -355,31 +357,129 @@ func (s *Server) removeExclusion(c *gin.Context) {
 }
 
 func (s *Server) listLibraryFolders(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "List library folders - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	folders, err := database.GlobalStore.GetAllLibraryFolders()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": folders, "count": len(folders)})
 }
 
 func (s *Server) addLibraryFolder(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Add library folder - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var req struct {
+		Path    string `json:"path" binding:"required"`
+		Name    string `json:"name" binding:"required"`
+		Enabled *bool  `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	folder, err := database.GlobalStore.CreateLibraryFolder(req.Path, req.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Enabled != nil && !*req.Enabled {
+		folder.Enabled = false
+		if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, folder); err != nil {
+			// Non-fatal; return created folder anyway with note
+			c.JSON(http.StatusCreated, gin.H{"folder": folder, "warning": "created but could not update enabled flag"})
+			return
+		}
+	}
+	c.JSON(http.StatusCreated, gin.H{"folder": folder})
 }
 
 func (s *Server) removeLibraryFolder(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Remove library folder - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid library folder id"})
+		return
+	}
+	if err := database.GlobalStore.DeleteLibraryFolder(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) startScan(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Start scan - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var req struct {
+		FolderPath *string `json:"folder_path"`
+	}
+	_ = c.ShouldBindJSON(&req) // optional
+	id := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	_ = database.GlobalStore.UpdateOperationStatus(op.ID, "queued", 0, 0, "scan requested")
+	c.JSON(http.StatusAccepted, op)
 }
 
 func (s *Server) startOrganize(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Start organize - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var req struct {
+		FolderPath *string `json:"folder_path"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	id := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(id, "organize", req.FolderPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	_ = database.GlobalStore.UpdateOperationStatus(op.ID, "queued", 0, 0, "organize requested")
+	c.JSON(http.StatusAccepted, op)
 }
 
 func (s *Server) getOperationStatus(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Get operation status - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	op, err := database.GlobalStore.GetOperationByID(id)
+	if err != nil || op == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		return
+	}
+	c.JSON(http.StatusOK, op)
 }
 
 func (s *Server) cancelOperation(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Cancel operation - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	if err := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "operation canceled by user"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) getSystemStatus(c *gin.Context) {
@@ -387,7 +487,12 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 }
 
 func (s *Server) getSystemLogs(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Get system logs - not implemented yet"})
+	// For now, redirect to operation logs when an operation_id is provided
+	if id := c.Query("operation_id"); id != "" {
+		s.getOperationLogs(c)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "system logs not implemented; pass operation_id to query operation logs"})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
@@ -396,6 +501,21 @@ func (s *Server) getConfig(c *gin.Context) {
 
 func (s *Server) updateConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Update config - not implemented yet"})
+}
+
+// getOperationLogs returns logs for a given operation
+func (s *Server) getOperationLogs(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	logs, err := database.GlobalStore.GetOperationLogs(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
 }
 
 // GetDefaultServerConfig returns default server configuration
