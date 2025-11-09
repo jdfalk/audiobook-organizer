@@ -73,4 +73,15 @@
   - Event hub initialization on server start
   - Graceful queue shutdown with timeout
   - Updated serve command with background operation support
+- **Database backup and restore** (`internal/backup/backup.go`)
+  - Compressed tar.gz backups with gzip compression
+  - SHA256 checksum verification
+  - Support for both PebbleDB (directory) and SQLite (file) databases
+  - Automatic cleanup of old backups (configurable retention)
+  - Backup API endpoints (create, list, restore, delete)
+- Enhanced server API (`internal/server/server.go` v1.6.0)
+  - POST `/api/v1/backup/create` - Create new backup
+  - GET `/api/v1/backup/list` - List all backups
+  - POST `/api/v1/backup/restore` - Restore from backup
+  - DELETE `/api/v1/backup/:filename` - Delete backup file
 

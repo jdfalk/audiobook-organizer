@@ -8,9 +8,9 @@
 - [x] ✅ **Backend**: File system browsing API (.jabexclude, stats, permissions)
 - [x] ✅ **Backend**: Async operation queue system with priority handling
 - [x] ✅ **Backend**: WebSocket/SSE for real-time operation updates
+- [x] ✅ **Backend**: Database backup and restore functionality
 
 - [ ] 🟡 **General**: Configure GitHub workflows
-- [ ] 🟡 **Backend**: Database backup and restore functionality
 - [ ] 🟡 **Backend**: Enhanced metadata API (batch updates, history, validation)
 - [ ] 🟡 **Frontend**: React app setup with TypeScript and Material-UI
 - [ ] 🟡 **Frontend**: Library browser with grid/list views
