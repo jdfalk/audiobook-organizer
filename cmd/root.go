@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -198,6 +199,21 @@ var serveCmd = &cobra.Command{
 		if host := cmd.Flag("host").Value.String(); host != "" {
 			cfg.Host = host
 		}
+		if rt := cmd.Flag("read-timeout").Value.String(); rt != "" {
+			if d, err := time.ParseDuration(rt); err == nil {
+				cfg.ReadTimeout = d
+			}
+		}
+		if wt := cmd.Flag("write-timeout").Value.String(); wt != "" {
+			if d, err := time.ParseDuration(wt); err == nil {
+				cfg.WriteTimeout = d
+			}
+		}
+		if it := cmd.Flag("idle-timeout").Value.String(); it != "" {
+			if d, err := time.ParseDuration(it); err == nil {
+				cfg.IdleTimeout = d
+			}
+		}
 
 		return srv.Start(cfg)
 	},
@@ -233,6 +249,9 @@ func init() {
 	// Add serve command specific flags
 	serveCmd.Flags().String("port", "8080", "port to run the web server on")
 	serveCmd.Flags().String("host", "localhost", "host to bind the web server to")
+	serveCmd.Flags().String("read-timeout", "15s", "read timeout (e.g. 15s, 1m)")
+	serveCmd.Flags().String("write-timeout", "15s", "write timeout (e.g. 15s, 1m)")
+	serveCmd.Flags().String("idle-timeout", "60s", "idle timeout (e.g. 60s, 2m)")
 }
 
 func initConfig() {
