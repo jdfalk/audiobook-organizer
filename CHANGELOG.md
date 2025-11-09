@@ -31,13 +31,22 @@
   - Sequential migration application with rollback support
   - Migration history tracking
   - Auto-run on database initialization
-- Enhanced server routes (`internal/server/server.go` v1.3.0)
+- Enhanced server routes (`internal/server/server.go` v1.4.0)
   - PUT `/api/v1/audiobooks/:id` - Update audiobook metadata
   - DELETE `/api/v1/audiobooks/:id` - Delete audiobook
   - POST `/api/v1/audiobooks/batch` - Batch update multiple audiobooks
   - GET `/api/v1/authors` - List all authors
   - GET `/api/v1/series` - List all series
+  - GET `/api/filesystem/browse` - Browse server directories
+  - POST `/api/filesystem/exclude` - Create .jabexclude files
+  - DELETE `/api/filesystem/exclude` - Remove .jabexclude files
 - Enhanced health check endpoint with database metrics
 - Library folder CRUD complete (list, add, remove)
 - Operation endpoints complete (scan, organize, status, cancel, logs)
 - Server timeout configuration via CLI flags
+- **Safe file operations** (`internal/fileops/safe_operations.go`)
+  - Copy-first logic with automatic backups
+  - SHA256 checksum verification
+  - Atomic operations with rollback support
+  - Configurable backup retention
+  - SafeMove and SafeCopy utilities
