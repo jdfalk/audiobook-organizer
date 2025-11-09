@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -145,6 +146,12 @@ func (s *Server) setupRoutes() {
 		api.GET("/system/logs", s.getSystemLogs)
 		api.GET("/config", s.getConfig)
 		api.PUT("/config", s.updateConfig)
+
+		// Backup routes
+		api.POST("/backup/create", s.createBackup)
+		api.GET("/backup/list", s.listBackups)
+		api.POST("/backup/restore", s.restoreBackup)
+		api.DELETE("/backup/:filename", s.deleteBackup)
 	}
 
 	// Serve static files (React frontend)
@@ -864,6 +871,99 @@ func (s *Server) handleEvents(c *gin.Context) {
 		return
 	}
 	realtime.GlobalHub.HandleSSE(c)
+}
+
+// createBackup creates a database backup
+func (s *Server) createBackup(c *gin.Context) {
+	var req struct {
+		MaxBackups *int `json:"max_backups"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	backupConfig := backup.DefaultBackupConfig()
+	if req.MaxBackups != nil {
+		backupConfig.MaxBackups = *req.MaxBackups
+	}
+
+	// Get database path and type from app config
+	dbPath := config.AppConfig.DatabasePath
+	dbType := config.AppConfig.DatabaseType
+
+	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, info)
+}
+
+// listBackups lists all available backups
+func (s *Server) listBackups(c *gin.Context) {
+	backupConfig := backup.DefaultBackupConfig()
+	
+	backups, err := backup.ListBackups(backupConfig.BackupDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"backups": backups,
+		"count":   len(backups),
+	})
+}
+
+// restoreBackup restores from a backup file
+func (s *Server) restoreBackup(c *gin.Context) {
+	var req struct {
+		BackupFilename string `json:"backup_filename" binding:"required"`
+		TargetPath     string `json:"target_path"`
+		Verify         bool   `json:"verify"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	backupConfig := backup.DefaultBackupConfig()
+	backupPath := filepath.Join(backupConfig.BackupDir, req.BackupFilename)
+
+	// Use current database path as target if not specified
+	targetPath := req.TargetPath
+	if targetPath == "" {
+		targetPath = filepath.Dir(config.AppConfig.DatabasePath)
+	}
+
+	if err := backup.RestoreBackup(backupPath, targetPath, req.Verify); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "backup restored successfully",
+		"target":  targetPath,
+	})
+}
+
+// deleteBackup deletes a backup file
+func (s *Server) deleteBackup(c *gin.Context) {
+	filename := c.Param("filename")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "filename required"})
+		return
+	}
+
+	backupConfig := backup.DefaultBackupConfig()
+	backupPath := filepath.Join(backupConfig.BackupDir, filename)
+
+	if err := backup.DeleteBackup(backupPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "backup deleted successfully"})
 }
 
 // GetDefaultServerConfig returns default server configuration

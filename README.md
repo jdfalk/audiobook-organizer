@@ -35,11 +35,11 @@ See our detailed planning documents:
 - **Real-time Updates**: Server-Sent Events (SSE) for operation progress, status, and logs
 - **Async Operation Queue**: Priority-based background processing with configurable workers
 - **Event Broadcasting**: Automatic client notification for operation updates
+- **Database Backup/Restore**: Compressed backups with checksums, automatic cleanup, restore verification
 
 ### 🚧 In Progress
 
 - **Enhanced Metadata**: Batch updates, validation, history tracking
-- **Database Backup/Restore**: Automated backup creation and restoration
 
 ### 📋 Planned
 
