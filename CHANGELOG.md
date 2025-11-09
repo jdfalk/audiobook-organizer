@@ -15,6 +15,9 @@
 - **HTTP server enhancements** with configurable timeouts and better error handling
 - **Library folder management** with full CRUD operations
 - **Operation tracking** with create, status, cancel, and logs retrieval
+- **Async operation queue system** with priority handling and background workers
+- **Real-time updates via Server-Sent Events (SSE)** for operation progress and logs
+- **WebSocket/SSE integration** with automatic client connection management
 
 ### Planning
 
@@ -50,3 +53,24 @@
   - Atomic operations with rollback support
   - Configurable backup retention
   - SafeMove and SafeCopy utilities
+- **Operation queue system** (`internal/operations/queue.go`)
+  - Async operation execution with configurable workers
+  - Priority-based queue (low, normal, high)
+  - Cancellation support with context propagation
+  - Progress reporting interface for operations
+  - Automatic status updates to database
+  - Integration with real-time event hub
+- **Real-time event system** (`internal/realtime/events.go`)
+  - Server-Sent Events (SSE) endpoint at `/api/events`
+  - Operation progress streaming
+  - Operation status changes (queued, running, completed, failed, canceled)
+  - Operation log streaming with levels (info, warn, error)
+  - Client subscription management
+  - Automatic heartbeat for connection keepalive
+  - Event types: operation.progress, operation.status, operation.log, system.status
+- Enhanced server initialization (`cmd/root.go` v1.4.0)
+  - Configurable worker count via `--workers` flag
+  - Event hub initialization on server start
+  - Graceful queue shutdown with timeout
+  - Updated serve command with background operation support
+

@@ -6,11 +6,11 @@
 - [x] ✅ **Backend**: HTTP server with configurable timeouts
 - [x] ✅ **Backend**: Safe file operations wrapper (copy-first, checksums, rollback)
 - [x] ✅ **Backend**: File system browsing API (.jabexclude, stats, permissions)
+- [x] ✅ **Backend**: Async operation queue system with priority handling
+- [x] ✅ **Backend**: WebSocket/SSE for real-time operation updates
 
 - [ ] 🟡 **General**: Configure GitHub workflows
 - [ ] 🟡 **Backend**: Database backup and restore functionality
-- [ ] 🟡 **Backend**: Async operation queue system
-- [ ] 🟡 **Backend**: WebSocket/SSE for real-time updates
 - [ ] 🟡 **Backend**: Enhanced metadata API (batch updates, history, validation)
 - [ ] 🟡 **Frontend**: React app setup with TypeScript and Material-UI
 - [ ] 🟡 **Frontend**: Library browser with grid/list views

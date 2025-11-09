@@ -37,13 +37,13 @@ func DefaultConfig() OperationConfig {
 
 // FileOperation represents a file operation with rollback capability
 type FileOperation struct {
-	config        OperationConfig
-	originalPath  string
-	targetPath    string
-	backupPath    string
-	completed     bool
-	originalHash  string
-	targetHash    string
+	config       OperationConfig
+	originalPath string
+	targetPath   string
+	backupPath   string
+	completed    bool
+	originalHash string
+	targetHash   string
 }
 
 // NewFileOperation creates a new safe file operation

@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -12,7 +12,9 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
+	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
@@ -188,6 +190,24 @@ var serveCmd = &cobra.Command{
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Println("Starting audiobook organizer web server...")
 
+		// Initialize real-time event hub
+		realtime.InitializeEventHub()
+		fmt.Println("Real-time event hub initialized")
+
+		// Initialize operation queue with 2 workers
+		workers := 2
+		if w := cmd.Flag("workers").Value.String(); w != "" {
+			fmt.Sscanf(w, "%d", &workers)
+		}
+		operations.InitializeQueue(database.GlobalStore, workers)
+		defer func() {
+			fmt.Println("Shutting down operation queue...")
+			if err := operations.ShutdownQueue(30 * time.Second); err != nil {
+				fmt.Printf("Warning: operation queue shutdown error: %v\n", err)
+			}
+		}()
+		fmt.Printf("Operation queue initialized with %d workers\n", workers)
+
 		// Create and start server
 		srv := server.NewServer()
 		cfg := server.GetDefaultServerConfig()
@@ -252,6 +272,7 @@ func init() {
 	serveCmd.Flags().String("read-timeout", "15s", "read timeout (e.g. 15s, 1m)")
 	serveCmd.Flags().String("write-timeout", "15s", "write timeout (e.g. 15s, 1m)")
 	serveCmd.Flags().String("idle-timeout", "60s", "idle timeout (e.g. 60s, 2m)")
+	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
 }
 
 func initConfig() {
