@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -378,7 +379,7 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	var req struct {
-		IDs    []int                  `json:"ids" binding:"required"`
+		IDs     []int                  `json:"ids" binding:"required"`
 		Updates map[string]interface{} `json:"updates" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -455,15 +456,141 @@ func (s *Server) listSeries(c *gin.Context) {
 }
 
 func (s *Server) browseFilesystem(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Browse filesystem - not implemented yet"})
+	path := c.Query("path")
+	if path == "" {
+		path = "." // Current directory
+	}
+
+	// Security check: prevent directory traversal attacks
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		return
+	}
+
+	// Read directory contents
+	entries, err := os.ReadDir(absPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to read directory: %v", err)})
+		return
+	}
+
+	type FileInfo struct {
+		Name      string `json:"name"`
+		Path      string `json:"path"`
+		IsDir     bool   `json:"is_dir"`
+		Size      int64  `json:"size,omitempty"`
+		ModTime   int64  `json:"mod_time,omitempty"`
+		Excluded  bool   `json:"excluded"`
+	}
+
+	items := []FileInfo{}
+	for _, entry := range entries {
+		fullPath := filepath.Join(absPath, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// Check if directory is excluded
+		excluded := false
+		if entry.IsDir() {
+			jabExcludePath := filepath.Join(fullPath, ".jabexclude")
+			if _, err := os.Stat(jabExcludePath); err == nil {
+				excluded = true
+			}
+		}
+
+		item := FileInfo{
+			Name:     entry.Name(),
+			Path:     fullPath,
+			IsDir:    entry.IsDir(),
+			Excluded: excluded,
+		}
+
+		if !entry.IsDir() {
+			item.Size = info.Size()
+			item.ModTime = info.ModTime().Unix()
+		}
+
+		items = append(items, item)
+	}
+
+	// Get disk space info
+	var diskInfo map[string]interface{}
+	if stat, err := os.Stat(absPath); err == nil {
+		diskInfo = map[string]interface{}{
+			"exists":   true,
+			"readable": stat.Mode().Perm()&0400 != 0,
+			"writable": stat.Mode().Perm()&0200 != 0,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"path":      absPath,
+		"items":     items,
+		"count":     len(items),
+		"disk_info": diskInfo,
+	})
 }
 
 func (s *Server) createExclusion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Create exclusion - not implemented yet"})
+	var req struct {
+		Path   string `json:"path" binding:"required"`
+		Reason string `json:"reason"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure it's a directory
+	info, err := os.Stat(req.Path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path does not exist"})
+		return
+	}
+	if !info.IsDir() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path must be a directory"})
+		return
+	}
+
+	// Create .jabexclude file
+	jabExcludePath := filepath.Join(req.Path, ".jabexclude")
+	content := fmt.Sprintf("# Excluded from audiobook organization\n")
+	if req.Reason != "" {
+		content += fmt.Sprintf("# Reason: %s\n", req.Reason)
+	}
+	content += fmt.Sprintf("# Created: %s\n", time.Now().Format(time.RFC3339))
+
+	if err := os.WriteFile(jabExcludePath, []byte(content), 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create exclusion: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"path":    req.Path,
+		"excluded": true,
+		"file":    jabExcludePath,
+	})
 }
 
 func (s *Server) removeExclusion(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Remove exclusion - not implemented yet"})
+	var req struct {
+		Path string `json:"path" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	jabExcludePath := filepath.Join(req.Path, ".jabexclude")
+	if err := os.Remove(jabExcludePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to remove exclusion: %v", err)})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) listLibraryFolders(c *gin.Context) {

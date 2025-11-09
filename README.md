@@ -28,11 +28,16 @@ See our detailed planning documents:
 - **Configurable Server**: Timeout settings, CORS, graceful shutdown
 - **Comprehensive Format Support**: MP3, M4A, M4B, AAC, FLAC, OGG, WMA
 
+### ✅ Additional Backend Features
+
+- **Safe File Operations**: Copy-first with SHA256 verification, automatic backups, rollback support
+- **File System API**: Directory browsing, .jabexclude management, disk space checking
+
 ### 🚧 In Progress
 
-- **Safe File Operations**: Copy-first operations with automatic backup system
 - **Real-time Updates**: WebSocket/SSE progress notifications for long operations
 - **Async Operation Queue**: Priority handling and background processing
+- **Enhanced Metadata**: Batch updates, validation, history tracking
 
 ### 📋 Planned
 

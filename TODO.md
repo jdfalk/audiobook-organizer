@@ -4,14 +4,14 @@
 - [x] ✅ **Backend**: Library folder management API
 - [x] ✅ **Backend**: Operation tracking and logs API
 - [x] ✅ **Backend**: HTTP server with configurable timeouts
+- [x] ✅ **Backend**: Safe file operations wrapper (copy-first, checksums, rollback)
+- [x] ✅ **Backend**: File system browsing API (.jabexclude, stats, permissions)
 
 - [ ] 🟡 **General**: Configure GitHub workflows
 - [ ] 🟡 **Backend**: Database backup and restore functionality
-- [ ] 🟡 **Backend**: Safe file operations wrapper (copy-first, checksums, rollback)
 - [ ] 🟡 **Backend**: Async operation queue system
 - [ ] 🟡 **Backend**: WebSocket/SSE for real-time updates
 - [ ] 🟡 **Backend**: Enhanced metadata API (batch updates, history, validation)
-- [ ] 🟡 **Backend**: File system browsing API (.jabexclude, stats, permissions)
 - [ ] 🟡 **Frontend**: React app setup with TypeScript and Material-UI
 - [ ] 🟡 **Frontend**: Library browser with grid/list views
 - [ ] 🟡 **Frontend**: Metadata editor with inline editing
