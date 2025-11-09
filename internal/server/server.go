@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -128,11 +128,11 @@ func (s *Server) setupRoutes() {
 		api.DELETE("/library/folders/:id", s.removeLibraryFolder)
 
 		// Operation routes
-	api.POST("/operations/scan", s.startScan)
-	api.POST("/operations/organize", s.startOrganize)
-	api.GET("/operations/:id/status", s.getOperationStatus)
-	api.GET("/operations/:id/logs", s.getOperationLogs)
-	api.DELETE("/operations/:id", s.cancelOperation)
+		api.POST("/operations/scan", s.startScan)
+		api.POST("/operations/organize", s.startOrganize)
+		api.GET("/operations/:id/status", s.getOperationStatus)
+		api.GET("/operations/:id/logs", s.getOperationLogs)
+		api.DELETE("/operations/:id", s.cancelOperation)
 
 		// System routes
 		api.GET("/system/status", s.getSystemStatus)
@@ -325,23 +325,133 @@ func (s *Server) getAudiobook(c *gin.Context) {
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Update audiobook - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
+		return
+	}
+
+	var book database.Book
+	if err := c.ShouldBindJSON(&book); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updatedBook, err := database.GlobalStore.UpdateBook(id, &book)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, updatedBook)
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Delete audiobook - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
+		return
+	}
+
+	if err := database.GlobalStore.DeleteBook(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Batch update audiobooks - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		IDs    []int                  `json:"ids" binding:"required"`
+		Updates map[string]interface{} `json:"updates" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	results := []gin.H{}
+	for _, id := range req.IDs {
+		book, err := database.GlobalStore.GetBookByID(id)
+		if err != nil {
+			results = append(results, gin.H{"id": id, "error": "not found"})
+			continue
+		}
+
+		// Apply updates
+		if title, ok := req.Updates["title"].(string); ok {
+			book.Title = title
+		}
+		if format, ok := req.Updates["format"].(string); ok {
+			book.Format = format
+		}
+		if authorID, ok := req.Updates["author_id"].(float64); ok {
+			aid := int(authorID)
+			book.AuthorID = &aid
+		}
+		if seriesID, ok := req.Updates["series_id"].(float64); ok {
+			sid := int(seriesID)
+			book.SeriesID = &sid
+		}
+		if seriesSeq, ok := req.Updates["series_sequence"].(float64); ok {
+			seq := int(seriesSeq)
+			book.SeriesSequence = &seq
+		}
+
+		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
+			results = append(results, gin.H{"id": id, "error": err.Error()})
+		} else {
+			results = append(results, gin.H{"id": id, "success": true})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"results": results})
 }
 
 func (s *Server) listAuthors(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "List authors - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	authors, err := database.GlobalStore.GetAllAuthors()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"items": authors, "count": len(authors)})
 }
 
 func (s *Server) listSeries(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "List series - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	series, err := database.GlobalStore.GetAllSeries()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"items": series, "count": len(series)})
 }
 
 func (s *Server) browseFilesystem(c *gin.Context) {
