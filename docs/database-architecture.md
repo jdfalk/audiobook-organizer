@@ -165,7 +165,7 @@ type Store interface {
     CreateBook(book *Book) (*Book, error)
     UpdateBook(id int, book *Book) (*Book, error)
     DeleteBook(id int) error
-    
+
     // ... (full interface in internal/database/store.go)
 }
 ```

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -12,11 +12,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // webFS holds embedded web assets (will be populated when frontend is built)
@@ -145,7 +148,7 @@ func (s *Server) setupStaticFiles() {
 	// For now, just serve a simple index page at root
 	// TODO: Implement proper static file serving when frontend is built
 	s.router.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "", `
+		html := `
 <!DOCTYPE html>
 <html>
 <head>
@@ -179,13 +182,14 @@ func (s *Server) setupStaticFiles() {
     </div>
 </body>
 </html>
-		`)
+		`
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 	})
 
 	// Catch-all route for SPA (Single Page Application)
 	s.router.NoRoute(func(c *gin.Context) {
 		// Return 404 for unknown API routes
-		if c.Request.URL.Path[:4] == "/api" {
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
 			return
 		}
@@ -213,19 +217,109 @@ func corsMiddleware() gin.HandlerFunc {
 
 // Handler functions (stubs for now)
 func (s *Server) healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":    "ok",
-		"timestamp": time.Now().Unix(),
-		"version":   "1.0.0",
-	})
+	// Gather basic metrics; tolerate errors (don't fail health entirely)
+	var bookCount, authorCount, seriesCount, playlistCount int
+	var dbErr error
+	if database.GlobalStore != nil {
+		if bc, err := database.GlobalStore.CountBooks(); err == nil {
+			bookCount = bc
+		} else {
+			dbErr = err
+		}
+		if authors, err := database.GlobalStore.GetAllAuthors(); err == nil {
+			authorCount = len(authors)
+		} else if dbErr == nil {
+			dbErr = err
+		}
+		if series, err := database.GlobalStore.GetAllSeries(); err == nil {
+			seriesCount = len(series)
+		} else if dbErr == nil {
+			dbErr = err
+		}
+		if playlists, err := database.GlobalStore.GetPlaylistBySeriesID(0); err == nil && playlists != nil { // legacy placeholder (0 unlikely valid series)
+			playlistCount = 1 // minimal indicator; real playlist counting not yet implemented
+		}
+	}
+	resp := gin.H{
+		"status":        "ok",
+		"timestamp":     time.Now().Unix(),
+		"version":       "1.1.0",
+		"database_type": config.AppConfig.DatabaseType,
+		"metrics": gin.H{
+			"books":     bookCount,
+			"authors":   authorCount,
+			"series":    seriesCount,
+			"playlists": playlistCount,
+		},
+	}
+	if dbErr != nil {
+		resp["partial_error"] = dbErr.Error()
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) listAudiobooks(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "List audiobooks - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Query params
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+	search := c.Query("search")
+	authorIDStr := c.Query("author_id")
+	seriesIDStr := c.Query("series_id")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	var books []database.Book
+	if search != "" {
+		books, err = database.GlobalStore.SearchBooks(search, limit, offset)
+	} else if authorIDStr != "" {
+		if authorID, convErr := strconv.Atoi(authorIDStr); convErr == nil {
+			books, err = database.GlobalStore.GetBooksByAuthorID(authorID)
+		}
+	} else if seriesIDStr != "" {
+		if seriesID, convErr := strconv.Atoi(seriesIDStr); convErr == nil {
+			books, err = database.GlobalStore.GetBooksBySeriesID(seriesID)
+		}
+	}
+	if books == nil && err == nil { // fall back to generic list
+		books, err = database.GlobalStore.GetAllBooks(limit, offset)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books), "limit": limit, "offset": offset})
 }
 
 func (s *Server) getAudiobook(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Get audiobook - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
+		return
+	}
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+	c.JSON(http.StatusOK, book)
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {

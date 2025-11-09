@@ -5,8 +5,8 @@
 package database
 
 import (
-	"encoding/json"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,11 +17,11 @@ import (
 )
 
 // PebbleStore implements the Store interface using PebbleDB (LSM key-value store)
-// 
+//
 // Key Schema:
 // - author:<id>                -> Author JSON
 // - author:name:<name>         -> author_id (for lookups)
-// - series:<id>                -> Series JSON  
+// - series:<id>                -> Series JSON
 // - series:name:<name>:<author_id> -> series_id (for lookups)
 // - book:<id>                  -> Book JSON
 // - book:path:<path>           -> book_id (for lookups)
@@ -55,7 +55,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	}
 
 	store := &PebbleStore{db: db}
-	
+
 	// Initialize counters if they don't exist
 	counters := []string{"author", "series", "book", "library", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
@@ -85,7 +85,7 @@ func (p *PebbleStore) Close() error {
 
 func (p *PebbleStore) nextID(counter string) (int, error) {
 	key := []byte(fmt.Sprintf("counter:%s", counter))
-	
+
 	value, closer, err := p.db.Get(key)
 	if err != nil {
 		return 0, err
@@ -132,7 +132,7 @@ func (p *PebbleStore) GetAllAuthors() ([]Author, error) {
 		if strings.Contains(string(iter.Key()), ":name:") {
 			continue
 		}
-		
+
 		var author Author
 		if err := json.Unmarshal(iter.Value(), &author); err != nil {
 			return nil, err
@@ -204,7 +204,7 @@ func (p *PebbleStore) CreateAuthor(name string) (*Author, error) {
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("author:%d", id))
 	indexKey := []byte(fmt.Sprintf("author:name:%s", name))
-	
+
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
 		return nil, err
@@ -213,7 +213,7 @@ func (p *PebbleStore) CreateAuthor(name string) (*Author, error) {
 		batch.Close()
 		return nil, err
 	}
-	
+
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func (p *PebbleStore) GetSeriesByName(name string, authorID *int) (*Series, erro
 	if authorID != nil {
 		authorIDStr = strconv.Itoa(*authorID)
 	}
-	
+
 	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", name, authorIDStr))
 	value, closer, err := p.db.Get(indexKey)
 	if err == pebble.ErrNotFound {
@@ -321,7 +321,7 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("series:%d", id))
 	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", name, authorIDStr))
-	
+
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
 		return nil, err
@@ -330,7 +330,7 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 		batch.Close()
 		return nil, err
 	}
-	
+
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
@@ -357,8 +357,8 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Skip index keys
 		key := string(iter.Key())
-		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") || 
-		   strings.Contains(key, ":author:") {
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
 			continue
 		}
 
@@ -422,7 +422,7 @@ func (p *PebbleStore) GetBookByFilePath(path string) (*Book, error) {
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	prefix := []byte(fmt.Sprintf("book:series:%d:", seriesID))
-	
+
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xFF),
@@ -453,7 +453,7 @@ func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	var books []Book
 	prefix := []byte(fmt.Sprintf("book:author:%d:", authorID))
-	
+
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xFF),
@@ -494,7 +494,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	}
 
 	batch := p.db.NewBatch()
-	
+
 	// Main key
 	key := []byte(fmt.Sprintf("book:%d", id))
 	if err := batch.Set(key, data, nil); err != nil {
@@ -551,7 +551,7 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 	}
 
 	batch := p.db.NewBatch()
-	
+
 	// Update main key
 	key := []byte(fmt.Sprintf("book:%d", id))
 	if err := batch.Set(key, data, nil); err != nil {
@@ -642,7 +642,7 @@ func (p *PebbleStore) DeleteBook(id int) error {
 	}
 
 	batch := p.db.NewBatch()
-	
+
 	// Delete main key
 	key := []byte(fmt.Sprintf("book:%d", id))
 	if err := batch.Delete(key, nil); err != nil {
@@ -721,8 +721,8 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	for iter.First(); iter.Valid(); iter.Next() {
 		// Skip index keys
 		key := string(iter.Key())
-		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") || 
-		   strings.Contains(key, ":author:") {
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
 			continue
 		}
 		count++
@@ -820,7 +820,7 @@ func (p *PebbleStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("library:%d", id))
 	indexKey := []byte(fmt.Sprintf("library:path:%s", path))
-	
+
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
 		return nil, err
@@ -829,7 +829,7 @@ func (p *PebbleStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 		batch.Close()
 		return nil, err
 	}
-	
+
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
@@ -858,7 +858,7 @@ func (p *PebbleStore) DeleteLibraryFolder(id int) error {
 	}
 
 	batch := p.db.NewBatch()
-	
+
 	key := []byte(fmt.Sprintf("library:%d", id))
 	if err := batch.Delete(key, nil); err != nil {
 		batch.Close()
@@ -1038,7 +1038,7 @@ func (p *PebbleStore) AddOperationLog(operationID, level, message string, detail
 func (p *PebbleStore) GetOperationLogs(operationID string) ([]OperationLog, error) {
 	var logs []OperationLog
 	prefix := []byte(fmt.Sprintf("operationlog:%s:", operationID))
-	
+
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xFF),
@@ -1238,7 +1238,7 @@ func (p *PebbleStore) AddPlaylistItem(playlistID, bookID, position int) error {
 func (p *PebbleStore) GetPlaylistItems(playlistID int) ([]PlaylistItem, error) {
 	var items []PlaylistItem
 	prefix := []byte(fmt.Sprintf("playlistitem:%d:", playlistID))
-	
+
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
 		UpperBound: append(prefix, 0xFF),
@@ -1267,17 +1267,19 @@ func (p *PebbleStore) CreateUser(username, email, passwordHashAlgo, passwordHash
 	lowerEmail := strings.ToLower(email)
 
 	// uniqueness checks
-	if _, closer, err := p.db.Get([]byte("idx:user:username:"+lowerUser)); err == nil {
+	if _, closer, err := p.db.Get([]byte("idx:user:username:" + lowerUser)); err == nil {
 		closer.Close()
 		return nil, fmt.Errorf("username already exists")
 	}
-	if _, closer, err := p.db.Get([]byte("idx:user:email:"+lowerEmail)); err == nil {
+	if _, closer, err := p.db.Get([]byte("idx:user:email:" + lowerEmail)); err == nil {
 		closer.Close()
 		return nil, fmt.Errorf("email already exists")
 	}
 
 	id, err := newULID()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	user := &User{
 		ID: id, Username: username, Email: email,
@@ -1286,38 +1288,59 @@ func (p *PebbleStore) CreateUser(username, email, passwordHashAlgo, passwordHash
 	}
 	data, _ := json.Marshal(user)
 	b := p.db.NewBatch()
-	if err := b.Set([]byte("u:"+id), data, nil); err != nil { b.Close(); return nil, err }
-	if err := b.Set([]byte("idx:user:username:"+lowerUser), []byte(id), nil); err != nil { b.Close(); return nil, err }
-	if err := b.Set([]byte("idx:user:email:"+lowerEmail), []byte(id), nil); err != nil { b.Close(); return nil, err }
-	if err := b.Commit(pebble.Sync); err != nil { return nil, err }
+	if err := b.Set([]byte("u:"+id), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:user:username:"+lowerUser), []byte(id), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:user:email:"+lowerEmail), []byte(id), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
 func (p *PebbleStore) GetUserByID(id string) (*User, error) {
-	v, closer, err := p.db.Get([]byte("u:"+id))
-	if err == pebble.ErrNotFound { return nil, nil }
-	if err != nil { return nil, err }
+	v, closer, err := p.db.Get([]byte("u:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer closer.Close()
 	var u User
-	if err := json.Unmarshal(v, &u); err != nil { return nil, err }
+	if err := json.Unmarshal(v, &u); err != nil {
+		return nil, err
+	}
 	return &u, nil
 }
 
 func (p *PebbleStore) getUserByIndex(idx string) (*User, error) {
 	v, closer, err := p.db.Get([]byte(idx))
-	if err == pebble.ErrNotFound { return nil, nil }
-	if err != nil { return nil, err }
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer closer.Close()
 	id := string(v)
 	return p.GetUserByID(id)
 }
 
 func (p *PebbleStore) GetUserByUsername(username string) (*User, error) {
-	return p.getUserByIndex("idx:user:username:"+strings.ToLower(username))
+	return p.getUserByIndex("idx:user:username:" + strings.ToLower(username))
 }
 
 func (p *PebbleStore) GetUserByEmail(email string) (*User, error) {
-	return p.getUserByIndex("idx:user:email:"+strings.ToLower(email))
+	return p.getUserByIndex("idx:user:email:" + strings.ToLower(email))
 }
 
 func (p *PebbleStore) UpdateUser(user *User) error {
@@ -1329,46 +1352,70 @@ func (p *PebbleStore) UpdateUser(user *User) error {
 // Sessions
 func (p *PebbleStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) {
 	id, err := newULID()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	sess := &Session{ID: id, UserID: userID, CreatedAt: now, ExpiresAt: now.Add(ttl), IP: ip, UserAgent: userAgent, Revoked: false, Version: 1}
 	data, _ := json.Marshal(sess)
 	b := p.db.NewBatch()
-	if err := b.Set([]byte("sess:"+id), data, nil); err != nil { b.Close(); return nil, err }
-	if err := b.Set([]byte("idx:sess:user:"+userID+":"+id), []byte("1"), nil); err != nil { b.Close(); return nil, err }
-	if err := b.Commit(pebble.Sync); err != nil { return nil, err }
+	if err := b.Set([]byte("sess:"+id), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:sess:user:"+userID+":"+id), []byte("1"), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
 	return sess, nil
 }
 
 func (p *PebbleStore) GetSession(id string) (*Session, error) {
-	v, closer, err := p.db.Get([]byte("sess:"+id))
-	if err == pebble.ErrNotFound { return nil, nil }
-	if err != nil { return nil, err }
+	v, closer, err := p.db.Get([]byte("sess:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer closer.Close()
 	var s Session
-	if err := json.Unmarshal(v, &s); err != nil { return nil, err }
+	if err := json.Unmarshal(v, &s); err != nil {
+		return nil, err
+	}
 	return &s, nil
 }
 
 func (p *PebbleStore) RevokeSession(id string) error {
 	s, err := p.GetSession(id)
-	if err != nil { return err }
-	if s == nil { return nil }
+	if err != nil {
+		return err
+	}
+	if s == nil {
+		return nil
+	}
 	s.Revoked = true
 	data, _ := json.Marshal(s)
 	return p.db.Set([]byte("sess:"+id), data, pebble.Sync)
 }
 
 func (p *PebbleStore) ListUserSessions(userID string) ([]Session, error) {
-	prefix := []byte("idx:sess:user:"+userID+":")
+	prefix := []byte("idx:sess:user:" + userID + ":")
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer iter.Close()
 	var res []Session
 	for iter.First(); iter.Valid(); iter.Next() {
 		sessID := strings.TrimPrefix(string(iter.Key()), "idx:sess:user:"+userID+":")
 		s, err := p.GetSession(sessID)
-		if err == nil && s != nil { res = append(res, *s) }
+		if err == nil && s != nil {
+			res = append(res, *s)
+		}
 	}
 	return res, nil
 }
@@ -1380,23 +1427,33 @@ func (p *PebbleStore) SetUserPreferenceForUser(userID, key, value string) error 
 	return p.db.Set([]byte("pref:"+userID+":"+key), data, pebble.Sync)
 }
 func (p *PebbleStore) GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error) {
-	v, closer, err := p.db.Get([]byte("pref:"+userID+":"+key))
-	if err == pebble.ErrNotFound { return nil, nil }
-	if err != nil { return nil, err }
+	v, closer, err := p.db.Get([]byte("pref:" + userID + ":" + key))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer closer.Close()
 	var kv UserPreferenceKV
-	if err := json.Unmarshal(v, &kv); err != nil { return nil, err }
+	if err := json.Unmarshal(v, &kv); err != nil {
+		return nil, err
+	}
 	return &kv, nil
 }
 func (p *PebbleStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) {
-	prefix := []byte("pref:"+userID+":")
+	prefix := []byte("pref:" + userID + ":")
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer iter.Close()
 	var res []UserPreferenceKV
 	for iter.First(); iter.Valid(); iter.Next() {
 		var kv UserPreferenceKV
-		if err := json.Unmarshal(iter.Value(), &kv); err == nil { res = append(res, kv) }
+		if err := json.Unmarshal(iter.Value(), &kv); err == nil {
+			res = append(res, kv)
+		}
 	}
 	return res, nil
 }
@@ -1404,7 +1461,9 @@ func (p *PebbleStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceK
 // Book segments & merge
 func (p *PebbleStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error) {
 	segID, err := newULID()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	segment.ID = segID
 	segment.BookID = bookNumericID
@@ -1414,9 +1473,17 @@ func (p *PebbleStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 	segment.Version = 1
 	data, _ := json.Marshal(segment)
 	b := p.db.NewBatch()
-	if err := b.Set([]byte("bf:"+segID), data, nil); err != nil { b.Close(); return nil, err }
-	if err := b.Set([]byte(fmt.Sprintf("bfs:%d:%s", bookNumericID, segID)), []byte("1"), nil); err != nil { b.Close(); return nil, err }
-	if err := b.Commit(pebble.Sync); err != nil { return nil, err }
+	if err := b.Set([]byte("bf:"+segID), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte(fmt.Sprintf("bfs:%d:%s", bookNumericID, segID)), []byte("1"), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
 	// recompute duration map
 	_ = p.recomputeDurationMap(bookNumericID)
 	return segment, nil
@@ -1425,15 +1492,19 @@ func (p *PebbleStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 func (p *PebbleStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
 	prefix := []byte(fmt.Sprintf("bfs:%d:", bookNumericID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer iter.Close()
 	var segs []BookSegment
 	for iter.First(); iter.Valid(); iter.Next() {
 		segID := strings.TrimPrefix(string(iter.Key()), fmt.Sprintf("bfs:%d:", bookNumericID))
-		v, closer, err := p.db.Get([]byte("bf:"+segID))
+		v, closer, err := p.db.Get([]byte("bf:" + segID))
 		if err == nil {
 			var s BookSegment
-			if err := json.Unmarshal(v, &s); err == nil { segs = append(segs, s) }
+			if err := json.Unmarshal(v, &s); err == nil {
+				segs = append(segs, s)
+			}
 			closer.Close()
 		}
 	}
@@ -1443,11 +1514,13 @@ func (p *PebbleStore) ListBookSegments(bookNumericID int) ([]BookSegment, error)
 func (p *PebbleStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error {
 	// Create new segment
 	_, err := p.CreateBookSegment(bookNumericID, newSegment)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	// Mark old segments
 	b := p.db.NewBatch()
 	for _, id := range supersedeIDs {
-		v, closer, err := p.db.Get([]byte("bf:"+id))
+		v, closer, err := p.db.Get([]byte("bf:" + id))
 		if err == nil {
 			var s BookSegment
 			if err := json.Unmarshal(v, &s); err == nil {
@@ -1457,22 +1530,31 @@ func (p *PebbleStore) MergeBookSegments(bookNumericID int, newSegment *BookSegme
 				s.SupersededBy = &sid
 				s.UpdatedAt = time.Now()
 				data, _ := json.Marshal(&s)
-				if err := b.Set([]byte("bf:"+id), data, nil); err != nil { b.Close(); return err }
-			} else { closer.Close() }
+				if err := b.Set([]byte("bf:"+id), data, nil); err != nil {
+					b.Close()
+					return err
+				}
+			} else {
+				closer.Close()
+			}
 		}
 	}
-	if err := b.Commit(pebble.Sync); err != nil { return err }
+	if err := b.Commit(pebble.Sync); err != nil {
+		return err
+	}
 	// recompute duration map
 	return p.recomputeDurationMap(bookNumericID)
 }
 
 func (p *PebbleStore) recomputeDurationMap(bookNumericID int) error {
 	segs, err := p.ListBookSegments(bookNumericID)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	// simple stable ordering: by TrackNumber(if present) then FilePath
 	// bubble sort (small lists expected)
 	for i := 0; i < len(segs)-1; i++ {
-		for j := i+1; j < len(segs); j++ {
+		for j := i + 1; j < len(segs); j++ {
 			less := false
 			if segs[i].TrackNumber != nil && segs[j].TrackNumber != nil {
 				less = *segs[i].TrackNumber > *segs[j].TrackNumber
@@ -1483,10 +1565,17 @@ func (p *PebbleStore) recomputeDurationMap(bookNumericID int) error {
 			} else {
 				less = segs[i].FilePath > segs[j].FilePath
 			}
-			if less { segs[i], segs[j] = segs[j], segs[i] }
+			if less {
+				segs[i], segs[j] = segs[j], segs[i]
+			}
 		}
 	}
-	type segMap struct{ ID string `json:"id"`; Duration int `json:"duration"`; Active bool `json:"active"`; OffsetStart int `json:"offset_start"` }
+	type segMap struct {
+		ID          string `json:"id"`
+		Duration    int    `json:"duration"`
+		Active      bool   `json:"active"`
+		OffsetStart int    `json:"offset_start"`
+	}
 	var arr []segMap
 	total := 0
 	for _, s := range segs {
@@ -1500,7 +1589,9 @@ func (p *PebbleStore) recomputeDurationMap(bookNumericID int) error {
 
 // Playback events & progress
 func (p *PebbleStore) AddPlaybackEvent(event *PlaybackEvent) error {
-	if event.CreatedAt.IsZero() { event.CreatedAt = time.Now() }
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
+	}
 	event.Version = 1
 	data, _ := json.Marshal(event)
 	key := fmt.Sprintf("playe:%s:%d:%d", event.UserID, event.BookID, event.CreatedAt.UnixNano())
@@ -1510,21 +1601,31 @@ func (p *PebbleStore) AddPlaybackEvent(event *PlaybackEvent) error {
 func (p *PebbleStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error) {
 	prefix := []byte(fmt.Sprintf("playe:%s:%d:", userID, bookNumericID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer iter.Close()
 	var events []PlaybackEvent
 	for iter.First(); iter.Valid(); iter.Next() {
 		var ev PlaybackEvent
-		if err := json.Unmarshal(iter.Value(), &ev); err == nil { events = append(events, ev) }
+		if err := json.Unmarshal(iter.Value(), &ev); err == nil {
+			events = append(events, ev)
+		}
 	}
 	// reverse chronological and cap to limit
-	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 { events[i], events[j] = events[j], events[i] }
-	if limit > 0 && len(events) > limit { events = events[:limit] }
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	if limit > 0 && len(events) > limit {
+		events = events[:limit]
+	}
 	return events, nil
 }
 
 func (p *PebbleStore) UpdatePlaybackProgress(progress *PlaybackProgress) error {
-	if progress.UpdatedAt.IsZero() { progress.UpdatedAt = time.Now() }
+	if progress.UpdatedAt.IsZero() {
+		progress.UpdatedAt = time.Now()
+	}
 	progress.Version = 1
 	data, _ := json.Marshal(progress)
 	key := fmt.Sprintf("playp:%s:%d", progress.UserID, progress.BookID)
@@ -1533,18 +1634,26 @@ func (p *PebbleStore) UpdatePlaybackProgress(progress *PlaybackProgress) error {
 
 func (p *PebbleStore) GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error) {
 	v, closer, err := p.db.Get([]byte(fmt.Sprintf("playp:%s:%d", userID, bookNumericID)))
-	if err == pebble.ErrNotFound { return nil, nil }
-	if err != nil { return nil, err }
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	defer closer.Close()
 	var pr PlaybackProgress
-	if err := json.Unmarshal(v, &pr); err != nil { return nil, err }
+	if err := json.Unmarshal(v, &pr); err != nil {
+		return nil, err
+	}
 	return &pr, nil
 }
 
 // Stats aggregation
 func (p *PebbleStore) IncrementBookPlayStats(bookNumericID int, seconds int) error {
 	// increment counters stored as decimal strings
-	if err := p.incrementIntKey(fmt.Sprintf("stats:book:plays:%d", bookNumericID), 1); err != nil { return err }
+	if err := p.incrementIntKey(fmt.Sprintf("stats:book:plays:%d", bookNumericID), 1); err != nil {
+		return err
+	}
 	return p.incrementIntKey(fmt.Sprintf("stats:book:listen_seconds:%d", bookNumericID), seconds)
 }
 func (p *PebbleStore) GetBookStats(bookNumericID int) (*BookStats, error) {
@@ -1556,14 +1665,18 @@ func (p *PebbleStore) IncrementUserListenStats(userID string, seconds int) error
 	return p.incrementIntKey("stats:user:listen_seconds:"+userID, seconds)
 }
 func (p *PebbleStore) GetUserStats(userID string) (*UserStats, error) {
-	secs, _ := p.readIntKey("stats:user:listen_seconds:"+userID)
+	secs, _ := p.readIntKey("stats:user:listen_seconds:" + userID)
 	return &UserStats{UserID: userID, ListenSeconds: secs, Version: 1}, nil
 }
 
 func (p *PebbleStore) readIntKey(key string) (int, error) {
 	v, closer, err := p.db.Get([]byte(key))
-	if err == pebble.ErrNotFound { return 0, nil }
-	if err != nil { return 0, err }
+	if err == pebble.ErrNotFound {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
 	defer closer.Close()
 	return strconv.Atoi(string(v))
 }

@@ -47,9 +47,9 @@ func (s *SQLiteStore) createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name);
-	
+
 	CREATE TABLE IF NOT EXISTS series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
@@ -57,10 +57,10 @@ func (s *SQLiteStore) createTables() error {
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		UNIQUE(name, author_id)
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_series_name ON series(name);
 	CREATE INDEX IF NOT EXISTS idx_series_author ON series(author_id);
-	
+
 	CREATE TABLE IF NOT EXISTS books (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
@@ -73,12 +73,12 @@ func (s *SQLiteStore) createTables() error {
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
 	CREATE INDEX IF NOT EXISTS idx_books_author ON books(author_id);
 	CREATE INDEX IF NOT EXISTS idx_books_series ON books(series_id);
 	CREATE INDEX IF NOT EXISTS idx_books_file_path ON books(file_path);
-	
+
 	CREATE TABLE IF NOT EXISTS playlists (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
@@ -86,7 +86,7 @@ func (s *SQLiteStore) createTables() error {
 		file_path TEXT NOT NULL,
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
-	
+
 	CREATE TABLE IF NOT EXISTS playlist_items (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		playlist_id INTEGER NOT NULL,
@@ -95,9 +95,9 @@ func (s *SQLiteStore) createTables() error {
 		FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
 		FOREIGN KEY (book_id) REFERENCES books(id)
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id);
-	
+
 	CREATE TABLE IF NOT EXISTS library_folders (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		path TEXT NOT NULL UNIQUE,
@@ -107,9 +107,9 @@ func (s *SQLiteStore) createTables() error {
 		last_scan DATETIME,
 		book_count INTEGER NOT NULL DEFAULT 0
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_library_folders_path ON library_folders(path);
-	
+
 	CREATE TABLE IF NOT EXISTS operations (
 		id TEXT PRIMARY KEY,
 		type TEXT NOT NULL,
@@ -123,10 +123,10 @@ func (s *SQLiteStore) createTables() error {
 		completed_at DATETIME,
 		error_message TEXT
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
 	CREATE INDEX IF NOT EXISTS idx_operations_created_at ON operations(created_at);
-	
+
 	CREATE TABLE IF NOT EXISTS operation_logs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		operation_id TEXT NOT NULL,
@@ -136,16 +136,16 @@ func (s *SQLiteStore) createTables() error {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE CASCADE
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_operation_logs_operation ON operation_logs(operation_id);
-	
+
 	CREATE TABLE IF NOT EXISTS user_preferences (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		key TEXT NOT NULL UNIQUE,
 		value TEXT,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-	
+
 	CREATE INDEX IF NOT EXISTS idx_user_preferences_key ON user_preferences(key);
 	`
 
@@ -165,27 +165,53 @@ func (s *SQLiteStore) Close() error {
 func (s *SQLiteStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error) {
 	return nil, fmt.Errorf("advanced user management not supported in SQLite mode")
 }
-func (s *SQLiteStore) GetUserByID(id string) (*User, error) { return nil, nil }
+func (s *SQLiteStore) GetUserByID(id string) (*User, error)             { return nil, nil }
 func (s *SQLiteStore) GetUserByUsername(username string) (*User, error) { return nil, nil }
-func (s *SQLiteStore) GetUserByEmail(email string) (*User, error) { return nil, nil }
-func (s *SQLiteStore) UpdateUser(user *User) error { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) { return nil, fmt.Errorf("not supported") }
-func (s *SQLiteStore) GetSession(id string) (*Session, error) { return nil, nil }
-func (s *SQLiteStore) RevokeSession(id string) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) GetUserByEmail(email string) (*User, error)       { return nil, nil }
+func (s *SQLiteStore) UpdateUser(user *User) error                      { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) {
+	return nil, fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) GetSession(id string) (*Session, error)            { return nil, nil }
+func (s *SQLiteStore) RevokeSession(id string) error                     { return fmt.Errorf("not supported") }
 func (s *SQLiteStore) ListUserSessions(userID string) ([]Session, error) { return []Session{}, nil }
-func (s *SQLiteStore) SetUserPreferenceForUser(userID, key, value string) error { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error) { return nil, nil }
-func (s *SQLiteStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) { return []UserPreferenceKV{}, nil }
-func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error) { return nil, fmt.Errorf("not supported") }
-func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) { return []BookSegment{}, nil }
-func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) AddPlaybackEvent(event *PlaybackEvent) error { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error) { return []PlaybackEvent{}, nil }
-func (s *SQLiteStore) UpdatePlaybackProgress(progress *PlaybackProgress) error { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error) { return nil, nil }
-func (s *SQLiteStore) IncrementBookPlayStats(bookNumericID int, seconds int) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) SetUserPreferenceForUser(userID, key, value string) error {
+	return fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) {
+	return []UserPreferenceKV{}, nil
+}
+func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error) {
+	return nil, fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
+	return []BookSegment{}, nil
+}
+func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error {
+	return fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) AddPlaybackEvent(event *PlaybackEvent) error {
+	return fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error) {
+	return []PlaybackEvent{}, nil
+}
+func (s *SQLiteStore) UpdatePlaybackProgress(progress *PlaybackProgress) error {
+	return fmt.Errorf("not supported")
+}
+func (s *SQLiteStore) GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) IncrementBookPlayStats(bookNumericID int, seconds int) error {
+	return fmt.Errorf("not supported")
+}
 func (s *SQLiteStore) GetBookStats(bookNumericID int) (*BookStats, error) { return nil, nil }
-func (s *SQLiteStore) IncrementUserListenStats(userID string, seconds int) error { return fmt.Errorf("not supported") }
+func (s *SQLiteStore) IncrementUserListenStats(userID string, seconds int) error {
+	return fmt.Errorf("not supported")
+}
 func (s *SQLiteStore) GetUserStats(userID string) (*UserStats, error) { return nil, nil }
 
 // Author operations
@@ -311,7 +337,7 @@ func (s *SQLiteStore) CreateSeries(name string, authorID *int) (*Series, error) 
 // Book operations
 
 func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books ORDER BY title LIMIT ? OFFSET ?`
 	rows, err := s.db.Query(query, limit, offset)
 	if err != nil {
@@ -322,7 +348,7 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, 
+		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
 			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
 			return nil, err
 		}
@@ -333,9 +359,9 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 
 func (s *SQLiteStore) GetBookByID(id int) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books WHERE id = ?`
-	err := s.db.QueryRow(query, id).Scan(&book.ID, &book.Title, &book.AuthorID, 
+	err := s.db.QueryRow(query, id).Scan(&book.ID, &book.Title, &book.AuthorID,
 		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -348,9 +374,9 @@ func (s *SQLiteStore) GetBookByID(id int) (*Book, error) {
 
 func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books WHERE file_path = ?`
-	err := s.db.QueryRow(query, path).Scan(&book.ID, &book.Title, &book.AuthorID, 
+	err := s.db.QueryRow(query, path).Scan(&book.ID, &book.Title, &book.AuthorID,
 		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -362,7 +388,7 @@ func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books WHERE series_id = ? ORDER BY series_sequence, title`
 	rows, err := s.db.Query(query, seriesID)
 	if err != nil {
@@ -373,7 +399,7 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, 
+		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
 			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
 			return nil, err
 		}
@@ -383,7 +409,7 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books WHERE author_id = ? ORDER BY title`
 	rows, err := s.db.Query(query, authorID)
 	if err != nil {
@@ -394,7 +420,7 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, 
+		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
 			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
 			return nil, err
 		}
@@ -406,7 +432,7 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	query := `INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
 			  VALUES (?, ?, ?, ?, ?, ?, ?)`
-	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID, 
+	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
 		book.SeriesSequence, book.FilePath, book.Format, book.Duration)
 	if err != nil {
 		return nil, err
@@ -420,9 +446,9 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 }
 
 func (s *SQLiteStore) UpdateBook(id int, book *Book) (*Book, error) {
-	query := `UPDATE books SET title = ?, author_id = ?, series_id = ?, series_sequence = ?, 
+	query := `UPDATE books SET title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 			  file_path = ?, format = ?, duration = ? WHERE id = ?`
-	_, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID, 
+	_, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
 		book.SeriesSequence, book.FilePath, book.Format, book.Duration, id)
 	if err != nil {
 		return nil, err
@@ -437,7 +463,7 @@ func (s *SQLiteStore) DeleteBook(id int) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	searchQuery := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration 
+	searchQuery := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 					FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`
 	rows, err := s.db.Query(searchQuery, "%"+query+"%", limit, offset)
 	if err != nil {
@@ -448,7 +474,7 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, 
+		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
 			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
 			return nil, err
 		}
@@ -466,7 +492,7 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 // Library Folder operations
 
 func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
-	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count 
+	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
 			  FROM library_folders ORDER BY name`
 	rows, err := s.db.Query(query)
 	if err != nil {
@@ -477,7 +503,7 @@ func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
 	var folders []LibraryFolder
 	for rows.Next() {
 		var folder LibraryFolder
-		if err := rows.Scan(&folder.ID, &folder.Path, &folder.Name, &folder.Enabled, 
+		if err := rows.Scan(&folder.ID, &folder.Path, &folder.Name, &folder.Enabled,
 			&folder.CreatedAt, &folder.LastScan, &folder.BookCount); err != nil {
 			return nil, err
 		}
@@ -488,9 +514,9 @@ func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
 
 func (s *SQLiteStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
 	var folder LibraryFolder
-	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count 
+	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
 			  FROM library_folders WHERE id = ?`
-	err := s.db.QueryRow(query, id).Scan(&folder.ID, &folder.Path, &folder.Name, 
+	err := s.db.QueryRow(query, id).Scan(&folder.ID, &folder.Path, &folder.Name,
 		&folder.Enabled, &folder.CreatedAt, &folder.LastScan, &folder.BookCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -503,9 +529,9 @@ func (s *SQLiteStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
 
 func (s *SQLiteStore) GetLibraryFolderByPath(path string) (*LibraryFolder, error) {
 	var folder LibraryFolder
-	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count 
+	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
 			  FROM library_folders WHERE path = ?`
-	err := s.db.QueryRow(query, path).Scan(&folder.ID, &folder.Path, &folder.Name, 
+	err := s.db.QueryRow(query, path).Scan(&folder.ID, &folder.Path, &folder.Name,
 		&folder.Enabled, &folder.CreatedAt, &folder.LastScan, &folder.BookCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -536,7 +562,7 @@ func (s *SQLiteStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 }
 
 func (s *SQLiteStore) UpdateLibraryFolder(id int, folder *LibraryFolder) error {
-	_, err := s.db.Exec(`UPDATE library_folders SET path = ?, name = ?, enabled = ?, 
+	_, err := s.db.Exec(`UPDATE library_folders SET path = ?, name = ?, enabled = ?,
 		last_scan = ?, book_count = ? WHERE id = ?`,
 		folder.Path, folder.Name, folder.Enabled, folder.LastScan, folder.BookCount, id)
 	return err
@@ -551,7 +577,7 @@ func (s *SQLiteStore) DeleteLibraryFolder(id int) error {
 
 func (s *SQLiteStore) CreateOperation(id, opType string, folderPath *string) (*Operation, error) {
 	now := time.Now()
-	_, err := s.db.Exec(`INSERT INTO operations (id, type, status, folder_path, created_at) 
+	_, err := s.db.Exec(`INSERT INTO operations (id, type, status, folder_path, created_at)
 		VALUES (?, ?, ?, ?, ?)`, id, opType, "pending", folderPath, now)
 	if err != nil {
 		return nil, err
@@ -570,11 +596,11 @@ func (s *SQLiteStore) CreateOperation(id, opType string, folderPath *string) (*O
 
 func (s *SQLiteStore) GetOperationByID(id string) (*Operation, error) {
 	var op Operation
-	query := `SELECT id, type, status, progress, total, message, folder_path, 
-			  created_at, started_at, completed_at, error_message 
+	query := `SELECT id, type, status, progress, total, message, folder_path,
+			  created_at, started_at, completed_at, error_message
 			  FROM operations WHERE id = ?`
-	err := s.db.QueryRow(query, id).Scan(&op.ID, &op.Type, &op.Status, &op.Progress, 
-		&op.Total, &op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt, 
+	err := s.db.QueryRow(query, id).Scan(&op.ID, &op.Type, &op.Status, &op.Progress,
+		&op.Total, &op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
 		&op.CompletedAt, &op.ErrorMessage)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -586,8 +612,8 @@ func (s *SQLiteStore) GetOperationByID(id string) (*Operation, error) {
 }
 
 func (s *SQLiteStore) GetRecentOperations(limit int) ([]Operation, error) {
-	query := `SELECT id, type, status, progress, total, message, folder_path, 
-			  created_at, started_at, completed_at, error_message 
+	query := `SELECT id, type, status, progress, total, message, folder_path,
+			  created_at, started_at, completed_at, error_message
 			  FROM operations ORDER BY created_at DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
@@ -598,8 +624,8 @@ func (s *SQLiteStore) GetRecentOperations(limit int) ([]Operation, error) {
 	var operations []Operation
 	for rows.Next() {
 		var op Operation
-		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total, 
-			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt, 
+		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total,
+			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
 			&op.CompletedAt, &op.ErrorMessage); err != nil {
 			return nil, err
 		}
@@ -619,14 +645,14 @@ func (s *SQLiteStore) UpdateOperationStatus(id, status string, progress, total i
 		completedAt = &now
 	}
 
-	_, err := s.db.Exec(`UPDATE operations SET status = ?, progress = ?, total = ?, 
+	_, err := s.db.Exec(`UPDATE operations SET status = ?, progress = ?, total = ?,
 		message = ?, started_at = COALESCE(started_at, ?), completed_at = ? WHERE id = ?`,
 		status, progress, total, message, startedAt, completedAt, id)
 	return err
 }
 
 func (s *SQLiteStore) UpdateOperationError(id, errorMessage string) error {
-	_, err := s.db.Exec("UPDATE operations SET error_message = ?, status = 'failed' WHERE id = ?", 
+	_, err := s.db.Exec("UPDATE operations SET error_message = ?, status = 'failed' WHERE id = ?",
 		errorMessage, id)
 	return err
 }
@@ -634,13 +660,13 @@ func (s *SQLiteStore) UpdateOperationError(id, errorMessage string) error {
 // Operation Log operations
 
 func (s *SQLiteStore) AddOperationLog(operationID, level, message string, details *string) error {
-	_, err := s.db.Exec(`INSERT INTO operation_logs (operation_id, level, message, details) 
+	_, err := s.db.Exec(`INSERT INTO operation_logs (operation_id, level, message, details)
 		VALUES (?, ?, ?, ?)`, operationID, level, message, details)
 	return err
 }
 
 func (s *SQLiteStore) GetOperationLogs(operationID string) ([]OperationLog, error) {
-	query := `SELECT id, operation_id, level, message, details, created_at 
+	query := `SELECT id, operation_id, level, message, details, created_at
 			  FROM operation_logs WHERE operation_id = ? ORDER BY created_at`
 	rows, err := s.db.Query(query, operationID)
 	if err != nil {
@@ -651,7 +677,7 @@ func (s *SQLiteStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 	var logs []OperationLog
 	for rows.Next() {
 		var log OperationLog
-		if err := rows.Scan(&log.ID, &log.OperationID, &log.Level, &log.Message, 
+		if err := rows.Scan(&log.ID, &log.OperationID, &log.Level, &log.Message,
 			&log.Details, &log.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -703,7 +729,7 @@ func (s *SQLiteStore) GetAllUserPreferences() ([]UserPreference, error) {
 // Playlist operations
 
 func (s *SQLiteStore) CreatePlaylist(name string, seriesID *int, filePath string) (*Playlist, error) {
-	result, err := s.db.Exec("INSERT INTO playlists (name, series_id, file_path) VALUES (?, ?, ?)", 
+	result, err := s.db.Exec("INSERT INTO playlists (name, series_id, file_path) VALUES (?, ?, ?)",
 		name, seriesID, filePath)
 	if err != nil {
 		return nil, err
@@ -747,13 +773,13 @@ func (s *SQLiteStore) GetPlaylistBySeriesID(seriesID int) (*Playlist, error) {
 }
 
 func (s *SQLiteStore) AddPlaylistItem(playlistID, bookID, position int) error {
-	_, err := s.db.Exec("INSERT INTO playlist_items (playlist_id, book_id, position) VALUES (?, ?, ?)", 
+	_, err := s.db.Exec("INSERT INTO playlist_items (playlist_id, book_id, position) VALUES (?, ?, ?)",
 		playlistID, bookID, position)
 	return err
 }
 
 func (s *SQLiteStore) GetPlaylistItems(playlistID int) ([]PlaylistItem, error) {
-	rows, err := s.db.Query(`SELECT id, playlist_id, book_id, position 
+	rows, err := s.db.Query(`SELECT id, playlist_id, book_id, position
 		FROM playlist_items WHERE playlist_id = ? ORDER BY position`, playlistID)
 	if err != nil {
 		return nil, err

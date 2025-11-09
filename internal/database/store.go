@@ -125,22 +125,22 @@ type Series struct {
 
 // Book represents an audiobook
 type Book struct {
-	ID             int     `json:"id"`
-	Title          string  `json:"title"`
-	AuthorID       *int    `json:"author_id,omitempty"`
-	SeriesID       *int    `json:"series_id,omitempty"`
-	SeriesSequence *int    `json:"series_sequence,omitempty"`
-	FilePath       string  `json:"file_path"`
-	Format         string  `json:"format,omitempty"`
-	Duration       *int    `json:"duration,omitempty"`
+	ID             int    `json:"id"`
+	Title          string `json:"title"`
+	AuthorID       *int   `json:"author_id,omitempty"`
+	SeriesID       *int   `json:"series_id,omitempty"`
+	SeriesSequence *int   `json:"series_sequence,omitempty"`
+	FilePath       string `json:"file_path"`
+	Format         string `json:"format,omitempty"`
+	Duration       *int   `json:"duration,omitempty"`
 }
 
 // Playlist represents a playlist
 type Playlist struct {
-	ID       int     `json:"id"`
-	Name     string  `json:"name"`
-	SeriesID *int    `json:"series_id,omitempty"`
-	FilePath string  `json:"file_path"`
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	SeriesID *int   `json:"series_id,omitempty"`
+	FilePath string `json:"file_path"`
 }
 
 // PlaylistItem represents an item in a playlist
@@ -199,28 +199,28 @@ type UserPreference struct {
 
 // User represents an application user (ULID IDs)
 type User struct {
-	ID              string    `json:"id"`
-	Username        string    `json:"username"`
-	Email           string    `json:"email"`
-	PasswordHashAlgo string   `json:"password_hash_algo"`
-	PasswordHash    string    `json:"password_hash"`
-	Roles           []string  `json:"roles"`
-	Status          string    `json:"status"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	Version         int       `json:"version"`
+	ID               string    `json:"id"`
+	Username         string    `json:"username"`
+	Email            string    `json:"email"`
+	PasswordHashAlgo string    `json:"password_hash_algo"`
+	PasswordHash     string    `json:"password_hash"`
+	Roles            []string  `json:"roles"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	Version          int       `json:"version"`
 }
 
 // Session represents an authenticated session token
 type Session struct {
-	ID         string    `json:"id"`
-	UserID     string    `json:"user_id"`
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	IP         string    `json:"ip"`
-	UserAgent  string    `json:"user_agent"`
-	Revoked    bool      `json:"revoked"`
-	Version    int       `json:"version"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	IP        string    `json:"ip"`
+	UserAgent string    `json:"user_agent"`
+	Revoked   bool      `json:"revoked"`
+	Version   int       `json:"version"`
 }
 
 // UserPreferenceKV represents per-user preference (key/value)
@@ -234,57 +234,57 @@ type UserPreferenceKV struct {
 
 // BookSegment represents a physical file segment of a book
 type BookSegment struct {
-	ID            string    `json:"id"`
-	BookID        int       `json:"book_id"` // link to numeric book ID (legacy)
-	FilePath      string    `json:"file_path"`
-	Format        string    `json:"format"`
-	SizeBytes     int64     `json:"size_bytes"`
-	DurationSec   int       `json:"duration_seconds"`
-	TrackNumber   *int      `json:"track_number,omitempty"`
-	TotalTracks   *int      `json:"total_tracks,omitempty"`
-	Active        bool      `json:"active"`
-	SupersededBy  *string   `json:"superseded_by,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Version       int       `json:"version"`
+	ID           string    `json:"id"`
+	BookID       int       `json:"book_id"` // link to numeric book ID (legacy)
+	FilePath     string    `json:"file_path"`
+	Format       string    `json:"format"`
+	SizeBytes    int64     `json:"size_bytes"`
+	DurationSec  int       `json:"duration_seconds"`
+	TrackNumber  *int      `json:"track_number,omitempty"`
+	TotalTracks  *int      `json:"total_tracks,omitempty"`
+	Active       bool      `json:"active"`
+	SupersededBy *string   `json:"superseded_by,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Version      int       `json:"version"`
 }
 
 // PlaybackEvent immutable event
 type PlaybackEvent struct {
-	UserID        string    `json:"user_id"`
-	BookID        int       `json:"book_id"`
-	SegmentID     string    `json:"segment_id"`
-	PositionSec   int       `json:"position_seconds"`
-	EventType     string    `json:"event_type"` // progress|start|pause|complete
-	PlaySpeed     float64   `json:"play_speed"`
-	CreatedAt     time.Time `json:"created_at"`
-	Version       int       `json:"version"`
+	UserID      string    `json:"user_id"`
+	BookID      int       `json:"book_id"`
+	SegmentID   string    `json:"segment_id"`
+	PositionSec int       `json:"position_seconds"`
+	EventType   string    `json:"event_type"` // progress|start|pause|complete
+	PlaySpeed   float64   `json:"play_speed"`
+	CreatedAt   time.Time `json:"created_at"`
+	Version     int       `json:"version"`
 }
 
 // PlaybackProgress latest snapshot
 type PlaybackProgress struct {
-	UserID        string    `json:"user_id"`
-	BookID        int       `json:"book_id"`
-	SegmentID     string    `json:"segment_id"`
-	PositionSec   int       `json:"position_seconds"`
-	Percent       float64   `json:"percent_complete"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	Version       int       `json:"version"`
+	UserID      string    `json:"user_id"`
+	BookID      int       `json:"book_id"`
+	SegmentID   string    `json:"segment_id"`
+	PositionSec int       `json:"position_seconds"`
+	Percent     float64   `json:"percent_complete"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
 }
 
 // BookStats aggregated counters
 type BookStats struct {
-	BookID        int       `json:"book_id"`
-	PlayCount     int       `json:"play_count"`
-	ListenSeconds int       `json:"listen_seconds"`
-	Version       int       `json:"version"`
+	BookID        int `json:"book_id"`
+	PlayCount     int `json:"play_count"`
+	ListenSeconds int `json:"listen_seconds"`
+	Version       int `json:"version"`
 }
 
 // UserStats aggregated counters
 type UserStats struct {
-	UserID        string    `json:"user_id"`
-	ListenSeconds int       `json:"listen_seconds"`
-	Version       int       `json:"version"`
+	UserID        string `json:"user_id"`
+	ListenSeconds int    `json:"listen_seconds"`
+	Version       int    `json:"version"`
 }
 
 // Global store instance
