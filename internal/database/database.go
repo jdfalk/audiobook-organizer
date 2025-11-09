@@ -1,3 +1,7 @@
+// file: internal/database/database.go
+// version: 1.1.0
+// guid: 8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f
+
 package database
 
 import (
@@ -94,6 +98,71 @@ func createTables() error {
             position INTEGER,
             FOREIGN KEY (playlist_id) REFERENCES playlists(id),
             FOREIGN KEY (book_id) REFERENCES books(id)
+        )
+    `)
+	if err != nil {
+		return err
+	}
+
+	// Create library_folders table for web interface
+	_, err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS library_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            enabled BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_scan TIMESTAMP,
+            book_count INTEGER DEFAULT 0
+        )
+    `)
+	if err != nil {
+		return err
+	}
+
+	// Create operations table for async operation tracking
+	_, err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS operations (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            progress INTEGER DEFAULT 0,
+            total INTEGER DEFAULT 0,
+            message TEXT,
+            folder_path TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            started_at TIMESTAMP,
+            completed_at TIMESTAMP,
+            error_message TEXT
+        )
+    `)
+	if err != nil {
+		return err
+	}
+
+	// Create operation_logs table for detailed operation history
+	_, err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS operation_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            operation_id TEXT NOT NULL,
+            level TEXT NOT NULL DEFAULT 'info',
+            message TEXT NOT NULL,
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (operation_id) REFERENCES operations(id)
+        )
+    `)
+	if err != nil {
+		return err
+	}
+
+	// Create user_preferences table for UI settings
+	_, err = DB.Exec(`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT NOT NULL UNIQUE,
+            value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     `)
 	if err != nil {

@@ -1,3 +1,7 @@
+// file: internal/matcher/matcher.go
+// version: 1.1.0
+// guid: 1f2a3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b6c
+
 package matcher
 
 import (

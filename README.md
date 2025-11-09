@@ -1,13 +1,39 @@
 # Audiobook Organizer
 
-A Go application to organize audiobook collections by identifying series and
-generating playlists.
+A comprehensive audiobook management application with a modern web interface and
+powerful Go backend for organizing, managing, and enjoying your audiobook collection.
 
-## Overview
+## 🎯 MVP Development in Progress
 
-Audiobook Organizer helps you manage your audiobook collection by:
+**Current Status**: CLI application complete (~35% of MVP), transitioning to full web application
 
-- Scanning directories for audiobook files (.m4b, .mp3, etc.)
+See our detailed planning documents:
+- **[MVP Specification](docs/mvp-specification.md)**: Complete feature requirements and architecture
+- **[Implementation Plan](docs/mvp-implementation-plan.md)**: 14-week development roadmap
+- **[Progress Analysis](docs/current-progress-analysis.md)**: Current state assessment
+- **[Executive Summary](docs/mvp-summary.md)**: High-level project overview
+
+## 🌟 Planned MVP Features
+
+### Web Interface (React + Material Design)
+- **Library Browser**: Grid/list view with advanced sorting, filtering, and search
+- **Metadata Editor**: Inline editing with batch operations and undo functionality
+- **Folder Management**: Server directory browsing with .jabexclude support
+- **Settings Dashboard**: Comprehensive configuration and preferences
+- **Status Monitor**: Real-time operation progress and system statistics
+
+### Enhanced Backend (Go 1.25)
+- **Self-contained Binary**: Embedded React frontend, zero external dependencies
+- **Safe File Operations**: Copy-first operations with automatic backup system
+- **REST API**: Complete HTTP endpoints for web interface communication
+- **Real-time Updates**: WebSocket progress notifications for long operations
+- **Comprehensive Format Support**: MP3, M4A, M4B, AAC, FLAC, OGG, WMA
+
+## 📋 Current CLI Features
+
+The existing command-line interface provides a solid foundation with:
+
+- Scanning directories for audiobook files (.m4b, .mp3, .m4a, .aac, .ogg, .flac, .wma)
 - Extracting metadata and analyzing filenames/paths
 - Identifying series relationships using pattern matching and fuzzy logic
 - Storing organization data in a SQLite database (no files are moved)
