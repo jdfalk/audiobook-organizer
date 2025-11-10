@@ -11,6 +11,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 ## Current State Analysis
 
 ### What We Have ✅
+
 - **Go CLI Application**: Functional command-line tool with scan, playlist, tag, and organize commands
 - **Database Layer**: SQLite database with schema for authors, series, books, playlists, and playlist items
 - **Metadata Extraction**: Audio file metadata reading using dhowden/tag library
@@ -21,6 +22,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 - **Configuration**: Viper-based config management with YAML support
 
 ### What We Need to Build 🔨
+
 - **React Web Interface**: Complete frontend application with Material Design
 - **REST API Backend**: HTTP endpoints for web interface communication
 - **File Browser**: Server-side directory browsing and .jabexclude management
@@ -35,6 +37,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 ### 1. Web Interface (React + Material Design)
 
 #### 1.1 Application Layout
+
 - **Left Sidebar Navigation**: Collapsible menu with the following sections:
   - 📚 **Library Browser**: Main audiobook management interface
   - 📁 **Folder Management**: Add/remove library folders
@@ -43,6 +46,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
   - 📋 **Logs**: Operation history and debug information
 
 #### 1.2 Library Browser
+
 - **Audiobook Grid/List View**:
   - Toggle between card grid and detailed list views
   - Sortable by: Title, Author, Series, Date Added, Duration, Format
@@ -56,6 +60,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
   - Undo/redo functionality
 
 #### 1.3 Folder Management
+
 - **Directory Browser**:
   - Server filesystem navigation with breadcrumb trail
   - Display folder contents with file counts
@@ -68,6 +73,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
   - Bulk operations for multiple folders
 
 #### 1.4 Settings Page
+
 - **Library Settings**: Default scan locations, file naming patterns
 - **Metadata Settings**: Preferred metadata sources, auto-tagging rules
 - **File Operation Settings**: Backup preferences, safety mode toggles
@@ -75,6 +81,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 - **Export/Import**: Configuration backup and restore
 
 #### 1.5 Status Dashboard
+
 - **Current Operations**: Real-time progress of scans, metadata updates, file moves
 - **System Information**: Library statistics, disk usage, performance metrics
 - **Recent Activities**: Log of recent operations with timestamps
@@ -83,6 +90,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 ### 2. Go Backend (Go 1.25)
 
 #### 2.1 Web Server Architecture
+
 - **Self-contained Binary**: Embedded React build, no external dependencies
 - **HTTP REST API**: JSON endpoints for all web interface operations
 - **Static File Serving**: Serve React application and assets
@@ -92,6 +100,7 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 #### 2.2 API Endpoints
 
 ##### Library Management
+
 ```
 GET    /api/audiobooks              # List all audiobooks with pagination/filtering
 GET    /api/audiobooks/{id}         # Get specific audiobook details
@@ -103,6 +112,7 @@ GET    /api/series                  # List all series
 ```
 
 ##### File Operations
+
 ```
 POST   /api/operations/scan         # Trigger library scan
 POST   /api/operations/move         # Move/rename files
@@ -112,6 +122,7 @@ DELETE /api/operations/{id}         # Cancel operation
 ```
 
 ##### Folder Management
+
 ```
 GET    /api/filesystem/browse       # Browse server filesystem
 POST   /api/filesystem/exclude      # Create .jabexclude file
@@ -122,6 +133,7 @@ DELETE /api/library/folders/{id}    # Remove folder from library
 ```
 
 ##### System
+
 ```
 GET    /api/system/status           # System health and statistics
 GET    /api/system/logs             # Application logs
@@ -130,6 +142,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 #### 2.3 Enhanced File Operations
+
 - **Safe Operation Mode**:
   - Copy original to `.bak` extension before modification
   - Atomic operations with rollback capability
@@ -148,6 +161,7 @@ PUT    /api/config                  # Update configuration
   - Handle duplicate detection and resolution
 
 #### 2.4 Database Enhancements
+
 - **Extended Schema**: Add tables for library folders, operation history, user preferences
 - **Migration System**: Automatic schema updates for future versions
 - **Backup/Restore**: Database export and import functionality
@@ -156,6 +170,7 @@ PUT    /api/config                  # Update configuration
 ### 3. File Format & Metadata Standards
 
 #### 3.1 Supported Audio Formats
+
 | Format | Extension | Priority | Metadata Support | Notes                     |
 | ------ | --------- | -------- | ---------------- | ------------------------- |
 | M4B    | .m4b      | High     | Full MP4 atoms   | iTunes audiobook standard |
@@ -167,6 +182,7 @@ PUT    /api/config                  # Update configuration
 | WMA    | .wma      | Low      | ASF metadata     | Windows media format      |
 
 #### 3.2 Metadata Fields
+
 - **Standard Fields**: Title, Artist/Author, Album, Genre, Year, Track Number
 - **Audiobook Specific**: Series Name, Series Position, Duration, Narrator
 - **Custom Fields**: Tags, Rating, Description, Publisher, ISBN
@@ -189,6 +205,7 @@ Simple JSON format for folder exclusion:
 ## Implementation Phases
 
 ### Phase 1: Backend Foundation (Weeks 1-2)
+
 1. **Upgrade Go Version**: Update to Go 1.25, update go.mod
 2. **Web Server Setup**: Add HTTP server with basic routing
 3. **API Framework**: Implement core REST endpoints with proper error handling
@@ -196,6 +213,7 @@ Simple JSON format for folder exclusion:
 5. **File Operations**: Implement safe copy-first file handling
 
 ### Phase 2: Core API Development (Weeks 3-4)
+
 1. **Library API**: Complete audiobook CRUD operations
 2. **Metadata API**: Implement metadata reading/writing with validation
 3. **File System API**: Add directory browsing and .jabexclude management
@@ -203,6 +221,7 @@ Simple JSON format for folder exclusion:
 5. **WebSocket Setup**: Real-time updates for long operations
 
 ### Phase 3: React Frontend Foundation (Weeks 5-6)
+
 1. **Project Setup**: Create React app with Material-UI and TypeScript
 2. **Layout Components**: Implement sidebar navigation and main content areas
 3. **API Integration**: Set up Axios client with proper error handling
@@ -210,6 +229,7 @@ Simple JSON format for folder exclusion:
 5. **State Management**: Set up Redux or Context for global state
 
 ### Phase 4: Library Browser (Weeks 7-8)
+
 1. **Audiobook Grid**: Display audiobooks with sorting and filtering
 2. **Metadata Editor**: Inline editing with validation and error handling
 3. **Search Functionality**: Full-text search across metadata
@@ -217,6 +237,7 @@ Simple JSON format for folder exclusion:
 5. **Progress Indicators**: Loading states and operation feedback
 
 ### Phase 5: File Management (Weeks 9-10)
+
 1. **Directory Browser**: Server filesystem navigation component
 2. **Folder Management**: Add/remove library folders interface
 3. **Exclusion Management**: Create/delete .jabexclude files
@@ -224,6 +245,7 @@ Simple JSON format for folder exclusion:
 5. **Rescan Operations**: Trigger and monitor folder rescans
 
 ### Phase 6: Settings & Status (Weeks 11-12)
+
 1. **Settings Interface**: Configuration management UI
 2. **Status Dashboard**: Operation monitoring and system stats
 3. **Log Viewer**: Application logs with filtering and search
@@ -231,6 +253,7 @@ Simple JSON format for folder exclusion:
 5. **Performance Optimization**: Code splitting and lazy loading
 
 ### Phase 7: Integration & Testing (Weeks 13-14)
+
 1. **End-to-End Testing**: Complete user workflow validation
 2. **Performance Testing**: Large library handling and optimization
 3. **Error Recovery**: Edge case handling and graceful degradation
@@ -240,6 +263,7 @@ Simple JSON format for folder exclusion:
 ## Current Progress Assessment
 
 ### Completed (≈40% of MVP)
+
 - ✅ **Database Schema**: Core tables and relationships established
 - ✅ **Metadata Extraction**: Audio file reading with dhowden/tag
 - ✅ **File Scanning**: Directory traversal and file discovery
@@ -248,10 +272,12 @@ Simple JSON format for folder exclusion:
 - ✅ **CLI Interface**: Complete command-line functionality
 
 ### In Progress (≈10% of MVP)
+
 - 🔄 **File Operations**: Basic metadata writing exists, needs safety features
 - 🔄 **Format Support**: Limited to common formats, needs expansion
 
 ### Not Started (≈50% of MVP)
+
 - ❌ **Web Interface**: Complete React application needed
 - ❌ **REST API**: HTTP server and endpoints needed
 - ❌ **File Browser**: Server-side directory browsing needed
@@ -262,22 +288,26 @@ Simple JSON format for folder exclusion:
 ## Technical Risks & Mitigations
 
 ### High Risk
+
 1. **File Corruption**: Mitigate with atomic operations and checksums
 2. **Large Library Performance**: Implement pagination and lazy loading
 3. **Concurrent Operations**: Use proper locking and queue management
 
 ### Medium Risk
+
 1. **Cross-platform Compatibility**: Test on Windows/macOS/Linux
 2. **Memory Usage**: Profile and optimize for large collections
 3. **Network Security**: Implement proper input validation and sanitization
 
 ### Low Risk
+
 1. **Browser Compatibility**: Use modern React with polyfills
 2. **Audio Format Edge Cases**: Graceful degradation for unsupported formats
 
 ## Success Metrics
 
 ### MVP Completion Criteria
+
 - [ ] **Web Interface**: All 5 main sections functional and user-friendly
 - [ ] **Metadata Editing**: Safe, reliable editing with undo/redo
 - [ ] **File Operations**: Zero data loss with comprehensive backup system
@@ -286,6 +316,7 @@ Simple JSON format for folder exclusion:
 - [ ] **Documentation**: Complete user guide and installation instructions
 
 ### Quality Gates
+
 - [ ] **Test Coverage**: >80% backend code coverage, comprehensive frontend testing
 - [ ] **Performance**: <3 second load times, <500ms API response times
 - [ ] **Reliability**: 99.9% operation success rate with proper error recovery
@@ -294,17 +325,20 @@ Simple JSON format for folder exclusion:
 ## Resource Requirements
 
 ### Development Environment
+
 - **Go 1.25+**: Latest Go toolchain
 - **Node.js 18+**: For React development
 - **SQLite**: Database for development and testing
 - **Git**: Version control and collaboration
 
 ### Dependencies
+
 - **Backend**: Gin/Echo (HTTP), gorilla/websocket, testify (testing)
 - **Frontend**: React 18, Material-UI v5, TypeScript, Axios, React Router
 - **Build**: Embed for asset bundling, Docker for containerization
 
 ### Infrastructure
+
 - **Development**: Local development servers
 - **Testing**: Automated CI/CD pipeline
 - **Distribution**: Binary releases for major platforms
