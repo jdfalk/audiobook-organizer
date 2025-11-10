@@ -16,7 +16,7 @@ import (
 
 // MetadataUpdate represents a metadata update operation
 type MetadataUpdate struct {
-	BookID   int                    `json:"book_id" binding:"required"`
+	BookID   string                 `json:"book_id" binding:"required"`
 	Updates  map[string]interface{} `json:"updates" binding:"required"`
 	Validate bool                   `json:"validate"`
 }
@@ -24,7 +24,7 @@ type MetadataUpdate struct {
 // MetadataHistory represents a historical metadata change
 type MetadataHistory struct {
 	ID        int       `json:"id"`
-	BookID    int       `json:"book_id"`
+	BookID    string    `json:"book_id"`
 	Field     string    `json:"field"`
 	OldValue  string    `json:"old_value"`
 	NewValue  string    `json:"new_value"`
@@ -226,7 +226,7 @@ func writeFLACMetadata(filePath string, metadata map[string]interface{}, config 
 
 // RecordMetadataChange records a metadata change in history
 // This would typically be stored in the database
-func RecordMetadataChange(bookID int, field, oldValue, newValue, updatedBy string) *MetadataHistory {
+func RecordMetadataChange(bookID string, field, oldValue, newValue, updatedBy string) *MetadataHistory {
 	return &MetadataHistory{
 		BookID:    bookID,
 		Field:     field,
@@ -239,7 +239,7 @@ func RecordMetadataChange(bookID int, field, oldValue, newValue, updatedBy strin
 
 // GetMetadataHistory retrieves metadata change history for a book
 // This is a placeholder for future database implementation
-func GetMetadataHistory(bookID int, store database.Store) ([]MetadataHistory, error) {
+func GetMetadataHistory(bookID string, store database.Store) ([]MetadataHistory, error) {
 	// TODO: Implement metadata history storage and retrieval in database
 	return nil, fmt.Errorf("metadata history not yet implemented in database")
 }

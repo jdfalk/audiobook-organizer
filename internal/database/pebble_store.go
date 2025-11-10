@@ -382,8 +382,8 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	return books, nil
 }
 
-func (p *PebbleStore) GetBookByID(id int) (*Book, error) {
-	key := []byte(fmt.Sprintf("book:%d", id))
+func (p *PebbleStore) GetBookByID(id string) (*Book, error) {
+	key := []byte(fmt.Sprintf("book:%s", id))
 	value, closer, err := p.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return nil, nil
@@ -411,10 +411,7 @@ func (p *PebbleStore) GetBookByFilePath(path string) (*Book, error) {
 	}
 	defer closer.Close()
 
-	id, err := strconv.Atoi(string(value))
-	if err != nil {
-		return nil, err
-	}
+	id := string(value) // ULID string
 
 	return p.GetBookByID(id)
 }
@@ -433,10 +430,7 @@ func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		id, err := strconv.Atoi(string(iter.Value()))
-		if err != nil {
-			continue
-		}
+		id := string(iter.Value()) // ULID string
 
 		book, err := p.GetBookByID(id)
 		if err != nil {
@@ -464,10 +458,7 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		id, err := strconv.Atoi(string(iter.Value()))
-		if err != nil {
-			continue
-		}
+		id := string(iter.Value()) // ULID string
 
 		book, err := p.GetBookByID(id)
 		if err != nil {
@@ -482,12 +473,15 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
-	id, err := p.nextID("book")
-	if err != nil {
-		return nil, err
+	// Generate ULID if not provided
+	if book.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		book.ID = id
 	}
 
-	book.ID = id
 	data, err := json.Marshal(book)
 	if err != nil {
 		return nil, err
@@ -496,7 +490,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	batch := p.db.NewBatch()
 
 	// Main key
-	key := []byte(fmt.Sprintf("book:%d", id))
+	key := []byte(fmt.Sprintf("book:%s", book.ID))
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
 		return nil, err
@@ -504,15 +498,15 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 
 	// Path index
 	pathKey := []byte(fmt.Sprintf("book:path:%s", book.FilePath))
-	if err := batch.Set(pathKey, []byte(strconv.Itoa(id)), nil); err != nil {
+	if err := batch.Set(pathKey, []byte(book.ID), nil); err != nil {
 		batch.Close()
 		return nil, err
 	}
 
 	// Series index
 	if book.SeriesID != nil {
-		seriesKey := []byte(fmt.Sprintf("book:series:%d:%d", *book.SeriesID, id))
-		if err := batch.Set(seriesKey, []byte(strconv.Itoa(id)), nil); err != nil {
+		seriesKey := []byte(fmt.Sprintf("book:series:%d:%s", *book.SeriesID, book.ID))
+		if err := batch.Set(seriesKey, []byte(book.ID), nil); err != nil {
 			batch.Close()
 			return nil, err
 		}
@@ -520,8 +514,8 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 
 	// Author index
 	if book.AuthorID != nil {
-		authorKey := []byte(fmt.Sprintf("book:author:%d:%d", *book.AuthorID, id))
-		if err := batch.Set(authorKey, []byte(strconv.Itoa(id)), nil); err != nil {
+		authorKey := []byte(fmt.Sprintf("book:author:%d:%s", *book.AuthorID, book.ID))
+		if err := batch.Set(authorKey, []byte(book.ID), nil); err != nil {
 			batch.Close()
 			return nil, err
 		}
@@ -534,7 +528,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	return book, nil
 }
 
-func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
+func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	// Get old book to clean up old indexes
 	oldBook, err := p.GetBookByID(id)
 	if err != nil {
@@ -553,7 +547,7 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 	batch := p.db.NewBatch()
 
 	// Update main key
-	key := []byte(fmt.Sprintf("book:%d", id))
+	key := []byte(fmt.Sprintf("book:%s", id))
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
 		return nil, err
@@ -567,7 +561,7 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 			return nil, err
 		}
 		newPathKey := []byte(fmt.Sprintf("book:path:%s", book.FilePath))
-		if err := batch.Set(newPathKey, []byte(strconv.Itoa(id)), nil); err != nil {
+		if err := batch.Set(newPathKey, []byte(id), nil); err != nil {
 			batch.Close()
 			return nil, err
 		}
@@ -584,15 +578,15 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 	}
 	if oldSeriesID != newSeriesID {
 		if oldSeriesID != -1 {
-			oldSeriesKey := []byte(fmt.Sprintf("book:series:%d:%d", oldSeriesID, id))
+			oldSeriesKey := []byte(fmt.Sprintf("book:series:%d:%s", oldSeriesID, id))
 			if err := batch.Delete(oldSeriesKey, nil); err != nil {
 				batch.Close()
 				return nil, err
 			}
 		}
 		if newSeriesID != -1 {
-			newSeriesKey := []byte(fmt.Sprintf("book:series:%d:%d", newSeriesID, id))
-			if err := batch.Set(newSeriesKey, []byte(strconv.Itoa(id)), nil); err != nil {
+			newSeriesKey := []byte(fmt.Sprintf("book:series:%d:%s", newSeriesID, id))
+			if err := batch.Set(newSeriesKey, []byte(id), nil); err != nil {
 				batch.Close()
 				return nil, err
 			}
@@ -610,15 +604,15 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 	}
 	if oldAuthorID != newAuthorID {
 		if oldAuthorID != -1 {
-			oldAuthorKey := []byte(fmt.Sprintf("book:author:%d:%d", oldAuthorID, id))
+			oldAuthorKey := []byte(fmt.Sprintf("book:author:%d:%s", oldAuthorID, id))
 			if err := batch.Delete(oldAuthorKey, nil); err != nil {
 				batch.Close()
 				return nil, err
 			}
 		}
 		if newAuthorID != -1 {
-			newAuthorKey := []byte(fmt.Sprintf("book:author:%d:%d", newAuthorID, id))
-			if err := batch.Set(newAuthorKey, []byte(strconv.Itoa(id)), nil); err != nil {
+			newAuthorKey := []byte(fmt.Sprintf("book:author:%d:%s", newAuthorID, id))
+			if err := batch.Set(newAuthorKey, []byte(id), nil); err != nil {
 				batch.Close()
 				return nil, err
 			}
@@ -632,7 +626,7 @@ func (p *PebbleStore) UpdateBook(id int, book *Book) (*Book, error) {
 	return book, nil
 }
 
-func (p *PebbleStore) DeleteBook(id int) error {
+func (p *PebbleStore) DeleteBook(id string) error {
 	book, err := p.GetBookByID(id)
 	if err != nil {
 		return err
@@ -644,7 +638,7 @@ func (p *PebbleStore) DeleteBook(id int) error {
 	batch := p.db.NewBatch()
 
 	// Delete main key
-	key := []byte(fmt.Sprintf("book:%d", id))
+	key := []byte(fmt.Sprintf("book:%s", id))
 	if err := batch.Delete(key, nil); err != nil {
 		batch.Close()
 		return err
@@ -659,7 +653,7 @@ func (p *PebbleStore) DeleteBook(id int) error {
 
 	// Delete series index
 	if book.SeriesID != nil {
-		seriesKey := []byte(fmt.Sprintf("book:series:%d:%d", *book.SeriesID, id))
+		seriesKey := []byte(fmt.Sprintf("book:series:%d:%s", *book.SeriesID, id))
 		if err := batch.Delete(seriesKey, nil); err != nil {
 			batch.Close()
 			return err
@@ -668,7 +662,7 @@ func (p *PebbleStore) DeleteBook(id int) error {
 
 	// Delete author index
 	if book.AuthorID != nil {
-		authorKey := []byte(fmt.Sprintf("book:author:%d:%d", *book.AuthorID, id))
+		authorKey := []byte(fmt.Sprintf("book:author:%d:%s", *book.AuthorID, id))
 		if err := batch.Delete(authorKey, nil); err != nil {
 			batch.Close()
 			return err

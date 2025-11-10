@@ -29,13 +29,13 @@ type Store interface {
 
 	// Books
 	GetAllBooks(limit, offset int) ([]Book, error)
-	GetBookByID(id int) (*Book, error)
+	GetBookByID(id string) (*Book, error) // ID is ULID string
 	GetBookByFilePath(path string) (*Book, error)
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
-	CreateBook(book *Book) (*Book, error)
-	UpdateBook(id int, book *Book) (*Book, error)
-	DeleteBook(id int) error
+	CreateBook(book *Book) (*Book, error) // Generates ULID if ID is empty
+	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
+	DeleteBook(id string) error // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
 
@@ -125,7 +125,7 @@ type Series struct {
 
 // Book represents an audiobook
 type Book struct {
-	ID             int    `json:"id"`
+	ID             string `json:"id"` // ULID format
 	Title          string `json:"title"`
 	AuthorID       *int   `json:"author_id,omitempty"`
 	SeriesID       *int   `json:"series_id,omitempty"`
