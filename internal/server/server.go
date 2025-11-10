@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -302,7 +302,8 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		offset = 0
 	}
 
-	var books []database.Book
+	// Initialize as empty slice to ensure JSON returns [] instead of null
+	books := []database.Book{}
 	if search != "" {
 		books, err = database.GlobalStore.SearchBooks(search, limit, offset)
 	} else if authorIDStr != "" {
@@ -314,12 +315,17 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 			books, err = database.GlobalStore.GetBooksBySeriesID(seriesID)
 		}
 	}
-	if books == nil && err == nil { // fall back to generic list
+	if len(books) == 0 && err == nil { // fall back to generic list if no results yet
 		books, err = database.GlobalStore.GetAllBooks(limit, offset)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	
+	// Ensure we never return null - always return empty array
+	if books == nil {
+		books = []database.Book{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books), "limit": limit, "offset": offset})
@@ -398,11 +404,22 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	var req struct {
-		IDs     []int                  `json:"ids" binding:"required"`
-		Updates map[string]interface{} `json:"updates" binding:"required"`
+		IDs     []int                  `json:"ids"`
+		Updates map[string]interface{} `json:"updates"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	// Allow empty batches - return success with 0 updates
+	if len(req.IDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success":        0,
+			"failed":         0,
+			"total":          0,
+			"message":        "no items to update",
+		})
 		return
 	}
 
@@ -455,6 +472,11 @@ func (s *Server) listAuthors(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	
+	// Ensure we never return null - always return empty array
+	if authors == nil {
+		authors = []database.Author{}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"items": authors, "count": len(authors)})
 }
@@ -470,6 +492,11 @@ func (s *Server) listSeries(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	
+	// Ensure we never return null - always return empty array
+	if series == nil {
+		series = []database.Series{}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"items": series, "count": len(series)})
 }
@@ -477,7 +504,8 @@ func (s *Server) listSeries(c *gin.Context) {
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
-		path = "." // Current directory
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path parameter is required"})
+		return
 	}
 
 	// Security check: prevent directory traversal attacks
@@ -576,7 +604,7 @@ func (s *Server) createExclusion(c *gin.Context) {
 
 	// Create .jabexclude file
 	jabExcludePath := filepath.Join(req.Path, ".jabexclude")
-	content := fmt.Sprintf("# Excluded from audiobook organization\n")
+	content := "# Excluded from audiobook organization\n"
 	if req.Reason != "" {
 		content += fmt.Sprintf("# Reason: %s\n", req.Reason)
 	}
@@ -622,7 +650,13 @@ func (s *Server) listLibraryFolders(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": folders, "count": len(folders)})
+	
+	// Ensure we never return null - always return empty array
+	if folders == nil {
+		folders = []database.LibraryFolder{}
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"folders": folders, "count": len(folders)})
 }
 
 func (s *Server) addLibraryFolder(c *gin.Context) {
@@ -913,6 +947,11 @@ func (s *Server) listBackups(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	
+	// Ensure we never return null - always return empty array
+	if backups == nil {
+		backups = []backup.BackupInfo{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
