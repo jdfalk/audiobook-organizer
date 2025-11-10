@@ -62,7 +62,7 @@ func (s *SQLiteStore) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_series_author ON series(author_id);
 
 	CREATE TABLE IF NOT EXISTS books (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id TEXT PRIMARY KEY,
 		title TEXT NOT NULL,
 		author_id INTEGER,
 		series_id INTEGER,
@@ -357,7 +357,7 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	return books, rows.Err()
 }
 
-func (s *SQLiteStore) GetBookByID(id int) (*Book, error) {
+func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 	var book Book
 	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
 			  FROM books WHERE id = ?`
@@ -430,36 +430,57 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 }
 
 func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
-	query := `INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
-			  VALUES (?, ?, ?, ?, ?, ?, ?)`
-	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
+	// Generate ULID if not provided
+	if book.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		book.ID = id
+	}
+
+	query := `INSERT INTO books (id, title, author_id, series_id, series_sequence, file_path, format, duration)
+			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err := s.db.Exec(query, book.ID, book.Title, book.AuthorID, book.SeriesID,
 		book.SeriesSequence, book.FilePath, book.Format, book.Duration)
 	if err != nil {
 		return nil, err
 	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
-	book.ID = int(id)
 	return book, nil
 }
 
-func (s *SQLiteStore) UpdateBook(id int, book *Book) (*Book, error) {
+func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	query := `UPDATE books SET title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 			  file_path = ?, format = ?, duration = ? WHERE id = ?`
-	_, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
+	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
 		book.SeriesSequence, book.FilePath, book.Format, book.Duration, id)
 	if err != nil {
 		return nil, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("book not found")
 	}
 	book.ID = id
 	return book, nil
 }
 
-func (s *SQLiteStore) DeleteBook(id int) error {
-	_, err := s.db.Exec("DELETE FROM books WHERE id = ?", id)
-	return err
+func (s *SQLiteStore) DeleteBook(id string) error {
+	result, err := s.db.Exec("DELETE FROM books WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("book not found")
+	}
+	return nil
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {

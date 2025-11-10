@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -322,7 +322,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Ensure we never return null - always return empty array
 	if books == nil {
 		books = []database.Book{}
@@ -336,14 +336,14 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
-		return
-	}
+	id := c.Param("id") // ULID string
+
 	book, err := database.GlobalStore.GetBookByID(id)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
@@ -355,12 +355,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
-		return
-	}
+	id := c.Param("id") // ULID string
 
 	var book database.Book
 	if err := c.ShouldBindJSON(&book); err != nil {
@@ -369,6 +364,11 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	updatedBook, err := database.GlobalStore.UpdateBook(id, &book)
+		// Check if error is "not found"
+		if err.Error() == "book not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+			return
+		}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -382,14 +382,14 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid audiobook id"})
-		return
-	}
+	id := c.Param("id") // ULID string
 
 	if err := database.GlobalStore.DeleteBook(id); err != nil {
+		// Check if error is "not found"
+		if err.Error() == "book not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -404,21 +404,21 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	var req struct {
-		IDs     []int                  `json:"ids"`
+		IDs     []string               `json:"ids"` // ULID strings
 		Updates map[string]interface{} `json:"updates"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Allow empty batches - return success with 0 updates
 	if len(req.IDs) == 0 {
 		c.JSON(http.StatusOK, gin.H{
-			"success":        0,
-			"failed":         0,
-			"total":          0,
-			"message":        "no items to update",
+			"success": 0,
+			"failed":  0,
+			"total":   0,
+			"message": "no items to update",
 		})
 		return
 	}
@@ -472,7 +472,7 @@ func (s *Server) listAuthors(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Ensure we never return null - always return empty array
 	if authors == nil {
 		authors = []database.Author{}
@@ -492,7 +492,7 @@ func (s *Server) listSeries(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Ensure we never return null - always return empty array
 	if series == nil {
 		series = []database.Series{}
@@ -650,12 +650,12 @@ func (s *Server) listLibraryFolders(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Ensure we never return null - always return empty array
 	if folders == nil {
 		folders = []database.LibraryFolder{}
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"folders": folders, "count": len(folders)})
 }
 
@@ -948,7 +948,7 @@ func (s *Server) listBackups(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// Ensure we never return null - always return empty array
 	if backups == nil {
 		backups = []backup.BackupInfo{}
