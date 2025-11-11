@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0e1f2a3b-4c5d-6e7f-8a9b-0c1d2e3f4a5b
 
 package scanner
@@ -20,13 +20,16 @@ import (
 
 // Book represents an audiobook file
 type Book struct {
-	FilePath string
-	Title    string
-	Author   string
-	Series   string
-	Position int
-	Format   string
-	Duration int
+	FilePath  string
+	Title     string
+	Author    string
+	Series    string
+	Position  int
+	Format    string
+	Duration  int
+	Narrator  string
+	Language  string
+	Publisher string
 }
 
 // ScanDirectory scans the given directory for audiobook files
@@ -80,6 +83,9 @@ func ProcessBooks(books []Book) error {
 		} else {
 			books[i].Title = meta.Title
 			books[i].Author = meta.Artist
+			books[i].Narrator = meta.Narrator
+			books[i].Language = meta.Language
+			books[i].Publisher = meta.Publisher
 		}
 
 		// If metadata is incomplete, try to extract info from filepath
@@ -141,48 +147,126 @@ func extractInfoFromPath(book *Book) {
 
 // saveBookToDatabase saves the book information to the database
 func saveBookToDatabase(book *Book) error {
-	// First ensure the author exists
-	var authorID int64
-	err := database.DB.QueryRow("SELECT id FROM authors WHERE name = ?", book.Author).Scan(&authorID)
-	if err != nil {
-		// Insert new author
-		result, err := database.DB.Exec("INSERT INTO authors (name) VALUES (?)", book.Author)
-		if err != nil {
-			return fmt.Errorf("failed to insert author: %w", err)
+	// Prefer using the unified Store API when available
+	if database.GlobalStore != nil {
+		// Resolve author (create if missing)
+		var authorID *int
+		if book.Author != "" {
+			author, err := database.GlobalStore.GetAuthorByName(book.Author)
+			if err != nil {
+				return fmt.Errorf("author lookup failed: %w", err)
+			}
+			if author == nil {
+				author, err = database.GlobalStore.CreateAuthor(book.Author)
+				if err != nil {
+					return fmt.Errorf("author create failed: %w", err)
+				}
+			}
+			authorID = &author.ID
 		}
-		authorID, _ = result.LastInsertId()
+
+		// Resolve series (create if missing)
+		var seriesID *int
+		if book.Series != "" {
+			series, err := database.GlobalStore.GetSeriesByName(book.Series, authorID)
+			if err != nil {
+				return fmt.Errorf("series lookup failed: %w", err)
+			}
+			if series == nil {
+				series, err = database.GlobalStore.CreateSeries(book.Series, authorID)
+				if err != nil {
+					return fmt.Errorf("series create failed: %w", err)
+				}
+			}
+			seriesID = &series.ID
+		}
+
+		// Attempt Work association (normalize title + author)
+		var workID *string
+		if book.Title != "" {
+			canonical := strings.ToLower(strings.TrimSpace(book.Title))
+			// Simple heuristic: try existing works then create new
+			works, err := database.GlobalStore.GetAllWorks()
+			if err == nil { // non-critical
+				for _, w := range works {
+					if strings.ToLower(strings.TrimSpace(w.Title)) == canonical && ((authorID == nil && w.AuthorID == nil) || (authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
+						wid := w.ID
+						workID = &wid
+						break
+					}
+				}
+			}
+			if workID == nil {
+				newWork := &database.Work{Title: book.Title, AuthorID: authorID}
+				created, err := database.GlobalStore.CreateWork(newWork)
+				if err == nil {
+					wid := created.ID
+					workID = &wid
+				}
+			}
+		}
+
+		dbBook := &database.Book{
+			Title:          book.Title,
+			AuthorID:       authorID,
+			SeriesID:       seriesID,
+			SeriesSequence: &book.Position,
+			FilePath:       book.FilePath,
+			Format:         strings.TrimPrefix(book.Format, "."),
+			Duration:       &book.Duration,
+			WorkID:         workID,
+			Narrator:       nullablePtr(book.Narrator),
+			Language:       nullablePtr(book.Language),
+			Publisher:      nullablePtr(book.Publisher),
+		}
+
+		// Upsert semantics: try lookup by file path first
+		existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath)
+		if err != nil {
+			return fmt.Errorf("book lookup failed: %w", err)
+		}
+		if existing == nil {
+			_, err = database.GlobalStore.CreateBook(dbBook)
+			return err
+		}
+		_, err = database.GlobalStore.UpdateBook(existing.ID, dbBook)
+		return err
 	}
 
-	// Then handle the series if it exists
+	// Fallback legacy path using raw DB for backward compatibility
+	var authorIDInt int64
+	err := database.DB.QueryRow("SELECT id FROM authors WHERE name = ?", book.Author).Scan(&authorIDInt)
+	if err != nil {
+		result, err2 := database.DB.Exec("INSERT INTO authors (name) VALUES (?)", book.Author)
+		if err2 != nil { return fmt.Errorf("failed to insert author: %w", err2) }
+		authorIDInt, _ = result.LastInsertId()
+	}
 	var seriesID sql.NullInt64
 	if book.Series != "" {
 		var id int64
-		err := database.DB.QueryRow("SELECT id FROM series WHERE name = ?", book.Series).Scan(&id)
-		if err != nil {
-			// Insert new series
-			result, err := database.DB.Exec("INSERT INTO series (name, author_id) VALUES (?, ?)",
-				book.Series, authorID)
-			if err != nil {
-				return fmt.Errorf("failed to insert series: %w", err)
-			}
+		serr := database.DB.QueryRow("SELECT id FROM series WHERE name = ?", book.Series).Scan(&id)
+		if serr != nil {
+			result, ierr := database.DB.Exec("INSERT INTO series (name, author_id) VALUES (?, ?)", book.Series, authorIDInt)
+			if ierr != nil { return fmt.Errorf("failed to insert series: %w", ierr) }
 			id, _ = result.LastInsertId()
 		}
-		seriesID.Int64 = id
-		seriesID.Valid = true
+		seriesID.Int64 = id; seriesID.Valid = true
 	}
-
-	// Finally insert the book
 	_, err = database.DB.Exec(`
-        INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(file_path)
-        DO UPDATE SET title=?, author_id=?, series_id=?, series_sequence=?, format=?, duration=?
-    `,
-		book.Title, authorID, seriesID, book.Position, book.FilePath, book.Format, book.Duration,
-		book.Title, authorID, seriesID, book.Position, book.Format, book.Duration,
+	        INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
+	        VALUES (?, ?, ?, ?, ?, ?, ?)
+	        ON CONFLICT(file_path)
+	        DO UPDATE SET title=?, author_id=?, series_id=?, series_sequence=?, format=?, duration=?
+	    `,
+		book.Title, authorIDInt, seriesID, book.Position, book.FilePath, book.Format, book.Duration,
+		book.Title, authorIDInt, seriesID, book.Position, book.Format, book.Duration,
 	)
-
 	return err
+}
+
+func nullablePtr(s string) *string {
+	if strings.TrimSpace(s) == "" { return nil }
+	return &s
 }
 
 // identifySeriesUsingExternalAPIs tries to match books to series using external APIs

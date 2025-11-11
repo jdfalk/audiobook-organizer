@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -23,6 +23,12 @@ type Metadata struct {
 	SeriesIndex int
 	Comments    string
 	Year        int
+	// Extended fields (best-effort; may be empty)
+	Narrator    string
+	Language    string
+	Publisher   string
+	ISBN10      string
+	ISBN13      string
 }
 
 // ExtractMetadata reads metadata from audio files
@@ -84,6 +90,37 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 					}
 				}
 			}
+		}
+	}
+
+	// Try to extract extended fields from raw tag map using common frames/atoms
+	// Note: Availability varies by format and tagging tool; this is best-effort.
+	raw := m.Raw()
+	// Language (ID3: TLAN)
+	if v, ok := raw["TLAN"]; ok {
+		if s, sok := v.(string); sok { metadata.Language = strings.TrimSpace(s) }
+	}
+	// Publisher (ID3: TPUB, MP4: ©pub)
+	if v, ok := raw["TPUB"]; ok {
+		if s, sok := v.(string); sok { metadata.Publisher = strings.TrimSpace(s) }
+	} else if v, ok := raw["©pub"]; ok {
+		if s, sok := v.(string); sok { metadata.Publisher = strings.TrimSpace(s) }
+	}
+	// Narrator (often custom TXXX frames; also MP4 freeform keys)
+	for _, key := range []string{"TXXX:NARRATOR", "TXXX:Narrator", "NARRATOR", "Narrator", "©nrt"} {
+		if v, ok := raw[key]; ok {
+			if s, sok := v.(string); sok { metadata.Narrator = strings.TrimSpace(s); break }
+		}
+	}
+	// ISBNs (custom frames)
+	for k, target := range map[string]*string{
+		"TXXX:ISBN": &metadata.ISBN13,
+		"TXXX:ISBN13": &metadata.ISBN13,
+		"TXXX:ISBN10": &metadata.ISBN10,
+		"ISBN": &metadata.ISBN13,
+	} {
+		if v, ok := raw[k]; ok {
+			if s, sok := v.(string); sok { *target = strings.TrimSpace(s) }
 		}
 	}
 
