@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -33,9 +33,9 @@ type Store interface {
 	GetBookByFilePath(path string) (*Book, error)
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
-	CreateBook(book *Book) (*Book, error) // Generates ULID if ID is empty
+	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
 	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
-	DeleteBook(id string) error // ID is ULID string
+	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
 
@@ -133,6 +133,14 @@ type Book struct {
 	FilePath       string `json:"file_path"`
 	Format         string `json:"format,omitempty"`
 	Duration       *int   `json:"duration,omitempty"`
+	// Extended metadata (optional)
+	WorkID    *string `json:"work_id,omitempty"`
+	Narrator  *string `json:"narrator,omitempty"`
+	Edition   *string `json:"edition,omitempty"`
+	Language  *string `json:"language,omitempty"`
+	Publisher *string `json:"publisher,omitempty"`
+	ISBN10    *string `json:"isbn10,omitempty"`
+	ISBN13    *string `json:"isbn13,omitempty"`
 }
 
 // Playlist represents a playlist

@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 package database
@@ -70,6 +70,13 @@ func (s *SQLiteStore) createTables() error {
 		file_path TEXT NOT NULL UNIQUE,
 		format TEXT,
 		duration INTEGER,
+		work_id TEXT,
+		narrator TEXT,
+		edition TEXT,
+		language TEXT,
+		publisher TEXT,
+		isbn10 TEXT,
+		isbn13 TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -149,8 +156,63 @@ func (s *SQLiteStore) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_user_preferences_key ON user_preferences(key);
 	`
 
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Non-destructive migration for existing databases: add missing columns
+	return s.ensureExtendedBookColumns()
+}
+
+// ensureExtendedBookColumns adds newly introduced optional metadata columns to the books table
+// for existing databases created before these columns were part of the CREATE TABLE statement.
+// SQLite lacks IF NOT EXISTS for ADD COLUMN, so we inspect PRAGMA table_info and conditionally ALTER.
+func (s *SQLiteStore) ensureExtendedBookColumns() error {
+	// Map of desired columns (name -> type)
+	columns := map[string]string{
+		"work_id":   "TEXT",
+		"narrator":  "TEXT",
+		"edition":   "TEXT",
+		"language":  "TEXT",
+		"publisher": "TEXT",
+		"isbn10":    "TEXT",
+		"isbn13":    "TEXT",
+	}
+
+	// Fetch existing columns
+	rows, err := s.db.Query("PRAGMA table_info(books)")
+	if err != nil {
+		return fmt.Errorf("failed to inspect books schema: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue interface{}
+		// PRAGMA table_info returns: cid,name,type,notnull,dflt_value,pk
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("failed to scan table_info row: %w", err)
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating table_info: %w", err)
+	}
+
+	// Add any missing columns
+	for name, colType := range columns {
+		if _, ok := existing[name]; ok {
+			continue
+		}
+		alter := fmt.Sprintf("ALTER TABLE books ADD COLUMN %s %s", name, colType)
+		if _, err := s.db.Exec(alter); err != nil {
+			return fmt.Errorf("failed adding column %s: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // Close closes the database connection
@@ -337,8 +399,9 @@ func (s *SQLiteStore) CreateSeries(name string, authorID *int) (*Series, error) 
 // Book operations
 
 func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-			  FROM books ORDER BY title LIMIT ? OFFSET ?`
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books ORDER BY title LIMIT ? OFFSET ?`
 	rows, err := s.db.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
@@ -349,7 +412,8 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	for rows.Next() {
 		var book Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
+			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -359,10 +423,12 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 
 func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-			  FROM books WHERE id = ?`
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books WHERE id = ?`
 	err := s.db.QueryRow(query, id).Scan(&book.ID, &book.Title, &book.AuthorID,
-		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration)
+		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -374,10 +440,12 @@ func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 
 func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-			  FROM books WHERE file_path = ?`
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books WHERE file_path = ?`
 	err := s.db.QueryRow(query, path).Scan(&book.ID, &book.Title, &book.AuthorID,
-		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration)
+		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -388,8 +456,9 @@ func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-			  FROM books WHERE series_id = ? ORDER BY series_sequence, title`
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books WHERE series_id = ? ORDER BY series_sequence, title`
 	rows, err := s.db.Query(query, seriesID)
 	if err != nil {
 		return nil, err
@@ -400,7 +469,8 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	for rows.Next() {
 		var book Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
+			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -409,8 +479,9 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-			  FROM books WHERE author_id = ? ORDER BY title`
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books WHERE author_id = ? ORDER BY title`
 	rows, err := s.db.Query(query, authorID)
 	if err != nil {
 		return nil, err
@@ -421,7 +492,8 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	for rows.Next() {
 		var book Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
+			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -439,10 +511,13 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.ID = id
 	}
 
-	query := `INSERT INTO books (id, title, author_id, series_id, series_sequence, file_path, format, duration)
-			  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO books (
+		id, title, author_id, series_id, series_sequence, file_path, format, duration,
+		work_id, narrator, edition, language, publisher, isbn10, isbn13)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query, book.ID, book.Title, book.AuthorID, book.SeriesID,
-		book.SeriesSequence, book.FilePath, book.Format, book.Duration)
+		book.SeriesSequence, book.FilePath, book.Format, book.Duration,
+		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher, book.ISBN10, book.ISBN13)
 	if err != nil {
 		return nil, err
 	}
@@ -451,9 +526,11 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 
 func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	query := `UPDATE books SET title = ?, author_id = ?, series_id = ?, series_sequence = ?,
-			  file_path = ?, format = ?, duration = ? WHERE id = ?`
+			  file_path = ?, format = ?, duration = ?, work_id = ?, narrator = ?, edition = ?, language = ?,
+			  publisher = ?, isbn10 = ?, isbn13 = ? WHERE id = ?`
 	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
-		book.SeriesSequence, book.FilePath, book.Format, book.Duration, id)
+		book.SeriesSequence, book.FilePath, book.Format, book.Duration,
+		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher, book.ISBN10, book.ISBN13, id)
 	if err != nil {
 		return nil, err
 	}
@@ -484,8 +561,9 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	searchQuery := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration
-					FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`
+	searchQuery := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+				 work_id, narrator, edition, language, publisher, isbn10, isbn13
+				FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`
 	rows, err := s.db.Query(searchQuery, "%"+query+"%", limit, offset)
 	if err != nil {
 		return nil, err
@@ -496,7 +574,8 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 	for rows.Next() {
 		var book Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration); err != nil {
+			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
