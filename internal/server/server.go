@@ -364,12 +364,12 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	updatedBook, err := database.GlobalStore.UpdateBook(id, &book)
+	if err != nil {
 		// Check if error is "not found"
 		if err.Error() == "book not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 			return
 		}
-	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
