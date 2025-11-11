@@ -1,24 +1,34 @@
+<!-- file: docs/technical_design.md -->
+<!-- version: 1.1.0 -->
+<!-- guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a -->
+
 # Audiobook Organizer - Technical Design Document
 
 ## Overview
 
-Audiobook Organizer is a command-line application designed to help users
-organize their audiobook collections by identifying series, generating
-playlists, and updating audio file metadata. The application scans audiobook
-files, extracts metadata, uses pattern matching and fuzzy logic to identify
-series relationships, and stores this information in a SQLite database without
-modifying the original file structure.
+Audiobook Organizer is a command-line application and lightweight HTTP API server
+designed to help users organize their audiobook collections by identifying series,
+generating playlists, and updating audio file metadata. The application scans
+audiobook files, extracts metadata, uses pattern matching and fuzzy logic to
+identify series relationships, and persists information using a pluggable
+storage layer.
+
+Key capabilities:
+
+- CLI workflows for scan, organize, playlist generation, and tagging
+- HTTP API under `/api/v1` for listing/updating audiobooks, works, folders, backups, and metadata ops
+- Safe operations philosophy (copy-first, backups for file writes)
 
 ## Architecture
 
 The application follows a modular architecture with clear separation of
 concerns:
 
-```
+```text
 audiobook-organizer/
 ├── cmd/               # Command-line interface definitions
 ├── internal/          # Private application code
-│   ├── api/           # External API integrations
+│   ├── api/           # External API integrations (future)
 │   ├── config/        # Configuration management
 │   ├── database/      # Database operations
 │   ├── matcher/       # Series matching algorithms
@@ -26,9 +36,10 @@ audiobook-organizer/
 │   ├── playlist/      # Playlist generation
 │   ├── scanner/       # File system scanning
 │   └── tagger/        # Audio file tag updates
+├── internal/server/   # HTTP server, routes, and handlers
 ├── docs/              # Documentation
 └── main.go            # Application entry point
-```
+```text
 
 ## Key Components
 
@@ -52,14 +63,27 @@ Manages application settings using Viper:
 
 ### Database (internal/database)
 
-SQLite3-based persistence layer:
+Pluggable persistence layer with two implementations:
+
+- PebbleDB (default, recommended): embedded key-value store for production
+- SQLite3 (opt-in): relational store for development/testing convenience
 
 - **authors**: Stores author information
 - **series**: Stores series information with author relationships
-- **books**: Stores book information with paths, formats, and series
-  relationships
+- **works**: Logical title-level grouping across editions/narrations/languages
+- **books**: Stores book information with paths, formats, series/author links,
+   and extended metadata (see below)
 - **playlists**: Stores generated playlist information
 - **playlist_items**: Stores the composition of playlists
+
+Identifiers:
+
+- ULID string IDs for books and works (stable, sortable) stored as TEXT in SQLite
+- Integer IDs retained for authors, series, playlists to match existing schema
+
+Extended Book fields:
+
+- work_id, narrator, edition, language, publisher, isbn10, isbn13
 
 ### Scanner (internal/scanner)
 
@@ -67,6 +91,8 @@ Responsible for discovering and processing audiobook files:
 
 - Walks directory structures to find supported audio files
 - Extracts metadata and identifies series relationships
+- Maps standard tags (title/artist/album) and, where available, narrator/language/publisher
+- Establishes a Work association (by normalized title/author) when enabled
 - Maps files to database entities
 
 ### Metadata (internal/metadata)
@@ -76,6 +102,7 @@ Extracts and processes metadata from audio files:
 - Uses the `dhowden/tag` library to read standard tags
 - Falls back to filename and path analysis when tags are missing
 - Handles various audio formats including M4B, MP3, and others
+- Provides batch validation/update utilities used by the API
 
 ### Matcher (internal/matcher)
 
@@ -103,9 +130,19 @@ Updates metadata tags in audio files:
   metaflac)
 - Currently implemented as mock operations with actual commands commented
 
+### HTTP Server (internal/server)
+
+Exposes a JSON REST API used by the web UI (future) and external tools:
+
+- Audiobooks: `GET /api/v1/audiobooks`, `GET/PUT/DELETE /api/v1/audiobooks/:id`
+- Works: `GET/POST /api/v1/works`, `GET/PUT/DELETE /api/v1/works/:id`, `GET /api/v1/works/:id/books`
+- Metadata: `POST /api/v1/metadata/batch-update`, `POST /api/v1/metadata/validate`,
+  `GET /api/v1/metadata/export`, `POST /api/v1/metadata/import`
+- Library folders, operations, backups, and system status endpoints
+
 ## Database Schema
 
-```
+```text
 +----------------+       +---------------+       +---------------+
 | authors        |       | series        |       | books         |
 +----------------+       +---------------+       +---------------+
@@ -136,6 +173,13 @@ Updates metadata tags in audio files:
                                      | position       |
                                      +----------------+
 ```
+
+Additional tables/keys:
+
+- works (SQLite): id TEXT PK, title TEXT, author_id INT NULL, series_id INT NULL,
+  alt_titles TEXT NULL, created_at, updated_at
+- books (extensions): work_id TEXT NULL, narrator TEXT NULL, edition TEXT NULL,
+  language TEXT NULL, publisher TEXT NULL, isbn10 TEXT NULL, isbn13 TEXT NULL
 
 ## Algorithmic Approach
 
@@ -185,8 +229,8 @@ Updates metadata tags in audio files:
    - Support for more audio formats
 
 3. **Web Interface**:
-   - Optional web UI for visualization and manual organization
-   - Series relationship editing
+   - Web UI for visualization and manual organization (server already exposes API)
+   - Work and series relationship editing
 
 4. **Advanced Matching**:
    - Machine learning-based title and series matching
@@ -203,8 +247,9 @@ Updates metadata tags in audio files:
 3. Limited handling of books that belong to multiple series
 4. Fuzzy matching may produce false positives with similar titles
 5. No handling of cover art or other media assets
+6. PUT semantics replace full objects for updates; PATCH behavior may be added later
 
-6. **Library Organization**:
+7. **Library Organization**:
    - Optionally create a structured library using hard links, reflinks, or
      copies
    - Support multiple layout styles including iTunes-compatible organization
