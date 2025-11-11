@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -159,6 +159,14 @@ func (s *Server) setupRoutes() {
 		api.POST("/metadata/validate", s.validateMetadata)
 		api.GET("/metadata/export", s.exportMetadata)
 		api.POST("/metadata/import", s.importMetadata)
+
+		// Work routes (logical title-level grouping)
+		api.GET("/works", s.listWorks)
+		api.POST("/works", s.createWork)
+		api.GET("/works/:id", s.getWork)
+		api.PUT("/works/:id", s.updateWork)
+		api.DELETE("/works/:id", s.deleteWork)
+		api.GET("/works/:id/books", s.listWorkBooks)
 	}
 
 	// Serve static files (React frontend)
@@ -459,6 +467,121 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"results": results})
+}
+
+// ---- Work handlers ----
+
+func (s *Server) listWorks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	works, err := database.GlobalStore.GetAllWorks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if works == nil { works = []database.Work{} }
+	c.JSON(http.StatusOK, gin.H{"items": works, "count": len(works)})
+}
+
+func (s *Server) createWork(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var work database.Work
+	if err := c.ShouldBindJSON(&work); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(work.Title) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	created, err := database.GlobalStore.CreateWork(&work)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, created)
+}
+
+func (s *Server) getWork(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	work, err := database.GlobalStore.GetWorkByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if work == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+		return
+	}
+	c.JSON(http.StatusOK, work)
+}
+
+func (s *Server) updateWork(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	var work database.Work
+	if err := c.ShouldBindJSON(&work); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if strings.TrimSpace(work.Title) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	updated, err := database.GlobalStore.UpdateWork(id, &work)
+	if err != nil {
+		if err.Error() == "work not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, updated)
+}
+
+func (s *Server) deleteWork(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	if err := database.GlobalStore.DeleteWork(id); err != nil {
+		if err.Error() == "work not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func (s *Server) listWorkBooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+	books, err := database.GlobalStore.GetBooksByWorkID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if books == nil { books = []database.Book{} }
+	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books)})
 }
 
 func (s *Server) listAuthors(c *gin.Context) {

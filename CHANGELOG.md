@@ -16,6 +16,7 @@
 - API tests for extended metadata (round‑trip + update semantics)
 - Hardened audiobook update handler error checking (nil-safe not found handling)
 - Metadata extraction scaffolding for future multi-format support (tag reader integration prep)
+- Work entity: basic model, SQLite schema, Pebble+SQLite store methods, and REST API endpoints (list/get/create/update/delete, list books by work)
 
 ### Upcoming
 

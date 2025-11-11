@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -26,6 +26,14 @@ type Store interface {
 	GetSeriesByID(id int) (*Series, error)
 	GetSeriesByName(name string, authorID *int) (*Series, error)
 	CreateSeries(name string, authorID *int) (*Series, error)
+
+	// Works (logical title-level grouping across editions/narrations)
+	GetAllWorks() ([]Work, error)
+	GetWorkByID(id string) (*Work, error) // ULID ID
+	CreateWork(work *Work) (*Work, error) // Generates ULID if empty
+	UpdateWork(id string, work *Work) (*Work, error)
+	DeleteWork(id string) error
+	GetBooksByWorkID(workID string) ([]Book, error)
 
 	// Books
 	GetAllBooks(limit, offset int) ([]Book, error)
@@ -141,6 +149,16 @@ type Book struct {
 	Publisher *string `json:"publisher,omitempty"`
 	ISBN10    *string `json:"isbn10,omitempty"`
 	ISBN13    *string `json:"isbn13,omitempty"`
+}
+
+// Work represents a logical title-level grouping that may span multiple editions,
+// narrations, languages, or publishers. Books can optionally reference a Work via WorkID.
+type Work struct {
+	ID        string   `json:"id"`          // ULID format
+	Title     string   `json:"title"`       // Canonical title
+	AuthorID  *int     `json:"author_id,omitempty"`
+	SeriesID  *int     `json:"series_id,omitempty"`
+	AltTitles []string `json:"alt_titles,omitempty"` // Optional alternate titles
 }
 
 // Playlist represents a playlist

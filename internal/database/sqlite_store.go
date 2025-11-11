@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -60,6 +61,18 @@ func (s *SQLiteStore) createTables() error {
 
 	CREATE INDEX IF NOT EXISTS idx_series_name ON series(name);
 	CREATE INDEX IF NOT EXISTS idx_series_author ON series(author_id);
+
+	CREATE TABLE IF NOT EXISTS works (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		author_id INTEGER,
+		series_id INTEGER,
+		alt_titles TEXT,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_works_title ON works(title);
 
 	CREATE TABLE IF NOT EXISTS books (
 		id TEXT PRIMARY KEY,
@@ -394,6 +407,128 @@ func (s *SQLiteStore) CreateSeries(name string, authorID *int) (*Series, error) 
 		return nil, err
 	}
 	return &Series{ID: int(id), Name: name, AuthorID: authorID}, nil
+}
+
+// Work operations
+
+func (s *SQLiteStore) GetAllWorks() ([]Work, error) {
+	rows, err := s.db.Query("SELECT id, title, author_id, series_id, alt_titles FROM works ORDER BY title")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var works []Work
+	for rows.Next() {
+		var w Work
+		var altTitlesStr *string
+		if err := rows.Scan(&w.ID, &w.Title, &w.AuthorID, &w.SeriesID, &altTitlesStr); err != nil {
+			return nil, err
+		}
+		if altTitlesStr != nil && *altTitlesStr != "" {
+			w.AltTitles = strings.Split(*altTitlesStr, "|")
+		}
+		works = append(works, w)
+	}
+	return works, rows.Err()
+}
+
+func (s *SQLiteStore) GetWorkByID(id string) (*Work, error) {
+	var w Work
+	var altTitlesStr *string
+	err := s.db.QueryRow("SELECT id, title, author_id, series_id, alt_titles FROM works WHERE id = ?", id).
+		Scan(&w.ID, &w.Title, &w.AuthorID, &w.SeriesID, &altTitlesStr)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if altTitlesStr != nil && *altTitlesStr != "" {
+		w.AltTitles = strings.Split(*altTitlesStr, "|")
+	}
+	return &w, nil
+}
+
+func (s *SQLiteStore) CreateWork(work *Work) (*Work, error) {
+	if work.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		work.ID = id
+	}
+	var altTitlesStr *string
+	if len(work.AltTitles) > 0 {
+		joined := strings.Join(work.AltTitles, "|")
+		altTitlesStr = &joined
+	}
+	_, err := s.db.Exec("INSERT INTO works (id, title, author_id, series_id, alt_titles, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		work.ID, work.Title, work.AuthorID, work.SeriesID, altTitlesStr, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return work, nil
+}
+
+func (s *SQLiteStore) UpdateWork(id string, work *Work) (*Work, error) {
+	var altTitlesStr *string
+	if len(work.AltTitles) > 0 {
+		joined := strings.Join(work.AltTitles, "|")
+		altTitlesStr = &joined
+	}
+	result, err := s.db.Exec("UPDATE works SET title = ?, author_id = ?, series_id = ?, alt_titles = ?, updated_at = ? WHERE id = ?",
+		work.Title, work.AuthorID, work.SeriesID, altTitlesStr, time.Now(), id)
+	if err != nil {
+		return nil, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("work not found")
+	}
+	work.ID = id
+	return work, nil
+}
+
+func (s *SQLiteStore) DeleteWork(id string) error {
+	result, err := s.db.Exec("DELETE FROM works WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("work not found")
+	}
+	return nil
+}
+
+func (s *SQLiteStore) GetBooksByWorkID(workID string) ([]Book, error) {
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	          FROM books WHERE work_id = ? ORDER BY title`
+	rows, err := s.db.Query(query, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
+			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
 }
 
 // Book operations
