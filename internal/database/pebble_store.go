@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -336,6 +336,97 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 	}
 
 	return series, nil
+}
+
+// ---- Work operations (logical title-level grouping) ----
+
+func (p *PebbleStore) GetAllWorks() ([]Work, error) {
+	var works []Work
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: []byte("work:0"), UpperBound: []byte("work:;")})
+	if err != nil { return nil, err }
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip index keys
+		if strings.Contains(string(iter.Key()), ":title:") { continue }
+		var w Work
+		if err := json.Unmarshal(iter.Value(), &w); err != nil { return nil, err }
+		works = append(works, w)
+	}
+	return works, nil
+}
+
+func (p *PebbleStore) GetWorkByID(id string) (*Work, error) {
+	key := []byte(fmt.Sprintf("work:%s", id))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound { return nil, nil }
+	if err != nil { return nil, err }
+	defer closer.Close()
+	var w Work
+	if err := json.Unmarshal(value, &w); err != nil { return nil, err }
+	return &w, nil
+}
+
+func (p *PebbleStore) CreateWork(work *Work) (*Work, error) {
+	if work.ID == "" {
+		id, err := newULID(); if err != nil { return nil, err }
+		work.ID = id
+	}
+	data, err := json.Marshal(work)
+	if err != nil { return nil, err }
+	batch := p.db.NewBatch()
+	key := []byte(fmt.Sprintf("work:%s", work.ID))
+	if err := batch.Set(key, data, nil); err != nil { batch.Close(); return nil, err }
+	// Basic title index (case-insensitive normalized) for future lookup
+	normTitle := strings.ToLower(strings.TrimSpace(work.Title))
+	if normTitle != "" {
+		idxKey := []byte(fmt.Sprintf("work:title:%s:%s", normTitle, work.ID))
+		if err := batch.Set(idxKey, []byte(work.ID), nil); err != nil { batch.Close(); return nil, err }
+	}
+	if err := batch.Commit(pebble.Sync); err != nil { return nil, err }
+	return work, nil
+}
+
+func (p *PebbleStore) UpdateWork(id string, work *Work) (*Work, error) {
+	old, err := p.GetWorkByID(id)
+	if err != nil { return nil, err }
+	if old == nil { return nil, fmt.Errorf("work not found") }
+	work.ID = id
+	data, err := json.Marshal(work)
+	if err != nil { return nil, err }
+	batch := p.db.NewBatch()
+	key := []byte(fmt.Sprintf("work:%s", id))
+	if err := batch.Set(key, data, nil); err != nil { batch.Close(); return nil, err }
+	oldNorm := strings.ToLower(strings.TrimSpace(old.Title))
+	newNorm := strings.ToLower(strings.TrimSpace(work.Title))
+	if oldNorm != newNorm {
+		if oldNorm != "" { _ = batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", oldNorm, id)), nil) }
+		if newNorm != "" { _ = batch.Set([]byte(fmt.Sprintf("work:title:%s:%s", newNorm, id)), []byte(id), nil) }
+	}
+	if err := batch.Commit(pebble.Sync); err != nil { return nil, err }
+	return work, nil
+}
+
+func (p *PebbleStore) DeleteWork(id string) error {
+	work, err := p.GetWorkByID(id)
+	if err != nil { return err }
+	if work == nil { return nil }
+	batch := p.db.NewBatch()
+	key := []byte(fmt.Sprintf("work:%s", id))
+	if err := batch.Delete(key, nil); err != nil { batch.Close(); return err }
+	norm := strings.ToLower(strings.TrimSpace(work.Title))
+	if norm != "" { _ = batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", norm, id)), nil) }
+	return batch.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) GetBooksByWorkID(workID string) ([]Book, error) {
+	// Scan all books and filter by WorkID (could add index later)
+	books, err := p.GetAllBooks(1_000_000, 0)
+	if err != nil { return nil, err }
+	var filtered []Book
+	for _, b := range books {
+		if b.WorkID != nil && *b.WorkID == workID { filtered = append(filtered, b) }
+	}
+	return filtered, nil
 }
 
 // Book operations
