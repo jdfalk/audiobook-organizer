@@ -39,7 +39,7 @@ audiobook-organizer/
 ├── internal/server/   # HTTP server, routes, and handlers
 ├── docs/              # Documentation
 └── main.go            # Application entry point
-```text
+```
 
 ## Key Components
 
