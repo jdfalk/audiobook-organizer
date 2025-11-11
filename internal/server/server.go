@@ -481,7 +481,9 @@ func (s *Server) listWorks(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if works == nil { works = []database.Work{} }
+	if works == nil {
+		works = []database.Work{}
+	}
 	c.JSON(http.StatusOK, gin.H{"items": works, "count": len(works)})
 }
 
@@ -580,7 +582,9 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if books == nil { books = []database.Book{} }
+	if books == nil {
+		books = []database.Book{}
+	}
 	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books)})
 }
 

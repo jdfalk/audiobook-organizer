@@ -154,8 +154,8 @@ type Book struct {
 // Work represents a logical title-level grouping that may span multiple editions,
 // narrations, languages, or publishers. Books can optionally reference a Work via WorkID.
 type Work struct {
-	ID        string   `json:"id"`          // ULID format
-	Title     string   `json:"title"`       // Canonical title
+	ID        string   `json:"id"`    // ULID format
+	Title     string   `json:"title"` // Canonical title
 	AuthorID  *int     `json:"author_id,omitempty"`
 	SeriesID  *int     `json:"series_id,omitempty"`
 	AltTitles []string `json:"alt_titles,omitempty"` // Optional alternate titles
