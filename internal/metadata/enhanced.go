@@ -1,10 +1,11 @@
 // file: internal/metadata/enhanced.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,6 +44,9 @@ type ValidationRule struct {
 	AllowedValues   []string
 	CustomValidator func(interface{}) error
 }
+
+// ErrTaglibUnavailable is returned when native taglib writing is not compiled in.
+var ErrTaglibUnavailable = errors.New("taglib native writer unavailable")
 
 // DefaultValidationRules returns default validation rules for audiobook metadata
 func DefaultValidationRules() map[string]ValidationRule {
@@ -189,8 +193,16 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 }
 
 // WriteMetadataToFile safely writes metadata to an audiobook file
-// Uses external CLI tools with backup/rollback strategy via fileops.SafeCopy
+// Prefers native TagLib writer when built with 'taglib'; falls back to external CLI tools if unavailable or failed.
+// Uses backup/rollback strategy via fileops.SafeCopy for all paths.
 func WriteMetadataToFile(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
+	// Attempt native writer first if compiled in
+	if taglibAvailable {
+		if err := writeMetadataWithTaglib(filePath, metadata, config); err == nil {
+			return nil
+		}
+		// Native failed; continue with CLI fallback
+	}
 	// Determine file type
 	ext := strings.ToLower(filepath.Ext(filePath))
 
