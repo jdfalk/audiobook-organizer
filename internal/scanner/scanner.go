@@ -238,7 +238,9 @@ func saveBookToDatabase(book *Book) error {
 	err := database.DB.QueryRow("SELECT id FROM authors WHERE name = ?", book.Author).Scan(&authorIDInt)
 	if err != nil {
 		result, err2 := database.DB.Exec("INSERT INTO authors (name) VALUES (?)", book.Author)
-		if err2 != nil { return fmt.Errorf("failed to insert author: %w", err2) }
+		if err2 != nil {
+			return fmt.Errorf("failed to insert author: %w", err2)
+		}
 		authorIDInt, _ = result.LastInsertId()
 	}
 	var seriesID sql.NullInt64
@@ -247,10 +249,13 @@ func saveBookToDatabase(book *Book) error {
 		serr := database.DB.QueryRow("SELECT id FROM series WHERE name = ?", book.Series).Scan(&id)
 		if serr != nil {
 			result, ierr := database.DB.Exec("INSERT INTO series (name, author_id) VALUES (?, ?)", book.Series, authorIDInt)
-			if ierr != nil { return fmt.Errorf("failed to insert series: %w", ierr) }
+			if ierr != nil {
+				return fmt.Errorf("failed to insert series: %w", ierr)
+			}
 			id, _ = result.LastInsertId()
 		}
-		seriesID.Int64 = id; seriesID.Valid = true
+		seriesID.Int64 = id
+		seriesID.Valid = true
 	}
 	_, err = database.DB.Exec(`
 	        INSERT INTO books (title, author_id, series_id, series_sequence, file_path, format, duration)
@@ -265,7 +270,9 @@ func saveBookToDatabase(book *Book) error {
 }
 
 func nullablePtr(s string) *string {
-	if strings.TrimSpace(s) == "" { return nil }
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
 	return &s
 }
 

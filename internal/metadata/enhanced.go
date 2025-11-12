@@ -1,11 +1,13 @@
 // file: internal/metadata/enhanced.go
-// version: 1.0.0
-// guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
+// version: 1.2.0
+// guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -145,7 +147,7 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 		if validate || update.Validate {
 			validationErrors := ValidateMetadata(update.Updates, rules)
 			if len(validationErrors) > 0 {
-				errors = append(errors, fmt.Errorf("update %d (book %d): %v", i, update.BookID, validationErrors))
+				errors = append(errors, fmt.Errorf("update %d (book %s): %v", i, update.BookID, validationErrors))
 				continue
 			}
 		}
@@ -153,7 +155,7 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 		// Get current book
 		book, err := store.GetBookByID(update.BookID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("update %d: failed to get book %d: %w", i, update.BookID, err))
+			errors = append(errors, fmt.Errorf("update %d: failed to get book %s: %w", i, update.BookID, err))
 			continue
 		}
 
@@ -176,7 +178,7 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 		// Update in database
 		_, err = store.UpdateBook(update.BookID, book)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("update %d: failed to update book %d: %w", i, update.BookID, err))
+			errors = append(errors, fmt.Errorf("update %d: failed to update book %s: %w", i, update.BookID, err))
 			continue
 		}
 
@@ -187,6 +189,7 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 }
 
 // WriteMetadataToFile safely writes metadata to an audiobook file
+// Uses external CLI tools with backup/rollback strategy via fileops.SafeCopy
 func WriteMetadataToFile(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
 	// Determine file type
 	ext := strings.ToLower(filepath.Ext(filePath))
@@ -203,25 +206,167 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 	}
 }
 
-// writeM4BMetadata writes metadata to M4B/M4A files using safe file operations
+// writeM4BMetadata writes metadata to M4B/M4A files using AtomicParsley
 func writeM4BMetadata(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
-	// TODO: Implement M4B metadata writing using a library like github.com/dhowden/tag
-	// For now, return not implemented
-	return fmt.Errorf("M4B metadata writing not yet implemented")
+	// Check if AtomicParsley is available
+	if _, err := exec.LookPath("AtomicParsley"); err != nil {
+		return fmt.Errorf("AtomicParsley not found in PATH (install: brew install atomicparsley): %w", err)
+	}
+
+	// Create backup using safe copy with config
+	backupPath := filePath + ".backup"
+	if err := fileops.SafeCopy(filePath, backupPath, config); err != nil {
+		return fmt.Errorf("backup failed: %w", err)
+	}
+	defer func() {
+		// Clean up backup unless PreserveOriginal is set
+		if !config.PreserveOriginal {
+			_ = os.Remove(backupPath)
+		}
+	}()
+
+	// Build AtomicParsley command with metadata updates
+	args := []string{filePath, "--overWrite"}
+	if title, ok := metadata["title"].(string); ok && title != "" {
+		args = append(args, "--title", title)
+	}
+	if artist, ok := metadata["artist"].(string); ok && artist != "" {
+		args = append(args, "--artist", artist)
+	}
+	if album, ok := metadata["album"].(string); ok && album != "" {
+		args = append(args, "--album", album)
+	}
+	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
+		args = append(args, "--comment", "Narrator: "+narrator)
+	}
+	if genre, ok := metadata["genre"].(string); ok && genre != "" {
+		args = append(args, "--genre", genre)
+	}
+	if year, ok := metadata["year"].(int); ok && year > 0 {
+		args = append(args, "--year", fmt.Sprintf("%d", year))
+	}
+
+	cmd := exec.Command("AtomicParsley", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Restore from backup on failure
+		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
+			return fmt.Errorf("tag write failed and restore failed: write=%w, restore=%v, output=%s", err, restoreErr, output)
+		}
+		return fmt.Errorf("tag write failed (restored from backup): %w, output: %s", err, output)
+	}
+	return nil
 }
 
-// writeMP3Metadata writes metadata to MP3 files using safe file operations
+// writeMP3Metadata writes metadata to MP3 files using eyeD3
 func writeMP3Metadata(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
-	// TODO: Implement MP3 metadata writing using ID3 tags
-	// For now, return not implemented
-	return fmt.Errorf("MP3 metadata writing not yet implemented")
+	// Check if eyeD3 is available
+	if _, err := exec.LookPath("eyeD3"); err != nil {
+		return fmt.Errorf("eyeD3 not found in PATH (install: pip install eyeD3): %w", err)
+	}
+
+	// Create backup
+	backupPath := filePath + ".backup"
+	if err := fileops.SafeCopy(filePath, backupPath, config); err != nil {
+		return fmt.Errorf("backup failed: %w", err)
+	}
+	defer func() {
+		if !config.PreserveOriginal {
+			_ = os.Remove(backupPath)
+		}
+	}()
+
+	// Build eyeD3 command
+	args := []string{}
+	if title, ok := metadata["title"].(string); ok && title != "" {
+		args = append(args, "--title", title)
+	}
+	if artist, ok := metadata["artist"].(string); ok && artist != "" {
+		args = append(args, "--artist", artist)
+	}
+	if album, ok := metadata["album"].(string); ok && album != "" {
+		args = append(args, "--album", album)
+	}
+	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
+		// Store narrator in a custom TXXX frame
+		args = append(args, "--user-text-frame=NARRATOR:"+narrator)
+	}
+	if genre, ok := metadata["genre"].(string); ok && genre != "" {
+		args = append(args, "--genre", genre)
+	}
+	if year, ok := metadata["year"].(int); ok && year > 0 {
+		args = append(args, "--release-year", fmt.Sprintf("%d", year))
+	}
+	args = append(args, filePath)
+
+	cmd := exec.Command("eyeD3", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Restore from backup on failure
+		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
+			return fmt.Errorf("tag write failed and restore failed: write=%w, restore=%v, output=%s", err, restoreErr, output)
+		}
+		return fmt.Errorf("tag write failed (restored from backup): %w, output: %s", err, output)
+	}
+	return nil
 }
 
-// writeFLACMetadata writes metadata to FLAC files using safe file operations
+// writeFLACMetadata writes metadata to FLAC files using metaflac
 func writeFLACMetadata(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
-	// TODO: Implement FLAC metadata writing using Vorbis comments
-	// For now, return not implemented
-	return fmt.Errorf("FLAC metadata writing not yet implemented")
+	// Check if metaflac is available
+	if _, err := exec.LookPath("metaflac"); err != nil {
+		return fmt.Errorf("metaflac not found in PATH (install: brew install flac): %w", err)
+	}
+
+	// Create backup
+	backupPath := filePath + ".backup"
+	if err := fileops.SafeCopy(filePath, backupPath, config); err != nil {
+		return fmt.Errorf("backup failed: %w", err)
+	}
+	defer func() {
+		if !config.PreserveOriginal {
+			_ = os.Remove(backupPath)
+		}
+	}()
+
+	// Build metaflac command (remove old tags first, then set new)
+	removeArgs := []string{"--remove-tag=TITLE", "--remove-tag=ARTIST", "--remove-tag=ALBUM", "--remove-tag=GENRE", "--remove-tag=DATE", "--remove-tag=NARRATOR", filePath}
+	if err := exec.Command("metaflac", removeArgs...).Run(); err != nil {
+		// Non-fatal if tags don't exist
+	}
+
+	// Set new tags
+	var args []string
+	if title, ok := metadata["title"].(string); ok && title != "" {
+		args = append(args, "--set-tag=TITLE="+title)
+	}
+	if artist, ok := metadata["artist"].(string); ok && artist != "" {
+		args = append(args, "--set-tag=ARTIST="+artist)
+	}
+	if album, ok := metadata["album"].(string); ok && album != "" {
+		args = append(args, "--set-tag=ALBUM="+album)
+	}
+	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
+		args = append(args, "--set-tag=NARRATOR="+narrator)
+	}
+	if genre, ok := metadata["genre"].(string); ok && genre != "" {
+		args = append(args, "--set-tag=GENRE="+genre)
+	}
+	if year, ok := metadata["year"].(int); ok && year > 0 {
+		args = append(args, fmt.Sprintf("--set-tag=DATE=%d", year))
+	}
+	args = append(args, filePath)
+
+	cmd := exec.Command("metaflac", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Restore from backup on failure
+		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
+			return fmt.Errorf("tag write failed and restore failed: write=%w, restore=%v, output=%s", err, restoreErr, output)
+		}
+		return fmt.Errorf("tag write failed (restored from backup): %w, output: %s", err, output)
+	}
+	return nil
 }
 
 // RecordMetadataChange records a metadata change in history
