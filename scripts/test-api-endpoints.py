@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/test-api-endpoints.py
-# version: 1.0.0
+# version: 1.1.0
 # guid: a1b2c3d4-e5f6-7890-abcd-1234567890ab
 
 """
@@ -237,6 +237,79 @@ class APITester:
         # Note: We won't import metadata in test mode
         print("\n" + "="*80)
         print("Note: Skipping POST /api/v1/metadata/import (would modify database)")
+
+        # Work endpoints - comprehensive CRUD testing
+        print("\n" + "="*80)
+        print("Testing Work entity endpoints...")
+
+        # List works (should be empty initially or have existing ones)
+        self.test_endpoint(
+            "GET",
+            "/api/v1/works",
+            description="List all works",
+        )
+
+        # Create a work
+        work_create_result = self.test_endpoint(
+            "POST",
+            "/api/v1/works",
+            expected_status=201,
+            json_data={"title": "API Test Work"},
+            description="Create a new work",
+        )
+
+        # Extract work ID if creation succeeded
+        work_id = None
+        if work_create_result.success and work_create_result.response:
+            work_id = work_create_result.response.get("id")
+            print(f"Created work ID: {work_id}")
+
+        if work_id:
+            # Get work by ID
+            self.test_endpoint(
+                "GET",
+                f"/api/v1/works/{work_id}",
+                description=f"Get work by ID: {work_id}",
+            )
+
+            # Update work
+            self.test_endpoint(
+                "PUT",
+                f"/api/v1/works/{work_id}",
+                json_data={"title": "API Test Work (Updated)"},
+                description=f"Update work title",
+            )
+
+            # List books by work (should be empty)
+            self.test_endpoint(
+                "GET",
+                f"/api/v1/works/{work_id}/books",
+                description=f"List books for work {work_id}",
+            )
+
+            # Delete work
+            self.test_endpoint(
+                "DELETE",
+                f"/api/v1/works/{work_id}",
+                expected_status=204,
+                description=f"Delete work {work_id}",
+            )
+
+        # Test error cases
+        self.test_endpoint(
+            "POST",
+            "/api/v1/works",
+            expected_status=400,
+            json_data={},
+            description="Create work with missing title (expect 400)",
+        )
+
+        self.test_endpoint(
+            "GET",
+            "/api/v1/works/01HXXXXXXXXXXXXXXXXXXX",
+            expected_status=404,
+            description="Get non-existent work (expect 404)",
+        )
 
         # Exclusion endpoints - test with safe dummy data
         print("\n" + "="*80)
