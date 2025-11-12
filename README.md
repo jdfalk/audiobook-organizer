@@ -78,39 +78,31 @@ The existing command-line interface provides a solid foundation with:
 ## Installation
 
 ```bash
-```
-
-## Native Tag Writing (optional)
-
-By default, metadata writing uses external tools (AtomicParsley for M4B/M4A, eyeD3 for MP3, metaflac for FLAC).
-
-For faster, dependency-free native writes, you can enable the TagLib-backed writer:
-
-```bash
-# Add module (already in go.mod as indirect when enabled via build tag)
-go get go.senan.xyz/taglib@latest
-
-# Build with the native writer enabled
-go build -tags taglib ./...
-
-# Tests with native writer
-go test -tags taglib ./...
-```
-
-Runtime behavior:
-
-- When built with `-tags taglib`, the app uses the native TagLib path first.
-- If the native write fails, it automatically falls back to the external CLI tools.
-- When built without the tag, it uses the CLI tools only.
-
-Note: go-taglib bundles a Wasm binary of TagLib, so it requires no system TagLib or cgo.
-
 # Clone the repository
 git clone https://github.com/jdfalk/audiobook-organizer.git
 cd audiobook-organizer
 
 # Build the application
 go build -o audiobook-organizer
+```
+
+### Metadata Writing
+
+The application uses **native TagLib** (pure Go with bundled Wasm) for metadata writing by default. This provides:
+
+- Fast, dependency-free tag writing for all formats (MP3, M4B, M4A, FLAC, etc.)
+- No external tools required
+- Automatic fallback to CLI tools if native write fails
+
+**Optional CLI tool fallback:**
+
+If needed, the app can fall back to external tools:
+
+- **M4B/M4A**: AtomicParsley (`brew install atomicparsley`)
+- **MP3**: eyeD3 (`pip install eyeD3`)
+- **FLAC**: metaflac (`brew install flac`)
+
+These are only used if the native TagLib write fails.
 ```
 
 ## Usage
