@@ -1,11 +1,8 @@
 // file: internal/metadata/taglib_support.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
-//go:build taglib
-// +build taglib
-
-// TagLib native writer support (optional via build tag 'taglib'). Default build without tag excludes this file.
+// TagLib native writer support (default). Falls back to CLI tools on failure.
 
 package metadata
 
