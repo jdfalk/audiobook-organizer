@@ -18,7 +18,7 @@ describe('App', () => {
         </ThemeProvider>
       </BrowserRouter>
     );
-    
+
     expect(screen.getByText('Audiobook Organizer')).toBeInTheDocument();
   });
 
@@ -30,14 +30,14 @@ describe('App', () => {
         </ThemeProvider>
       </BrowserRouter>
     );
-    
+
     // Check for navigation items (they appear multiple times due to responsive drawer)
     const dashboardItems = screen.getAllByText('Dashboard');
     expect(dashboardItems.length).toBeGreaterThan(0);
-    
+
     const libraryItems = screen.getAllByText('Library');
     expect(libraryItems.length).toBeGreaterThan(0);
-    
+
     expect(screen.getAllByText('Works').length).toBeGreaterThan(0);
     expect(screen.getAllByText('File Manager').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Settings').length).toBeGreaterThan(0);
