@@ -1,11 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.0.0
-// guid: 6d7e8f9a-0b1c-2d3e-4f5a-6b7c8d9e0f1a
-
-import { Box, Typography } from '@mui/material';
-
-// file: web/src/pages/Settings.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 
 import { useState } from 'react';
@@ -53,20 +47,63 @@ export function Settings() {
     // Library settings
     scanOnStartup: false,
     autoOrganize: true,
-    fileNamingPattern: '{author} - {title}',
+    folderNamingPattern: '{author}/{title} ({print_year})',
+    fileNamingPattern: '{title} - {narrator}',
     createBackups: true,
-    
+
     // Metadata settings
     autoFetchMetadata: true,
     metadataSource: 'audible',
     language: 'en',
-    
+
     // Performance settings
     concurrentScans: 4,
     cacheSize: 1000,
     logLevel: 'info',
   });
   const [saved, setSaved] = useState(false);
+
+  // Example data for "To Kill a Mockingbird" audiobook
+  const exampleData = {
+    title: 'To Kill a Mockingbird',
+    author: 'Harper Lee',
+    narrator: 'Sissy Spacek',
+    series: '',
+    series_number: '',
+    print_year: 1960,
+    audiobook_release_year: 2014,
+    year: 1960,
+    publisher: 'Harper Audio',
+    edition: 'Unabridged',
+    language: 'English',
+    isbn13: '9780061808128',
+    isbn10: '0061808121'
+  };
+
+  const generateExample = (pattern: string, isFolder: boolean = false) => {
+    let result = pattern;
+    const replacements: Record<string, string> = {
+      '{title}': exampleData.title,
+      '{author}': exampleData.author,
+      '{narrator}': exampleData.narrator,
+      '{series}': exampleData.series || '',
+      '{series_number}': exampleData.series_number || '',
+      '{print_year}': exampleData.print_year.toString(),
+      '{audiobook_release_year}': exampleData.audiobook_release_year.toString(),
+      '{year}': exampleData.year.toString(),
+      '{publisher}': exampleData.publisher,
+      '{edition}': exampleData.edition,
+      '{language}': exampleData.language,
+      '{isbn13}': exampleData.isbn13,
+      '{isbn10}': exampleData.isbn10,
+    };
+
+    Object.entries(replacements).forEach(([key, value]) => {
+      result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+    });
+
+    return result + (isFolder ? '/' : '.m4b');
+  };
 
   const handleChange = (field: string, value: string | boolean | number) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
@@ -91,11 +128,12 @@ export function Settings() {
 
   const handleReset = () => {
     if (!confirm('Reset all settings to defaults?')) return;
-    
+
     setSettings({
       scanOnStartup: false,
       autoOrganize: true,
-      fileNamingPattern: '{author} - {title}',
+      folderNamingPattern: '{author}/{title} ({print_year})',
+      fileNamingPattern: '{title} - {narrator}',
       createBackups: true,
       autoFetchMetadata: true,
       metadataSource: 'audible',
@@ -165,11 +203,34 @@ export function Settings() {
             <Grid item xs={12}>
               <TextField
                 fullWidth
+                label="Folder Naming Pattern"
+                value={settings.folderNamingPattern}
+                onChange={(e) => handleChange('folderNamingPattern', e.target.value)}
+                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}"
+              />
+              <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Example: {generateExample(settings.folderNamingPattern, true)}
+                </Typography>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
                 label="File Naming Pattern"
                 value={settings.fileNamingPattern}
                 onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
-                helperText="Available variables: {title}, {author}, {series}, {series_number}, {year}"
+                helperText="Pattern for individual audiobook files within folders"
               />
+              <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Example: {generateExample(settings.fileNamingPattern, false)}
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Note: For multi-file audiobooks, files are automatically numbered (Part 1, Part 2, etc.)
+              </Typography>
             </Grid>
 
             <Grid item xs={12}>

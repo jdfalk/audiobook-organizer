@@ -1,8 +1,9 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -15,6 +16,7 @@ import {
   ListItem,
   ListItemText,
   Chip,
+  CardActionArea,
 } from '@mui/material';
 import {
   LibraryBooks as LibraryBooksIcon,
@@ -22,6 +24,8 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
   Storage as StorageIcon,
+  Person as PersonIcon,
+  MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
 
 interface SystemStats {
@@ -42,6 +46,7 @@ interface RecentOperation {
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<SystemStats>({
     total_books: 0,
     total_authors: 0,
@@ -63,7 +68,7 @@ export function Dashboard() {
       // const opsResponse = await fetch('/api/v1/operations/recent');
       // setStats(await statsResponse.json());
       // setOperations(await opsResponse.json());
-      
+
       // Placeholder data
       setStats({
         total_books: 1247,
@@ -100,27 +105,31 @@ export function Dashboard() {
     value,
     icon,
     suffix = '',
+    onClick,
   }: {
     title: string;
     value: number;
     icon: React.ReactNode;
     suffix?: string;
+    onClick?: () => void;
   }) => (
     <Card>
-      <CardContent>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
-          <Box>
-            <Typography color="text.secondary" gutterBottom>
-              {title}
-            </Typography>
-            <Typography variant="h4">
-              {value.toLocaleString()}
-              {suffix}
-            </Typography>
+      <CardActionArea onClick={onClick} disabled={!onClick}>
+        <CardContent>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box>
+              <Typography color="text.secondary" gutterBottom>
+                {title}
+              </Typography>
+              <Typography variant="h4">
+                {value.toLocaleString()}
+                {suffix}
+              </Typography>
+            </Box>
+            <Box sx={{ color: 'primary.main' }}>{icon}</Box>
           </Box>
-          <Box sx={{ color: 'primary.main' }}>{icon}</Box>
-        </Box>
-      </CardContent>
+        </CardContent>
+      </CardActionArea>
     </Card>
   );
 
@@ -158,6 +167,7 @@ export function Dashboard() {
             title="Total Audiobooks"
             value={stats.total_books}
             icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/library')}
           />
         </Grid>
 
@@ -165,7 +175,8 @@ export function Dashboard() {
           <StatCard
             title="Authors"
             value={stats.total_authors}
-            icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
+            icon={<PersonIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/library')}
           />
         </Grid>
 
@@ -173,7 +184,8 @@ export function Dashboard() {
           <StatCard
             title="Series"
             value={stats.total_series}
-            icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
+            icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/library')}
           />
         </Grid>
 
@@ -182,6 +194,7 @@ export function Dashboard() {
             title="Library Folders"
             value={stats.library_folders}
             icon={<FolderIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/file-manager')}
           />
         </Grid>
 

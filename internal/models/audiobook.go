@@ -1,5 +1,5 @@
 // file: internal/models/audiobook.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
 
 package models
@@ -22,14 +22,23 @@ type Series struct {
 
 // Audiobook represents an audiobook with all its metadata
 type Audiobook struct {
-	ID             int    `json:"id" db:"id"`
-	Title          string `json:"title" db:"title"`
-	AuthorID       *int   `json:"author_id" db:"author_id"`
-	SeriesID       *int   `json:"series_id" db:"series_id"`
-	SeriesSequence *int   `json:"series_sequence" db:"series_sequence"`
-	FilePath       string `json:"file_path" db:"file_path"`
-	Format         string `json:"format" db:"format"`
-	Duration       *int   `json:"duration" db:"duration"`
+	ID                   int     `json:"id" db:"id"`
+	Title                string  `json:"title" db:"title"`
+	AuthorID             *int    `json:"author_id" db:"author_id"`
+	SeriesID             *int    `json:"series_id" db:"series_id"`
+	SeriesSequence       *int    `json:"series_sequence" db:"series_sequence"`
+	FilePath             string  `json:"file_path" db:"file_path"`
+	OriginalFilename     *string `json:"original_filename" db:"original_filename"`
+	Format               string  `json:"format" db:"format"`
+	Duration             *int    `json:"duration" db:"duration"`
+	Narrator             *string `json:"narrator" db:"narrator"`
+	Edition              *string `json:"edition" db:"edition"`
+	Language             *string `json:"language" db:"language"`
+	Publisher            *string `json:"publisher" db:"publisher"`
+	PrintYear            *int    `json:"print_year" db:"print_year"`
+	AudiobookReleaseYear *int    `json:"audiobook_release_year" db:"audiobook_release_year"`
+	ISBN10               *string `json:"isbn10" db:"isbn10"`
+	ISBN13               *string `json:"isbn13" db:"isbn13"`
 
 	// Related objects (populated via joins)
 	Author *Author `json:"author,omitempty"`

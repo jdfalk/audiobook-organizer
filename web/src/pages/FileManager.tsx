@@ -1,8 +1,8 @@
 // file: web/src/pages/FileManager.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -17,11 +17,13 @@ import {
   DialogActions,
   TextField,
   Alert,
+  Stack,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Home as HomeIcon,
   NavigateNext as NavigateNextIcon,
+  FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material';
 import { DirectoryTree, DirectoryNode } from '../components/filemanager/DirectoryTree';
 import { LibraryFolderCard, LibraryFolder } from '../components/filemanager/LibraryFolderCard';
@@ -32,6 +34,7 @@ export function FileManager() {
   const [newFolderPath, setNewFolderPath] = useState('');
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [directoryTree, setDirectoryTree] = useState<DirectoryNode | null>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddFolder = async () => {
     if (!newFolderPath.trim()) return;
@@ -126,18 +129,57 @@ export function FileManager() {
 
   const pathSegments = selectedPath.split('/').filter(Boolean);
 
+  const handleBrowseFolder = () => {
+    folderInputRef.current?.click();
+  };
+
+  const handleFolderSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    // Get the directory path from the first file
+    const firstFile = files[0];
+    const webkitPath = (firstFile as any).webkitRelativePath;
+    if (webkitPath) {
+      const folderPath = webkitPath.split('/')[0];
+      setNewFolderPath(folderPath);
+      setAddFolderOpen(true);
+    }
+  };
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">File Manager</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setAddFolderOpen(true)}
-        >
-          Add Library Folder
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="outlined"
+            startIcon={<FolderOpenIcon />}
+            onClick={handleBrowseFolder}
+          >
+            Browse for Folder
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddFolderOpen(true)}
+          >
+            Add Library Folder
+          </Button>
+        </Stack>
       </Box>
+
+      {/* Hidden folder input for browsing */}
+      <input
+        ref={folderInputRef}
+        type="file"
+        // @ts-ignore - webkitdirectory is not in TypeScript types
+        webkitdirectory=""
+        directory=""
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFolderSelect}
+      />
 
       <Grid container spacing={3}>
         <Grid item xs={12}>
