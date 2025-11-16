@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.2.0
+// version: 1.6.0
 // guid: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 
 import { useState } from 'react';
@@ -16,8 +16,24 @@ import {
   FormControlLabel,
   Alert,
   Divider,
+  Collapse,
+  IconButton,
+  MenuItem,
+  InputAdornment,
+  Radio,
+  RadioGroup,
+  FormControl,
+  FormLabel,
 } from '@mui/material';
-import { Save as SaveIcon, RestartAlt as RestartAltIcon } from '@mui/icons-material';
+import {
+  Save as SaveIcon,
+  RestartAlt as RestartAltIcon,
+  DragHandle as DragHandleIcon,
+  CheckBox as CheckBoxIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  ExpandMore as ExpandMoreIcon,
+  Settings as SettingsIcon,
+} from '@mui/icons-material';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -45,23 +61,74 @@ export function Settings() {
   const [tabValue, setTabValue] = useState(0);
   const [settings, setSettings] = useState({
     // Library settings
+    libraryPath: '/path/to/audiobooks/library',
+    organizationStrategy: 'auto', // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
     scanOnStartup: false,
     autoOrganize: true,
     folderNamingPattern: '{author}/{title} ({print_year})',
     fileNamingPattern: '{title} - {narrator}',
     createBackups: true,
 
+    // Storage quotas
+    enableDiskQuota: false,
+    diskQuotaPercent: 80,
+    enableUserQuotas: false,
+    defaultUserQuotaGB: 100,
+
     // Metadata settings
     autoFetchMetadata: true,
-    metadataSource: 'audible',
+    metadataSources: [
+      {
+        id: 'audible',
+        name: 'Audible',
+        enabled: true,
+        priority: 1,
+        requiresAuth: false,
+        credentials: {}
+      },
+      {
+        id: 'goodreads',
+        name: 'Goodreads',
+        enabled: true,
+        priority: 2,
+        requiresAuth: true,
+        credentials: { apiKey: '', apiSecret: '' }
+      },
+      {
+        id: 'openlibrary',
+        name: 'Open Library',
+        enabled: false,
+        priority: 3,
+        requiresAuth: true,
+        credentials: { apiKey: '' }
+      },
+      {
+        id: 'google-books',
+        name: 'Google Books',
+        enabled: false,
+        priority: 4,
+        requiresAuth: true,
+        credentials: { apiKey: '' }
+      },
+    ],
     language: 'en',
 
     // Performance settings
     concurrentScans: 4,
-    cacheSize: 1000,
+
+    // Memory management
+    memoryLimitType: 'items', // 'items', 'percent', 'absolute'
+    cacheSize: 1000, // items
+    memoryLimitPercent: 25, // % of system memory
+    memoryLimitMB: 512, // MB
+
+    // Logging
     logLevel: 'info',
+    logFormat: 'text', // 'text' or 'json'
+    enableJsonLogging: false,
   });
   const [saved, setSaved] = useState(false);
+  const [expandedSource, setExpandedSource] = useState<string | null>(null);
 
   // Example data for "To Kill a Mockingbird" audiobook
   const exampleData = {
@@ -77,7 +144,9 @@ export function Settings() {
     edition: 'Unabridged',
     language: 'English',
     isbn13: '9780061808128',
-    isbn10: '0061808121'
+    isbn10: '0061808121',
+    track_number: 3,
+    total_tracks: 50
   };
 
   const generateExample = (pattern: string, isFolder: boolean = false) => {
@@ -96,6 +165,8 @@ export function Settings() {
       '{language}': exampleData.language,
       '{isbn13}': exampleData.isbn13,
       '{isbn10}': exampleData.isbn10,
+      '{track_number}': exampleData.track_number.toString().padStart(2, '0'),
+      '{total_tracks}': exampleData.total_tracks.toString(),
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
@@ -107,6 +178,50 @@ export function Settings() {
 
   const handleChange = (field: string, value: string | boolean | number) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
+    setSaved(false);
+  };
+
+  const handleSourceToggle = (sourceId: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      metadataSources: prev.metadataSources.map((source) =>
+        source.id === sourceId ? { ...source, enabled: !source.enabled } : source
+      ),
+    }));
+    setSaved(false);
+  };
+
+  const handleCredentialChange = (sourceId: string, field: string, value: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      metadataSources: prev.metadataSources.map((source) =>
+        source.id === sourceId
+          ? { ...source, credentials: { ...source.credentials, [field]: value } }
+          : source
+      ),
+    }));
+    setSaved(false);
+  };
+
+  const handleSourceReorder = (sourceId: string, direction: 'up' | 'down') => {
+    setSettings((prev) => {
+      const sources = [...prev.metadataSources];
+      const index = sources.findIndex((s) => s.id === sourceId);
+      if (index === -1) return prev;
+
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= sources.length) return prev;
+
+      // Swap priorities
+      const temp = sources[index].priority;
+      sources[index] = { ...sources[index], priority: sources[targetIndex].priority };
+      sources[targetIndex] = { ...sources[targetIndex], priority: temp };
+
+      // Sort by priority
+      sources.sort((a, b) => a.priority - b.priority);
+
+      return { ...prev, metadataSources: sources };
+    });
     setSaved(false);
   };
 
@@ -130,17 +245,33 @@ export function Settings() {
     if (!confirm('Reset all settings to defaults?')) return;
 
     setSettings({
+      libraryPath: '/path/to/audiobooks/library',
+      organizationStrategy: 'auto',
       scanOnStartup: false,
       autoOrganize: true,
       folderNamingPattern: '{author}/{title} ({print_year})',
       fileNamingPattern: '{title} - {narrator}',
       createBackups: true,
+      enableDiskQuota: false,
+      diskQuotaPercent: 80,
+      enableUserQuotas: false,
+      defaultUserQuotaGB: 100,
       autoFetchMetadata: true,
-      metadataSource: 'audible',
+      metadataSources: [
+        { id: 'audible', name: 'Audible', enabled: true, priority: 1, requiresAuth: false, credentials: {} },
+        { id: 'goodreads', name: 'Goodreads', enabled: true, priority: 2, requiresAuth: true, credentials: { apiKey: '', apiSecret: '' } },
+        { id: 'openlibrary', name: 'Open Library', enabled: false, priority: 3, requiresAuth: true, credentials: { apiKey: '' } },
+        { id: 'google-books', name: 'Google Books', enabled: false, priority: 4, requiresAuth: true, credentials: { apiKey: '' } },
+      ],
       language: 'en',
       concurrentScans: 4,
+      memoryLimitType: 'items',
       cacheSize: 1000,
+      memoryLimitPercent: 25,
+      memoryLimitMB: 512,
       logLevel: 'info',
+      logFormat: 'text',
+      enableJsonLogging: false,
     });
   };
 
@@ -177,6 +308,42 @@ export function Settings() {
             </Grid>
 
             <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Library Path"
+                value={settings.libraryPath}
+                onChange={(e) => handleChange('libraryPath', e.target.value)}
+                helperText="Main library directory where organized audiobooks are stored. Import paths are configured in File Manager."
+              />
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="caption">
+                  <strong>Library vs Import Paths:</strong> The library path is where organized audiobooks live.
+                  Import paths (configured in File Manager) are watched for new files to import into the library.
+                </Typography>
+              </Alert>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                select
+                label="File Organization Strategy"
+                value={settings.organizationStrategy}
+                onChange={(e) => handleChange('organizationStrategy', e.target.value)}
+                helperText="How files are organized into the library"
+              >
+                <MenuItem value="auto">Auto (tries Reflink → Hard Link → Copy)</MenuItem>
+                <MenuItem value="reflink">Reflink (CoW - fastest, space-efficient)</MenuItem>
+                <MenuItem value="hardlink">Hard Link (fast, space-efficient)</MenuItem>
+                <MenuItem value="symlink">Symbolic Link (fast, but fragile)</MenuItem>
+                <MenuItem value="copy">Copy (slow, uses double space, safest)</MenuItem>
+              </TextField>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Auto mode tries methods in order of efficiency: Reflink (CoW clone) → Hard Link → Copy as fallback.
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
               <FormControlLabel
                 control={
                   <Switch
@@ -206,7 +373,7 @@ export function Settings() {
                 label="Folder Naming Pattern"
                 value={settings.folderNamingPattern}
                 onChange={(e) => handleChange('folderNamingPattern', e.target.value)}
-                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}"
+                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}"
               />
               <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary">
@@ -221,16 +388,25 @@ export function Settings() {
                 label="File Naming Pattern"
                 value={settings.fileNamingPattern}
                 onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
-                helperText="Pattern for individual audiobook files within folders"
+                helperText="Pattern for individual audiobook files. All folder fields plus {track_number} and {total_tracks}"
               />
               <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Example: {generateExample(settings.fileNamingPattern, false)}
+                  Single file: {generateExample(settings.fileNamingPattern, false)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Multi-file: {generateExample(settings.fileNamingPattern, false).replace('.m4b', ' 03 of 50.mp3')}
                 </Typography>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Note: For multi-file audiobooks, files are automatically numbered (Part 1, Part 2, etc.)
-              </Typography>
+              <Alert severity="info" sx={{ mt: 1 }}>
+                <Typography variant="caption">
+                  <strong>Multi-file audiobooks:</strong> For books with multiple files (e.g., 50 MP3s), the system automatically appends track numbers.
+                  Pattern detection: Uses hyphens if pattern contains "-", underscores if "_", otherwise spaces.
+                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator 03 of 50.mp3"<br/>
+                  <strong>Override:</strong> Include {'{track_number}'} and {'{total_tracks}'} in your pattern to control exact formatting.
+                  Example: "{'{title}'} - Part {'{track_number}'} of {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of 50.m4b"
+                </Typography>
+              </Alert>
             </Grid>
 
             <Grid item xs={12}>
@@ -244,6 +420,71 @@ export function Settings() {
                 label="Create backups before modifying files"
               />
             </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                Storage Quotas
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enableDiskQuota}
+                    onChange={(e) => handleChange('enableDiskQuota', e.target.checked)}
+                  />
+                }
+                label="Enable disk quota limit"
+              />
+            </Grid>
+
+            {settings.enableDiskQuota && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Maximum Disk Usage"
+                  value={settings.diskQuotaPercent}
+                  onChange={(e) => handleChange('diskQuotaPercent', parseInt(e.target.value) || 0)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                  }}
+                  inputProps={{ min: 1, max: 100 }}
+                  helperText="Maximum percentage of disk space the library can use"
+                />
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enableUserQuotas}
+                    onChange={(e) => handleChange('enableUserQuotas', e.target.checked)}
+                  />
+                }
+                label="Enable per-user storage quotas (multi-user mode)"
+              />
+            </Grid>
+
+            {settings.enableUserQuotas && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Default User Quota"
+                  value={settings.defaultUserQuotaGB}
+                  onChange={(e) => handleChange('defaultUserQuotaGB', parseInt(e.target.value) || 0)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">GB</InputAdornment>,
+                  }}
+                  inputProps={{ min: 1, max: 10000 }}
+                  helperText="Storage limit per user"
+                />
+              </Grid>
+            )}
           </Grid>
         </TabPanel>
 
@@ -268,19 +509,161 @@ export function Settings() {
               />
             </Grid>
 
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                select
-                label="Metadata Source"
-                value={settings.metadataSource}
-                onChange={(e) => handleChange('metadataSource', e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="audible">Audible</option>
-                <option value="goodreads">Goodreads</option>
-                <option value="openlibrary">Open Library</option>
-              </TextField>
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Metadata Sources (Priority Order)
+              </Typography>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <Typography variant="caption">
+                  Sources are queried in order. If a field is missing from the first source,
+                  the system automatically falls back to the next enabled source to fill in additional fields.
+                </Typography>
+              </Alert>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                {settings.metadataSources.map((source, index) => (
+                  <Box key={source.id}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        py: 1.5,
+                        px: 1,
+                        bgcolor: source.enabled ? 'transparent' : 'action.disabledBackground',
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', mr: 1 }}>
+                        <Button
+                          size="small"
+                          onClick={() => handleSourceReorder(source.id, 'up')}
+                          disabled={index === 0}
+                          sx={{ minWidth: 'auto', p: 0.5 }}
+                        >
+                          ▲
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => handleSourceReorder(source.id, 'down')}
+                          disabled={index === settings.metadataSources.length - 1}
+                          sx={{ minWidth: 'auto', p: 0.5 }}
+                        >
+                          ▼
+                        </Button>
+                      </Box>
+                      <DragHandleIcon sx={{ mr: 2, color: 'text.disabled' }} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                        <Typography
+                          variant="body1"
+                          sx={{
+                            fontWeight: source.enabled ? 500 : 400,
+                            color: source.enabled ? 'text.primary' : 'text.disabled',
+                          }}
+                        >
+                          {source.priority}. {source.name}
+                        </Typography>
+                        {source.requiresAuth && (
+                          <Typography
+                            variant="caption"
+                            sx={{ ml: 1, color: 'text.secondary' }}
+                          >
+                            (requires API key)
+                          </Typography>
+                        )}
+                      </Box>
+                      {source.requiresAuth && (
+                        <IconButton
+                          size="small"
+                          onClick={() => setExpandedSource(expandedSource === source.id ? null : source.id)}
+                          sx={{ mr: 1 }}
+                        >
+                          <ExpandMoreIcon
+                            sx={{
+                              transform: expandedSource === source.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transition: 'transform 0.3s',
+                            }}
+                          />
+                        </IconButton>
+                      )}
+                      <Button
+                        size="small"
+                        onClick={() => handleSourceToggle(source.id)}
+                        startIcon={
+                          source.enabled ? <CheckBoxIcon /> : <CheckBoxOutlineBlankIcon />
+                        }
+                      >
+                        {source.enabled ? 'Enabled' : 'Disabled'}
+                      </Button>
+                    </Box>
+                    {source.requiresAuth && (
+                      <Collapse in={expandedSource === source.id}>
+                        <Box sx={{ p: 2, bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
+                          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <SettingsIcon sx={{ mr: 1, fontSize: 18 }} />
+                            API Configuration
+                          </Typography>
+                          <Grid container spacing={2}>
+                            {source.id === 'goodreads' && (
+                              <>
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="API Key"
+                                    value={source.credentials.apiKey || ''}
+                                    onChange={(e) => handleCredentialChange(source.id, 'apiKey', e.target.value)}
+                                    placeholder="Enter your Goodreads API key"
+                                  />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="API Secret"
+                                    type="password"
+                                    value={source.credentials.apiSecret || ''}
+                                    onChange={(e) => handleCredentialChange(source.id, 'apiSecret', e.target.value)}
+                                    placeholder="Enter your Goodreads API secret"
+                                  />
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Get your API credentials at: <a href="https://www.goodreads.com/api" target="_blank" rel="noopener noreferrer">goodreads.com/api</a>
+                                  </Typography>
+                                </Grid>
+                              </>
+                            )}
+                            {(source.id === 'openlibrary' || source.id === 'google-books') && (
+                              <>
+                                <Grid item xs={12}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="API Key"
+                                    value={source.credentials.apiKey || ''}
+                                    onChange={(e) => handleCredentialChange(source.id, 'apiKey', e.target.value)}
+                                    placeholder={`Enter your ${source.name} API key`}
+                                  />
+                                </Grid>
+                                <Grid item xs={12}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {source.id === 'google-books' ? (
+                                      <>Get your API key at: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></>
+                                    ) : (
+                                      <>Open Library API is free and doesn't require authentication for basic usage</>
+                                    )}
+                                  </Typography>
+                                </Grid>
+                              </>
+                            )}
+                          </Grid>
+                        </Box>
+                      </Collapse>
+                    )}
+                    {index < settings.metadataSources.length - 1 && (
+                      <Divider />
+                    )}
+                  </Box>
+                ))}
+              </Paper>
             </Grid>
 
             <Grid item xs={12} sm={6}>
@@ -316,16 +699,80 @@ export function Settings() {
               />
             </Grid>
 
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Cache Size (items)"
-                value={settings.cacheSize}
-                onChange={(e) => handleChange('cacheSize', parseInt(e.target.value) || 100)}
-                inputProps={{ min: 100, max: 10000 }}
-                helperText="Number of items to cache in memory"
-              />
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Memory Management
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl component="fieldset">
+                <FormLabel component="legend">Memory Limit Type</FormLabel>
+                <RadioGroup
+                  row
+                  value={settings.memoryLimitType}
+                  onChange={(e) => handleChange('memoryLimitType', e.target.value)}
+                >
+                  <FormControlLabel value="items" control={<Radio />} label="Number of Items" />
+                  <FormControlLabel value="percent" control={<Radio />} label="% of System Memory" />
+                  <FormControlLabel value="absolute" control={<Radio />} label="Absolute MB" />
+                </RadioGroup>
+              </FormControl>
+            </Grid>
+
+            {settings.memoryLimitType === 'items' && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Cache Size (items)"
+                  value={settings.cacheSize}
+                  onChange={(e) => handleChange('cacheSize', parseInt(e.target.value) || 100)}
+                  inputProps={{ min: 100, max: 10000 }}
+                  helperText="Number of audiobook records to cache in memory"
+                />
+              </Grid>
+            )}
+
+            {settings.memoryLimitType === 'percent' && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Memory Limit"
+                  value={settings.memoryLimitPercent}
+                  onChange={(e) => handleChange('memoryLimitPercent', parseInt(e.target.value) || 1)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                  }}
+                  inputProps={{ min: 1, max: 90 }}
+                  helperText="Maximum percentage of system memory to use"
+                />
+              </Grid>
+            )}
+
+            {settings.memoryLimitType === 'absolute' && (
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Memory Limit"
+                  value={settings.memoryLimitMB}
+                  onChange={(e) => handleChange('memoryLimitMB', parseInt(e.target.value) || 128)}
+                  InputProps={{
+                    endAdornment: <InputAdornment position="end">MB</InputAdornment>,
+                  }}
+                  inputProps={{ min: 128, max: 16384 }}
+                  helperText="Absolute memory limit in megabytes"
+                />
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" gutterBottom>
+                Logging
+              </Typography>
             </Grid>
 
             <Grid item xs={12} sm={6}>
@@ -335,14 +782,44 @@ export function Settings() {
                 label="Log Level"
                 value={settings.logLevel}
                 onChange={(e) => handleChange('logLevel', e.target.value)}
-                SelectProps={{ native: true }}
                 helperText="Logging verbosity level"
               >
-                <option value="debug">Debug</option>
-                <option value="info">Info</option>
-                <option value="warn">Warning</option>
-                <option value="error">Error</option>
+                <MenuItem value="debug">Debug</MenuItem>
+                <MenuItem value="info">Info</MenuItem>
+                <MenuItem value="warn">Warning</MenuItem>
+                <MenuItem value="error">Error</MenuItem>
               </TextField>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                select
+                label="Log Format"
+                value={settings.logFormat}
+                onChange={(e) => handleChange('logFormat', e.target.value)}
+              >
+                <MenuItem value="text">Text (human-readable)</MenuItem>
+                <MenuItem value="json">JSON (structured)</MenuItem>
+              </TextField>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                JSON logging is recommended for log aggregation and analysis tools
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enableJsonLogging}
+                    onChange={(e) => handleChange('enableJsonLogging', e.target.checked)}
+                  />
+                }
+                label="Enable JSON structured logging to separate file"
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                Creates a separate .json log file in addition to the main log
+              </Typography>
             </Grid>
           </Grid>
         </TabPanel>
