@@ -1,6 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.3.0
-// guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
+// version: 1.4.0
+// guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
 
@@ -81,6 +81,7 @@ func (s *SQLiteStore) createTables() error {
 		series_id INTEGER,
 		series_sequence INTEGER,
 		file_path TEXT NOT NULL UNIQUE,
+		original_filename TEXT,
 		format TEXT,
 		duration INTEGER,
 		work_id TEXT,
@@ -88,6 +89,8 @@ func (s *SQLiteStore) createTables() error {
 		edition TEXT,
 		language TEXT,
 		publisher TEXT,
+		print_year INTEGER,
+		audiobook_release_year INTEGER,
 		isbn10 TEXT,
 		isbn13 TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
