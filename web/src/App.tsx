@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.0.0
+// version: 1.2.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
 import { Works } from './pages/Works';
-import { FileManager } from './pages/FileManager';
+import { System } from './pages/System';
 import { Settings } from './pages/Settings';
 
 function App() {
@@ -20,7 +20,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/library" element={<Library />} />
           <Route path="/works" element={<Works />} />
-          <Route path="/files" element={<FileManager />} />
+          <Route path="/system" element={<System />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </MainLayout>

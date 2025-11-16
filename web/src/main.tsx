@@ -1,5 +1,5 @@
 // file: web/src/main.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import React from 'react';
@@ -13,7 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <App />
