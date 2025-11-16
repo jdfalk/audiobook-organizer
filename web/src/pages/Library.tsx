@@ -14,7 +14,7 @@ import {
   Alert,
   AlertTitle,
 } from '@mui/material';
-import { 
+import {
   FilterList as FilterListIcon,
   Upload as UploadIcon,
   FolderOpen as FolderOpenIcon,
@@ -208,6 +208,7 @@ export const Library = () => {
             />
           )}
         </Button>
+        </Stack>
       </Box>
 
       {/* Hidden file input for manual import */}
