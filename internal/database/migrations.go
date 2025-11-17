@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -59,6 +60,12 @@ var migrations = []Migration{
 		Version:     4,
 		Description: "Add extended Pebble keyspace (users, sessions, segments, playback)",
 		Up:          migration004Up,
+		Down:        nil,
+	},
+	{
+		Version:     5,
+		Description: "Add media info and version management fields to books",
+		Up:          migration005Up,
 		Down:        nil,
 	},
 }
@@ -189,6 +196,61 @@ func migration003Up(store Store) error {
 func migration004Up(store Store) error {
 	// Extended keyspace (users, sessions, segments, playback) already supported
 	log.Println("  - Adding extended Pebble keyspace (users, sessions, segments, playback)")
+	return nil
+}
+
+// migration005Up adds media info and version management fields to books table
+func migration005Up(store Store) error {
+	log.Println("  - Adding media info and version management fields to books table")
+
+	// Check if this is a SQLite store (we need direct SQL access for ALTER TABLE)
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		// For non-SQLite stores, these fields are handled by the store implementation
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// Add media info fields
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN bitrate_kbps INTEGER",
+		"ALTER TABLE books ADD COLUMN codec TEXT",
+		"ALTER TABLE books ADD COLUMN sample_rate_hz INTEGER",
+		"ALTER TABLE books ADD COLUMN channels INTEGER",
+		"ALTER TABLE books ADD COLUMN bit_depth INTEGER",
+		"ALTER TABLE books ADD COLUMN quality TEXT",
+		// Add version management fields
+		"ALTER TABLE books ADD COLUMN is_primary_version BOOLEAN DEFAULT 1",
+		"ALTER TABLE books ADD COLUMN version_group_id TEXT",
+		"ALTER TABLE books ADD COLUMN version_notes TEXT",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			// Check if column already exists (this is not an error)
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	// Create indices for version management
+	indexStatements := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_version_group ON books(version_group_id)",
+		"CREATE INDEX IF NOT EXISTS idx_books_is_primary ON books(is_primary_version)",
+	}
+
+	for _, stmt := range indexStatements {
+		log.Printf("    - Creating index: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	log.Println("  - Media info and version management fields added successfully")
 	return nil
 }
 

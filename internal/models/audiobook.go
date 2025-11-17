@@ -1,5 +1,5 @@
 // file: internal/models/audiobook.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
 
 package models
@@ -39,6 +39,19 @@ type Audiobook struct {
 	AudiobookReleaseYear *int    `json:"audiobook_release_year" db:"audiobook_release_year"`
 	ISBN10               *string `json:"isbn10" db:"isbn10"`
 	ISBN13               *string `json:"isbn13" db:"isbn13"`
+
+	// Media info fields (parsed from file metadata)
+	Bitrate    *int    `json:"bitrate_kbps" db:"bitrate_kbps"`     // Bitrate in kbps
+	Codec      *string `json:"codec" db:"codec"`                   // e.g., 'AAC', 'MP3', 'FLAC'
+	SampleRate *int    `json:"sample_rate_hz" db:"sample_rate_hz"` // Sample rate in Hz
+	Channels   *int    `json:"channels" db:"channels"`             // Number of audio channels
+	BitDepth   *int    `json:"bit_depth" db:"bit_depth"`           // Bit depth (for lossless formats)
+	Quality    *string `json:"quality" db:"quality"`               // Human-readable quality string
+
+	// Version management
+	IsPrimaryVersion *bool   `json:"is_primary_version" db:"is_primary_version"` // Mark preferred version
+	VersionGroupID   *string `json:"version_group_id" db:"version_group_id"`     // Links versions together
+	VersionNotes     *string `json:"version_notes" db:"version_notes"`           // e.g., 'Remastered 2020'
 
 	// Related objects (populated via joins)
 	Author *Author `json:"author,omitempty"`
