@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.6.0
+// version: 1.8.0
 // guid: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 
 import { useState } from 'react';
@@ -45,15 +45,22 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
   return (
-    <div
+    <Box
       role="tabpanel"
       hidden={value !== index}
       id={`settings-tabpanel-${index}`}
       aria-labelledby={`settings-tab-${index}`}
+      sx={{
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        flex: 1,
+        minHeight: 0,
+        p: 3
+      }}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
+      {value === index && children}
+    </Box>
   );
 }
 
@@ -65,7 +72,7 @@ export function Settings() {
     organizationStrategy: 'auto', // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
     scanOnStartup: false,
     autoOrganize: true,
-    folderNamingPattern: '{author}/{title} ({print_year})',
+    folderNamingPattern: '{author}/{series}/{title} ({print_year})',
     fileNamingPattern: '{title} - {narrator}',
     createBackups: true,
 
@@ -130,8 +137,8 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
 
-  // Example data for "To Kill a Mockingbird" audiobook
-  const exampleData = {
+  // Example data for "To Kill a Mockingbird" audiobook (no series)
+  const exampleNoSeries = {
     title: 'To Kill a Mockingbird',
     author: 'Harper Lee',
     narrator: 'Sissy Spacek',
@@ -149,7 +156,26 @@ export function Settings() {
     total_tracks: 50
   };
 
-  const generateExample = (pattern: string, isFolder: boolean = false) => {
+  // Example data for Nancy Drew series book
+  const exampleWithSeries = {
+    title: 'The Secret of the Old Clock',
+    author: 'Carolyn Keene',
+    narrator: 'Laura Linney',
+    series: 'Nancy Drew Mystery Stories',
+    series_number: '1',
+    print_year: 1930,
+    audiobook_release_year: 2018,
+    year: 1930,
+    publisher: 'Listening Library',
+    edition: 'Unabridged',
+    language: 'English',
+    isbn13: '9781524780123',
+    isbn10: '1524780120',
+    track_number: 1,
+    total_tracks: 12
+  };
+
+  const generateExample = (pattern: string, exampleData: typeof exampleNoSeries, isFolder: boolean = false) => {
     let result = pattern;
     const replacements: Record<string, string> = {
       '{title}': exampleData.title,
@@ -173,7 +199,13 @@ export function Settings() {
       result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
     });
 
-    return result + (isFolder ? '/' : '.m4b');
+    // Clean up paths: remove empty segments (e.g., when series is empty)
+    if (isFolder) {
+      result = result.split('/').filter(segment => segment.trim() !== '').join('/');
+      return result + '/';
+    }
+
+    return result + '.m4b';
   };
 
   const handleChange = (field: string, value: string | boolean | number) => {
@@ -249,7 +281,7 @@ export function Settings() {
       organizationStrategy: 'auto',
       scanOnStartup: false,
       autoOrganize: true,
-      folderNamingPattern: '{author}/{title} ({print_year})',
+      folderNamingPattern: '{author}/{series}/{title} ({print_year})',
       fileNamingPattern: '{title} - {narrator}',
       createBackups: true,
       enableDiskQuota: false,
@@ -287,7 +319,7 @@ export function Settings() {
         </Alert>
       )}
 
-      <Paper>
+      <Paper sx={{ maxHeight: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
         <Tabs
           value={tabValue}
           onChange={(_, newValue) => setTabValue(newValue)}
@@ -373,11 +405,26 @@ export function Settings() {
                 label="Folder Naming Pattern"
                 value={settings.folderNamingPattern}
                 onChange={(e) => handleChange('folderNamingPattern', e.target.value)}
-                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}"
+                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}."
               />
-              <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Example: {generateExample(settings.folderNamingPattern, true)}
+              <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
+                <Typography variant="caption">
+                  <strong>Smart Path Handling:</strong> Empty fields (like {'{series}'}) are automatically removed from paths.
+                  If a book has no series, that segment disappears gracefully—no duplicate slashes or empty folders.
+                </Typography>
+              </Alert>
+              <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                  With Series:
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}>
+                  {generateExample(settings.folderNamingPattern, exampleWithSeries, true)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                  Without Series:
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block' }}>
+                  {generateExample(settings.folderNamingPattern, exampleNoSeries, true)}
                 </Typography>
               </Box>
             </Grid>
@@ -390,12 +437,18 @@ export function Settings() {
                 onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
                 helperText="Pattern for individual audiobook files. All folder fields plus {track_number} and {total_tracks}"
               />
-              <Box sx={{ mt: 1, p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Single file: {generateExample(settings.fileNamingPattern, false)}
+              <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                  With Series (single file):
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                  Multi-file: {generateExample(settings.fileNamingPattern, false).replace('.m4b', ' 03 of 50.mp3')}
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}>
+                  {generateExample(settings.fileNamingPattern, exampleWithSeries, false)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                  Without Series (multi-file):
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-word' }}>
+                  {generateExample(settings.fileNamingPattern, exampleNoSeries, false).replace('.m4b', ' 03 of 50.mp3')}
                 </Typography>
               </Box>
               <Alert severity="info" sx={{ mt: 1 }}>
@@ -824,7 +877,7 @@ export function Settings() {
           </Grid>
         </TabPanel>
 
-        <Box sx={{ p: 2, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+        <Box sx={{ p: 2, display: 'flex', gap: 2, justifyContent: 'flex-end', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
           <Button
             variant="outlined"
             startIcon={<RestartAltIcon />}
