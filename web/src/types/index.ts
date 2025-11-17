@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -27,6 +27,19 @@ export interface Audiobook {
   file_size_bytes?: number;
   format?: string;
   bitrate_kbps?: number;
+
+  // Media info fields (parsed from file)
+  codec?: string;
+  sample_rate_hz?: number;
+  channels?: number;
+  bit_depth?: number;
+  quality?: string; // e.g., '320kbps AAC', '128kbps MP3', 'FLAC Lossless'
+
+  // Version management
+  is_primary_version?: boolean;
+  version_group_id?: string; // Links multiple versions of same book
+  version_notes?: string; // e.g., 'Remastered 2020', 'Original Recording'
+
   created_at: string;
   updated_at: string;
   work_id?: string;
