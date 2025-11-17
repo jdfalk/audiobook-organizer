@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 
 import { useState } from 'react';
@@ -73,7 +73,7 @@ export function Settings() {
     scanOnStartup: false,
     autoOrganize: true,
     folderNamingPattern: '{author}/{series}/{title} ({print_year})',
-    fileNamingPattern: '{title} - {narrator}',
+    fileNamingPattern: '{title} - {author} - read by {narrator}',
     createBackups: true,
 
     // Storage quotas
@@ -153,7 +153,10 @@ export function Settings() {
     isbn13: '9780061808128',
     isbn10: '0061808121',
     track_number: 3,
-    total_tracks: 50
+    total_tracks: 50,
+    bitrate: '320kbps',
+    codec: 'AAC',
+    quality: '320kbps AAC'
   };
 
   // Example data for Nancy Drew series book
@@ -172,7 +175,10 @@ export function Settings() {
     isbn13: '9781524780123',
     isbn10: '1524780120',
     track_number: 1,
-    total_tracks: 12
+    total_tracks: 12,
+    bitrate: '128kbps',
+    codec: 'MP3',
+    quality: '128kbps MP3'
   };
 
   const generateExample = (pattern: string, exampleData: typeof exampleNoSeries, isFolder: boolean = false) => {
@@ -193,6 +199,9 @@ export function Settings() {
       '{isbn10}': exampleData.isbn10,
       '{track_number}': exampleData.track_number.toString().padStart(2, '0'),
       '{total_tracks}': exampleData.total_tracks.toString(),
+      '{bitrate}': exampleData.bitrate || '',
+      '{codec}': exampleData.codec || '',
+      '{quality}': exampleData.quality || '',
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
@@ -282,7 +291,7 @@ export function Settings() {
       scanOnStartup: false,
       autoOrganize: true,
       folderNamingPattern: '{author}/{series}/{title} ({print_year})',
-      fileNamingPattern: '{title} - {narrator}',
+      fileNamingPattern: '{title} - {author} - read by {narrator}',
       createBackups: true,
       enableDiskQuota: false,
       diskQuotaPercent: 80,
@@ -435,7 +444,7 @@ export function Settings() {
                 label="File Naming Pattern"
                 value={settings.fileNamingPattern}
                 onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
-                helperText="Pattern for individual audiobook files. All folder fields plus {track_number} and {total_tracks}"
+                helperText="Pattern for individual audiobook files. All folder fields plus {track_number}, {total_tracks}, {bitrate}, {codec}, {quality} (parsed from media)"
               />
               <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
