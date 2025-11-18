@@ -363,7 +363,7 @@ export function Settings() {
         // Core paths
         root_dir: settings.libraryPath,
         playlist_dir: settings.libraryPath + '/playlists',
-        
+
         // Library organization
         organization_strategy: settings.organizationStrategy,
         scan_on_startup: settings.scanOnStartup,
@@ -371,13 +371,13 @@ export function Settings() {
         folder_naming_pattern: settings.folderNamingPattern,
         file_naming_pattern: settings.fileNamingPattern,
         create_backups: settings.createBackups,
-        
+
         // Storage quotas
         enable_disk_quota: settings.enableDiskQuota,
         disk_quota_percent: settings.diskQuotaPercent,
         enable_user_quotas: settings.enableUserQuotas,
         default_user_quota_gb: settings.defaultUserQuotaGB,
-        
+
         // Metadata
         auto_fetch_metadata: settings.autoFetchMetadata,
         metadata_sources: settings.metadataSources.map(source => ({
@@ -389,16 +389,16 @@ export function Settings() {
           credentials: source.credentials as { [key: string]: string }
         })),
         language: settings.language,
-        
+
         // Performance
         concurrent_scans: settings.concurrentScans,
-        
+
         // Memory management
         memory_limit_type: settings.memoryLimitType,
         cache_size: settings.cacheSize,
         memory_limit_percent: settings.memoryLimitPercent,
         memory_limit_mb: settings.memoryLimitMB,
-        
+
         // Logging
         log_level: settings.logLevel,
         log_format: settings.logFormat,

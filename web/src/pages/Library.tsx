@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -40,6 +40,7 @@ import { SearchBar, ViewMode } from '../components/audiobooks/SearchBar';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
+import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
 import * as api from '../services/api';
 
@@ -64,6 +65,8 @@ export const Library = () => {
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [hasLibraryFolders, setHasLibraryFolders] = useState(true);
+  const [versionManagementOpen, setVersionManagementOpen] = useState(false);
+  const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
@@ -228,6 +231,20 @@ export const Library = () => {
     // TODO: Navigate to audiobook detail page
   }, []);
 
+  const handleVersionManage = (audiobook: Audiobook) => {
+    setVersionManagingAudiobook(audiobook);
+    setVersionManagementOpen(true);
+  };
+
+  const handleVersionManagementClose = () => {
+    setVersionManagementOpen(false);
+    setVersionManagingAudiobook(null);
+  };
+
+  const handleVersionUpdate = () => {
+    loadAudiobooks();
+  };
+
   const handleFiltersChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
     setPage(1); // Reset to first page on filter change
@@ -383,6 +400,7 @@ export const Library = () => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onClick={handleClick}
+              onVersionManage={handleVersionManage}
             />
           ) : (
             <AudiobookList
@@ -430,6 +448,13 @@ export const Library = () => {
         audiobooks={selectedAudiobooks}
         onClose={() => setBatchEditOpen(false)}
         onSave={handleBatchSave}
+      />
+
+      <VersionManagement
+        audiobookId={versionManagingAudiobook?.id || ''}
+        open={versionManagementOpen}
+        onClose={handleVersionManagementClose}
+        onUpdate={handleVersionUpdate}
       />
 
       {/* Import Path Management Dialog */}

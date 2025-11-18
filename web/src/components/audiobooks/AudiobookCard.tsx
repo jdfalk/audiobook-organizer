@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -18,6 +18,7 @@ import {
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  Compare as CompareIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
 
@@ -26,6 +27,7 @@ interface AudiobookCardProps {
   onEdit?: (audiobook: Audiobook) => void;
   onDelete?: (audiobook: Audiobook) => void;
   onClick?: (audiobook: Audiobook) => void;
+  onVersionManage?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -33,6 +35,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
   onEdit,
   onDelete,
   onClick,
+  onVersionManage,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -56,6 +59,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
     event.stopPropagation();
     handleClose();
     onDelete?.(audiobook);
+  };
+
+  const handleVersionManage = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    handleClose();
+    onVersionManage?.(audiobook);
   };
 
   const handleCardClick = () => {
@@ -156,6 +165,9 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
         )}
 
         <Box sx={{ mt: 'auto', pt: 1, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {audiobook.version_group_id && (
+            <Chip label="Multiple Versions" size="small" color="info" icon={<CompareIcon />} />
+          )}
           {audiobook.genre && (
             <Chip label={audiobook.genre} size="small" variant="outlined" />
           )}
@@ -170,6 +182,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           <MenuItem onClick={handleEdit}>
             <EditIcon sx={{ mr: 1 }} fontSize="small" />
             Edit
+          </MenuItem>
+        )}
+        {onVersionManage && (
+          <MenuItem onClick={handleVersionManage}>
+            <CompareIcon sx={{ mr: 1 }} fontSize="small" />
+            Manage Versions
           </MenuItem>
         )}
         {onDelete && (
