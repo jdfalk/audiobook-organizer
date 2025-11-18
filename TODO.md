@@ -63,12 +63,12 @@
 - [ ] 🟡 **Backend**: Metadata source integration (Audible, Goodreads, Open Library, Google Books)
 
 - [x] ✅ **Frontend**: Connect all pages to backend APIs
-  - ✅ Created comprehensive API service layer (src/services/api.ts)
+  - ✅ Created comprehensive API service layer (src/services/api.ts) with 30+ typed endpoints
   - ✅ Dashboard: Real statistics from /api/v1/audiobooks, /api/v1/authors, /api/v1/series, /api/v1/system/status
   - ✅ Library page: Real audiobook listing, search, import path management, scan operations
-  - ✅ System page: Real logs with filtering, system status, memory/CPU stats
+  - ✅ System page: Real logs with filtering, system status, memory/CPU stats, SystemInfoTab displays real-time data
+  - ✅ Settings page: Loads configuration on mount with api.getConfig(), saves with api.updateConfig()
   - ✅ All API endpoints integrated with proper error handling
-- [ ] 🟡 **Frontend**: Settings page - Connect to /api/v1/config endpoints
 - [ ] 🟡 **Frontend**: Library browser with grid/list views and version selection
 - [ ] 🟡 **Frontend**: Metadata editor with inline editing and version management
 - [ ] 🟡 **Frontend**: Multiple version display and management UI
