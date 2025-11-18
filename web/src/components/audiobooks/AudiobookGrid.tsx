@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookGrid.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 import React from 'react';
@@ -14,6 +14,7 @@ interface AudiobookGridProps {
   onDelete?: (audiobook: Audiobook) => void;
   onClick?: (audiobook: Audiobook) => void;
   onVersionManage?: (audiobook: Audiobook) => void;
+  onFetchMetadata?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
@@ -23,6 +24,7 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
   onDelete,
   onClick,
   onVersionManage,
+  onFetchMetadata,
 }) => {
   if (loading) {
     return (
@@ -62,6 +64,7 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
             onDelete={onDelete}
             onClick={onClick}
             onVersionManage={onVersionManage}
+            onFetchMetadata={onFetchMetadata}
           />
         </Grid>
       ))}

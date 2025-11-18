@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -19,6 +19,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Compare as CompareIcon,
+  CloudDownload as CloudDownloadIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
 
@@ -28,6 +29,7 @@ interface AudiobookCardProps {
   onDelete?: (audiobook: Audiobook) => void;
   onClick?: (audiobook: Audiobook) => void;
   onVersionManage?: (audiobook: Audiobook) => void;
+  onFetchMetadata?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -36,6 +38,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
   onDelete,
   onClick,
   onVersionManage,
+  onFetchMetadata,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -65,6 +68,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
     event.stopPropagation();
     handleClose();
     onVersionManage?.(audiobook);
+  };
+
+  const handleFetchMetadata = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    handleClose();
+    onFetchMetadata?.(audiobook);
   };
 
   const handleCardClick = () => {
@@ -188,6 +197,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           <MenuItem onClick={handleVersionManage}>
             <CompareIcon sx={{ mr: 1 }} fontSize="small" />
             Manage Versions
+          </MenuItem>
+        )}
+        {onFetchMetadata && (
+          <MenuItem onClick={handleFetchMetadata}>
+            <CloudDownloadIcon sx={{ mr: 1 }} fontSize="small" />
+            Fetch Metadata
           </MenuItem>
         )}
         {onDelete && (
