@@ -4,6 +4,33 @@
 
 ### Added / Changed
 
+#### Latest Changes (Metadata, UI Enhancements, Testing, Documentation)
+
+- **Metadata Integration**: Open Library API integration for external metadata fetching
+  - Created OpenLibraryClient with search and ISBN lookup capabilities
+  - API endpoints: `GET /api/v1/metadata/search`, `POST /api/v1/audiobooks/:id/fetch-metadata`
+  - Frontend: "Fetch Metadata" button in audiobook card menu with CloudDownload icon
+  - Returns title, author, description, publisher, publish year, ISBN, cover URL, language
+- **Library UI Enhancements**: Sorting functionality for audiobooks
+  - Sorting dropdown with options: title, author, date added, date modified
+  - Client-side sorting with localeCompare for strings, timestamp comparison for dates
+  - Date sorting displays newest first (descending order)
+- **Inline Editing**: Reusable InlineEditField component
+  - Edit/display modes with TextField integration
+  - Save/cancel buttons with keyboard shortcuts (Enter to save, Escape to cancel)
+  - Support for single-line and multiline editing
+- **Testing Framework**: Comprehensive test suite created
+  - 8 metadata tests: client initialization, search operations, ISBN lookup, error handling
+  - 11 database tests: CRUD operations, version management, author operations, pagination, counting
+  - Uses setupTestDB pattern with temporary databases and cleanup
+  - Network tests use t.Skip for rate limit protection
+- **API Documentation**: Complete OpenAPI 3.0.3 specification (docs/openapi.yaml)
+  - Documented 20+ endpoints across 9 categories
+  - Full schema definitions for all models (Book with 25+ fields, Author, Series, etc.)
+  - Request/response examples with proper types and error codes
+
+#### Previous Changes
+
 - Extended Book metadata fields: work_id, narrator, edition, language, publisher, isbn10, isbn13 (with SQLite migration & CRUD support)
 - API tests for extended metadata (round‑trip + update semantics)
 - Hardened audiobook update handler error checking (nil-safe not found handling)
