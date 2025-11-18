@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -57,6 +57,7 @@ export const Library = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<import('../components/audiobooks/SearchBar').SortOption>('title');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
   const [page, setPage] = useState(1);
@@ -120,7 +121,23 @@ export const Library = () => {
         lastPlayed: undefined,
       }));
 
-      setAudiobooks(convertedBooks);
+      // Apply client-side sorting
+      const sortedBooks = [...convertedBooks].sort((a, b) => {
+        switch (sortBy) {
+          case 'title':
+            return a.title.localeCompare(b.title);
+          case 'author':
+            return (a.author || '').localeCompare(b.author || '');
+          case 'date_added':
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          case 'date_modified':
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          default:
+            return 0;
+        }
+      });
+
+      setAudiobooks(sortedBooks);
       setTotalPages(Math.ceil((debouncedSearch ? books.length : bookCount) / limit));
       setHasLibraryFolders(folders.length > 0);
 
@@ -139,7 +156,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filters, page]);
+  }, [debouncedSearch, filters, page, sortBy]);
 
   const handleManualImport = () => {
     fileInputRef.current?.click();
@@ -403,6 +420,8 @@ export const Library = () => {
             onChange={setSearchQuery}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
           />
 
           {viewMode === 'grid' ? (
