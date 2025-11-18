@@ -130,12 +130,59 @@ export interface SystemLogs {
   offset: number;
 }
 
+export interface MetadataSource {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  requires_auth: boolean;
+  credentials: {
+    [key: string]: string;
+  };
+}
+
 export interface Config {
+  // Core paths
   root_dir: string;
   database_path: string;
   database_type: string;
   enable_sqlite: boolean;
   playlist_dir: string;
+  
+  // Library organization
+  organization_strategy: string;
+  scan_on_startup: boolean;
+  auto_organize: boolean;
+  folder_naming_pattern: string;
+  file_naming_pattern: string;
+  create_backups: boolean;
+  
+  // Storage quotas
+  enable_disk_quota: boolean;
+  disk_quota_percent: number;
+  enable_user_quotas: boolean;
+  default_user_quota_gb: number;
+  
+  // Metadata
+  auto_fetch_metadata: boolean;
+  metadata_sources: MetadataSource[];
+  language: string;
+  
+  // Performance
+  concurrent_scans: number;
+  
+  // Memory management
+  memory_limit_type: string;
+  cache_size: number;
+  memory_limit_percent: number;
+  memory_limit_mb: number;
+  
+  // Logging
+  log_level: string;
+  log_format: string;
+  enable_json_logging: boolean;
+  
+  // Legacy fields
   api_keys: {
     goodreads: string;
   };
