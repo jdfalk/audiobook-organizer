@@ -22,6 +22,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
+import * as api from '../../services/api';
 import {
   Refresh as RefreshIcon,
   ExpandMore as ExpandMoreIcon,
@@ -66,35 +67,28 @@ export function LogsTab() {
   }, [autoRefresh, levelFilter, sourceFilter]);
 
   const fetchLogs = async () => {
+    setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/v1/logs?level=${levelFilter}&source=${sourceFilter}&page=${page}&limit=${rowsPerPage}`);
-      // const data = await response.json();
+      const response = await api.getSystemLogs({
+        level: levelFilter !== 'all' ? levelFilter : undefined,
+        search: searchQuery || undefined,
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+      });
 
-      // Mock data for demonstration
-      const mockLogs: LogEntry[] = Array.from({ length: 50 }, (_, i) => ({
-        id: `log-${i}`,
-        timestamp: new Date(Date.now() - i * 60000).toISOString(),
-        level: ['debug', 'info', 'warn', 'error'][Math.floor(Math.random() * 4)] as LogEntry['level'],
-        message: [
-          'Scanning library folder: /audiobooks/import',
-          'Successfully imported audiobook: To Kill a Mockingbird',
-          'Failed to fetch metadata from Goodreads',
-          'Database connection established',
-          'File organization completed',
-          'Memory usage: 45%',
-          'Disk quota check: 67% used',
-        ][Math.floor(Math.random() * 7)],
-        source: ['scanner', 'importer', 'metadata', 'database', 'organizer'][Math.floor(Math.random() * 5)],
-        metadata: {
-          duration: Math.floor(Math.random() * 1000),
-          files_processed: Math.floor(Math.random() * 100),
-        },
+      const convertedLogs: LogEntry[] = response.logs.map((log, i) => ({
+        id: `${log.operation_id}-${i}`,
+        timestamp: log.timestamp,
+        level: log.level as LogEntry['level'],
+        message: log.message,
+        source: log.operation_id,
+        metadata: log.details ? { details: log.details } : undefined,
       }));
 
-      setLogs(mockLogs);
+      setLogs(convertedLogs);
     } catch (error) {
       console.error('Failed to fetch logs:', error);
+      setLogs([]);
     } finally {
       setLoading(false);
     }

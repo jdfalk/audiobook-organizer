@@ -41,6 +41,7 @@ import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import type { Audiobook, FilterOptions } from '../types';
+import * as api from '../services/api';
 
 interface ImportPath {
   id: string;
@@ -84,28 +85,54 @@ export const Library = () => {
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/v1/audiobooks?' + new URLSearchParams({
-      //   page: page.toString(),
-      //   limit: '24',
-      //   search: debouncedSearch,
-      //   ...filters
-      // }));
-      // const data = await response.json();
-      // setAudiobooks(data.data);
-      // setTotalPages(Math.ceil(data.total / 24));
+      const limit = 24;
+      const offset = (page - 1) * limit;
 
-      // Check if library folders exist
-      // const foldersResponse = await fetch('/api/v1/library-folders');
-      // const foldersData = await foldersResponse.json();
-      // setHasLibraryFolders(foldersData.folders && foldersData.folders.length > 0);
+      // Fetch audiobooks and library folders
+      const [books, folders, bookCount] = await Promise.all([
+        debouncedSearch ? api.searchBooks(debouncedSearch, limit) : api.getBooks(limit, offset),
+        api.getLibraryFolders(),
+        debouncedSearch ? Promise.resolve(0) : api.countBooks(),
+      ]);
 
-      // Placeholder data for now
-      setAudiobooks([]);
-      setTotalPages(1);
-      setHasLibraryFolders(false); // Set to false to show empty state
+      // Convert API books to Audiobook type
+      const convertedBooks: Audiobook[] = books.map(book => ({
+        id: book.id,
+        title: book.title,
+        author: book.author_name || 'Unknown',
+        narrator: book.narrator,
+        series: book.series_name,
+        seriesPosition: book.series_position,
+        duration: book.duration,
+        coverImage: book.cover_image,
+        filePath: book.file_path,
+        file_path: book.file_path,
+        fileSize: 0, // Not provided by API
+        format: book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
+        quality: book.quality,
+        bitrate: book.bitrate,
+        addedDate: book.created_at,
+        created_at: book.created_at,
+        updated_at: book.updated_at,
+        lastPlayed: undefined,
+      }));
+
+      setAudiobooks(convertedBooks);
+      setTotalPages(Math.ceil((debouncedSearch ? books.length : bookCount) / limit));
+      setHasLibraryFolders(folders.length > 0);
+
+      // Load import paths
+      const convertedPaths: ImportPath[] = folders.map(folder => ({
+        id: folder.id.toString(),
+        path: folder.path,
+        status: 'idle',
+        book_count: folder.book_count,
+      }));
+      setImportPaths(convertedPaths);
     } catch (error) {
       console.error('Failed to load audiobooks:', error);
+      setAudiobooks([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -214,28 +241,46 @@ export const Library = () => {
   const handleAddImportPath = async () => {
     if (!newImportPath.trim()) return;
 
-    // TODO: API call to add import path
-    const newPath: ImportPath = {
-      id: Date.now().toString(),
-      path: newImportPath,
-      status: 'idle',
-      book_count: 0,
-    };
-    setImportPaths((prev) => [...prev, newPath]);
-    setNewImportPath('');
-    setAddPathDialogOpen(false);
+    try {
+      const folder = await api.addLibraryFolder(newImportPath, newImportPath.split('/').pop() || 'Library');
+      const newPath: ImportPath = {
+        id: folder.id.toString(),
+        path: folder.path,
+        status: 'idle',
+        book_count: folder.book_count,
+      };
+      setImportPaths((prev) => [...prev, newPath]);
+      setNewImportPath('');
+      setAddPathDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to add import path:', error);
+    }
   };
 
   const handleRemoveImportPath = async (id: string) => {
-    // TODO: API call to remove import path
-    setImportPaths((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await api.removeLibraryFolder(parseInt(id));
+      setImportPaths((prev) => prev.filter((p) => p.id !== id));
+    } catch (error) {
+      console.error('Failed to remove import path:', error);
+    }
   };
 
   const handleScanImportPath = async (id: string) => {
-    // TODO: API call to scan import path
-    setImportPaths((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: 'scanning' as const } : p))
-    );
+    try {
+      const path = importPaths.find(p => p.id === id)?.path;
+      setImportPaths((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'scanning' as const } : p))
+      );
+      await api.startScan(path);
+      // Reload audiobooks after scan
+      setTimeout(() => loadAudiobooks(), 1000);
+    } catch (error) {
+      console.error('Failed to scan import path:', error);
+      setImportPaths((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'idle' as const } : p))
+      );
+    }
   };
 
   const handleBrowseFolder = () => {
@@ -413,8 +458,7 @@ export const Library = () => {
           <input
             ref={folderInputRef}
             type="file"
-            webkitdirectory=""
-            directory=""
+            {...({ webkitdirectory: '', directory: '' } as any)}
             multiple
             style={{ display: 'none' }}
             onChange={handleFolderSelect}
