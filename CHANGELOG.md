@@ -45,11 +45,12 @@
   - `POST /api/v1/import/file` - Import single audio file with automatic metadata and media info extraction
   - File validation, author auto-creation, optional file organization
 - **Frontend API Integration**: Complete connection to backend services
-  - Created comprehensive API service layer (src/services/api.ts) with typed functions for all endpoints
+  - Created comprehensive API service layer (src/services/api.ts) with typed functions for 30+ endpoints
   - Dashboard: Real-time statistics from multiple endpoints (books, authors, series, system status)
   - Library page: Live audiobook data with search, import path CRUD, scan operations
-  - System page: Real logs with filtering, system metrics, memory/CPU monitoring
-  - All pages now use real backend APIs with proper error handling
+  - System page: Complete integration with real logs (filtering), system metrics (memory/CPU/runtime), operation monitoring
+  - Settings page: Configuration loading on mount (api.getConfig) and saving (api.updateConfig) with backend sync
+  - All pages now use real backend APIs with comprehensive error handling and type safety
 - **Smart Path Handling**: Empty fields (like {series}) automatically removed from folder paths (no duplicate slashes)
 - **Naming Pattern Examples**: Live preview with both series and non-series books (Nancy Drew + To Kill a Mockingbird)
 
