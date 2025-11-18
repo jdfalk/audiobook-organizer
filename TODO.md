@@ -69,6 +69,7 @@
   - ✅ System page: Real logs with filtering, system status, memory/CPU stats, SystemInfoTab displays real-time data
   - ✅ Settings page: Loads configuration on mount with api.getConfig(), saves with api.updateConfig()
   - ✅ All API endpoints integrated with proper error handling
+  - ✅ Backend Config struct expanded to support all frontend settings (organization, quotas, metadata, performance, memory, logging)
 - [ ] 🟡 **Frontend**: Library browser with grid/list views and version selection
 - [ ] 🟡 **Frontend**: Metadata editor with inline editing and version management
 - [ ] 🟡 **Frontend**: Multiple version display and management UI

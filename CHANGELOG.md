@@ -49,8 +49,16 @@
   - Dashboard: Real-time statistics from multiple endpoints (books, authors, series, system status)
   - Library page: Live audiobook data with search, import path CRUD, scan operations
   - System page: Complete integration with real logs (filtering), system metrics (memory/CPU/runtime), operation monitoring
-  - Settings page: Configuration loading on mount (api.getConfig) and saving (api.updateConfig) with backend sync
+  - Settings page: Full configuration management with backend persistence
   - All pages now use real backend APIs with comprehensive error handling and type safety
+- **Expanded Backend Configuration**: Config struct now supports complete frontend settings
+  - Library organization: strategy (auto/copy/hardlink/reflink), folder/file naming patterns, backups
+  - Storage quotas: disk quota limits, per-user quotas
+  - Metadata sources: configurable providers (Audible, Goodreads, Open Library, Google Books) with credentials
+  - Performance: concurrent scan control
+  - Memory management: cache size, memory limits (items/percent/absolute)
+  - Logging: level, format (text/json), structured logging options
+  - All settings persist to configuration file and sync between frontend/backend
 - **Smart Path Handling**: Empty fields (like {series}) automatically removed from folder paths (no duplicate slashes)
 - **Naming Pattern Examples**: Live preview with both series and non-series books (Nancy Drew + To Kill a Mockingbird)
 
