@@ -91,7 +91,7 @@ export function SystemInfoTab() {
   const fetchSystemInfo = async () => {
     try {
       const status = await api.getSystemStatus();
-      
+
       // Map API SystemStatus to SystemInfo format
       setInfo({
         os: {

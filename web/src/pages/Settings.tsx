@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -146,12 +146,82 @@ export function Settings() {
   const loadConfig = async () => {
     try {
       const config = await api.getConfig();
-      // Map backend config to frontend settings format
-      setSettings(prev => ({
-        ...prev,
-        libraryPath: config.root_dir || prev.libraryPath,
-        // Note: Backend config has limited fields, most settings remain as defaults
-      }));
+      // Map all backend config fields to frontend settings format
+      setSettings({
+        // Library settings
+        libraryPath: config.root_dir || '/path/to/audiobooks/library',
+        organizationStrategy: config.organization_strategy || 'auto',
+        scanOnStartup: config.scan_on_startup ?? false,
+        autoOrganize: config.auto_organize ?? true,
+        folderNamingPattern: config.folder_naming_pattern || '{author}/{series}/{title} ({print_year})',
+        fileNamingPattern: config.file_naming_pattern || '{title} - {author} - read by {narrator}',
+        createBackups: config.create_backups ?? true,
+
+        // Storage quotas
+        enableDiskQuota: config.enable_disk_quota ?? false,
+        diskQuotaPercent: config.disk_quota_percent || 80,
+        enableUserQuotas: config.enable_user_quotas ?? false,
+        defaultUserQuotaGB: config.default_user_quota_gb || 100,
+
+        // Metadata settings
+        autoFetchMetadata: config.auto_fetch_metadata ?? true,
+        metadataSources: (config.metadata_sources && config.metadata_sources.length > 0) ? config.metadata_sources.map(source => ({
+          id: source.id,
+          name: source.name,
+          enabled: source.enabled,
+          priority: source.priority,
+          requiresAuth: source.requires_auth,
+          credentials: source.credentials || {} as { [key: string]: string }
+        })) : [
+          {
+            id: 'audible',
+            name: 'Audible',
+            enabled: true,
+            priority: 1,
+            requiresAuth: false,
+            credentials: {}
+          },
+          {
+            id: 'goodreads',
+            name: 'Goodreads',
+            enabled: true,
+            priority: 2,
+            requiresAuth: true,
+            credentials: { apiKey: '', apiSecret: '' }
+          },
+          {
+            id: 'openlibrary',
+            name: 'Open Library',
+            enabled: false,
+            priority: 3,
+            requiresAuth: true,
+            credentials: { apiKey: '' }
+          },
+          {
+            id: 'google-books',
+            name: 'Google Books',
+            enabled: false,
+            priority: 4,
+            requiresAuth: true,
+            credentials: { apiKey: '' }
+          },
+        ],
+        language: config.language || 'en',
+
+        // Performance settings
+        concurrentScans: config.concurrent_scans || 4,
+
+        // Memory management
+        memoryLimitType: config.memory_limit_type || 'items',
+        cacheSize: config.cache_size || 1000,
+        memoryLimitPercent: config.memory_limit_percent || 25,
+        memoryLimitMB: config.memory_limit_mb || 512,
+
+        // Logging
+        logLevel: config.log_level || 'info',
+        logFormat: config.log_format || 'text',
+        enableJsonLogging: config.enable_json_logging ?? false,
+      });
     } catch (error) {
       console.error('Failed to load config:', error);
     }
@@ -257,9 +327,9 @@ export function Settings() {
       ...prev,
       metadataSources: prev.metadataSources.map((source) =>
         source.id === sourceId
-          ? { ...source, credentials: { ...source.credentials, [field]: value } }
+          ? { ...source, credentials: { ...source.credentials, [field]: value } as any }
           : source
-      ),
+      ) as any,
     }));
     setSaved(false);
   };
@@ -288,12 +358,51 @@ export function Settings() {
 
   const handleSave = async () => {
     try {
-      // Map frontend settings to backend config format
-      const updates = {
+      // Map all frontend settings to backend config format
+      const updates: Partial<api.Config> = {
+        // Core paths
         root_dir: settings.libraryPath,
         playlist_dir: settings.libraryPath + '/playlists',
-        // Note: Backend config has limited updatable fields
-        // Other settings would need backend support
+        
+        // Library organization
+        organization_strategy: settings.organizationStrategy,
+        scan_on_startup: settings.scanOnStartup,
+        auto_organize: settings.autoOrganize,
+        folder_naming_pattern: settings.folderNamingPattern,
+        file_naming_pattern: settings.fileNamingPattern,
+        create_backups: settings.createBackups,
+        
+        // Storage quotas
+        enable_disk_quota: settings.enableDiskQuota,
+        disk_quota_percent: settings.diskQuotaPercent,
+        enable_user_quotas: settings.enableUserQuotas,
+        default_user_quota_gb: settings.defaultUserQuotaGB,
+        
+        // Metadata
+        auto_fetch_metadata: settings.autoFetchMetadata,
+        metadata_sources: settings.metadataSources.map(source => ({
+          id: source.id,
+          name: source.name,
+          enabled: source.enabled,
+          priority: source.priority,
+          requires_auth: source.requiresAuth,
+          credentials: source.credentials as { [key: string]: string }
+        })),
+        language: settings.language,
+        
+        // Performance
+        concurrent_scans: settings.concurrentScans,
+        
+        // Memory management
+        memory_limit_type: settings.memoryLimitType,
+        cache_size: settings.cacheSize,
+        memory_limit_percent: settings.memoryLimitPercent,
+        memory_limit_mb: settings.memoryLimitMB,
+        
+        // Logging
+        log_level: settings.logLevel,
+        log_format: settings.logFormat,
+        enable_json_logging: settings.enableJsonLogging,
       };
 
       await api.updateConfig(updates);
