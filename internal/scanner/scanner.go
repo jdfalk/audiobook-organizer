@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -122,6 +124,37 @@ func extractInfoFromPath(book *Book) {
 	baseName := filepath.Base(path)
 	baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
 
+	// Remove leading track/chapter numbers
+	parts := strings.Split(baseName, " ")
+	if len(parts) > 0 {
+		if _, err := strconv.Atoi(parts[0]); err == nil {
+			baseName = strings.Join(parts[1:], " ")
+		}
+	}
+	baseName = strings.TrimSpace(baseName)
+
+	// Remove chapter info from end
+	re := regexp.MustCompile(`(?i)[-_]\d+\s+Chapter\s+\d+$`)
+	baseName = re.ReplaceAllString(baseName, "")
+
+	// Try underscore separator first
+	if strings.Contains(baseName, "_") && !strings.Contains(baseName, " - ") {
+		parts := strings.SplitN(baseName, "_", 2)
+		if len(parts) == 2 {
+			left := strings.TrimSpace(parts[0])
+			right := strings.TrimSpace(parts[1])
+			if looksLikePersonName(right) && !looksLikePersonName(left) && book.Author == "" {
+				book.Author = right
+				book.Title = left
+				return
+			} else if looksLikePersonName(left) && !looksLikePersonName(right) && book.Author == "" {
+				book.Author = left
+				book.Title = right
+				return
+			}
+		}
+	}
+
 	// Try to parse "Title - Author" or "Author - Title" patterns from filename
 	if strings.Contains(baseName, " - ") {
 		title, author := parseFilenameForAuthor(baseName)
@@ -144,27 +177,87 @@ func extractInfoFromPath(book *Book) {
 		book.Title = baseName
 	}
 
-	// Extract author from directory name (but avoid common directory names)
+	// Extract author from directory name
 	if book.Author == "" {
-		dirs := strings.Split(filepath.Dir(path), string(os.PathSeparator))
-		if len(dirs) > 0 {
-			authorDir := dirs[len(dirs)-1]
-
-			// Skip common non-author directory names
-			skipDirs := map[string]bool{
-				"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
-				"media": true, "audio": true, "library": true, "collection": true,
-				"bt": true, "incomplete": true, "data": true,
-			}
-
-			if !skipDirs[strings.ToLower(authorDir)] {
-				book.Author = authorDir
-			}
-		}
+		book.Author = extractAuthorFromDirectory(path)
 	}
 }
 
-// parseFilenameForAuthor attempts to intelligently parse title and author from filename
+// extractAuthorFromDirectory extracts author from directory with validation
+func extractAuthorFromDirectory(filePath string) string {
+	dirs := strings.Split(filepath.Dir(filePath), string(os.PathSeparator))
+	if len(dirs) == 0 {
+		return ""
+	}
+
+	dirName := dirs[len(dirs)-1]
+
+	// Skip common non-author directory names
+	skipDirs := map[string]bool{
+		"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
+		"media": true, "audio": true, "library": true, "collection": true,
+		"bt": true, "incomplete": true, "data": true,
+	}
+
+	if skipDirs[strings.ToLower(dirName)] {
+		return ""
+	}
+
+	// Handle "Author, Co-Author - translator - Title" patterns
+	if strings.Contains(dirName, " - translator - ") || strings.Contains(dirName, " - narrated by - ") {
+		re := regexp.MustCompile(`^([^-]+)\s*-\s*(?:translator|narrated by)\s*-`)
+		matches := re.FindStringSubmatch(dirName)
+		if len(matches) > 1 {
+			return strings.TrimSpace(matches[1])
+		}
+	}
+
+	// Extract from "Author - Title" directory pattern
+	if strings.Contains(dirName, " - ") {
+		parts := strings.SplitN(dirName, " - ", 2)
+		if len(parts) > 0 {
+			author := strings.TrimSpace(parts[0])
+			if isValidAuthor(author) {
+				return author
+			}
+		}
+	}
+
+	// Use directory name if valid
+	if isValidAuthor(dirName) {
+		return dirName
+	}
+
+	return ""
+}
+
+// isValidAuthor checks if extracted author string is valid
+func isValidAuthor(author string) bool {
+	if author == "" {
+		return false
+	}
+
+	lower := strings.ToLower(author)
+
+	// Skip invalid patterns
+	if strings.HasPrefix(lower, "book") || strings.HasPrefix(lower, "chapter") ||
+		strings.HasPrefix(lower, "part") || strings.HasPrefix(lower, "vol") ||
+		strings.HasPrefix(lower, "volume") || strings.HasPrefix(lower, "disc") {
+		return false
+	}
+
+	// Skip purely numeric
+	if _, err := strconv.Atoi(author); err == nil {
+		return false
+	}
+
+	// Skip chapter patterns
+	if strings.HasPrefix(lower, "chapter ") {
+		return false
+	}
+
+	return true
+} // parseFilenameForAuthor attempts to intelligently parse title and author from filename
 // Handles patterns like "Title - Author" or "Author - Title"
 // Returns (title, author) where author is empty string if pattern not detected
 func parseFilenameForAuthor(filename string) (string, string) {
@@ -198,7 +291,7 @@ func parseFilenameForAuthor(filename string) (string, string) {
 // looksLikePersonName checks if a string looks like a person's name
 // Looks for patterns like "John Smith", "J. Smith", "J. K. Rowling"
 func looksLikePersonName(s string) bool {
-	if s == "" {
+	if !isValidAuthor(s) {
 		return false
 	}
 
@@ -244,9 +337,7 @@ func looksLikePersonName(s string) bool {
 	}
 
 	return false
-}
-
-// saveBookToDatabase saves the book information to the database
+} // saveBookToDatabase saves the book information to the database
 func saveBookToDatabase(book *Book) error {
 	// Prefer using the unified Store API when available
 	if database.GlobalStore != nil {

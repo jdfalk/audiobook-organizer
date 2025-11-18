@@ -2,7 +2,7 @@
 # file: scripts/test-organize-import-v3.py
 #!/usr/bin/env python3
 # file: scripts/test-organize-import-v3.py
-# version: 1.1.0
+# version: 1.2.0
 # guid: e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b
 # guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b
 
@@ -90,10 +90,12 @@ class MetadataExtractor:
             # Run ffprobe to get metadata
             cmd = [
                 "ffprobe",
-                "-v", "quiet",
-                "-print_format", "json",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
                 "-show_format",
-                file_path
+                file_path,
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
@@ -133,7 +135,11 @@ class MetadataExtractor:
                         elif "author" in lower_key and "artist" not in metadata:
                             metadata["artist"] = tags[key]
 
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, json.JSONDecodeError):
+        except (
+            subprocess.TimeoutExpired,
+            subprocess.SubprocessError,
+            json.JSONDecodeError,
+        ):
             pass
 
         return metadata
@@ -147,7 +153,10 @@ class SeriesPatternMatcher:
         (re.compile(r"(?i)(.+?)\s+(\d+)(?:\s*:|\s+-)\s+(.+)"), "numbered_series"),
         (re.compile(r"(?i)(.+?)\s+Book\s+(\d+)(?:\s*:|\s+-)\s+(.+)"), "book_numbered"),
         (re.compile(r"(?i)(.+?)\s+#(\d+)(?:\s*:|\s+-)\s+(.+)"), "hash_numbered"),
-        (re.compile(r"(?i)(.+?)\s+Vol(?:\.|ume)?\s+(\d+)(?:\s*:|\s+-)\s+(.+)"), "volume_numbered"),
+        (
+            re.compile(r"(?i)(.+?)\s+Vol(?:\.|ume)?\s+(\d+)(?:\s*:|\s+-)\s+(.+)"),
+            "volume_numbered",
+        ),
     ]
 
     SERIES_WORDS = ["trilogy", "series", "saga", "chronicles", "sequence", "collection"]
@@ -177,7 +186,10 @@ class SeriesPatternMatcher:
                     if word.lower() in parent_dir.lower():
                         return parent_dir, 0, "directory:keyword"
 
-                if title and (parent_dir.lower() in title.lower() or title.lower() in parent_dir.lower()):
+                if title and (
+                    parent_dir.lower() in title.lower()
+                    or title.lower() in parent_dir.lower()
+                ):
                     return parent_dir, 0, "directory:fuzzy"
 
         return "", 0, "none"
@@ -227,8 +239,20 @@ class PathExtractor:
 
     # Directory names to skip when looking for author
     SKIP_DIRS = {
-        "books", "audiobooks", "bt", "incomplete", "mnt", "bigdata", "data", "/",
-        "newbooks", "downloads", "media", "audio", "library", "collection"
+        "books",
+        "audiobooks",
+        "bt",
+        "incomplete",
+        "mnt",
+        "bigdata",
+        "data",
+        "/",
+        "newbooks",
+        "downloads",
+        "media",
+        "audio",
+        "library",
+        "collection",
     }
 
     @staticmethod
@@ -250,17 +274,47 @@ class PathExtractor:
 
         first_dir = meaningful_dirs[0]
 
+        # Pattern: "Author, Co-Author - translator - Title-Series, Book N"
+        # Example: "Petr Zhgulyov, Sofia Gutkin - translator - City of Goblins-In the System, Book 1"
+        if " - translator - " in first_dir or " - narrated by - " in first_dir:
+            author_match = re.match(
+                r"^([^-]+)\s*-\s*(?:translator|narrated by)\s*-", first_dir
+            )
+            if author_match:
+                return author_match.group(1).strip()
+
         # Check if directory name looks like "Author - Year - Title" format
         if " - " in first_dir and any(char.isdigit() for char in first_dir):
             author_match = re.match(r"^([^-]+)\s*-", first_dir)
             if author_match:
                 author = author_match.group(1).strip()
-                if not author.lower().startswith(("book", "chapter", "part", "vol")):
-                    # Check if it's numeric (like "01", "001", etc.)
-                    if not re.match(r"^\d+$", author):
-                        return author
+                # Skip invalid author patterns
+                if PathExtractor._is_valid_author(author):
+                    return author
 
         return ""
+
+    @staticmethod
+    def _is_valid_author(author: str) -> bool:
+        """Check if extracted author string is valid (not a book number, chapter, etc.)."""
+        if not author:
+            return False
+
+        # Skip if it starts with common non-author patterns
+        if author.lower().startswith(
+            ("book", "chapter", "part", "vol", "volume", "disc")
+        ):
+            return False
+
+        # Skip if it's purely numeric (like "01", "02", "001")
+        if re.match(r"^\d+$", author):
+            return False
+
+        # Skip if it's a chapter pattern
+        if re.match(r"(?i)^chapter\s+\d+", author):
+            return False
+
+        return True
 
     @staticmethod
     def extract_title_from_filename(filename: str) -> str:
@@ -271,7 +325,9 @@ class PathExtractor:
             return ""
 
         title = re.sub(r"^\d+[-_.\s]+", "", title)
-        title = re.sub(r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE
+        )
 
         return title.strip()
 
@@ -281,6 +337,7 @@ class PathExtractor:
         Parse title and author from filename patterns like:
         - "Title - Author"
         - "Author - Title"
+        - "Title_Author" (underscore separator)
         - "Series Name - Author"
 
         Returns tuple of (title, author).
@@ -290,8 +347,28 @@ class PathExtractor:
         # Remove leading numbers (chapter/track numbers)
         stem = re.sub(r"^\d+[-_.\s]+", "", stem)
 
+        # Remove chapter info from end (e.g., "Title-10 Chapter 10" -> "Title")
+        stem = re.sub(r"[-_]\d+\s+Chapter\s+\d+$", "", stem, flags=re.IGNORECASE)
+
         # Remove common suffixes
-        stem = re.sub(r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", stem, flags=re.IGNORECASE)
+        stem = re.sub(
+            r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", stem, flags=re.IGNORECASE
+        )
+
+        # Try underscore separator first (less common, so check it first)
+        if "_" in stem and " - " not in stem:
+            parts = stem.split("_", 1)
+            if len(parts) == 2:
+                left, right = parts[0].strip(), parts[1].strip()
+                # Check if this looks like "Title_Author" pattern
+                if PathExtractor._looks_like_person_name(
+                    right
+                ) and not PathExtractor._looks_like_person_name(left):
+                    return left, right
+                elif PathExtractor._looks_like_person_name(
+                    left
+                ) and not PathExtractor._looks_like_person_name(right):
+                    return right, left
 
         # Look for " - " separator
         if " - " in stem:
@@ -299,23 +376,10 @@ class PathExtractor:
             if len(parts) == 2:
                 left, right = parts[0].strip(), parts[1].strip()
 
-                # Heuristic: if right side looks like an author name (has spaces, proper case, etc.)
-                # and left side looks like a title, treat it as "Title - Author"
-                # Common author patterns: "FirstName LastName", "F. LastName", "First M. Last"
-
                 # Check if right side looks like a person's name
-                right_is_name = (
-                    bool(re.match(r"^[A-Z][a-z]+\.?\s+[A-Z]", right)) or  # "John Smith", "J. Smith"
-                    bool(re.match(r"^[A-Z]\.\s*[A-Z]\.\s*[A-Z]", right)) or  # "J. K. Rowling"
-                    (len(right.split()) >= 2 and all(word[0].isupper() for word in right.split() if word))  # "Multi Word Name"
-                )
-
+                right_is_name = PathExtractor._looks_like_person_name(right)
                 # Check if left side looks like a person's name
-                left_is_name = (
-                    bool(re.match(r"^[A-Z][a-z]+\.?\s+[A-Z]", left)) or
-                    bool(re.match(r"^[A-Z]\.\s*[A-Z]\.\s*[A-Z]", left)) or
-                    (len(left.split()) >= 2 and len(left.split()) <= 4 and all(word[0].isupper() for word in left.split() if word))
-                )
+                left_is_name = PathExtractor._looks_like_person_name(left)
 
                 # Decide which is which
                 if right_is_name and not left_is_name:
@@ -332,6 +396,40 @@ class PathExtractor:
         return stem.strip(), ""
 
     @staticmethod
+    def _looks_like_person_name(s: str) -> bool:
+        """Check if a string looks like a person's name."""
+        if not s:
+            return False
+
+        # Reject invalid author patterns
+        if not PathExtractor._is_valid_author(s):
+            return False
+
+        # Check for initials like "J. K. Rowling" or "J.K. Rowling"
+        if "." in s:
+            uppers = sum(1 for c in s if c >= "A" and c <= "Z")
+            if uppers >= 2:
+                return True
+
+        # Check for multi-word names with proper capitalization
+        words = s.split()
+        if len(words) >= 2 and len(words) <= 4:
+            # Check if all words start with uppercase
+            if all(word and word[0].isupper() for word in words):
+                return True
+
+        # Check for "FirstName LastName" pattern
+        if len(words) >= 2:
+            if (
+                words[0]
+                and words[0][0].isupper()
+                and words[1]
+                and words[1][0].isupper()
+            ):
+                return True
+
+        return False @ staticmethod
+
     def is_chapter_file(filename: str) -> Tuple[bool, Optional[int]]:
         """Check if file is a chapter file and extract chapter number."""
         stem = Path(filename).stem
@@ -384,7 +482,9 @@ class BookGrouper:
 
             self.books_by_directory[directory].append(file_info)
 
-        print(f"Phase 2: Extracting metadata from {len(self.books_by_directory):,} directories...")
+        print(
+            f"Phase 2: Extracting metadata from {len(self.books_by_directory):,} directories..."
+        )
         books = []
         processed_dirs: Set[str] = set()
 
@@ -422,7 +522,9 @@ class BookGrouper:
 
         return {}
 
-    def _create_book_from_directory(self, directory: str, files: List[FileInfo]) -> Optional[BookMetadata]:
+    def _create_book_from_directory(
+        self, directory: str, files: List[FileInfo]
+    ) -> Optional[BookMetadata]:
         """Create a BookMetadata object from files in a directory."""
         if not files:
             return None
@@ -452,7 +554,11 @@ class BookGrouper:
         # Fallback to filename/path if no metadata
         if not title or not author:
             # Try to parse title and author from filename
-            parsed_title, parsed_author = self.path_extractor.parse_title_author_from_filename(primary_file.filename)
+            parsed_title, parsed_author = (
+                self.path_extractor.parse_title_author_from_filename(
+                    primary_file.filename
+                )
+            )
 
             if not title and parsed_title:
                 title = parsed_title
@@ -465,12 +571,16 @@ class BookGrouper:
 
             # Still no author? Try path extraction as last resort
             if not author:
-                author = self.path_extractor.extract_author_from_path(primary_file.original_path, fallback_only=False)
+                author = self.path_extractor.extract_author_from_path(
+                    primary_file.original_path, fallback_only=False
+                )
                 if metadata_source == "tags":
                     metadata_source = "mixed"
 
         # Identify series
-        series, position, method = self.pattern_matcher.identify_series(title, album, primary_file.original_path)
+        series, position, method = self.pattern_matcher.identify_series(
+            title, album, primary_file.original_path
+        )
 
         # Generate book ID
         book_id = self._generate_book_id(title, author, series)
@@ -488,7 +598,9 @@ class BookGrouper:
         )
 
         # Calculate confidence
-        confidence = self._calculate_confidence(title, author, series, position, metadata_source)
+        confidence = self._calculate_confidence(
+            title, author, series, position, metadata_source
+        )
 
         # Create book metadata
         book = BookMetadata(
@@ -501,7 +613,9 @@ class BookGrouper:
             album=album,
             confidence=confidence,
             extraction_method=method,
-            proposed_path=self._generate_proposed_path(title, author, series, position, version.format),
+            proposed_path=self._generate_proposed_path(
+                title, author, series, position, version.format
+            ),
             versions=[version],
             total_versions=1,
             metadata_source=metadata_source,
@@ -525,8 +639,8 @@ class BookGrouper:
         """Normalize text for duplicate comparison."""
         if not text:
             return ""
-        text = re.sub(r'[^\w\s]', '', text.lower())
-        text = re.sub(r'\s+', '_', text.strip())
+        text = re.sub(r"[^\w\s]", "", text.lower())
+        text = re.sub(r"\s+", "_", text.strip())
         return text
 
     def _determine_primary_format(self, files: List[FileInfo]) -> str:
@@ -539,7 +653,9 @@ class BookGrouper:
             return max(ext_counts, key=ext_counts.get)
         return ""
 
-    def _calculate_confidence(self, title: str, author: str, series: str, position: int, metadata_source: str) -> str:
+    def _calculate_confidence(
+        self, title: str, author: str, series: str, position: int, metadata_source: str
+    ) -> str:
         """Calculate confidence level for extracted metadata."""
         score = 0
 
@@ -565,7 +681,9 @@ class BookGrouper:
         else:
             return "low"
 
-    def _generate_proposed_path(self, title: str, author: str, series: str, position: int, format: str) -> str:
+    def _generate_proposed_path(
+        self, title: str, author: str, series: str, position: int, format: str
+    ) -> str:
         """Generate proposed organized path structure."""
         parts = []
 
@@ -640,7 +758,9 @@ class TestReportGenerator:
         """Initialize the report generator."""
         self.stats = defaultdict(int)
 
-    def generate_report(self, books: List[BookMetadata], output_file: Optional[str] = None) -> Dict:
+    def generate_report(
+        self, books: List[BookMetadata], output_file: Optional[str] = None
+    ) -> Dict:
         """Generate comprehensive report from scanned books."""
         report = {
             "summary": self._generate_summary(books),
@@ -660,16 +780,22 @@ class TestReportGenerator:
     def _generate_summary(self, books: List[BookMetadata]) -> Dict:
         """Generate high-level summary statistics."""
         total_files = sum(v.total_files for book in books for v in book.versions)
-        multi_file_books = sum(1 for book in books for v in book.versions if v.is_multi_file)
+        multi_file_books = sum(
+            1 for book in books for v in book.versions if v.is_multi_file
+        )
         books_with_duplicates = sum(1 for book in books if book.duplicate_group_id)
-        metadata_from_tags = sum(1 for book in books if book.metadata_source in ["tags", "mixed"])
+        metadata_from_tags = sum(
+            1 for book in books if book.metadata_source in ["tags", "mixed"]
+        )
 
         return {
             "total_books": len(books),
             "total_files_processed": total_files,
             "multi_file_books": multi_file_books,
             "books_with_duplicates": books_with_duplicates,
-            "unique_duplicate_groups": len(set(b.duplicate_group_id for b in books if b.duplicate_group_id)),
+            "unique_duplicate_groups": len(
+                set(b.duplicate_group_id for b in books if b.duplicate_group_id)
+            ),
             "books_with_series": sum(1 for b in books if b.series),
             "books_with_position": sum(1 for b in books if b.position > 0),
             "high_confidence": sum(1 for b in books if b.confidence == "high"),
@@ -702,8 +828,12 @@ class TestReportGenerator:
             "by_format": dict(formats),
             "by_extraction_method": dict(extraction_methods),
             "by_metadata_source": dict(metadata_sources),
-            "top_authors": dict(sorted(authors.items(), key=lambda x: x[1], reverse=True)[:30]),
-            "top_series": dict(sorted(series.items(), key=lambda x: x[1], reverse=True)[:30]),
+            "top_authors": dict(
+                sorted(authors.items(), key=lambda x: x[1], reverse=True)[:30]
+            ),
+            "top_series": dict(
+                sorted(series.items(), key=lambda x: x[1], reverse=True)[:30]
+            ),
         }
 
     def _generate_duplicates_summary(self, books: List[BookMetadata]) -> List[Dict]:
@@ -716,22 +846,24 @@ class TestReportGenerator:
 
         duplicates = []
         for group_id, group_books in sorted(dup_groups.items()):
-            duplicates.append({
-                "group_id": group_id,
-                "title": group_books[0].title,
-                "author": group_books[0].author,
-                "version_count": len(group_books),
-                "versions": [
-                    {
-                        "version_id": v.version_id,
-                        "format": v.format,
-                        "file_count": v.total_files,
-                        "directory": v.base_directory,
-                    }
-                    for book in group_books
-                    for v in book.versions
-                ],
-            })
+            duplicates.append(
+                {
+                    "group_id": group_id,
+                    "title": group_books[0].title,
+                    "author": group_books[0].author,
+                    "version_count": len(group_books),
+                    "versions": [
+                        {
+                            "version_id": v.version_id,
+                            "format": v.format,
+                            "file_count": v.total_files,
+                            "directory": v.base_directory,
+                        }
+                        for book in group_books
+                        for v in book.versions
+                    ],
+                }
+            )
 
         return duplicates
 
@@ -778,7 +910,12 @@ class TestReportGenerator:
                             "chapter_number": f.chapter_number,
                         }
                         for f in v.files[:10]  # Limit to first 10 files in JSON
-                    ] + ([{"note": f"... and {len(v.files) - 10} more files"}] if len(v.files) > 10 else []),
+                    ]
+                    + (
+                        [{"note": f"... and {len(v.files) - 10} more files"}]
+                        if len(v.files) > 10
+                        else []
+                    ),
                 }
                 for v in book.versions
             ],
@@ -823,7 +960,9 @@ class TestReportGenerator:
             print(f"  {source}: {count:,}")
 
         print("\nEXTRACTION METHODS:")
-        for method, count in sorted(stats["by_extraction_method"].items(), key=lambda x: x[1], reverse=True):
+        for method, count in sorted(
+            stats["by_extraction_method"].items(), key=lambda x: x[1], reverse=True
+        ):
             print(f"  {method}: {count:,}")
 
         print("\nTOP 15 AUTHORS:")
@@ -835,7 +974,9 @@ class TestReportGenerator:
             print(f"  {series}: {count:,} books")
 
         if "duplicates" in report and report["duplicates"]:
-            print(f"\nDUPLICATE GROUPS (showing first 5 of {len(report['duplicates'])}):")
+            print(
+                f"\nDUPLICATE GROUPS (showing first 5 of {len(report['duplicates'])}):"
+            )
             for dup in report["duplicates"][:5]:
                 print(f"  {dup['group_id']}: {dup['author']} - {dup['title']}")
                 print(f"    Versions: {dup['version_count']}")
@@ -857,11 +998,18 @@ def main():
     )
     parser.add_argument("file_list", help="Path to file list")
     parser.add_argument(
-        "--output", "-o", help="Output JSON file", default="organize-test-report-v3.json"
+        "--output",
+        "-o",
+        help="Output JSON file",
+        default="organize-test-report-v3.json",
     )
     parser.add_argument("--limit", "-l", type=int, help="Limit number of files")
-    parser.add_argument("--sample", "-s", type=int, help="Sample books to display", default=5)
-    parser.add_argument("--no-metadata", action="store_true", help="Skip metadata extraction (faster)")
+    parser.add_argument(
+        "--sample", "-s", type=int, help="Sample books to display", default=5
+    )
+    parser.add_argument(
+        "--no-metadata", action="store_true", help="Skip metadata extraction (faster)"
+    )
 
     args = parser.parse_args()
 
@@ -903,19 +1051,31 @@ def main():
         for book in books[: args.sample]:
             print(f"\n[{book.book_id}] {book.author} - {book.title}")
             if book.series:
-                print(f"  Series: {book.series} #{book.position if book.position else 'N/A'}")
+                print(
+                    f"  Series: {book.series} #{book.position if book.position else 'N/A'}"
+                )
             if book.narrator:
                 print(f"  Narrator: {book.narrator}")
-            print(f"  Source: {book.metadata_source}, Method: {book.extraction_method}, Confidence: {book.confidence}")
+            print(
+                f"  Source: {book.metadata_source}, Method: {book.extraction_method}, Confidence: {book.confidence}"
+            )
             print(f"  Proposed: {book.proposed_path}")
             if book.duplicate_group_id:
-                print(f"  ⚠️  DUPLICATE: Group {book.duplicate_group_id} ({book.total_versions} versions)")
+                print(
+                    f"  ⚠️  DUPLICATE: Group {book.duplicate_group_id} ({book.total_versions} versions)"
+                )
             print(f"  Versions: {len(book.versions)}")
             for i, version in enumerate(book.versions, 1):
-                print(f"    Version {i}: {version.format} - {version.total_files} file(s)")
+                print(
+                    f"    Version {i}: {version.format} - {version.total_files} file(s)"
+                )
                 if version.is_multi_file:
                     for file in version.files[:2]:
-                        chapter_info = f" (Chapter {file.chapter_number})" if file.is_chapter else ""
+                        chapter_info = (
+                            f" (Chapter {file.chapter_number})"
+                            if file.is_chapter
+                            else ""
+                        )
                         print(f"      - {file.filename}{chapter_info}")
                     if len(version.files) > 2:
                         print(f"      ... and {len(version.files) - 2} more files")
