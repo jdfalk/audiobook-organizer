@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/test-organize-import.py
-# version: 1.0.0
+# version: 2.0.0
 # guid: 9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d
 
 """
@@ -9,7 +9,8 @@ Test script to validate audiobook organizer scanning and renaming logic.
 This script processes a large file list (file-list-books) and simulates
 how the audiobook-organizer would identify, categorize, and rename files.
 It generates a detailed report showing:
-- Original file paths
+- Books with all their constituent files grouped together
+- Duplicate/version detection linking different editions
 - Extracted metadata (title, author, series, position)
 - Proposed organized path structure
 - Statistics and summary
@@ -27,12 +28,36 @@ from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
-class BookMetadata:
-    """Represents extracted metadata for an audiobook file."""
+class FileInfo:
+    """Represents a single file that is part of an audiobook."""
 
     original_path: str
     filename: str
     extension: str
+    size_mb: float = 0.0
+    is_chapter: bool = False
+    chapter_number: Optional[int] = None
+
+
+@dataclass
+class BookVersion:
+    """Represents a specific version of an audiobook (different format/quality/edition)."""
+
+    version_id: str
+    files: List[FileInfo] = field(default_factory=list)
+    primary_file: Optional[str] = None  # The main file (if multi-file book)
+    format: str = ""  # m4b, mp3, etc.
+    total_files: int = 0
+    total_size_mb: float = 0.0
+    is_multi_file: bool = False
+    quality_notes: str = ""  # e.g., "Unabridged", "Remastered"
+
+
+@dataclass
+class BookMetadata:
+    """Represents an audiobook with all its versions and files."""
+
+    book_id: str  # Unique identifier for this book
     title: str = ""
     author: str = ""
     series: str = ""
@@ -42,6 +67,8 @@ class BookMetadata:
     extraction_method: str = ""
     proposed_path: str = ""
     issues: List[str] = field(default_factory=list)
+    versions: List[BookVersion] = field(default_factory=list)
+    duplicate_group_id: Optional[str] = None  # Links duplicates together
 
 
 class SeriesPatternMatcher:
