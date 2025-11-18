@@ -173,6 +173,8 @@ func (s *Server) setupRoutes() {
 		api.POST("/metadata/validate", s.validateMetadata)
 		api.GET("/metadata/export", s.exportMetadata)
 		api.POST("/metadata/import", s.importMetadata)
+		api.GET("/metadata/search", s.searchMetadata)
+		api.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
 
 		// Work routes (logical title-level grouping)
 		api.GET("/works", s.listWorks)

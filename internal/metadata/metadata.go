@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -146,24 +146,128 @@ func extractFromFilename(filePath string) Metadata {
 	// Remove extension
 	filename = strings.TrimSuffix(filename, filepath.Ext(filename))
 
-	// Check for common patterns
-	// Pattern: "Series Name - Book Title"
+	// Remove leading track/chapter numbers (e.g., "01 - Title" or "001 Title")
+	filename = strings.TrimSpace(strings.TrimPrefix(filename, strings.Split(filename, " ")[0]))
+	
+	// Try to parse "Title - Author" or "Author - Title" patterns
 	if strings.Contains(filename, " - ") {
-		parts := strings.Split(filename, " - ")
-		if len(parts) >= 2 {
-			metadata.Series = parts[0]
-			metadata.Title = parts[len(parts)-1]
+		title, author := parseFilenameForAuthor(filename)
+		if author != "" {
+			metadata.Title = title
+			metadata.Artist = author
 		} else {
-			metadata.Title = filename
+			// Fallback to old behavior if we can't determine author
+			parts := strings.Split(filename, " - ")
+			if len(parts) >= 2 {
+				metadata.Series = parts[0]
+				metadata.Title = parts[len(parts)-1]
+			} else {
+				metadata.Title = filename
+			}
 		}
 	} else {
 		metadata.Title = filename
 	}
 
-	// Try to get artist from parent directory
-	dir := filepath.Dir(filePath)
-	dirName := filepath.Base(dir)
-	metadata.Artist = dirName
+	// If we still don't have an artist, try to get from parent directory
+	// (but avoid common directory names like "newbooks", "books", etc.)
+	if metadata.Artist == "" {
+		dir := filepath.Dir(filePath)
+		dirName := filepath.Base(dir)
+		
+		// Skip common non-author directory names
+		skipDirs := map[string]bool{
+			"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
+			"media": true, "audio": true, "library": true, "collection": true,
+			"bt": true, "incomplete": true, "data": true,
+		}
+		
+		if !skipDirs[strings.ToLower(dirName)] {
+			metadata.Artist = dirName
+		}
+	}
 
 	return metadata
+}
+
+// parseFilenameForAuthor attempts to intelligently parse title and author from filename
+// Handles patterns like "Title - Author" or "Author - Title"
+// Returns (title, author) where author is empty string if pattern not detected
+func parseFilenameForAuthor(filename string) (string, string) {
+	parts := strings.Split(filename, " - ")
+	if len(parts) != 2 {
+		return "", "" // Not a simple two-part pattern
+	}
+	
+	left := strings.TrimSpace(parts[0])
+	right := strings.TrimSpace(parts[1])
+	
+	// Heuristic: check if right side looks like an author name
+	rightIsName := looksLikePersonName(right)
+	leftIsName := looksLikePersonName(left)
+	
+	if rightIsName && !leftIsName {
+		// Pattern: "Title - Author"
+		return left, right
+	} else if leftIsName && !rightIsName {
+		// Pattern: "Author - Title"
+		return right, left
+	} else if rightIsName {
+		// Both could be names, prefer "Title - Author" pattern
+		return left, right
+	}
+	
+	// Couldn't determine, return empty author
+	return "", ""
+}
+
+// looksLikePersonName checks if a string looks like a person's name
+// Looks for patterns like "John Smith", "J. Smith", "J. K. Rowling"
+func looksLikePersonName(s string) bool {
+	if s == "" {
+		return false
+	}
+	
+	// Check for initials like "J. K. Rowling" or "J.K. Rowling"
+	if strings.Contains(s, ".") {
+		// Count uppercase letters and periods
+		uppers := 0
+		for _, r := range s {
+			if r >= 'A' && r <= 'Z' {
+				uppers++
+			}
+		}
+		if uppers >= 2 {
+			return true
+		}
+	}
+	
+	// Check for multi-word names with proper capitalization
+	words := strings.Fields(s)
+	if len(words) >= 2 && len(words) <= 4 {
+		// Check if all words start with uppercase
+		allProperCase := true
+		for _, word := range words {
+			if len(word) == 0 || (word[0] < 'A' || word[0] > 'Z') {
+				allProperCase = false
+				break
+			}
+		}
+		if allProperCase {
+			return true
+		}
+	}
+	
+	// Check for "FirstName LastName" pattern (at least one space, proper case)
+	if len(words) >= 2 {
+		// First word starts with capital
+		if len(words[0]) > 0 && words[0][0] >= 'A' && words[0][0] <= 'Z' {
+			// Second word starts with capital
+			if len(words[1]) > 0 && words[1][0] >= 'A' && words[1][0] <= 'Z' {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
