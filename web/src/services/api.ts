@@ -383,3 +383,32 @@ export async function importFile(filePath: string, organize = false): Promise<{ 
   if (!response.ok) throw new Error('Failed to import file');
   return response.json();
 }
+
+// Metadata Fetching
+export interface MetadataResult {
+  title: string;
+  author: string;
+  description?: string;
+  publisher?: string;
+  publish_year?: number;
+  isbn?: string;
+  cover_url?: string;
+  language?: string;
+}
+
+export async function searchMetadata(title: string, author?: string): Promise<{ results: MetadataResult[]; source: string }> {
+  const params = new URLSearchParams({ title });
+  if (author) params.append('author', author);
+
+  const response = await fetch(`${API_BASE}/metadata/search?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to search metadata');
+  return response.json();
+}
+
+export async function fetchBookMetadata(bookId: string): Promise<{ message: string; book: Book; source: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/fetch-metadata`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to fetch book metadata');
+  return response.json();
+}

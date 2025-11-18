@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -245,6 +245,18 @@ export const Library = () => {
     loadAudiobooks();
   };
 
+  const handleFetchMetadata = async (audiobook: Audiobook) => {
+    try {
+      const result = await api.fetchBookMetadata(audiobook.id);
+      console.log(`Metadata fetched from ${result.source}:`, result.book);
+      // Reload audiobooks to show updated data
+      loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to fetch metadata:', error);
+      // TODO: Show error notification to user
+    }
+  };
+
   const handleFiltersChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
     setPage(1); // Reset to first page on filter change
@@ -401,6 +413,7 @@ export const Library = () => {
               onDelete={handleDelete}
               onClick={handleClick}
               onVersionManage={handleVersionManage}
+              onFetchMetadata={handleFetchMetadata}
             />
           ) : (
             <AudiobookList
