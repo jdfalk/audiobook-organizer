@@ -21,6 +21,7 @@ import {
   Code as CodeIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
+import * as api from '../../services/api';
 
 interface SystemInfo {
   os: {

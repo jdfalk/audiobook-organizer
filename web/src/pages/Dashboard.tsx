@@ -27,6 +27,7 @@ import {
   Person as PersonIcon,
   MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
+import * as api from '../services/api';
 
 interface SystemStats {
   total_books: number;
@@ -63,40 +64,37 @@ export function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // TODO: Replace with actual API calls
-      // const statsResponse = await fetch('/api/v1/stats');
-      // const opsResponse = await fetch('/api/v1/operations/recent');
-      // setStats(await statsResponse.json());
-      // setOperations(await opsResponse.json());
+      // Fetch real data from API
+      const [systemStatus, bookCount, authors, seriesList, folders] = await Promise.all([
+        api.getSystemStatus(),
+        api.countBooks(),
+        api.getAuthors(),
+        api.getSeries(),
+        api.getLibraryFolders(),
+      ]);
 
-      // Placeholder data
       setStats({
-        total_books: 1247,
-        total_authors: 342,
-        total_series: 89,
-        library_folders: 3,
-        total_size_gb: 156.4,
-        disk_usage_percent: 45,
+        total_books: bookCount,
+        total_authors: authors.length,
+        total_series: seriesList.length,
+        library_folders: folders.length,
+        total_size_gb: systemStatus.library.total_size / (1024 * 1024 * 1024),
+        disk_usage_percent: 0, // Calculate if needed
       });
 
-      setOperations([
-        {
-          id: '1',
-          type: 'Scan',
-          status: 'success',
-          message: 'Scanned /audiobooks/fiction',
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          type: 'Metadata Update',
-          status: 'success',
-          message: 'Updated 12 audiobooks',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ]);
+      // Convert recent operations to dashboard format
+      const recentOps = systemStatus.operations.recent.slice(0, 5).map(op => ({
+        id: op.id,
+        type: op.type,
+        status: (op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'running') as 'success' | 'error' | 'running',
+        message: op.message || `${op.type} operation`,
+        timestamp: op.created_at,
+      }));
+
+      setOperations(recentOps);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      // Keep default/empty state on error
     }
   };
 

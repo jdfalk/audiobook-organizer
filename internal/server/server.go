@@ -1056,7 +1056,7 @@ func (s *Server) importFile(c *gin.Context) {
 
 	if !supported {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("unsupported file type: %s", ext),
+			"error":                fmt.Sprintf("unsupported file type: %s", ext),
 			"supported_extensions": config.AppConfig.SupportedExtensions,
 		})
 		return
