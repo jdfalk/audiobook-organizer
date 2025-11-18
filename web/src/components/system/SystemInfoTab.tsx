@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -90,10 +90,38 @@ export function SystemInfoTab() {
 
   const fetchSystemInfo = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/v1/system/info');
-      // const data = await response.json();
-      // setInfo(data);
+      const status = await api.getSystemStatus();
+      
+      // Map API SystemStatus to SystemInfo format
+      setInfo({
+        os: {
+          platform: 'darwin', // Could be enhanced to get from backend
+          arch: 'arm64',
+          version: 'macOS',
+        },
+        memory: {
+          total: status.memory.sys_bytes,
+          used: status.memory.alloc_bytes,
+          free: status.memory.sys_bytes - status.memory.alloc_bytes,
+          cacheSize: status.memory.total_alloc_bytes,
+        },
+        cpu: {
+          cores: status.runtime.num_cpu,
+          model: 'CPU',
+          usage: 0, // Not provided by current API
+        },
+        runtime: {
+          goVersion: status.runtime.go_version,
+          numGoroutines: status.runtime.num_goroutine,
+          uptime: '', // Not provided by current API
+        },
+        database: {
+          size: status.library.total_size,
+          books: status.library.book_count,
+          authors: 0, // Not in SystemStatus API
+          series: 0, // Not in SystemStatus API
+        },
+      });
     } catch (error) {
       console.error('Failed to fetch system info:', error);
     }

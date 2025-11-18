@@ -270,7 +270,7 @@ export async function getSystemLogs(params?: {
   if (params?.search) query.append('search', params.search);
   if (params?.limit) query.append('limit', params.limit.toString());
   if (params?.offset) query.append('offset', params.offset.toString());
-  
+
   const response = await fetch(`${API_BASE}/system/logs?${query}`);
   if (!response.ok) throw new Error('Failed to fetch system logs');
   return response.json();

@@ -1,8 +1,8 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.9.0
-// guid: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
+// version: 1.10.0
+// guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -25,6 +25,7 @@ import {
   FormControl,
   FormLabel,
 } from '@mui/material';
+import * as api from '../services/api';
 import {
   Save as SaveIcon,
   RestartAlt as RestartAltIcon,
@@ -136,6 +137,25 @@ export function Settings() {
   });
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+
+  // Load configuration on mount
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    try {
+      const config = await api.getConfig();
+      // Map backend config to frontend settings format
+      setSettings(prev => ({
+        ...prev,
+        libraryPath: config.root_dir || prev.libraryPath,
+        // Note: Backend config has limited fields, most settings remain as defaults
+      }));
+    } catch (error) {
+      console.error('Failed to load config:', error);
+    }
+  };
 
   // Example data for "To Kill a Mockingbird" audiobook (no series)
   const exampleNoSeries = {
@@ -268,17 +288,21 @@ export function Settings() {
 
   const handleSave = async () => {
     try {
-      // TODO: Replace with actual API call
-      // await fetch('/api/v1/settings', {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(settings)
-      // });
+      // Map frontend settings to backend config format
+      const updates = {
+        root_dir: settings.libraryPath,
+        playlist_dir: settings.libraryPath + '/playlists',
+        // Note: Backend config has limited updatable fields
+        // Other settings would need backend support
+      };
+
+      await api.updateConfig(updates);
       console.log('Saved settings:', settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error('Failed to save settings:', error);
+      alert('Failed to save settings. Please try again.');
     }
   };
 
