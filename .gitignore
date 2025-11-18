@@ -24,11 +24,13 @@ go.work.sum
 .env
 .env.*
 *.local
+local.env
 
 # Build output
 bin/
 dist/
 build/
+temp_out/
 
 # Logs and temporary files
 logs/
