@@ -1,62 +1,89 @@
 <!-- file: scripts/QUICK-START.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e -->
 
 # Quick Start: Test Audiobook Organizer
 
 Run the test script to validate how the audiobook-organizer would process your file collection.
 
-## One-Line Test Commands
+## 🆕 Version 3 Script (RECOMMENDED - Intelligent Metadata Extraction)
+
+The V3 script uses multiple strategies to extract accurate metadata:
+
+1. **Embedded tags**: Reads ID3/M4A tags from audio files using ffprobe
+2. **Smart filename parsing**: Extracts author from patterns like "Title - Author" or "Author - Title"
+3. **Fallback to paths**: Uses directory structure as last resort
+
+This multi-layered approach dramatically improves author detection even when files lack embedded metadata tags.
+
+### Test with 20,000 files (recommended starting point)
+
+```bash
+cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+./scripts/test-organize-import-v3.py /Users/jdfalk/repos/scratch/file-list-books --limit 20000
+```
 
 ### Test with full file list (~187k files)
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
-./scripts/test-organize-import.py /Users/jdfalk/repos/scratch/file-list-books
+./scripts/test-organize-import-v3.py /Users/jdfalk/repos/scratch/file-list-books
 ```
 
-### Quick test (first 1000 files)
+### Quick test with fewer files
+
+```bash
+./scripts/test-organize-import-v3.py /Users/jdfalk/repos/scratch/file-list-books --limit 10000
+```
+
+## Version 2 Script (Path-based grouping)
+
+The V2 script groups files by book and detects duplicates, but uses directory/filename parsing instead of reading tags.
+
+```bash
+./scripts/test-organize-import-v2.py /Users/jdfalk/repos/scratch/file-list-books --limit 20000
+```
+
+## Version 1 Script (File-by-file analysis)
+
+The V1 script processes each file individually (useful for detailed file-level analysis).
 
 ```bash
 ./scripts/test-organize-import.py /Users/jdfalk/repos/scratch/file-list-books --limit 1000
 ```
 
-### Medium test (10,000 files)
-
-```bash
-./scripts/test-organize-import.py /Users/jdfalk/repos/scratch/file-list-books --limit 10000 --output test-10k.json
-```
-
-## What You'll Get
+## What You'll Get (V2 Script)
 
 1. **Console output** with summary statistics
-2. **JSON report** with complete details (default: `organize-test-report.json`)
-3. **Sample book details** showing extraction results
+2. **JSON report** with complete details (default: `organize-test-report-v2.json`)
+3. **Book-centric view** with all files grouped by book
+4. **Duplicate detection** showing all versions of the same book
+5. **Sample book details** with version and file information
 
-## Key Metrics to Watch
+## Key Metrics to Watch (V2)
 
-- **Books with series identified** - How many were recognized as part of a series
+- **Total books identified** - Unique books found (not file count)
+- **Multi-file books** - Books with multiple chapters/parts
+- **Duplicate versions** - Same book in different formats/editions
 - **Confidence levels** - High/medium/low accuracy ratings
 - **Top authors/series** - Verify correct identification
-- **Common issues** - Problems to address
 
-## Example Output Snippet
+## Example Output Snippet (V2)
 
 ```text
 SUMMARY:
-  Total files processed: 186,736
-  Books with series identified: 150,234
-  Books with series position: 95,678
+  Total books identified: 1,659
+  Total files processed: 10,782
+  Multi-file books: 352
+  Books with duplicate versions: 15
+  Unique duplicate groups: 5
+  Books with series identified: 1,360
 
-CONFIDENCE LEVELS:
-  High confidence: 120,456
-  Medium confidence: 45,890
-  Low confidence: 20,390
-
-TOP 10 AUTHORS:
-  Brandon Sanderson: 125 books
-  Timothy Zahn: 98 books
-  ...
+DUPLICATE GROUPS:
+  DUP0001: Richard Morgan - Altered Carbon
+    Versions: 3
+      - .m4b (1 files) in /path/to/version1
+      - .mp3 (15 files) in /path/to/version2
+      - .flac (15 files) in /path/to/version3
 ```
 
 ## Next Steps
