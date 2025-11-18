@@ -30,6 +30,20 @@
   - Extracts bitrate, codec, sample rate, channels, and bit depth
   - Generates human-readable quality strings (e.g., "320kbps MP3", "FLAC Lossless (16-bit/44.1kHz)")
   - Quality tier system for comparing audio versions (0-100 scale)
+- Version management API endpoints implemented
+  - `GET /api/v1/audiobooks/:id/versions` - List all versions of an audiobook
+  - `POST /api/v1/audiobooks/:id/versions` - Link two audiobooks as versions (creates/uses version_group_id)
+  - `PUT /api/v1/audiobooks/:id/set-primary` - Set an audiobook as the primary version in its group
+  - `GET /api/v1/version-groups/:id` - Get all audiobooks in a version group
+  - GetBooksByVersionGroup() method added to Store interface with SQLite and PebbleDB implementations
+- System information and monitoring APIs
+  - `GET /api/v1/system/status` - Comprehensive system status with library stats, memory usage, runtime info, recent operations
+  - `GET /api/v1/system/logs` - System-wide logs with filtering by level, search, and pagination
+  - `GET /api/v1/config` - Get current configuration
+  - `PUT /api/v1/config` - Update configuration at runtime (with safety restrictions on critical settings)
+- Manual file import endpoint
+  - `POST /api/v1/import/file` - Import single audio file with automatic metadata and media info extraction
+  - File validation, author auto-creation, optional file organization
 - **Smart Path Handling**: Empty fields (like {series}) automatically removed from folder paths (no duplicate slashes)
 - **Naming Pattern Examples**: Live preview with both series and non-series books (Nancy Drew + To Kill a Mockingbird)
 

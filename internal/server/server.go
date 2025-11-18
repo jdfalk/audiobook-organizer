@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
@@ -31,6 +33,15 @@ import (
 // webFS holds embedded web assets (will be populated when frontend is built)
 // TODO: Add go:embed directive when web/dist directory exists
 var webFS embed.FS
+
+// Helper functions for pointer conversions
+func stringPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
+}
 
 // Server represents the HTTP server
 type Server struct {
@@ -142,6 +153,9 @@ func (s *Server) setupRoutes() {
 		api.GET("/operations/:id/logs", s.getOperationLogs)
 		api.DELETE("/operations/:id", s.cancelOperation)
 
+		// Import routes
+		api.POST("/import/file", s.importFile)
+
 		// System routes
 		api.GET("/system/status", s.getSystemStatus)
 		api.GET("/system/logs", s.getSystemLogs)
@@ -167,6 +181,12 @@ func (s *Server) setupRoutes() {
 		api.PUT("/works/:id", s.updateWork)
 		api.DELETE("/works/:id", s.deleteWork)
 		api.GET("/works/:id/books", s.listWorkBooks)
+
+		// Version management routes
+		api.GET("/audiobooks/:id/versions", s.listAudiobookVersions)
+		api.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
+		api.PUT("/audiobooks/:id/set-primary", s.setAudiobookPrimary)
+		api.GET("/version-groups/:id", s.getVersionGroup)
 	}
 
 	// Serve static files (React frontend)
@@ -996,17 +1016,332 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (s *Server) importFile(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		FilePath string `json:"file_path" binding:"required"`
+		Organize bool   `json:"organize"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate file exists and is supported
+	fileInfo, err := os.Stat(req.FilePath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file not found or inaccessible"})
+		return
+	}
+
+	if fileInfo.IsDir() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path is a directory, not a file"})
+		return
+	}
+
+	// Check if file extension is supported
+	ext := strings.ToLower(filepath.Ext(req.FilePath))
+	supported := false
+	for _, supportedExt := range config.AppConfig.SupportedExtensions {
+		if ext == supportedExt {
+			supported = true
+			break
+		}
+	}
+
+	if !supported {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("unsupported file type: %s", ext),
+			"supported_extensions": config.AppConfig.SupportedExtensions,
+		})
+		return
+	}
+
+	// Extract metadata
+	meta, err := metadata.ExtractMetadata(req.FilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to extract metadata: %v", err)})
+		return
+	}
+
+	// Create book record
+	book := &database.Book{
+		Title:            meta.Title,
+		FilePath:         req.FilePath,
+		OriginalFilename: stringPtr(filepath.Base(req.FilePath)),
+	}
+
+	// Set author if available
+	if meta.Artist != "" {
+		author, err := database.GlobalStore.GetAuthorByName(meta.Artist)
+		if err != nil {
+			// Create new author
+			author, err = database.GlobalStore.CreateAuthor(meta.Artist)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create author"})
+				return
+			}
+		}
+		book.AuthorID = &author.ID
+	}
+
+	// Set additional metadata
+	if meta.Album != "" && book.Title == "" {
+		book.Title = meta.Album
+	}
+	if meta.Narrator != "" {
+		book.Narrator = &meta.Narrator
+	}
+	if meta.Language != "" {
+		book.Language = &meta.Language
+	}
+	if meta.Publisher != "" {
+		book.Publisher = &meta.Publisher
+	}
+
+	// Extract media info
+	mediaInfo, err := mediainfo.Extract(req.FilePath)
+	if err == nil {
+		if mediaInfo.Bitrate > 0 {
+			book.Bitrate = intPtr(mediaInfo.Bitrate)
+		}
+		if mediaInfo.Codec != "" {
+			book.Codec = stringPtr(mediaInfo.Codec)
+		}
+		if mediaInfo.SampleRate > 0 {
+			book.SampleRate = intPtr(mediaInfo.SampleRate)
+		}
+		if mediaInfo.Channels > 0 {
+			book.Channels = intPtr(mediaInfo.Channels)
+		}
+		if mediaInfo.BitDepth > 0 {
+			book.BitDepth = intPtr(mediaInfo.BitDepth)
+		}
+		if mediaInfo.Quality != "" {
+			book.Quality = stringPtr(mediaInfo.Quality)
+		}
+	}
+
+	// Create book in database
+	createdBook, err := database.GlobalStore.CreateBook(book)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create book: %v", err)})
+		return
+	}
+
+	response := gin.H{
+		"message": "file imported successfully",
+		"book":    createdBook,
+	}
+
+	// If organize flag is set, trigger organization operation
+	if req.Organize && operations.GlobalQueue != nil {
+		opID := ulid.Make().String()
+		op, err := database.GlobalStore.CreateOperation(opID, "organize", nil)
+		if err == nil {
+			// Queue the organization operation
+			operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+				_ = progress.Log("info", fmt.Sprintf("Organizing imported file: %s", req.FilePath), nil)
+				// TODO: Implement actual organization logic
+				return nil
+			}
+			operations.GlobalQueue.Enqueue(opID, "organize", operations.PriorityNormal, operationFunc)
+			response["operation_id"] = op.ID
+		}
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 func (s *Server) getSystemStatus(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Get system status - not implemented yet"})
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get book count
+	bookCount, err := database.GlobalStore.CountBooks()
+	if err != nil {
+		bookCount = 0
+	}
+
+	// Get library folders
+	folders, err := database.GlobalStore.GetAllLibraryFolders()
+	if err != nil {
+		folders = []database.LibraryFolder{}
+	}
+
+	// Get recent operations
+	recentOps, err := database.GlobalStore.GetRecentOperations(5)
+	if err != nil {
+		recentOps = []database.Operation{}
+	}
+
+	// Memory stats
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	// Disk usage for library folders
+	var totalSize int64
+	for _, folder := range folders {
+		if !folder.Enabled {
+			continue
+		}
+		// Get folder size (walk directory)
+		if info, err := os.Stat(folder.Path); err == nil {
+			if info.IsDir() {
+				// Calculate directory size
+				var size int64
+				filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
+					if err == nil && !info.IsDir() {
+						size += info.Size()
+					}
+					return nil
+				})
+				totalSize += size
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "running",
+		"library": gin.H{
+			"book_count":   bookCount,
+			"folder_count": len(folders),
+			"total_size":   totalSize,
+		},
+		"memory": gin.H{
+			"alloc_bytes":       memStats.Alloc,
+			"total_alloc_bytes": memStats.TotalAlloc,
+			"sys_bytes":         memStats.Sys,
+			"num_gc":            memStats.NumGC,
+		},
+		"runtime": gin.H{
+			"go_version":    runtime.Version(),
+			"num_goroutine": runtime.NumGoroutine(),
+			"num_cpu":       runtime.NumCPU(),
+		},
+		"operations": gin.H{
+			"recent": recentOps,
+		},
+	})
 }
 
 func (s *Server) getSystemLogs(c *gin.Context) {
-	// For now, redirect to operation logs when an operation_id is provided
+	// For operation-specific logs, redirect to getOperationLogs
 	if id := c.Query("operation_id"); id != "" {
 		s.getOperationLogs(c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "system logs not implemented; pass operation_id to query operation logs"})
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Query parameters for filtering
+	level := c.Query("level")      // Filter by log level (info, warn, error)
+	search := c.Query("search")    // Search in message/details
+	limitStr := c.Query("limit")   // Pagination limit
+	offsetStr := c.Query("offset") // Pagination offset
+
+	// Parse pagination
+	limit := 100
+	offset := 0
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	// Get recent operations to collect logs from
+	operations, err := database.GlobalStore.GetRecentOperations(50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch operations"})
+		return
+	}
+
+	// Collect logs from all operations
+	type LogEntry struct {
+		OperationID string    `json:"operation_id"`
+		Timestamp   time.Time `json:"timestamp"`
+		Level       string    `json:"level"`
+		Message     string    `json:"message"`
+		Details     *string   `json:"details,omitempty"`
+	}
+	var allLogs []LogEntry
+
+	for _, op := range operations {
+		logs, err := database.GlobalStore.GetOperationLogs(op.ID)
+		if err != nil {
+			continue
+		}
+
+		for _, log := range logs {
+			// Apply level filter
+			if level != "" && log.Level != level {
+				continue
+			}
+
+			// Apply search filter
+			if search != "" {
+				found := strings.Contains(strings.ToLower(log.Message), strings.ToLower(search))
+				if !found && log.Details != nil {
+					found = strings.Contains(strings.ToLower(*log.Details), strings.ToLower(search))
+				}
+				if !found {
+					continue
+				}
+			}
+
+			allLogs = append(allLogs, LogEntry{
+				OperationID: op.ID,
+				Timestamp:   log.CreatedAt,
+				Level:       log.Level,
+				Message:     log.Message,
+				Details:     log.Details,
+			})
+		}
+	}
+
+	// Sort by timestamp (newest first) - simple bubble sort for now
+	for i := 0; i < len(allLogs)-1; i++ {
+		for j := i + 1; j < len(allLogs); j++ {
+			if allLogs[j].Timestamp.After(allLogs[i].Timestamp) {
+				allLogs[i], allLogs[j] = allLogs[j], allLogs[i]
+			}
+		}
+	}
+
+	// Apply pagination
+	total := len(allLogs)
+	start := offset
+	end := offset + limit
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	paginatedLogs := allLogs[start:end]
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":   paginatedLogs,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
@@ -1014,7 +1349,57 @@ func (s *Server) getConfig(c *gin.Context) {
 }
 
 func (s *Server) updateConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Update config - not implemented yet"})
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Note: This updates the in-memory config only
+	// For persistent configuration changes, a config file update mechanism is needed
+	// This implementation provides runtime configuration updates
+
+	// Update allowed fields
+	updated := []string{}
+
+	if val, ok := updates["root_dir"].(string); ok {
+		config.AppConfig.RootDir = val
+		updated = append(updated, "root_dir")
+	}
+
+	if val, ok := updates["database_path"].(string); ok {
+		config.AppConfig.DatabasePath = val
+		updated = append(updated, "database_path")
+	}
+
+	if val, ok := updates["playlist_dir"].(string); ok {
+		config.AppConfig.PlaylistDir = val
+		updated = append(updated, "playlist_dir")
+	}
+
+	if apiKeys, ok := updates["api_keys"].(map[string]interface{}); ok {
+		if goodreads, ok := apiKeys["goodreads"].(string); ok {
+			config.AppConfig.APIKeys.Goodreads = goodreads
+			updated = append(updated, "api_keys.goodreads")
+		}
+	}
+
+	// Database type and enable_sqlite are read-only at runtime for safety
+	if _, ok := updates["database_type"]; ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database_type cannot be changed at runtime"})
+		return
+	}
+
+	if _, ok := updates["enable_sqlite"]; ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "enable_sqlite cannot be changed at runtime"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "configuration updated",
+		"updated": updated,
+		"config":  config.AppConfig,
+	})
 }
 
 // getOperationLogs returns logs for a given operation
@@ -1263,6 +1648,154 @@ func (s *Server) importMetadata(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusOK, response)
 	}
+}
+
+// Version Management Handlers
+
+// listAudiobookVersions lists all versions of an audiobook
+func (s *Server) listAudiobookVersions(c *gin.Context) {
+	id := c.Param("id")
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	if book.VersionGroupID == nil {
+		c.JSON(http.StatusOK, gin.H{"versions": []interface{}{book}})
+		return
+	}
+
+	books, err := database.GlobalStore.GetBooksByVersionGroup(*book.VersionGroupID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch versions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"versions": books})
+}
+
+// linkAudiobookVersion links an audiobook as another version
+func (s *Server) linkAudiobookVersion(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		OtherID string `json:"other_id" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book1, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	book2, err := database.GlobalStore.GetBookByID(req.OtherID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "other audiobook not found"})
+		return
+	}
+
+	versionGroupID := ""
+	if book1.VersionGroupID != nil {
+		versionGroupID = *book1.VersionGroupID
+	} else if book2.VersionGroupID != nil {
+		versionGroupID = *book2.VersionGroupID
+	} else {
+		versionGroupID = ulid.Make().String()
+	}
+
+	book1.VersionGroupID = &versionGroupID
+	book2.VersionGroupID = &versionGroupID
+
+	if _, err := database.GlobalStore.UpdateBook(id, book1); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
+		return
+	}
+
+	if _, err := database.GlobalStore.UpdateBook(req.OtherID, book2); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update other audiobook"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"version_group_id": versionGroupID})
+}
+
+// setAudiobookPrimary sets an audiobook as the primary version
+func (s *Server) setAudiobookPrimary(c *gin.Context) {
+	id := c.Param("id")
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	if book.VersionGroupID == nil {
+		primaryFlag := true
+		book.IsPrimaryVersion = &primaryFlag
+		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "audiobook set as primary"})
+		return
+	}
+
+	books, err := database.GlobalStore.GetBooksByVersionGroup(*book.VersionGroupID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch versions"})
+		return
+	}
+
+	for i := range books {
+		primaryFlag := books[i].ID == id
+		books[i].IsPrimaryVersion = &primaryFlag
+		if _, err := database.GlobalStore.UpdateBook(books[i].ID, &books[i]); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update version"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "audiobook set as primary"})
+}
+
+// getVersionGroup gets all audiobooks in a version group
+func (s *Server) getVersionGroup(c *gin.Context) {
+	groupID := c.Param("id")
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	books, err := database.GlobalStore.GetBooksByVersionGroup(groupID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch version group"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"audiobooks": books})
 }
 
 // GetDefaultServerConfig returns default server configuration

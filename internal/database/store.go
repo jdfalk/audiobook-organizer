@@ -47,6 +47,9 @@ type Store interface {
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
 
+	// Version Management
+	GetBooksByVersionGroup(groupID string) ([]Book, error)
+
 	// Library Folders
 	GetAllLibraryFolders() ([]LibraryFolder, error)
 	GetLibraryFolderByID(id int) (*LibraryFolder, error)
@@ -142,13 +145,27 @@ type Book struct {
 	Format         string `json:"format,omitempty"`
 	Duration       *int   `json:"duration,omitempty"`
 	// Extended metadata (optional)
-	WorkID    *string `json:"work_id,omitempty"`
-	Narrator  *string `json:"narrator,omitempty"`
-	Edition   *string `json:"edition,omitempty"`
-	Language  *string `json:"language,omitempty"`
-	Publisher *string `json:"publisher,omitempty"`
-	ISBN10    *string `json:"isbn10,omitempty"`
-	ISBN13    *string `json:"isbn13,omitempty"`
+	WorkID               *string `json:"work_id,omitempty"`
+	Narrator             *string `json:"narrator,omitempty"`
+	Edition              *string `json:"edition,omitempty"`
+	Language             *string `json:"language,omitempty"`
+	Publisher            *string `json:"publisher,omitempty"`
+	PrintYear            *int    `json:"print_year,omitempty"`
+	AudiobookReleaseYear *int    `json:"audiobook_release_year,omitempty"`
+	ISBN10               *string `json:"isbn10,omitempty"`
+	ISBN13               *string `json:"isbn13,omitempty"`
+	OriginalFilename     *string `json:"original_filename,omitempty"`
+	// Media info fields
+	Bitrate    *int    `json:"bitrate_kbps,omitempty"`
+	Codec      *string `json:"codec,omitempty"`
+	SampleRate *int    `json:"sample_rate_hz,omitempty"`
+	Channels   *int    `json:"channels,omitempty"`
+	BitDepth   *int    `json:"bit_depth,omitempty"`
+	Quality    *string `json:"quality,omitempty"`
+	// Version management
+	IsPrimaryVersion *bool   `json:"is_primary_version,omitempty"`
+	VersionGroupID   *string `json:"version_group_id,omitempty"`
+	VersionNotes     *string `json:"version_notes,omitempty"`
 }
 
 // Work represents a logical title-level grouping that may span multiple editions,

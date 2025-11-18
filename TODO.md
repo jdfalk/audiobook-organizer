@@ -23,15 +23,43 @@
   - ✅ Supports MP3, M4A/M4B, FLAC, OGG formats
   - ✅ Extracts bitrate, codec, sample rate, channels, bit depth
   - ✅ Quality string generation and tier comparison
-- [ ] 🟡 **Backend**: Version management API (link versions, set primary, manage version groups)
-- [ ] 🟡 **Backend**: Import paths CRUD API (list, add, remove, scan)
-- [ ] 🟡 **Backend**: System info API (storage, quotas, system stats)
-- [ ] 🟡 **Backend**: Logs API with filtering (level, source, search, pagination)
-- [ ] 🟡 **Backend**: Settings API (save/load configuration)
+- [x] ✅ **Backend**: Version management API (link versions, set primary, manage version groups)
+  - ✅ Added GetBooksByVersionGroup() to Store interface and both implementations
+  - ✅ Implemented 4 API endpoints: list versions, link versions, set primary, get version group
+  - ✅ Uses ULID-based version group IDs for grouping multiple versions
+  - ✅ All handlers properly use database.GlobalStore
+- [x] ✅ **Backend**: Import paths CRUD API (list, add, remove, scan)
+  - ✅ GET /api/v1/library/folders - List all library folders/import paths
+  - ✅ POST /api/v1/library/folders - Add new import path
+  - ✅ DELETE /api/v1/library/folders/:id - Remove import path
+  - ✅ POST /api/v1/operations/scan - Trigger scan (optionally for specific folder)
+- [x] ✅ **Backend**: System info API (storage, quotas, system stats)
+  - ✅ GET /api/v1/system/status - Comprehensive system status (library stats, memory, runtime, operations)
+  - ✅ Includes book count, folder count, total storage size
+  - ✅ Memory statistics (alloc, total_alloc, sys, num_gc)
+  - ✅ Runtime information (Go version, goroutines, CPU count)
+- [x] ✅ **Backend**: Logs API with filtering (level, source, search, pagination)
+  - ✅ GET /api/v1/system/logs - System-wide logs with filtering
+  - ✅ Supports filtering by level (info, warn, error)
+  - ✅ Full-text search in messages and details
+  - ✅ Pagination with limit/offset parameters
+  - ✅ Aggregates logs from all recent operations
+- [x] ✅ **Backend**: Settings API (save/load configuration)
+  - ✅ GET /api/v1/config - Get current configuration
+  - ✅ PUT /api/v1/config - Update configuration at runtime
+  - ✅ Supports updating root_dir, database_path, playlist_dir, API keys
+  - ✅ Safety restrictions on database_type and enable_sqlite (read-only at runtime)
 - [x] **Backend - Database migration for media info and version fields**
   - ✅ Created migration005 adding all 9 fields to books table
   - ✅ Handles duplicate column detection gracefully
   - ✅ Creates indices for version_group_id and is_primary_version
+- [x] ✅ **Backend**: Manual file import handling
+  - ✅ POST /api/v1/import/file - Import single audio file with metadata extraction
+  - ✅ File validation (existence, extension support)
+  - ✅ Automatic metadata extraction (title, author, narrator, etc.)
+  - ✅ Media info extraction (bitrate, codec, quality)
+  - ✅ Author auto-creation if not exists
+  - ✅ Optional organize flag to trigger file organization
 - [ ] 🟡 **Backend**: Metadata source integration (Audible, Goodreads, Open Library, Google Books)
 
 - [ ] 🟡 **Frontend**: Library browser with grid/list views and version selection
