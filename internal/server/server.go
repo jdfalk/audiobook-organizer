@@ -1652,6 +1652,91 @@ func (s *Server) importMetadata(c *gin.Context) {
 	}
 }
 
+// searchMetadata searches external metadata sources
+func (s *Server) searchMetadata(c *gin.Context) {
+	title := c.Query("title")
+	author := c.Query("author")
+
+	if title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title parameter required"})
+		return
+	}
+
+	// Use Open Library for now
+	client := metadata.NewOpenLibraryClient()
+
+	var results []metadata.BookMetadata
+	var err error
+
+	if author != "" {
+		results, err = client.SearchByTitleAndAuthor(title, author)
+	} else {
+		results, err = client.SearchByTitle(title)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("metadata search failed: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"results": results,
+		"source":  "Open Library",
+	})
+}
+
+// fetchAudiobookMetadata fetches and applies metadata to an audiobook
+func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
+	id := c.Param("id")
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get the audiobook
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// Search for metadata using current title
+	client := metadata.NewOpenLibraryClient()
+	results, err := client.SearchByTitle(book.Title)
+	if err != nil || len(results) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no metadata found"})
+		return
+	}
+
+	// Use the first result
+	meta := results[0]
+
+	// Update book with fetched metadata (only fields that exist in Book struct)
+	if meta.Title != "" {
+		book.Title = meta.Title
+	}
+	if meta.Publisher != "" {
+		book.Publisher = stringPtr(meta.Publisher)
+	}
+	if meta.Language != "" {
+		book.Language = stringPtr(meta.Language)
+	}
+
+	// Update in database
+	updatedBook, err := database.GlobalStore.UpdateBook(id, book)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update book: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "metadata fetched and applied",
+		"book":    updatedBook,
+		"source":  "Open Library",
+	})
+}
+
 // Version Management Handlers
 
 // listAudiobookVersions lists all versions of an audiobook
