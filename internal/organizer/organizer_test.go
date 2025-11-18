@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/models"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // Helper function to create string pointer
@@ -47,29 +47,25 @@ func TestSanitizeFilename(t *testing.T) {
 func TestExpandPattern(t *testing.T) {
 	org := &Organizer{
 		config: &config.Config{
-			FolderNamingPattern: "{author}/{series}",
-			FileNamingPattern:   "{title} - {narrator}",
+			FolderNamingPattern: "{title}",
+			FileNamingPattern:   "{title}",
 		},
 	}
 
-	book := &models.Book{
-		Title:      "The Hobbit",
-		AuthorName: "J.R.R. Tolkien",
-		SeriesName: "Middle-earth",
-		Narrator:   stringPtr("Rob Inglis"),
+	book := &database.Book{
+		Title:    "The Hobbit",
+		Narrator: stringPtr("Rob Inglis"),
 	}
 
-	result := org.expandPattern("{author}/{title}", book)
-	expected := "J.R.R. Tolkien/The Hobbit"
+	result := org.expandPattern("{title}", book)
+	expected := "The Hobbit"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
 
-	// Test with series number
-	seriesNum := 1
-	book.SeriesNumber = &seriesNum
-	result = org.expandPattern("{series} #{series_number}", book)
-	expected = "Middle-earth #1"
+	// Test with narrator
+	result = org.expandPattern("{title} - {narrator}", book)
+	expected = "The Hobbit - Rob Inglis"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -118,16 +114,14 @@ func TestGenerateTargetPath(t *testing.T) {
 	org := &Organizer{
 		config: &config.Config{
 			RootDir:             tmpDir,
-			FolderNamingPattern: "{author}/{series}",
+			FolderNamingPattern: "books",
 			FileNamingPattern:   "{title}",
 		},
 	}
 
-	book := &models.Book{
-		Title:      "The Hobbit",
-		AuthorName: "J.R.R. Tolkien",
-		SeriesName: "Middle-earth",
-		FilePath:   "/source/hobbit.m4b",
+	book := &database.Book{
+		Title:    "The Hobbit",
+		FilePath: "/source/hobbit.m4b",
 	}
 
 	targetPath, err := org.generateTargetPath(book)
@@ -135,7 +129,7 @@ func TestGenerateTargetPath(t *testing.T) {
 		t.Fatalf("failed to generate target path: %v", err)
 	}
 
-	expected := filepath.Join(tmpDir, "J.R.R. Tolkien", "Middle-earth", "The Hobbit.m4b")
+	expected := filepath.Join(tmpDir, "books", "The Hobbit.m4b")
 	if targetPath != expected {
 		t.Errorf("expected %q, got %q", expected, targetPath)
 	}

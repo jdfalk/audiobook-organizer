@@ -168,6 +168,10 @@ export interface Config {
   metadata_sources: MetadataSource[];
   language: string;
 
+  // AI parsing
+  enable_ai_parsing: boolean;
+  openai_api_key: string;
+
   // Performance
   concurrent_scans: number;
 
@@ -409,6 +413,47 @@ export async function fetchBookMetadata(bookId: string): Promise<{ message: stri
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/fetch-metadata`, {
     method: 'POST',
   });
-  if (!response.ok) throw new Error('Failed to fetch book metadata');
+  if (!response.ok) throw new Error('Failed to fetch metadata');
+  return response.json();
+}
+
+// AI Parsing
+export interface AIParseResult {
+  title: string;
+  author: string;
+  series?: string;
+  series_number?: number;
+  narrator?: string;
+  publisher?: string;
+  year?: number;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export async function parseFilenameWithAI(filename: string): Promise<{ metadata: AIParseResult }> {
+  const response = await fetch(`${API_BASE}/ai/parse-filename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename }),
+  });
+  if (!response.ok) throw new Error('Failed to parse filename with AI');
+  return response.json();
+}
+
+export async function testAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
+  const response = await fetch(`${API_BASE}/ai/test-connection`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Connection test failed');
+  }
+  return response.json();
+}
+
+export async function parseAudiobookWithAI(bookId: string): Promise<{ message: string; book: Book; confidence: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/parse-with-ai`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to parse audiobook with AI');
   return response.json();
 }

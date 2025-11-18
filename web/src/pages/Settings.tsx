@@ -85,6 +85,8 @@ export function Settings() {
 
     // Metadata settings
     autoFetchMetadata: true,
+    enableAIParsing: false,
+    openaiApiKey: '',
     metadataSources: [
       {
         id: 'audible',
@@ -165,6 +167,8 @@ export function Settings() {
 
         // Metadata settings
         autoFetchMetadata: config.auto_fetch_metadata ?? true,
+        enableAIParsing: config.enable_ai_parsing ?? false,
+        openaiApiKey: config.openai_api_key || '',
         metadataSources: (config.metadata_sources && config.metadata_sources.length > 0) ? config.metadata_sources.map(source => ({
           id: source.id,
           name: source.name,
@@ -380,6 +384,8 @@ export function Settings() {
 
         // Metadata
         auto_fetch_metadata: settings.autoFetchMetadata,
+        enable_ai_parsing: settings.enableAIParsing,
+        openai_api_key: settings.openaiApiKey,
         metadata_sources: settings.metadataSources.map(source => ({
           id: source.id,
           name: source.name,
@@ -701,6 +707,69 @@ export function Settings() {
                   />
                 }
                 label="Automatically fetch missing metadata"
+              />
+            </Grid>
+
+            {/* AI-Powered Parsing Section */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                AI-Powered Filename Parsing
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enableAIParsing}
+                    onChange={(e) => handleChange('enableAIParsing', e.target.checked)}
+                  />
+                }
+                label="Enable AI-powered filename parsing"
+              />
+              <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
+                <Typography variant="caption">
+                  <strong>What is this?</strong> Uses OpenAI to intelligently parse complex audiobook filenames into title, author, series, narrator, etc.
+                  This dramatically improves metadata extraction from poorly named files where traditional parsing fails.
+                </Typography>
+              </Alert>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="OpenAI API Key"
+                type="password"
+                value={settings.openaiApiKey}
+                onChange={(e) => handleChange('openaiApiKey', e.target.value)}
+                disabled={!settings.enableAIParsing}
+                helperText={
+                  settings.enableAIParsing
+                    ? "Get your API key from https://platform.openai.com/api-keys"
+                    : "Enable AI parsing to configure API key"
+                }
+                InputProps={{
+                  endAdornment: settings.enableAIParsing && settings.openaiApiKey && (
+                    <InputAdornment position="end">
+                      <Button
+                        size="small"
+                        onClick={async () => {
+                          try {
+                            const response = await api.testAIConnection();
+                            if (response.success) {
+                              alert('✅ Connection successful!');
+                            }
+                          } catch (error) {
+                            alert('❌ Connection failed: ' + (error as Error).message);
+                          }
+                        }}
+                      >
+                        Test
+                      </Button>
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Grid>
 
