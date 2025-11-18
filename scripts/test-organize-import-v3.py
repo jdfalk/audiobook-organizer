@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # file: scripts/test-organize-import-v3.py
-#!/usr/bin/env python3
-# file: scripts/test-organize-import-v3.py
-# version: 1.2.0
-# guid: e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b
-# guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b
+# version: 1.3.0
+# guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+
 
 """
 Test script to validate audiobook organizer with REAL metadata extraction.
@@ -149,13 +147,29 @@ class SeriesPatternMatcher:
     """Pattern matching for series identification."""
 
     PATTERNS = [
-        (re.compile(r"(?i)(.*?)\s+-\s+(.+)"), "dash_separator"),
-        (re.compile(r"(?i)(.+?)\s+(\d+)(?:\s*:|\s+-)\s+(.+)"), "numbered_series"),
-        (re.compile(r"(?i)(.+?)\s+Book\s+(\d+)(?:\s*:|\s+-)\s+(.+)"), "book_numbered"),
-        (re.compile(r"(?i)(.+?)\s+#(\d+)(?:\s*:|\s+-)\s+(.+)"), "hash_numbered"),
+        # "Series Name 03 Book Title" or "Series Name 03" - captures series name and number
+        (re.compile(r"(?i)^(.+?)\s+(\d{2})\s+(.+)$"), "series_number_title"),
+        # "Series Name, Book N" or "Series Name, Book N - Title"
         (
-            re.compile(r"(?i)(.+?)\s+Vol(?:\.|ume)?\s+(\d+)(?:\s*:|\s+-)\s+(.+)"),
-            "volume_numbered",
+            re.compile(r"(?i)^(.+?),\s+Book\s+(\d+)(?:\s*-\s*(.+))?$"),
+            "series_comma_book",
+        ),
+        # "Series Name Book N" or "Series Name Book N - Title"
+        (
+            re.compile(r"(?i)^(.+?)\s+Book\s+(\d+)(?:\s*-\s*(.+))?$"),
+            "series_book_numbered",
+        ),
+        # "Series Name #N" or "Series Name #N - Title"
+        (re.compile(r"(?i)^(.+?)\s+#(\d+)(?:\s*-\s*(.+))?$"), "series_hash_numbered"),
+        # "Series Name Vol N" or "Series Name Volume N"
+        (
+            re.compile(r"(?i)^(.+?)\s+Vol(?:\.|ume)?\s+(\d+)(?:\s*-\s*(.+))?$"),
+            "series_volume_numbered",
+        ),
+        # Generic "Series N - Title" (but not if it looks like a chapter)
+        (
+            re.compile(r"(?i)^(.+?)\s+(\d+)(?:\s*:|\s+-)\s+(.+)$"),
+            "series_numbered_title",
         ),
     ]
 
@@ -182,17 +196,53 @@ class SeriesPatternMatcher:
             author_dir = path_parts[-3] if len(path_parts) >= 3 else ""
 
             if parent_dir != author_dir and len(parent_dir.split()) > 1:
+                # Check if directory has series pattern
+                series, position, method = SeriesPatternMatcher._check_patterns(
+                    parent_dir
+                )
+                if series:
+                    return series, position, f"directory:{method}"
+
                 for word in SeriesPatternMatcher.SERIES_WORDS:
                     if word.lower() in parent_dir.lower():
-                        return parent_dir, 0, "directory:keyword"
+                        # Clean up directory name
+                        clean_dir, pos = SeriesPatternMatcher._clean_series_name(
+                            parent_dir
+                        )
+                        return clean_dir, pos, "directory:keyword"
 
                 if title and (
                     parent_dir.lower() in title.lower()
                     or title.lower() in parent_dir.lower()
                 ):
-                    return parent_dir, 0, "directory:fuzzy"
+                    # Clean up directory name
+                    clean_dir, pos = SeriesPatternMatcher._clean_series_name(parent_dir)
+                    return clean_dir, pos, "directory:fuzzy"
 
         return "", 0, "none"
+
+    @staticmethod
+    def _clean_series_name(text: str) -> Tuple[str, int]:
+        """Clean series name by removing trailing numbers and extracting position."""
+        if not text:
+            return text, 0
+
+        # Try to extract series number from patterns like "Series Name 03"
+        match = re.match(r"^(.+?)\s+(\d{2})$", text)
+        if match:
+            return match.group(1).strip(), int(match.group(2))
+
+        # Try "Series Name, Book N"
+        match = re.match(r"^(.+?),\s+Book\s+(\d+)$", text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip(), int(match.group(2))
+
+        # Try "Series Name Book N"
+        match = re.match(r"^(.+?)\s+Book\s+(\d+)$", text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip(), int(match.group(2))
+
+        return text, 0
 
     @staticmethod
     def _check_patterns(text: str) -> Tuple[str, int, str]:
@@ -202,32 +252,21 @@ class SeriesPatternMatcher:
 
         for pattern, method in SeriesPatternMatcher.PATTERNS:
             match = pattern.match(text)
-            if match and len(match.groups()) >= 2:
-                series = match.group(1).strip()
+            if match:
+                groups = match.groups()
+                if len(groups) < 2:
+                    continue
+
+                series = groups[0].strip()
                 position = 0
 
-                if method in ["numbered_series", "book_numbered", "hash_numbered"]:
-                    try:
-                        position = int(match.group(2))
-                    except (ValueError, IndexError):
-                        pass
-                elif method == "volume_numbered" and len(match.groups()) >= 3:
-                    try:
-                        position = int(match.group(3))
-                    except (ValueError, IndexError):
-                        pass
+                # Extract position from second capture group
+                try:
+                    position = int(groups[1])
+                except (ValueError, IndexError):
+                    pass
 
                 return series, position, method
-
-        # Check for colon or dash separators
-        if ": " in text:
-            parts = text.split(": ", 1)
-            if len(parts) == 2:
-                return parts[0], 0, "colon"
-
-        if " - " in text and len(text.split(" - ")) == 2:
-            parts = text.split(" - ", 1)
-            return parts[0], 0, "dash"
 
         return "", 0, ""
 
@@ -428,8 +467,9 @@ class PathExtractor:
             ):
                 return True
 
-        return False @ staticmethod
+        return False
 
+    @staticmethod
     def is_chapter_file(filename: str) -> Tuple[bool, Optional[int]]:
         """Check if file is a chapter file and extract chapter number."""
         stem = Path(filename).stem
