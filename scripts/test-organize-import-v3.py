@@ -815,10 +815,10 @@ class TestReportGenerator:
             output_path = Path(output_file)
             if not output_path.is_absolute() and output_path.parts[0] != "temp_out":
                 output_path = Path("temp_out") / output_path.name
-            
+
             # Create temp_out directory if it doesn't exist
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             print(f"\nWriting report to {output_path}...")
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2)
