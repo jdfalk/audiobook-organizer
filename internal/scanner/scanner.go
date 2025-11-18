@@ -1,6 +1,6 @@
 // file: internal/scanner/scanner.go
-// version: 1.2.0
-// guid: 0e1f2a3b-4c5d-6e7f-8a9b-0c1d2e3f4a5b
+// version: 1.4.0
+// guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
 
@@ -122,27 +122,128 @@ func extractInfoFromPath(book *Book) {
 	baseName := filepath.Base(path)
 	baseName = strings.TrimSuffix(baseName, filepath.Ext(baseName))
 
-	// Check if we can extract series and title information
-	// Many naming conventions use " - " to separate series from title
-	parts := strings.Split(baseName, " - ")
-	if len(parts) > 1 {
-		book.Title = strings.TrimSpace(parts[len(parts)-1])
-		if book.Series == "" {
-			book.Series = strings.TrimSpace(parts[0])
+	// Try to parse "Title - Author" or "Author - Title" patterns from filename
+	if strings.Contains(baseName, " - ") {
+		title, author := parseFilenameForAuthor(baseName)
+		if author != "" && book.Author == "" {
+			book.Author = author
+			book.Title = title
+		} else {
+			// Fallback to old behavior: treat as "Series - Title"
+			parts := strings.Split(baseName, " - ")
+			if len(parts) > 1 {
+				book.Title = strings.TrimSpace(parts[len(parts)-1])
+				if book.Series == "" {
+					book.Series = strings.TrimSpace(parts[0])
+				}
+			} else {
+				book.Title = baseName
+			}
 		}
 	} else {
 		book.Title = baseName
 	}
 
-	// Extract author from directory name
-	dirs := strings.Split(filepath.Dir(path), string(os.PathSeparator))
-	if len(dirs) > 0 {
-		authorDir := dirs[len(dirs)-1]
-		// If we don't have an author yet, use the directory name
-		if book.Author == "" {
-			book.Author = authorDir
+	// Extract author from directory name (but avoid common directory names)
+	if book.Author == "" {
+		dirs := strings.Split(filepath.Dir(path), string(os.PathSeparator))
+		if len(dirs) > 0 {
+			authorDir := dirs[len(dirs)-1]
+			
+			// Skip common non-author directory names
+			skipDirs := map[string]bool{
+				"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
+				"media": true, "audio": true, "library": true, "collection": true,
+				"bt": true, "incomplete": true, "data": true,
+			}
+			
+			if !skipDirs[strings.ToLower(authorDir)] {
+				book.Author = authorDir
+			}
 		}
 	}
+}
+
+// parseFilenameForAuthor attempts to intelligently parse title and author from filename
+// Handles patterns like "Title - Author" or "Author - Title"
+// Returns (title, author) where author is empty string if pattern not detected
+func parseFilenameForAuthor(filename string) (string, string) {
+	parts := strings.Split(filename, " - ")
+	if len(parts) != 2 {
+		return "", "" // Not a simple two-part pattern
+	}
+	
+	left := strings.TrimSpace(parts[0])
+	right := strings.TrimSpace(parts[1])
+	
+	// Heuristic: check if right side looks like an author name
+	rightIsName := looksLikePersonName(right)
+	leftIsName := looksLikePersonName(left)
+	
+	if rightIsName && !leftIsName {
+		// Pattern: "Title - Author"
+		return left, right
+	} else if leftIsName && !rightIsName {
+		// Pattern: "Author - Title"
+		return right, left
+	} else if rightIsName {
+		// Both could be names, prefer "Title - Author" pattern
+		return left, right
+	}
+	
+	// Couldn't determine, return empty author
+	return "", ""
+}
+
+// looksLikePersonName checks if a string looks like a person's name
+// Looks for patterns like "John Smith", "J. Smith", "J. K. Rowling"
+func looksLikePersonName(s string) bool {
+	if s == "" {
+		return false
+	}
+	
+	// Check for initials like "J. K. Rowling" or "J.K. Rowling"
+	if strings.Contains(s, ".") {
+		// Count uppercase letters and periods
+		uppers := 0
+		for _, r := range s {
+			if r >= 'A' && r <= 'Z' {
+				uppers++
+			}
+		}
+		if uppers >= 2 {
+			return true
+		}
+	}
+	
+	// Check for multi-word names with proper capitalization
+	words := strings.Fields(s)
+	if len(words) >= 2 && len(words) <= 4 {
+		// Check if all words start with uppercase
+		allProperCase := true
+		for _, word := range words {
+			if len(word) == 0 || (word[0] < 'A' || word[0] > 'Z') {
+				allProperCase = false
+				break
+			}
+		}
+		if allProperCase {
+			return true
+		}
+	}
+	
+	// Check for "FirstName LastName" pattern (at least one space, proper case)
+	if len(words) >= 2 {
+		// First word starts with capital
+		if len(words[0]) > 0 && words[0][0] >= 'A' && words[0][0] <= 'Z' {
+			// Second word starts with capital
+			if len(words[1]) > 0 && words[1][0] >= 'A' && words[1][0] <= 'Z' {
+				return true
+			}
+		}
+	}
+	
+	return false
 }
 
 // saveBookToDatabase saves the book information to the database
