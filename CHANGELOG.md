@@ -59,6 +59,14 @@
   - Memory management: cache size, memory limits (items/percent/absolute)
   - Logging: level, format (text/json), structured logging options
   - All settings persist to configuration file and sync between frontend/backend
+- **Version Management UI**: Complete interface for managing multiple audiobook versions
+  - VersionManagement dialog component displaying all linked versions with quality comparison
+  - Quality indicators showing codec (MP3/AAC/FLAC), bitrate, sample rate for each version
+  - Primary version selection with visual star indicator
+  - Link version dialog for connecting different editions/qualities of same audiobook
+  - Version indicator chips on audiobook cards ("Multiple Versions" badge)
+  - Integrated into Library page with menu item and handlers
+  - Full CRUD support using version management API endpoints
 - **Smart Path Handling**: Empty fields (like {series}) automatically removed from folder paths (no duplicate slashes)
 - **Naming Pattern Examples**: Live preview with both series and non-series books (Nancy Drew + To Kill a Mockingbird)
 
