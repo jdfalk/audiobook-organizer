@@ -1,4 +1,3 @@
-package database
 // file: internal/database/sqlite_test.go
 // version: 1.0.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
@@ -17,7 +16,7 @@ import (
 func setupTestDB(t *testing.T) (Store, func()) {
 	// Create temporary database file
 	tmpfile := "/tmp/test_audiobook_" + ulid.Make().String() + ".db"
-	
+
 
 
 
