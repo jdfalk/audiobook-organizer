@@ -10,6 +10,10 @@ import {
   Box,
   ToggleButton,
   ToggleButtonGroup,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -19,12 +23,15 @@ import {
 } from '@mui/icons-material';
 
 export type ViewMode = 'grid' | 'list';
+export type SortOption = 'title' | 'author' | 'date_added' | 'date_modified';
 
 interface SearchBarProps {
   value: string;
   onChange: (value: string) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  sortBy?: SortOption;
+  onSortChange?: (sort: SortOption) => void;
   placeholder?: string;
 }
 
@@ -33,6 +40,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onChange,
   viewMode,
   onViewModeChange,
+  sortBy = 'title',
+  onSortChange,
   placeholder = 'Search audiobooks...',
 }) => {
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +83,24 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           ),
         }}
       />
+      
+      {onSortChange && (
+        <FormControl sx={{ minWidth: 150 }}>
+          <InputLabel id="sort-select-label">Sort by</InputLabel>
+          <Select
+            labelId="sort-select-label"
+            value={sortBy}
+            label="Sort by"
+            onChange={(e) => onSortChange(e.target.value as SortOption)}
+          >
+            <MenuItem value="title">Title</MenuItem>
+            <MenuItem value="author">Author</MenuItem>
+            <MenuItem value="date_added">Date Added</MenuItem>
+            <MenuItem value="date_modified">Date Modified</MenuItem>
+          </Select>
+        </FormControl>
+      )}
+
       <ToggleButtonGroup
         value={viewMode}
         exclusive

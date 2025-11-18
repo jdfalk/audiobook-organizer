@@ -149,14 +149,14 @@ func extractInfoFromPath(book *Book) {
 		dirs := strings.Split(filepath.Dir(path), string(os.PathSeparator))
 		if len(dirs) > 0 {
 			authorDir := dirs[len(dirs)-1]
-			
+
 			// Skip common non-author directory names
 			skipDirs := map[string]bool{
 				"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
 				"media": true, "audio": true, "library": true, "collection": true,
 				"bt": true, "incomplete": true, "data": true,
 			}
-			
+
 			if !skipDirs[strings.ToLower(authorDir)] {
 				book.Author = authorDir
 			}
@@ -172,14 +172,14 @@ func parseFilenameForAuthor(filename string) (string, string) {
 	if len(parts) != 2 {
 		return "", "" // Not a simple two-part pattern
 	}
-	
+
 	left := strings.TrimSpace(parts[0])
 	right := strings.TrimSpace(parts[1])
-	
+
 	// Heuristic: check if right side looks like an author name
 	rightIsName := looksLikePersonName(right)
 	leftIsName := looksLikePersonName(left)
-	
+
 	if rightIsName && !leftIsName {
 		// Pattern: "Title - Author"
 		return left, right
@@ -190,7 +190,7 @@ func parseFilenameForAuthor(filename string) (string, string) {
 		// Both could be names, prefer "Title - Author" pattern
 		return left, right
 	}
-	
+
 	// Couldn't determine, return empty author
 	return "", ""
 }
@@ -201,7 +201,7 @@ func looksLikePersonName(s string) bool {
 	if s == "" {
 		return false
 	}
-	
+
 	// Check for initials like "J. K. Rowling" or "J.K. Rowling"
 	if strings.Contains(s, ".") {
 		// Count uppercase letters and periods
@@ -215,7 +215,7 @@ func looksLikePersonName(s string) bool {
 			return true
 		}
 	}
-	
+
 	// Check for multi-word names with proper capitalization
 	words := strings.Fields(s)
 	if len(words) >= 2 && len(words) <= 4 {
@@ -231,7 +231,7 @@ func looksLikePersonName(s string) bool {
 			return true
 		}
 	}
-	
+
 	// Check for "FirstName LastName" pattern (at least one space, proper case)
 	if len(words) >= 2 {
 		// First word starts with capital
@@ -242,7 +242,7 @@ func looksLikePersonName(s string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
