@@ -20,12 +20,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -175,6 +177,11 @@ func (s *Server) setupRoutes() {
 		api.POST("/metadata/import", s.importMetadata)
 		api.GET("/metadata/search", s.searchMetadata)
 		api.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
+
+		// AI-powered parsing routes
+		api.POST("/ai/parse-filename", s.parseFilenameWithAI)
+		api.POST("/ai/test-connection", s.testAIConnection)
+		api.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
 
 		// Work routes (logical title-level grouping)
 		api.GET("/works", s.listWorks)
@@ -951,27 +958,48 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 	// Create operation function
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		// TODO: Implement actual organize logic here
-		// For now, simulate an organize operation
-		folderPath := "all folders"
-		if req.FolderPath != nil {
-			folderPath = *req.FolderPath
+		org := organizer.NewOrganizer(&config.AppConfig)
+
+		_ = progress.Log("info", "Starting file organization", nil)
+
+		// Get books to organize
+		books, err := database.GlobalStore.GetAllBooks(1000, 0)
+		if err != nil {
+			errDetails := err.Error()
+			_ = progress.Log("error", "Failed to fetch books", &errDetails)
+			return fmt.Errorf("failed to fetch books: %w", err)
 		}
 
-		_ = progress.Log("info", fmt.Sprintf("Starting organize of %s", folderPath), nil)
-
-		// Simulate organize progress
-		for i := 0; i <= 10; i++ {
+		organized := 0
+		failed := 0
+		for i, book := range books {
 			if progress.IsCanceled() {
 				_ = progress.Log("info", "Organize canceled", nil)
 				return fmt.Errorf("organize canceled")
 			}
 
-			_ = progress.UpdateProgress(i, 10, fmt.Sprintf("Organizing... %d/10", i))
-			time.Sleep(1 * time.Second)
+			_ = progress.UpdateProgress(i, len(books), fmt.Sprintf("Organizing %s...", book.Title))
+
+			newPath, err := org.OrganizeBook(&book)
+			if err != nil {
+				errDetails := fmt.Sprintf("Failed to organize %s: %s", book.Title, err.Error())
+				_ = progress.Log("warn", errDetails, nil)
+				failed++
+				continue
+			}
+
+			// Update book's file path in database
+			book.FilePath = newPath
+			if _, err := database.GlobalStore.UpdateBook(book.ID, &book); err != nil {
+				errDetails := fmt.Sprintf("Failed to update book path: %s", err.Error())
+				_ = progress.Log("warn", errDetails, nil)
+			} else {
+				organized++
+			}
 		}
 
-		_ = progress.Log("info", "Organize completed successfully", nil)
+		summary := fmt.Sprintf("Organization completed: %d organized, %d failed", organized, failed)
+		_ = progress.Log("info", summary, nil)
 		return nil
 	}
 
@@ -1883,6 +1911,149 @@ func (s *Server) getVersionGroup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"audiobooks": books})
+}
+
+// parseFilenameWithAI uses OpenAI to parse a filename into structured metadata
+func (s *Server) parseFilenameWithAI(c *gin.Context) {
+	var req struct {
+		Filename string `json:"filename" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "filename is required"})
+		return
+	}
+
+	// Create AI parser
+	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	if !parser.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+		return
+	}
+
+	// Parse filename
+	metadata, err := parser.ParseFilename(c.Request.Context(), req.Filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse filename: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"metadata": metadata})
+}
+
+// testAIConnection tests the OpenAI API connection
+func (s *Server) testAIConnection(c *gin.Context) {
+	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	if !parser.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+		return
+	}
+
+	if err := parser.TestConnection(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("connection test failed: %v", err), "success": false})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "OpenAI connection successful"})
+}
+
+// parseAudiobookWithAI parses an audiobook's filename with AI and updates its metadata
+func (s *Server) parseAudiobookWithAI(c *gin.Context) {
+	id := c.Param("id")
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get the book
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// Create AI parser
+	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	if !parser.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+		return
+	}
+
+	// Extract filename from path
+	filename := filepath.Base(book.FilePath)
+
+	// Parse with AI
+	metadata, err := parser.ParseFilename(c.Request.Context(), filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse filename: %v", err)})
+		return
+	}
+
+	// Update book with parsed metadata
+	if metadata.Title != "" {
+		book.Title = metadata.Title
+	}
+	if metadata.Narrator != "" {
+		book.Narrator = &metadata.Narrator
+	}
+	if metadata.Publisher != "" {
+		book.Publisher = &metadata.Publisher
+	}
+	if metadata.Year > 0 {
+		yearStr := fmt.Sprintf("%d", metadata.Year)
+		book.PrintYear = &yearStr
+	}
+
+	// Handle author
+	if metadata.Author != "" {
+		author, err := database.GlobalStore.GetAuthorByName(metadata.Author)
+		if err != nil || author == nil {
+			// Create new author
+			author, err = database.GlobalStore.CreateAuthor(metadata.Author)
+			if err == nil && author != nil {
+				book.AuthorID = &author.ID
+				book.AuthorName = author.Name
+			}
+		} else {
+			book.AuthorID = &author.ID
+			book.AuthorName = author.Name
+		}
+	}
+
+	// Handle series
+	if metadata.Series != "" {
+		series, err := database.GlobalStore.GetSeriesByName(metadata.Series, book.AuthorID)
+		if err != nil || series == nil {
+			// Create new series
+			series, err = database.GlobalStore.CreateSeries(metadata.Series, book.AuthorID)
+			if err == nil && series != nil {
+				book.SeriesID = &series.ID
+				book.SeriesName = series.Name
+			}
+		} else {
+			book.SeriesID = &series.ID
+			book.SeriesName = series.Name
+		}
+
+		if metadata.SeriesNum > 0 {
+			seriesNum := metadata.SeriesNum
+			book.SeriesNumber = &seriesNum
+		}
+	}
+
+	// Update in database
+	updatedBook, err := database.GlobalStore.UpdateBook(id, book)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "audiobook updated with AI-parsed metadata",
+		"book":       updatedBook,
+		"confidence": metadata.Confidence,
+	})
 }
 
 // GetDefaultServerConfig returns default server configuration
