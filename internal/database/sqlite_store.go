@@ -727,6 +727,36 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 	return count, err
 }
 
+// GetBooksByVersionGroup returns all books in a version group
+func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, original_filename, format, duration, work_id, narrator, edition, language, publisher, print_year, audiobook_release_year, isbn10, isbn13, bitrate_kbps, codec, sample_rate_hz, channels, bit_depth, quality, is_primary_version, version_group_id, version_notes
+			  FROM books WHERE version_group_id = ? ORDER BY is_primary_version DESC, title`
+	rows, err := s.db.Query(query, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		err := rows.Scan(
+			&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, &book.SeriesSequence,
+			&book.FilePath, &book.OriginalFilename, &book.Format, &book.Duration, &book.WorkID,
+			&book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.PrintYear,
+			&book.AudiobookReleaseYear, &book.ISBN10, &book.ISBN13,
+			&book.Bitrate, &book.Codec, &book.SampleRate, &book.Channels, &book.BitDepth, &book.Quality,
+			&book.IsPrimaryVersion, &book.VersionGroupID, &book.VersionNotes,
+		)
+		if err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+
+	return books, rows.Err()
+}
+
 // Library Folder operations
 
 func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {

@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -867,6 +868,50 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetBooksByVersionGroup returns all books in a version group
+func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
+	var books []Book
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip index keys
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":version:") {
+			continue
+		}
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+
+		if book.VersionGroupID != nil && *book.VersionGroupID == groupID {
+			books = append(books, book)
+		}
+	}
+
+	// Sort by primary version first, then by title
+	sort.Slice(books, func(i, j int) bool {
+		if books[i].IsPrimaryVersion != nil && *books[i].IsPrimaryVersion {
+			return true
+		}
+		if books[j].IsPrimaryVersion != nil && *books[j].IsPrimaryVersion {
+			return false
+		}
+		return books[i].Title < books[j].Title
+	})
+
+	return books, nil
 }
 
 // Library Folder operations
