@@ -1,0 +1,697 @@
+# file: docs/openapi.yaml
+# version: 1.0.0
+# guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
+
+openapi: 3.0.3
+info:
+  title: Audiobook Organizer API
+  description: |
+    REST API for the Audiobook Organizer application.
+    Provides endpoints for managing audiobooks, authors, series, library folders, and metadata.
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/jdfalk/audiobook-organizer
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: /api/v1
+    description: Relative path (for production deployment)
+
+tags:
+  - name: Audiobooks
+    description: Audiobook management operations
+  - name: Authors
+    description: Author management
+  - name: Series
+    description: Series management
+  - name: Library
+    description: Library folder management
+  - name: Operations
+    description: Background operations (scan, organize)
+  - name: Metadata
+    description: Metadata fetching and management
+  - name: Versions
+    description: Version management for multiple editions
+  - name: System
+    description: System status and configuration
+  - name: Backup
+    description: Database backup and restore
+
+paths:
+  /audiobooks:
+    get:
+      tags: [Audiobooks]
+      summary: List audiobooks
+      description: Retrieve a paginated list of audiobooks
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 24
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of audiobooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+        '500':
+          description: Internal server error
+          
+  /audiobooks/{id}:
+    get:
+      tags: [Audiobooks]
+      summary: Get audiobook by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        '200':
+          description: Audiobook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          description: Audiobook not found
+          
+    put:
+      tags: [Audiobooks]
+      summary: Update audiobook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+      responses:
+        '200':
+          description: Updated audiobook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          description: Invalid request body
+        '404':
+          description: Audiobook not found
+          
+    delete:
+      tags: [Audiobooks]
+      summary: Delete audiobook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        '204':
+          description: Audiobook deleted
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/batch:
+    post:
+      tags: [Audiobooks]
+      summary: Batch update audiobooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: ulid
+                updates:
+                  $ref: '#/components/schemas/Book'
+      responses:
+        '200':
+          description: Batch update successful
+        '400':
+          description: Invalid request
+
+  /audiobooks/{id}/versions:
+    get:
+      tags: [Versions]
+      summary: List audiobook versions
+      description: Get all versions of an audiobook (different editions, qualities, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Book'
+        '404':
+          description: Audiobook not found
+          
+    post:
+      tags: [Versions]
+      summary: Link audiobook version
+      description: Link another audiobook as a version of this one
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                other_id:
+                  type: string
+                  format: ulid
+              required:
+                - other_id
+      responses:
+        '200':
+          description: Version linked successfully
+        '400':
+          description: Invalid request
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/set-primary:
+    put:
+      tags: [Versions]
+      summary: Set primary version
+      description: Mark this version as the primary version in its version group
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        '200':
+          description: Primary version set
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/fetch-metadata:
+    post:
+      tags: [Metadata]
+      summary: Fetch and apply metadata
+      description: Fetch metadata from external sources and apply to audiobook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: ulid
+      responses:
+        '200':
+          description: Metadata fetched and applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+                  source:
+                    type: string
+        '404':
+          description: Audiobook or metadata not found
+
+  /metadata/search:
+    get:
+      tags: [Metadata]
+      summary: Search metadata
+      description: Search external metadata sources for book information
+      parameters:
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: author
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MetadataResult'
+                  source:
+                    type: string
+        '400':
+          description: Title parameter required
+
+  /authors:
+    get:
+      tags: [Authors]
+      summary: List authors
+      responses:
+        '200':
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+
+  /series:
+    get:
+      tags: [Series]
+      summary: List series
+      responses:
+        '200':
+          description: List of series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Series'
+
+  /library/folders:
+    get:
+      tags: [Library]
+      summary: List library folders
+      responses:
+        '200':
+          description: List of library folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LibraryFolder'
+                  
+    post:
+      tags: [Library]
+      summary: Add library folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                name:
+                  type: string
+              required:
+                - path
+                - name
+      responses:
+        '201':
+          description: Folder added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryFolder'
+
+  /library/folders/{id}:
+    delete:
+      tags: [Library]
+      summary: Remove library folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Folder removed
+        '404':
+          description: Folder not found
+
+  /operations/scan:
+    post:
+      tags: [Operations]
+      summary: Start library scan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                folder_path:
+                  type: string
+      responses:
+        '202':
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+                  message:
+                    type: string
+
+  /operations/organize:
+    post:
+      tags: [Operations]
+      summary: Start library organization
+      responses:
+        '202':
+          description: Organization started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+                  message:
+                    type: string
+
+  /system/status:
+    get:
+      tags: [System]
+      summary: Get system status
+      description: Retrieve system information including library stats, memory usage, and runtime info
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+
+  /config:
+    get:
+      tags: [System]
+      summary: Get configuration
+      responses:
+        '200':
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+                
+    put:
+      tags: [System]
+      summary: Update configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Config'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: string
+          format: ulid
+        title:
+          type: string
+        author_id:
+          type: integer
+          nullable: true
+        author_name:
+          type: string
+          nullable: true
+        series_id:
+          type: integer
+          nullable: true
+        series_name:
+          type: string
+          nullable: true
+        series_position:
+          type: integer
+          nullable: true
+        file_path:
+          type: string
+        duration:
+          type: integer
+          description: Duration in seconds
+          nullable: true
+        narrator:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        publisher:
+          type: string
+          nullable: true
+        cover_image:
+          type: string
+          nullable: true
+        bitrate:
+          type: integer
+          description: Bitrate in kbps
+          nullable: true
+        codec:
+          type: string
+          nullable: true
+        sample_rate:
+          type: integer
+          description: Sample rate in Hz
+          nullable: true
+        quality:
+          type: string
+          nullable: true
+        is_primary_version:
+          type: boolean
+          nullable: true
+        version_group_id:
+          type: string
+          format: ulid
+          nullable: true
+        version_notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - file_path
+        - created_at
+        - updated_at
+
+    Author:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - created_at
+
+    Series:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        author_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - created_at
+
+    LibraryFolder:
+      type: object
+      properties:
+        id:
+          type: integer
+        path:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_scan:
+          type: string
+          format: date-time
+          nullable: true
+        book_count:
+          type: integer
+      required:
+        - id
+        - path
+        - name
+        - enabled
+        - created_at
+        - book_count
+
+    MetadataResult:
+      type: object
+      properties:
+        title:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+          nullable: true
+        publisher:
+          type: string
+          nullable: true
+        publish_year:
+          type: integer
+          nullable: true
+        isbn:
+          type: string
+          nullable: true
+        cover_url:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+
+    SystemStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        library:
+          type: object
+          properties:
+            book_count:
+              type: integer
+            folder_count:
+              type: integer
+            total_size:
+              type: integer
+              description: Total size in bytes
+        memory:
+          type: object
+          properties:
+            alloc_bytes:
+              type: integer
+            total_alloc_bytes:
+              type: integer
+            sys_bytes:
+              type: integer
+            num_gc:
+              type: integer
+        runtime:
+          type: object
+          properties:
+            go_version:
+              type: string
+            num_goroutine:
+              type: integer
+            num_cpu:
+              type: integer
+
+    Config:
+      type: object
+      properties:
+        root_dir:
+          type: string
+        database_path:
+          type: string
+        playlist_dir:
+          type: string
+        organization_strategy:
+          type: string
+          enum: [copy, hardlink, reflink, auto]
+        scan_on_startup:
+          type: boolean
+        auto_organize:
+          type: boolean
+        folder_naming_pattern:
+          type: string
+        file_naming_pattern:
+          type: string
+        auto_fetch_metadata:
+          type: boolean
+        log_level:
+          type: string
+          enum: [debug, info, warn, error]
