@@ -46,6 +46,10 @@ type Config struct {
 	MetadataSources   []MetadataSource `json:"metadata_sources"`
 	Language          string           `json:"language"`
 
+	// AI-powered parsing
+	EnableAIParsing bool   `json:"enable_ai_parsing"`
+	OpenAIAPIKey    string `json:"openai_api_key"`
+
 	// Performance
 	ConcurrentScans int `json:"concurrent_scans"`
 
@@ -94,6 +98,10 @@ func InitConfig() {
 	viper.SetDefault("auto_fetch_metadata", true)
 	viper.SetDefault("language", "en")
 
+	// Set AI parsing defaults
+	viper.SetDefault("enable_ai_parsing", false)
+	viper.SetDefault("openai_api_key", "")
+
 	// Set performance defaults
 	viper.SetDefault("concurrent_scans", 4)
 
@@ -133,6 +141,10 @@ func InitConfig() {
 		// Metadata
 		AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
 		Language:          viper.GetString("language"),
+
+		// AI parsing
+		EnableAIParsing: viper.GetBool("enable_ai_parsing"),
+		OpenAIAPIKey:    viper.GetString("openai_api_key"),
 
 		// Performance
 		ConcurrentScans: viper.GetInt("concurrent_scans"),
