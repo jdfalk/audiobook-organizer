@@ -2001,8 +2001,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 		book.Publisher = &metadata.Publisher
 	}
 	if metadata.Year > 0 {
-		yearStr := fmt.Sprintf("%d", metadata.Year)
-		book.PrintYear = &yearStr
+		book.PrintYear = &metadata.Year
 	}
 
 	// Handle author
@@ -2013,11 +2012,9 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 			author, err = database.GlobalStore.CreateAuthor(metadata.Author)
 			if err == nil && author != nil {
 				book.AuthorID = &author.ID
-				book.AuthorName = author.Name
 			}
 		} else {
 			book.AuthorID = &author.ID
-			book.AuthorName = author.Name
 		}
 	}
 
@@ -2029,16 +2026,13 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 			series, err = database.GlobalStore.CreateSeries(metadata.Series, book.AuthorID)
 			if err == nil && series != nil {
 				book.SeriesID = &series.ID
-				book.SeriesName = series.Name
 			}
 		} else {
 			book.SeriesID = &series.ID
-			book.SeriesName = series.Name
 		}
 
 		if metadata.SeriesNum > 0 {
-			seriesNum := metadata.SeriesNum
-			book.SeriesNumber = &seriesNum
+			book.SeriesSequence = &metadata.SeriesNum
 		}
 	}
 
