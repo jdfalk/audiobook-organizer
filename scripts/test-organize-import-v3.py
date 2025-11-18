@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/test-organize-import-v3.py
-# version: 1.3.0
+# version: 1.4.0
 # guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 
@@ -811,8 +811,16 @@ class TestReportGenerator:
         }
 
         if output_file:
-            print(f"\nWriting report to {output_file}...")
-            with open(output_file, "w", encoding="utf-8") as f:
+            # Ensure output goes to temp_out directory
+            output_path = Path(output_file)
+            if not output_path.is_absolute() and output_path.parts[0] != "temp_out":
+                output_path = Path("temp_out") / output_path.name
+            
+            # Create temp_out directory if it doesn't exist
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            print(f"\nWriting report to {output_path}...")
+            with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2)
 
         return report
@@ -1040,7 +1048,7 @@ def main():
     parser.add_argument(
         "--output",
         "-o",
-        help="Output JSON file",
+        help="Output JSON file (will be placed in temp_out/)",
         default="organize-test-report-v3.json",
     )
     parser.add_argument("--limit", "-l", type=int, help="Limit number of files")
