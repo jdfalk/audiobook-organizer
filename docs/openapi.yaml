@@ -63,17 +63,17 @@ paths:
             default: 0
             minimum: 0
       responses:
-        '200':
+        "200":
           description: List of audiobooks
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Book'
-        '500':
+                  $ref: "#/components/schemas/Book"
+        "500":
           description: Internal server error
-          
+
   /audiobooks/{id}:
     get:
       tags: [Audiobooks]
@@ -86,15 +86,15 @@ paths:
             type: string
             format: ulid
       responses:
-        '200':
+        "200":
           description: Audiobook details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Book'
-        '404':
+                $ref: "#/components/schemas/Book"
+        "404":
           description: Audiobook not found
-          
+
     put:
       tags: [Audiobooks]
       summary: Update audiobook
@@ -110,19 +110,19 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Book'
+              $ref: "#/components/schemas/Book"
       responses:
-        '200':
+        "200":
           description: Updated audiobook
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Book'
-        '400':
+                $ref: "#/components/schemas/Book"
+        "400":
           description: Invalid request body
-        '404':
+        "404":
           description: Audiobook not found
-          
+
     delete:
       tags: [Audiobooks]
       summary: Delete audiobook
@@ -134,9 +134,9 @@ paths:
             type: string
             format: ulid
       responses:
-        '204':
+        "204":
           description: Audiobook deleted
-        '404':
+        "404":
           description: Audiobook not found
 
   /audiobooks/batch:
@@ -156,11 +156,11 @@ paths:
                     type: string
                     format: ulid
                 updates:
-                  $ref: '#/components/schemas/Book'
+                  $ref: "#/components/schemas/Book"
       responses:
-        '200':
+        "200":
           description: Batch update successful
-        '400':
+        "400":
           description: Invalid request
 
   /audiobooks/{id}/versions:
@@ -176,7 +176,7 @@ paths:
             type: string
             format: ulid
       responses:
-        '200':
+        "200":
           description: List of versions
           content:
             application/json:
@@ -186,10 +186,10 @@ paths:
                   versions:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Book'
-        '404':
+                      $ref: "#/components/schemas/Book"
+        "404":
           description: Audiobook not found
-          
+
     post:
       tags: [Versions]
       summary: Link audiobook version
@@ -214,11 +214,11 @@ paths:
               required:
                 - other_id
       responses:
-        '200':
+        "200":
           description: Version linked successfully
-        '400':
+        "400":
           description: Invalid request
-        '404':
+        "404":
           description: Audiobook not found
 
   /audiobooks/{id}/set-primary:
@@ -234,9 +234,9 @@ paths:
             type: string
             format: ulid
       responses:
-        '200':
+        "200":
           description: Primary version set
-        '404':
+        "404":
           description: Audiobook not found
 
   /audiobooks/{id}/fetch-metadata:
@@ -252,7 +252,7 @@ paths:
             type: string
             format: ulid
       responses:
-        '200':
+        "200":
           description: Metadata fetched and applied
           content:
             application/json:
@@ -262,10 +262,10 @@ paths:
                   message:
                     type: string
                   book:
-                    $ref: '#/components/schemas/Book'
+                    $ref: "#/components/schemas/Book"
                   source:
                     type: string
-        '404':
+        "404":
           description: Audiobook or metadata not found
 
   /metadata/search:
@@ -284,7 +284,7 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Search results
           content:
             application/json:
@@ -294,10 +294,10 @@ paths:
                   results:
                     type: array
                     items:
-                      $ref: '#/components/schemas/MetadataResult'
+                      $ref: "#/components/schemas/MetadataResult"
                   source:
                     type: string
-        '400':
+        "400":
           description: Title parameter required
 
   /authors:
@@ -305,43 +305,43 @@ paths:
       tags: [Authors]
       summary: List authors
       responses:
-        '200':
+        "200":
           description: List of authors
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Author'
+                  $ref: "#/components/schemas/Author"
 
   /series:
     get:
       tags: [Series]
       summary: List series
       responses:
-        '200':
+        "200":
           description: List of series
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Series'
+                  $ref: "#/components/schemas/Series"
 
   /library/folders:
     get:
       tags: [Library]
       summary: List library folders
       responses:
-        '200':
+        "200":
           description: List of library folders
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/LibraryFolder'
-                  
+                  $ref: "#/components/schemas/LibraryFolder"
+
     post:
       tags: [Library]
       summary: Add library folder
@@ -360,12 +360,12 @@ paths:
                 - path
                 - name
       responses:
-        '201':
+        "201":
           description: Folder added
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LibraryFolder'
+                $ref: "#/components/schemas/LibraryFolder"
 
   /library/folders/{id}:
     delete:
@@ -378,9 +378,9 @@ paths:
           schema:
             type: integer
       responses:
-        '204':
+        "204":
           description: Folder removed
-        '404':
+        "404":
           description: Folder not found
 
   /operations/scan:
@@ -396,7 +396,7 @@ paths:
                 folder_path:
                   type: string
       responses:
-        '202':
+        "202":
           description: Scan started
           content:
             application/json:
@@ -413,7 +413,7 @@ paths:
       tags: [Operations]
       summary: Start library organization
       responses:
-        '202':
+        "202":
           description: Organization started
           content:
             application/json:
@@ -431,25 +431,25 @@ paths:
       summary: Get system status
       description: Retrieve system information including library stats, memory usage, and runtime info
       responses:
-        '200':
+        "200":
           description: System status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SystemStatus'
+                $ref: "#/components/schemas/SystemStatus"
 
   /config:
     get:
       tags: [System]
       summary: Get configuration
       responses:
-        '200':
+        "200":
           description: Current configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Config'
-                
+                $ref: "#/components/schemas/Config"
+
     put:
       tags: [System]
       summary: Update configuration
@@ -458,14 +458,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Config'
+              $ref: "#/components/schemas/Config"
       responses:
-        '200':
+        "200":
           description: Configuration updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Config'
+                $ref: "#/components/schemas/Config"
 
 components:
   schemas:
