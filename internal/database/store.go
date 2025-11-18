@@ -166,6 +166,9 @@ type Book struct {
 	IsPrimaryVersion *bool   `json:"is_primary_version,omitempty"`
 	VersionGroupID   *string `json:"version_group_id,omitempty"`
 	VersionNotes     *string `json:"version_notes,omitempty"`
+	// Related objects (populated via joins, not stored in DB)
+	Author *Author `json:"author,omitempty" db:"-"`
+	Series *Series `json:"series,omitempty" db:"-"`
 }
 
 // Work represents a logical title-level grouping that may span multiple editions,

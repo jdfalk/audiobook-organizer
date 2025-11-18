@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/models"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // Organizer handles file organization operations
@@ -28,8 +28,8 @@ func NewOrganizer(cfg *config.Config) *Organizer {
 	}
 }
 
-// OrganizeBook organizes an audiobook file according to the configured pattern
-func (o *Organizer) OrganizeBook(book *models.Book) (string, error) {
+// OrganizeBook organizes a book file according to the configured patterns
+func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 	if book == nil || book.FilePath == "" {
 		return "", fmt.Errorf("invalid book or file path")
 	}
@@ -80,7 +80,7 @@ func (o *Organizer) OrganizeBook(book *models.Book) (string, error) {
 }
 
 // generateTargetPath creates the target file path based on naming patterns
-func (o *Organizer) generateTargetPath(book *models.Book) (string, error) {
+func (o *Organizer) generateTargetPath(book *database.Book) (string, error) {
 	// Get file extension
 	ext := filepath.Ext(book.FilePath)
 
@@ -99,20 +99,31 @@ func (o *Organizer) generateTargetPath(book *models.Book) (string, error) {
 }
 
 // expandPattern expands a pattern with book metadata
-func (o *Organizer) expandPattern(pattern string, book *models.Book) string {
+func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 	result := pattern
 
-	// Get author name
-	authorName := book.AuthorName
-	if authorName == "" {
-		authorName = "Unknown Author"
+	// Get author name from embedded Author object or default
+	authorName := "Unknown Author"
+	if book.Author != nil && book.Author.Name != "" {
+		authorName = book.Author.Name
 	}
 
-	// Get series info
-	seriesName := book.SeriesName
+	// Get series info from embedded Series object
+	seriesName := ""
+	if book.Series != nil {
+		seriesName = book.Series.Name
+	}
 	seriesNum := ""
-	if book.SeriesNumber != nil && *book.SeriesNumber > 0 {
-		seriesNum = fmt.Sprintf("%d", *book.SeriesNumber)
+	if book.SeriesSequence != nil && *book.SeriesSequence > 0 {
+		seriesNum = fmt.Sprintf("%d", *book.SeriesSequence)
+	}
+
+	// Helper to convert int pointer to string
+	intToString := func(i *int) string {
+		if i == nil {
+			return ""
+		}
+		return fmt.Sprintf("%d", *i)
 	}
 
 	// Replacements map
@@ -125,13 +136,13 @@ func (o *Organizer) expandPattern(pattern string, book *models.Book) string {
 		"{publisher}":     stringOrEmpty(book.Publisher),
 		"{language}":      stringOrEmpty(book.Language),
 		"{edition}":       stringOrEmpty(book.Edition),
-		"{print_year}":    stringOrEmpty(book.PrintYear),
-		"{year}":          stringOrEmpty(book.PrintYear),
+		"{print_year}":    intToString(book.PrintYear),
+		"{year}":          intToString(book.PrintYear),
 		"{isbn10}":        stringOrEmpty(book.ISBN10),
 		"{isbn13}":        stringOrEmpty(book.ISBN13),
-		"{bitrate}":       book.Bitrate,
-		"{codec}":         book.Codec,
-		"{quality}":       book.Quality,
+		"{bitrate}":       intToString(book.Bitrate),
+		"{codec}":         stringOrEmpty(book.Codec),
+		"{quality}":       stringOrEmpty(book.Quality),
 	}
 
 	// Perform replacements
