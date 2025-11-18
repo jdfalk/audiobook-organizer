@@ -70,9 +70,16 @@
   - ✅ Settings page: Loads configuration on mount with api.getConfig(), saves with api.updateConfig()
   - ✅ All API endpoints integrated with proper error handling
   - ✅ Backend Config struct expanded to support all frontend settings (organization, quotas, metadata, performance, memory, logging)
+- [x] ✅ **Frontend**: Version management UI components
+  - ✅ VersionManagement dialog component with version comparison view
+  - ✅ Quality indicators (codec, bitrate, sample rate display)
+  - ✅ Primary version selection with star icon
+  - ✅ Link version dialog for connecting multiple editions
+  - ✅ Version indicator chips on audiobook cards
+  - ✅ Integrated into Library page grid view
+  - ✅ Uses all version management API endpoints (getBookVersions, linkBookVersion, setPrimaryVersion)
 - [ ] 🟡 **Frontend**: Library browser with grid/list views and version selection
-- [ ] 🟡 **Frontend**: Metadata editor with inline editing and version management
-- [ ] 🟡 **Frontend**: Multiple version display and management UI
+- [ ] 🟡 **Frontend**: Metadata editor with inline editing
 
 - [ ] 🟡 **General**: Configure GitHub workflows
 - [ ] 🟡 **Testing**: Unit and integration test framework
