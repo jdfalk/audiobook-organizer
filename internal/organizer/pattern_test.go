@@ -313,8 +313,8 @@ func TestComplexRealWorldPaths(t *testing.T) {
 				SeriesSequence: intPtr(3),
 			},
 			folderPat:    "{author}/{series}",
-			filePat:      "{series_number:02d} - {title}",
-			expectedPath: "Richard Morgan/Takeshi Kovacs/03 - Woken Furies.m4b",
+			filePat:      "Book {series_number} - {title}",
+			expectedPath: "Richard Morgan/Takeshi Kovacs/Book 3 - Woken Furies.m4b",
 		},
 		{
 			name: "author-only organization",

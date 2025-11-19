@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+# file: scripts/test_openai_quick.py
+# version: 1.0.0
+# guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
+
+"""
+Quick OpenAI API Test
+
+This script tests the OpenAI API connection with a few sample filenames.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+try:
+    from openai import OpenAI
+except ImportError:
+    print("ERROR: openai package not found. Install with: pip install openai")
+    sys.exit(1)
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("WARNING: python-dotenv not found, using env vars only")
+
+def test_openai_connection():
+    """Test OpenAI API connection with sample filenames."""
+
+    # Get API key
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        print("ERROR: OPENAI_API_KEY not found in environment")
+        sys.exit(1)
+
+    print("=" * 80)
+    print("OPENAI API CONNECTION TEST")
+    print("=" * 80)
+    print(f"API Key: {api_key[:20]}...{api_key[-10:]}")
+    print()
+
+    # Initialize client
+    print("Initializing OpenAI client...")
+    try:
+        client = OpenAI(api_key=api_key)
+        print("✓ Client initialized successfully")
+    except Exception as e:
+        print(f"✗ Failed to initialize client: {e}")
+        sys.exit(1)
+
+    # Test filenames
+    test_filenames = [
+        "The Hobbit - J.R.R. Tolkien - read by Andy Serkis.m4b",
+        "Brandon Sanderson - Mistborn 01 - The Final Empire.mp3",
+        "Ready Player One by Ernest Cline.epub"
+    ]
+
+    print(f"\nTesting with {len(test_filenames)} sample filenames...")
+    print()
+
+    for i, filename in enumerate(test_filenames, 1):
+        print(f"Test {i}/{len(test_filenames)}: {filename}")
+        print("-" * 80)
+
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at parsing audiobook filenames. Extract title and author from the filename. Return ONLY valid JSON with 'title' and 'author' fields."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Parse this audiobook filename: {filename}"
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=200
+            )
+
+            content = response.choices[0].message.content
+            print(f"✓ Response: {content}")
+            print(f"  Tokens used: {response.usage.total_tokens}")
+            print()
+
+        except Exception as e:
+            print(f"✗ Error: {e}")
+            print()
+            return False
+
+    print("=" * 80)
+    print("All tests passed! ✓")
+    print("=" * 80)
+    return True
+
+if __name__ == "__main__":
+    success = test_openai_connection()
+    sys.exit(0 if success else 1)
