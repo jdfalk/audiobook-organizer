@@ -127,7 +127,9 @@ Return ONLY valid JSON with these fields (omit if not found):
 Set confidence based on:
 - high: Clear, unambiguous structure with title and author
 - medium: Some ambiguity but reasonable interpretation
-- low: Very unclear or minimal information"""    def parse_filename(self, filename: str) -> Tuple[Optional[ParsedMetadata], float, Optional[int]]:
+- low: Very unclear or minimal information"""
+
+    def parse_filename(self, filename: str) -> Tuple[Optional[ParsedMetadata], float, Optional[int]]:
         """
         Parse a filename using OpenAI.
 
@@ -381,28 +383,28 @@ def run_parsing_tests(parser: OpenAIFilenameParser,
                     filename=os.path.basename(file_path),
                     source_path=source_path,
                     parsed_metadata=None,
-                success=False,
-                error="Parsing failed",
-                response_time=response_time,
-                tokens_used=None
-            )
-            failed += 1
-            error_types["parsing_failed"] += 1
+                    success=False,
+                    error="Parsing failed",
+                    response_time=response_time,
+                    tokens_used=None
+                )
+                failed += 1
+                error_types["parsing_failed"] += 1
 
-        results.append(result)
-        source_counts[source_path] += 1
-        total_response_time += response_time
+            results.append(result)
+            source_counts[source_path] += 1
+            total_response_time += response_time
 
-        # Progress update every 100 files
-        if idx % 100 == 0 or idx == len(files):
-            elapsed = time.time() - start_time
-            rate = idx / elapsed if elapsed > 0 else 0
-            remaining = (len(files) - idx) / rate if rate > 0 else 0
+        # Progress update after each batch
+        processed = batch_idx + len(batch_files)
+        elapsed = time.time() - start_time
+        rate = processed / elapsed if elapsed > 0 else 0
+        remaining = (len(files) - processed) / rate if rate > 0 else 0
 
-            print(f"Progress: {idx}/{len(files):,} ({idx/len(files)*100:.1f}%) | "
-                  f"Success: {successful:,} | Failed: {failed:,} | "
-                  f"Rate: {rate:.1f} files/sec | "
-                  f"ETA: {remaining:.0f}s")
+        print(f"Progress: {processed}/{len(files):,} ({processed/len(files)*100:.1f}%) | "
+              f"Success: {successful:,} | Failed: {failed:,} | "
+              f"Rate: {rate:.1f} files/sec | "
+              f"ETA: {remaining:.0f}s")
 
     total_time = time.time() - start_time
     avg_response_time = total_response_time / len(files) if files else 0
@@ -557,6 +559,18 @@ def main():
         help="Directory to save test results (default: test_results)"
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        help="Number of files to process in each batch (default: 50)"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=10,
+        help="Number of concurrent workers for parallel requests (default: 10)"
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         help="Random seed for reproducible sampling"
@@ -585,6 +599,8 @@ def main():
     print(f"Configuration:")
     print(f"  File List: {args.file_list}")
     print(f"  Sample Size: {args.num_samples:,}")
+    print(f"  Batch Size: {args.batch_size}")
+    print(f"  Concurrent Workers: {args.workers}")
     print(f"  Output Directory: {args.output_dir}")
     print("=" * 80)
 
@@ -603,14 +619,16 @@ def main():
 
     # Initialize parser
     print("\nInitializing OpenAI parser...")
-    openai_parser = OpenAIFilenameParser(api_key=api_key)
+    openai_parser = OpenAIFilenameParser(api_key=api_key, max_workers=args.workers)
     print(f"Using model: {openai_parser.model}")
+    print(f"Max concurrent workers: {openai_parser.max_workers}")
 
     # Run tests
     results, metrics = run_parsing_tests(
         openai_parser,
         selected_files,
-        args.output_dir
+        args.output_dir,
+        batch_size=args.batch_size
     )
 
     # Save results
