@@ -1,10 +1,11 @@
 // file: internal/scanner/scanner.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -36,76 +38,160 @@ type Book struct {
 
 // ScanDirectory scans the given directory for audiobook files
 func ScanDirectory(rootDir string) ([]Book, error) {
-	var books []Book
+	return ScanDirectoryParallel(rootDir, 1)
+}
 
-	fmt.Println("Scanning for audiobook files...")
+// ScanDirectoryParallel scans directory with parallel workers for improved performance
+func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
+	if workers < 1 {
+		workers = 1
+	}
 
+	fmt.Printf("Scanning for audiobook files (using %d workers)...\n", workers)
+
+	// Collect all directories first
+	var dirs []string
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
 		if info.IsDir() {
-			return nil
+			dirs = append(dirs, path)
 		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		for _, supportedExt := range config.AppConfig.SupportedExtensions {
-			if ext == supportedExt {
-				// Calculate relative path for informational purposes if needed later
-				// We're not using the relative path right now, but keeping the calculation
-				// in case it's needed in the future
-				_, _ = filepath.Rel(rootDir, path)
-
-				books = append(books, Book{
-					FilePath: path,
-					Format:   ext,
-				})
-				break
-			}
-		}
-
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return books, err
+	// Parallel scan of directories
+	var mu sync.Mutex
+	var books []Book
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, workers)
+
+	for _, dir := range dirs {
+		wg.Add(1)
+		go func(scanDir string) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
+			// Read directory entries
+			entries, err := os.ReadDir(scanDir)
+			if err != nil {
+				return
+			}
+
+			var localBooks []Book
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+
+				path := filepath.Join(scanDir, entry.Name())
+				ext := strings.ToLower(filepath.Ext(path))
+				for _, supportedExt := range config.AppConfig.SupportedExtensions {
+					if ext == supportedExt {
+						localBooks = append(localBooks, Book{
+							FilePath: path,
+							Format:   ext,
+						})
+						break
+					}
+				}
+			}
+
+			// Merge results
+			if len(localBooks) > 0 {
+				mu.Lock()
+				books = append(books, localBooks...)
+				mu.Unlock()
+			}
+		}(dir)
+	}
+
+	wg.Wait()
+	return books, nil
 }
 
 // ProcessBooks processes the discovered books to extract metadata and identify series
 func ProcessBooks(books []Book) error {
-	fmt.Println("Processing audiobook metadata...")
+	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans)
+}
+
+// ProcessBooksParallel processes books with parallel workers for improved performance
+func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error {
+	if workers < 1 {
+		workers = 1
+	}
+
+	fmt.Printf("Processing audiobook metadata (using %d workers)...\n", workers)
 
 	bar := progressbar.Default(int64(len(books)))
 
+	// Worker pool for parallel processing
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, workers)
+	errChan := make(chan error, len(books))
+
 	for i := range books {
-		// Extract metadata from the file
-		meta, err := metadata.ExtractMetadata(books[i].FilePath)
-		if err != nil {
-			fmt.Printf("Warning: Could not extract metadata from %s: %v\n", books[i].FilePath, err)
-		} else {
-			books[i].Title = meta.Title
-			books[i].Author = meta.Artist
-			books[i].Narrator = meta.Narrator
-			books[i].Language = meta.Language
-			books[i].Publisher = meta.Publisher
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
 
-		// If metadata is incomplete, try to extract info from filepath
-		if books[i].Title == "" || books[i].Author == "" {
-			extractInfoFromPath(&books[i])
-		}
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			semaphore <- struct{}{} // Acquire
+			defer func() {
+				<-semaphore // Release
+				bar.Add(1)
+			}()
 
-		// Identify series based on title and filepath
-		series, position := matcher.IdentifySeries(books[i].Title, books[i].FilePath)
-		books[i].Series = series
-		books[i].Position = position
+			// Extract metadata from the file
+			meta, err := metadata.ExtractMetadata(books[idx].FilePath)
+			if err != nil {
+				fmt.Printf("Warning: Could not extract metadata from %s: %v\n", books[idx].FilePath, err)
+			} else {
+				books[idx].Title = meta.Title
+				books[idx].Author = meta.Artist
+				books[idx].Narrator = meta.Narrator
+				books[idx].Language = meta.Language
+				books[idx].Publisher = meta.Publisher
+			}
 
-		// Save to database
-		if err := saveBookToDatabase(&books[i]); err != nil {
-			fmt.Printf("Warning: Failed to save book to database: %v\n", err)
-		}
+			// If metadata is incomplete, try to extract info from filepath
+			if books[idx].Title == "" || books[idx].Author == "" {
+				extractInfoFromPath(&books[idx])
+			}
 
-		bar.Add(1)
+			// Identify series based on title and filepath
+			series, position := matcher.IdentifySeries(books[idx].Title, books[idx].FilePath)
+			books[idx].Series = series
+			books[idx].Position = position
+
+			// Save to database (database operations are thread-safe)
+			if err := saveBookToDatabase(&books[idx]); err != nil {
+				errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Collect any errors
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	if len(errs) > 0 {
+		fmt.Printf("Warning: %d books failed to save\n", len(errs))
 	}
 
 	// After processing all books, try to match series using external APIs for uncertain cases

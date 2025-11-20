@@ -851,18 +851,22 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 					return fmt.Errorf("folder does not exist: %s", folderPath)
 				}
 
-				// Scan directory for audiobook files
-				books, err := scanner.ScanDirectory(folderPath)
+				// Scan directory for audiobook files (parallel)
+				workers := config.AppConfig.ConcurrentScans
+				if workers < 1 {
+					workers = 4
+				}
+				books, err := scanner.ScanDirectoryParallel(folderPath, workers)
 				if err != nil {
 					return fmt.Errorf("failed to scan folder: %w", err)
 				}
 
 				_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files", len(books)), nil)
 
-				// Process the books to extract metadata
+				// Process the books to extract metadata (parallel)
 				if len(books) > 0 {
-					_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books", len(books)), nil)
-					if err := scanner.ProcessBooks(books); err != nil {
+					_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
+					if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
 						return fmt.Errorf("failed to process books: %w", err)
 					}
 					// Auto-organize if enabled
@@ -1046,8 +1050,12 @@ func (s *Server) startScan(c *gin.Context) {
 				continue
 			}
 
-			// Scan directory for audiobook files
-			books, err := scanner.ScanDirectory(folderPath)
+			// Scan directory for audiobook files (parallel)
+			workers := config.AppConfig.ConcurrentScans
+			if workers < 1 {
+				workers = 4
+			}
+			books, err := scanner.ScanDirectoryParallel(folderPath, workers)
 			if err != nil {
 				_ = progress.Log("error", fmt.Sprintf("Failed to scan folder %s: %v", folderPath, err), nil)
 				continue
@@ -1056,10 +1064,10 @@ func (s *Server) startScan(c *gin.Context) {
 			_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files in %s", len(books), folderPath), nil)
 			totalBooks += len(books)
 
-			// Process the books to extract metadata
+			// Process the books to extract metadata (parallel)
 			if len(books) > 0 {
-				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books", len(books)), nil)
-				if err := scanner.ProcessBooks(books); err != nil {
+				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
+				if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
 				}
 				// Auto-organize if enabled
