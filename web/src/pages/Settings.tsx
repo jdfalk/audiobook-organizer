@@ -75,6 +75,13 @@ export function Settings() {
   const [tabValue, setTabValue] = useState(0);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
+  // Import folder management
+  const [importFolders, setImportFolders] = useState<api.LibraryFolder[]>([]);
+  const [addFolderDialogOpen, setAddFolderDialogOpen] = useState(false);
+  const [newFolderPath, setNewFolderPath] = useState('');
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+
   const [settings, setSettings] = useState({
     // Library settings
     libraryPath: '/path/to/audiobooks/library',
@@ -151,6 +158,7 @@ export function Settings() {
   // Load configuration on mount
   useEffect(() => {
     loadConfig();
+    loadImportFolders();
   }, []);
 
   const loadConfig = async () => {
@@ -345,6 +353,45 @@ export function Settings() {
   const handleBrowserCancel = () => {
     setBrowserOpen(false);
     setSelectedPath(null);
+  };
+
+  // Import folder management handlers
+  const loadImportFolders = async () => {
+    try {
+      const folders = await api.getLibraryFolders();
+      setImportFolders(folders);
+    } catch (error) {
+      console.error('Failed to load import folders:', error);
+    }
+  };
+
+  const handleAddImportFolder = async () => {
+    if (!newFolderPath.trim()) return;
+
+    try {
+      const folder = await api.addLibraryFolder(newFolderPath, newFolderPath.split('/').pop() || 'Import Folder');
+      setImportFolders((prev) => [...prev, folder]);
+      setNewFolderPath('');
+      setShowFolderBrowser(false);
+      setAddFolderDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to add import folder:', error);
+    }
+  };
+
+  const handleRemoveImportFolder = async (id: number) => {
+    try {
+      await api.removeLibraryFolder(id);
+      setImportFolders((prev) => prev.filter((f) => f.id !== id));
+    } catch (error) {
+      console.error('Failed to remove import folder:', error);
+    }
+  };
+
+  const handleFolderBrowserSelect = (path: string, isDir: boolean) => {
+    if (isDir) {
+      setNewFolderPath(path);
+    }
   };
 
   const handleSourceToggle = (sourceId: string) => {
@@ -655,6 +702,58 @@ export function Settings() {
                   Example: "{'{title}'} - Part {'{track_number}'} of {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of 50.m4b"
                 </Typography>
               </Alert>
+            </Grid>
+
+            {/* Import Folders Section */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                Import Folders
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Import folders are monitored for new audiobook files. When new files are detected, they are automatically imported into the library.
+              </Alert>
+
+              <Box>
+                {importFolders.length === 0 ? (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    No import folders configured. Add folders to automatically import audiobooks from specific locations.
+                  </Alert>
+                ) : (
+                  <List>
+                    {importFolders.map((folder) => (
+                      <ListItem
+                        key={folder.id}
+                        secondaryAction={
+                          <IconButton edge="end" onClick={() => handleRemoveImportFolder(folder.id)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        }
+                      >
+                        <ListItemIcon>
+                          <FolderIcon />
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={folder.path}
+                          secondary={`${folder.book_count || 0} books`}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setAddFolderDialogOpen(true)}
+                  sx={{ mt: 2 }}
+                >
+                  Add Import Folder
+                </Button>
+              </Box>
             </Grid>
 
             <Grid item xs={12}>
