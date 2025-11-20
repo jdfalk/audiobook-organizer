@@ -758,7 +758,8 @@ export function Settings() {
                         size="small"
                         onClick={async () => {
                           try {
-                            const response = await api.testAIConnection();
+                            // Use the current value from the field, not saved config
+                            const response = await api.testAIConnection(settings.openaiApiKey);
                             if (response.success) {
                               alert('✅ Connection successful!');
                             }

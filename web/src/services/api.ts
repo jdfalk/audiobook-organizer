@@ -439,9 +439,13 @@ export async function parseFilenameWithAI(filename: string): Promise<{ metadata:
   return response.json();
 }
 
-export async function testAIConnection(): Promise<{ success: boolean; message?: string; error?: string }> {
+export async function testAIConnection(apiKey?: string): Promise<{ success: boolean; message?: string; error?: string }> {
   const response = await fetch(`${API_BASE}/ai/test-connection`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: apiKey ? JSON.stringify({ api_key: apiKey }) : undefined,
   });
   if (!response.ok) {
     const data = await response.json();
