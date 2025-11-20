@@ -36,7 +36,7 @@ function App() {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <WelcomeWizard open={showWizard} onComplete={handleWizardComplete} />
 
       <MainLayout>
