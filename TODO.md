@@ -114,6 +114,47 @@
 - [ ] 🟡 **General**: Implement library organization with hard links, reflinks,
       or copies (auto mode tries reflink → hardlink → copy)
 
+## 🚨 CRITICAL FIXES - HIGH PRIORITY
+
+### System Page Issues
+
+- [ ] **Fix memory display** - System Total memory shows app memory (sys_bytes)
+      instead of actual system RAM. Either get real system memory or change
+      label to "App Memory Total"
+- [ ] **Fix logs not displaying** - Logs tab shows no data despite API returning
+      logs. Check data mapping and display logic.
+
+### Settings Page Issues
+
+- [ ] **Fix scrolling in Settings page** - Cannot scroll down to Library &
+      Storage section. Fix container height/overflow CSS.
+- [ ] **Fix library path browser** - Browse Server button fails to open
+      filesystem browser for library path setting.
+
+### ServerFileBrowser Component Issues
+
+- [ ] **Make current path sticky** - Add floating/sticky path display at top
+      that scrolls with user
+- [ ] **Fix Add Folder button always disabled** - Remove double-click
+      requirement. Single click navigates, button adds current folder.
+- [ ] **Add manual path editing** - Allow direct text editing of path for
+      corrections and quick navigation.
+
+### Import Path Functionality Issues
+
+- [ ] **Fix folder scanning doesn't traverse subdirectories** - Import folder
+      shows 0 books. Scanner must recursively find all audiobooks in folder tree.
+- [ ] **Auto-scan on import path add** - When adding import path: automatically
+      scan for books, import to library, setup monitoring for new files.
+- [ ] **Fix import path terminology** - Import paths incorrectly called
+      "library". Only main library path is for organization. Import paths are
+      watch/scan locations.
+
+### Dashboard Navigation Issues
+
+- [ ] **Fix Library Folders link** - Clicking Library Folders on dashboard loads
+      blank page. Should navigate to Library page with import folders visible.
+
 ## Current Sprint Tasks
 
 ### Frontend UI Improvements

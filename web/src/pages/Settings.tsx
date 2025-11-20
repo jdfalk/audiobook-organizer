@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.12.0
+// version: 1.13.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -554,16 +554,18 @@ export function Settings() {
         </Alert>
       )}
 
-      <Paper sx={{ maxHeight: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column' }}>
-        <Tabs
-          value={tabValue}
-          onChange={(_, newValue) => setTabValue(newValue)}
-          aria-label="settings tabs"
-        >
-          <Tab label="Library" />
-          <Tab label="Metadata" />
-          <Tab label="Performance" />
-        </Tabs>
+      <Paper>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs
+            value={tabValue}
+            onChange={(_, newValue) => setTabValue(newValue)}
+            aria-label="settings tabs"
+          >
+            <Tab label="Library" />
+            <Tab label="Metadata" />
+            <Tab label="Performance" />
+          </Tabs>
+        </Box>
 
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={3}>
