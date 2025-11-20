@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -73,6 +73,12 @@ type Store interface {
 	GetUserPreference(key string) (*UserPreference, error)
 	SetUserPreference(key, value string) error
 	GetAllUserPreferences() ([]UserPreference, error)
+
+	// Settings (persistent configuration with encryption support)
+	GetSetting(key string) (*Setting, error)
+	SetSetting(key, value, typ string, isSecret bool) error
+	GetAllSettings() ([]Setting, error)
+	DeleteSetting(key string) error
 
 	// Playlists
 	CreatePlaylist(name string, seriesID *int, filePath string) (*Playlist, error)

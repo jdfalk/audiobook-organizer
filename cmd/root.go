@@ -188,6 +188,22 @@ var serveCmd = &cobra.Command{
 		defer database.CloseStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
+
+		// Initialize encryption for settings (generates key if needed)
+		dbDir := filepath.Dir(config.AppConfig.DatabasePath)
+		if err := database.InitEncryption(dbDir); err != nil {
+			return fmt.Errorf("failed to initialize encryption: %w", err)
+		}
+		fmt.Println("Settings encryption initialized")
+
+		// Load configuration from database (overrides defaults with persisted values)
+		if err := config.LoadConfigFromDatabase(database.GlobalStore); err != nil {
+			fmt.Printf("Warning: Could not load config from database: %v\n", err)
+		}
+
+		// Apply env var overrides (command line takes precedence over DB)
+		config.SyncConfigFromEnv()
+
 		fmt.Println("Starting audiobook organizer web server...")
 
 		// Initialize real-time event hub

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -25,11 +25,13 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Cached library size to avoid expensive recalculation on frequent status checks
@@ -70,6 +72,9 @@ func NewServer() *Server {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
+
+	// Register metrics (idempotent)
+	metrics.Register()
 
 	server := &Server{
 		router: router,
@@ -155,6 +160,10 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 // setupRoutes configures all the routes
 func (s *Server) setupRoutes() {
+	// Health check endpoint
+	// Prometheus metrics endpoint (standard path)
+	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	// Health check endpoint
 	s.router.GET("/api/health", s.healthCheck)
 
@@ -1600,21 +1609,30 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 }
 
 func (s *Server) getConfig(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"config": config.AppConfig})
+	// Create a copy of config with masked secrets
+	maskedConfig := config.AppConfig
+	if maskedConfig.OpenAIAPIKey != "" {
+		maskedConfig.OpenAIAPIKey = database.MaskSecret(maskedConfig.OpenAIAPIKey)
+	}
+	if maskedConfig.APIKeys.Goodreads != "" {
+		maskedConfig.APIKeys.Goodreads = database.MaskSecret(maskedConfig.APIKeys.Goodreads)
+	}
+	c.JSON(http.StatusOK, gin.H{"config": maskedConfig})
 }
 
 func (s *Server) updateConfig(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Note: This updates the in-memory config only
-	// For persistent configuration changes, a config file update mechanism is needed
-	// This implementation provides runtime configuration updates
-
-	// Update allowed fields
+	// Update allowed fields and persist to database
 	updated := []string{}
 
 	if val, ok := updates["root_dir"].(string); ok {
@@ -1674,6 +1692,35 @@ func (s *Server) updateConfig(c *gin.Context) {
 	if _, ok := updates["enable_sqlite"]; ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "enable_sqlite cannot be changed at runtime"})
 		return
+	}
+
+	// Handle AI API key updates
+	if val, ok := updates["openai_api_key"].(string); ok {
+		config.AppConfig.OpenAIAPIKey = val
+		updated = append(updated, "openai_api_key")
+	}
+	if val, ok := updates["enable_ai_parsing"].(bool); ok {
+		config.AppConfig.EnableAIParsing = val
+		updated = append(updated, "enable_ai_parsing")
+	}
+
+	// Handle additional config fields
+	if val, ok := updates["concurrent_scans"].(float64); ok {
+		config.AppConfig.ConcurrentScans = int(val)
+		updated = append(updated, "concurrent_scans")
+	}
+	if val, ok := updates["language"].(string); ok {
+		config.AppConfig.Language = val
+		updated = append(updated, "language")
+	}
+	if val, ok := updates["log_level"].(string); ok {
+		config.AppConfig.LogLevel = val
+		updated = append(updated, "log_level")
+	}
+
+	// Persist to database
+	if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+		log.Printf("Warning: Failed to persist config to database: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
