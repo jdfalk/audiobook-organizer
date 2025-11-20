@@ -38,6 +38,7 @@ import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
 import { AudiobookList } from '../components/audiobooks/AudiobookList';
 import { SearchBar, ViewMode } from '../components/audiobooks/SearchBar';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
+import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -69,13 +70,13 @@ export const Library = () => {
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
 
   // Import path management
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
   const [importPathsExpanded, setImportPathsExpanded] = useState(false);
   const [addPathDialogOpen, setAddPathDialogOpen] = useState(false);
   const [newImportPath, setNewImportPath] = useState('');
+  const [showServerBrowser, setShowServerBrowser] = useState(false);
 
   // Debounce search query
   useEffect(() => {
@@ -297,9 +298,16 @@ export const Library = () => {
       };
       setImportPaths((prev) => [...prev, newPath]);
       setNewImportPath('');
+      setShowServerBrowser(false);
       setAddPathDialogOpen(false);
     } catch (error) {
       console.error('Failed to add import path:', error);
+    }
+  };
+
+  const handleServerBrowserSelect = (path: string, isDir: boolean) => {
+    if (isDir) {
+      setNewImportPath(path);
     }
   };
 
@@ -326,19 +334,6 @@ export const Library = () => {
       setImportPaths((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: 'idle' as const } : p))
       );
-    }
-  };
-
-  const handleBrowseFolder = () => {
-    folderInputRef.current?.click();
-  };
-
-  const handleFolderSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const path = files[0].webkitRelativePath.split('/')[0];
-      setNewImportPath(`/${path}`);
-      setAddPathDialogOpen(true);
     }
   };
 
@@ -490,40 +485,60 @@ export const Library = () => {
       />
 
       {/* Import Path Management Dialog */}
-      <Dialog open={addPathDialogOpen} onClose={() => setAddPathDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addPathDialogOpen} onClose={() => setAddPathDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Add Import Path</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
             Import paths are watched for new audiobook files. Files found here will be imported into the library.
           </Alert>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Import Path"
-            value={newImportPath}
-            onChange={(e) => setNewImportPath(e.target.value)}
-            placeholder="/path/to/downloads"
-            sx={{ mt: 1 }}
-          />
-          <Button
-            startIcon={<FolderOpenIcon />}
-            onClick={handleBrowseFolder}
-            sx={{ mt: 2 }}
-          >
-            Browse
-          </Button>
-          <input
-            ref={folderInputRef}
-            type="file"
-            {...({ webkitdirectory: '', directory: '' } as any)}
-            multiple
-            style={{ display: 'none' }}
-            onChange={handleFolderSelect}
-          />
+          
+          {!showServerBrowser ? (
+            <Box>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Import Path"
+                value={newImportPath}
+                onChange={(e) => setNewImportPath(e.target.value)}
+                placeholder="/path/to/downloads"
+                sx={{ mt: 1 }}
+              />
+              <Button
+                startIcon={<FolderOpenIcon />}
+                onClick={() => setShowServerBrowser(true)}
+                sx={{ mt: 2 }}
+              >
+                Browse Server Filesystem
+              </Button>
+            </Box>
+          ) : (
+            <Box>
+              <Button
+                onClick={() => setShowServerBrowser(false)}
+                sx={{ mb: 2 }}
+              >
+                ← Back to Manual Entry
+              </Button>
+              <ServerFileBrowser
+                initialPath={newImportPath || '/'}
+                onSelect={handleServerBrowserSelect}
+                showFiles={false}
+                allowDirSelect={true}
+                allowFileSelect={false}
+              />
+              {newImportPath && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Selected:</strong> {newImportPath}
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddPathDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAddImportPath} variant="contained">
+          <Button onClick={() => { setAddPathDialogOpen(false); setShowServerBrowser(false); }}>Cancel</Button>
+          <Button onClick={handleAddImportPath} variant="contained" disabled={!newImportPath.trim()}>
             Add Path
           </Button>
         </DialogActions>
