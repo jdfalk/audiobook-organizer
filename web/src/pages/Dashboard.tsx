@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -77,7 +77,7 @@ export function Dashboard() {
         total_books: bookCount,
         total_authors: authors.length,
         total_series: seriesList.length,
-        library_folders: folders.length,
+        library_folders: systemStatus.library.folder_count,
         total_size_gb: systemStatus.library.total_size / (1024 * 1024 * 1024),
         disk_usage_percent: 0, // Calculate if needed
       });

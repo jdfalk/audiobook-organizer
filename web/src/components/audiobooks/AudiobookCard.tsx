@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -20,6 +20,7 @@ import {
   Delete as DeleteIcon,
   Compare as CompareIcon,
   CloudDownload as CloudDownloadIcon,
+  Psychology as PsychologyIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
 
@@ -30,6 +31,7 @@ interface AudiobookCardProps {
   onClick?: (audiobook: Audiobook) => void;
   onVersionManage?: (audiobook: Audiobook) => void;
   onFetchMetadata?: (audiobook: Audiobook) => void;
+  onParseWithAI?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -39,6 +41,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
   onClick,
   onVersionManage,
   onFetchMetadata,
+  onParseWithAI,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -74,6 +77,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
     event.stopPropagation();
     handleClose();
     onFetchMetadata?.(audiobook);
+  };
+
+  const handleParseWithAI = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    handleClose();
+    onParseWithAI?.(audiobook);
   };
 
   const handleCardClick = () => {
@@ -203,6 +212,12 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           <MenuItem onClick={handleFetchMetadata}>
             <CloudDownloadIcon sx={{ mr: 1 }} fontSize="small" />
             Fetch Metadata
+          </MenuItem>
+        )}
+        {onParseWithAI && (
+          <MenuItem onClick={handleParseWithAI}>
+            <PsychologyIcon sx={{ mr: 1 }} fontSize="small" />
+            Parse with AI
           </MenuItem>
         )}
         {onDelete && (

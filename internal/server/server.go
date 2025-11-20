@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.17.0
+// version: 1.19.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1175,22 +1175,38 @@ func (s *Server) startOrganize(c *gin.Context) {
 		_ = progress.Log("info", "Starting file organization", nil)
 
 		// Get books to organize
-		books, err := database.GlobalStore.GetAllBooks(1000, 0)
+		allBooks, err := database.GlobalStore.GetAllBooks(1000, 0)
 		if err != nil {
 			errDetails := err.Error()
 			_ = progress.Log("error", "Failed to fetch books", &errDetails)
 			return fmt.Errorf("failed to fetch books: %w", err)
 		}
 
+		// Filter books that need organizing (not already in root directory)
+		booksToOrganize := make([]database.Book, 0)
+		for _, book := range allBooks {
+			// Skip if book is already in the root directory (already organized)
+			if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+				continue
+			}
+			// Skip if file doesn't exist
+			if _, err := os.Stat(book.FilePath); os.IsNotExist(err) {
+				continue
+			}
+			booksToOrganize = append(booksToOrganize, book)
+		}
+
+		_ = progress.Log("info", fmt.Sprintf("Found %d books that need organizing", len(booksToOrganize)), nil)
+
 		organized := 0
 		failed := 0
-		for i, book := range books {
+		for i, book := range booksToOrganize {
 			if progress.IsCanceled() {
 				_ = progress.Log("info", "Organize canceled", nil)
 				return fmt.Errorf("organize canceled")
 			}
 
-			_ = progress.UpdateProgress(i, len(books), fmt.Sprintf("Organizing %s...", book.Title))
+			_ = progress.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
 
 			newPath, err := org.OrganizeBook(&book)
 			if err != nil {
@@ -1212,6 +1228,54 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 		summary := fmt.Sprintf("Organization completed: %d organized, %d failed", organized, failed)
 		_ = progress.Log("info", summary, nil)
+
+		// Trigger automatic rescan of library folder after organize completes
+		if organized > 0 && config.AppConfig.RootDir != "" {
+			_ = progress.Log("info", "Starting automatic rescan of library folder...", nil)
+
+			// Create a new scan operation
+			scanID := ulid.Make().String()
+			scanOp, err := database.GlobalStore.CreateOperation(scanID, "scan", &config.AppConfig.RootDir)
+			if err != nil {
+				errDetails := fmt.Sprintf("Failed to create rescan operation: %s", err.Error())
+				_ = progress.Log("warn", errDetails, nil)
+			} else {
+				// Enqueue the scan operation with low priority (don't block other operations)
+				scanFunc := func(ctx context.Context, scanProgress operations.ProgressReporter) error {
+					_ = scanProgress.Log("info", fmt.Sprintf("Scanning organized books in: %s", config.AppConfig.RootDir), nil)
+
+					// Scan the root directory for newly organized books
+					workers := config.AppConfig.ConcurrentScans
+					if workers < 1 {
+						workers = 4
+					}
+					books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers)
+					if err != nil {
+						return fmt.Errorf("failed to rescan root directory: %w", err)
+					}
+
+					_ = scanProgress.Log("info", fmt.Sprintf("Found %d books in root directory", len(books)), nil)
+
+					// Process the books to extract metadata
+					if len(books) > 0 {
+						if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
+							return fmt.Errorf("failed to process books: %w", err)
+						}
+					}
+
+					_ = scanProgress.Log("info", "Rescan completed successfully", nil)
+					return nil
+				}
+
+				if err := operations.GlobalQueue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
+					errDetails := fmt.Sprintf("Failed to enqueue rescan: %s", err.Error())
+					_ = progress.Log("warn", errDetails, nil)
+				} else {
+					_ = progress.Log("info", "Rescan operation queued successfully", nil)
+				}
+			}
+		}
+
 		return nil
 	}
 

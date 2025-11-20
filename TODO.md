@@ -48,7 +48,56 @@
   - ✅ GET /api/v1/config - Get current configuration
   - ✅ PUT /api/v1/config - Update configuration at runtime
   - ✅ Supports updating root_dir, database_path, playlist_dir, API keys
+
+## 🚨 CRITICAL FIXES COMPLETED - 2024-11-20
+
+### ✅ Bug Fixes and UX Improvements
+
+1. **Library Page Path Display** (v1.13.0)
+   - Enhanced "Path: Not configured" message with helpful text and warning color
+   - Added "Please set library path in Settings" guidance
+
+2. **Folder Browser UX** (v1.2.0)
+   - Removed two-step selection process (Select This Folder + bottom button)
+   - Current browsed path now automatically selected for parent component
+   - Simplified user experience for folder selection
+
+3. **Organize Operation** (v1.18.0)
+   - Fixed "organizing 0/0" issue by filtering books before operation
+   - Now only organizes books NOT already in root directory
+   - Skips books whose files don't exist
+   - Added log message showing count of books needing organization
+
+4. **Auto-Rescan After Organize** (v1.19.0)
+   - Automatically triggers library rescan after successful organize
+   - Rescan runs with low priority to avoid blocking other operations
+   - Picks up newly organized books and extracts metadata
+
+5. **AI Metadata Parsing Integration** (v1.8.0)
+   - Integrated OpenAI parser into scanner workflow
+   - When tag extraction fails or is incomplete, AI parser attempts to extract:
+     - Title, Author, Series, Narrator, Publisher from filename
+   - Requires EnableAIParsing=true and OpenAIAPIKey configured
+   - Falls back to filepath extraction if AI parsing fails
+
+6. **Dashboard Import Folders Count** (v1.3.0)
+   - Fixed "Import Folders: 0" display issue
+   - Changed from folders.length to systemStatus.library.folder_count
+   - Now uses consistent data source with backend metrics
+
+7. **Re-fetch Metadata UI** (v1.3.0 AudiobookCard, v1.3.0 AudiobookGrid, v1.14.0 Library)
+   - Added "Parse with AI" menu item to audiobook cards
+   - Wired up handleParseWithAI handler
+   - Uses existing backend endpoint: POST /api/v1/audiobooks/:id/parse-with-ai
+   - Allows re-parsing books after enabling OpenAI integration
+
+8. **Security Fix**
+   - Added .encryption_key to .gitignore
+   - Prevents accidental commit of encryption secrets
+
+- [x] ✅ **Backend**: Settings API safety restrictions
   - ✅ Safety restrictions on database_type and enable_sqlite (read-only at runtime)
+
 - [x] **Backend - Database migration for media info and version fields**
   - ✅ Created migration005 adding all 9 fields to books table
   - ✅ Handles duplicate column detection gracefully

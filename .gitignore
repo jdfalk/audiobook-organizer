@@ -48,6 +48,9 @@ audiobooks.pebble/
 *.bak
 .audiobook-backups/
 
+# Encryption keys
+.encryption_key
+
 # IDE and editor files
 .vscode/
 .idea/

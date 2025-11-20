@@ -1,5 +1,5 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useState, useEffect } from 'react';
@@ -20,7 +20,6 @@ import {
   Stack,
   TextField,
   IconButton,
-  Button,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -30,7 +29,6 @@ import {
   Block as BlockIcon,
   Edit as EditIcon,
   Check as CheckIcon,
-  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import * as api from '../../services/api';
 
@@ -79,7 +77,11 @@ export function ServerFileBrowser({
   useEffect(() => {
     fetchDirectory(currentPath);
     setEditPath(currentPath);
-  }, [currentPath]);
+    // Automatically notify parent of current path when browsing (if directory selection is allowed)
+    if (allowDirSelect && onSelect) {
+      onSelect(currentPath, true);
+    }
+  }, [currentPath, allowDirSelect, onSelect]);
 
   const fetchDirectory = async (path: string) => {
     setLoading(true);
@@ -114,12 +116,6 @@ export function ServerFileBrowser({
       onSelect(item.path, true);
     } else if (!item.is_dir && allowFileSelect && onSelect) {
       onSelect(item.path, false);
-    }
-  };
-
-  const handleSelectCurrentFolder = () => {
-    if (allowDirSelect && onSelect) {
-      onSelect(currentPath, true);
     }
   };
 
@@ -239,16 +235,6 @@ export function ServerFileBrowser({
             <IconButton size="small" onClick={handleEditPath}>
               <EditIcon />
             </IconButton>
-            {allowDirSelect && (
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<CheckCircleIcon />}
-                onClick={handleSelectCurrentFolder}
-              >
-                Select This Folder
-              </Button>
-            )}
           </Stack>
         )}
       </Paper>
@@ -330,9 +316,9 @@ export function ServerFileBrowser({
       <Box mt={2}>
         <Typography variant="caption" color="text.secondary">
           {allowDirSelect && allowFileSelect
-            ? 'Click folders to navigate. Use "Select This Folder" button above or double-click items to select.'
+            ? 'Click folders to navigate. Current folder is automatically selected. Double-click items to explicitly select.'
             : allowDirSelect
-            ? 'Click folders to navigate. Use "Select This Folder" button above to select current folder.'
+            ? 'Click folders to navigate. Current folder is automatically selected.'
             : allowFileSelect
             ? 'Click to navigate, double-click files to select'
             : 'Click to navigate through directories'}
