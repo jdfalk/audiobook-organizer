@@ -24,8 +24,13 @@ import {
   RadioGroup,
   FormControl,
   FormLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import * as api from '../services/api';
+import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import {
   Save as SaveIcon,
   RestartAlt as RestartAltIcon,
@@ -34,6 +39,7 @@ import {
   CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
   ExpandMore as ExpandMoreIcon,
   Settings as SettingsIcon,
+  FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material';
 
 interface TabPanelProps {
@@ -67,6 +73,8 @@ function TabPanel(props: TabPanelProps) {
 
 export function Settings() {
   const [tabValue, setTabValue] = useState(0);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     // Library settings
     libraryPath: '/path/to/audiobooks/library',
@@ -316,6 +324,29 @@ export function Settings() {
     setSaved(false);
   };
 
+  const handleBrowseLibraryPath = () => {
+    setSelectedPath(settings.libraryPath);
+    setBrowserOpen(true);
+  };
+
+  const handleBrowserSelect = (path: string, isDir: boolean) => {
+    if (isDir) {
+      setSelectedPath(path);
+    }
+  };
+
+  const handleBrowserConfirm = () => {
+    if (selectedPath) {
+      handleChange('libraryPath', selectedPath);
+    }
+    setBrowserOpen(false);
+  };
+
+  const handleBrowserCancel = () => {
+    setBrowserOpen(false);
+    setSelectedPath(null);
+  };
+
   const handleSourceToggle = (sourceId: string) => {
     setSettings((prev) => ({
       ...prev,
@@ -496,6 +527,20 @@ export function Settings() {
                 value={settings.libraryPath}
                 onChange={(e) => handleChange('libraryPath', e.target.value)}
                 helperText="Main library directory where organized audiobooks are stored. Import paths are configured in File Manager."
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<FolderOpenIcon />}
+                        onClick={handleBrowseLibraryPath}
+                      >
+                        Browse Server
+                      </Button>
+                    </InputAdornment>
+                  ),
+                }}
               />
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="caption">
@@ -1108,6 +1153,47 @@ export function Settings() {
           </Button>
         </Box>
       </Paper>
+
+      {/* Library Path Browser Dialog */}
+      <Dialog
+        open={browserOpen}
+        onClose={handleBrowserCancel}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Browse Server Filesystem</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Select the library folder where organized audiobooks will be stored.
+          </Typography>
+          <Box sx={{ mt: 2 }}>
+            <ServerFileBrowser
+              initialPath={selectedPath || settings.libraryPath}
+              onSelect={handleBrowserSelect}
+              showFiles={false}
+              allowDirSelect={true}
+              allowFileSelect={false}
+            />
+          </Box>
+          {selectedPath && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Selected:</strong> {selectedPath}
+              </Typography>
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleBrowserCancel}>Cancel</Button>
+          <Button
+            onClick={handleBrowserConfirm}
+            variant="contained"
+            disabled={!selectedPath}
+          >
+            Select Folder
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
