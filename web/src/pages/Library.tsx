@@ -249,7 +249,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filters, page, sortBy]);
+  }, [debouncedSearch, page, sortBy]);
 
   const handleManualImport = () => {
     fileInputRef.current?.click();
