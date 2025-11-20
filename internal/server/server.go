@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -814,6 +814,34 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 					if err := scanner.ProcessBooks(books); err != nil {
 						return fmt.Errorf("failed to process books: %w", err)
 					}
+					// Auto-organize if enabled
+					if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
+						org := organizer.NewOrganizer(&config.AppConfig)
+						organized := 0
+						for _, b := range books {
+							// Lookup DB book by file path
+							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							if err != nil || dbBook == nil {
+								continue
+							}
+							newPath, err := org.OrganizeBook(dbBook)
+							if err != nil {
+								_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
+								continue
+							}
+							if newPath != dbBook.FilePath {
+								dbBook.FilePath = newPath
+								if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
+									_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
+								} else {
+									organized++
+								}
+							}
+						}
+						_ = progress.Log("info", fmt.Sprintf("Auto-organize complete: %d organized", organized), nil)
+					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
+						_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
+					}
 				}
 
 				// Update book count for this library folder
@@ -844,6 +872,26 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 			if err == nil {
 				if len(books) > 0 {
 					_ = scanner.ProcessBooks(books) // ignore individual processing errors (already logged internally)
+					// Auto-organize if enabled
+					if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
+						org := organizer.NewOrganizer(&config.AppConfig)
+						for _, b := range books {
+							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							if err != nil || dbBook == nil {
+								continue
+							}
+							newPath, err := org.OrganizeBook(dbBook)
+							if err != nil {
+								continue
+							}
+							if newPath != dbBook.FilePath {
+								dbBook.FilePath = newPath
+								_, _ = database.GlobalStore.UpdateBook(dbBook.ID, dbBook)
+							}
+						}
+					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
+						log.Printf("auto-organize enabled but root_dir not set")
+					}
 				}
 				folder.BookCount = len(books)
 				now := time.Now()
@@ -962,6 +1010,38 @@ func (s *Server) startScan(c *gin.Context) {
 				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books", len(books)), nil)
 				if err := scanner.ProcessBooks(books); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
+				}
+				// Auto-organize if enabled
+				if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
+					org := organizer.NewOrganizer(&config.AppConfig)
+					organized := 0
+					for _, b := range books {
+						if progress.IsCanceled() {
+							break
+						}
+						// Lookup DB book by file path
+						dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+						if err != nil || dbBook == nil {
+							continue
+						}
+						newPath, err := org.OrganizeBook(dbBook)
+						if err != nil {
+							_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
+							continue
+						}
+						// Update DB path if changed
+						if newPath != dbBook.FilePath {
+							dbBook.FilePath = newPath
+							if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
+								_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
+							} else {
+								organized++
+							}
+						}
+					}
+					_ = progress.Log("info", fmt.Sprintf("Auto-organize complete: %d organized", organized), nil)
+				} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
+					_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
 				}
 			}
 
@@ -1309,6 +1389,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			"book_count":   bookCount,
 			"folder_count": len(folders),
 			"total_size":   totalSize,
+			"path":         config.AppConfig.RootDir,
 		},
 		"memory": gin.H{
 			"alloc_bytes":       memStats.Alloc,
@@ -1481,6 +1562,32 @@ func (s *Server) updateConfig(c *gin.Context) {
 			config.AppConfig.APIKeys.Goodreads = goodreads
 			updated = append(updated, "api_keys.goodreads")
 		}
+	}
+
+	// Library organization related updates
+	if val, ok := updates["organization_strategy"].(string); ok {
+		config.AppConfig.OrganizationStrategy = val
+		updated = append(updated, "organization_strategy")
+	}
+	if val, ok := updates["scan_on_startup"].(bool); ok {
+		config.AppConfig.ScanOnStartup = val
+		updated = append(updated, "scan_on_startup")
+	}
+	if val, ok := updates["auto_organize"].(bool); ok {
+		config.AppConfig.AutoOrganize = val
+		updated = append(updated, "auto_organize")
+	}
+	if val, ok := updates["folder_naming_pattern"].(string); ok {
+		config.AppConfig.FolderNamingPattern = val
+		updated = append(updated, "folder_naming_pattern")
+	}
+	if val, ok := updates["file_naming_pattern"].(string); ok {
+		config.AppConfig.FileNamingPattern = val
+		updated = append(updated, "file_naming_pattern")
+	}
+	if val, ok := updates["create_backups"].(bool); ok {
+		config.AppConfig.CreateBackups = val
+		updated = append(updated, "create_backups")
 	}
 
 	// Database type and enable_sqlite are read-only at runtime for safety

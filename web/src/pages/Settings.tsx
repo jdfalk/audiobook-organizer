@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.14.0
+// version: 1.15.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -543,7 +543,7 @@ export function Settings() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' }}>
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
@@ -554,7 +554,7 @@ export function Settings() {
         </Alert>
       )}
 
-      <Paper sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <Paper sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
             value={tabValue}
@@ -713,17 +713,17 @@ export function Settings() {
               </Alert>
             </Grid>
 
-            {/* Import Folders Section */}
+            {/* Import Paths Section */}
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                Import Folders (Watch Locations)
+                Import Paths (Watch Locations)
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
 
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Import Folders</strong> are watched for new audiobook files. Files found here are scanned and imported into the main library path where they are organized.
+                <strong>Import Paths</strong> are watched for new audiobook files. Files found here are scanned and imported into the main library path where they are organized.
               </Alert>
 
               <Box>
@@ -760,7 +760,7 @@ export function Settings() {
                   onClick={() => setAddFolderDialogOpen(true)}
                   sx={{ mt: 2 }}
                 >
-                  Add Import Folder
+                  Add Import Path
                 </Button>
               </Box>
             </Grid>
@@ -1305,10 +1305,10 @@ export function Settings() {
 
       {/* Import Folder Dialog */}
       <Dialog open={addFolderDialogOpen} onClose={() => setAddFolderDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
+        <DialogTitle>Add Import Path (Watch Location)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Import folders</strong> are separate from your main library. They are watched for new audiobook files that will be scanned, organized, and moved to your library path.
+            <strong>Import paths</strong> are separate from your main library. They are watched for new audiobook files that will be scanned, organized, and moved to your library path.
           </Alert>
 
           {!showFolderBrowser ? (
@@ -1358,7 +1358,7 @@ export function Settings() {
         <DialogActions>
           <Button onClick={() => { setAddFolderDialogOpen(false); setShowFolderBrowser(false); }}>Cancel</Button>
           <Button onClick={handleAddImportFolder} variant="contained" disabled={!newFolderPath.trim()}>
-            Add Folder
+            Add Path
           </Button>
         </DialogActions>
       </Dialog>

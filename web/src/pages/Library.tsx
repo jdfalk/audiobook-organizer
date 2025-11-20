@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -77,6 +77,8 @@ export const Library = () => {
   const [addPathDialogOpen, setAddPathDialogOpen] = useState(false);
   const [newImportPath, setNewImportPath] = useState('');
   const [showServerBrowser, setShowServerBrowser] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(null);
+  const [organizeRunning, setOrganizeRunning] = useState(false);
 
   // Debounce search query
   useEffect(() => {
@@ -183,6 +185,15 @@ export const Library = () => {
   // Load audiobooks when filters change
   useEffect(() => {
     loadAudiobooks();
+    // Load system status for library storage section
+    (async () => {
+      try {
+        const status = await api.getSystemStatus();
+        setSystemStatus(status);
+      } catch (e) {
+        console.error('Failed to load system status', e);
+      }
+    })();
   }, [loadAudiobooks]);
 
   const handleEdit = useCallback((audiobook: Audiobook) => {
@@ -411,6 +422,19 @@ export const Library = () => {
     }
   };
 
+  const handleOrganizeLibrary = async () => {
+    try {
+      setOrganizeRunning(true);
+      const op = await api.startOrganize();
+      // Reuse polling logic
+      pollScanOperation(op.id);
+    } catch (e) {
+      console.error('Failed to start organize', e);
+      setOrganizeRunning(false);
+    }
+  };
+
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -440,6 +464,42 @@ export const Library = () => {
         </Button>
         </Stack>
       </Box>
+
+      {systemStatus && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+            <Box>
+              <Typography variant="h6" gutterBottom>Main Library Storage</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Path: {systemStatus.library.path || 'Not configured'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Books: {systemStatus.library.book_count} | Import Paths: {systemStatus.library.folder_count}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Size: {(systemStatus.library.total_size / (1024*1024)).toFixed(2)} MB
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                disabled={organizeRunning}
+                onClick={handleOrganizeLibrary}
+              >
+                {organizeRunning ? 'Organizing…' : 'Organize Library'}
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={async () => {
+                  try { const status = await api.getSystemStatus(); setSystemStatus(status); } catch {}
+                }}
+              >
+                Refresh Stats
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
 
       {/* Hidden file input for manual import */}
       <input
