@@ -437,6 +437,8 @@ export function Settings() {
       enableUserQuotas: false,
       defaultUserQuotaGB: 100,
       autoFetchMetadata: true,
+      enableAIParsing: false,
+      openaiApiKey: '',
       metadataSources: [
         { id: 'audible', name: 'Audible', enabled: true, priority: 1, requiresAuth: false, credentials: {} },
         { id: 'goodreads', name: 'Goodreads', enabled: true, priority: 2, requiresAuth: true, credentials: { apiKey: '', apiSecret: '' } },

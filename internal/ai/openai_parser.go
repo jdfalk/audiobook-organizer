@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.0.0
+// version: 1.2.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -12,6 +12,8 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/shared"
 )
 
 // ParsedMetadata represents structured metadata extracted from a filename
@@ -43,7 +45,7 @@ func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
 	client := openai.NewClient(option.WithAPIKey(apiKey))
 
 	return &OpenAIParser{
-		client:     client,
+		client:     &client,
 		model:      "gpt-4o-mini", // Fast and cost-effective
 		maxRetries: 2,
 		enabled:    true,
@@ -90,19 +92,19 @@ Set confidence based on clarity of the filename structure.`
 	userPrompt := fmt.Sprintf("Parse this audiobook filename:\n\n%s", filename)
 
 	// Create chat completion with response format for JSON
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
 	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
-		}),
-		Model: openai.F(p.model),
-		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
-			openai.ResponseFormatJSONObjectParam{
-				Type: openai.F(openai.ResponseFormatJSONObjectTypeJSONObject),
-			},
-		),
-		Temperature: openai.Float(0.1), // Low temperature for consistent parsing
-		MaxTokens:   openai.Int(500),
+		},
+		Model:       shared.ChatModel(p.model),
+		Temperature: param.NewOpt(0.1),
+		MaxTokens:   param.NewOpt[int64](500),
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONObject: &jsonObjectFormat,
+		},
 	})
 
 	if err != nil {
@@ -172,19 +174,19 @@ Set confidence based on clarity of the filename structure.`
 	}
 
 	// Create chat completion
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
 	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
-		}),
-		Model: openai.F(p.model),
-		ResponseFormat: openai.F[openai.ChatCompletionNewParamsResponseFormatUnion](
-			openai.ResponseFormatJSONObjectParam{
-				Type: openai.F(openai.ResponseFormatJSONObjectTypeJSONObject),
-			},
-		),
-		Temperature: openai.Float(0.1),
-		MaxTokens:   openai.Int(2000),
+		},
+		Model:       shared.ChatModel(p.model),
+		Temperature: param.NewOpt(0.1),
+		MaxTokens:   param.NewOpt[int64](2000),
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONObject: &jsonObjectFormat,
+		},
 	})
 
 	if err != nil {

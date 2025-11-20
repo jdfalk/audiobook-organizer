@@ -6,7 +6,6 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Paper,
   Stack,
   LinearProgress,
   Grid,
@@ -31,7 +30,7 @@ interface StorageInfo {
 }
 
 export function StorageTab() {
-  const [storage, setStorage] = useState<StorageInfo>({
+  const [storage] = useState<StorageInfo>({
     total: 1000 * 1024 * 1024 * 1024, // 1TB
     used: 670 * 1024 * 1024 * 1024, // 670GB
     free: 330 * 1024 * 1024 * 1024, // 330GB

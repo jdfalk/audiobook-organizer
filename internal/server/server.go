@@ -1,12 +1,11 @@
 // file: internal/server/server.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,10 +30,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	ulid "github.com/oklog/ulid/v2"
 )
-
-// webFS holds embedded web assets (will be populated when frontend is built)
-// TODO: Add go:embed directive when web/dist directory exists
-var webFS embed.FS
 
 // Helper functions for pointer conversions
 func stringPtr(s string) *string {
@@ -199,62 +194,8 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Serve static files (React frontend)
+	// Implementation is in static_embed.go or static_nonembed.go depending on build tags
 	s.setupStaticFiles()
-}
-
-// setupStaticFiles serves the React frontend
-func (s *Server) setupStaticFiles() {
-	// For now, just serve a simple index page at root
-	// TODO: Implement proper static file serving when frontend is built
-	s.router.GET("/", func(c *gin.Context) {
-		html := `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Audiobook Organizer</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        .api-list { background: #f8f9fa; padding: 20px; border-radius: 4px; margin: 20px 0; }
-        .api-endpoint { font-family: 'Courier New', monospace; background: #e9ecef; padding: 4px 8px; margin: 2px 0; border-radius: 3px; display: block; }
-        .method { color: #007bff; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎧 Audiobook Organizer Web Interface</h1>
-        <p>The web interface is currently under development. You can use the API endpoints below:</p>
-
-        <div class="api-list">
-            <h3>Available API Endpoints:</h3>
-            <code class="api-endpoint"><span class="method">GET</span> /api/health - Health check</code>
-            <code class="api-endpoint"><span class="method">GET</span> /api/v1/audiobooks - List audiobooks</code>
-            <code class="api-endpoint"><span class="method">GET</span> /api/v1/authors - List authors</code>
-            <code class="api-endpoint"><span class="method">GET</span> /api/v1/series - List series</code>
-            <code class="api-endpoint"><span class="method">GET</span> /api/v1/config - Get configuration</code>
-            <code class="api-endpoint"><span class="method">POST</span> /api/v1/operations/scan - Start scan</code>
-        </div>
-
-        <p>Try the health check: <a href="/api/health" target="_blank">/api/health</a></p>
-        <p>View configuration: <a href="/api/v1/config" target="_blank">/api/v1/config</a></p>
-    </div>
-</body>
-</html>
-		`
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-	})
-
-	// Catch-all route for SPA (Single Page Application)
-	s.router.NoRoute(func(c *gin.Context) {
-		// Return 404 for unknown API routes
-		if strings.HasPrefix(c.Request.URL.Path, "/api") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
-			return
-		}
-		// Redirect other routes to home page for now
-		c.Redirect(http.StatusFound, "/")
-	})
 }
 
 // corsMiddleware adds CORS headers
