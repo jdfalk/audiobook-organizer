@@ -1,13 +1,16 @@
 // file: internal/scanner/scanner.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -484,6 +487,16 @@ func saveBookToDatabase(book *Book) error {
 			}
 		}
 
+		// Compute file hash and size for deduplication
+		var fileHash *string
+		var fileSize *int64
+		if hash, err := computeFileHashQuick(book.FilePath); err == nil && hash != "" {
+			fileHash = &hash
+			if size, err := getFileSize(book.FilePath); err == nil {
+				fileSize = &size
+			}
+		}
+
 		dbBook := &database.Book{
 			Title:          book.Title,
 			AuthorID:       authorID,
@@ -496,6 +509,8 @@ func saveBookToDatabase(book *Book) error {
 			Narrator:       nullablePtr(book.Narrator),
 			Language:       nullablePtr(book.Language),
 			Publisher:      nullablePtr(book.Publisher),
+			FileHash:       fileHash,
+			FileSize:       fileSize,
 		}
 
 		// Upsert semantics: try lookup by file path first
@@ -545,6 +560,82 @@ func saveBookToDatabase(book *Book) error {
 		book.Title, authorIDInt, seriesID, book.Position, book.Format, book.Duration,
 	)
 	return err
+}
+
+// computeFileHashQuick computes a SHA256 hash of the file
+// For large audiobook files, this can be slow, so we optimize by hashing chunks for large files
+func computeFileHashQuick(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// For large files (> 100MB), hash first 10MB + last 10MB + size for speed
+	info, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	const threshold = 100 * 1024 * 1024 // 100MB
+	const chunkSize = 10 * 1024 * 1024  // 10MB
+
+	if info.Size() > threshold {
+		// Quick hash for large files: first chunk + last chunk + size
+		h := sha256.New()
+
+		// First chunk
+		first := make([]byte, chunkSize)
+		n, err := file.Read(first)
+		if err != nil && err != io.EOF {
+			return "", err
+		}
+		h.Write(first[:n])
+
+		// Last chunk
+		if info.Size() > chunkSize {
+			file.Seek(-chunkSize, io.SeekEnd)
+			last := make([]byte, chunkSize)
+			n, err := file.Read(last)
+			if err != nil && err != io.EOF {
+				return "", err
+			}
+			h.Write(last[:n])
+		}
+
+		// Include size in hash
+		h.Write([]byte(fmt.Sprintf("%d", info.Size())))
+
+		return hex.EncodeToString(h.Sum(nil)), nil
+	}
+
+	// Full hash for smaller files
+	return computeFullFileHash(filePath)
+}
+
+// computeFullFileHash computes the SHA256 hash of the entire file
+func computeFullFileHash(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// getFileSize returns the size of a file in bytes
+func getFileSize(filePath string) (int64, error) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
 }
 
 func nullablePtr(s string) *string {

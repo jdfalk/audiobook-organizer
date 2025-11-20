@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -561,6 +561,22 @@ func (p *PebbleStore) GetBookByFilePath(path string) (*Book, error) {
 	return p.GetBookByID(id)
 }
 
+func (p *PebbleStore) GetBookByFileHash(hash string) (*Book, error) {
+	indexKey := []byte(fmt.Sprintf("book:hash:%s", hash))
+	value, closer, err := p.db.Get(indexKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	id := string(value) // ULID string
+
+	return p.GetBookByID(id)
+}
+
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	prefix := []byte(fmt.Sprintf("book:series:%d:", seriesID))
@@ -646,6 +662,15 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	if err := batch.Set(pathKey, []byte(book.ID), nil); err != nil {
 		batch.Close()
 		return nil, err
+	}
+
+	// Hash index (if hash provided)
+	if book.FileHash != nil && *book.FileHash != "" {
+		hashKey := []byte(fmt.Sprintf("book:hash:%s", *book.FileHash))
+		if err := batch.Set(hashKey, []byte(book.ID), nil); err != nil {
+			batch.Close()
+			return nil, err
+		}
 	}
 
 	// Series index

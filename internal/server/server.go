@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -30,6 +30,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -1497,6 +1498,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			"num_gc":            memStats.NumGC,
 			"heap_alloc":        memStats.HeapAlloc,
 			"heap_sys":          memStats.HeapSys,
+			"system_total":      sysinfo.GetTotalMemory(),
 		},
 		"runtime": gin.H{
 			"go_version":    runtime.Version(),

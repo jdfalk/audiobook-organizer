@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -46,9 +46,23 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 
-	// Check if file already exists at target
+	// Check if file already exists at exact target path
 	if _, err := os.Stat(targetPath); err == nil {
-		return targetPath, nil // Already organized
+		return targetPath, nil // Already organized at this location
+	}
+
+	// Check for duplicate files by hash (if hash is available in book metadata)
+	// This prevents copying the same file multiple times during re-organization
+	if book.FileHash != nil && *book.FileHash != "" {
+		// Check if a file with this hash already exists in the database
+		existingBook, err := database.GlobalStore.GetBookByFileHash(*book.FileHash)
+		if err == nil && existingBook != nil && existingBook.ID != book.ID {
+			// Another book with same hash exists - check if it's in the output directory
+			if strings.HasPrefix(existingBook.FilePath, o.config.RootDir) {
+				// File already organized under different metadata
+				return existingBook.FilePath, fmt.Errorf("duplicate file already organized at: %s", existingBook.FilePath)
+			}
+		}
 	}
 
 	// Perform the organization based on strategy
