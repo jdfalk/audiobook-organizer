@@ -99,9 +99,44 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server
+	// Heartbeat: push periodic system.status events via SSE (every 5s) while running
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	ticker := time.NewTicker(5 * time.Second)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if realtime.GlobalHub != nil {
+					// Gather lightweight metrics
+					var alloc runtime.MemStats
+					runtime.ReadMemStats(&alloc)
+					bookCount := 0
+					folderCount := 0
+					if database.GlobalStore != nil {
+						if bc, err := database.GlobalStore.CountBooks(); err == nil {
+							bookCount = bc
+						}
+						if folders, err := database.GlobalStore.GetAllLibraryFolders(); err == nil {
+							folderCount = len(folders)
+						}
+					}
+					realtime.GlobalHub.SendSystemStatus(map[string]interface{}{
+						"books":        bookCount,
+						"folders":      folderCount,
+						"memory_alloc": alloc.Alloc,
+						"goroutines":   runtime.NumGoroutine(),
+						"timestamp":    time.Now().Unix(),
+					})
+				}
+			case <-quit:
+				return
+			}
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
 	<-quit
 
 	log.Println("Shutting down server...")

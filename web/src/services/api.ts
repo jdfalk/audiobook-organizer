@@ -337,6 +337,13 @@ export async function getOperationLogs(id: string): Promise<OperationLog[]> {
   return data.logs || [];
 }
 
+export async function getOperationLogsTail(id: string, tail: number): Promise<OperationLog[]> {
+  const response = await fetch(`${API_BASE}/operations/${id}/logs?tail=${tail}`);
+  if (!response.ok) throw new Error('Failed to fetch operation logs tail');
+  const data = await response.json();
+  return data.items || data.logs || [];
+}
+
 export async function cancelOperation(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/operations/${id}`, {
     method: 'DELETE',
