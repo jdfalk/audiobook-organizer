@@ -1,5 +1,5 @@
 // file: internal/server/static_embed.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 //go:build embed_frontend
 
@@ -7,8 +7,11 @@ package server
 
 import (
 	"embed"
+	"io"
 	"io/fs"
+	"mime"
 	"net/http"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,12 +34,7 @@ func (s *Server) setupStaticFiles() {
 		return
 	}
 
-	// Serve all static files (assets/, vite.svg, etc.) directly from webDist root
-	// This allows /assets/vendor.js to map to assets/vendor.js in the filesystem
-	httpFS := http.FS(webDist)
-
-	// Try to serve files from the filesystem first
-	fileServer := http.FileServer(httpFS)
+	// NoRoute handler to serve static files or SPA index.html
 	s.router.NoRoute(func(c *gin.Context) {
 		// Return 404 for unknown API routes
 		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
@@ -46,13 +44,36 @@ func (s *Server) setupStaticFiles() {
 
 		// Try to serve the file from the embedded filesystem
 		path := c.Request.URL.Path
-		if _, err := webDist.Open(path[1:]); err == nil {
-			// File exists, serve it
-			fileServer.ServeHTTP(c.Writer, c.Request)
-			return
+		if path == "/" {
+			path = "/index.html"
 		}
 
-		// File not found, serve index.html for SPA routing
+		// Remove leading slash for fs.Open
+		filePath := path[1:]
+
+		file, err := webDist.Open(filePath)
+		if err == nil {
+			defer file.Close()
+
+			// Get file info for size
+			stat, err := file.Stat()
+			if err == nil && !stat.IsDir() {
+				// Detect MIME type from extension
+				contentType := mime.TypeByExtension(filepath.Ext(filePath))
+				if contentType == "" {
+					contentType = "application/octet-stream"
+				}
+
+				// Read file content
+				content, err := io.ReadAll(file)
+				if err == nil {
+					c.Data(http.StatusOK, contentType, content)
+					return
+				}
+			}
+		}
+
+		// File not found or error, serve index.html for SPA routing
 		indexData, err := fs.ReadFile(webDist, "index.html")
 		if err != nil {
 			c.String(http.StatusInternalServerError, "Failed to load frontend")
