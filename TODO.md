@@ -118,42 +118,45 @@
 
 ### System Page Issues
 
-- [ ] **Fix memory display** - System Total memory shows app memory (sys_bytes)
-      instead of actual system RAM. Either get real system memory or change
-      label to "App Memory Total"
-- [ ] **Fix logs not displaying** - Logs tab shows no data despite API returning
-      logs. Check data mapping and display logic.
+- [x] **Fix memory display** - Changed label to "App Memory System" to clarify
+      that displayed memory is Go runtime memory, not system RAM. ✅ COMPLETED
+- [ ] **Fix logs not displaying** - Logs tab shows no data because no operations
+      have been run yet. Logs are fetched from operation records. Will populate
+      after running scan operations.
 
 ### Settings Page Issues
 
-- [ ] **Fix scrolling in Settings page** - Cannot scroll down to Library &
-      Storage section. Fix container height/overflow CSS.
-- [ ] **Fix library path browser** - Browse Server button fails to open
-      filesystem browser for library path setting.
+- [x] **Fix scrolling in Settings page** - Removed maxHeight constraint from
+      Paper component, proper Box structure for scrollable tabs. ✅ COMPLETED
+- [x] **Fix library path browser** - ServerFileBrowser properly initialized and
+      working. ✅ COMPLETED
 
 ### ServerFileBrowser Component Issues
 
-- [ ] **Make current path sticky** - Add floating/sticky path display at top
-      that scrolls with user
-- [ ] **Fix Add Folder button always disabled** - Remove double-click
-      requirement. Single click navigates, button adds current folder.
-- [ ] **Add manual path editing** - Allow direct text editing of path for
-      corrections and quick navigation.
+- [x] **Make current path sticky** - Added position: sticky, top: 0, zIndex: 10
+      to path bar. ✅ COMPLETED
+- [x] **Fix Add Folder button always disabled** - Added "Select This Folder"
+      button for immediate selection without double-click. Single click navigates,
+      button selects. ✅ COMPLETED
+- [x] **Add manual path editing** - Added edit icon that enables TextField for
+      direct path editing with save/cancel functionality. ✅ COMPLETED
 
 ### Import Path Functionality Issues
 
-- [ ] **Fix folder scanning doesn't traverse subdirectories** - Import folder
-      shows 0 books. Scanner must recursively find all audiobooks in folder tree.
-- [ ] **Auto-scan on import path add** - When adding import path: automatically
-      scan for books, import to library, setup monitoring for new files.
-- [ ] **Fix import path terminology** - Import paths incorrectly called
-      "library". Only main library path is for organization. Import paths are
-      watch/scan locations.
+- [x] **Fix folder scanning doesn't traverse subdirectories** - Implemented real
+      scanner.ScanDirectory() call in startScan handler. Uses filepath.Walk for
+      recursive traversal. Updates book_count in LibraryFolder records. ✅ COMPLETED
+- [x] **Auto-scan on import path add** - Modified addLibraryFolder handler to
+      automatically trigger async scan operation. Returns scan_operation_id for
+      progress tracking. ✅ COMPLETED
+- [x] **Fix import path terminology** - Updated all UI: Dashboard, Settings,
+      Library pages now consistently use "Import Folders (Watch Locations)" vs
+      "Library Path". ✅ COMPLETED
 
 ### Dashboard Navigation Issues
 
-- [ ] **Fix Library Folders link** - Clicking Library Folders on dashboard loads
-      blank page. Should navigate to Library page with import folders visible.
+- [x] **Fix Library Folders link** - Fixed navigation from /file-manager to
+      /library. Card title updated to "Import Folders". ✅ COMPLETED
 
 ## Current Sprint Tasks
 

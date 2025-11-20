@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -486,10 +486,10 @@ export const Library = () => {
 
       {/* Import Path Management Dialog */}
       <Dialog open={addPathDialogOpen} onClose={() => setAddPathDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Add Import Path</DialogTitle>
+        <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Import folders</strong> are watch locations for new audiobooks. Files discovered here will be scanned and organized into your main library path.
+            <strong>Import folders</strong> are watch locations where the scanner looks for new audiobooks. Files discovered here will be copied and organized into your main library path (configured in Settings).
           </Alert>
 
           {!showServerBrowser ? (
