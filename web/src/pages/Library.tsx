@@ -491,7 +491,7 @@ export const Library = () => {
           <Alert severity="info" sx={{ mb: 2 }}>
             Import paths are watched for new audiobook files. Files found here will be imported into the library.
           </Alert>
-          
+
           {!showServerBrowser ? (
             <Box>
               <TextField
