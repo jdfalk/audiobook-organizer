@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -28,6 +28,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
@@ -40,6 +44,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   Settings as SettingsIcon,
   FolderOpen as FolderOpenIcon,
+  Folder as FolderIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 
 interface TabPanelProps {
@@ -1290,6 +1297,66 @@ export function Settings() {
             disabled={!selectedPath}
           >
             Select Folder
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Import Folder Dialog */}
+      <Dialog open={addFolderDialogOpen} onClose={() => setAddFolderDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Add Import Folder</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Import folders are watched for new audiobook files. Files found here will be automatically imported into the library.
+          </Alert>
+
+          {!showFolderBrowser ? (
+            <Box>
+              <TextField
+                autoFocus
+                fullWidth
+                label="Folder Path"
+                value={newFolderPath}
+                onChange={(e) => setNewFolderPath(e.target.value)}
+                placeholder="/path/to/downloads"
+                sx={{ mt: 1 }}
+              />
+              <Button
+                startIcon={<FolderOpenIcon />}
+                onClick={() => setShowFolderBrowser(true)}
+                sx={{ mt: 2 }}
+              >
+                Browse Server Filesystem
+              </Button>
+            </Box>
+          ) : (
+            <Box>
+              <Button
+                onClick={() => setShowFolderBrowser(false)}
+                sx={{ mb: 2 }}
+              >
+                ← Back to Manual Entry
+              </Button>
+              <ServerFileBrowser
+                initialPath={newFolderPath || '/'}
+                onSelect={handleFolderBrowserSelect}
+                showFiles={false}
+                allowDirSelect={true}
+                allowFileSelect={false}
+              />
+              {newFolderPath && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Selected:</strong> {newFolderPath}
+                  </Typography>
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setAddFolderDialogOpen(false); setShowFolderBrowser(false); }}>Cancel</Button>
+          <Button onClick={handleAddImportFolder} variant="contained" disabled={!newFolderPath.trim()}>
+            Add Folder
           </Button>
         </DialogActions>
       </Dialog>
