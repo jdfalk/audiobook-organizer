@@ -93,6 +93,8 @@ func (s *SQLiteStore) createTables() error {
 		audiobook_release_year INTEGER,
 		isbn10 TEXT,
 		isbn13 TEXT,
+		file_hash TEXT,
+		file_size INTEGER,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -101,6 +103,7 @@ func (s *SQLiteStore) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_books_author ON books(author_id);
 	CREATE INDEX IF NOT EXISTS idx_books_series ON books(series_id);
 	CREATE INDEX IF NOT EXISTS idx_books_file_path ON books(file_path);
+	CREATE INDEX IF NOT EXISTS idx_books_file_hash ON books(file_hash);
 
 	CREATE TABLE IF NOT EXISTS playlists (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -589,11 +592,30 @@ func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 	var book Book
 	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13, file_hash, file_size
 	          FROM books WHERE file_path = ?`
 	err := s.db.QueryRow(query, path).Scan(&book.ID, &book.Title, &book.AuthorID,
 		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13)
+		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13,
+		&book.FileHash, &book.FileSize)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (s *SQLiteStore) GetBookByFileHash(hash string) (*Book, error) {
+	var book Book
+	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
+	                 work_id, narrator, edition, language, publisher, isbn10, isbn13, file_hash, file_size
+	          FROM books WHERE file_hash = ? LIMIT 1`
+	err := s.db.QueryRow(query, hash).Scan(&book.ID, &book.Title, &book.AuthorID,
+		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
+		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13,
+		&book.FileHash, &book.FileSize)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
