@@ -94,6 +94,16 @@ export interface OperationLog {
   created_at: string;
 }
 
+// Active operations (subset when listing current queue state)
+export interface ActiveOperationSummary {
+  id: string;
+  type: string;
+  status: string;
+  progress: number;
+  total: number;
+  message: string;
+}
+
 export interface SystemStatus {
   status: string;
   library: {
@@ -332,6 +342,13 @@ export async function cancelOperation(id: string): Promise<void> {
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to cancel operation');
+}
+
+export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
+  const response = await fetch(`${API_BASE}/operations/active`);
+  if (!response.ok) throw new Error('Failed to fetch active operations');
+  const data = await response.json();
+  return data.operations || [];
 }
 
 // System

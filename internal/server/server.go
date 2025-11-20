@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -156,6 +156,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/operations/:id/status", s.getOperationStatus)
 		api.GET("/operations/:id/logs", s.getOperationLogs)
 		api.DELETE("/operations/:id", s.cancelOperation)
+		api.GET("/operations/active", s.listActiveOperations)
 
 		// Import routes
 		api.POST("/import/file", s.importFile)
@@ -1195,6 +1196,39 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// listActiveOperations returns a snapshot of currently queued/running operations with basic progress
+func (s *Server) listActiveOperations(c *gin.Context) {
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusOK, gin.H{"operations": []gin.H{}})
+		return
+	}
+	active := operations.GlobalQueue.ActiveOperations()
+	results := make([]gin.H, 0, len(active))
+	for _, a := range active {
+		status := "queued"
+		progress := 0
+		total := 0
+		message := ""
+		if database.GlobalStore != nil {
+			if op, err := database.GlobalStore.GetOperationByID(a.ID); err == nil && op != nil {
+				status = op.Status
+				progress = op.Progress
+				total = op.Total
+				message = op.Message
+			}
+		}
+		results = append(results, gin.H{
+			"id":       a.ID,
+			"type":     a.Type,
+			"status":   status,
+			"progress": progress,
+			"total":    total,
+			"message":  message,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"operations": results})
 }
 
 func (s *Server) importFile(c *gin.Context) {

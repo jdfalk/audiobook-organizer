@@ -82,6 +82,69 @@ export const Library = () => {
   const [organizeRunning, setOrganizeRunning] = useState(false);
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
   const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
+  const [operationLogs, setOperationLogs] = useState<Record<string, { level: string; message: string; details?: string; timestamp: number }[]>>({});
+
+  // SSE subscription for live operation progress & logs
+  useEffect(() => {
+    // Fetch active operations to hydrate UI on reload
+    (async () => {
+      try {
+        const active = await api.getActiveOperations();
+        active.forEach(op => {
+          const partial: api.Operation = {
+            id: op.id,
+            type: op.type,
+            status: op.status,
+            progress: op.progress,
+            total: op.total,
+            message: op.message,
+            created_at: new Date().toISOString(),
+          } as api.Operation;
+          if (op.type === 'scan') setActiveScanOp(partial);
+          if (op.type === 'organize') setActiveOrganizeOp(partial);
+        });
+      } catch (e) {
+        // ignore
+      }
+    })();
+
+    const es = new EventSource('/api/events');
+    es.onmessage = (ev) => {
+      try {
+        const evt = JSON.parse(ev.data);
+        if (!evt || !evt.type) return;
+        if (evt.type === 'operation.log') {
+          const opId = evt.data.operation_id;
+          setOperationLogs(prev => {
+            const existing = prev[opId] || [];
+            const next = [...existing, { level: evt.data.level, message: evt.data.message, details: evt.data.details, timestamp: Date.now() }];
+            // keep last 200 lines per op
+            return { ...prev, [opId]: next.slice(-200) };
+          });
+        } else if (evt.type === 'operation.progress') {
+          const opId = evt.data.operation_id;
+          const update = (op: api.Operation | null): api.Operation | null => {
+            if (!op || op.id !== opId) return op;
+            return { ...op, progress: evt.data.current, total: evt.data.total, message: evt.data.message };
+          };
+          setActiveScanOp(prev => update(prev));
+          setActiveOrganizeOp(prev => update(prev));
+        } else if (evt.type === 'operation.status') {
+          const opId = evt.data.operation_id;
+          const status = evt.data.status;
+          const finalize = (op: api.Operation | null): api.Operation | null => {
+            if (!op || op.id !== opId) return op;
+            return { ...op, status };
+          };
+          setActiveScanOp(prev => finalize(prev));
+          setActiveOrganizeOp(prev => finalize(prev));
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+    return () => es.close();
+  }, []);
 
   // Debounce search query
   useEffect(() => {
@@ -484,16 +547,40 @@ export const Library = () => {
               </Typography>
               {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
                 <Box mt={1}>
-                  <Typography variant="caption" color="text.secondary">
-                    Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total} {activeOrganizeOp.message}
-                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total} {activeOrganizeOp.message}
+                    </Typography>
+                    <Button size="small" variant="text" onClick={() => api.cancelOperation(activeOrganizeOp.id)}>Cancel</Button>
+                  </Stack>
+                  {operationLogs[activeOrganizeOp.id] && (
+                    <Box mt={0.5} sx={{ maxHeight: 120, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                      {operationLogs[activeOrganizeOp.id].map((l, idx) => (
+                        <Typography key={idx} variant="caption" display="block" sx={{ color: l.level === 'error' ? 'error.main' : 'text.secondary' }}>
+                          {l.message}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
                 </Box>
               )}
               {activeScanOp && activeScanOp.status !== 'completed' && (
                 <Box mt={1}>
-                  <Typography variant="caption" color="text.secondary">
-                    Scanning: {activeScanOp.progress}/{activeScanOp.total} {activeScanOp.message}
-                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      Scanning: {activeScanOp.progress}/{activeScanOp.total} {activeScanOp.message}
+                    </Typography>
+                    <Button size="small" variant="text" onClick={() => api.cancelOperation(activeScanOp.id)}>Cancel</Button>
+                  </Stack>
+                  {operationLogs[activeScanOp.id] && (
+                    <Box mt={0.5} sx={{ maxHeight: 120, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                      {operationLogs[activeScanOp.id].map((l, idx) => (
+                        <Typography key={idx} variant="caption" display="block" sx={{ color: l.level === 'error' ? 'error.main' : 'text.secondary' }}>
+                          {l.message}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
                 </Box>
               )}
             </Box>

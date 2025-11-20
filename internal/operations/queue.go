@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -371,6 +371,40 @@ func InitializeQueue(store database.Store, workers int) {
 	}
 	GlobalQueue = NewOperationQueue(store, workers)
 	log.Printf("Operation queue initialized with %d workers", workers)
+}
+
+// SetStore assigns a database store to an already-initialized queue if it doesn't have one yet.
+// This enables early queue initialization (before database setup) while still allowing
+// operation status persistence once the database becomes available.
+func (q *OperationQueue) SetStore(store database.Store) {
+	if q == nil || store == nil {
+		return
+	}
+	if q.store != nil { // Do not overwrite an existing store
+		return
+	}
+	q.store = store
+	log.Println("Operation queue store attached")
+}
+
+// ActiveOperation represents lightweight info about an in-flight operation.
+type ActiveOperation struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+// ActiveOperations returns a snapshot of currently queued/running operations.
+func (q *OperationQueue) ActiveOperations() []ActiveOperation {
+	if q == nil {
+		return []ActiveOperation{}
+	}
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	results := make([]ActiveOperation, 0, len(q.operations))
+	for id, op := range q.operations {
+		results = append(results, ActiveOperation{ID: id, Type: op.Type})
+	}
+	return results
 }
 
 // ShutdownQueue shuts down the global operation queue
