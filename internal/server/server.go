@@ -35,6 +35,7 @@ import (
 // Cached library size to avoid expensive recalculation on frequent status checks
 var cachedLibrarySize int64
 var cachedSizeComputedAt time.Time
+
 const librarySizeCacheTTL = 60 * time.Second
 
 // Helper functions for pointer conversions
@@ -1366,27 +1367,27 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-    // Disk usage for library folders (cached)
-    totalSize := cachedLibrarySize
-    if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
-        var newSize int64
-        for _, folder := range folders {
-            if !folder.Enabled {
-                continue
-            }
-            if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
-                filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
-                    if err == nil && !info.IsDir() {
-                        newSize += info.Size()
-                    }
-                    return nil
-                })
-            }
-        }
-        cachedLibrarySize = newSize
-        cachedSizeComputedAt = time.Now()
-        totalSize = newSize
-    }
+	// Disk usage for library folders (cached)
+	totalSize := cachedLibrarySize
+	if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
+		var newSize int64
+		for _, folder := range folders {
+			if !folder.Enabled {
+				continue
+			}
+			if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
+				filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
+					if err == nil && !info.IsDir() {
+						newSize += info.Size()
+					}
+					return nil
+				})
+			}
+		}
+		cachedLibrarySize = newSize
+		cachedSizeComputedAt = time.Now()
+		totalSize = newSize
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "running",
