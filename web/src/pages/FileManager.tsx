@@ -33,7 +33,7 @@ export function FileManager() {
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
   const [selectedPath, setSelectedPath] = useState<string>('');
-  const [directoryTree, setDirectoryTree] = useState<DirectoryNode | null>(null);
+  const [directoryTree] = useState<DirectoryNode | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddFolder = async () => {
@@ -115,7 +115,7 @@ export function FileManager() {
     }
   }, []);
 
-  const handleLoadChildren = async (path: string): Promise<DirectoryNode[]> => {
+  const handleLoadChildren = async (_path: string): Promise<DirectoryNode[]> => {
     // TODO: Replace with actual API call
     // const response = await fetch(`/api/v1/filesystem/browse?path=${encodeURIComponent(path)}`);
     // const data = await response.json();

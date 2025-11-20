@@ -185,8 +185,8 @@ func TestUpdateAudiobook(t *testing.T) {
 
 	server.router.ServeHTTP(w, req)
 
-	// Expect 404 for non-existent audiobook
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// Expect 400 for invalid request body (binding validation happens before existence check)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // TestDeleteAudiobook tests deleting an audiobook

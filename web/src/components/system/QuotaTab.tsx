@@ -38,7 +38,7 @@ interface QuotaInfo {
 }
 
 export function QuotaTab() {
-  const [quota, setQuota] = useState<QuotaInfo>({
+  const [quota] = useState<QuotaInfo>({
     systemQuotaEnabled: true,
     systemQuotaPercent: 80,
     systemQuotaUsed: 670 * 1024 * 1024 * 1024, // 670GB

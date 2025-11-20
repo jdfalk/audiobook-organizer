@@ -42,7 +42,7 @@ interface LogEntry {
 
 export function Logs() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [levelFilter, setLevelFilter] = useState<string>('all');
