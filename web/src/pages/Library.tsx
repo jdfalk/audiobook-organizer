@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -355,20 +355,59 @@ export const Library = () => {
     }
   };
 
+  const pollScanOperation = (opId: string) => {
+    const pollInterval = 2000;
+    let attempts = 0;
+    const maxAttempts = 300; // ~10 minutes
+    const poll = async () => {
+      try {
+        const op = await api.getOperationStatus(opId);
+        if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
+          // Refresh folders to update book counts
+          const folders = await api.getLibraryFolders();
+            setImportPaths(folders.map(f => ({
+              id: f.id.toString(),
+              path: f.path,
+              status: 'idle',
+              book_count: f.book_count,
+            })));
+          // Reload audiobooks list
+          loadAudiobooks();
+          return;
+        }
+        attempts++;
+        if (attempts < maxAttempts) setTimeout(poll, pollInterval);
+      } catch (e) {
+        attempts++;
+        if (attempts < maxAttempts) setTimeout(poll, pollInterval);
+      }
+    };
+    setTimeout(poll, pollInterval);
+  };
+
   const handleScanImportPath = async (id: string) => {
     try {
-      const path = importPaths.find(p => p.id === id)?.path;
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'scanning' as const } : p))
-      );
-      await api.startScan(path);
-      // Reload audiobooks after scan
-      setTimeout(() => loadAudiobooks(), 1000);
+      const pathEntry = importPaths.find(p => p.id === id);
+      const path = pathEntry?.path;
+      if (!path) return;
+      setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'scanning' } : p));
+      const op = await api.startScan(path);
+      pollScanOperation(op.id);
     } catch (error) {
       console.error('Failed to scan import path:', error);
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'idle' as const } : p))
-      );
+      setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'idle' } : p));
+    }
+  };
+
+  const handleScanAll = async () => {
+    try {
+      // Mark all paths scanning
+      setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
+      const op = await api.startScan(); // no folder path -> scan all
+      pollScanOperation(op.id);
+    } catch (error) {
+      console.error('Failed to start full scan:', error);
+      setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'idle' })));
     }
   };
 
@@ -595,14 +634,24 @@ export const Library = () => {
             <Typography variant="h6">
               Import Paths ({importPaths.length})
             </Typography>
-            <IconButton size="small">
-              <ExpandMoreIcon
-                sx={{
-                  transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.3s',
-                }}
-              />
-            </IconButton>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={(e) => { e.stopPropagation(); handleScanAll(); }}
+                disabled={importPaths.length === 0 || importPaths.some(p => p.status === 'scanning')}
+              >
+                Scan All
+              </Button>
+              <IconButton size="small" onClick={(e) => { e.stopPropagation(); setImportPathsExpanded(!importPathsExpanded); }}>
+                <ExpandMoreIcon
+                  sx={{
+                    transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s',
+                  }}
+                />
+              </IconButton>
+            </Stack>
           </Box>
           <Collapse in={importPathsExpanded}>
             <List>
