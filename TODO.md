@@ -259,3 +259,200 @@
   - [ ] Batch transcoding operations with priority queue
   - [ ] Original file preservation options (keep, replace, archive)
   - [ ] Integration with book download (serve M4B instead of ZIP for transcoded books)
+
+## Recently Added Observability Tasks
+
+- [ ] Persist operation logs (retain historical tail per operation; add `/api/v1/operations/:id/logs?tail=` and system-wide retention)
+- [ ] Improve log view UX (auto-scroll when following tail, level-based coloring, collapsible verbose details, memory usage guard)
+- [ ] SSE system status heartbeats (push `system.status` diff events every 5s for live memory / library metrics without polling)
+
+## Extended Improvement Backlog
+
+### Observability & Monitoring
+
+- [ ] Structured application metrics endpoint (Prometheus `/metrics`, operation duration histograms, scan/organize counters)
+- [ ] Per-operation timing summary stored after completion (wall time, file count, throughput)
+- [ ] Slow operation detector (warn if scan > configurable threshold)
+- [ ] Library growth trend stats (daily book count snapshot table)
+- [ ] File integrity checker (periodic checksum verification with mismatch surfacing)
+- [ ] Background health check SSE pings (report DB latency classification)
+- [ ] Error aggregation dashboard (top recurring errors with counts)
+
+### Performance
+
+- [ ] Parallel scanning (goroutine pool respecting `concurrent_scans` setting)
+- [ ] Debounced library size recomputation using inotify / fsnotify events instead of periodic full walk
+- [ ] Caching layer for frequent book queries (LRU keyed by filter + page)
+- [ ] Batch metadata fetch pipeline (queue & coalesce external API calls)
+- [ ] Adaptive operation worker scaling (increase workers under backlog, shrink when idle)
+- [ ] Memory pressure monitor triggering GC hints / cache trimming
+
+### Reliability & Resilience
+
+- [ ] Graceful resume of interrupted scan (persist walker state checkpoints)
+- [ ] Operation retry policy for transient failures (network metadata retrieval)
+- [ ] Circuit breaker for external metadata sources (avoid cascading failures)
+- [ ] Transactional organize rollback journal (record actions, allow revert)
+- [ ] Startup self-diagnostic (verify paths writable, database schema current, config sanity)
+
+### UX / Frontend
+
+- [ ] Global notification/toast system for successes & errors
+- [ ] Dark mode / theme customization with persisted preference
+- [ ] Keyboard shortcuts (e.g. '/' focus search, 'o' organize, 's' scan all)
+- [ ] Advanced filters (bitrate range, codec, quality tier, duration bucket)
+- [ ] Progressive loading skeletons for long lists
+- [ ] Inline author/series quick create dialog from edit form
+- [ ] Book detail modal with expanded metadata & version timeline
+- [ ] Accessible tab navigation (ARIA roles, focus management)
+- [ ] Mobile responsive layout improvements (grid collapse, drawer nav)
+- [ ] Virtualized audiobook list for large collections
+
+### API Enhancements
+
+- [ ] PATCH support for partial audiobook updates
+- [ ] Bulk import endpoint for multiple file paths in one request
+- [ ] Webhook system for external integrations (scan complete, organize complete)
+- [ ] Rate limiting (token bucket) for expensive endpoints
+- [ ] ETag / caching headers for read-only endpoints
+- [ ] API key auth layer (for third-party consumers)
+
+### Security
+
+- [ ] Audit log (who changed config, when, old vs new values)
+- [ ] Optional JWT auth for multi-user future
+- [ ] Secret scanning in config updates (reject accidental API key leakage)
+- [ ] Harden path traversal defenses in filesystem browse
+- [ ] TLS termination guide / built-in ACME client
+
+### Database & Data Quality
+
+- [ ] Deduplication job (identify same book with different filenames via fuzzy match)
+- [ ] Orphan file detector (files on disk not represented in DB)
+- [ ] Full-text search index (author/title/narrator) for advanced queries
+- [ ] Incremental migration harness with dry-run mode
+- [ ] Archival strategy (move old logs & completed operations to cold storage)
+
+### Operation Queue Improvements
+
+- [ ] Priority aging (long-waiting normal ops get temporary priority boost)
+- [ ] Operation dependency graph (organize waits for scan completion for same folder)
+- [ ] Pause / resume queue functionality
+- [ ] Real-time worker utilization stats
+- [ ] Rate-controlled progress events (coalesce rapid updates)
+
+### Real-Time & Streaming
+
+- [ ] Upgrade SSE hub to optional WebSocket mode for bidirectional cancel/resubscribe
+- [ ] Client subscription refinement (subscribe to multiple ops, filter types)
+- [ ] Replay last N events on connect for quick hydration
+
+### Frontend Components (New)
+
+- [ ] Timeline visualization for operations
+- [ ] Quality comparison chart between versions
+- [ ] Folder tree viewer for import paths with status badges
+- [ ] Log tail component standalone (filter by level, search live)
+
+### Testing & QA
+
+- [ ] Load test scenarios (large folder scan, 10k files)
+- [ ] Fuzz tests for filename parser / AI parse fallback
+- [ ] Frontend component snapshot tests
+- [ ] End-to-end test harness (Playwright or Cypress) for critical flows
+- [ ] Chaos test for operation cancellation mid-scan
+
+### DevOps / CI/CD
+
+- [ ] Automated release notes generation from conventional commits
+- [ ] Build artifact publishing (binary + Docker image)
+- [ ] Nightly vulnerability scan & report
+- [ ] Performance regression benchmarks (scan speed comparison per commit)
+
+### Documentation
+
+- [ ] Developer guide (architecture overview, data flow diagrams)
+- [ ] Operations handbook (recover from failed organize, manual rollback)
+- [ ] REST API quickstart examples (curl / client code snippets)
+- [ ] Advanced configuration examples (quota strategies, memory tuning)
+
+### Integration / Ecosystem
+
+- [ ] Calibre metadata export integration
+- [ ] OPDS feed generation for external audiobook apps
+- [ ] Plex / Jellyfin library sync stub
+- [ ] External cover art provider fallback chain
+
+### AI & Metadata Enhancements
+
+- [ ] Confidence explanation tooltips for AI parsing results
+- [ ] Batch AI parse queue for newly imported unparsed files
+- [ ] Metadata merge policy editor (prefer source A unless missing field)
+- [ ] Automatic language detection from text samples
+
+### Internationalization (i18n)
+
+- [ ] Extract UI strings into translation files
+- [ ] Language switcher in settings
+- [ ] Date/time localization and number formatting
+
+### Accessibility (a11y)
+
+- [ ] Screen reader labels for interactive elements
+- [ ] High contrast theme option
+- [ ] Focus outline consistency and skip-to-content link
+
+### Mobile / PWA
+
+- [ ] PWA manifest & offline shell
+- [ ] Add to Home Screen guidance
+- [ ] Basic offline read-only browsing of cached metadata
+
+### Packaging & Deployment
+
+- [ ] Docker multi-arch build pipeline (linux/amd64 + arm64)
+- [ ] Helm chart for Kubernetes deployment
+- [ ] Binary distribution script with checksums & SBOM
+
+### Backup & Restore Enhancements
+
+- [ ] Incremental backups (changes since last snapshot)
+- [ ] Backup integrity verification (hash manifest)
+- [ ] Scheduled backup task with retention policy
+
+### File Handling Improvements
+
+- [ ] Concurrent organize operations with folder-level locking
+- [ ] Metadata tag writing improvements (add narrator, series sequence tags)
+- [ ] Chapter file merging strategy (combine small segments automatically)
+
+### User Features (Future Multi-User)
+
+- [ ] Per-user favorites / starred books
+- [ ] Listening progress tracking (position syncing)
+- [ ] Personal notes / annotations per book
+
+### Data Analysis / Insights
+
+- [ ] Quality upgrade suggestions (identify low bitrate books with higher quality versions available)
+- [ ] Duplicate version ranking (present best candidate to keep)
+- [ ] Usage analytics (most scanned folders, peak operation times)
+
+### Housekeeping / Maintenance
+
+- [ ] Stale operation cleanup job (remove abandoned queued ops after timeout)
+- [ ] Automatic log rotation & compression
+- [ ] Config schema validation on update (reject invalid enum values)
+
+### Security Hardening
+
+- [ ] Content Security Policy headers for frontend
+- [ ] Rate limit brute-force attempts (future auth system)
+- [ ] Dependency vulnerability auto-PR updates
+
+### Miscellaneous Ideas
+
+- [ ] Embedded help panel with contextual docs
+- [ ] CLI progress mirroring (serve mode exposes op summary to CLI)
+- [ ] Export organized library manifest (JSON + checksums)
+- [ ] Plugin system scaffold (register metadata providers / transcoding strategies)
