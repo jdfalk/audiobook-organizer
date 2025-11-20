@@ -1,5 +1,5 @@
 // file: web/src/components/system/StorageTab.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9e0f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
 
 import { useState, useEffect } from 'react';
@@ -7,53 +7,64 @@ import {
   Box,
   Typography,
   Stack,
-  LinearProgress,
   Grid,
   Card,
   CardContent,
   Divider,
   Button,
+  CircularProgress,
 } from '@mui/material';
 import {
-  Storage as StorageIcon,
   Folder as FolderIcon,
   LibraryBooks as LibraryIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
+import * as api from '../../services/api';
+
+interface LibraryFolder {
+  id: number;
+  path: string;
+  name: string;
+  enabled: boolean;
+  book_count: number;
+}
 
 interface StorageInfo {
-  total: number;
-  used: number;
-  free: number;
-  librarySize: number;
-  importPathsSizes: { path: string; size: number }[];
+  totalLibrarySize: number;
+  bookCount: number;
+  folderCount: number;
+  folders: LibraryFolder[];
 }
 
 export function StorageTab() {
-  const [storage] = useState<StorageInfo>({
-    total: 1000 * 1024 * 1024 * 1024, // 1TB
-    used: 670 * 1024 * 1024 * 1024, // 670GB
-    free: 330 * 1024 * 1024 * 1024, // 330GB
-    librarySize: 450 * 1024 * 1024 * 1024, // 450GB
-    importPathsSizes: [
-      { path: '/audiobooks/import1', size: 120 * 1024 * 1024 * 1024 },
-      { path: '/audiobooks/import2', size: 85 * 1024 * 1024 * 1024 },
-      { path: '/media/downloads', size: 15 * 1024 * 1024 * 1024 },
-    ],
-  });
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStorageInfo();
   }, []);
 
   const fetchStorageInfo = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/v1/system/storage');
-      // const data = await response.json();
-      // setStorage(data);
-    } catch (error) {
-      console.error('Failed to fetch storage info:', error);
+      const [statusData, foldersData] = await Promise.all([
+        api.getSystemStatus(),
+        api.getLibraryFolders(),
+      ]);
+
+      setStorage({
+        totalLibrarySize: statusData.library.total_size,
+        bookCount: statusData.library.book_count,
+        folderCount: statusData.library.folder_count,
+        folders: foldersData,
+      });
+    } catch (err) {
+      console.error('Failed to fetch storage info:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch storage info');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,131 +75,125 @@ export function StorageTab() {
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
   };
 
-  const getPercentage = (used: number, total: number): number => {
-    return (used / total) * 100;
-  };
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  const usedPercentage = getPercentage(storage.used, storage.total);
-  const libraryPercentage = getPercentage(storage.librarySize, storage.total);
+  if (error) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <Typography color="error">{error}</Typography>
+      </Box>
+    );
+  }
+
+  if (!storage) {
+    return null;
+  }
 
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6">Storage Breakdown</Typography>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchStorageInfo}>
+        <Typography variant="h6">Library Storage</Typography>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={fetchStorageInfo}
+          disabled={loading}
+        >
           Refresh
         </Button>
       </Stack>
 
       <Grid container spacing={3}>
-        {/* Overall Storage */}
+        {/* Library Summary */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center" mb={2}>
-                <StorageIcon color="primary" />
-                <Typography variant="h6">Overall Disk Usage</Typography>
-              </Stack>
-              <Box sx={{ mb: 2 }}>
-                <Stack direction="row" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatBytes(storage.used)} used of {formatBytes(storage.total)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {usedPercentage.toFixed(1)}%
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={usedPercentage}
-                  sx={{ height: 10, borderRadius: 1 }}
-                  color={usedPercentage > 90 ? 'error' : usedPercentage > 75 ? 'warning' : 'primary'}
-                />
-              </Box>
-              <Stack direction="row" spacing={4}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Used
-                  </Typography>
-                  <Typography variant="h6">{formatBytes(storage.used)}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Free
-                  </Typography>
-                  <Typography variant="h6">{formatBytes(storage.free)}</Typography>
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Total
-                  </Typography>
-                  <Typography variant="h6">{formatBytes(storage.total)}</Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Library Storage */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                 <LibraryIcon color="primary" />
-                <Typography variant="h6">Library Storage</Typography>
+                <Typography variant="h6">Library Summary</Typography>
               </Stack>
-              <Box sx={{ mb: 2 }}>
-                <Stack direction="row" justifyContent="space-between" mb={1}>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatBytes(storage.librarySize)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {libraryPercentage.toFixed(1)}% of total disk
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={libraryPercentage}
-                  sx={{ height: 10, borderRadius: 1 }}
-                />
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                Organized audiobook files in the main library
-              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={4}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Library Size
+                    </Typography>
+                    <Typography variant="h5">{formatBytes(storage.totalLibrarySize)}</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Books
+                    </Typography>
+                    <Typography variant="h5">{storage.bookCount.toLocaleString()}</Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Library Folders
+                    </Typography>
+                    <Typography variant="h5">{storage.folderCount}</Typography>
+                  </Box>
+                </Grid>
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Import Paths Storage */}
-        <Grid item xs={12} md={6}>
+        {/* Library Folders */}
+        <Grid item xs={12}>
           <Card>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                 <FolderIcon color="primary" />
-                <Typography variant="h6">Import Paths</Typography>
+                <Typography variant="h6">Library Folders</Typography>
               </Stack>
-              {storage.importPathsSizes.map((item, index) => (
-                <Box key={index} sx={{ mb: index < storage.importPathsSizes.length - 1 ? 2 : 0 }}>
-                  <Stack direction="row" justifyContent="space-between" mb={0.5}>
-                    <Typography variant="body2" noWrap sx={{ flex: 1, mr: 2 }}>
-                      {item.path}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatBytes(item.size)}
-                    </Typography>
-                  </Stack>
-                  {index < storage.importPathsSizes.length - 1 && <Divider sx={{ mt: 1 }} />}
-                </Box>
-              ))}
-              <Divider sx={{ my: 2 }} />
-              <Stack direction="row" justifyContent="space-between">
-                <Typography variant="body2" fontWeight="bold">
-                  Total Import Paths
+              {storage.folders.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                  No library folders configured. Add folders in Settings or Library page.
                 </Typography>
-                <Typography variant="body2" fontWeight="bold">
-                  {formatBytes(storage.importPathsSizes.reduce((sum, item) => sum + item.size, 0))}
-                </Typography>
-              </Stack>
+              ) : (
+                storage.folders.map((folder, index) => (
+                  <Box key={folder.id} sx={{ mb: index < storage.folders.length - 1 ? 2 : 0 }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                      <Box sx={{ flex: 1, mr: 2 }}>
+                        <Typography variant="body2" fontWeight="medium" noWrap>
+                          {folder.name || folder.path}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {folder.path}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Typography variant="body2" color="text.secondary">
+                          {folder.book_count} {folder.book_count === 1 ? 'book' : 'books'}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            bgcolor: folder.enabled ? 'success.light' : 'grey.300',
+                            color: folder.enabled ? 'success.dark' : 'text.secondary'
+                          }}
+                        >
+                          {folder.enabled ? 'Enabled' : 'Disabled'}
+                        </Typography>
+                      </Stack>
+                    </Stack>
+                    {index < storage.folders.length - 1 && <Divider sx={{ mt: 1 }} />}
+                  </Box>
+                ))
+              )}
             </CardContent>
           </Card>
         </Grid>
