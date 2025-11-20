@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.12.0
+// version: 1.14.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -376,6 +376,18 @@ export const Library = () => {
     }
   };
 
+  const handleParseWithAI = async (audiobook: Audiobook) => {
+    try {
+      const result = await api.parseAudiobookWithAI(audiobook.id);
+      console.log(`AI parsing completed with ${result.confidence} confidence:`, result.book);
+      // Reload audiobooks to show updated data
+      loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to parse with AI:', error);
+      // TODO: Show error notification to user
+    }
+  };
+
   const handleFiltersChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
     setPage(1); // Reset to first page on filter change
@@ -560,8 +572,8 @@ export const Library = () => {
           <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
             <Box>
               <Typography variant="h6" gutterBottom>Main Library Storage</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Path: {systemStatus.library.path || 'Not configured'}
+              <Typography variant="body2" color={systemStatus.library.path ? 'text.secondary' : 'warning.main'}>
+                Path: {systemStatus.library.path || 'Not configured - Please set library path in Settings'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Books: {systemStatus.library.book_count} | Import Paths: {systemStatus.library.folder_count}
@@ -739,6 +751,7 @@ export const Library = () => {
               onClick={handleClick}
               onVersionManage={handleVersionManage}
               onFetchMetadata={handleFetchMetadata}
+              onParseWithAI={handleParseWithAI}
             />
           ) : (
             <AudiobookList

@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -17,7 +17,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
@@ -167,9 +169,45 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error 
 				books[idx].Publisher = meta.Publisher
 			}
 
-			// If metadata is incomplete, try to extract info from filepath
+			// If metadata is incomplete, try AI parsing first (if enabled), then filepath extraction
 			if books[idx].Title == "" || books[idx].Author == "" {
-				extractInfoFromPath(&books[idx])
+				// Try AI parsing if enabled and configured
+				if config.AppConfig.EnableAIParsing && config.AppConfig.OpenAIAPIKey != "" {
+					parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, true)
+					if parser.IsEnabled() {
+						filename := filepath.Base(books[idx].FilePath)
+						// Create a timeout context for AI parsing
+						aiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+						defer cancel()
+
+						aiMeta, err := parser.ParseFilename(aiCtx, filename)
+						if err == nil && aiMeta != nil {
+							if books[idx].Title == "" && aiMeta.Title != "" {
+								books[idx].Title = aiMeta.Title
+							}
+							if books[idx].Author == "" && aiMeta.Author != "" {
+								books[idx].Author = aiMeta.Author
+							}
+							if books[idx].Series == "" && aiMeta.Series != "" {
+								books[idx].Series = aiMeta.Series
+								books[idx].Position = aiMeta.SeriesNum
+							}
+							if books[idx].Narrator == "" && aiMeta.Narrator != "" {
+								books[idx].Narrator = aiMeta.Narrator
+							}
+							if books[idx].Publisher == "" && aiMeta.Publisher != "" {
+								books[idx].Publisher = aiMeta.Publisher
+							}
+						} else if err != nil {
+							fmt.Printf("Warning: AI parsing failed for %s: %v\n", books[idx].FilePath, err)
+						}
+					}
+				}
+
+				// Fallback to filepath extraction if still incomplete
+				if books[idx].Title == "" || books[idx].Author == "" {
+					extractInfoFromPath(&books[idx])
+				}
 			}
 
 			// Identify series based on title and filepath
