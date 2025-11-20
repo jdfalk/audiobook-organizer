@@ -716,14 +716,14 @@ export function Settings() {
             {/* Import Folders Section */}
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-                Import Folders
+                Import Folders (Watch Locations)
               </Typography>
               <Divider sx={{ mb: 2 }} />
             </Grid>
 
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mb: 2 }}>
-                Import folders are monitored for new audiobook files. When new files are detected, they are automatically imported into the library.
+                <strong>Import Folders</strong> are watched for new audiobook files. Files found here are scanned and imported into the main library path where they are organized.
               </Alert>
 
               <Box>
@@ -1305,10 +1305,10 @@ export function Settings() {
 
       {/* Import Folder Dialog */}
       <Dialog open={addFolderDialogOpen} onClose={() => setAddFolderDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Add Import Folder</DialogTitle>
+        <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Import folders are watched for new audiobook files. Files found here will be automatically imported into the library.
+            <strong>Import folders</strong> are separate from your main library. They are watched for new audiobook files that will be scanned, organized, and moved to your library path.
           </Alert>
 
           {!showFolderBrowser ? (

@@ -489,7 +489,7 @@ export const Library = () => {
         <DialogTitle>Add Import Path</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Import paths are watched for new audiobook files. Files found here will be imported into the library.
+            <strong>Import folders</strong> are watch locations for new audiobooks. Files discovered here will be scanned and organized into your main library path.
           </Alert>
 
           {!showServerBrowser ? (
