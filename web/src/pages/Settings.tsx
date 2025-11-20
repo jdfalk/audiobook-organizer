@@ -174,7 +174,7 @@ export function Settings() {
       // Map all backend config fields to frontend settings format
       setSettings({
         // Library settings
-        libraryPath: config.root_dir || '/path/to/audiobooks/library',
+        libraryPath: config.root_dir || '',
         organizationStrategy: config.organization_strategy || 'auto',
         scanOnStartup: config.scan_on_startup ?? false,
         autoOrganize: config.auto_organize ?? true,
@@ -543,7 +543,7 @@ export function Settings() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: '100%', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>

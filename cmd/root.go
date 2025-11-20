@@ -199,10 +199,27 @@ var serveCmd = &cobra.Command{
 		// Load configuration from database (overrides defaults with persisted values)
 		if err := config.LoadConfigFromDatabase(database.GlobalStore); err != nil {
 			fmt.Printf("Warning: Could not load config from database: %v\n", err)
+		} else {
+			fmt.Println("Configuration loaded from database")
+			fmt.Printf("  - Root dir (organize output): %s\n", config.AppConfig.RootDir)
+			fmt.Printf("  - OpenAI API key: %s\n", func() string {
+				if config.AppConfig.OpenAIAPIKey != "" {
+					return "***" + config.AppConfig.OpenAIAPIKey[len(config.AppConfig.OpenAIAPIKey)-4:]
+				}
+				return "(not set)"
+			}())
 		}
 
 		// Apply env var overrides (command line takes precedence over DB)
 		config.SyncConfigFromEnv()
+
+		// Log library folders count
+		if folders, err := database.GlobalStore.GetAllLibraryFolders(); err == nil {
+			fmt.Printf("  - Library folders (scan paths): %d configured\n", len(folders))
+			for _, folder := range folders {
+				fmt.Printf("    * %s (%s)\n", folder.Name, folder.Path)
+			}
+		}
 
 		fmt.Println("Starting audiobook organizer web server...")
 

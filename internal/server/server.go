@@ -1737,13 +1737,29 @@ func (s *Server) updateConfig(c *gin.Context) {
 
 	// Persist to database
 	if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
-		log.Printf("Warning: Failed to persist config to database: %v", err)
+		log.Printf("ERROR: Failed to persist config to database: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to save configuration",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	log.Printf("Configuration saved successfully. Updated fields: %v", updated)
+
+	// Reload to confirm persistence
+	maskedConfig := config.AppConfig
+	if maskedConfig.OpenAIAPIKey != "" {
+		maskedConfig.OpenAIAPIKey = database.MaskSecret(maskedConfig.OpenAIAPIKey)
+	}
+	if maskedConfig.APIKeys.Goodreads != "" {
+		maskedConfig.APIKeys.Goodreads = database.MaskSecret(maskedConfig.APIKeys.Goodreads)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "configuration updated",
+		"message": "configuration updated and saved to database",
 		"updated": updated,
-		"config":  config.AppConfig,
+		"config":  maskedConfig,
 	})
 }
 
