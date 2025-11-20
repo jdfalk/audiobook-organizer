@@ -818,6 +818,8 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 
 				// Update book count for this library folder
 				folder.BookCount = len(books)
+				now := time.Now()
+				folder.LastScan = &now
 				if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, folder); err != nil {
 					_ = progress.Log("warn", fmt.Sprintf("Failed to update book count: %v", err), nil)
 				}

@@ -266,7 +266,10 @@ export async function addLibraryFolder(path: string, name: string): Promise<Libr
     body: JSON.stringify({ path, name }),
   });
   if (!response.ok) throw new Error('Failed to add library folder');
-  return response.json();
+  const data = await response.json();
+  // Server returns { folder: LibraryFolder, scan_operation_id?: string }
+  // Gracefully handle both shapes
+  return (data.folder ? data.folder : data) as LibraryFolder;
 }
 
 export async function removeLibraryFolder(id: number): Promise<void> {
