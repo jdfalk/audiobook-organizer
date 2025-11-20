@@ -113,3 +113,41 @@
 
 - [ ] 🟡 **General**: Implement library organization with hard links, reflinks,
       or copies (auto mode tries reflink → hardlink → copy)
+
+## Current Sprint Tasks
+
+### Frontend UI Improvements
+
+- [ ] **Fix System Page Fake Data**
+  - [ ] Wire StorageTab.tsx to real API data from /api/v1/system/status and /api/v1/library/folders
+  - [ ] Wire QuotaTab.tsx to real API data or remove if quotas not implemented
+  - [ ] Wire LogsTab.tsx to /api/v1/system/logs endpoint to show actual application logs
+  - [ ] Wire SystemInfoTab.tsx to /api/v1/system/status to show real OS (linux), memory stats, CPU count, Go version
+
+### Library & Import Management
+
+- [ ] **Add Library Path Configuration**
+  - [ ] Add central library path setting in Settings page (where organized audiobooks go)
+  - [ ] Add UI in Settings to manage download/import folders with server filesystem browser
+  - [ ] Add UI in Library tab to add/remove download folders with server filesystem browser
+
+- [ ] **Server Filesystem Browser**
+  - [ ] Create reusable ServerFileBrowser component using /api/v1/filesystem/browse
+  - [ ] Update Library page import workflow - replace local file upload with server browser
+  - [ ] Allow selecting files and folders from remote server filesystem
+
+### First-Run Experience
+
+- [ ] **Welcome Wizard**
+  - [ ] Create WelcomeWizard component that runs on first launch
+  - [ ] Step 1: Set library folder path (where organized books go)
+  - [ ] Step 2: Optional OpenAI API key setup with connection test
+  - [ ] Step 3: Add import/download folder paths using server browser
+  - [ ] Store completion flag in config/database to skip wizard on subsequent launches
+
+### Testing
+
+- [ ] Create database_test.go - test initialization, configuration, database type selection
+- [ ] Create migrations_test.go - test schema versioning, migration execution, rollback
+- [ ] Create store_test.go - test interface methods and common store functionality
+- [ ] Create web_test.go - test HTTP handlers and API endpoints

@@ -1191,11 +1191,15 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			"total_alloc_bytes": memStats.TotalAlloc,
 			"sys_bytes":         memStats.Sys,
 			"num_gc":            memStats.NumGC,
+			"heap_alloc":        memStats.HeapAlloc,
+			"heap_sys":          memStats.HeapSys,
 		},
 		"runtime": gin.H{
 			"go_version":    runtime.Version(),
 			"num_goroutine": runtime.NumGoroutine(),
 			"num_cpu":       runtime.NumCPU(),
+			"os":            runtime.GOOS,
+			"arch":          runtime.GOARCH,
 		},
 		"operations": gin.H{
 			"recent": recentOps,
@@ -1884,12 +1888,24 @@ func (s *Server) parseFilenameWithAI(c *gin.Context) {
 
 // testAIConnection tests the OpenAI API connection
 func (s *Server) testAIConnection(c *gin.Context) {
-	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-	if !parser.IsEnabled() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+	// Parse request body for API key (allows testing without saving)
+	var req struct {
+		APIKey string `json:"api_key"`
+	}
+
+	// Try to get API key from request body first, fall back to config
+	apiKey := config.AppConfig.OpenAIAPIKey
+	if err := c.ShouldBindJSON(&req); err == nil && req.APIKey != "" {
+		apiKey = req.APIKey
+	}
+
+	if apiKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key not provided", "success": false})
 		return
 	}
 
+	// Create parser with the provided/configured API key
+	parser := ai.NewOpenAIParser(apiKey, true)
 	if err := parser.TestConnection(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("connection test failed: %v", err), "success": false})
 		return
