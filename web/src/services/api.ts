@@ -465,3 +465,30 @@ export async function parseAudiobookWithAI(bookId: string): Promise<{ message: s
   if (!response.ok) throw new Error('Failed to parse audiobook with AI');
   return response.json();
 }
+
+// Filesystem Browsing
+export interface FileSystemItem {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size?: number;
+  mod_time?: number;
+  excluded: boolean;
+}
+
+export interface FilesystemBrowseResult {
+  path: string;
+  items: FileSystemItem[];
+  count: number;
+  disk_info?: {
+    exists: boolean;
+    readable: boolean;
+    writable: boolean;
+  };
+}
+
+export async function browseFilesystem(path: string): Promise<FilesystemBrowseResult> {
+  const response = await fetch(`${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`);
+  if (!response.ok) throw new Error('Failed to browse filesystem');
+  return response.json();
+}
