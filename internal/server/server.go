@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -31,6 +31,11 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
+
+// Cached library size to avoid expensive recalculation on frequent status checks
+var cachedLibrarySize int64
+var cachedSizeComputedAt time.Time
+const librarySizeCacheTTL = 60 * time.Second
 
 // Helper functions for pointer conversions
 func stringPtr(s string) *string {
@@ -1361,27 +1366,27 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Disk usage for library folders
-	var totalSize int64
-	for _, folder := range folders {
-		if !folder.Enabled {
-			continue
-		}
-		// Get folder size (walk directory)
-		if info, err := os.Stat(folder.Path); err == nil {
-			if info.IsDir() {
-				// Calculate directory size
-				var size int64
-				filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
-					if err == nil && !info.IsDir() {
-						size += info.Size()
-					}
-					return nil
-				})
-				totalSize += size
-			}
-		}
-	}
+    // Disk usage for library folders (cached)
+    totalSize := cachedLibrarySize
+    if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
+        var newSize int64
+        for _, folder := range folders {
+            if !folder.Enabled {
+                continue
+            }
+            if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
+                filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
+                    if err == nil && !info.IsDir() {
+                        newSize += info.Size()
+                    }
+                    return nil
+                })
+            }
+        }
+        cachedLibrarySize = newSize
+        cachedSizeComputedAt = time.Now()
+        totalSize = newSize
+    }
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "running",

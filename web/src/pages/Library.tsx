@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -44,6 +44,7 @@ import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
 import * as api from '../services/api';
+import { pollOperation } from '../utils/operationPolling';
 
 interface ImportPath {
   id: string;
@@ -79,6 +80,8 @@ export const Library = () => {
   const [showServerBrowser, setShowServerBrowser] = useState(false);
   const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(null);
   const [organizeRunning, setOrganizeRunning] = useState(false);
+  const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
+  const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
 
   // Debounce search query
   useEffect(() => {
@@ -366,34 +369,35 @@ export const Library = () => {
     }
   };
 
-  const pollScanOperation = (opId: string) => {
-    const pollInterval = 2000;
-    let attempts = 0;
-    const maxAttempts = 300; // ~10 minutes
-    const poll = async () => {
-      try {
-        const op = await api.getOperationStatus(opId);
-        if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
-          // Refresh folders to update book counts
+  const startPolling = (opId: string, type: 'scan' | 'organize') => {
+    pollOperation(
+      opId,
+      { intervalMs: 2000 },
+      (op) => {
+        if (type === 'scan') setActiveScanOp(op);
+        else setActiveOrganizeOp(op);
+      },
+      async (op) => {
+        if (type === 'scan') {
           const folders = await api.getLibraryFolders();
-            setImportPaths(folders.map(f => ({
-              id: f.id.toString(),
-              path: f.path,
-              status: 'idle',
-              book_count: f.book_count,
-            })));
-          // Reload audiobooks list
-          loadAudiobooks();
-          return;
+          setImportPaths(folders.map(f => ({
+            id: f.id.toString(),
+            path: f.path,
+            status: 'idle',
+            book_count: f.book_count,
+          })));
+          setActiveScanOp(op);
+        } else {
+          setOrganizeRunning(false);
+          setActiveOrganizeOp(op);
         }
-        attempts++;
-        if (attempts < maxAttempts) setTimeout(poll, pollInterval);
-      } catch (e) {
-        attempts++;
-        if (attempts < maxAttempts) setTimeout(poll, pollInterval);
+        loadAudiobooks();
+      },
+      (err) => {
+        console.warn('Polling error', err);
+        if (type === 'organize') setOrganizeRunning(false);
       }
-    };
-    setTimeout(poll, pollInterval);
+    );
   };
 
   const handleScanImportPath = async (id: string) => {
@@ -403,7 +407,7 @@ export const Library = () => {
       if (!path) return;
       setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'scanning' } : p));
       const op = await api.startScan(path);
-      pollScanOperation(op.id);
+      startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
       setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'idle' } : p));
@@ -415,7 +419,7 @@ export const Library = () => {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
       const op = await api.startScan(); // no folder path -> scan all
-      pollScanOperation(op.id);
+      startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to start full scan:', error);
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'idle' })));
@@ -426,8 +430,7 @@ export const Library = () => {
     try {
       setOrganizeRunning(true);
       const op = await api.startOrganize();
-      // Reuse polling logic
-      pollScanOperation(op.id);
+      startPolling(op.id, 'organize');
     } catch (e) {
       console.error('Failed to start organize', e);
       setOrganizeRunning(false);
@@ -479,6 +482,20 @@ export const Library = () => {
               <Typography variant="body2" color="text.secondary">
                 Size: {(systemStatus.library.total_size / (1024*1024)).toFixed(2)} MB
               </Typography>
+              {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
+                <Box mt={1}>
+                  <Typography variant="caption" color="text.secondary">
+                    Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total} {activeOrganizeOp.message}
+                  </Typography>
+                </Box>
+              )}
+              {activeScanOp && activeScanOp.status !== 'completed' && (
+                <Box mt={1}>
+                  <Typography variant="caption" color="text.secondary">
+                    Scanning: {activeScanOp.progress}/{activeScanOp.total} {activeScanOp.message}
+                  </Typography>
+                </Box>
+              )}
             </Box>
             <Stack direction="row" spacing={2}>
               <Button
