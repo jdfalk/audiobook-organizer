@@ -82,15 +82,16 @@ export const Library = () => {
   const [organizeRunning, setOrganizeRunning] = useState(false);
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
   const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
-  const [operationLogs, setOperationLogs] = useState<Record<string, { level: string; message: string; details?: string; timestamp: number }[]>>({});
+  const [operationLogs, setOperationLogs] = useState<Record<string, { level: string; message: string; details?: string; timestamp: number; expanded?: boolean }[]>>({});
+  const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // SSE subscription for live operation progress & logs
+  // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
     // Fetch active operations to hydrate UI on reload
     (async () => {
       try {
         const active = await api.getActiveOperations();
-        active.forEach(op => {
+        for (const op of active) {
           const partial: api.Operation = {
             id: op.id,
             type: op.type,
@@ -102,8 +103,20 @@ export const Library = () => {
           } as api.Operation;
           if (op.type === 'scan') setActiveScanOp(partial);
           if (op.type === 'organize') setActiveOrganizeOp(partial);
-        });
-      } catch (e) {
+          // Hydrate historical tail logs (last 100)
+          try {
+            const hist = await api.getOperationLogsTail(op.id, 100);
+            if (hist && hist.length) {
+              setOperationLogs(prev => ({
+                ...prev,
+                [op.id]: hist.map((h: api.OperationLog) => ({ level: h.level, message: h.message, details: h.details, timestamp: Date.parse(h.created_at) || Date.now() }))
+              }));
+            }
+          } catch (e) {
+            // ignore hydration errors
+          }
+        }
+      } catch {
         // ignore
       }
     })();
@@ -145,6 +158,17 @@ export const Library = () => {
     };
     return () => es.close();
   }, []);
+
+  // Auto-scroll effect when logs update (placed at component top-level, not inside JSX)
+  useEffect(() => {
+    Object.entries(logContainerRefs.current).forEach(([, el]) => {
+      if (!el) return;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20;
+      if (atBottom) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+  }, [operationLogs]);
 
   // Debounce search query
   useEffect(() => {
@@ -554,11 +578,35 @@ export const Library = () => {
                     <Button size="small" variant="text" onClick={() => api.cancelOperation(activeOrganizeOp.id)}>Cancel</Button>
                   </Stack>
                   {operationLogs[activeOrganizeOp.id] && (
-                    <Box mt={0.5} sx={{ maxHeight: 120, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                    <Box
+                      mt={0.5}
+                      ref={(el: HTMLDivElement | null) => { logContainerRefs.current[activeOrganizeOp.id] = el; }}
+                      sx={{ maxHeight: 140, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
                       {operationLogs[activeOrganizeOp.id].map((l, idx) => (
-                        <Typography key={idx} variant="caption" display="block" sx={{ color: l.level === 'error' ? 'error.main' : 'text.secondary' }}>
-                          {l.message}
-                        </Typography>
+                        <Box key={idx} sx={{ mb: 0.3 }}>
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            sx={{
+                              color: l.level === 'error' ? 'error.main' : l.level === 'warn' ? 'warning.main' : 'text.secondary',
+                              fontWeight: l.level === 'error' ? 600 : 400,
+                              cursor: l.details ? 'pointer' : 'default'
+                            }}
+                            onClick={() => {
+                              if (!l.details) return;
+                              setOperationLogs(prev => {
+                                const arr = prev[activeOrganizeOp.id] || [];
+                                const updated = arr.map((item, i) => i === idx ? { ...item, expanded: !item.expanded } : item);
+                                return { ...prev, [activeOrganizeOp.id]: updated };
+                              });
+                            }}
+                          >
+                            {l.message}
+                          </Typography>
+                          {l.details && l.expanded && (
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>{l.details}</Typography>
+                          )}
+                        </Box>
                       ))}
                     </Box>
                   )}
@@ -573,16 +621,41 @@ export const Library = () => {
                     <Button size="small" variant="text" onClick={() => api.cancelOperation(activeScanOp.id)}>Cancel</Button>
                   </Stack>
                   {operationLogs[activeScanOp.id] && (
-                    <Box mt={0.5} sx={{ maxHeight: 120, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                    <Box
+                      mt={0.5}
+                      ref={(el: HTMLDivElement | null) => { logContainerRefs.current[activeScanOp.id] = el; }}
+                      sx={{ maxHeight: 140, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
                       {operationLogs[activeScanOp.id].map((l, idx) => (
-                        <Typography key={idx} variant="caption" display="block" sx={{ color: l.level === 'error' ? 'error.main' : 'text.secondary' }}>
-                          {l.message}
-                        </Typography>
+                        <Box key={idx} sx={{ mb: 0.3 }}>
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            sx={{
+                              color: l.level === 'error' ? 'error.main' : l.level === 'warn' ? 'warning.main' : 'text.secondary',
+                              fontWeight: l.level === 'error' ? 600 : 400,
+                              cursor: l.details ? 'pointer' : 'default'
+                            }}
+                            onClick={() => {
+                              if (!l.details) return;
+                              setOperationLogs(prev => {
+                                const arr = prev[activeScanOp.id] || [];
+                                const updated = arr.map((item, i) => i === idx ? { ...item, expanded: !item.expanded } : item);
+                                return { ...prev, [activeScanOp.id]: updated };
+                              });
+                            }}
+                          >
+                            {l.message}
+                          </Typography>
+                          {l.details && l.expanded && (
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>{l.details}</Typography>
+                          )}
+                        </Box>
                       ))}
                     </Box>
                   )}
                 </Box>
               )}
+              {/* Auto-scroll handled by top-level hook */}
             </Box>
             <Stack direction="row" spacing={2}>
               <Button
@@ -595,7 +668,7 @@ export const Library = () => {
               <Button
                 variant="outlined"
                 onClick={async () => {
-                  try { const status = await api.getSystemStatus(); setSystemStatus(status); } catch {}
+                  try { const status = await api.getSystemStatus(); setSystemStatus(status); } catch (e) { /* ignore refresh error */ }
                 }}
               >
                 Refresh Stats
