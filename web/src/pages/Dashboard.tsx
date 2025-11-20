@@ -65,12 +65,11 @@ export function Dashboard() {
   const loadDashboardData = async () => {
     try {
       // Fetch real data from API
-      const [systemStatus, bookCount, authors, seriesList, folders] = await Promise.all([
+      const [systemStatus, bookCount, authors, seriesList] = await Promise.all([
         api.getSystemStatus(),
         api.countBooks(),
         api.getAuthors(),
         api.getSeries(),
-        api.getLibraryFolders(),
       ]);
 
       setStats({
