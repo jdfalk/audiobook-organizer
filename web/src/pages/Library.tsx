@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
