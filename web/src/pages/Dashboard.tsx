@@ -189,10 +189,10 @@ export function Dashboard() {
 
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Library Folders"
+            title="Import Folders"
             value={stats.library_folders}
             icon={<FolderIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/file-manager')}
+            onClick={() => navigate('/library')}
           />
         </Grid>
 

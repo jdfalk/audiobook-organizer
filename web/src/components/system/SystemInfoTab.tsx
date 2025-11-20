@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -197,7 +197,7 @@ export function SystemInfoTab() {
               <Stack spacing={1.5}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    System Total
+                    App Memory System
                   </Typography>
                   <Typography variant="body1">
                     {formatBytes(info.memory.total)}

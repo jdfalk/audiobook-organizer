@@ -1,5 +1,5 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useState, useEffect } from 'react';
@@ -18,6 +18,9 @@ import {
   Alert,
   Chip,
   Stack,
+  TextField,
+  IconButton,
+  Button,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -25,6 +28,9 @@ import {
   Home as HomeIcon,
   NavigateNext as NavigateNextIcon,
   Block as BlockIcon,
+  Edit as EditIcon,
+  Check as CheckIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import * as api from '../../services/api';
 
@@ -67,9 +73,12 @@ export function ServerFileBrowser({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [diskInfo, setDiskInfo] = useState<api.FilesystemBrowseResult['disk_info']>();
+  const [editingPath, setEditingPath] = useState(false);
+  const [editPath, setEditPath] = useState(currentPath);
 
   useEffect(() => {
     fetchDirectory(currentPath);
+    setEditPath(currentPath);
   }, [currentPath]);
 
   const fetchDirectory = async (path: string) => {
@@ -106,6 +115,29 @@ export function ServerFileBrowser({
     } else if (!item.is_dir && allowFileSelect && onSelect) {
       onSelect(item.path, false);
     }
+  };
+
+  const handleSelectCurrentFolder = () => {
+    if (allowDirSelect && onSelect) {
+      onSelect(currentPath, true);
+    }
+  };
+
+  const handleEditPath = () => {
+    setEditingPath(true);
+    setEditPath(currentPath);
+  };
+
+  const handleSavePath = () => {
+    setEditingPath(false);
+    if (editPath !== currentPath) {
+      setCurrentPath(editPath);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingPath(false);
+    setEditPath(currentPath);
   };
 
   const getPathParts = (path: string): string[] => {
@@ -150,8 +182,8 @@ export function ServerFileBrowser({
 
   return (
     <Box>
-      {/* Breadcrumb Navigation */}
-      <Paper sx={{ p: 2, mb: 2 }}>
+      {/* Sticky Path Editor */}
+      <Paper sx={{ p: 2, mb: 2, position: 'sticky', top: 0, zIndex: 10, bgcolor: 'background.paper' }}>
         <Stack direction="row" alignItems="center" spacing={2} mb={1}>
           <Typography variant="subtitle2" color="text.secondary">
             Current Path:
@@ -167,19 +199,58 @@ export function ServerFileBrowser({
             </Stack>
           )}
         </Stack>
-        <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />}>
-          {pathParts.map((part, index) => (
-            <Link
-              key={index}
-              component="button"
-              variant="body1"
-              onClick={() => navigateToPath(index)}
-              sx={{ cursor: 'pointer' }}
-            >
-              {index === 0 ? <HomeIcon fontSize="small" /> : part}
-            </Link>
-          ))}
-        </Breadcrumbs>
+
+        {editingPath ? (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TextField
+              fullWidth
+              size="small"
+              value={editPath}
+              onChange={(e) => setEditPath(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleSavePath();
+                }
+              }}
+              autoFocus
+            />
+            <IconButton size="small" color="primary" onClick={handleSavePath}>
+              <CheckIcon />
+            </IconButton>
+            <IconButton size="small" onClick={handleCancelEdit}>
+              <EditIcon />
+            </IconButton>
+          </Stack>
+        ) : (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ flex: 1 }}>
+              {pathParts.map((part, index) => (
+                <Link
+                  key={index}
+                  component="button"
+                  variant="body1"
+                  onClick={() => navigateToPath(index)}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  {index === 0 ? <HomeIcon fontSize="small" /> : part}
+                </Link>
+              ))}
+            </Breadcrumbs>
+            <IconButton size="small" onClick={handleEditPath}>
+              <EditIcon />
+            </IconButton>
+            {allowDirSelect && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<CheckCircleIcon />}
+                onClick={handleSelectCurrentFolder}
+              >
+                Select This Folder
+              </Button>
+            )}
+          </Stack>
+        )}
       </Paper>
 
       {/* Loading State */}
@@ -259,11 +330,11 @@ export function ServerFileBrowser({
       <Box mt={2}>
         <Typography variant="caption" color="text.secondary">
           {allowDirSelect && allowFileSelect
-            ? 'Click to navigate, double-click to select a file or folder'
+            ? 'Click folders to navigate. Use "Select This Folder" button above or double-click items to select.'
             : allowDirSelect
-            ? 'Click to navigate, double-click to select a folder'
+            ? 'Click folders to navigate. Use "Select This Folder" button above to select current folder.'
             : allowFileSelect
-            ? 'Click to navigate, double-click to select a file'
+            ? 'Click to navigate, double-click files to select'
             : 'Click to navigate through directories'}
         </Typography>
       </Box>
