@@ -289,17 +289,52 @@ export const Library = () => {
     if (!newImportPath.trim()) return;
 
     try {
-      const folder = await api.addLibraryFolder(newImportPath, newImportPath.split('/').pop() || 'Library');
+      const detailed = await api.addLibraryFolderDetailed(newImportPath, newImportPath.split('/').pop() || 'Library');
+      const folder = detailed.folder;
       const newPath: ImportPath = {
         id: folder.id.toString(),
         path: folder.path,
-        status: 'idle',
+        status: detailed.scan_operation_id ? 'scanning' : 'idle',
         book_count: folder.book_count,
       };
       setImportPaths((prev) => [...prev, newPath]);
       setNewImportPath('');
       setShowServerBrowser(false);
       setAddPathDialogOpen(false);
+
+      // If scan started, poll status until complete then refresh folders
+      if (detailed.scan_operation_id) {
+        const opId = detailed.scan_operation_id;
+        const pollInterval = 2000;
+        let attempts = 0;
+        const maxAttempts = 150; // ~5 minutes
+        const poll = async () => {
+          try {
+            const op = await api.getOperationStatus(opId);
+            if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
+              // Refresh folder list to get updated book counts
+              const folders = await api.getLibraryFolders();
+              setImportPaths(folders.map(f => ({
+                id: f.id.toString(),
+                path: f.path,
+                status: 'idle',
+                book_count: f.book_count,
+              })));
+              return; // stop polling
+            }
+            attempts++;
+            if (attempts < maxAttempts) {
+              setTimeout(poll, pollInterval);
+            }
+          } catch (e) {
+            attempts++;
+            if (attempts < maxAttempts) {
+              setTimeout(poll, pollInterval);
+            }
+          }
+        };
+        setTimeout(poll, pollInterval);
+      }
     } catch (error) {
       console.error('Failed to add import path:', error);
     }

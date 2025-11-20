@@ -272,6 +272,29 @@ export async function addLibraryFolder(path: string, name: string): Promise<Libr
   return (data.folder ? data.folder : data) as LibraryFolder;
 }
 
+// Detailed add returning scan operation id when auto-scan kicks off
+export interface AddLibraryFolderDetailedResponse {
+  folder: LibraryFolder;
+  scan_operation_id?: string;
+}
+
+export async function addLibraryFolderDetailed(path: string, name: string): Promise<AddLibraryFolderDetailedResponse> {
+  const response = await fetch(`${API_BASE}/library/folders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, name }),
+  });
+  if (!response.ok) throw new Error('Failed to add library folder');
+  const data = await response.json();
+  if (data.folder) {
+    return { folder: data.folder, scan_operation_id: data.scan_operation_id };
+  }
+  // Legacy shape fallback
+  return { folder: data };
+}
+
+// Operation status polling
+
 export async function removeLibraryFolder(id: number): Promise<void> {
   const response = await fetch(`${API_BASE}/library/folders/${id}`, {
     method: 'DELETE',
