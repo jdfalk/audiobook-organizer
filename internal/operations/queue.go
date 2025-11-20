@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
 
@@ -207,6 +208,10 @@ func (q *OperationQueue) worker(id int) {
 
 			log.Printf("Worker %d processing operation %s", id, op.ID)
 
+			// Metrics: mark start
+			start := time.Now()
+			metrics.IncOperationStarted(op.Type)
+
 			// Update status to running
 			if q.store != nil {
 				_ = q.store.UpdateOperationStatus(op.ID, "running", 0, 0, "operation started")
@@ -227,6 +232,7 @@ func (q *OperationQueue) worker(id int) {
 				if q.store != nil {
 					_ = q.store.UpdateOperationError(op.ID, err.Error())
 				}
+				metrics.IncOperationFailed(op.Type)
 				// Send real-time error status
 				if realtime.GlobalHub != nil {
 					realtime.GlobalHub.SendOperationStatus(op.ID, "failed", map[string]interface{}{
@@ -236,6 +242,7 @@ func (q *OperationQueue) worker(id int) {
 				log.Printf("Operation %s failed: %v", op.ID, err)
 			} else if reporter.canceled {
 				// Already marked as canceled
+				metrics.IncOperationCanceled(op.Type)
 				// Send real-time canceled status
 				if realtime.GlobalHub != nil {
 					realtime.GlobalHub.SendOperationStatus(op.ID, "canceled", map[string]interface{}{
@@ -247,6 +254,7 @@ func (q *OperationQueue) worker(id int) {
 				if q.store != nil {
 					_ = q.store.UpdateOperationStatus(op.ID, "completed", reporter.current, reporter.total, "operation completed")
 				}
+				metrics.IncOperationCompleted(op.Type)
 				// Send real-time completed status
 				if realtime.GlobalHub != nil {
 					realtime.GlobalHub.SendOperationStatus(op.ID, "completed", map[string]interface{}{
@@ -257,6 +265,9 @@ func (q *OperationQueue) worker(id int) {
 				}
 				log.Printf("Operation %s completed successfully", op.ID)
 			}
+
+			// Observe duration
+			metrics.ObserveOperationDuration(op.Type, time.Since(start))
 
 			// Clean up
 			q.mu.Lock()

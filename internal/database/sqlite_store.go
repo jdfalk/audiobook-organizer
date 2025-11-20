@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -170,6 +170,16 @@ func (s *SQLiteStore) createTables() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_user_preferences_key ON user_preferences(key);
+
+	CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		type TEXT NOT NULL DEFAULT 'string',
+		is_secret BOOLEAN NOT NULL DEFAULT 0,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
