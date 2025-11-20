@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -10,9 +10,9 @@ import {
   Card,
   CardContent,
   Stack,
-  Chip,
   Divider,
   Button,
+  CircularProgress,
 } from '@mui/material';
 import {
   Computer as ComputerIcon,
@@ -33,97 +33,70 @@ interface SystemInfo {
     total: number;
     used: number;
     free: number;
-    cacheSize: number;
+    heapAlloc: number;
+    heapSys: number;
   };
   cpu: {
     cores: number;
-    model: string;
-    usage: number;
   };
   runtime: {
     goVersion: string;
     numGoroutines: number;
-    uptime: string;
   };
   database: {
     size: number;
     books: number;
-    authors: number;
-    series: number;
+    folderCount: number;
   };
 }
 
 export function SystemInfoTab() {
-  const [info, setInfo] = useState<SystemInfo>({
-    os: {
-      platform: 'darwin',
-      arch: 'arm64',
-      version: 'macOS 14.2',
-    },
-    memory: {
-      total: 16 * 1024 * 1024 * 1024, // 16GB
-      used: 8 * 1024 * 1024 * 1024, // 8GB
-      free: 8 * 1024 * 1024 * 1024, // 8GB
-      cacheSize: 500 * 1024 * 1024, // 500MB
-    },
-    cpu: {
-      cores: 8,
-      model: 'Apple M1',
-      usage: 35,
-    },
-    runtime: {
-      goVersion: '1.23.0',
-      numGoroutines: 24,
-      uptime: '2 days, 14 hours',
-    },
-    database: {
-      size: 125 * 1024 * 1024, // 125MB
-      books: 1247,
-      authors: 389,
-      series: 156,
-    },
-  });
+  const [info, setInfo] = useState<SystemInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSystemInfo();
   }, []);
 
   const fetchSystemInfo = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const status = await api.getSystemStatus();
 
       // Map API SystemStatus to SystemInfo format
       setInfo({
         os: {
-          platform: 'darwin', // Could be enhanced to get from backend
-          arch: 'arm64',
-          version: 'macOS',
+          platform: status.runtime.os,
+          arch: status.runtime.arch,
+          version: `${status.runtime.os} ${status.runtime.arch}`,
         },
         memory: {
           total: status.memory.sys_bytes,
           used: status.memory.alloc_bytes,
           free: status.memory.sys_bytes - status.memory.alloc_bytes,
-          cacheSize: status.memory.total_alloc_bytes,
+          heapAlloc: status.memory.heap_alloc,
+          heapSys: status.memory.heap_sys,
         },
         cpu: {
           cores: status.runtime.num_cpu,
-          model: 'CPU',
-          usage: 0, // Not provided by current API
         },
         runtime: {
           goVersion: status.runtime.go_version,
           numGoroutines: status.runtime.num_goroutine,
-          uptime: '', // Not provided by current API
         },
         database: {
           size: status.library.total_size,
           books: status.library.book_count,
-          authors: 0, // Not in SystemStatus API
-          series: 0, // Not in SystemStatus API
+          folderCount: status.library.folder_count,
         },
       });
-    } catch (error) {
-      console.error('Failed to fetch system info:', error);
+    } catch (err) {
+      console.error('Failed to fetch system info:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch system info');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -135,6 +108,7 @@ export function SystemInfoTab() {
   };
 
   const getOSIcon = () => {
+    if (!info) return '💻';
     switch (info.os.platform) {
       case 'darwin':
         return '🍎';
@@ -147,11 +121,36 @@ export function SystemInfoTab() {
     }
   };
 
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <Typography color="error">{error}</Typography>
+      </Box>
+    );
+  }
+
+  if (!info) {
+    return null;
+  }
+
   return (
     <Box>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h6">System Information</Typography>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchSystemInfo}>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={fetchSystemInfo}
+          disabled={loading}
+        >
           Refresh
         </Button>
       </Stack>
@@ -198,25 +197,32 @@ export function SystemInfoTab() {
               <Stack spacing={1.5}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total / Used
+                    System Total
                   </Typography>
                   <Typography variant="body1">
-                    {formatBytes(info.memory.total)} / {formatBytes(info.memory.used)}
+                    {formatBytes(info.memory.total)}
                   </Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Free
+                    Used by App
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.free)}</Typography>
+                  <Typography variant="body1">{formatBytes(info.memory.used)}</Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Cache Size (App)
+                    Heap Allocated
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.cacheSize)}</Typography>
+                  <Typography variant="body1">{formatBytes(info.memory.heapAlloc)}</Typography>
+                </Box>
+                <Divider />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Heap System
+                  </Typography>
+                  <Typography variant="body1">{formatBytes(info.memory.heapSys)}</Typography>
                 </Box>
               </Stack>
             </CardContent>
@@ -234,29 +240,9 @@ export function SystemInfoTab() {
               <Stack spacing={1.5}>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Model
-                  </Typography>
-                  <Typography variant="body1">{info.cpu.model}</Typography>
-                </Box>
-                <Divider />
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Cores
+                    Available Cores
                   </Typography>
                   <Typography variant="body1">{info.cpu.cores}</Typography>
-                </Box>
-                <Divider />
-                <Box>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Usage
-                    </Typography>
-                    <Chip
-                      label={`${info.cpu.usage}%`}
-                      size="small"
-                      color={info.cpu.usage > 80 ? 'error' : info.cpu.usage > 60 ? 'warning' : 'success'}
-                    />
-                  </Stack>
                 </Box>
               </Stack>
             </CardContent>
@@ -285,36 +271,29 @@ export function SystemInfoTab() {
                   </Typography>
                   <Typography variant="body1">{info.runtime.numGoroutines}</Typography>
                 </Box>
-                <Divider />
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Uptime
-                  </Typography>
-                  <Typography variant="body1">{info.runtime.uptime}</Typography>
-                </Box>
               </Stack>
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Database */}
+        {/* Database & Library */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                 <StorageIcon color="primary" />
-                <Typography variant="h6">Database</Typography>
+                <Typography variant="h6">Library & Storage</Typography>
               </Stack>
               <Grid container spacing={3}>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={4}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Database Size
+                      Library Size
                     </Typography>
                     <Typography variant="h6">{formatBytes(info.database.size)}</Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={4}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
                       Books
@@ -322,20 +301,12 @@ export function SystemInfoTab() {
                     <Typography variant="h6">{info.database.books.toLocaleString()}</Typography>
                   </Box>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={4}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Authors
+                      Library Folders
                     </Typography>
-                    <Typography variant="h6">{info.database.authors.toLocaleString()}</Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={3}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Series
-                    </Typography>
-                    <Typography variant="h6">{info.database.series.toLocaleString()}</Typography>
+                    <Typography variant="h6">{info.database.folderCount}</Typography>
                   </Box>
                 </Grid>
               </Grid>

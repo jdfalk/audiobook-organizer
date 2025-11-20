@@ -106,11 +106,15 @@ export interface SystemStatus {
     total_alloc_bytes: number;
     sys_bytes: number;
     num_gc: number;
+    heap_alloc: number;
+    heap_sys: number;
   };
   runtime: {
     go_version: string;
     num_goroutine: number;
     num_cpu: number;
+    os: string;
+    arch: string;
   };
   operations: {
     recent: Operation[];
