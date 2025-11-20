@@ -1,5 +1,5 @@
 // file: web/src/pages/System.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { useState } from 'react';
@@ -12,7 +12,6 @@ import {
 } from '@mui/material';
 import { LogsTab } from '../components/system/LogsTab';
 import { StorageTab } from '../components/system/StorageTab';
-import { QuotaTab } from '../components/system/QuotaTab';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
 
 interface TabPanelProps {
@@ -52,14 +51,13 @@ export function System() {
           onChange={(_, newValue) => setTabValue(newValue)}
           aria-label="system tabs"
         >
-          <Tab label="Logs" />
-          <Tab label="Storage" />
-          <Tab label="Quotas" />
           <Tab label="System Info" />
+          <Tab label="Storage" />
+          <Tab label="Logs" />
         </Tabs>
 
         <TabPanel value={tabValue} index={0}>
-          <LogsTab />
+          <SystemInfoTab />
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
@@ -67,11 +65,7 @@ export function System() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <QuotaTab />
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <SystemInfoTab />
+          <LogsTab />
         </TabPanel>
       </Paper>
     </Box>
