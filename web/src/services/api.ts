@@ -100,6 +100,7 @@ export interface SystemStatus {
     book_count: number;
     folder_count: number;
     total_size: number;
+    path?: string;
   };
   memory: {
     alloc_bytes: number;
@@ -337,6 +338,17 @@ export async function cancelOperation(id: string): Promise<void> {
 export async function getSystemStatus(): Promise<SystemStatus> {
   const response = await fetch(`${API_BASE}/system/status`);
   if (!response.ok) throw new Error('Failed to fetch system status');
+  return response.json();
+}
+
+// Organize operation
+export async function startOrganize(folderPath?: string, priority?: number): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/operations/organize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder_path: folderPath, priority }),
+  });
+  if (!response.ok) throw new Error('Failed to start organize');
   return response.json();
 }
 
