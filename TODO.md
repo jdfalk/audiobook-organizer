@@ -151,3 +151,67 @@
 - [ ] Create migrations_test.go - test schema versioning, migration execution, rollback
 - [ ] Create store_test.go - test interface methods and common store functionality
 - [ ] Create web_test.go - test HTTP handlers and API endpoints
+
+## Future Improvements
+
+### Multi-User & Security
+
+- [ ] **Multi-User Interface**
+  - [ ] User profiles and authentication system
+  - [ ] Per-user playback tracking and statistics
+  - [ ] User-specific library views and permissions
+  - [ ] Role-based access control (admin, user, read-only)
+
+- [ ] **SSL/TLS Support**
+  - [ ] HTTPS support with certificate management
+  - [ ] Let's Encrypt integration for automatic certificates
+  - [ ] Self-signed certificate generation for local deployments
+  - [ ] Configurable cipher suites and TLS versions
+
+### BitTorrent Client Integration
+
+- [ ] **Torrent Client Interoperability**
+  - [ ] uTorrent/µTorrent API integration
+  - [ ] Deluge RPC integration
+  - [ ] qBittorrent Web API integration
+  - [ ] Automatic torrent removal after successful library organization
+  - [ ] Support for preserving seeding after organization:
+    - [ ] Create shadow/mirror directory structure outside main library (e.g., `/audiobooks-seeding/`)
+    - [ ] Maintain hard links in shadow directory matching original torrent structure
+    - [ ] Update torrent client to serve from shadow directory after files are organized
+    - [ ] Handle cross-filesystem scenarios (copy to shadow dir when hard links impossible)
+    - [ ] Detect and handle metadata updates that modify organized files (break hard links)
+    - [ ] Optional: Re-link shadow files if organized files haven't been modified
+  - [ ] Configurable removal policies (remove after move, keep seeding, etc.)
+
+### iTunes Library Integration
+
+- [ ] **iTunes Interoperability**
+  - [ ] Read iTunes library XML/database for playback statistics
+  - [ ] Import play count, last played date, and user ratings from iTunes
+  - [ ] Sync playback progress and bookmarks between systems
+  - [ ] Write metadata updates back to iTunes library
+  - [ ] Bidirectional sync for play counts and ratings
+  - [ ] Support for multiple iTunes libraries (multi-user scenarios)
+
+### Web Download & Export
+
+- [ ] **Direct Book Download from Web Interface**
+  - [ ] Download individual audiobook files via web UI
+  - [ ] Automatic ZIP creation for multi-file books
+  - [ ] Progress indicators for ZIP creation and download
+  - [ ] Configurable download formats (original files, ZIP, M4B)
+  - [ ] Batch download support for multiple books
+  - [ ] Resume support for interrupted downloads
+
+### Audio Transcoding & Optimization
+
+- [ ] **Automated Audio Transcoding**
+  - [ ] MP3 to M4B conversion for multi-file books
+  - [ ] Chapter metadata preservation during transcoding
+  - [ ] Automatic chapter detection from file names/structure
+  - [ ] Cover art embedding in M4B files
+  - [ ] Configurable quality settings (bitrate, codec, sample rate)
+  - [ ] Batch transcoding operations with priority queue
+  - [ ] Original file preservation options (keep, replace, archive)
+  - [ ] Integration with book download (serve M4B instead of ZIP for transcoded books)
