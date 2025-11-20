@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.13.0
+// version: 1.14.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -543,7 +543,7 @@ export function Settings() {
   };
 
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
@@ -554,7 +554,7 @@ export function Settings() {
         </Alert>
       )}
 
-      <Paper>
+      <Paper sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
             value={tabValue}
