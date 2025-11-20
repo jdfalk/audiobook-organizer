@@ -1660,6 +1660,12 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// Optional tail parameter for last N log lines
+	if tailStr := c.Query("tail"); tailStr != "" {
+		if n, convErr := strconv.Atoi(tailStr); convErr == nil && n > 0 && n < len(logs) {
+			logs = logs[len(logs)-n:]
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
 }
 
