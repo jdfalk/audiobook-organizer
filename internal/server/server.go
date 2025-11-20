@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -783,6 +784,56 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 			return
 		}
 	}
+
+	// Auto-scan the newly added folder if enabled and operation queue is available
+	if folder.Enabled && operations.GlobalQueue != nil {
+		opID := ulid.Make().String()
+		folderPath := folder.Path
+		op, err := database.GlobalStore.CreateOperation(opID, "scan", &folderPath)
+		if err == nil {
+			// Create scan operation function
+			operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+				_ = progress.Log("info", fmt.Sprintf("Auto-scanning newly added folder: %s", folderPath), nil)
+
+				// Check if folder exists
+				if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+					return fmt.Errorf("folder does not exist: %s", folderPath)
+				}
+
+				// Scan directory for audiobook files
+				books, err := scanner.ScanDirectory(folderPath)
+				if err != nil {
+					return fmt.Errorf("failed to scan folder: %w", err)
+				}
+
+				_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files", len(books)), nil)
+
+				// Process the books to extract metadata
+				if len(books) > 0 {
+					_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books", len(books)), nil)
+					if err := scanner.ProcessBooks(books); err != nil {
+						return fmt.Errorf("failed to process books: %w", err)
+					}
+				}
+
+				// Update book count for this library folder
+				folder.BookCount = len(books)
+				if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, folder); err != nil {
+					_ = progress.Log("warn", fmt.Sprintf("Failed to update book count: %v", err), nil)
+				}
+
+				_ = progress.Log("info", fmt.Sprintf("Auto-scan completed. Total books: %d", len(books)), nil)
+				return nil
+			}
+
+			// Enqueue the scan operation with normal priority
+			_ = operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
+
+			c.JSON(http.StatusCreated, gin.H{"folder": folder, "scan_operation_id": op.ID})
+			return
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"folder": folder})
 }
 
@@ -835,27 +886,81 @@ func (s *Server) startScan(c *gin.Context) {
 
 	// Create operation function
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		// TODO: Implement actual scan logic here
-		// For now, simulate a scan operation
-		folderPath := "all folders"
-		if req.FolderPath != nil {
-			folderPath = *req.FolderPath
+		// Determine which folders to scan
+		var foldersToScan []string
+		if req.FolderPath != nil && *req.FolderPath != "" {
+			// Scan specific folder
+			foldersToScan = []string{*req.FolderPath}
+			_ = progress.Log("info", fmt.Sprintf("Starting scan of folder: %s", *req.FolderPath), nil)
+		} else {
+			// Scan all library folders
+			folders, err := database.GlobalStore.GetAllLibraryFolders()
+			if err != nil {
+				return fmt.Errorf("failed to get library folders: %w", err)
+			}
+			for _, folder := range folders {
+				if folder.Enabled {
+					foldersToScan = append(foldersToScan, folder.Path)
+				}
+			}
+			_ = progress.Log("info", fmt.Sprintf("Starting scan of %d library folders", len(foldersToScan)), nil)
 		}
 
-		_ = progress.Log("info", fmt.Sprintf("Starting scan of %s", folderPath), nil)
+		if len(foldersToScan) == 0 {
+			_ = progress.Log("warn", "No folders to scan", nil)
+			return nil
+		}
 
-		// Simulate scan progress
-		for i := 0; i <= 10; i++ {
+		// Scan each folder
+		totalBooks := 0
+		for folderIdx, folderPath := range foldersToScan {
 			if progress.IsCanceled() {
 				_ = progress.Log("info", "Scan canceled", nil)
 				return fmt.Errorf("scan canceled")
 			}
 
-			_ = progress.UpdateProgress(i, 10, fmt.Sprintf("Scanning... %d/10", i))
-			time.Sleep(1 * time.Second)
+			_ = progress.UpdateProgress(folderIdx, len(foldersToScan), fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
+			_ = progress.Log("info", fmt.Sprintf("Scanning folder: %s", folderPath), nil)
+
+			// Check if folder exists
+			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+				_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
+				continue
+			}
+
+			// Scan directory for audiobook files
+			books, err := scanner.ScanDirectory(folderPath)
+			if err != nil {
+				_ = progress.Log("error", fmt.Sprintf("Failed to scan folder %s: %v", folderPath, err), nil)
+				continue
+			}
+
+			_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files in %s", len(books), folderPath), nil)
+			totalBooks += len(books)
+
+			// Process the books to extract metadata
+			if len(books) > 0 {
+				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books", len(books)), nil)
+				if err := scanner.ProcessBooks(books); err != nil {
+					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
+				}
+			}
+
+			// Update book count for this library folder
+			folders, _ := database.GlobalStore.GetAllLibraryFolders()
+			for _, folder := range folders {
+				if folder.Path == folderPath {
+					folder.BookCount = len(books)
+					if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, &folder); err != nil {
+						_ = progress.Log("warn", fmt.Sprintf("Failed to update book count for folder %s: %v", folderPath, err), nil)
+					}
+					break
+				}
+			}
 		}
 
-		_ = progress.Log("info", "Scan completed successfully", nil)
+		_ = progress.UpdateProgress(len(foldersToScan), len(foldersToScan), "Scan completed")
+		_ = progress.Log("info", fmt.Sprintf("Scan completed successfully. Total books found: %d", totalBooks), nil)
 		return nil
 	}
 
