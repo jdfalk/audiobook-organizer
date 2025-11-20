@@ -34,7 +34,7 @@ func LoadConfigFromDatabase(store database.Store) error {
 	applied := 0
 	for _, setting := range settings {
 		value := setting.Value
-		
+
 		// Decrypt if secret
 		if setting.IsSecret {
 			decrypted, err := database.DecryptValue(value)
@@ -193,9 +193,9 @@ func SaveConfigToDatabase(store database.Store) error {
 		"create_backups":        {strconv.FormatBool(AppConfig.CreateBackups), "bool", false},
 
 		// Storage quotas
-		"enable_disk_quota":    {strconv.FormatBool(AppConfig.EnableDiskQuota), "bool", false},
-		"disk_quota_percent":   {strconv.Itoa(AppConfig.DiskQuotaPercent), "int", false},
-		"enable_user_quotas":   {strconv.FormatBool(AppConfig.EnableUserQuotas), "bool", false},
+		"enable_disk_quota":     {strconv.FormatBool(AppConfig.EnableDiskQuota), "bool", false},
+		"disk_quota_percent":    {strconv.Itoa(AppConfig.DiskQuotaPercent), "int", false},
+		"enable_user_quotas":    {strconv.FormatBool(AppConfig.EnableUserQuotas), "bool", false},
 		"default_user_quota_gb": {strconv.Itoa(AppConfig.DefaultUserQuotaGB), "int", false},
 
 		// Metadata
