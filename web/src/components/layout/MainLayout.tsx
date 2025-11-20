@@ -35,6 +35,8 @@ export function MainLayout({ children }: MainLayoutProps) {
           p: 3,
           width: { sm: `calc(100% - ${DRAWER_WIDTH}px)` },
           mt: 8,
+          height: '100vh',
+          overflow: 'auto',
         }}
       >
         {children}
