@@ -127,6 +127,13 @@ func (s *Server) Start(cfg ServerConfig) error {
 							folderCount = len(folders)
 						}
 					}
+
+					// Update Prometheus metrics
+					metrics.SetBooks(bookCount)
+					metrics.SetFolders(folderCount)
+					metrics.SetMemoryAlloc(alloc.Alloc)
+					metrics.SetGoroutines(runtime.NumGoroutine())
+
 					realtime.GlobalHub.SendSystemStatus(map[string]interface{}{
 						"books":        bookCount,
 						"folders":      folderCount,
