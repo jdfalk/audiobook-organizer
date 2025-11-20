@@ -138,7 +138,7 @@ export function StorageTab() {
                 <Grid item xs={12} sm={4}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Library Folders
+                      Import Folders
                     </Typography>
                     <Typography variant="h5">{storage.folderCount}</Typography>
                   </Box>
@@ -154,11 +154,11 @@ export function StorageTab() {
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center" mb={2}>
                 <FolderIcon color="primary" />
-                <Typography variant="h6">Library Folders</Typography>
+                <Typography variant="h6">Import Folders</Typography>
               </Stack>
               {storage.folders.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                  No library folders configured. Add folders in Settings or Library page.
+                  No import folders configured. Add folders in Settings or Library page.
                 </Typography>
               ) : (
                 storage.folders.map((folder, index) => (

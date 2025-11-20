@@ -154,7 +154,7 @@ export function Dashboard() {
   };
 
   return (
-    <Box>
+    <Box sx={{ height: '100%', overflow: 'auto' }}>
       <Typography variant="h4" gutterBottom>
         Dashboard
       </Typography>
