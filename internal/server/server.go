@@ -836,6 +836,23 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 		}
 	}
 
+	// Fallback: if enabled but queue unavailable OR operation creation failed, run synchronous scan
+	if folder.Enabled && operations.GlobalQueue == nil {
+		// Basic scan without progress reporter
+		if _, err := os.Stat(folder.Path); err == nil {
+			books, err := scanner.ScanDirectory(folder.Path)
+			if err == nil {
+				if len(books) > 0 {
+					_ = scanner.ProcessBooks(books) // ignore individual processing errors (already logged internally)
+				}
+				folder.BookCount = len(books)
+				now := time.Now()
+				folder.LastScan = &now
+				_ = database.GlobalStore.UpdateLibraryFolder(folder.ID, folder)
+			}
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"folder": folder})
 }
 
