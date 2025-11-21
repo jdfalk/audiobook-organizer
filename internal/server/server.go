@@ -159,6 +159,18 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	log.Println("Shutting down server...")
 
+	// Broadcast shutdown event to all connected clients
+	if realtime.GlobalHub != nil {
+		realtime.GlobalHub.Broadcast(&realtime.Event{
+			Type: "system.shutdown",
+			Data: map[string]interface{}{
+				"message": "Server is shutting down",
+			},
+		})
+		// Give clients a moment to receive the event
+		time.Sleep(500 * time.Millisecond)
+	}
+
 	// Give outstanding requests a deadline for completion
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1019,10 +1031,16 @@ func (s *Server) startScan(c *gin.Context) {
 	}
 
 	var req struct {
-		FolderPath *string `json:"folder_path"`
-		Priority   *int    `json:"priority"`
+		FolderPath  *string `json:"folder_path"`
+		Priority    *int    `json:"priority"`
+		ForceUpdate *bool   `json:"force_update"`
 	}
 	_ = c.ShouldBindJSON(&req) // optional
+
+	forceUpdate := req.ForceUpdate != nil && *req.ForceUpdate
+	if forceUpdate {
+		log.Printf("[DEBUG] startScan: Force update enabled - will update all book file paths in database")
+	}
 
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
@@ -1100,6 +1118,31 @@ func (s *Server) startScan(c *gin.Context) {
 				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
 				if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
+				}
+
+				// Force update file paths in database if requested
+				if forceUpdate {
+					_ = progress.Log("info", fmt.Sprintf("Force updating file paths for %d books in database", len(books)), nil)
+					for _, book := range books {
+						if progress.IsCanceled() {
+							break
+						}
+						// Get existing book record by title/author to update path
+						dbBook, err := database.GlobalStore.GetBookByFilePath(book.FilePath)
+						if err != nil || dbBook == nil {
+							continue
+						}
+						// Update path if it changed (e.g., file was moved)
+						if dbBook.FilePath != book.FilePath {
+							oldPath := dbBook.FilePath
+							dbBook.FilePath = book.FilePath
+							if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
+								log.Printf("[DEBUG] Failed to update path for %s: %v", dbBook.Title, err)
+							} else {
+								log.Printf("[DEBUG] Updated path for %s: %s -> %s", dbBook.Title, oldPath, book.FilePath)
+							}
+						}
+					}
 				}
 				// Auto-organize if enabled
 				if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {

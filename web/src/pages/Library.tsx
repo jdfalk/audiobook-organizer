@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.14.0
+// version: 1.15.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -525,6 +525,19 @@ export const Library = () => {
     }
   };
 
+  const handleFullRescan = async () => {
+    try {
+      // Mark all paths scanning
+      setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
+      // Force full rescan with database path updates
+      const op = await api.startScan(undefined, undefined, true);
+      startPolling(op.id, 'scan');
+    } catch (error) {
+      console.error('Failed to start full rescan:', error);
+      setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'idle' })));
+    }
+  };
+
   const handleOrganizeLibrary = async () => {
     try {
       setOrganizeRunning(true);
@@ -676,6 +689,14 @@ export const Library = () => {
                 onClick={handleOrganizeLibrary}
               >
                 {organizeRunning ? 'Organizing…' : 'Organize Library'}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                disabled={activeScanOp !== null}
+                onClick={handleFullRescan}
+              >
+                {activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}
               </Button>
               <Button
                 variant="outlined"
