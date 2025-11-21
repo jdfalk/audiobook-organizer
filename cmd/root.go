@@ -386,7 +386,7 @@ func setupFileLogging() (*os.File, error) {
 	// Create log file with timestamp
 	timestamp := time.Now().Format("2006-01-02")
 	logFile := filepath.Join(logsDir, fmt.Sprintf("audiobook-organizer-%s.log", timestamp))
-	
+
 	// Open log file (append mode, create if doesn't exist)
 	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {

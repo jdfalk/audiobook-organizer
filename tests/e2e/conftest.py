@@ -33,14 +33,14 @@ def driver(base_url):
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
-    
+
     # Create WebDriver
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     driver.implicitly_wait(10)  # Wait up to 10 seconds for elements
-    
+
     yield driver
-    
+
     # Cleanup
     driver.quit()
 
