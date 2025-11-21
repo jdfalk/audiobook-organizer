@@ -31,6 +31,7 @@ import * as api from '../services/api';
 
 interface SystemStats {
   total_books: number;
+  import_books: number;
   total_authors: number;
   total_series: number;
   library_folders: number;
@@ -50,6 +51,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<SystemStats>({
     total_books: 0,
+    import_books: 0,
     total_authors: 0,
     total_series: 0,
     library_folders: 0,
@@ -78,10 +80,11 @@ export function Dashboard() {
       console.log('[Dashboard] Book count:', bookCount);
 
       setStats({
-        total_books: bookCount,
+        total_books: systemStatus.library.book_count,
+        import_books: systemStatus.import_paths?.book_count || 0,
         total_authors: authors.length,
         total_series: seriesList.length,
-        library_folders: systemStatus.library.folder_count,
+        library_folders: systemStatus.import_paths?.folder_count || 0,
         total_size_gb: systemStatus.library.total_size / (1024 * 1024 * 1024),
         disk_usage_percent: 0, // Calculate if needed
       });
@@ -166,9 +169,18 @@ export function Dashboard() {
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Total Audiobooks"
+            title="Library Books"
             value={stats.total_books}
             icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
+            onClick={() => navigate('/library')}
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Import Path Books"
+            value={stats.import_books}
+            icon={<FolderIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
         </Grid>
@@ -187,15 +199,6 @@ export function Dashboard() {
             title="Series"
             value={stats.total_series}
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/library')}
-          />
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Import Folders"
-            value={stats.library_folders}
-            icon={<FolderIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
         </Grid>

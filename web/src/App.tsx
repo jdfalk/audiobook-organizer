@@ -31,7 +31,7 @@ function App() {
   // Listen for server shutdown events and handle reconnection
   useEffect(() => {
     const es = new EventSource('/api/events');
-    
+
     es.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
