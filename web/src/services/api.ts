@@ -314,11 +314,11 @@ export async function removeLibraryFolder(id: number): Promise<void> {
 }
 
 // Operations
-export async function startScan(folderPath?: string, priority?: number): Promise<Operation> {
+export async function startScan(folderPath?: string, priority?: number, forceUpdate?: boolean): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/scan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder_path: folderPath, priority }),
+    body: JSON.stringify({ folder_path: folderPath, priority, force_update: forceUpdate }),
   });
   if (!response.ok) throw new Error('Failed to start scan');
   return response.json();
