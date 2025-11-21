@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.15.0
+// version: 1.16.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -84,6 +84,7 @@ export const Library = () => {
   const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
   const [operationLogs, setOperationLogs] = useState<Record<string, { level: string; message: string; details?: string; timestamp: number; expanded?: boolean }[]>>({});
   const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -121,42 +122,64 @@ export const Library = () => {
       }
     })();
 
-    const es = new EventSource('/api/events');
-    es.onmessage = (ev) => {
-      try {
-        const evt = JSON.parse(ev.data);
-        if (!evt || !evt.type) return;
-        if (evt.type === 'operation.log') {
-          const opId = evt.data.operation_id;
-          setOperationLogs(prev => {
-            const existing = prev[opId] || [];
-            const next = [...existing, { level: evt.data.level, message: evt.data.message, details: evt.data.details, timestamp: Date.now() }];
-            // keep last 200 lines per op
-            return { ...prev, [opId]: next.slice(-200) };
-          });
-        } else if (evt.type === 'operation.progress') {
-          const opId = evt.data.operation_id;
-          const update = (op: api.Operation | null): api.Operation | null => {
-            if (!op || op.id !== opId) return op;
-            return { ...op, progress: evt.data.current, total: evt.data.total, message: evt.data.message };
-          };
-          setActiveScanOp(prev => update(prev));
-          setActiveOrganizeOp(prev => update(prev));
-        } else if (evt.type === 'operation.status') {
-          const opId = evt.data.operation_id;
-          const status = evt.data.status;
-          const finalize = (op: api.Operation | null): api.Operation | null => {
-            if (!op || op.id !== opId) return op;
-            return { ...op, status };
-          };
-          setActiveScanOp(prev => finalize(prev));
-          setActiveOrganizeOp(prev => finalize(prev));
+    const setupEventSource = () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+
+      const es = new EventSource('/api/events');
+      eventSourceRef.current = es;
+
+      es.onmessage = (ev) => {
+        try {
+          const evt = JSON.parse(ev.data);
+          if (!evt || !evt.type) return;
+          if (evt.type === 'heartbeat') return; // Ignore heartbeat messages
+
+          if (evt.type === 'operation.log') {
+            const opId = evt.data.operation_id;
+            setOperationLogs(prev => {
+              const existing = prev[opId] || [];
+              const next = [...existing, { level: evt.data.level, message: evt.data.message, details: evt.data.details, timestamp: Date.now() }];
+              return { ...prev, [opId]: next.slice(-200) };
+            });
+          } else if (evt.type === 'operation.progress') {
+            const opId = evt.data.operation_id;
+            const update = (op: api.Operation | null): api.Operation | null => {
+              if (!op || op.id !== opId) return op;
+              return { ...op, progress: evt.data.current, total: evt.data.total, message: evt.data.message };
+            };
+            setActiveScanOp(prev => update(prev));
+            setActiveOrganizeOp(prev => update(prev));
+          } else if (evt.type === 'operation.status') {
+            const opId = evt.data.operation_id;
+            const status = evt.data.status;
+            const finalize = (op: api.Operation | null): api.Operation | null => {
+              if (!op || op.id !== opId) return op;
+              return { ...op, status };
+            };
+            setActiveScanOp(prev => finalize(prev));
+            setActiveOrganizeOp(prev => finalize(prev));
+          }
+        } catch {
+          // ignore parse errors
         }
-      } catch {
-        // ignore parse errors
+      };
+
+      es.onerror = () => {
+        console.warn('EventSource connection lost, reconnecting in 3s...');
+        es.close();
+        setTimeout(setupEventSource, 3000);
+      };
+    };
+
+    setupEventSource();
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
-    return () => es.close();
   }, []);
 
   // Auto-scroll effect when logs update (placed at component top-level, not inside JSX)
@@ -551,7 +574,7 @@ export const Library = () => {
 
 
   return (
-    <Box>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Library</Typography>
         <Stack direction="row" spacing={2}>
@@ -589,7 +612,7 @@ export const Library = () => {
                 Path: {systemStatus.library.path || 'Not configured - Please set library path in Settings'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Books: {systemStatus.library.book_count} | Import Paths: {systemStatus.library.folder_count}
+                Books: {systemStatus.library.book_count} | Import Paths: {systemStatus.import_paths?.folder_count || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Size: {(systemStatus.library.total_size / (1024*1024)).toFixed(2)} MB
@@ -721,6 +744,7 @@ export const Library = () => {
         onChange={handleFileSelect}
       />
 
+      <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       {!hasLibraryFolders ? (
         <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
           <FolderOpenIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
@@ -958,6 +982,7 @@ export const Library = () => {
           </Collapse>
         </Paper>
       )}
+      </Box>
     </Box>
   );
 };

@@ -696,8 +696,13 @@ func (s *Server) listSeries(c *gin.Context) {
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path parameter is required"})
-		return
+		// Default to user's home directory if no path provided
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get home directory"})
+			return
+		}
+		path = homeDir
 	}
 
 	// Security check: prevent directory traversal attacks
@@ -1064,7 +1069,13 @@ func (s *Server) startScan(c *gin.Context) {
 			foldersToScan = []string{*req.FolderPath}
 			_ = progress.Log("info", fmt.Sprintf("Starting scan of folder: %s", *req.FolderPath), nil)
 		} else {
-			// Scan all library folders
+			// Full scan: include RootDir if force_update enabled, then all import paths
+			if forceUpdate && config.AppConfig.RootDir != "" {
+				foldersToScan = append(foldersToScan, config.AppConfig.RootDir)
+				_ = progress.Log("info", fmt.Sprintf("Full rescan: including library folder %s", config.AppConfig.RootDir), nil)
+			}
+			
+			// Add all library folders (import paths)
 			folders, err := database.GlobalStore.GetAllLibraryFolders()
 			if err != nil {
 				return fmt.Errorf("failed to get library folders: %w", err)
@@ -1074,7 +1085,7 @@ func (s *Server) startScan(c *gin.Context) {
 					foldersToScan = append(foldersToScan, folder.Path)
 				}
 			}
-			_ = progress.Log("info", fmt.Sprintf("Starting scan of %d library folders", len(foldersToScan)), nil)
+			_ = progress.Log("info", fmt.Sprintf("Scanning %d total folders (%d import paths)", len(foldersToScan), len(folders)), nil)
 		}
 
 		if len(foldersToScan) == 0 {
@@ -1114,36 +1125,15 @@ func (s *Server) startScan(c *gin.Context) {
 			totalBooks += len(books)
 
 			// Process the books to extract metadata (parallel)
+			// This automatically upserts books by FilePath, creating new records or updating existing ones
 			if len(books) > 0 {
 				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
 				if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
+				} else {
+					_ = progress.Log("info", fmt.Sprintf("Successfully processed %d books", len(books)), nil)
 				}
-
-				// Force update file paths in database if requested
-				if forceUpdate {
-					_ = progress.Log("info", fmt.Sprintf("Force updating file paths for %d books in database", len(books)), nil)
-					for _, book := range books {
-						if progress.IsCanceled() {
-							break
-						}
-						// Get existing book record by title/author to update path
-						dbBook, err := database.GlobalStore.GetBookByFilePath(book.FilePath)
-						if err != nil || dbBook == nil {
-							continue
-						}
-						// Update path if it changed (e.g., file was moved)
-						if dbBook.FilePath != book.FilePath {
-							oldPath := dbBook.FilePath
-							dbBook.FilePath = book.FilePath
-							if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
-								log.Printf("[DEBUG] Failed to update path for %s: %v", dbBook.Title, err)
-							} else {
-								log.Printf("[DEBUG] Updated path for %s: %s -> %s", dbBook.Title, oldPath, book.FilePath)
-							}
-						}
-					}
-				}
+			}
 				// Auto-organize if enabled
 				if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
 					org := organizer.NewOrganizer(&config.AppConfig)
