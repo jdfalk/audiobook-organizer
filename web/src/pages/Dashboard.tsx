@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -64,6 +64,7 @@ export function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
+      console.log('[Dashboard] Loading dashboard data...');
       // Fetch real data from API
       const [systemStatus, bookCount, authors, seriesList] = await Promise.all([
         api.getSystemStatus(),
@@ -71,6 +72,10 @@ export function Dashboard() {
         api.getAuthors(),
         api.getSeries(),
       ]);
+
+      console.log('[Dashboard] System status:', systemStatus);
+      console.log('[Dashboard] Library folder_count:', systemStatus.library.folder_count);
+      console.log('[Dashboard] Book count:', bookCount);
 
       setStats({
         total_books: bookCount,

@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -224,11 +224,18 @@ func SaveConfigToDatabase(store database.Store) error {
 		"goodreads_api_key": {AppConfig.APIKeys.Goodreads, "string", true},
 	}
 
+	log.Printf("[DEBUG] SaveConfigToDatabase: OpenAI key length: %d, EnableAIParsing: %v", len(AppConfig.OpenAIAPIKey), AppConfig.EnableAIParsing)
+
 	saved := 0
 	for key, s := range settings {
 		// Skip empty secrets
 		if s.isSecret && s.value == "" {
+			log.Printf("[DEBUG] SaveConfigToDatabase: Skipping empty secret: %s", key)
 			continue
+		}
+
+		if key == "openai_api_key" {
+			log.Printf("[DEBUG] SaveConfigToDatabase: Saving OpenAI key (length: %d, secret: %v)", len(s.value), s.isSecret)
 		}
 
 		if err := store.SetSetting(key, s.value, s.typ, s.isSecret); err != nil {

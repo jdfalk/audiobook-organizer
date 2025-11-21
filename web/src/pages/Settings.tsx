@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.15.0
+// version: 1.17.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -496,7 +496,10 @@ export function Settings() {
         enable_json_logging: settings.enableJsonLogging,
       };
 
-      await api.updateConfig(updates);
+      console.log('Saving config with OpenAI key:', settings.openaiApiKey ? `***${settings.openaiApiKey.slice(-4)}` : '(empty)');
+      console.log('Full updates object:', updates);
+      const response = await api.updateConfig(updates);
+      console.log('Save response:', response);
       console.log('Saved settings:', settings);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -543,13 +546,13 @@ export function Settings() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <Typography variant="h4" gutterBottom>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', maxHeight: '100vh', overflow: 'hidden', p: 2 }}>
+      <Typography variant="h4" gutterBottom sx={{ flexShrink: 0 }}>
         Settings
       </Typography>
 
       {saved && (
-        <Alert severity="success" sx={{ mb: 2 }}>
+        <Alert severity="success" sx={{ mb: 2, flexShrink: 0 }}>
           Settings saved successfully!
         </Alert>
       )}

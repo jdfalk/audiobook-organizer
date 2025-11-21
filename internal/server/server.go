@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.19.0
+// version: 1.21.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -123,9 +123,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 					if database.GlobalStore != nil {
 						if bc, err := database.GlobalStore.CountBooks(); err == nil {
 							bookCount = bc
+						} else {
+							log.Printf("[DEBUG] Heartbeat: Failed to count books: %v", err)
 						}
 						if folders, err := database.GlobalStore.GetAllLibraryFolders(); err == nil {
 							folderCount = len(folders)
+							log.Printf("[DEBUG] Heartbeat: Got %d library folders", folderCount)
+						} else {
+							log.Printf("[DEBUG] Heartbeat: Failed to get library folders: %v", err)
 						}
 					}
 
@@ -1182,21 +1187,31 @@ func (s *Server) startOrganize(c *gin.Context) {
 			return fmt.Errorf("failed to fetch books: %w", err)
 		}
 
+		logMsg := fmt.Sprintf("Fetched %d total books from database", len(allBooks))
+		_ = progress.Log("info", logMsg, nil)
+		log.Printf("[DEBUG] Organize: %s", logMsg)
+
 		// Filter books that need organizing (not already in root directory)
 		booksToOrganize := make([]database.Book, 0)
 		for _, book := range allBooks {
 			// Skip if book is already in the root directory (already organized)
 			if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+				logMsg := fmt.Sprintf("Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
+				log.Printf("[DEBUG] Organize: %s", logMsg)
 				continue
 			}
 			// Skip if file doesn't exist
 			if _, err := os.Stat(book.FilePath); os.IsNotExist(err) {
+				logMsg := fmt.Sprintf("Skipping non-existent file: %s", book.FilePath)
+				log.Printf("[DEBUG] Organize: %s", logMsg)
 				continue
 			}
 			booksToOrganize = append(booksToOrganize, book)
 		}
 
-		_ = progress.Log("info", fmt.Sprintf("Found %d books that need organizing", len(booksToOrganize)), nil)
+		logMsg = fmt.Sprintf("Found %d books that need organizing (out of %d total)", len(booksToOrganize), len(allBooks))
+		_ = progress.Log("info", logMsg, nil)
+		log.Printf("[DEBUG] Organize: %s", logMsg)
 
 		organized := 0
 		failed := 0
@@ -1512,7 +1527,13 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	// Get library folders
 	folders, err := database.GlobalStore.GetAllLibraryFolders()
 	if err != nil {
+		log.Printf("[DEBUG] getSystemStatus: Failed to get library folders: %v", err)
 		folders = []database.LibraryFolder{}
+	} else {
+		log.Printf("[DEBUG] getSystemStatus: Got %d library folders", len(folders))
+		for i, f := range folders {
+			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
+		}
 	}
 
 	// Get recent operations
@@ -1777,10 +1798,19 @@ func (s *Server) updateConfig(c *gin.Context) {
 
 	// Handle AI API key updates
 	if val, ok := updates["openai_api_key"].(string); ok {
+		log.Printf("[DEBUG] updateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
+			if len(val) > 4 {
+				return val[len(val)-4:]
+			}
+			return val
+		}())
 		config.AppConfig.OpenAIAPIKey = val
 		updated = append(updated, "openai_api_key")
+	} else {
+		log.Printf("[DEBUG] updateConfig: No openai_api_key in updates (present: %v, type: %T)", ok, updates["openai_api_key"])
 	}
 	if val, ok := updates["enable_ai_parsing"].(bool); ok {
+		log.Printf("[DEBUG] updateConfig: Updating enable_ai_parsing to: %v", val)
 		config.AppConfig.EnableAIParsing = val
 		updated = append(updated, "enable_ai_parsing")
 	}
