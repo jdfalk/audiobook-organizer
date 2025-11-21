@@ -6,17 +6,25 @@
 
 ## Executive Summary
 
-This document defines the Minimum Viable Product (MVP) for the Audiobook Organizer, transforming the existing CLI tool into a full-featured web application with an interactive React frontend and enhanced Go backend. The MVP will provide a complete audiobook management solution with metadata editing, file organization, and library management capabilities.
+This document defines the Minimum Viable Product (MVP) for the Audiobook
+Organizer, transforming the existing CLI tool into a full-featured web
+application with an interactive React frontend and enhanced Go backend. The MVP
+will provide a complete audiobook management solution with metadata editing,
+file organization, and library management capabilities.
 
 ## Current State Analysis
 
 ### What We Have ✅
 
-- **Go CLI Application**: Functional command-line tool with scan, playlist, tag, and organize commands
-- **Database Layer**: SQLite database with schema for authors, series, books, playlists, and playlist items
+- **Go CLI Application**: Functional command-line tool with scan, playlist, tag,
+  and organize commands
+- **Database Layer**: SQLite database with schema for authors, series, books,
+  playlists, and playlist items
 - **Metadata Extraction**: Audio file metadata reading using dhowden/tag library
-- **File Scanner**: Directory traversal with support for multiple audio formats (.m4b, .mp3, .m4a, .aac, .ogg, .flac, .wma)
-- **Series Matching**: Basic pattern matching and fuzzy logic for series identification
+- **File Scanner**: Directory traversal with support for multiple audio formats
+  (.m4b, .mp3, .m4a, .aac, .ogg, .flac, .wma)
+- **Series Matching**: Basic pattern matching and fuzzy logic for series
+  identification
 - **Playlist Generation**: iTunes-compatible playlist creation
 - **Tag Updates**: Audio file metadata modification capabilities
 - **Configuration**: Viper-based config management with YAML support
@@ -82,7 +90,8 @@ This document defines the Minimum Viable Product (MVP) for the Audiobook Organiz
 
 #### 1.5 Status Dashboard
 
-- **Current Operations**: Real-time progress of scans, metadata updates, file moves
+- **Current Operations**: Real-time progress of scans, metadata updates, file
+  moves
 - **System Information**: Library statistics, disk usage, performance metrics
 - **Recent Activities**: Log of recent operations with timestamps
 - **Queue Management**: View and manage pending operations
@@ -162,7 +171,8 @@ PUT    /api/config                  # Update configuration
 
 #### 2.4 Database Enhancements
 
-- **Extended Schema**: Add tables for library folders, operation history, user preferences
+- **Extended Schema**: Add tables for library folders, operation history, user
+  preferences
 - **Migration System**: Automatic schema updates for future versions
 - **Backup/Restore**: Database export and import functionality
 - **Optimization**: Indexing for performance, cleanup routines
@@ -311,13 +321,15 @@ Simple JSON format for folder exclusion:
 - [ ] **Web Interface**: All 5 main sections functional and user-friendly
 - [ ] **Metadata Editing**: Safe, reliable editing with undo/redo
 - [ ] **File Operations**: Zero data loss with comprehensive backup system
-- [ ] **Library Management**: Easy folder addition/removal with .jabexclude support
+- [ ] **Library Management**: Easy folder addition/removal with .jabexclude
+      support
 - [ ] **Performance**: Handle 10,000+ audiobook libraries smoothly
 - [ ] **Documentation**: Complete user guide and installation instructions
 
 ### Quality Gates
 
-- [ ] **Test Coverage**: >80% backend code coverage, comprehensive frontend testing
+- [ ] **Test Coverage**: >80% backend code coverage, comprehensive frontend
+      testing
 - [ ] **Performance**: <3 second load times, <500ms API response times
 - [ ] **Reliability**: 99.9% operation success rate with proper error recovery
 - [ ] **Usability**: Intuitive interface requiring minimal documentation
@@ -343,4 +355,7 @@ Simple JSON format for folder exclusion:
 - **Testing**: Automated CI/CD pipeline
 - **Distribution**: Binary releases for major platforms
 
-This MVP specification provides a comprehensive roadmap for transforming the existing CLI tool into a full-featured web application while maintaining the reliability and functionality that users expect from professional audiobook management software.
+This MVP specification provides a comprehensive roadmap for transforming the
+existing CLI tool into a full-featured web application while maintaining the
+reliability and functionality that users expect from professional audiobook
+management software.

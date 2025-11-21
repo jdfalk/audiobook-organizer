@@ -6,7 +6,8 @@
 
 ## Summary
 
-Successfully migrated the audiobook organizer from SQLite3 to PebbleDB as the primary database, with SQLite3 available as an opt-in legacy option.
+Successfully migrated the audiobook organizer from SQLite3 to PebbleDB as the
+primary database, with SQLite3 available as an opt-in legacy option.
 
 ## What Changed
 
@@ -35,9 +36,9 @@ Successfully migrated the audiobook organizer from SQLite3 to PebbleDB as the pr
 
 ```yaml
 # .audiobook-organizer.yaml
-database_type: pebble                        # "pebble" (default) or "sqlite"
-database_path: audiobooks.pebble             # Changed from audiobooks.db
-enable_sqlite3_i_know_the_risks: false       # Must be true for SQLite
+database_type: pebble # "pebble" (default) or "sqlite"
+database_path: audiobooks.pebble # Changed from audiobooks.db
+enable_sqlite3_i_know_the_risks: false # Must be true for SQLite
 ```
 
 **New Command-Line Flags:**
@@ -92,23 +93,27 @@ enable_sqlite3_i_know_the_risks: false       # Must be true for SQLite
 ### 1. PebbleDB as Default
 
 **Reasoning:**
+
 - No CGO dependency (pure Go)
 - Cross-compilation works everywhere
 - Production-proven (CockroachDB)
 - Simpler deployment
 
 **Trade-offs:**
+
 - No SQL queries (but we don't need them)
 - Manual indexing required (implemented)
 
 ### 2. SQLite3 as Opt-in Only
 
 **Reasoning:**
+
 - Cross-compilation issues with CGO
 - Most users don't need it
 - Scary flag prevents accidental use
 
 **Implementation:**
+
 ```go
 if !enableSQLite && dbType == "sqlite" {
     return fmt.Errorf("SQLite3 is not enabled. To use SQLite3, you must explicitly enable it...")
@@ -118,6 +123,7 @@ if !enableSQLite && dbType == "sqlite" {
 ### 3. Clean Abstraction Layer
 
 **Interface-based design:**
+
 ```go
 type Store interface {
     GetAllAuthors() ([]Author, error)
@@ -127,6 +133,7 @@ type Store interface {
 ```
 
 **Benefits:**
+
 - Easy to add new backends (BoltDB, BadgerDB, etc.)
 - Testing with mock implementations
 - Clear API contract
@@ -167,16 +174,17 @@ counter:book → 2
 
 ### Operations
 
-**Lookup by ID:** `O(log N)` - direct key access
-**Lookup by name:** `O(log N)` - index lookup + data fetch
-**List by series:** `O(K log N)` - range scan over `book:series:<id>:*`
-**List all:** `O(N)` - range scan over `book:0` to `book:;`
+**Lookup by ID:** `O(log N)` - direct key access **Lookup by name:**
+`O(log N)` - index lookup + data fetch **List by series:** `O(K log N)` - range
+scan over `book:series:<id>:*` **List all:** `O(N)` - range scan over `book:0`
+to `book:;`
 
 ## Migration Path
 
 ### For New Installations
 
 Just use the defaults:
+
 ```bash
 ./audiobook-organizer scan --dir /audiobooks
 # Uses PebbleDB automatically
@@ -187,6 +195,7 @@ Just use the defaults:
 Two options:
 
 **1. Continue using SQLite (not recommended):**
+
 ```bash
 ./audiobook-organizer scan \
   --dir /audiobooks \
@@ -196,6 +205,7 @@ Two options:
 ```
 
 **2. Switch to PebbleDB (recommended):**
+
 ```bash
 # Your old SQLite database remains at audiobooks.db
 # Just use new defaults - PebbleDB will create new database
@@ -207,6 +217,7 @@ Two options:
 ### Future: Automatic Migration
 
 Not yet implemented, but planned:
+
 ```bash
 ./audiobook-organizer migrate \
   --from-sqlite audiobooks.db \
@@ -217,13 +228,10 @@ Not yet implemented, but planned:
 
 ### Verified
 
-✅ Project builds successfully
-✅ No compilation errors
-✅ All Store interface methods implemented
-✅ PebbleDB initializes correctly
-✅ SQLite wrapper maintains compatibility
-✅ Configuration system updated
-✅ Command-line flags working
+✅ Project builds successfully ✅ No compilation errors ✅ All Store interface
+methods implemented ✅ PebbleDB initializes correctly ✅ SQLite wrapper
+maintains compatibility ✅ Configuration system updated ✅ Command-line flags
+working
 
 ### TODO
 

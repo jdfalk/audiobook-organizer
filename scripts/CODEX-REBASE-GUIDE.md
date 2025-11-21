@@ -2,7 +2,8 @@
 
 ## When to Use
 
-Use these scripts when Codex encounters rebase conflicts or gets stuck in rebase loops.
+Use these scripts when Codex encounters rebase conflicts or gets stuck in rebase
+loops.
 
 ## Simple Auto-Rebase (Recommended for Codex)
 
@@ -12,7 +13,8 @@ Use these scripts when Codex encounters rebase conflicts or gets stuck in rebase
 
 This unified script:
 
-- ✅ Automatically detects best implementation (Python preferred, shell fallback)
+- ✅ Automatically detects best implementation (Python preferred, shell
+  fallback)
 - ✅ Resolves conflicts intelligently based on file types
 - ✅ Creates backup branch automatically
 - ✅ Force pushes the result
@@ -44,8 +46,8 @@ Use these task IDs in VS Code:
 - `"Smart Rebase Dry Run"` - Preview changes (still available)
 - `"Smart Rebase onto Main"` - Legacy full featured rebase (still available)
 
-**New recommended approach:** Use the terminal or create custom tasks with the unified `rebase`
-script:
+**New recommended approach:** Use the terminal or create custom tasks with the
+unified `rebase` script:
 
 ```bash
 # Add to tasks.json for new unified approach
@@ -101,7 +103,14 @@ Add these tasks to your `.vscode/tasks.json` for easy access:
       "label": "Rebase: Force Shell Implementation",
       "type": "shell",
       "command": "./scripts/rebase",
-      "args": ["--implementation", "shell", "--mode", "automated", "--force-push", "main"],
+      "args": [
+        "--implementation",
+        "shell",
+        "--mode",
+        "automated",
+        "--force-push",
+        "main"
+      ],
       "group": "build",
       "detail": "Use shell fallback implementation"
     }
@@ -145,24 +154,28 @@ The unified rebase script uses intelligent strategies based on file types:
 
 After running the new unified script, you may see:
 
-- `*.current` and `*.incoming` - Both versions of conflicted files (Python implementation)
+- `*.current` and `*.incoming` - Both versions of conflicted files (Python
+  implementation)
 - `rebase-summary-TIMESTAMP.md` - Comprehensive summary of what happened
 - `backup/BRANCH/TIMESTAMP` - Backup branch (safe to delete after verification)
 
 ## Best Practices for Codex
 
-1. **Use the unified script**: `./scripts/rebase --mode automated --force-push main`
+1. **Use the unified script**:
+   `./scripts/rebase --mode automated --force-push main`
 2. **Always use automated mode** for AI agents: `--mode automated`
 3. **Include force-push flag** for continuous integration: `--force-push`
 4. **Use dry-run for testing**: `--dry-run --verbose` to preview changes
 5. **Check the summary file** for important information about what happened
-6. **Review conflict resolution files** when available (`.current` and `.incoming`)
+6. **Review conflict resolution files** when available (`.current` and
+   `.incoming`)
 7. **Test the rebased code** before continuing with other tasks
 8. **Clean up backup branches** when done: `git branch -D backup/*`
 
 ## Environment Variables for Automation
 
-The new script doesn't require environment variables, but you can set these for consistency:
+The new script doesn't require environment variables, but you can set these for
+consistency:
 
 ```bash
 # For backward compatibility with legacy scripts
@@ -195,5 +208,6 @@ export VERBOSE=true
 
 - **"Not in git repository"**: Make sure you're in project root
 - **"Target branch does not exist"**: Run `git fetch origin` first
-- **"Force push failed"**: Someone else pushed changes, try `git pull --rebase` first
+- **"Force push failed"**: Someone else pushed changes, try `git pull --rebase`
+  first
 - **Script hangs**: Kill with Ctrl+C, then `git rebase --abort`

@@ -4,15 +4,15 @@
 
 # GitHub Notifications Cleanup Scripts
 
-This directory contains scripts to automatically mark old GitHub notifications as done (completely
-dismissed).
+This directory contains scripts to automatically mark old GitHub notifications
+as done (completely dismissed).
 
 ## Scripts
 
 ### `mark_old_notifications_done.py`
 
-Main Python script that uses the GitHub API to mark notifications older than a specified threshold
-as done.
+Main Python script that uses the GitHub API to mark notifications older than a
+specified threshold as done.
 
 **Features:**
 
@@ -31,7 +31,8 @@ as done.
 
 ### `cleanup-notifications.sh`
 
-Bash wrapper script that automatically handles dependency installation and runs the Python script.
+Bash wrapper script that automatically handles dependency installation and runs
+the Python script.
 
 **Features:**
 
@@ -217,7 +218,8 @@ Error: 401 Unauthorized
 Error: 403 rate limit exceeded
 ```
 
-- Solution: Wait for rate limit to reset (usually 1 hour) or use authenticated requests
+- Solution: Wait for rate limit to reset (usually 1 hour) or use authenticated
+  requests
 
 **Python dependencies:**
 
@@ -225,7 +227,8 @@ Error: 403 rate limit exceeded
 ModuleNotFoundError: No module named 'requests'
 ```
 
-- Solution: Install dependencies with `pip3 install -r scripts/requirements-notifications.txt`
+- Solution: Install dependencies with
+  `pip3 install -r scripts/requirements-notifications.txt`
 
 ### Debugging
 
@@ -256,4 +259,5 @@ GitHub API has rate limits:
 - Authenticated requests: 5,000 per hour
 - Unauthenticated requests: 60 per hour
 
-The script handles pagination and should work well within these limits for normal usage.
+The script handles pagination and should work well within these limits for
+normal usage.

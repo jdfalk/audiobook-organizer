@@ -6,18 +6,24 @@
 
 ## Overview
 
-The audiobook organizer uses an abstraction layer to support multiple database backends:
+The audiobook organizer uses an abstraction layer to support multiple database
+backends:
 
 - **PebbleDB** (Default, Recommended): Pure Go LSM key-value store
-- **SQLite3** (Opt-in, Legacy): Traditional SQL database with cross-compilation challenges
+- **SQLite3** (Opt-in, Legacy): Traditional SQL database with cross-compilation
+  challenges
 
 ## PebbleDB Keyspace Specification
 
-For the complete prefix/key layout, JSON value schemas, indices, playback tracking, and migration strategy, see the dedicated schema document:
+For the complete prefix/key layout, JSON value schemas, indices, playback
+tracking, and migration strategy, see the dedicated schema document:
 
 **[PebbleDB Keyspace Schema](database-pebble-schema.md)**
 
-That document formalizes all keys (users, sessions, preferences, authors, series, books, segments, playlists, playback events, progress, stats, operations, migrations) and should be treated as canonical for any new feature touching persistence.
+That document formalizes all keys (users, sessions, preferences, authors,
+series, books, segments, playlists, playback events, progress, stats,
+operations, migrations) and should be treated as canonical for any new feature
+touching persistence.
 
 ## Why PebbleDB?
 
@@ -82,7 +88,8 @@ That document formalizes all keys (users, sessions, preferences, authors, series
 
 ### Opt-in: SQLite3
 
-**⚠️ WARNING: SQLite3 has cross-compilation issues. Use only if you understand the risks.**
+**⚠️ WARNING: SQLite3 has cross-compilation issues. Use only if you understand
+the risks.**
 
 ```bash
 # Must explicitly enable with scary flag
@@ -101,7 +108,6 @@ That document formalizes all keys (users, sessions, preferences, authors, series
 # Default: PebbleDB (recommended)
 database_type: pebble
 database_path: audiobooks.pebble
-
 # Legacy: SQLite3 (requires explicit enable flag)
 # database_type: sqlite
 # database_path: audiobooks.db
@@ -186,18 +192,20 @@ Future feature: automatic data migration from SQLite to PebbleDB.
 ### Manual Migration
 
 1. **Export from SQLite**:
+
    ```bash
    sqlite3 audiobooks.db .dump > backup.sql
    ```
 
 2. **Switch to PebbleDB**:
+
    ```bash
    # Remove old database flag, use new default
    ./audiobook-organizer scan --dir /audiobooks
    ```
 
-3. **Re-scan your library**:
-   PebbleDB will rebuild the database from scratch by scanning files.
+3. **Re-scan your library**: PebbleDB will rebuild the database from scratch by
+   scanning files.
 
 ## Performance Considerations
 
@@ -222,11 +230,12 @@ PebbleDB's advantage is in build/deployment simplicity.
 
 ### PebbleDB Issues
 
-**Problem**: Database corruption
-**Solution**: Delete `audiobooks.pebble` directory and re-scan
+**Problem**: Database corruption **Solution**: Delete `audiobooks.pebble`
+directory and re-scan
 
-**Problem**: Disk space usage growing
-**Solution**: PebbleDB compacts automatically, but you can force it:
+**Problem**: Disk space usage growing **Solution**: PebbleDB compacts
+automatically, but you can force it:
+
 ```go
 // In code
 db.Compact([]byte(""), []byte("~"), true)
@@ -234,11 +243,11 @@ db.Compact([]byte(""), []byte("~"), true)
 
 ### SQLite Issues
 
-**Problem**: Cross-compilation fails
-**Solution**: Use PebbleDB instead
+**Problem**: Cross-compilation fails **Solution**: Use PebbleDB instead
 
-**Problem**: "CGO not enabled"
-**Solution**: Either enable CGO or switch to PebbleDB:
+**Problem**: "CGO not enabled" **Solution**: Either enable CGO or switch to
+PebbleDB:
+
 ```bash
 CGO_ENABLED=1 go build  # Enable CGO (requires C compiler)
 # OR

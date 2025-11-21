@@ -11,6 +11,7 @@ Tiny audio files for integration testing, managed via Git LFS.
 ## Purpose
 
 These minimal audio files enable:
+
 - Metadata read/write integration tests
 - Scanner functionality tests
 - Tag library validation

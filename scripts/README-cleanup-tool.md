@@ -1,13 +1,16 @@
 # Repository Cleanup Tool
 
-Automatically detects and cleans up archived or outdated GitHub repositories from your local
-filesystem.
+Automatically detects and cleans up archived or outdated GitHub repositories
+from your local filesystem.
 
 ## Features
 
-- 🔍 **Smart Detection**: Scans directories for Git repositories and checks their GitHub status
-- 🗃️ **Archive Detection**: Identifies archived, disabled, or outdated repositories
-- 🧹 **Safe Cleanup**: Removes local directories for repositories that are no longer active
+- 🔍 **Smart Detection**: Scans directories for Git repositories and checks
+  their GitHub status
+- 🗃️ **Archive Detection**: Identifies archived, disabled, or outdated
+  repositories
+- 🧹 **Safe Cleanup**: Removes local directories for repositories that are no
+  longer active
 - 🛡️ **Safety First**: Dry-run mode by default, interactive confirmations
 - 📊 **Detailed Logging**: Comprehensive logs with timestamps and statistics
 - ⚡ **GitHub Integration**: Uses GitHub CLI for accurate repository status
@@ -153,13 +156,16 @@ The tool handles various error conditions gracefully:
 
 ## Safety Notice
 
-⚠️ **Important**: Always run with `--dry-run` first to see what would be removed!
+⚠️ **Important**: Always run with `--dry-run` first to see what would be
+removed!
 
-This tool permanently deletes local directories. While it has safety features, you should:
+This tool permanently deletes local directories. While it has safety features,
+you should:
 
 1. Backup important work before running
 2. Review the dry-run output carefully
 3. Understand what each repository contains
 4. Use version control for important projects
 
-The tool only removes local directories - it never touches your GitHub repositories online.
+The tool only removes local directories - it never touches your GitHub
+repositories online.

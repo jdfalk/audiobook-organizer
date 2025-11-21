@@ -6,13 +6,15 @@
 
 ## Standard Build (API Only)
 
-By default, the application builds without embedding the frontend. This results in a smaller binary that only serves the API:
+By default, the application builds without embedding the frontend. This results
+in a smaller binary that only serves the API:
 
 ```bash
 go build -o audiobook-organizer
 ```
 
-The server will display an API documentation page at the root (`/`) with available endpoints.
+The server will display an API documentation page at the root (`/`) with
+available endpoints.
 
 ## Build with Embedded Frontend
 
@@ -29,7 +31,9 @@ cd ..
 go build -tags embed_frontend -o audiobook-organizer
 ```
 
-With this option, the compiled binary includes the entire React frontend from `web/dist/`, allowing the application to serve both the API and web interface from a single executable.
+With this option, the compiled binary includes the entire React frontend from
+`web/dist/`, allowing the application to serve both the API and web interface
+from a single executable.
 
 ## Build Tags
 
@@ -65,7 +69,8 @@ GOOS=windows GOARCH=amd64 go build -o audiobook-organizer.exe
 
 ## Implementation Details
 
-The build system uses Go's build tags to conditionally compile different versions:
+The build system uses Go's build tags to conditionally compile different
+versions:
 
 - `internal/server/static_nonembed.go` - Compiles by default (no tags)
   - Serves placeholder HTML with API documentation
@@ -76,7 +81,8 @@ The build system uses Go's build tags to conditionally compile different version
   - Serves React SPA from embedded filesystem
   - Handles SPA routing (all non-API routes serve index.html)
 
-Both files implement the same `setupStaticFiles()` method, allowing the main server code to remain unchanged regardless of build configuration.
+Both files implement the same `setupStaticFiles()` method, allowing the main
+server code to remain unchanged regardless of build configuration.
 
 ## Development Workflow
 

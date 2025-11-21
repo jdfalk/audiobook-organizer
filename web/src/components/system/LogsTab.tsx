@@ -108,7 +108,9 @@ export function LogsTab() {
     }
   };
 
-  const getLevelColor = (level: string): 'error' | 'warning' | 'info' | 'default' => {
+  const getLevelColor = (
+    level: string
+  ): 'error' | 'warning' | 'info' | 'default' => {
     switch (level) {
       case 'error':
         return 'error';
@@ -125,7 +127,11 @@ export function LogsTab() {
   const filteredLogs = logs.filter((log) => {
     if (levelFilter !== 'all' && log.level !== levelFilter) return false;
     if (sourceFilter !== 'all' && log.source !== sourceFilter) return false;
-    if (searchQuery && !log.message.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (
+      searchQuery &&
+      !log.message.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+      return false;
     return true;
   });
 
@@ -133,14 +139,21 @@ export function LogsTab() {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h6">Logs & Events</Typography>
         <Stack direction="row" spacing={2}>
           <Button
@@ -149,7 +162,11 @@ export function LogsTab() {
           >
             Auto Refresh {autoRefresh && '(5s)'}
           </Button>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchLogs}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchLogs}
+          >
             Refresh
           </Button>
         </Stack>
@@ -216,11 +233,16 @@ export function LogsTab() {
                     <TableCell>
                       <IconButton
                         size="small"
-                        onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
+                        onClick={() =>
+                          setExpandedRow(expandedRow === log.id ? null : log.id)
+                        }
                       >
                         <ExpandMoreIcon
                           sx={{
-                            transform: expandedRow === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transform:
+                              expandedRow === log.id
+                                ? 'rotate(180deg)'
+                                : 'rotate(0deg)',
                             transition: 'transform 0.3s',
                           }}
                         />
@@ -240,13 +262,20 @@ export function LogsTab() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip label={log.source || 'system'} size="small" variant="outlined" />
+                      <Chip
+                        label={log.source || 'system'}
+                        size="small"
+                        variant="outlined"
+                      />
                     </TableCell>
                     <TableCell>{log.message}</TableCell>
                   </TableRow>
                   {expandedRow === log.id && log.metadata && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ bgcolor: 'background.default' }}>
+                      <TableCell
+                        colSpan={5}
+                        sx={{ bgcolor: 'background.default' }}
+                      >
                         <Collapse in={expandedRow === log.id}>
                           <Box sx={{ p: 2 }}>
                             <Typography variant="subtitle2" gutterBottom>

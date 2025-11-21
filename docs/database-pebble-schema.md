@@ -5,8 +5,8 @@
 # PebbleDB Keyspace Schema and Data Model
 
 This document defines the PebbleDB keyspace layout, entity models, and query
-patterns for the Audiobook Organizer. PebbleDB is a sorted key–value store;
-we design with prefix-based keys for efficient scans, atomic batch writes, and
+patterns for the Audiobook Organizer. PebbleDB is a sorted key–value store; we
+design with prefix-based keys for efficient scans, atomic batch writes, and
 forward-compatible JSON values.
 
 ## Design goals
@@ -62,10 +62,10 @@ Indexes (examples):
 - `idx:book:title:<normalized>:<bookULID>` → `1`
 - `idx:book:tag:<tagLower>:<bookULID>` → `1`
 - Future: `idx:book:genre:<normalized>:<bookULID>` → `1`
-- `idx:book:isbn10:<isbn10norm>:<bookULID>` → `1`
-  (isbn10norm: uppercase X; remove hyphens/spaces)
-- `idx:book:isbn13:<isbn13norm>:<bookULID>` → `1`
-  (isbn13norm: remove hyphens/spaces)
+- `idx:book:isbn10:<isbn10norm>:<bookULID>` → `1` (isbn10norm: uppercase X;
+  remove hyphens/spaces)
+- `idx:book:isbn13:<isbn13norm>:<bookULID>` → `1` (isbn13norm: remove
+  hyphens/spaces)
 
 // v1.1.0 additions
 
@@ -89,23 +89,15 @@ Operations:
 
 Each entity JSON includes a `version` for forwards compatibility.
 
-Note: Angle-bracket placeholders like `<ulid>` are shown as literals; markdown lint (MD033) warnings are acceptable here as they document template fields.
+Note: Angle-bracket placeholders like `<ulid>` are shown as literals; markdown
+lint (MD033) warnings are acceptable here as they document template fields.
 
 ### User
 
-Key: `u:&lt;userULID&gt;`
-{
-  "id": "&lt;ulid&gt;",
-  "username": "...",
-  "email": "...",
-  "password_hash_algo": "argon2id",
-  "password_hash": "base64...",
-  "created_at": "RFC3339",
-  "updated_at": "RFC3339",
-  "roles": ["admin", "user"],
-  "status": "active|disabled",
-  "version": 1
-}
+Key: `u:&lt;userULID&gt;` { "id": "&lt;ulid&gt;", "username": "...", "email":
+"...", "password_hash_algo": "argon2id", "password_hash": "base64...",
+"created_at": "RFC3339", "updated_at": "RFC3339", "roles": ["admin", "user"],
+"status": "active|disabled", "version": 1 }
 
 Indexes:
 
@@ -114,17 +106,9 @@ Indexes:
 
 ### Session
 
-Key: `sess:&lt;sessionULID&gt;`
-{
-  "id": "&lt;ulid&gt;",
-  "user_id": "&lt;userULID&gt;",
-  "created_at": "...",
-  "expires_at": "...",
-  "ip": "...",
-  "user_agent": "...",
-  "revoked": false,
-  "version": 1
-}
+Key: `sess:&lt;sessionULID&gt;` { "id": "&lt;ulid&gt;", "user_id":
+"&lt;userULID&gt;", "created_at": "...", "expires_at": "...", "ip": "...",
+"user_agent": "...", "revoked": false, "version": 1 }
 
 Optional index: `idx:sess:user:&lt;userULID&gt;:&lt;sessionULID&gt;` → `1`
 
@@ -136,28 +120,15 @@ Per-key approach (fine-grained updates):
 
 ### Author
 
-Key: `a:<authorULID>`
-{
-  "id": "<ulid>",
-  "name": "...",
-  "normalized_name": "...",
-  "created_at": "...",
-  "version": 1
-}
+Key: `a:<authorULID>` { "id": "<ulid>", "name": "...", "normalized_name": "...",
+"created_at": "...", "version": 1 }
 
 Index: `idx:author:name:<normalizedName>` → `<authorULID>`
 
 ### Series
 
-Key: `s:<seriesULID>`
-{
-  "id": "<ulid>",
-  "name": "...",
-  "normalized_name": "...",
-  "author_id": "<authorULID>|null",
-  "created_at": "...",
-  "version": 1
-}
+Key: `s:<seriesULID>` { "id": "<ulid>", "name": "...", "normalized_name": "...",
+"author_id": "<authorULID>|null", "created_at": "...", "version": 1 }
 
 Indexes:
 
@@ -166,18 +137,9 @@ Indexes:
 
 ### Work (title-level logical grouping)
 
-Key: `w:<workULID>`
-{
-  "id": "<ulid>",
-  "title": "...",
-  "normalized_title": "...",
-  "author_id": "<authorULID>|null",
-  "alt_titles": ["..."],
-  "series_id": "<seriesULID>|null",
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
+Key: `w:<workULID>` { "id": "<ulid>", "title": "...", "normalized_title": "...",
+"author_id": "<authorULID>|null", "alt_titles": ["..."], "series_id":
+"<seriesULID>|null", "created_at": "...", "updated_at": "...", "version": 1 }
 
 Indexes:
 
@@ -185,29 +147,14 @@ Indexes:
 
 ### Book (logical)
 
-Key: `b:<bookULID>`
-{
-  "id": "<ulid>",
-  "title": "...",
-  "normalized_title": "...",
-  "author_id": "<authorULID>|null",
-  "series_id": "<seriesULID>|null",
-  "series_position": 1,
-  "work_id": "<workULID>|null",
-  "narrator": "...|null",
-  "edition": "unabridged|abridged|special|...|null",
-  "language": "en|...|null",
-  "publisher": "...|null",
-  "isbn10": "[0-9Xx]{10}|null",
-  "isbn13": "[0-9]{13}|null",
-  "description": "...",
-  "published_year": 0,
-  "cover_asset_id": "<assetULID>|null",
-  "tags": ["..."],
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
+Key: `b:<bookULID>` { "id": "<ulid>", "title": "...", "normalized_title": "...",
+"author_id": "<authorULID>|null", "series_id": "<seriesULID>|null",
+"series_position": 1, "work_id": "<workULID>|null", "narrator": "...|null",
+"edition": "unabridged|abridged|special|...|null", "language": "en|...|null",
+"publisher": "...|null", "isbn10": "[0-9Xx]{10}|null", "isbn13":
+"[0-9]{13}|null", "description": "...", "published_year": 0, "cover_asset_id":
+"<assetULID>|null", "tags": ["..."], "created_at": "...", "updated_at": "...",
+"version": 1 }
 
 Indexes:
 
@@ -219,23 +166,11 @@ Indexes:
 
 ### Book file segment (physical)
 
-Key: `bf:<segmentULID>`
-{
-  "id": "<ulid>",
-  "book_id": "<bookULID>",
-  "file_path": "...",
-  "format": "m4b|mp3|flac|...",
-  "size_bytes": 0,
-  "duration_seconds": 0,
-  "hash_sha256": "hex",
-  "track_number": 1,
-  "total_tracks": 10,
-  "active": true,
-  "superseded_by": "<segmentULID>|null",
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
+Key: `bf:<segmentULID>` { "id": "<ulid>", "book_id": "<bookULID>", "file_path":
+"...", "format": "m4b|mp3|flac|...", "size_bytes": 0, "duration_seconds": 0,
+"hash_sha256": "hex", "track_number": 1, "total_tracks": 10, "active": true,
+"superseded_by": "<segmentULID>|null", "created_at": "...", "updated_at": "...",
+"version": 1 }
 
 Ordering index:
 
@@ -249,15 +184,8 @@ On merge multi-file → single-file:
 
 ### Playlist
 
-Key: `pl:<playlistULID>`
-{
-  "id": "<ulid>",
-  "name": "...",
-  "user_id": "<userULID>|null",
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
+Key: `pl:<playlistULID>` { "id": "<ulid>", "name": "...", "user_id":
+"<userULID>|null", "created_at": "...", "updated_at": "...", "version": 1 }
 
 Index: `idx:playlist:user:<userULID>:<playlistULID>` → `1`
 
@@ -267,41 +195,22 @@ Playlist items (ordered):
 
 ### Playback event (immutable)
 
-Key: `playe:<userULID>:<bookULID>:<timestampULID>`
-{
-  "user_id": "<userULID>",
-  "book_id": "<bookULID>",
-  "segment_id": "<segmentULID>",
-  "position_seconds": 0,
-  "event_type": "progress|start|pause|complete",
-  "play_speed": 1.0,
-  "created_at": "...",
-  "version": 1
-}
+Key: `playe:<userULID>:<bookULID>:<timestampULID>` { "user_id": "<userULID>",
+"book_id": "<bookULID>", "segment_id": "<segmentULID>", "position_seconds": 0,
+"event_type": "progress|start|pause|complete", "play_speed": 1.0, "created_at":
+"...", "version": 1 }
 
 ### Playback progress (latest snapshot)
 
-Key: `playp:<userULID>:<bookULID>`
-{
-  "user_id": "<userULID>",
-  "book_id": "<bookULID>",
-  "segment_id": "<segmentULID>",
-  "position_seconds": 0,
-  "percent_complete": 0.0,
-  "updated_at": "...",
-  "version": 1
-}
+Key: `playp:<userULID>:<bookULID>` { "user_id": "<userULID>", "book_id":
+"<bookULID>", "segment_id": "<segmentULID>", "position_seconds": 0,
+"percent_complete": 0.0, "updated_at": "...", "version": 1 }
 
 Durations mapping for offset conversion (merge help):
 
-- Key: `b:duration_map:<bookULID>`
-{
-  "segments": [
-    { "id": "<segmentULID>", "duration": 0, "active": true, "offset_start": 0 }
-  ],
-  "total_duration": 0,
-  "version": 1
-}
+- Key: `b:duration_map:<bookULID>` { "segments": [ { "id": "<segmentULID>",
+  "duration": 0, "active": true, "offset_start": 0 } ], "total_duration": 0,
+  "version": 1 }
 
 ### Stats aggregates (derived)
 
@@ -313,52 +222,44 @@ Durations mapping for offset conversion (merge help):
 
 ### Operations and logs
 
-Operation: `op:<operationULID>`
-{
-  "id": "<ulid>",
-  "type": "scan|organize|transcode|merge",
-  "status": "pending|running|completed|failed",
-  "started_at": "...",
-  "completed_at": "...|null",
-  "error": "...|null",
-  "progress": { "current": 0, "total": 0 },
-  "created_by": "<userULID>|system",
-  "version": 1
-}
+Operation: `op:<operationULID>` { "id": "<ulid>", "type":
+"scan|organize|transcode|merge", "status": "pending|running|completed|failed",
+"started_at": "...", "completed_at": "...|null", "error": "...|null",
+"progress": { "current": 0, "total": 0 }, "created_by": "<userULID>|system",
+"version": 1 }
 
-Log: `opl:<operationULID>:<seqPadded>`
-{
-  "seq": 0,
-  "timestamp": "...",
-  "level": "info|warn|error",
-  "message": "...",
-  "version": 1
-}
+Log: `opl:<operationULID>:<seqPadded>` { "seq": 0, "timestamp": "...", "level":
+"info|warn|error", "message": "...", "version": 1 }
 
 Maintain `op:<operationULID>:next_seq` counter for log sequencing.
 
 ### Migrations
 
-Record: `mig:<versionPadded>` → { "id": number, "applied_at": "...", "description": "...", "duration_ms": number }
+Record: `mig:<versionPadded>` → { "id": number, "applied_at": "...",
+"description": "...", "duration_ms": number }
 
 Current version: `meta:version` → number
 
 ## Query patterns
 
-- Find user by username: `get(idx:user:username:<lower>)` → `userID`, then `get(u:<id>)`
+- Find user by username: `get(idx:user:username:<lower>)` → `userID`, then
+  `get(u:<id>)`
 - List series by author: scan `idx:series:author:<authorID>:`
 - List books in series ordered: scan `idx:book:series:<seriesID>:`
 - Segments for book: scan `bfi:<bookID>:` then fetch `bf:<segmentID>`
 - Recent playback events: reverse-iterate `playe:<userID>:<bookID>:`
 - Recent operations: scan `op:` (ULID provides time order)
-- Aggregate plays by work: read `stats:work:plays:<workULID>`; if missing, sum `stats:book:plays` for all `idx:book:work:<workULID>:` entries (lazy backfill).
+- Aggregate plays by work: read `stats:work:plays:<workULID>`; if missing, sum
+  `stats:book:plays` for all `idx:book:work:<workULID>:` entries (lazy
+  backfill).
 
 ## Write patterns & atomicity
 
 - Use Pebble batches for atomic multi-key writes (entity + indices)
 - Idempotent creation by checking conflict indices first
 - Prefer write primary key first, indices next (or within same batch)
-- When incrementing `stats:book:*`, also increment corresponding `stats:work:*` if `work_id` is set on the book.
+- When incrementing `stats:book:*`, also increment corresponding `stats:work:*`
+  if `work_id` is set on the book.
 
 ## Security
 
@@ -368,7 +269,8 @@ Current version: `meta:version` → number
 
 ## TTL / Compaction
 
-- Playback events may be pruned after aggregation (keep last N days or last N events)
+- Playback events may be pruned after aggregation (keep last N days or last N
+  events)
 - Compaction job updates `stats:` aggregates before deleting old `playe:` keys
 
 ## Migration strategy
@@ -381,9 +283,11 @@ On startup:
 
 ### Work introduction backfill (v1.1.0)
 
-1. For each `b:<bookULID>` without a `work_id`, derive `(normalized_title, author_id)` and create/find `w:<workULID>`.
+1. For each `b:<bookULID>` without a `work_id`, derive
+   `(normalized_title, author_id)` and create/find `w:<workULID>`.
 2. Update book to set `work_id` and write `idx:book:work:<workULID>:<bookULID>`.
-3. Initialize `stats:work:*` by summing existing per-book stats (or lazily on first read).
+3. Initialize `stats:work:*` by summing existing per-book stats (or lazily on
+   first read).
 4. Record migration details under `mig:` and bump schema version.
 
 ## Multi-file → single-file merge procedure
@@ -392,25 +296,27 @@ On startup:
 2. Compute segment cumulative offsets from `b:duration_map:<bookID>`
 3. For each `playp:<userID>:<bookID>` referencing old segments:
    - `newPosition = oldSegmentOffsetStart + oldPosition`
-   - Update snapshot to `{ segment_id: <newSeg>, position_seconds: newPosition }`
+   - Update snapshot to
+     `{ segment_id: <newSeg>, position_seconds: newPosition }`
 4. Mark old segments `active=false` and set `superseded_by=<newSeg>`
 5. Append `opl:` entries to document the change
 
 ## Future extensions
 
-- Cover assets: `asset:<assetULID>` records referencing filesystem paths and mime
+- Cover assets: `asset:<assetULID>` records referencing filesystem paths and
+  mime
 - Full-text search: external engine (Bleve/Meilisearch) fed by change log
 - Multi-tenant prefixing: `tenant:<tenantID>:` prepend to all keys
 - Encryption-at-rest: selective field-level encryption in JSON values
-<!-- file: docs/database-pebble-schema.md -->
-<!-- version: 1.1.0 -->
-<!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
+  <!-- file: docs/database-pebble-schema.md -->
+  <!-- version: 1.1.0 -->
+  <!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
 
 # PebbleDB Keyspace Schema and Data Model
 
 This document defines the PebbleDB keyspace layout, entity models, and query
-patterns for the Audiobook Organizer. PebbleDB is a sorted key–value store;
-we design with prefix-based keys for efficient scans, atomic batch writes, and
+patterns for the Audiobook Organizer. PebbleDB is a sorted key–value store; we
+design with prefix-based keys for efficient scans, atomic batch writes, and
 forward-compatible JSON values.
 
 ## Design goals
@@ -468,7 +374,9 @@ Indexes (examples):
 - Future: `idx:book:genre:&lt;normalized&gt;:&lt;bookULID&gt;` → `1`
 
 // v1.1.0 additions
-- `idx:work:title:&lt;normalizedTitle&gt;:author:&lt;authorULID|null&gt;` → `&lt;workULID&gt;`
+
+- `idx:work:title:&lt;normalizedTitle&gt;:author:&lt;authorULID|null&gt;` →
+  `&lt;workULID&gt;`
 - `idx:book:work:&lt;workULID&gt;:&lt;bookULID&gt;` → `1`
 
 Playlists and playback:
@@ -480,6 +388,7 @@ Playlists and playback:
 - `stats:` — derived aggregates
 
 // v1.1.0 additions
+
 - `idx:book:work:&lt;workULID&gt;:&lt;bookULID&gt;` → `1`
 
 Operations:
@@ -488,39 +397,36 @@ Operations:
 - `opl:` — operation logs
 
 // v1.1.0 additions
+
 - `stats:work:plays:&lt;workULID&gt;` → integer
 - `stats:work:listen_seconds:&lt;workULID&gt;` → integer
 
 ## Entity JSON schemas (values)
 
-Each entity JSON includes a `version` for forwards compatibility.
-// v1.1.0 Work entity introduction requires backfill migration
+Each entity JSON includes a `version` for forwards compatibility. // v1.1.0 Work
+entity introduction requires backfill migration
 
 ### User
 
-Key: `u:<userULID>`
-// v1.1.0 additions
-- Aggregate plays by work: read `stats:work:plays:&lt;workULID&gt;`; if missing, sum `stats:book:plays` for all `idx:book:work:&lt;workULID&gt;:` entries (lazy backfill strategy).
+Key: `u:<userULID>` // v1.1.0 additions
 
-{
-  "id": "&lt;ulid&gt;",
-  "username": "...",
+- Aggregate plays by work: read `stats:work:plays:&lt;workULID&gt;`; if missing,
+  sum `stats:book:plays` for all `idx:book:work:&lt;workULID&gt;:` entries (lazy
+  backfill strategy).
+
+{ "id": "&lt;ulid&gt;", "username": "...",
 
 ### Work introduction backfill (v1.1.0)
 
 1. Scan all `b:` keys; build map `(normalized_title, author_id)` → `workULID`.
-2. For each book without `work_id`, assign (create new `w:` record if needed) and write `idx:book:work:&lt;workULID&gt;:&lt;bookULID&gt;`.
-3. Initialize `stats:work:*` by summing existing per-book stats (optional lazy init if large dataset).
-4. Record migration summary in `mig:` with timing and counts.
-  "email": "...",
-  "password_hash_algo": "argon2id",
-  "password_hash": "base64...",
-  "created_at": "RFC3339",
-  "updated_at": "RFC3339",
-  "roles": ["admin", "user"],
-  "status": "active|disabled",
-  "version": 1
-}
+2. For each book without `work_id`, assign (create new `w:` record if needed)
+   and write `idx:book:work:&lt;workULID&gt;:&lt;bookULID&gt;`.
+3. Initialize `stats:work:*` by summing existing per-book stats (optional lazy
+   init if large dataset).
+4. Record migration summary in `mig:` with timing and counts. "email": "...",
+   "password_hash_algo": "argon2id", "password_hash": "base64...", "created_at":
+   "RFC3339", "updated_at": "RFC3339", "roles": ["admin", "user"], "status":
+   "active|disabled", "version": 1 }
 
 Indexes:
 
@@ -529,17 +435,9 @@ Indexes:
 
 ### Session
 
-Key: `sess:<sessionULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "user_id": "&lt;userULID&gt;",
-  "created_at": "...",
-  "expires_at": "...",
-  "ip": "...",
-  "user_agent": "...",
-  "revoked": false,
-  "version": 1
-}
+Key: `sess:<sessionULID>` { "id": "&lt;ulid&gt;", "user_id": "&lt;userULID&gt;",
+"created_at": "...", "expires_at": "...", "ip": "...", "user_agent": "...",
+"revoked": false, "version": 1 }
 
 Optional index: `idx:sess:user:<userULID>:<sessionULID>` → `1`
 
@@ -551,51 +449,26 @@ Per-key approach (fine-grained updates):
 
 ### Author
 
-Key: `a:<authorULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "name": "...",
-  "normalized_name": "...",
-  "created_at": "...",
-  "version": 1
-}
-Index: `idx:author:name:&lt;normalizedName&gt;` → `&lt;authorULID&gt;`
+Key: `a:<authorULID>` { "id": "&lt;ulid&gt;", "name": "...", "normalized_name":
+"...", "created_at": "...", "version": 1 } Index:
+`idx:author:name:&lt;normalizedName&gt;` → `&lt;authorULID&gt;`
 
 ### Series
 
-Key: `s:<seriesULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "name": "...",
-  "normalized_name": "...",
-  "author_id": "&lt;authorULID&gt;|null",
-  "created_at": "...",
-  "version": 1
-}
-Indexes:
+Key: `s:<seriesULID>` { "id": "&lt;ulid&gt;", "name": "...", "normalized_name":
+"...", "author_id": "&lt;authorULID&gt;|null", "created_at": "...", "version": 1
+} Indexes:
 
 - `idx:series:name:&lt;normalizedName&gt;` → `&lt;seriesULID&gt;`
 - `idx:series:author:&lt;authorULID&gt;:&lt;seriesULID&gt;` → `1`
 
 ### Book (logical)
 
-Key: `b:<bookULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "title": "...",
-  "normalized_title": "...",
-  "author_id": "&lt;authorULID&gt;|null",
-  "series_id": "&lt;seriesULID&gt;|null",
-  "series_position": 1,
-  "description": "...",
-  "published_year": 0,
-  "cover_asset_id": "&lt;assetULID&gt;|null",
-  "tags": ["..."],
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
-Indexes:
+Key: `b:<bookULID>` { "id": "&lt;ulid&gt;", "title": "...", "normalized_title":
+"...", "author_id": "&lt;authorULID&gt;|null", "series_id":
+"&lt;seriesULID&gt;|null", "series_position": 1, "description": "...",
+"published_year": 0, "cover_asset_id": "&lt;assetULID&gt;|null", "tags":
+["..."], "created_at": "...", "updated_at": "...", "version": 1 } Indexes:
 
 - `idx:book:author:&lt;authorULID&gt;:&lt;bookULID&gt;` → `1`
 - `idx:book:series:&lt;seriesULID&gt;:&lt;posPadded&gt;:&lt;bookULID&gt;` → `1`
@@ -604,24 +477,11 @@ Indexes:
 
 ### Book file segment (physical)
 
-Key: `bf:<segmentULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "book_id": "&lt;bookULID&gt;",
-  "file_path": "...",
-  "format": "m4b|mp3|flac|...",
-  "size_bytes": 0,
-  "duration_seconds": 0,
-  "hash_sha256": "hex",
-  "track_number": 1,
-  "total_tracks": 10,
-  "active": true,
-  "superseded_by": "&lt;segmentULID&gt;|null",
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
-Ordering index:
+Key: `bf:<segmentULID>` { "id": "&lt;ulid&gt;", "book_id": "&lt;bookULID&gt;",
+"file_path": "...", "format": "m4b|mp3|flac|...", "size_bytes": 0,
+"duration_seconds": 0, "hash_sha256": "hex", "track_number": 1, "total_tracks":
+10, "active": true, "superseded_by": "&lt;segmentULID&gt;|null", "created_at":
+"...", "updated_at": "...", "version": 1 } Ordering index:
 
 - `bfi:&lt;bookULID&gt;:&lt;segmentOrderPadded&gt;` → `&lt;segmentULID&gt;`
 
@@ -633,16 +493,9 @@ On merge multi-file → single-file:
 
 ### Playlist
 
-Key: `pl:<playlistULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "name": "...",
-  "user_id": "&lt;userULID&gt;|null",
-  "created_at": "...",
-  "updated_at": "...",
-  "version": 1
-}
-Index: `idx:playlist:user:<userULID>:<playlistULID>` → `1`
+Key: `pl:<playlistULID>` { "id": "&lt;ulid&gt;", "name": "...", "user_id":
+"&lt;userULID&gt;|null", "created_at": "...", "updated_at": "...", "version": 1
+} Index: `idx:playlist:user:<userULID>:<playlistULID>` → `1`
 
 Playlist items (ordered):
 
@@ -650,41 +503,23 @@ Playlist items (ordered):
 
 ### Playback event (immutable)
 
-Key: `playe:<userULID>:<bookULID>:<timestampULID>`
-{
-  "user_id": "&lt;userULID&gt;",
-  "book_id": "&lt;bookULID&gt;",
-  "segment_id": "&lt;segmentULID&gt;",
-  "position_seconds": 0,
-  "event_type": "progress|start|pause|complete",
-  "play_speed": 1.0,
-  "created_at": "...",
-  "version": 1
-}
+Key: `playe:<userULID>:<bookULID>:<timestampULID>` { "user_id":
+"&lt;userULID&gt;", "book_id": "&lt;bookULID&gt;", "segment_id":
+"&lt;segmentULID&gt;", "position_seconds": 0, "event_type":
+"progress|start|pause|complete", "play_speed": 1.0, "created_at": "...",
+"version": 1 }
 
 ### Playback progress (latest snapshot)
 
-Key: `playp:<userULID>:<bookULID>`
-{
-  "user_id": "&lt;userULID&gt;",
-  "book_id": "&lt;bookULID&gt;",
-  "segment_id": "&lt;segmentULID&gt;",
-  "position_seconds": 0,
-  "percent_complete": 0.0,
-  "updated_at": "...",
-  "version": 1
-}
+Key: `playp:<userULID>:<bookULID>` { "user_id": "&lt;userULID&gt;", "book_id":
+"&lt;bookULID&gt;", "segment_id": "&lt;segmentULID&gt;", "position_seconds": 0,
+"percent_complete": 0.0, "updated_at": "...", "version": 1 }
 
 Durations mapping for offset conversion (merge help):
 
-- Key: `b:duration_map:&lt;bookULID&gt;`
-{
-  "segments": [
-    { "id": "&lt;segmentULID&gt;", "duration": 0, "active": true, "offset_start": 0 }
-  ],
-  "total_duration": 0,
-  "version": 1
-}
+- Key: `b:duration_map:&lt;bookULID&gt;` { "segments": [ { "id":
+  "&lt;segmentULID&gt;", "duration": 0, "active": true, "offset_start": 0 } ],
+  "total_duration": 0, "version": 1 }
 
 ### Stats aggregates (derived)
 
@@ -694,38 +529,27 @@ Durations mapping for offset conversion (merge help):
 
 ### Operations and logs
 
-Operation: `op:<operationULID>`
-{
-  "id": "&lt;ulid&gt;",
-  "type": "scan|organize|transcode|merge",
-  "status": "pending|running|completed|failed",
-  "started_at": "...",
-  "completed_at": "...|null",
-  "error": "...|null",
-  "progress": { "current": 0, "total": 0 },
-  "created_by": "&lt;userULID&gt;|system",
-  "version": 1
-}
+Operation: `op:<operationULID>` { "id": "&lt;ulid&gt;", "type":
+"scan|organize|transcode|merge", "status": "pending|running|completed|failed",
+"started_at": "...", "completed_at": "...|null", "error": "...|null",
+"progress": { "current": 0, "total": 0 }, "created_by":
+"&lt;userULID&gt;|system", "version": 1 }
 
-Log: `opl:<operationULID>:<seqPadded>`
-{
-  "seq": 0,
-  "timestamp": "...",
-  "level": "info|warn|error",
-  "message": "...",
-  "version": 1
-}
+Log: `opl:<operationULID>:<seqPadded>` { "seq": 0, "timestamp": "...", "level":
+"info|warn|error", "message": "...", "version": 1 }
 
 Maintain `op:<operationULID>:next_seq` counter for log sequencing.
 
 ### Migrations
 
-Record: `mig:&lt;versionPadded&gt;` → { "id": number, "applied_at": "...", "description": "...", "duration_ms": number }
-Current version: `meta:version` → number
+Record: `mig:&lt;versionPadded&gt;` → { "id": number, "applied_at": "...",
+"description": "...", "duration_ms": number } Current version: `meta:version` →
+number
 
 ## Query patterns
 
-- Find user by username: `get(idx:user:username:<lower>)` → `userID`, then `get(u:<id>)`
+- Find user by username: `get(idx:user:username:<lower>)` → `userID`, then
+  `get(u:<id>)`
 - List series by author: scan `idx:series:author:<authorID>:`
 - List books in series ordered: scan `idx:book:series:<seriesID>:`
 - Segments for book: scan `bfi:<bookID>:` then fetch `bf:<segmentID>`
@@ -746,7 +570,8 @@ Current version: `meta:version` → number
 
 ## TTL / Compaction
 
-- Playback events may be pruned after aggregation (keep last N days or last N events)
+- Playback events may be pruned after aggregation (keep last N days or last N
+  events)
 - Compaction job updates `stats:` aggregates before deleting old `playe:` keys
 
 ## Migration strategy
@@ -763,13 +588,15 @@ On startup:
 2. Compute segment cumulative offsets from `b:duration_map:<bookID>`
 3. For each `playp:<userID>:<bookID>` referencing old segments:
    - `newPosition = oldSegmentOffsetStart + oldPosition`
-   - Update snapshot to `{ segment_id: <newSeg>, position_seconds: newPosition }`
+   - Update snapshot to
+     `{ segment_id: <newSeg>, position_seconds: newPosition }`
 4. Mark old segments `active=false` and set `superseded_by=<newSeg>`
 5. Append `opl:` entries to document the change
 
 ## Future extensions
 
-- Cover assets: `asset:<assetULID>` records referencing filesystem paths and mime
+- Cover assets: `asset:<assetULID>` records referencing filesystem paths and
+  mime
 - Full-text search: external engine (Bleve/Meilisearch) fed by change log
 - Multi-tenant prefixing: `tenant:<tenantID>:` prepend to all keys
 - Encryption-at-rest: selective field-level encryption in JSON values

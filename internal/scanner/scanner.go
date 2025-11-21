@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -551,11 +552,41 @@ func saveBookToDatabase(book *Book) error {
 			FileSize:       fileSize,
 		}
 
-		// Upsert semantics: try lookup by file path first
+		// Upsert semantics with duplicate detection:
+		// 1. Try lookup by file path first (exact match)
 		existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath)
 		if err != nil {
 			return fmt.Errorf("book lookup failed: %w", err)
 		}
+
+		// 2. If not found by path but we have a file hash, check for duplicates by hash
+		if existing == nil && fileHash != nil && *fileHash != "" {
+			// Get all books to check for hash duplicates
+			allBooks, err := database.GlobalStore.GetAllBooks(10000, 0)
+			if err == nil {
+				for _, existingBook := range allBooks {
+					if existingBook.FileHash != nil && *existingBook.FileHash == *fileHash {
+						// Found duplicate by hash - this is the same file in a different location
+						log.Printf("[DEBUG] Found duplicate book by hash: %s (existing: %s, new: %s)",
+							existingBook.Title, existingBook.FilePath, book.FilePath)
+						// Don't create a new record - update the existing one's path if it's in import folder
+						// and the existing is in library (organized location)
+						if strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
+							!strings.HasPrefix(existingBook.FilePath, config.AppConfig.RootDir) {
+							// New path is in library, old path is in import - update to library path
+							existing = &existingBook
+							break
+						} else {
+							// Either both in import paths, or existing is already in library
+							// Skip creating duplicate
+							log.Printf("[DEBUG] Skipping duplicate: keeping existing path %s", existingBook.FilePath)
+							return nil
+						}
+					}
+				}
+			}
+		}
+
 		if existing == nil {
 			_, err = database.GlobalStore.CreateBook(dbBook)
 			return err

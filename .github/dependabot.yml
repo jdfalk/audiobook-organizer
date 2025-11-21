@@ -7,75 +7,75 @@
 
 version: 2
 updates:
-- package-ecosystem: github-actions
-  directory: /
-  schedule:
-    interval: weekly
-    day: wednesday
-    time: '10:00'
-    timezone: America/New_York
-  open-pull-requests-limit: 5
-  commit-message:
-    prefix: ci
-    include: scope
-  labels:
-  - dependencies
-  - github-actions
-  - ci-cd
-  groups:
-    ci-dependencies:
-      patterns:
-      - actions/*
-      - github/*
-      update-types:
-      - minor
-      - patch
-    external-actions:
-      patterns:
-      - '*'
-      exclude-patterns:
-      - actions/*
-      - github/*
-      update-types:
-      - minor
-      - patch
-- package-ecosystem: gomod
-  directory: /
-  schedule:
-    interval: weekly
-    day: monday
-    time: 09:00
-    timezone: America/New_York
-  open-pull-requests-limit: 5
-  commit-message:
-    prefix: go
-    include: scope
-  labels:
-  - dependencies
-  - tech:go
-  allow:
-  - dependency-type: direct
-  ignore:
-  - dependency-name: '*'
-    update-types:
-    - version-update:semver-major
-- package-ecosystem: pip
-  directory: /scripts
-  schedule:
-    interval: weekly
-    day: tuesday
-    time: '12:00'
-    timezone: America/New_York
-  open-pull-requests-limit: 3
-  commit-message:
-    prefix: python
-    include: scope
-  labels:
-  - dependencies
-  - tech:python
-  allow:
-  - dependency-type: direct
-  ignore:
-  - dependency-name: '*'
-    update-types:
-    - version-update:semver-major
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: wednesday
+      time: "10:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - dependencies
+      - github-actions
+      - ci-cd
+    groups:
+      ci-dependencies:
+        patterns:
+          - actions/*
+          - github/*
+        update-types:
+          - minor
+          - patch
+      external-actions:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - actions/*
+          - github/*
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: 09:00
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: go
+      include: scope
+    labels:
+      - dependencies
+      - tech:go
+    allow:
+      - dependency-type: direct
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+  - package-ecosystem: pip
+    directory: /scripts
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "12:00"
+      timezone: America/New_York
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: python
+      include: scope
+    labels:
+      - dependencies
+      - tech:python
+    allow:
+      - dependency-type: direct
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major

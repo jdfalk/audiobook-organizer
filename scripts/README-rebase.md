@@ -1,7 +1,7 @@
 # Smart Rebase Automation Documentation
 
-This directory contains intelligent rebase automation scripts designed to handle Git conflicts
-automatically, particularly useful for AI agents like Codex.
+This directory contains intelligent rebase automation scripts designed to handle
+Git conflicts automatically, particularly useful for AI agents like Codex.
 
 ## Scripts Overview
 

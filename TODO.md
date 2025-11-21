@@ -1,10 +1,12 @@
 - [x] ✅ **Backend**: Database migration system with version tracking
-- [x] ✅ **Backend**: Complete audiobook CRUD API (create, read, update, delete, batch)
+- [x] ✅ **Backend**: Complete audiobook CRUD API (create, read, update, delete,
+      batch)
 - [x] ✅ **Backend**: Authors and series API endpoints
 - [x] ✅ **Backend**: Library folder management API
 - [x] ✅ **Backend**: Operation tracking and logs API
 - [x] ✅ **Backend**: HTTP server with configurable timeouts
-- [x] ✅ **Backend**: Safe file operations wrapper (copy-first, checksums, rollback)
+- [x] ✅ **Backend**: Safe file operations wrapper (copy-first, checksums,
+      rollback)
 - [x] ✅ **Backend**: File system browsing API (.jabexclude, stats, permissions)
 - [x] ✅ **Backend**: Async operation queue system with priority handling
 - [x] ✅ **Backend**: WebSocket/SSE for real-time operation updates
@@ -23,22 +25,28 @@
   - ✅ Supports MP3, M4A/M4B, FLAC, OGG formats
   - ✅ Extracts bitrate, codec, sample rate, channels, bit depth
   - ✅ Quality string generation and tier comparison
-- [x] ✅ **Backend**: Version management API (link versions, set primary, manage version groups)
-  - ✅ Added GetBooksByVersionGroup() to Store interface and both implementations
-  - ✅ Implemented 4 API endpoints: list versions, link versions, set primary, get version group
+- [x] ✅ **Backend**: Version management API (link versions, set primary, manage
+      version groups)
+  - ✅ Added GetBooksByVersionGroup() to Store interface and both
+    implementations
+  - ✅ Implemented 4 API endpoints: list versions, link versions, set primary,
+    get version group
   - ✅ Uses ULID-based version group IDs for grouping multiple versions
   - ✅ All handlers properly use database.GlobalStore
 - [x] ✅ **Backend**: Import paths CRUD API (list, add, remove, scan)
   - ✅ GET /api/v1/library/folders - List all library folders/import paths
   - ✅ POST /api/v1/library/folders - Add new import path
   - ✅ DELETE /api/v1/library/folders/:id - Remove import path
-  - ✅ POST /api/v1/operations/scan - Trigger scan (optionally for specific folder)
+  - ✅ POST /api/v1/operations/scan - Trigger scan (optionally for specific
+    folder)
 - [x] ✅ **Backend**: System info API (storage, quotas, system stats)
-  - ✅ GET /api/v1/system/status - Comprehensive system status (library stats, memory, runtime, operations)
+  - ✅ GET /api/v1/system/status - Comprehensive system status (library stats,
+    memory, runtime, operations)
   - ✅ Includes book count, folder count, total storage size
   - ✅ Memory statistics (alloc, total_alloc, sys, num_gc)
   - ✅ Runtime information (Go version, goroutines, CPU count)
-- [x] ✅ **Backend**: Logs API with filtering (level, source, search, pagination)
+- [x] ✅ **Backend**: Logs API with filtering (level, source, search,
+      pagination)
   - ✅ GET /api/v1/system/logs - System-wide logs with filtering
   - ✅ Supports filtering by level (info, warn, error)
   - ✅ Full-text search in messages and details
@@ -85,7 +93,8 @@
    - Changed from folders.length to systemStatus.library.folder_count
    - Now uses consistent data source with backend metrics
 
-7. **Re-fetch Metadata UI** (v1.3.0 AudiobookCard, v1.3.0 AudiobookGrid, v1.14.0 Library)
+7. **Re-fetch Metadata UI** (v1.3.0 AudiobookCard, v1.3.0 AudiobookGrid, v1.14.0
+   Library)
    - Added "Parse with AI" menu item to audiobook cards
    - Wired up handleParseWithAI handler
    - Uses existing backend endpoint: POST /api/v1/audiobooks/:id/parse-with-ai
@@ -96,33 +105,45 @@
    - Prevents accidental commit of encryption secrets
 
 - [x] ✅ **Backend**: Settings API safety restrictions
-  - ✅ Safety restrictions on database_type and enable_sqlite (read-only at runtime)
+  - ✅ Safety restrictions on database_type and enable_sqlite (read-only at
+    runtime)
 
 - [x] **Backend - Database migration for media info and version fields**
   - ✅ Created migration005 adding all 9 fields to books table
   - ✅ Handles duplicate column detection gracefully
   - ✅ Creates indices for version_group_id and is_primary_version
 - [x] ✅ **Backend**: Manual file import handling
-  - ✅ POST /api/v1/import/file - Import single audio file with metadata extraction
+  - ✅ POST /api/v1/import/file - Import single audio file with metadata
+    extraction
   - ✅ File validation (existence, extension support)
   - ✅ Automatic metadata extraction (title, author, narrator, etc.)
   - ✅ Media info extraction (bitrate, codec, quality)
   - ✅ Author auto-creation if not exists
   - ✅ Optional organize flag to trigger file organization
 - [x] ✅ **Backend**: Metadata source integration (Open Library)
-  - ✅ Created OpenLibraryClient with SearchByTitle, SearchByTitleAndAuthor, GetBookByISBN methods
-  - ✅ Returns title, author, description, publisher, publish_year, ISBN, cover_url, language
-  - ✅ API endpoints: GET /api/v1/metadata/search, POST /api/v1/audiobooks/:id/fetch-metadata
-  - ✅ 8 comprehensive test cases created (client init, search operations, error handling)
+  - ✅ Created OpenLibraryClient with SearchByTitle, SearchByTitleAndAuthor,
+    GetBookByISBN methods
+  - ✅ Returns title, author, description, publisher, publish_year, ISBN,
+    cover_url, language
+  - ✅ API endpoints: GET /api/v1/metadata/search, POST
+    /api/v1/audiobooks/:id/fetch-metadata
+  - ✅ 8 comprehensive test cases created (client init, search operations, error
+    handling)
 
 - [x] ✅ **Frontend**: Connect all pages to backend APIs
-  - ✅ Created comprehensive API service layer (src/services/api.ts) with 30+ typed endpoints
-  - ✅ Dashboard: Real statistics from /api/v1/audiobooks, /api/v1/authors, /api/v1/series, /api/v1/system/status
-  - ✅ Library page: Real audiobook listing, search, import path management, scan operations
-  - ✅ System page: Real logs with filtering, system status, memory/CPU stats, SystemInfoTab displays real-time data
-  - ✅ Settings page: Loads configuration on mount with api.getConfig(), saves with api.updateConfig()
+  - ✅ Created comprehensive API service layer (src/services/api.ts) with 30+
+    typed endpoints
+  - ✅ Dashboard: Real statistics from /api/v1/audiobooks, /api/v1/authors,
+    /api/v1/series, /api/v1/system/status
+  - ✅ Library page: Real audiobook listing, search, import path management,
+    scan operations
+  - ✅ System page: Real logs with filtering, system status, memory/CPU stats,
+    SystemInfoTab displays real-time data
+  - ✅ Settings page: Loads configuration on mount with api.getConfig(), saves
+    with api.updateConfig()
   - ✅ All API endpoints integrated with proper error handling
-  - ✅ Backend Config struct expanded to support all frontend settings (organization, quotas, metadata, performance, memory, logging)
+  - ✅ Backend Config struct expanded to support all frontend settings
+    (organization, quotas, metadata, performance, memory, logging)
 - [x] ✅ **Frontend**: Version management UI components
   - ✅ VersionManagement dialog component with version comparison view
   - ✅ Quality indicators (codec, bitrate, sample rate display)
@@ -130,12 +151,16 @@
   - ✅ Link version dialog for connecting multiple editions
   - ✅ Version indicator chips on audiobook cards
   - ✅ Integrated into Library page grid view
-  - ✅ Uses all version management API endpoints (getBookVersions, linkBookVersion, setPrimaryVersion)
+  - ✅ Uses all version management API endpoints (getBookVersions,
+    linkBookVersion, setPrimaryVersion)
 - [x] ✅ **Frontend**: Library browser with grid/list views and sorting
-  - ✅ Grid view fully functional with AudiobookCard and AudiobookGrid components
+  - ✅ Grid view fully functional with AudiobookCard and AudiobookGrid
+    components
   - ✅ Sorting dropdown with options: title, author, date added, date modified
-  - ✅ Client-side sort implementation in Library.tsx with localeCompare for strings
-  - ✅ Date sorting (descending - newest first) for created_at and updated_at fields
+  - ✅ Client-side sort implementation in Library.tsx with localeCompare for
+    strings
+  - ✅ Date sorting (descending - newest first) for created_at and updated_at
+    fields
 - [x] ✅ **Frontend**: Metadata editor with inline editing
   - ✅ MetadataEditDialog component with comprehensive edit form
   - ✅ InlineEditField component created for quick inline edits
@@ -151,14 +176,18 @@
 - [x] ✅ **Testing**: Unit and integration test framework
   - ✅ Created internal/metadata/openlibrary_test.go (8 test cases)
   - ✅ Created internal/database/sqlite_test.go (11 test cases)
-  - ✅ Tests cover client initialization, search operations, CRUD, version management, author operations
+  - ✅ Tests cover client initialization, search operations, CRUD, version
+    management, author operations
   - ✅ Uses setupTestDB pattern with temporary database and cleanup
   - ✅ Network tests use t.Skip for rate limits
 - [x] ✅ **Docs**: OpenAPI/Swagger documentation
   - ✅ Created docs/openapi.yaml with complete OpenAPI 3.0.3 specification
-  - ✅ Documented 20+ endpoints across 9 tags (Audiobooks, Authors, Series, Library, Operations, Metadata, Versions, System, Backup)
-  - ✅ Full schema definitions for Book (25+ fields), Author, Series, LibraryFolder, MetadataResult, SystemStatus, Config
-  - ✅ Request/response examples with proper types, error codes, ULID format specifications
+  - ✅ Documented 20+ endpoints across 9 tags (Audiobooks, Authors, Series,
+    Library, Operations, Metadata, Versions, System, Backup)
+  - ✅ Full schema definitions for Book (25+ fields), Author, Series,
+    LibraryFolder, MetadataResult, SystemStatus, Config
+  - ✅ Request/response examples with proper types, error codes, ULID format
+    specifications
 
 - [ ] 🟡 **General**: Implement library organization with hard links, reflinks,
       or copies (auto mode tries reflink → hardlink → copy)
@@ -185,8 +214,8 @@
 - [x] **Make current path sticky** - Added position: sticky, top: 0, zIndex: 10
       to path bar. ✅ COMPLETED
 - [x] **Fix Add Folder button always disabled** - Added "Select This Folder"
-      button for immediate selection without double-click. Single click navigates,
-      button selects. ✅ COMPLETED
+      button for immediate selection without double-click. Single click
+      navigates, button selects. ✅ COMPLETED
 - [x] **Add manual path editing** - Added edit icon that enables TextField for
       direct path editing with save/cancel functionality. ✅ COMPLETED
 
@@ -194,7 +223,8 @@
 
 - [x] **Fix folder scanning doesn't traverse subdirectories** - Implemented real
       scanner.ScanDirectory() call in startScan handler. Uses filepath.Walk for
-      recursive traversal. Updates book_count in LibraryFolder records. ✅ COMPLETED
+      recursive traversal. Updates book_count in LibraryFolder records. ✅
+      COMPLETED
 - [x] **Auto-scan on import path add** - Modified addLibraryFolder handler to
       automatically trigger async scan operation. Returns scan_operation_id for
       progress tracking. ✅ COMPLETED
@@ -212,21 +242,29 @@
 ### Frontend UI Improvements
 
 - [ ] **Fix System Page Fake Data**
-  - [ ] Wire StorageTab.tsx to real API data from /api/v1/system/status and /api/v1/library/folders
+  - [ ] Wire StorageTab.tsx to real API data from /api/v1/system/status and
+        /api/v1/library/folders
   - [ ] Wire QuotaTab.tsx to real API data or remove if quotas not implemented
-  - [ ] Wire LogsTab.tsx to /api/v1/system/logs endpoint to show actual application logs
-  - [ ] Wire SystemInfoTab.tsx to /api/v1/system/status to show real OS (linux), memory stats, CPU count, Go version
+  - [ ] Wire LogsTab.tsx to /api/v1/system/logs endpoint to show actual
+        application logs
+  - [ ] Wire SystemInfoTab.tsx to /api/v1/system/status to show real OS (linux),
+        memory stats, CPU count, Go version
 
 ### Library & Import Management
 
 - [ ] **Add Library Path Configuration**
-  - [ ] Add central library path setting in Settings page (where organized audiobooks go)
-  - [ ] Add UI in Settings to manage download/import folders with server filesystem browser
-  - [ ] Add UI in Library tab to add/remove download folders with server filesystem browser
+  - [ ] Add central library path setting in Settings page (where organized
+        audiobooks go)
+  - [ ] Add UI in Settings to manage download/import folders with server
+        filesystem browser
+  - [ ] Add UI in Library tab to add/remove download folders with server
+        filesystem browser
 
 - [ ] **Server Filesystem Browser**
-  - [ ] Create reusable ServerFileBrowser component using /api/v1/filesystem/browse
-  - [ ] Update Library page import workflow - replace local file upload with server browser
+  - [ ] Create reusable ServerFileBrowser component using
+        /api/v1/filesystem/browse
+  - [ ] Update Library page import workflow - replace local file upload with
+        server browser
   - [ ] Allow selecting files and folders from remote server filesystem
 
 ### First-Run Experience
@@ -236,13 +274,17 @@
   - [ ] Step 1: Set library folder path (where organized books go)
   - [ ] Step 2: Optional OpenAI API key setup with connection test
   - [ ] Step 3: Add import/download folder paths using server browser
-  - [ ] Store completion flag in config/database to skip wizard on subsequent launches
+  - [ ] Store completion flag in config/database to skip wizard on subsequent
+        launches
 
 ### Testing
 
-- [ ] Create database_test.go - test initialization, configuration, database type selection
-- [ ] Create migrations_test.go - test schema versioning, migration execution, rollback
-- [ ] Create store_test.go - test interface methods and common store functionality
+- [ ] Create database_test.go - test initialization, configuration, database
+      type selection
+- [ ] Create migrations_test.go - test schema versioning, migration execution,
+      rollback
+- [ ] Create store_test.go - test interface methods and common store
+      functionality
 - [ ] Create web_test.go - test HTTP handlers and API endpoints
 
 ## Future Improvements
@@ -269,12 +311,18 @@
   - [ ] qBittorrent Web API integration
   - [ ] Automatic torrent removal after successful library organization
   - [ ] Support for preserving seeding after organization:
-    - [ ] Create shadow/mirror directory structure outside main library (e.g., `/audiobooks-seeding/`)
-    - [ ] Maintain hard links in shadow directory matching original torrent structure
-    - [ ] Update torrent client to serve from shadow directory after files are organized
-    - [ ] Handle cross-filesystem scenarios (copy to shadow dir when hard links impossible)
-    - [ ] Detect and handle metadata updates that modify organized files (break hard links)
-    - [ ] Optional: Re-link shadow files if organized files haven't been modified
+    - [ ] Create shadow/mirror directory structure outside main library (e.g.,
+          `/audiobooks-seeding/`)
+    - [ ] Maintain hard links in shadow directory matching original torrent
+          structure
+    - [ ] Update torrent client to serve from shadow directory after files are
+          organized
+    - [ ] Handle cross-filesystem scenarios (copy to shadow dir when hard links
+          impossible)
+    - [ ] Detect and handle metadata updates that modify organized files (break
+          hard links)
+    - [ ] Optional: Re-link shadow files if organized files haven't been
+          modified
   - [ ] Configurable removal policies (remove after move, keep seeding, etc.)
 
 ### iTunes Library Integration
@@ -307,33 +355,94 @@
   - [ ] Configurable quality settings (bitrate, codec, sample rate)
   - [ ] Batch transcoding operations with priority queue
   - [ ] Original file preservation options (keep, replace, archive)
-  - [ ] Integration with book download (serve M4B instead of ZIP for transcoded books)
+  - [ ] Integration with book download (serve M4B instead of ZIP for transcoded
+        books)
 
 ## Recently Added Observability Tasks
 
-- [ ] Persist operation logs (retain historical tail per operation; add `/api/v1/operations/:id/logs?tail=` and system-wide retention)
-- [ ] Improve log view UX (auto-scroll when following tail, level-based coloring, collapsible verbose details, memory usage guard)
-- [ ] SSE system status heartbeats (push `system.status` diff events every 5s for live memory / library metrics without polling)
+- [ ] Persist operation logs (retain historical tail per operation; add
+      `/api/v1/operations/:id/logs?tail=` and system-wide retention)
+- [ ] Improve log view UX (auto-scroll when following tail, level-based
+      coloring, collapsible verbose details, memory usage guard)
+- [ ] SSE system status heartbeats (push `system.status` diff events every 5s
+      for live memory / library metrics without polling)
+
+## 🔥 CRITICAL - IN PROGRESS (Nov 21, 2025)
+
+### Metadata Extraction Completely Broken
+
+- [ ] **URGENT**: Debug why metadata extraction returns empty/Unknown values
+  - [ ] Add extensive logging to `internal/metadata/extract.go`
+  - [ ] Verify mediainfo library is working (test with actual file)
+  - [ ] Check field mappings: Album → Title, Performer → Narrator, Composer →
+        Author
+  - [ ] Test file:
+        `/Users/jdfalk/Downloads/test_books/[PZG] My Quiet Blacksmith Life.../... [PZG].m4b`
+  - Has perfect metadata: Album="My Quiet Blacksmith Life in Another World, Vol.
+    01", Performer="Greg Chun", Composer="Tamamaru", Publisher="Podium Audio"
+
+### AI Parsing Not Working
+
+- [ ] **URGENT**: Fix OpenAI integration in scanner workflow
+  - [ ] Add logging when AI parser is created and called
+  - [ ] Verify config.AppConfig.OpenAIAPIKey is loaded (not empty)
+  - [ ] Check if AI parsing is being called when metadata incomplete
+  - [ ] Review error handling - might be failing silently
+  - [ ] Confirm timeout/context handling doesn't break parsing
+
+### Volume Number Extraction Missing
+
+- [ ] **HIGH**: Add volume/book number detection
+  - [ ] Create regex patterns for: Vol. 01, Vol 01, Volume 1, Book 1, Bk. 1, Bk
+        1
+  - [ ] Extract to `series_position` field in database
+  - [ ] Apply to both filename parsing AND album tag parsing
+  - [ ] Handle both "Vol. 01" and "Volume 1" style formats
+
+### Template Variables in Organized Paths
+
+- [ ] **HIGH**: Fix organizer writing literal `{series}` and `{narrator}`
+  - [ ] Validate all template variables have values before organizing
+  - [ ] Use defaults for missing fields: "Unknown" for author, "narrator" for
+        narrator
+  - [ ] Add pre-organize validation to prevent template literals in filesystem
+  - [ ] Fix existing corrupted paths: `library/Unknown Author/{series}/...`
+
+### Duplicate Detection Needs Testing
+
+- [ ] **MEDIUM**: Test hash-based duplicate detection (added v1.9.0 but
+      untested)
+  - [ ] Delete existing duplicate records with `cleanup_invalid_books.go`
+  - [ ] Run Full Rescan with duplicate detection enabled
+  - [ ] Verify 4 unique books created (not 8) when same files in library +
+        import path
+  - [ ] Check logs for "Found duplicate book by hash" and "Skipping duplicate"
+        messages
 
 ## Extended Improvement Backlog
 
 ### Observability & Monitoring
 
-- [ ] Structured application metrics endpoint (Prometheus `/metrics`, operation duration histograms, scan/organize counters)
-- [ ] Per-operation timing summary stored after completion (wall time, file count, throughput)
+- [ ] Structured application metrics endpoint (Prometheus `/metrics`, operation
+      duration histograms, scan/organize counters)
+- [ ] Per-operation timing summary stored after completion (wall time, file
+      count, throughput)
 - [ ] Slow operation detector (warn if scan > configurable threshold)
 - [ ] Library growth trend stats (daily book count snapshot table)
-- [ ] File integrity checker (periodic checksum verification with mismatch surfacing)
+- [ ] File integrity checker (periodic checksum verification with mismatch
+      surfacing)
 - [ ] Background health check SSE pings (report DB latency classification)
 - [ ] Error aggregation dashboard (top recurring errors with counts)
 
 ### Performance
 
 - [ ] Parallel scanning (goroutine pool respecting `concurrent_scans` setting)
-- [ ] Debounced library size recomputation using inotify / fsnotify events instead of periodic full walk
+- [ ] Debounced library size recomputation using inotify / fsnotify events
+      instead of periodic full walk
 - [ ] Caching layer for frequent book queries (LRU keyed by filter + page)
 - [ ] Batch metadata fetch pipeline (queue & coalesce external API calls)
-- [ ] Adaptive operation worker scaling (increase workers under backlog, shrink when idle)
+- [ ] Adaptive operation worker scaling (increase workers under backlog, shrink
+      when idle)
 - [ ] Memory pressure monitor triggering GC hints / cache trimming
 
 ### Reliability & Resilience
@@ -342,7 +451,8 @@
 - [ ] Operation retry policy for transient failures (network metadata retrieval)
 - [ ] Circuit breaker for external metadata sources (avoid cascading failures)
 - [ ] Transactional organize rollback journal (record actions, allow revert)
-- [ ] Startup self-diagnostic (verify paths writable, database schema current, config sanity)
+- [ ] Startup self-diagnostic (verify paths writable, database schema current,
+      config sanity)
 
 ### UX / Frontend
 
@@ -361,7 +471,8 @@
 
 - [ ] PATCH support for partial audiobook updates
 - [ ] Bulk import endpoint for multiple file paths in one request
-- [ ] Webhook system for external integrations (scan complete, organize complete)
+- [ ] Webhook system for external integrations (scan complete, organize
+      complete)
 - [ ] Rate limiting (token bucket) for expensive endpoints
 - [ ] ETag / caching headers for read-only endpoints
 - [ ] API key auth layer (for third-party consumers)
@@ -376,7 +487,8 @@
 
 ### Database & Data Quality
 
-- [ ] Deduplication job (identify same book with different filenames via fuzzy match)
+- [ ] Deduplication job (identify same book with different filenames via fuzzy
+      match)
 - [ ] Orphan file detector (files on disk not represented in DB)
 - [ ] Full-text search index (author/title/narrator) for advanced queries
 - [ ] Incremental migration harness with dry-run mode
@@ -385,14 +497,16 @@
 ### Operation Queue Improvements
 
 - [ ] Priority aging (long-waiting normal ops get temporary priority boost)
-- [ ] Operation dependency graph (organize waits for scan completion for same folder)
+- [ ] Operation dependency graph (organize waits for scan completion for same
+      folder)
 - [ ] Pause / resume queue functionality
 - [ ] Real-time worker utilization stats
 - [ ] Rate-controlled progress events (coalesce rapid updates)
 
 ### Real-Time & Streaming
 
-- [ ] Upgrade SSE hub to optional WebSocket mode for bidirectional cancel/resubscribe
+- [ ] Upgrade SSE hub to optional WebSocket mode for bidirectional
+      cancel/resubscribe
 - [ ] Client subscription refinement (subscribe to multiple ops, filter types)
 - [ ] Replay last N events on connect for quick hydration
 
@@ -483,7 +597,8 @@
 
 ### Data Analysis / Insights
 
-- [ ] Quality upgrade suggestions (identify low bitrate books with higher quality versions available)
+- [ ] Quality upgrade suggestions (identify low bitrate books with higher
+      quality versions available)
 - [ ] Duplicate version ranking (present best candidate to keep)
 - [ ] Usage analytics (most scanned folders, peak operation times)
 
@@ -504,4 +619,5 @@
 - [ ] Embedded help panel with contextual docs
 - [ ] CLI progress mirroring (serve mode exposes op summary to CLI)
 - [ ] Export organized library manifest (JSON + checksums)
-- [ ] Plugin system scaffold (register metadata providers / transcoding strategies)
+- [ ] Plugin system scaffold (register metadata providers / transcoding
+      strategies)

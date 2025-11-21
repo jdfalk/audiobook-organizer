@@ -6,18 +6,22 @@
 
 ## Overview
 
-The V2 test script (`test-organize-import-v2.py`) provides a **book-centric** view of your audiobook collection instead of a file-centric view, with intelligent duplicate detection.
+The V2 test script (`test-organize-import-v2.py`) provides a **book-centric**
+view of your audiobook collection instead of a file-centric view, with
+intelligent duplicate detection.
 
 ## Key Improvements Over V1
 
 ### 1. Book Grouping
 
 **V1 Behavior:** Each file was treated as a separate entry
+
 - 100 chapter files = 100 entries in the report
 - Hard to see which files belong together
 - Inflated book counts
 
 **V2 Behavior:** Files are grouped by book
+
 - 100 chapter files = 1 book entry with 100 files listed
 - Clear view of multi-file audiobooks
 - Accurate book counts
@@ -25,10 +29,12 @@ The V2 test script (`test-organize-import-v2.py`) provides a **book-centric** vi
 ### 2. Duplicate/Version Detection
 
 **V1 Behavior:** No duplicate detection
+
 - Same book in different formats appeared as separate unrelated entries
 - No way to identify redundant copies
 
 **V2 Behavior:** Intelligent version linking
+
 - Same book in different formats/qualities are linked together
 - Each version shows:
   - Format (m4b, mp3, flac, etc.)
@@ -39,10 +45,12 @@ The V2 test script (`test-organize-import-v2.py`) provides a **book-centric** vi
 ### 3. Multi-File Book Handling
 
 **V1 Behavior:** Each chapter file was a separate book
+
 - Lost the connection between chapters
 - Couldn't tell if files were complete
 
 **V2 Behavior:** Chapters grouped under parent book
+
 - Shows total file count per version
 - Lists chapter numbers if detected
 - Indicates if book is multi-file vs single-file
@@ -50,10 +58,12 @@ The V2 test script (`test-organize-import-v2.py`) provides a **book-centric** vi
 ### 4. Better Statistics
 
 **V1 Stats:**
+
 - Total files processed
 - Books with series
 
 **V2 Stats:**
+
 - Total books identified (accurate count)
 - Multi-file books count
 - Duplicate versions count

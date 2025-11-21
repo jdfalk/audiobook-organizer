@@ -1074,7 +1074,7 @@ func (s *Server) startScan(c *gin.Context) {
 				foldersToScan = append(foldersToScan, config.AppConfig.RootDir)
 				_ = progress.Log("info", fmt.Sprintf("Full rescan: including library folder %s", config.AppConfig.RootDir), nil)
 			}
-			
+
 			// Add all library folders (import paths)
 			folders, err := database.GlobalStore.GetAllLibraryFolders()
 			if err != nil {
@@ -1133,7 +1133,7 @@ func (s *Server) startScan(c *gin.Context) {
 				} else {
 					_ = progress.Log("info", fmt.Sprintf("Successfully processed %d books", len(books)), nil)
 				}
-			}
+
 				// Auto-organize if enabled
 				if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
 					org := organizer.NewOrganizer(&config.AppConfig)

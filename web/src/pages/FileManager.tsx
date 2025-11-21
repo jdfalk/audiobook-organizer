@@ -25,8 +25,14 @@ import {
   NavigateNext as NavigateNextIcon,
   FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material';
-import { DirectoryTree, DirectoryNode } from '../components/filemanager/DirectoryTree';
-import { LibraryFolderCard, LibraryFolder } from '../components/filemanager/LibraryFolderCard';
+import {
+  DirectoryTree,
+  DirectoryNode,
+} from '../components/filemanager/DirectoryTree';
+import {
+  LibraryFolderCard,
+  LibraryFolder,
+} from '../components/filemanager/LibraryFolderCard';
 
 export function FileManager() {
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
@@ -86,7 +92,9 @@ export function FileManager() {
 
       setLibraryFolders((prev) =>
         prev.map((f) =>
-          f.id === folder.id ? { ...f, status: 'scanning' as const, progress: 0 } : f
+          f.id === folder.id
+            ? { ...f, status: 'scanning' as const, progress: 0 }
+            : f
         )
       );
 
@@ -97,7 +105,14 @@ export function FileManager() {
         setLibraryFolders((prev) =>
           prev.map((f) =>
             f.id === folder.id
-              ? { ...f, progress, status: progress >= 100 ? ('complete' as const) : ('scanning' as const) }
+              ? {
+                  ...f,
+                  progress,
+                  status:
+                    progress >= 100
+                      ? ('complete' as const)
+                      : ('scanning' as const),
+                }
               : f
           )
         );
@@ -115,7 +130,9 @@ export function FileManager() {
     }
   }, []);
 
-  const handleLoadChildren = async (_path: string): Promise<DirectoryNode[]> => {
+  const handleLoadChildren = async (
+    _path: string
+  ): Promise<DirectoryNode[]> => {
     // TODO: Replace with actual API call
     // const response = await fetch(`/api/v1/filesystem/browse?path=${encodeURIComponent(path)}`);
     // const data = await response.json();
@@ -133,7 +150,9 @@ export function FileManager() {
     folderInputRef.current?.click();
   };
 
-  const handleFolderSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFolderSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -149,7 +168,12 @@ export function FileManager() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
         <Typography variant="h4">File Manager</Typography>
         <Stack direction="row" spacing={2}>
           <Button
@@ -188,7 +212,8 @@ export function FileManager() {
           </Typography>
           {libraryFolders.length === 0 ? (
             <Alert severity="info">
-              No library folders added yet. Click "Add Library Folder" to get started.
+              No library folders added yet. Click "Add Library Folder" to get
+              started.
             </Alert>
           ) : (
             <Grid container spacing={2}>
@@ -253,7 +278,12 @@ export function FileManager() {
         )}
       </Grid>
 
-      <Dialog open={addFolderOpen} onClose={() => setAddFolderOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={addFolderOpen}
+        onClose={() => setAddFolderOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Add Library Folder</DialogTitle>
         <DialogContent>
           <TextField
@@ -270,7 +300,11 @@ export function FileManager() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddFolderOpen(false)}>Cancel</Button>
-          <Button onClick={handleAddFolder} variant="contained" disabled={!newFolderPath.trim()}>
+          <Button
+            onClick={handleAddFolder}
+            variant="contained"
+            disabled={!newFolderPath.trim()}
+          >
             Add Folder
           </Button>
         </DialogActions>

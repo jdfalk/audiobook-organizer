@@ -59,17 +59,21 @@ export const Library = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortBy, setSortBy] = useState<import('../components/audiobooks/SearchBar').SortOption>('title');
+  const [sortBy, setSortBy] =
+    useState<import('../components/audiobooks/SearchBar').SortOption>('title');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(null);
+  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(
+    null
+  );
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [hasLibraryFolders, setHasLibraryFolders] = useState(true);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
-  const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
+  const [versionManagingAudiobook, setVersionManagingAudiobook] =
+    useState<Audiobook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Import path management
@@ -78,11 +82,25 @@ export const Library = () => {
   const [addPathDialogOpen, setAddPathDialogOpen] = useState(false);
   const [newImportPath, setNewImportPath] = useState('');
   const [showServerBrowser, setShowServerBrowser] = useState(false);
-  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(null);
+  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(
+    null
+  );
   const [organizeRunning, setOrganizeRunning] = useState(false);
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
-  const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
-  const [operationLogs, setOperationLogs] = useState<Record<string, { level: string; message: string; details?: string; timestamp: number; expanded?: boolean }[]>>({});
+  const [activeOrganizeOp, setActiveOrganizeOp] =
+    useState<api.Operation | null>(null);
+  const [operationLogs, setOperationLogs] = useState<
+    Record<
+      string,
+      {
+        level: string;
+        message: string;
+        details?: string;
+        timestamp: number;
+        expanded?: boolean;
+      }[]
+    >
+  >({});
   const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -108,9 +126,14 @@ export const Library = () => {
           try {
             const hist = await api.getOperationLogsTail(op.id, 100);
             if (hist && hist.length) {
-              setOperationLogs(prev => ({
+              setOperationLogs((prev) => ({
                 ...prev,
-                [op.id]: hist.map((h: api.OperationLog) => ({ level: h.level, message: h.message, details: h.details, timestamp: Date.parse(h.created_at) || Date.now() }))
+                [op.id]: hist.map((h: api.OperationLog) => ({
+                  level: h.level,
+                  message: h.message,
+                  details: h.details,
+                  timestamp: Date.parse(h.created_at) || Date.now(),
+                })),
               }));
             }
           } catch (e) {
@@ -138,28 +161,43 @@ export const Library = () => {
 
           if (evt.type === 'operation.log') {
             const opId = evt.data.operation_id;
-            setOperationLogs(prev => {
+            setOperationLogs((prev) => {
               const existing = prev[opId] || [];
-              const next = [...existing, { level: evt.data.level, message: evt.data.message, details: evt.data.details, timestamp: Date.now() }];
+              const next = [
+                ...existing,
+                {
+                  level: evt.data.level,
+                  message: evt.data.message,
+                  details: evt.data.details,
+                  timestamp: Date.now(),
+                },
+              ];
               return { ...prev, [opId]: next.slice(-200) };
             });
           } else if (evt.type === 'operation.progress') {
             const opId = evt.data.operation_id;
             const update = (op: api.Operation | null): api.Operation | null => {
               if (!op || op.id !== opId) return op;
-              return { ...op, progress: evt.data.current, total: evt.data.total, message: evt.data.message };
+              return {
+                ...op,
+                progress: evt.data.current,
+                total: evt.data.total,
+                message: evt.data.message,
+              };
             };
-            setActiveScanOp(prev => update(prev));
-            setActiveOrganizeOp(prev => update(prev));
+            setActiveScanOp((prev) => update(prev));
+            setActiveOrganizeOp((prev) => update(prev));
           } else if (evt.type === 'operation.status') {
             const opId = evt.data.operation_id;
             const status = evt.data.status;
-            const finalize = (op: api.Operation | null): api.Operation | null => {
+            const finalize = (
+              op: api.Operation | null
+            ): api.Operation | null => {
               if (!op || op.id !== opId) return op;
               return { ...op, status };
             };
-            setActiveScanOp(prev => finalize(prev));
-            setActiveOrganizeOp(prev => finalize(prev));
+            setActiveScanOp((prev) => finalize(prev));
+            setActiveOrganizeOp((prev) => finalize(prev));
           }
         } catch {
           // ignore parse errors
@@ -210,13 +248,15 @@ export const Library = () => {
 
       // Fetch audiobooks and library folders
       const [books, folders, bookCount] = await Promise.all([
-        debouncedSearch ? api.searchBooks(debouncedSearch, limit) : api.getBooks(limit, offset),
+        debouncedSearch
+          ? api.searchBooks(debouncedSearch, limit)
+          : api.getBooks(limit, offset),
         api.getLibraryFolders(),
         debouncedSearch ? Promise.resolve(0) : api.countBooks(),
       ]);
 
       // Convert API books to Audiobook type
-      const convertedBooks: Audiobook[] = books.map(book => ({
+      const convertedBooks: Audiobook[] = books.map((book) => ({
         id: book.id,
         title: book.title,
         author: book.author_name || 'Unknown',
@@ -245,20 +285,28 @@ export const Library = () => {
           case 'author':
             return (a.author || '').localeCompare(b.author || '');
           case 'date_added':
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            return (
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+            );
           case 'date_modified':
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+            return (
+              new Date(b.updated_at).getTime() -
+              new Date(a.updated_at).getTime()
+            );
           default:
             return 0;
         }
       });
 
       setAudiobooks(sortedBooks);
-      setTotalPages(Math.ceil((debouncedSearch ? books.length : bookCount) / limit));
+      setTotalPages(
+        Math.ceil((debouncedSearch ? books.length : bookCount) / limit)
+      );
       setHasLibraryFolders(folders.length > 0);
 
       // Load import paths
-      const convertedPaths: ImportPath[] = folders.map(folder => ({
+      const convertedPaths: ImportPath[] = folders.map((folder) => ({
         id: folder.id.toString(),
         path: folder.path,
         status: 'idle',
@@ -278,7 +326,9 @@ export const Library = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -350,7 +400,12 @@ export const Library = () => {
       //     updates
       //   })
       // });
-      console.log('Batch updated:', selectedAudiobooks.length, 'audiobooks with', updates);
+      console.log(
+        'Batch updated:',
+        selectedAudiobooks.length,
+        'audiobooks with',
+        updates
+      );
 
       // Update local state
       setAudiobooks((prev) =>
@@ -402,7 +457,10 @@ export const Library = () => {
   const handleParseWithAI = async (audiobook: Audiobook) => {
     try {
       const result = await api.parseAudiobookWithAI(audiobook.id);
-      console.log(`AI parsing completed with ${result.confidence} confidence:`, result.book);
+      console.log(
+        `AI parsing completed with ${result.confidence} confidence:`,
+        result.book
+      );
       // Reload audiobooks to show updated data
       loadAudiobooks();
     } catch (error) {
@@ -417,7 +475,8 @@ export const Library = () => {
   };
 
   const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '').length;
+    return Object.values(filters).filter((v) => v !== undefined && v !== '')
+      .length;
   };
 
   // Import path management handlers
@@ -425,7 +484,10 @@ export const Library = () => {
     if (!newImportPath.trim()) return;
 
     try {
-      const detailed = await api.addLibraryFolderDetailed(newImportPath, newImportPath.split('/').pop() || 'Library');
+      const detailed = await api.addLibraryFolderDetailed(
+        newImportPath,
+        newImportPath.split('/').pop() || 'Library'
+      );
       const folder = detailed.folder;
       const newPath: ImportPath = {
         id: folder.id.toString(),
@@ -447,15 +509,21 @@ export const Library = () => {
         const poll = async () => {
           try {
             const op = await api.getOperationStatus(opId);
-            if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
+            if (
+              op.status === 'completed' ||
+              op.status === 'failed' ||
+              op.status === 'canceled'
+            ) {
               // Refresh folder list to get updated book counts
               const folders = await api.getLibraryFolders();
-              setImportPaths(folders.map(f => ({
-                id: f.id.toString(),
-                path: f.path,
-                status: 'idle',
-                book_count: f.book_count,
-              })));
+              setImportPaths(
+                folders.map((f) => ({
+                  id: f.id.toString(),
+                  path: f.path,
+                  status: 'idle',
+                  book_count: f.book_count,
+                }))
+              );
               return; // stop polling
             }
             attempts++;
@@ -502,12 +570,14 @@ export const Library = () => {
       async (op) => {
         if (type === 'scan') {
           const folders = await api.getLibraryFolders();
-          setImportPaths(folders.map(f => ({
-            id: f.id.toString(),
-            path: f.path,
-            status: 'idle',
-            book_count: f.book_count,
-          })));
+          setImportPaths(
+            folders.map((f) => ({
+              id: f.id.toString(),
+              path: f.path,
+              status: 'idle',
+              book_count: f.book_count,
+            }))
+          );
           setActiveScanOp(op);
         } else {
           setOrganizeRunning(false);
@@ -524,15 +594,19 @@ export const Library = () => {
 
   const handleScanImportPath = async (id: string) => {
     try {
-      const pathEntry = importPaths.find(p => p.id === id);
+      const pathEntry = importPaths.find((p) => p.id === id);
       const path = pathEntry?.path;
       if (!path) return;
-      setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'scanning' } : p));
+      setImportPaths((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p))
+      );
       const op = await api.startScan(path);
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
-      setImportPaths((prev) => prev.map((p) => p.id === id ? { ...p, status: 'idle' } : p));
+      setImportPaths((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p))
+      );
     }
   };
 
@@ -572,10 +646,21 @@ export const Library = () => {
     }
   };
 
-
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+    <Box
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
         <Typography variant="h4">Library</Typography>
         <Stack direction="row" spacing={2}>
           <Button
@@ -594,65 +679,116 @@ export const Library = () => {
             {getActiveFilterCount() > 0 && (
               <Chip
                 label={getActiveFilterCount()}
-              size="small"
-              color="primary"
-              sx={{ ml: 1 }}
-            />
-          )}
-        </Button>
+                size="small"
+                color="primary"
+                sx={{ ml: 1 }}
+              />
+            )}
+          </Button>
         </Stack>
       </Box>
 
       {systemStatus && (
         <Paper sx={{ p: 2, mb: 3 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            flexWrap="wrap"
+            gap={2}
+          >
             <Box>
-              <Typography variant="h6" gutterBottom>Main Library Storage</Typography>
-              <Typography variant="body2" color={systemStatus.library.path ? 'text.secondary' : 'warning.main'}>
-                Path: {systemStatus.library.path || 'Not configured - Please set library path in Settings'}
+              <Typography variant="h6" gutterBottom>
+                Main Library Storage
+              </Typography>
+              <Typography
+                variant="body2"
+                color={
+                  systemStatus.library.path ? 'text.secondary' : 'warning.main'
+                }
+              >
+                Path:{' '}
+                {systemStatus.library.path ||
+                  'Not configured - Please set library path in Settings'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Books: {systemStatus.library.book_count} | Import Paths: {systemStatus.import_paths?.folder_count || 0}
+                Books: {systemStatus.library.book_count} | Import Paths:{' '}
+                {systemStatus.import_paths?.folder_count || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Size: {(systemStatus.library.total_size / (1024*1024)).toFixed(2)} MB
+                Size:{' '}
+                {(systemStatus.library.total_size / (1024 * 1024)).toFixed(2)}{' '}
+                MB
               </Typography>
               {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total} {activeOrganizeOp.message}
+                      Organizing: {activeOrganizeOp.progress}/
+                      {activeOrganizeOp.total} {activeOrganizeOp.message}
                     </Typography>
-                    <Button size="small" variant="text" onClick={() => api.cancelOperation(activeOrganizeOp.id)}>Cancel</Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => api.cancelOperation(activeOrganizeOp.id)}
+                    >
+                      Cancel
+                    </Button>
                   </Stack>
                   {operationLogs[activeOrganizeOp.id] && (
                     <Box
                       mt={0.5}
-                      ref={(el: HTMLDivElement | null) => { logContainerRefs.current[activeOrganizeOp.id] = el; }}
-                      sx={{ maxHeight: 140, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                      ref={(el: HTMLDivElement | null) => {
+                        logContainerRefs.current[activeOrganizeOp.id] = el;
+                      }}
+                      sx={{
+                        maxHeight: 140,
+                        overflowY: 'auto',
+                        borderLeft: '2px solid',
+                        borderColor: 'divider',
+                        pl: 1,
+                      }}
+                    >
                       {operationLogs[activeOrganizeOp.id].map((l, idx) => (
                         <Box key={idx} sx={{ mb: 0.3 }}>
                           <Typography
                             variant="caption"
                             display="block"
                             sx={{
-                              color: l.level === 'error' ? 'error.main' : l.level === 'warn' ? 'warning.main' : 'text.secondary',
+                              color:
+                                l.level === 'error'
+                                  ? 'error.main'
+                                  : l.level === 'warn'
+                                    ? 'warning.main'
+                                    : 'text.secondary',
                               fontWeight: l.level === 'error' ? 600 : 400,
-                              cursor: l.details ? 'pointer' : 'default'
+                              cursor: l.details ? 'pointer' : 'default',
                             }}
                             onClick={() => {
                               if (!l.details) return;
-                              setOperationLogs(prev => {
+                              setOperationLogs((prev) => {
                                 const arr = prev[activeOrganizeOp.id] || [];
-                                const updated = arr.map((item, i) => i === idx ? { ...item, expanded: !item.expanded } : item);
-                                return { ...prev, [activeOrganizeOp.id]: updated };
+                                const updated = arr.map((item, i) =>
+                                  i === idx
+                                    ? { ...item, expanded: !item.expanded }
+                                    : item
+                                );
+                                return {
+                                  ...prev,
+                                  [activeOrganizeOp.id]: updated,
+                                };
                               });
                             }}
                           >
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>{l.details}</Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ ml: 1.5, color: 'text.secondary' }}
+                            >
+                              {l.details}
+                            </Typography>
                           )}
                         </Box>
                       ))}
@@ -664,30 +800,55 @@ export const Library = () => {
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Scanning: {activeScanOp.progress}/{activeScanOp.total} {activeScanOp.message}
+                      Scanning: {activeScanOp.progress}/{activeScanOp.total}{' '}
+                      {activeScanOp.message}
                     </Typography>
-                    <Button size="small" variant="text" onClick={() => api.cancelOperation(activeScanOp.id)}>Cancel</Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => api.cancelOperation(activeScanOp.id)}
+                    >
+                      Cancel
+                    </Button>
                   </Stack>
                   {operationLogs[activeScanOp.id] && (
                     <Box
                       mt={0.5}
-                      ref={(el: HTMLDivElement | null) => { logContainerRefs.current[activeScanOp.id] = el; }}
-                      sx={{ maxHeight: 140, overflowY: 'auto', borderLeft: '2px solid', borderColor: 'divider', pl: 1 }}>
+                      ref={(el: HTMLDivElement | null) => {
+                        logContainerRefs.current[activeScanOp.id] = el;
+                      }}
+                      sx={{
+                        maxHeight: 140,
+                        overflowY: 'auto',
+                        borderLeft: '2px solid',
+                        borderColor: 'divider',
+                        pl: 1,
+                      }}
+                    >
                       {operationLogs[activeScanOp.id].map((l, idx) => (
                         <Box key={idx} sx={{ mb: 0.3 }}>
                           <Typography
                             variant="caption"
                             display="block"
                             sx={{
-                              color: l.level === 'error' ? 'error.main' : l.level === 'warn' ? 'warning.main' : 'text.secondary',
+                              color:
+                                l.level === 'error'
+                                  ? 'error.main'
+                                  : l.level === 'warn'
+                                    ? 'warning.main'
+                                    : 'text.secondary',
                               fontWeight: l.level === 'error' ? 600 : 400,
-                              cursor: l.details ? 'pointer' : 'default'
+                              cursor: l.details ? 'pointer' : 'default',
                             }}
                             onClick={() => {
                               if (!l.details) return;
-                              setOperationLogs(prev => {
+                              setOperationLogs((prev) => {
                                 const arr = prev[activeScanOp.id] || [];
-                                const updated = arr.map((item, i) => i === idx ? { ...item, expanded: !item.expanded } : item);
+                                const updated = arr.map((item, i) =>
+                                  i === idx
+                                    ? { ...item, expanded: !item.expanded }
+                                    : item
+                                );
                                 return { ...prev, [activeScanOp.id]: updated };
                               });
                             }}
@@ -695,7 +856,12 @@ export const Library = () => {
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>{l.details}</Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ ml: 1.5, color: 'text.secondary' }}
+                            >
+                              {l.details}
+                            </Typography>
                           )}
                         </Box>
                       ))}
@@ -724,7 +890,12 @@ export const Library = () => {
               <Button
                 variant="outlined"
                 onClick={async () => {
-                  try { const status = await api.getSystemStatus(); setSystemStatus(status); } catch (e) { /* ignore refresh error */ }
+                  try {
+                    const status = await api.getSystemStatus();
+                    setSystemStatus(status);
+                  } catch (e) {
+                    /* ignore refresh error */
+                  }
                 }}
               >
                 Refresh Stats
@@ -745,243 +916,286 @@ export const Library = () => {
       />
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-      {!hasLibraryFolders ? (
-        <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
-          <FolderOpenIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
-          <Alert severity="info" sx={{ textAlign: 'center' }}>
-            <AlertTitle>No Import Paths Configured</AlertTitle>
-            You haven't added any import paths yet. Get started by:
-            <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
-              <li>Importing individual audiobook files using the "Import Files" button below</li>
-              <li>Adding import paths using the "Add Import Path" button below (watches folders for new files)</li>
-            </ul>
-          </Alert>
-          <Box sx={{ mt: 3 }}>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<UploadIcon />}
-              onClick={handleManualImport}
-              sx={{ mr: 2 }}
-            >
-              Import Files
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              startIcon={<AddIcon />}
-              onClick={() => setAddPathDialogOpen(true)}
-            >
-              Add Import Path
-            </Button>
-          </Box>
-        </Paper>
-      ) : (
-        <Stack spacing={3}>
-          <SearchBar
-            value={searchQuery}
-            onChange={setSearchQuery}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            sortBy={sortBy}
-            onSortChange={setSortBy}
-          />
-
-          {viewMode === 'grid' ? (
-            <AudiobookGrid
-              audiobooks={audiobooks}
-              loading={loading}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onClick={handleClick}
-              onVersionManage={handleVersionManage}
-              onFetchMetadata={handleFetchMetadata}
-              onParseWithAI={handleParseWithAI}
+        {!hasLibraryFolders ? (
+          <Paper
+            sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
+          >
+            <FolderOpenIcon
+              sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }}
             />
-          ) : (
-            <AudiobookList
-              audiobooks={audiobooks}
-              loading={loading}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            onClick={handleClick}
-          />
+            <Alert severity="info" sx={{ textAlign: 'center' }}>
+              <AlertTitle>No Import Paths Configured</AlertTitle>
+              You haven't added any import paths yet. Get started by:
+              <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
+                <li>
+                  Importing individual audiobook files using the "Import Files"
+                  button below
+                </li>
+                <li>
+                  Adding import paths using the "Add Import Path" button below
+                  (watches folders for new files)
+                </li>
+              </ul>
+            </Alert>
+            <Box sx={{ mt: 3 }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<UploadIcon />}
+                onClick={handleManualImport}
+                sx={{ mr: 2 }}
+              >
+                Import Files
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                startIcon={<AddIcon />}
+                onClick={() => setAddPathDialogOpen(true)}
+              >
+                Add Import Path
+              </Button>
+            </Box>
+          </Paper>
+        ) : (
+          <Stack spacing={3}>
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+            />
+
+            {viewMode === 'grid' ? (
+              <AudiobookGrid
+                audiobooks={audiobooks}
+                loading={loading}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onClick={handleClick}
+                onVersionManage={handleVersionManage}
+                onFetchMetadata={handleFetchMetadata}
+                onParseWithAI={handleParseWithAI}
+              />
+            ) : (
+              <AudiobookList
+                audiobooks={audiobooks}
+                loading={loading}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onClick={handleClick}
+              />
+            )}
+
+            {!loading && totalPages > 1 && (
+              <Box display="flex" justifyContent="center" mt={4}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                />
+              </Box>
+            )}
+          </Stack>
         )}
 
-          {!loading && totalPages > 1 && (
-            <Box display="flex" justifyContent="center" mt={4}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={(_, value) => setPage(value)}
-                color="primary"
-              />
-            </Box>
-          )}
-        </Stack>
-      )}
+        <FilterSidebar
+          open={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          authors={[]} // TODO: Load from API
+          series={[]} // TODO: Load from API
+          genres={[]} // TODO: Load from API
+          languages={[]} // TODO: Load from API
+        />
 
-      <FilterSidebar
-        open={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        authors={[]} // TODO: Load from API
-        series={[]} // TODO: Load from API
-        genres={[]} // TODO: Load from API
-        languages={[]} // TODO: Load from API
-      />
+        <MetadataEditDialog
+          open={!!editingAudiobook}
+          audiobook={editingAudiobook}
+          onClose={() => setEditingAudiobook(null)}
+          onSave={handleSaveMetadata}
+        />
 
-      <MetadataEditDialog
-        open={!!editingAudiobook}
-        audiobook={editingAudiobook}
-        onClose={() => setEditingAudiobook(null)}
-        onSave={handleSaveMetadata}
-      />
+        <BatchEditDialog
+          open={batchEditOpen}
+          audiobooks={selectedAudiobooks}
+          onClose={() => setBatchEditOpen(false)}
+          onSave={handleBatchSave}
+        />
 
-      <BatchEditDialog
-        open={batchEditOpen}
-        audiobooks={selectedAudiobooks}
-        onClose={() => setBatchEditOpen(false)}
-        onSave={handleBatchSave}
-      />
+        <VersionManagement
+          audiobookId={versionManagingAudiobook?.id || ''}
+          open={versionManagementOpen}
+          onClose={handleVersionManagementClose}
+          onUpdate={handleVersionUpdate}
+        />
 
-      <VersionManagement
-        audiobookId={versionManagingAudiobook?.id || ''}
-        open={versionManagementOpen}
-        onClose={handleVersionManagementClose}
-        onUpdate={handleVersionUpdate}
-      />
+        {/* Import Path Management Dialog */}
+        <Dialog
+          open={addPathDialogOpen}
+          onClose={() => setAddPathDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
+          <DialogContent>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <strong>Import folders</strong> are watch locations where the
+              scanner looks for new audiobooks. Files discovered here will be
+              copied and organized into your main library path (configured in
+              Settings).
+            </Alert>
 
-      {/* Import Path Management Dialog */}
-      <Dialog open={addPathDialogOpen} onClose={() => setAddPathDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
-        <DialogContent>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Import folders</strong> are watch locations where the scanner looks for new audiobooks. Files discovered here will be copied and organized into your main library path (configured in Settings).
-          </Alert>
-
-          {!showServerBrowser ? (
-            <Box>
-              <TextField
-                autoFocus
-                fullWidth
-                label="Import Path"
-                value={newImportPath}
-                onChange={(e) => setNewImportPath(e.target.value)}
-                placeholder="/path/to/downloads"
-                sx={{ mt: 1 }}
-              />
-              <Button
-                startIcon={<FolderOpenIcon />}
-                onClick={() => setShowServerBrowser(true)}
-                sx={{ mt: 2 }}
-              >
-                Browse Server Filesystem
-              </Button>
-            </Box>
-          ) : (
-            <Box>
-              <Button
-                onClick={() => setShowServerBrowser(false)}
-                sx={{ mb: 2 }}
-              >
-                ← Back to Manual Entry
-              </Button>
-              <ServerFileBrowser
-                initialPath={newImportPath || '/'}
-                onSelect={handleServerBrowserSelect}
-                showFiles={false}
-                allowDirSelect={true}
-                allowFileSelect={false}
-              />
-              {newImportPath && (
-                <Alert severity="success" sx={{ mt: 2 }}>
-                  <Typography variant="body2">
-                    <strong>Selected:</strong> {newImportPath}
-                  </Typography>
-                </Alert>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setAddPathDialogOpen(false); setShowServerBrowser(false); }}>Cancel</Button>
-          <Button onClick={handleAddImportPath} variant="contained" disabled={!newImportPath.trim()}>
-            Add Path
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Import Paths List */}
-      {importPaths.length > 0 && (
-        <Paper sx={{ mt: 2 }}>
-          <Box
-            sx={{
-              p: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-            }}
-            onClick={() => setImportPathsExpanded(!importPathsExpanded)}
-          >
-            <Typography variant="h6">
-              Import Paths ({importPaths.length})
-            </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={(e) => { e.stopPropagation(); handleScanAll(); }}
-                disabled={importPaths.length === 0 || importPaths.some(p => p.status === 'scanning')}
-              >
-                Scan All
-              </Button>
-              <IconButton size="small" onClick={(e) => { e.stopPropagation(); setImportPathsExpanded(!importPathsExpanded); }}>
-                <ExpandMoreIcon
-                  sx={{
-                    transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.3s',
-                  }}
+            {!showServerBrowser ? (
+              <Box>
+                <TextField
+                  autoFocus
+                  fullWidth
+                  label="Import Path"
+                  value={newImportPath}
+                  onChange={(e) => setNewImportPath(e.target.value)}
+                  placeholder="/path/to/downloads"
+                  sx={{ mt: 1 }}
                 />
-              </IconButton>
-            </Stack>
-          </Box>
-          <Collapse in={importPathsExpanded}>
-            <List>
-              {importPaths.map((path) => (
-                <ListItem key={path.id}>
-                  <ListItemText
-                    primary={path.path}
-                    secondary={
-                      path.status === 'scanning'
-                        ? 'Scanning...'
-                        : `${path.book_count} books found`
-                    }
+                <Button
+                  startIcon={<FolderOpenIcon />}
+                  onClick={() => setShowServerBrowser(true)}
+                  sx={{ mt: 2 }}
+                >
+                  Browse Server Filesystem
+                </Button>
+              </Box>
+            ) : (
+              <Box>
+                <Button
+                  onClick={() => setShowServerBrowser(false)}
+                  sx={{ mb: 2 }}
+                >
+                  ← Back to Manual Entry
+                </Button>
+                <ServerFileBrowser
+                  initialPath={newImportPath || '/'}
+                  onSelect={handleServerBrowserSelect}
+                  showFiles={false}
+                  allowDirSelect={true}
+                  allowFileSelect={false}
+                />
+                {newImportPath && (
+                  <Alert severity="success" sx={{ mt: 2 }}>
+                    <Typography variant="body2">
+                      <strong>Selected:</strong> {newImportPath}
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setAddPathDialogOpen(false);
+                setShowServerBrowser(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddImportPath}
+              variant="contained"
+              disabled={!newImportPath.trim()}
+            >
+              Add Path
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Import Paths List */}
+        {importPaths.length > 0 && (
+          <Paper sx={{ mt: 2 }}>
+            <Box
+              sx={{
+                p: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+              }}
+              onClick={() => setImportPathsExpanded(!importPathsExpanded)}
+            >
+              <Typography variant="h6">
+                Import Paths ({importPaths.length})
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleScanAll();
+                  }}
+                  disabled={
+                    importPaths.length === 0 ||
+                    importPaths.some((p) => p.status === 'scanning')
+                  }
+                >
+                  Scan All
+                </Button>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImportPathsExpanded(!importPathsExpanded);
+                  }}
+                >
+                  <ExpandMoreIcon
+                    sx={{
+                      transform: importPathsExpanded
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)',
+                      transition: 'transform 0.3s',
+                    }}
                   />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      onClick={() => handleScanImportPath(path.id)}
-                      disabled={path.status === 'scanning'}
-                      sx={{ mr: 1 }}
-                    >
-                      <RefreshIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => handleRemoveImportPath(path.id)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-          </Collapse>
-        </Paper>
-      )}
+                </IconButton>
+              </Stack>
+            </Box>
+            <Collapse in={importPathsExpanded}>
+              <List>
+                {importPaths.map((path) => (
+                  <ListItem key={path.id}>
+                    <ListItemText
+                      primary={path.path}
+                      secondary={
+                        path.status === 'scanning'
+                          ? 'Scanning...'
+                          : `${path.book_count} books found`
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        onClick={() => handleScanImportPath(path.id)}
+                        disabled={path.status === 'scanning'}
+                        sx={{ mr: 1 }}
+                      >
+                        <RefreshIcon />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => handleRemoveImportPath(path.id)}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                ))}
+              </List>
+            </Collapse>
+          </Paper>
+        )}
       </Box>
     </Box>
   );
