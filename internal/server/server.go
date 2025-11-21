@@ -1579,23 +1579,37 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 		return
 	}
 
-	// Get book count
-	bookCount, err := database.GlobalStore.CountBooks()
-	if err != nil {
-		bookCount = 0
-	}
-
-	// Get library folders
-	folders, err := database.GlobalStore.GetAllLibraryFolders()
+	// Get import folders
+	importFolders, err := database.GlobalStore.GetAllLibraryFolders()
 	if err != nil {
 		log.Printf("[DEBUG] getSystemStatus: Failed to get library folders: %v", err)
-		folders = []database.LibraryFolder{}
+		importFolders = []database.LibraryFolder{}
 	} else {
-		log.Printf("[DEBUG] getSystemStatus: Got %d library folders", len(folders))
-		for i, f := range folders {
+		log.Printf("[DEBUG] getSystemStatus: Got %d library folders", len(importFolders))
+		for i, f := range importFolders {
 			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
 		}
 	}
+
+	// Separate counts: books in RootDir (library) vs import paths
+	allBooks, err := database.GlobalStore.GetAllBooks(100000, 0)
+	if err != nil {
+		allBooks = []database.Book{}
+	}
+
+	libraryBookCount := 0
+	importBookCount := 0
+	rootDir := config.AppConfig.RootDir
+
+	for _, book := range allBooks {
+		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
+			libraryBookCount++
+		} else {
+			importBookCount++
+		}
+	}
+
+	log.Printf("[DEBUG] getSystemStatus: Library books: %d, Import path books: %d", libraryBookCount, importBookCount)
 
 	// Get recent operations
 	recentOps, err := database.GlobalStore.GetRecentOperations(5)
@@ -1611,7 +1625,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	totalSize := cachedLibrarySize
 	if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
 		var newSize int64
-		for _, folder := range folders {
+		for _, folder := range importFolders {
 			if !folder.Enabled {
 				continue
 			}
@@ -1629,13 +1643,33 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 		totalSize = newSize
 	}
 
+	// Calculate size for library vs import paths
+	librarySize := int64(0)
+	importSize := int64(0)
+	if rootDir != "" {
+		if info, err := os.Stat(rootDir); err == nil && info.IsDir() {
+			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					librarySize += info.Size()
+				}
+				return nil
+			})
+		}
+	}
+	importSize = totalSize - librarySize
+
 	c.JSON(http.StatusOK, gin.H{
 		"status": "running",
 		"library": gin.H{
-			"book_count":   bookCount,
-			"folder_count": len(folders),
-			"total_size":   totalSize,
-			"path":         config.AppConfig.RootDir,
+			"book_count":   libraryBookCount,
+			"folder_count": 1, // Always 1 for RootDir
+			"total_size":   librarySize,
+			"path":         rootDir,
+		},
+		"import_paths": gin.H{
+			"book_count":   importBookCount,
+			"folder_count": len(importFolders),
+			"total_size":   importSize,
 		},
 		"memory": gin.H{
 			"alloc_bytes":       memStats.Alloc,

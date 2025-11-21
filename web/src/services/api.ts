@@ -112,6 +112,11 @@ export interface SystemStatus {
     total_size: number;
     path?: string;
   };
+  import_paths: {
+    book_count: number;
+    folder_count: number;
+    total_size: number;
+  };
   memory: {
     alloc_bytes: number;
     total_alloc_bytes: number;
