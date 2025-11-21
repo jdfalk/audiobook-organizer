@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -188,6 +188,7 @@ func (s *Server) setupRoutes() {
 	{
 		// Audiobook routes
 		api.GET("/audiobooks", s.listAudiobooks)
+		api.GET("/audiobooks/count", s.countAudiobooks)
 		api.GET("/audiobooks/:id", s.getAudiobook)
 		api.PUT("/audiobooks/:id", s.updateAudiobook)
 		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
@@ -372,6 +373,23 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books), "limit": limit, "offset": offset})
+}
+
+func (s *Server) countAudiobooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	count, err := database.GlobalStore.CountBooks()
+	if err != nil {
+		log.Printf("[DEBUG] countAudiobooks: Error counting books: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[DEBUG] countAudiobooks: Returning count: %d", count)
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 func (s *Server) getAudiobook(c *gin.Context) {

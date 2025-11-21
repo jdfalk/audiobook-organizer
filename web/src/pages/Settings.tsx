@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.17.0
+// version: 1.18.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -171,6 +171,7 @@ export function Settings() {
   const loadConfig = async () => {
     try {
       const config = await api.getConfig();
+      console.log('[Settings] Loaded config, OpenAI key:', config.openai_api_key);
       // Map all backend config fields to frontend settings format
       setSettings({
         // Library settings
@@ -902,9 +903,12 @@ export function Settings() {
                 value={settings.openaiApiKey}
                 onChange={(e) => handleChange('openaiApiKey', e.target.value)}
                 disabled={!settings.enableAIParsing}
+                placeholder={settings.openaiApiKey && settings.openaiApiKey.startsWith('***') ? 'Key is set (enter new key to change)' : 'sk-...'}
                 helperText={
                   settings.enableAIParsing
-                    ? "Get your API key from https://platform.openai.com/api-keys"
+                    ? (settings.openaiApiKey && settings.openaiApiKey.startsWith('***')
+                        ? "Key is currently set. Enter a new key to update it."
+                        : "Get your API key from https://platform.openai.com/api-keys")
                     : "Enable AI parsing to configure API key"
                 }
                 InputProps={{
