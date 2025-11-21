@@ -1,0 +1,8 @@
+# file: tests/e2e/requirements.txt
+# version: 1.0.0
+# guid: 9a8b7c6d-5e4f-3d2c-1b0a-9e8d7c6b5a4f
+
+selenium>=4.15.0
+pytest>=7.4.0
+pytest-html>=4.1.0
+webdriver-manager>=4.0.0

@@ -1,11 +1,13 @@
 // file: cmd/root.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,6 +47,14 @@ var scanCmd = &cobra.Command{
 	Short: "Scan audiobook directories",
 	Long:  `Scan audiobook directories to identify books and series.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Setup file logging
+		logFile, err := setupFileLogging()
+		if err != nil {
+			fmt.Printf("Warning: Could not setup file logging: %v\n", err)
+		} else {
+			defer logFile.Close()
+		}
+
 		if config.AppConfig.RootDir == "" {
 			return fmt.Errorf("root directory not specified")
 		}
@@ -130,6 +140,14 @@ var organizeCmd = &cobra.Command{
 	Short: "Run the complete organization process",
 	Long:  `Scan audiobooks, identify series, generate playlists, and update tags.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Setup file logging
+		logFile, err := setupFileLogging()
+		if err != nil {
+			fmt.Printf("Warning: Could not setup file logging: %v\n", err)
+		} else {
+			defer logFile.Close()
+		}
+
 		if config.AppConfig.RootDir == "" {
 			return fmt.Errorf("root directory not specified")
 		}
@@ -181,6 +199,15 @@ var serveCmd = &cobra.Command{
 	Short: "Start the web server",
 	Long:  `Start the web server to provide a web interface for audiobook management.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Setup file logging (logs to both file and stdout)
+		logFile, err := setupFileLogging()
+		if err != nil {
+			fmt.Printf("Warning: Could not setup file logging: %v\n", err)
+			fmt.Println("Continuing with stdout-only logging...")
+		} else {
+			defer logFile.Close()
+		}
+
 		// Initialize database
 		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
@@ -344,4 +371,35 @@ func initConfig() {
 	}
 
 	config.InitConfig()
+}
+
+// setupFileLogging configures logging to write to both a file and stdout.
+// Creates logs directory if it doesn't exist and opens/creates a log file with timestamps.
+// Returns the log file handle which should be closed when done.
+func setupFileLogging() (*os.File, error) {
+	// Create logs directory if it doesn't exist
+	logsDir := "logs"
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	// Create log file with timestamp
+	timestamp := time.Now().Format("2006-01-02")
+	logFile := filepath.Join(logsDir, fmt.Sprintf("audiobook-organizer-%s.log", timestamp))
+	
+	// Open log file (append mode, create if doesn't exist)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	// Create multi-writer to write to both file and stdout
+	multiWriter := io.MultiWriter(os.Stdout, file)
+	log.SetOutput(multiWriter)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	log.Printf("=== Audiobook Organizer Started ===")
+	log.Printf("Log file: %s", logFile)
+
+	return file, nil
 }

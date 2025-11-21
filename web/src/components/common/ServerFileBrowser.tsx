@@ -1,5 +1,5 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useState, useEffect } from 'react';
@@ -77,11 +77,7 @@ export function ServerFileBrowser({
   useEffect(() => {
     fetchDirectory(currentPath);
     setEditPath(currentPath);
-    // Automatically notify parent of current path when browsing (if directory selection is allowed)
-    if (allowDirSelect && onSelect) {
-      onSelect(currentPath, true);
-    }
-  }, [currentPath, allowDirSelect, onSelect]);
+  }, [currentPath]);
 
   const fetchDirectory = async (path: string) => {
     setLoading(true);
@@ -91,6 +87,11 @@ export function ServerFileBrowser({
       setItems(result.items);
       setCurrentPath(result.path);
       setDiskInfo(result.disk_info);
+
+      // Automatically notify parent of current path after successful fetch (if directory selection is allowed)
+      if (allowDirSelect && onSelect) {
+        onSelect(result.path, true);
+      }
     } catch (err) {
       console.error('Failed to browse filesystem:', err);
       setError(err instanceof Error ? err.message : 'Failed to browse filesystem');
