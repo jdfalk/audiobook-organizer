@@ -1,5 +1,5 @@
 // file: internal/realtime/events.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9e8d7f6a-5c4b-3a21-0f9e-8d7c6b5a4392
 
 package realtime
@@ -112,8 +112,11 @@ func (h *EventHub) Broadcast(event *Event) {
 
 	count := 0
 	for _, client := range h.clients {
-		// Only send to clients interested in this operation
-		if event.ID == "" || client.IsSubscribed(event.ID) {
+		// Send to clients if:
+		// 1. Event has no ID (system-wide events), OR
+		// 2. Client has no subscriptions (wants all events), OR
+		// 3. Client is subscribed to this specific operation
+		if event.ID == "" || len(client.Operations) == 0 || client.IsSubscribed(event.ID) {
 			select {
 			case client.Channel <- event:
 				count++
