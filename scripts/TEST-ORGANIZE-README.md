@@ -4,14 +4,17 @@
 
 # Audiobook Organizer Testing Guide
 
-This guide explains how to use the `test-organize-import.py` script to test the audiobook organizer's scanning, metadata extraction, and file organization logic against large file lists.
+This guide explains how to use the `test-organize-import.py` script to test the
+audiobook organizer's scanning, metadata extraction, and file organization logic
+against large file lists.
 
 ## Purpose
 
 The test script validates that the audiobook-organizer can:
 
 - **Scan large file lists** efficiently
-- **Extract metadata** from file paths and names (title, author, series, position)
+- **Extract metadata** from file paths and names (title, author, series,
+  position)
 - **Identify series** using pattern matching and heuristics
 - **Generate organized paths** showing how files would be renamed/organized
 - **Report issues** with problematic files
@@ -154,10 +157,13 @@ Examples:
 
 The script identifies these common problems:
 
-1. **Missing or unclear title** - Cannot extract a clear title from path/filename
-2. **Missing or unclear author** - Cannot identify author from directory structure
+1. **Missing or unclear title** - Cannot extract a clear title from
+   path/filename
+2. **Missing or unclear author** - Cannot identify author from directory
+   structure
 3. **Low confidence in metadata extraction** - Overall poor metadata quality
-4. **No series pattern detected** - Book might be standalone or pattern not recognized
+4. **No series pattern detected** - Book might be standalone or pattern not
+   recognized
 
 ## Example Session
 
@@ -225,7 +231,8 @@ Detailed report written to: organize-test-report.json
 
 Use this test to:
 
-1. **Validate pattern matching** - Check if series patterns are correctly identified
+1. **Validate pattern matching** - Check if series patterns are correctly
+   identified
 2. **Identify edge cases** - Find problematic file naming conventions
 3. **Measure accuracy** - Track confidence levels and issue rates
 4. **Optimize algorithms** - Use results to improve extraction heuristics

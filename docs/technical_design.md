@@ -6,17 +6,18 @@
 
 ## Overview
 
-Audiobook Organizer is a command-line application and lightweight HTTP API server
-designed to help users organize their audiobook collections by identifying series,
-generating playlists, and updating audio file metadata. The application scans
-audiobook files, extracts metadata, uses pattern matching and fuzzy logic to
-identify series relationships, and persists information using a pluggable
-storage layer.
+Audiobook Organizer is a command-line application and lightweight HTTP API
+server designed to help users organize their audiobook collections by
+identifying series, generating playlists, and updating audio file metadata. The
+application scans audiobook files, extracts metadata, uses pattern matching and
+fuzzy logic to identify series relationships, and persists information using a
+pluggable storage layer.
 
 Key capabilities:
 
 - CLI workflows for scan, organize, playlist generation, and tagging
-- HTTP API under `/api/v1` for listing/updating audiobooks, works, folders, backups, and metadata ops
+- HTTP API under `/api/v1` for listing/updating audiobooks, works, folders,
+  backups, and metadata ops
 - Safe operations philosophy (copy-first, backups for file writes)
 
 ## Architecture
@@ -72,13 +73,14 @@ Pluggable persistence layer with two implementations:
 - **series**: Stores series information with author relationships
 - **works**: Logical title-level grouping across editions/narrations/languages
 - **books**: Stores book information with paths, formats, series/author links,
-   and extended metadata (see below)
+  and extended metadata (see below)
 - **playlists**: Stores generated playlist information
 - **playlist_items**: Stores the composition of playlists
 
 Identifiers:
 
-- ULID string IDs for books and works (stable, sortable) stored as TEXT in SQLite
+- ULID string IDs for books and works (stable, sortable) stored as TEXT in
+  SQLite
 - Integer IDs retained for authors, series, playlists to match existing schema
 
 Extended Book fields:
@@ -91,7 +93,8 @@ Responsible for discovering and processing audiobook files:
 
 - Walks directory structures to find supported audio files
 - Extracts metadata and identifies series relationships
-- Maps standard tags (title/artist/album) and, where available, narrator/language/publisher
+- Maps standard tags (title/artist/album) and, where available,
+  narrator/language/publisher
 - Establishes a Work association (by normalized title/author) when enabled
 - Maps files to database entities
 
@@ -135,9 +138,11 @@ Updates metadata tags in audio files:
 Exposes a JSON REST API used by the web UI (future) and external tools:
 
 - Audiobooks: `GET /api/v1/audiobooks`, `GET/PUT/DELETE /api/v1/audiobooks/:id`
-- Works: `GET/POST /api/v1/works`, `GET/PUT/DELETE /api/v1/works/:id`, `GET /api/v1/works/:id/books`
-- Metadata: `POST /api/v1/metadata/batch-update`, `POST /api/v1/metadata/validate`,
-  `GET /api/v1/metadata/export`, `POST /api/v1/metadata/import`
+- Works: `GET/POST /api/v1/works`, `GET/PUT/DELETE /api/v1/works/:id`,
+  `GET /api/v1/works/:id/books`
+- Metadata: `POST /api/v1/metadata/batch-update`,
+  `POST /api/v1/metadata/validate`, `GET /api/v1/metadata/export`,
+  `POST /api/v1/metadata/import`
 - Library folders, operations, backups, and system status endpoints
 
 ## Database Schema
@@ -176,8 +181,8 @@ Exposes a JSON REST API used by the web UI (future) and external tools:
 
 Additional tables/keys:
 
-- works (SQLite): id TEXT PK, title TEXT, author_id INT NULL, series_id INT NULL,
-  alt_titles TEXT NULL, created_at, updated_at
+- works (SQLite): id TEXT PK, title TEXT, author_id INT NULL, series_id INT
+  NULL, alt_titles TEXT NULL, created_at, updated_at
 - books (extensions): work_id TEXT NULL, narrator TEXT NULL, edition TEXT NULL,
   language TEXT NULL, publisher TEXT NULL, isbn10 TEXT NULL, isbn13 TEXT NULL
 
@@ -229,7 +234,8 @@ Additional tables/keys:
    - Support for more audio formats
 
 3. **Web Interface**:
-   - Web UI for visualization and manual organization (server already exposes API)
+   - Web UI for visualization and manual organization (server already exposes
+     API)
    - Work and series relationship editing
 
 4. **Advanced Matching**:
@@ -247,7 +253,8 @@ Additional tables/keys:
 3. Limited handling of books that belong to multiple series
 4. Fuzzy matching may produce false positives with similar titles
 5. No handling of cover art or other media assets
-6. PUT semantics replace full objects for updates; PATCH behavior may be added later
+6. PUT semantics replace full objects for updates; PATCH behavior may be added
+   later
 
 7. **Library Organization**:
    - Optionally create a structured library using hard links, reflinks, or

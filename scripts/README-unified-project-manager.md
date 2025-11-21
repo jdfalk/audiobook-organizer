@@ -4,8 +4,9 @@
 <!-- version: 1.0.0 -->
 <!-- guid: 5c6d7e8f-9a0b-1234-5678-9abcdef01234 -->
 
-A comprehensive Python script that manages GitHub Projects across all repositories in the
-organization. This script consolidates and replaces all individual project creation scripts.
+A comprehensive Python script that manages GitHub Projects across all
+repositories in the organization. This script consolidates and replaces all
+individual project creation scripts.
 
 ## 🎯 Overview
 
@@ -23,7 +24,8 @@ The Unified GitHub Project Manager provides:
 ### Cross-Repository Projects
 
 - **gcommon Refactor**: Migration to gcommon modules (gcommon, subtitle-manager)
-- **Security & Logging**: Security enhancements (gcommon, subtitle-manager, ghcommon)
+- **Security & Logging**: Security enhancements (gcommon, subtitle-manager,
+  ghcommon)
 
 ### Repository-Specific Projects
 

@@ -3,13 +3,7 @@
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { useState } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Tabs,
-  Tab,
-} from '@mui/material';
+import { Box, Typography, Paper, Tabs, Tab } from '@mui/material';
 import { LogsTab } from '../components/system/LogsTab';
 import { StorageTab } from '../components/system/StorageTab';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';

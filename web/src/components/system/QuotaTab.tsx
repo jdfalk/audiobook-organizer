@@ -114,13 +114,25 @@ export function QuotaTab() {
     }
   };
 
-  const systemPercentage = getPercentage(quota.systemQuotaUsed, quota.systemQuotaLimit);
+  const systemPercentage = getPercentage(
+    quota.systemQuotaUsed,
+    quota.systemQuotaLimit
+  );
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h6">Quota Information</Typography>
-        <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchQuotaInfo}>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={fetchQuotaInfo}
+        >
           Refresh
         </Button>
       </Stack>
@@ -130,7 +142,12 @@ export function QuotaTab() {
         <Grid item xs={12}>
           <Card>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={2}
+              >
                 <Typography variant="h6">System-wide Quota</Typography>
                 <Chip
                   label={quota.systemQuotaEnabled ? 'Enabled' : 'Disabled'}
@@ -143,21 +160,28 @@ export function QuotaTab() {
                 <>
                   {systemPercentage > 90 && (
                     <Alert severity="error" sx={{ mb: 2 }}>
-                      System quota exceeded! Storage usage is above the configured limit of{' '}
-                      {quota.systemQuotaPercent}% ({formatBytes(quota.systemQuotaLimit)}).
+                      System quota exceeded! Storage usage is above the
+                      configured limit of {quota.systemQuotaPercent}% (
+                      {formatBytes(quota.systemQuotaLimit)}).
                     </Alert>
                   )}
                   {systemPercentage > 75 && systemPercentage <= 90 && (
                     <Alert severity="warning" sx={{ mb: 2 }}>
-                      Approaching system quota limit. Currently at {systemPercentage.toFixed(1)}% of{' '}
+                      Approaching system quota limit. Currently at{' '}
+                      {systemPercentage.toFixed(1)}% of{' '}
                       {quota.systemQuotaPercent}% limit.
                     </Alert>
                   )}
 
                   <Box sx={{ mb: 2 }}>
-                    <Stack direction="row" justifyContent="space-between" mb={1}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      mb={1}
+                    >
                       <Typography variant="body2" color="text.secondary">
-                        {formatBytes(quota.systemQuotaUsed)} used of {formatBytes(quota.systemQuotaLimit)} limit
+                        {formatBytes(quota.systemQuotaUsed)} used of{' '}
+                        {formatBytes(quota.systemQuotaLimit)} limit
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {systemPercentage.toFixed(1)}%
@@ -167,19 +191,27 @@ export function QuotaTab() {
                       variant="determinate"
                       value={Math.min(systemPercentage, 100)}
                       sx={{ height: 10, borderRadius: 1 }}
-                      color={systemPercentage > 90 ? 'error' : systemPercentage > 75 ? 'warning' : 'primary'}
+                      color={
+                        systemPercentage > 90
+                          ? 'error'
+                          : systemPercentage > 75
+                            ? 'warning'
+                            : 'primary'
+                      }
                     />
                   </Box>
 
                   <Typography variant="body2" color="text.secondary">
-                    Maximum disk usage is limited to {quota.systemQuotaPercent}% of total available space
+                    Maximum disk usage is limited to {quota.systemQuotaPercent}%
+                    of total available space
                   </Typography>
                 </>
               )}
 
               {!quota.systemQuotaEnabled && (
                 <Typography variant="body2" color="text.secondary">
-                  No system-wide quota is currently configured. The application can use all available disk space.
+                  No system-wide quota is currently configured. The application
+                  can use all available disk space.
                 </Typography>
               )}
             </CardContent>
@@ -191,7 +223,12 @@ export function QuotaTab() {
           <Grid item xs={12}>
             <Card>
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mb={2}
+                >
                   <Typography variant="h6">Per-User Quotas</Typography>
                   <Chip label="Multi-User Mode" color="primary" size="small" />
                 </Stack>
@@ -201,18 +238,38 @@ export function QuotaTab() {
                     const percentage = getPercentage(user.used, user.limit);
                     return (
                       <Paper key={user.username} sx={{ p: 2 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                          <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          mb={1}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
                             {getStatusIcon(user.status)}
-                            <Typography variant="subtitle1">{user.username}</Typography>
+                            <Typography variant="subtitle1">
+                              {user.username}
+                            </Typography>
                           </Stack>
-                          <Chip label={user.status.toUpperCase()} size="small" color={getStatusColor(user.status)} />
+                          <Chip
+                            label={user.status.toUpperCase()}
+                            size="small"
+                            color={getStatusColor(user.status)}
+                          />
                         </Stack>
 
                         <Box sx={{ mb: 1 }}>
-                          <Stack direction="row" justifyContent="space-between" mb={0.5}>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            mb={0.5}
+                          >
                             <Typography variant="body2" color="text.secondary">
-                              {formatBytes(user.used)} used of {formatBytes(user.limit)} limit
+                              {formatBytes(user.used)} used of{' '}
+                              {formatBytes(user.limit)} limit
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                               {percentage.toFixed(1)}%
@@ -222,7 +279,13 @@ export function QuotaTab() {
                             variant="determinate"
                             value={Math.min(percentage, 100)}
                             sx={{ height: 8, borderRadius: 1 }}
-                            color={percentage > 100 ? 'error' : percentage > 90 ? 'warning' : 'primary'}
+                            color={
+                              percentage > 100
+                                ? 'error'
+                                : percentage > 90
+                                  ? 'warning'
+                                  : 'primary'
+                            }
                           />
                         </Box>
                       </Paper>
@@ -237,8 +300,8 @@ export function QuotaTab() {
         {!quota.userQuotasEnabled && (
           <Grid item xs={12}>
             <Alert severity="info">
-              Per-user quotas are not enabled. Enable multi-user mode in Settings to configure individual user storage
-              limits.
+              Per-user quotas are not enabled. Enable multi-user mode in
+              Settings to configure individual user storage limits.
             </Alert>
           </Grid>
         )}

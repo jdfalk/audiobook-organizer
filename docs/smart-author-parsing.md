@@ -6,7 +6,9 @@
 
 ## Overview
 
-Enhanced the audiobook organizer to intelligently extract author information from filenames with patterns like "Title - Author" or "Author - Title", instead of blindly treating the first part as a series name.
+Enhanced the audiobook organizer to intelligently extract author information
+from filenames with patterns like "Title - Author" or "Author - Title", instead
+of blindly treating the first part as a series name.
 
 ## Problem
 
@@ -27,7 +29,8 @@ Added intelligent parsing that:
 
 1. Detects patterns with " - " separator
 2. Uses heuristics to identify which part is the author name
-3. Looks for proper name patterns (capitalized words, initials with periods, etc.)
+3. Looks for proper name patterns (capitalized words, initials with periods,
+   etc.)
 4. Correctly assigns Title and Author fields
 
 ## Files Modified
@@ -64,15 +67,19 @@ With 10k file test:
 
 Examples of correct parsing:
 
-- "Neural Wraith - K.D. Robertson" → Title: "Neural Wraith", Author: "K.D. Robertson"
-- "Sarah J. Maas - A Court of Wings and Ruin" → Title: "A Court...", Author: "Sarah J. Maas"
-- "Michael Grant - Gone 02 - Hunger" → Title: "Gone 02 - Hunger", Author: "Michael Grant"
+- "Neural Wraith - K.D. Robertson" → Title: "Neural Wraith", Author: "K.D.
+  Robertson"
+- "Sarah J. Maas - A Court of Wings and Ruin" → Title: "A Court...", Author:
+  "Sarah J. Maas"
+- "Michael Grant - Gone 02 - Hunger" → Title: "Gone 02 - Hunger", Author:
+  "Michael Grant"
 
 ## Integration Points
 
 When the organizer code is updated/refactored, ensure:
 
-1. **Metadata extraction** uses the enhanced `metadata.ExtractMetadata()` function
+1. **Metadata extraction** uses the enhanced `metadata.ExtractMetadata()`
+   function
 2. **Path parsing** uses the enhanced `scanner.extractInfoFromPath()` function
 3. **Directory filtering** respects the skip lists for common directory names
 4. **Fallback behavior** still works when patterns aren't detected

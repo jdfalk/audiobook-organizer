@@ -75,7 +75,9 @@ export function Logs() {
       const mockLogs: LogEntry[] = Array.from({ length: 50 }, (_, i) => ({
         id: `log-${i}`,
         timestamp: new Date(Date.now() - i * 60000).toISOString(),
-        level: ['debug', 'info', 'warn', 'error'][Math.floor(Math.random() * 4)] as LogEntry['level'],
+        level: ['debug', 'info', 'warn', 'error'][
+          Math.floor(Math.random() * 4)
+        ] as LogEntry['level'],
         message: [
           'Scanning library folder: /audiobooks/import',
           'Successfully imported audiobook: To Kill a Mockingbird',
@@ -85,7 +87,9 @@ export function Logs() {
           'Memory usage: 45%',
           'Disk quota check: 67% used',
         ][Math.floor(Math.random() * 7)],
-        source: ['scanner', 'importer', 'metadata', 'database', 'organizer'][Math.floor(Math.random() * 5)],
+        source: ['scanner', 'importer', 'metadata', 'database', 'organizer'][
+          Math.floor(Math.random() * 5)
+        ],
         metadata: {
           duration: Math.floor(Math.random() * 1000),
           files_processed: Math.floor(Math.random() * 100),
@@ -114,7 +118,9 @@ export function Logs() {
     }
   };
 
-  const getLevelColor = (level: string): 'error' | 'warning' | 'info' | 'default' => {
+  const getLevelColor = (
+    level: string
+  ): 'error' | 'warning' | 'info' | 'default' => {
     switch (level) {
       case 'error':
         return 'error';
@@ -131,7 +137,11 @@ export function Logs() {
   const filteredLogs = logs.filter((log) => {
     if (levelFilter !== 'all' && log.level !== levelFilter) return false;
     if (sourceFilter !== 'all' && log.source !== sourceFilter) return false;
-    if (searchQuery && !log.message.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (
+      searchQuery &&
+      !log.message.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+      return false;
     return true;
   });
 
@@ -139,14 +149,21 @@ export function Logs() {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChangeRowsPerPage = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
         <Typography variant="h4">Logs & Events</Typography>
         <Stack direction="row" spacing={2}>
           <Button
@@ -155,7 +172,11 @@ export function Logs() {
           >
             Auto Refresh {autoRefresh && '(5s)'}
           </Button>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchLogs}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={fetchLogs}
+          >
             Refresh
           </Button>
         </Stack>
@@ -222,11 +243,16 @@ export function Logs() {
                     <TableCell>
                       <IconButton
                         size="small"
-                        onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
+                        onClick={() =>
+                          setExpandedRow(expandedRow === log.id ? null : log.id)
+                        }
                       >
                         <ExpandMoreIcon
                           sx={{
-                            transform: expandedRow === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transform:
+                              expandedRow === log.id
+                                ? 'rotate(180deg)'
+                                : 'rotate(0deg)',
                             transition: 'transform 0.3s',
                           }}
                         />
@@ -246,13 +272,20 @@ export function Logs() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip label={log.source || 'system'} size="small" variant="outlined" />
+                      <Chip
+                        label={log.source || 'system'}
+                        size="small"
+                        variant="outlined"
+                      />
                     </TableCell>
                     <TableCell>{log.message}</TableCell>
                   </TableRow>
                   {expandedRow === log.id && log.metadata && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ bgcolor: 'background.default' }}>
+                      <TableCell
+                        colSpan={5}
+                        sx={{ bgcolor: 'background.default' }}
+                      >
                         <Collapse in={expandedRow === log.id}>
                           <Box sx={{ p: 2 }}>
                             <Typography variant="subtitle2" gutterBottom>

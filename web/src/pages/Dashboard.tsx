@@ -76,7 +76,10 @@ export function Dashboard() {
       ]);
 
       console.log('[Dashboard] System status:', systemStatus);
-      console.log('[Dashboard] Library folder_count:', systemStatus.library.folder_count);
+      console.log(
+        '[Dashboard] Library folder_count:',
+        systemStatus.library.folder_count
+      );
       console.log('[Dashboard] Book count:', bookCount);
 
       setStats({
@@ -90,13 +93,19 @@ export function Dashboard() {
       });
 
       // Convert recent operations to dashboard format
-      const recentOps = systemStatus.operations.recent.slice(0, 5).map(op => ({
-        id: op.id,
-        type: op.type,
-        status: (op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'running') as 'success' | 'error' | 'running',
-        message: op.message || `${op.type} operation`,
-        timestamp: op.created_at,
-      }));
+      const recentOps = systemStatus.operations.recent
+        .slice(0, 5)
+        .map((op) => ({
+          id: op.id,
+          type: op.type,
+          status: (op.status === 'completed'
+            ? 'success'
+            : op.status === 'failed'
+              ? 'error'
+              : 'running') as 'success' | 'error' | 'running',
+          message: op.message || `${op.type} operation`,
+          timestamp: op.created_at,
+        }));
 
       setOperations(recentOps);
     } catch (error) {
@@ -121,7 +130,11 @@ export function Dashboard() {
     <Card>
       <CardActionArea onClick={onClick} disabled={!onClick}>
         <CardContent>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Box
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+          >
             <Box>
               <Typography color="text.secondary" gutterBottom>
                 {title}
@@ -222,7 +235,11 @@ export function Dashboard() {
                 value={stats.disk_usage_percent}
                 sx={{ height: 8, borderRadius: 1 }}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 0.5, display: 'block' }}
+              >
                 {stats.disk_usage_percent}% of disk used
               </Typography>
             </Box>
@@ -258,7 +275,12 @@ export function Dashboard() {
                       <Chip
                         label={op.type}
                         size="small"
-                        color={getStatusColor(op.status) as 'success' | 'error' | 'default'}
+                        color={
+                          getStatusColor(op.status) as
+                            | 'success'
+                            | 'error'
+                            | 'default'
+                        }
                         variant="outlined"
                       />
                     </Box>

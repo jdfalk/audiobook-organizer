@@ -1,16 +1,22 @@
 # Audiobook Organizer
 
 A comprehensive audiobook management application with a modern web interface and
-powerful Go backend for organizing, managing, and enjoying your audiobook collection.
+powerful Go backend for organizing, managing, and enjoying your audiobook
+collection.
 
 ## 🎯 MVP Development in Progress
 
-**Current Status**: Backend foundation complete (~45% of MVP), React frontend scaffolded
+**Current Status**: Backend foundation complete (~45% of MVP), React frontend
+scaffolded
 
 See our detailed planning documents:
-- **[MVP Specification](docs/mvp-specification.md)**: Complete feature requirements and architecture
-- **[Implementation Plan](docs/mvp-implementation-plan.md)**: 14-week development roadmap
-- **[Progress Analysis](docs/current-progress-analysis.md)**: Current state assessment
+
+- **[MVP Specification](docs/mvp-specification.md)**: Complete feature
+  requirements and architecture
+- **[Implementation Plan](docs/mvp-implementation-plan.md)**: 14-week
+  development roadmap
+- **[Progress Analysis](docs/current-progress-analysis.md)**: Current state
+  assessment
 - **[Executive Summary](docs/mvp-summary.md)**: High-level project overview
 
 ## 🌟 MVP Features
@@ -30,16 +36,22 @@ See our detailed planning documents:
 
 ### ✅ Additional Backend Features
 
-- **Safe File Operations**: Copy-first with SHA256 verification, automatic backups, rollback support
-- **File System API**: Directory browsing, .jabexclude management, disk space checking
-- **Real-time Updates**: Server-Sent Events (SSE) for operation progress, status, and logs
-- **Async Operation Queue**: Priority-based background processing with configurable workers
+- **Safe File Operations**: Copy-first with SHA256 verification, automatic
+  backups, rollback support
+- **File System API**: Directory browsing, .jabexclude management, disk space
+  checking
+- **Real-time Updates**: Server-Sent Events (SSE) for operation progress,
+  status, and logs
+- **Async Operation Queue**: Priority-based background processing with
+  configurable workers
 - **Event Broadcasting**: Automatic client notification for operation updates
-- **Database Backup/Restore**: Compressed backups with checksums, automatic cleanup, restore verification
+- **Database Backup/Restore**: Compressed backups with checksums, automatic
+  cleanup, restore verification
 
 ### ✅ Additional Backend Features (cont'd)
 
-- **Enhanced Metadata API**: Batch updates with validation, export/import, comprehensive validation rules
+- **Enhanced Metadata API**: Batch updates with validation, export/import,
+  comprehensive validation rules
 
 ### 🚧 In Progress (Phase 3: React Frontend Foundation)
 
@@ -77,7 +89,8 @@ See our detailed planning documents:
 
 The existing command-line interface provides a solid foundation with:
 
-- Scanning directories for audiobook files (.m4b, .mp3, .m4a, .aac, .ogg, .flac, .wma)
+- Scanning directories for audiobook files (.m4b, .mp3, .m4a, .aac, .ogg, .flac,
+  .wma)
 - Extracting metadata and analyzing filenames/paths
 - Identifying series relationships using pattern matching and fuzzy logic
 - Storing organization data in a SQLite database (no files are moved)
@@ -107,7 +120,8 @@ go build -o audiobook-organizer
 
 ### Metadata Writing
 
-The application uses **native TagLib** (pure Go with bundled Wasm) for metadata writing by default. This provides:
+The application uses **native TagLib** (pure Go with bundled Wasm) for metadata
+writing by default. This provides:
 
 - Fast, dependency-free tag writing for all formats (MP3, M4B, M4A, FLAC, etc.)
 - No external tools required
@@ -122,7 +136,8 @@ If needed, the app can fall back to external tools:
 - **FLAC**: metaflac (`brew install flac`)
 
 These are only used if the native TagLib write fails.
-```
+
+````
 
 ## Usage
 
@@ -138,7 +153,7 @@ These are only used if the native TagLib write fails.
 
 # Or do everything at once
 ./audiobook-organizer organize --dir /path/to/audiobooks
-```
+````
 
 ## Configuration
 
@@ -158,7 +173,8 @@ api_keys:
 
 For more detailed information, see the
 [Technical Design Document](docs/technical_design.md) and the
-[PebbleDB Keyspace Schema](docs/database-pebble-schema.md) for the database layout and persistence model.
+[PebbleDB Keyspace Schema](docs/database-pebble-schema.md) for the database
+layout and persistence model.
 
 ## License
 

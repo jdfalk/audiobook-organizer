@@ -39,7 +39,12 @@ interface VersionManagementProps {
   onUpdate?: () => void;
 }
 
-export function VersionManagement({ audiobookId, open, onClose, onUpdate }: VersionManagementProps) {
+export function VersionManagement({
+  audiobookId,
+  open,
+  onClose,
+  onUpdate,
+}: VersionManagementProps) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +113,9 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
     return 50;
   };
 
-  const getQualityColor = (tier: number): 'success' | 'info' | 'warning' | 'default' => {
+  const getQualityColor = (
+    tier: number
+  ): 'success' | 'info' | 'warning' | 'default' => {
     if (tier >= 90) return 'success';
     if (tier >= 70) return 'info';
     if (tier >= 50) return 'warning';
@@ -126,7 +133,11 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
         </DialogTitle>
         <DialogContent>
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              onClose={() => setError(null)}
+            >
               {error}
             </Alert>
           )}
@@ -136,8 +147,8 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
           ) : versions.length === 0 ? (
             <Alert severity="info">
               <AlertTitle>No Additional Versions</AlertTitle>
-              This audiobook has no linked versions. Link another version to compare quality,
-              format, or editions.
+              This audiobook has no linked versions. Link another version to
+              compare quality, format, or editions.
             </Alert>
           ) : (
             <List>
@@ -150,23 +161,42 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
                     {index > 0 && <Divider />}
                     <ListItem>
                       <Box sx={{ width: '100%' }}>
-                        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                        <Stack
+                          direction="row"
+                          alignItems="center"
+                          spacing={1}
+                          sx={{ mb: 1 }}
+                        >
                           <IconButton
                             size="small"
                             onClick={() => handleSetPrimary(version.id)}
-                            color={version.is_primary_version ? 'primary' : 'default'}
+                            color={
+                              version.is_primary_version ? 'primary' : 'default'
+                            }
                           >
-                            {version.is_primary_version ? <StarIcon /> : <StarBorderIcon />}
+                            {version.is_primary_version ? (
+                              <StarIcon />
+                            ) : (
+                              <StarBorderIcon />
+                            )}
                           </IconButton>
                           <Typography variant="subtitle1" sx={{ flex: 1 }}>
                             {version.title}
                           </Typography>
                           {version.is_primary_version && (
-                            <Chip label="Primary" color="primary" size="small" />
+                            <Chip
+                              label="Primary"
+                              color="primary"
+                              size="small"
+                            />
                           )}
                         </Stack>
 
-                        <Stack direction="row" spacing={1} sx={{ ml: 5, mb: 1 }}>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          sx={{ ml: 5, mb: 1 }}
+                        >
                           {version.quality && (
                             <Chip
                               label={version.quality}
@@ -175,24 +205,50 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
                             />
                           )}
                           {version.codec && (
-                            <Chip label={version.codec} size="small" variant="outlined" />
+                            <Chip
+                              label={version.codec}
+                              size="small"
+                              variant="outlined"
+                            />
                           )}
                           {version.bitrate && (
-                            <Chip label={`${version.bitrate} kbps`} size="small" variant="outlined" />
+                            <Chip
+                              label={`${version.bitrate} kbps`}
+                              size="small"
+                              variant="outlined"
+                            />
                           )}
                           {version.sample_rate && (
-                            <Chip label={`${version.sample_rate} Hz`} size="small" variant="outlined" />
+                            <Chip
+                              label={`${version.sample_rate} Hz`}
+                              size="small"
+                              variant="outlined"
+                            />
                           )}
                         </Stack>
 
                         {version.version_notes && (
-                          <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>
-                            <InfoIcon sx={{ fontSize: 14, verticalAlign: 'middle', mr: 0.5 }} />
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ ml: 5 }}
+                          >
+                            <InfoIcon
+                              sx={{
+                                fontSize: 14,
+                                verticalAlign: 'middle',
+                                mr: 0.5,
+                              }}
+                            />
                             {version.version_notes}
                           </Typography>
                         )}
 
-                        <Typography variant="caption" color="text.secondary" sx={{ ml: 5, display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ ml: 5, display: 'block' }}
+                        >
                           {version.file_path}
                         </Typography>
                       </Box>
@@ -222,8 +278,9 @@ export function VersionManagement({ audiobookId, open, onClose, onUpdate }: Vers
         <DialogTitle>Link Version</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter the ID of another audiobook to link it as a version. This is useful for
-            different qualities, formats, or editions of the same book.
+            Enter the ID of another audiobook to link it as a version. This is
+            useful for different qualities, formats, or editions of the same
+            book.
           </Typography>
           <TextField
             autoFocus

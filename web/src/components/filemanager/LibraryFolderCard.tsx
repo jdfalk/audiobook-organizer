@@ -93,7 +93,11 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
   return (
     <Card>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+        <Box
+          display="flex"
+          justifyContent="space-between"
+          alignItems="flex-start"
+        >
           <Box display="flex" gap={2} flex={1} alignItems="flex-start">
             <Box mt={0.5}>{getStatusIcon()}</Box>
             <Box flex={1}>
@@ -114,10 +118,16 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
                 <Chip
                   label={folder.status}
                   size="small"
-                  color={getStatusColor() as 'default' | 'success' | 'error' | 'info'}
+                  color={
+                    getStatusColor() as 'default' | 'success' | 'error' | 'info'
+                  }
                 />
                 {folder.book_count !== undefined && (
-                  <Chip label={`${folder.book_count} books`} size="small" variant="outlined" />
+                  <Chip
+                    label={`${folder.book_count} books`}
+                    size="small"
+                    variant="outlined"
+                  />
                 )}
                 {folder.last_scan && (
                   <Chip
@@ -148,7 +158,11 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
         {folder.status === 'scanning' && folder.progress !== undefined && (
           <Box mt={2}>
             <LinearProgress variant="determinate" value={folder.progress} />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mt: 0.5 }}
+            >
               {Math.round(folder.progress)}% complete
             </Typography>
           </Box>

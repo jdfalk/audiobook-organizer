@@ -126,7 +126,7 @@ jobs:
     uses: ./.github/workflows/release-go.yml
     with:
       go-matrix: ${{ needs.detect-languages.outputs.go-matrix }}
-      protobuf-artifacts: 'false'
+      protobuf-artifacts: "false"
     secrets: inherit
 
   # Call Python workflow if Python is detected
@@ -137,7 +137,7 @@ jobs:
     uses: ./.github/workflows/release-python.yml
     with:
       python-matrix: ${{ needs.detect-languages.outputs.python-matrix }}
-      protobuf-artifacts: 'false'
+      protobuf-artifacts: "false"
     secrets: inherit
 
   # Call Frontend workflow if Frontend is detected
@@ -148,7 +148,7 @@ jobs:
     uses: ./.github/workflows/release-frontend.yml
     with:
       frontend-matrix: ${{ needs.detect-languages.outputs.frontend-matrix }}
-      protobuf-artifacts: 'false'
+      protobuf-artifacts: "false"
     secrets: inherit
 
   # Call Docker workflow if Docker is detected
@@ -159,7 +159,7 @@ jobs:
     uses: ./.github/workflows/release-docker.yml
     with:
       docker-matrix: ${{ needs.detect-languages.outputs.docker-matrix }}
-      protobuf-artifacts: 'false'
+      protobuf-artifacts: "false"
       registry: ${{ needs.detect-languages.outputs.registry }}
       image-name: ${{ needs.detect-languages.outputs.image-name }}
     secrets: inherit
@@ -171,7 +171,7 @@ jobs:
     if: needs.detect-languages.outputs.has-rust == 'true'
     uses: ./.github/workflows/release-rust.yml
     with:
-      protobuf-artifacts: 'false'
+      protobuf-artifacts: "false"
     secrets: inherit
 
   # Final status check

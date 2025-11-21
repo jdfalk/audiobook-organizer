@@ -9,18 +9,12 @@ import (
 	"log"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 func main() {
-	// Initialize config
-	if err := config.Load(); err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
 	// Initialize database
-	if err := database.InitializeDatabase("audiobooks.pebble"); err != nil {
+	if err := database.Initialize("audiobooks.pebble"); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer database.Close()

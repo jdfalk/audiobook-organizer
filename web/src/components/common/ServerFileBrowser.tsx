@@ -70,7 +70,8 @@ export function ServerFileBrowser({
   const [items, setItems] = useState<api.FileSystemItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [diskInfo, setDiskInfo] = useState<api.FilesystemBrowseResult['disk_info']>();
+  const [diskInfo, setDiskInfo] =
+    useState<api.FilesystemBrowseResult['disk_info']>();
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
 
@@ -94,7 +95,9 @@ export function ServerFileBrowser({
       }
     } catch (err) {
       console.error('Failed to browse filesystem:', err);
-      setError(err instanceof Error ? err.message : 'Failed to browse filesystem');
+      setError(
+        err instanceof Error ? err.message : 'Failed to browse filesystem'
+      );
     } finally {
       setLoading(false);
     }
@@ -180,7 +183,16 @@ export function ServerFileBrowser({
   return (
     <Box>
       {/* Sticky Path Editor */}
-      <Paper sx={{ p: 2, mb: 2, position: 'sticky', top: 0, zIndex: 10, bgcolor: 'background.paper' }}>
+      <Paper
+        sx={{
+          p: 2,
+          mb: 2,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          bgcolor: 'background.paper',
+        }}
+      >
         <Stack direction="row" alignItems="center" spacing={2} mb={1}>
           <Typography variant="subtitle2" color="text.secondary">
             Current Path:
@@ -220,7 +232,10 @@ export function ServerFileBrowser({
           </Stack>
         ) : (
           <Stack direction="row" spacing={1} alignItems="center">
-            <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ flex: 1 }}>
+            <Breadcrumbs
+              separator={<NavigateNextIcon fontSize="small" />}
+              sx={{ flex: 1 }}
+            >
               {pathParts.map((part, index) => (
                 <Link
                   key={index}
@@ -262,7 +277,11 @@ export function ServerFileBrowser({
               <ListItem>
                 <ListItemText
                   primary="No items found"
-                  secondary={showFiles ? 'This directory is empty' : 'No subdirectories found'}
+                  secondary={
+                    showFiles
+                      ? 'This directory is empty'
+                      : 'No subdirectories found'
+                  }
                 />
               </ListItem>
             )}
@@ -288,7 +307,9 @@ export function ServerFileBrowser({
                 >
                   <ListItemIcon>
                     {item.is_dir ? (
-                      <FolderIcon color={item.excluded ? 'disabled' : 'primary'} />
+                      <FolderIcon
+                        color={item.excluded ? 'disabled' : 'primary'}
+                      />
                     ) : (
                       <FileIcon color="action" />
                     )}
@@ -298,7 +319,9 @@ export function ServerFileBrowser({
                     secondary={
                       !item.is_dir && item.size !== undefined
                         ? `${formatBytes(item.size)}${
-                            item.mod_time ? ` • ${formatDate(item.mod_time)}` : ''
+                            item.mod_time
+                              ? ` • ${formatDate(item.mod_time)}`
+                              : ''
                           }`
                         : null
                     }
@@ -319,10 +342,10 @@ export function ServerFileBrowser({
           {allowDirSelect && allowFileSelect
             ? 'Click folders to navigate. Current folder is automatically selected. Double-click items to explicitly select.'
             : allowDirSelect
-            ? 'Click folders to navigate. Current folder is automatically selected.'
-            : allowFileSelect
-            ? 'Click to navigate, double-click files to select'
-            : 'Click to navigate through directories'}
+              ? 'Click folders to navigate. Current folder is automatically selected.'
+              : allowFileSelect
+                ? 'Click to navigate, double-click files to select'
+                : 'Click to navigate through directories'}
         </Typography>
       </Box>
     </Box>

@@ -69,7 +69,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [children, setChildren] = useState<DirectoryNode[]>(node.children || []);
+  const [children, setChildren] = useState<DirectoryNode[]>(
+    node.children || []
+  );
 
   const handleToggle = async () => {
     if (!node.is_dir) return;
@@ -130,7 +132,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         {node.excluded ? (
           <BlockIcon sx={{ mr: 1, color: 'error.main' }} fontSize="small" />
         ) : expanded ? (
-          <FolderOpenIcon sx={{ mr: 1, color: 'primary.main' }} fontSize="small" />
+          <FolderOpenIcon
+            sx={{ mr: 1, color: 'primary.main' }}
+            fontSize="small"
+          />
         ) : (
           <FolderIcon sx={{ mr: 1, color: 'action.active' }} fontSize="small" />
         )}

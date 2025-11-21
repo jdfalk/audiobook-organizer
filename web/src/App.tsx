@@ -4,7 +4,13 @@
 
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Box, Backdrop, CircularProgress, Typography, Stack } from '@mui/material';
+import {
+  Box,
+  Backdrop,
+  CircularProgress,
+  Typography,
+  Stack,
+} from '@mui/material';
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
@@ -66,7 +72,7 @@ function App() {
         }
       } catch (e) {
         // Server still down, increment attempts
-        setReconnectAttempts(prev => prev + 1);
+        setReconnectAttempts((prev) => prev + 1);
       }
     }, 5000); // Try every 5 seconds
 
@@ -91,9 +97,7 @@ function App() {
       >
         <Stack spacing={3} alignItems="center">
           <CircularProgress color="inherit" size={60} />
-          <Typography variant="h5">
-            Server Shutting Down
-          </Typography>
+          <Typography variant="h5">Server Shutting Down</Typography>
           <Typography variant="body1" sx={{ opacity: 0.8 }}>
             Attempting to reconnect...
           </Typography>

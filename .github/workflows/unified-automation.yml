@@ -14,16 +14,16 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'Operation to perform'
+        description: "Operation to perform"
         required: false
-        default: 'issues'
+        default: "issues"
         type: choice
         options:
           - issues
           - migrate
           - dependencies
       dry_run:
-        description: 'Run in dry-run mode'
+        description: "Run in dry-run mode"
         required: false
         default: false
         type: boolean
@@ -47,7 +47,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies

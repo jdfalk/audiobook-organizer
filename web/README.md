@@ -107,11 +107,13 @@ web/
 The frontend connects to the backend API running on port 8080. In development, Vite proxies `/api` requests to `http://localhost:8080`.
 
 Environment variables:
+
 - `VITE_API_URL` - Override default API base URL (default: `/api/v1`)
 
 ## State Management
 
 Uses Zustand for lightweight state management:
+
 - `useAppStore` - Global app state (loading, notifications, errors)
 - More stores will be added for entity-specific state
 
@@ -124,6 +126,7 @@ Uses Zustand for lightweight state management:
 ## Current Status
 
 Phase 3 (React Frontend Foundation) is complete:
+
 - ✅ Project structure and configuration
 - ✅ Layout and navigation components
 - ✅ Routing with React Router v6
@@ -136,6 +139,7 @@ Phase 3 (React Frontend Foundation) is complete:
 ## Next Steps
 
 Phase 4 will implement the Library Browser:
+
 - Audiobook grid/list views
 - Search and filtering
 - Metadata editing

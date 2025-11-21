@@ -4,7 +4,8 @@
 
 # API Testing Scripts
 
-This directory contains automated and manual testing scripts for the Audiobook Organizer API.
+This directory contains automated and manual testing scripts for the Audiobook
+Organizer API.
 
 ## Available Scripts
 
@@ -192,7 +193,8 @@ cat test-results.json
 
 ## Known Issues
 
-See `docs/api-testing-summary.md` for detailed list of discovered issues and required fixes.
+See `docs/api-testing-summary.md` for detailed list of discovered issues and
+required fixes.
 
 **Summary:**
 

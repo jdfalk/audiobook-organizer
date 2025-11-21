@@ -4,17 +4,20 @@
 
 # Quick Start: Test Audiobook Organizer
 
-Run the test script to validate how the audiobook-organizer would process your file collection.
+Run the test script to validate how the audiobook-organizer would process your
+file collection.
 
 ## 🆕 Version 3 Script (RECOMMENDED - Intelligent Metadata Extraction)
 
 The V3 script uses multiple strategies to extract accurate metadata:
 
 1. **Embedded tags**: Reads ID3/M4A tags from audio files using ffprobe
-2. **Smart filename parsing**: Extracts author from patterns like "Title - Author" or "Author - Title"
+2. **Smart filename parsing**: Extracts author from patterns like "Title -
+   Author" or "Author - Title"
 3. **Fallback to paths**: Uses directory structure as last resort
 
-This multi-layered approach dramatically improves author detection even when files lack embedded metadata tags.
+This multi-layered approach dramatically improves author detection even when
+files lack embedded metadata tags.
 
 ### Test with 20,000 files (recommended starting point)
 
@@ -37,7 +40,8 @@ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
 
 ## Version 2 Script (Path-based grouping)
 
-The V2 script groups files by book and detects duplicates, but uses directory/filename parsing instead of reading tags.
+The V2 script groups files by book and detects duplicates, but uses
+directory/filename parsing instead of reading tags.
 
 ```bash
 ./scripts/test-organize-import-v2.py /Users/jdfalk/repos/scratch/file-list-books --limit 20000
@@ -45,7 +49,8 @@ The V2 script groups files by book and detects duplicates, but uses directory/fi
 
 ## Version 1 Script (File-by-file analysis)
 
-The V1 script processes each file individually (useful for detailed file-level analysis).
+The V1 script processes each file individually (useful for detailed file-level
+analysis).
 
 ```bash
 ./scripts/test-organize-import.py /Users/jdfalk/repos/scratch/file-list-books --limit 1000
@@ -54,7 +59,8 @@ The V1 script processes each file individually (useful for detailed file-level a
 ## What You'll Get (V2 Script)
 
 1. **Console output** with summary statistics
-2. **JSON report** with complete details (default: `organize-test-report-v2.json`)
+2. **JSON report** with complete details (default:
+   `organize-test-report-v2.json`)
 3. **Book-centric view** with all files grouped by book
 4. **Duplicate detection** showing all versions of the same book
 5. **Sample book details** with version and file information
@@ -93,4 +99,5 @@ DUPLICATE GROUPS:
 3. Compare results with actual Go organizer behavior
 4. Update extraction patterns if needed
 
-See [TEST-ORGANIZE-README.md](TEST-ORGANIZE-README.md) for complete documentation.
+See [TEST-ORGANIZE-README.md](TEST-ORGANIZE-README.md) for complete
+documentation.

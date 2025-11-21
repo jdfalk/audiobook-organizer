@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.18.0
+// version: 1.19.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -69,7 +69,7 @@ function TabPanel(props: TabPanelProps) {
         overflowX: 'hidden',
         flex: 1,
         minHeight: 0,
-        p: 3
+        p: 3,
       }}
       {...other}
     >
@@ -116,7 +116,7 @@ export function Settings() {
         enabled: true,
         priority: 1,
         requiresAuth: false,
-        credentials: {}
+        credentials: {},
       },
       {
         id: 'goodreads',
@@ -124,7 +124,7 @@ export function Settings() {
         enabled: true,
         priority: 2,
         requiresAuth: true,
-        credentials: { apiKey: '', apiSecret: '' }
+        credentials: { apiKey: '', apiSecret: '' },
       },
       {
         id: 'openlibrary',
@@ -132,7 +132,7 @@ export function Settings() {
         enabled: false,
         priority: 3,
         requiresAuth: true,
-        credentials: { apiKey: '' }
+        credentials: { apiKey: '' },
       },
       {
         id: 'google-books',
@@ -140,7 +140,7 @@ export function Settings() {
         enabled: false,
         priority: 4,
         requiresAuth: true,
-        credentials: { apiKey: '' }
+        credentials: { apiKey: '' },
       },
     ],
     language: 'en',
@@ -161,6 +161,7 @@ export function Settings() {
   });
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [savedApiKeyMask, setSavedApiKeyMask] = useState<string>(''); // Track if we have a saved key
 
   // Load configuration on mount
   useEffect(() => {
@@ -171,7 +172,14 @@ export function Settings() {
   const loadConfig = async () => {
     try {
       const config = await api.getConfig();
-      console.log('[Settings] Loaded config, OpenAI key:', config.openai_api_key);
+      console.log(
+        '[Settings] Loaded config, OpenAI key:',
+        config.openai_api_key
+      );
+      // Store masked key if present
+      if (config.openai_api_key && config.openai_api_key.includes('***')) {
+        setSavedApiKeyMask(config.openai_api_key);
+      }
       // Map all backend config fields to frontend settings format
       setSettings({
         // Library settings
@@ -179,8 +187,12 @@ export function Settings() {
         organizationStrategy: config.organization_strategy || 'auto',
         scanOnStartup: config.scan_on_startup ?? false,
         autoOrganize: config.auto_organize ?? true,
-        folderNamingPattern: config.folder_naming_pattern || '{author}/{series}/{title} ({print_year})',
-        fileNamingPattern: config.file_naming_pattern || '{title} - {author} - read by {narrator}',
+        folderNamingPattern:
+          config.folder_naming_pattern ||
+          '{author}/{series}/{title} ({print_year})',
+        fileNamingPattern:
+          config.file_naming_pattern ||
+          '{title} - {author} - read by {narrator}',
         createBackups: config.create_backups ?? true,
 
         // Storage quotas
@@ -192,48 +204,52 @@ export function Settings() {
         // Metadata settings
         autoFetchMetadata: config.auto_fetch_metadata ?? true,
         enableAIParsing: config.enable_ai_parsing ?? false,
-        openaiApiKey: config.openai_api_key || '',
-        metadataSources: (config.metadata_sources && config.metadata_sources.length > 0) ? config.metadata_sources.map(source => ({
-          id: source.id,
-          name: source.name,
-          enabled: source.enabled,
-          priority: source.priority,
-          requiresAuth: source.requires_auth,
-          credentials: source.credentials || {} as { [key: string]: string }
-        })) : [
-          {
-            id: 'audible',
-            name: 'Audible',
-            enabled: true,
-            priority: 1,
-            requiresAuth: false,
-            credentials: {}
-          },
-          {
-            id: 'goodreads',
-            name: 'Goodreads',
-            enabled: true,
-            priority: 2,
-            requiresAuth: true,
-            credentials: { apiKey: '', apiSecret: '' }
-          },
-          {
-            id: 'openlibrary',
-            name: 'Open Library',
-            enabled: false,
-            priority: 3,
-            requiresAuth: true,
-            credentials: { apiKey: '' }
-          },
-          {
-            id: 'google-books',
-            name: 'Google Books',
-            enabled: false,
-            priority: 4,
-            requiresAuth: true,
-            credentials: { apiKey: '' }
-          },
-        ],
+        openaiApiKey: '', // Clear field when loading, show placeholder instead
+        metadataSources:
+          config.metadata_sources && config.metadata_sources.length > 0
+            ? config.metadata_sources.map((source) => ({
+                id: source.id,
+                name: source.name,
+                enabled: source.enabled,
+                priority: source.priority,
+                requiresAuth: source.requires_auth,
+                credentials:
+                  source.credentials || ({} as { [key: string]: string }),
+              }))
+            : [
+                {
+                  id: 'audible',
+                  name: 'Audible',
+                  enabled: true,
+                  priority: 1,
+                  requiresAuth: false,
+                  credentials: {},
+                },
+                {
+                  id: 'goodreads',
+                  name: 'Goodreads',
+                  enabled: true,
+                  priority: 2,
+                  requiresAuth: true,
+                  credentials: { apiKey: '', apiSecret: '' },
+                },
+                {
+                  id: 'openlibrary',
+                  name: 'Open Library',
+                  enabled: false,
+                  priority: 3,
+                  requiresAuth: true,
+                  credentials: { apiKey: '' },
+                },
+                {
+                  id: 'google-books',
+                  name: 'Google Books',
+                  enabled: false,
+                  priority: 4,
+                  requiresAuth: true,
+                  credentials: { apiKey: '' },
+                },
+              ],
         language: config.language || 'en',
 
         // Performance settings
@@ -274,7 +290,7 @@ export function Settings() {
     total_tracks: 50,
     bitrate: '320kbps',
     codec: 'AAC',
-    quality: '320kbps AAC'
+    quality: '320kbps AAC',
   };
 
   // Example data for Nancy Drew series book
@@ -296,10 +312,14 @@ export function Settings() {
     total_tracks: 12,
     bitrate: '128kbps',
     codec: 'MP3',
-    quality: '128kbps MP3'
+    quality: '128kbps MP3',
   };
 
-  const generateExample = (pattern: string, exampleData: typeof exampleNoSeries, isFolder: boolean = false) => {
+  const generateExample = (
+    pattern: string,
+    exampleData: typeof exampleNoSeries,
+    isFolder: boolean = false
+  ) => {
     let result = pattern;
     const replacements: Record<string, string> = {
       '{title}': exampleData.title,
@@ -323,12 +343,18 @@ export function Settings() {
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
-      result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      result = result.replace(
+        new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'),
+        value
+      );
     });
 
     // Clean up paths: remove empty segments (e.g., when series is empty)
     if (isFolder) {
-      result = result.split('/').filter(segment => segment.trim() !== '').join('/');
+      result = result
+        .split('/')
+        .filter((segment) => segment.trim() !== '')
+        .join('/');
       return result + '/';
     }
 
@@ -377,7 +403,10 @@ export function Settings() {
     if (!newFolderPath.trim()) return;
 
     try {
-      const folder = await api.addLibraryFolder(newFolderPath, newFolderPath.split('/').pop() || 'Import Folder');
+      const folder = await api.addLibraryFolder(
+        newFolderPath,
+        newFolderPath.split('/').pop() || 'Import Folder'
+      );
       setImportFolders((prev) => [...prev, folder]);
       setNewFolderPath('');
       setShowFolderBrowser(false);
@@ -406,18 +435,27 @@ export function Settings() {
     setSettings((prev) => ({
       ...prev,
       metadataSources: prev.metadataSources.map((source) =>
-        source.id === sourceId ? { ...source, enabled: !source.enabled } : source
+        source.id === sourceId
+          ? { ...source, enabled: !source.enabled }
+          : source
       ),
     }));
     setSaved(false);
   };
 
-  const handleCredentialChange = (sourceId: string, field: string, value: string) => {
+  const handleCredentialChange = (
+    sourceId: string,
+    field: string,
+    value: string
+  ) => {
     setSettings((prev) => ({
       ...prev,
       metadataSources: prev.metadataSources.map((source) =>
         source.id === sourceId
-          ? { ...source, credentials: { ...source.credentials, [field]: value } as any }
+          ? {
+              ...source,
+              credentials: { ...source.credentials, [field]: value } as any,
+            }
           : source
       ) as any,
     }));
@@ -435,7 +473,10 @@ export function Settings() {
 
       // Swap priorities
       const temp = sources[index].priority;
-      sources[index] = { ...sources[index], priority: sources[targetIndex].priority };
+      sources[index] = {
+        ...sources[index],
+        priority: sources[targetIndex].priority,
+      };
       sources[targetIndex] = { ...sources[targetIndex], priority: temp };
 
       // Sort by priority
@@ -471,14 +512,17 @@ export function Settings() {
         // Metadata
         auto_fetch_metadata: settings.autoFetchMetadata,
         enable_ai_parsing: settings.enableAIParsing,
-        openai_api_key: settings.openaiApiKey,
-        metadata_sources: settings.metadataSources.map(source => ({
+        // Only include API key if user entered a new one
+        ...(settings.openaiApiKey
+          ? { openai_api_key: settings.openaiApiKey }
+          : {}),
+        metadata_sources: settings.metadataSources.map((source) => ({
           id: source.id,
           name: source.name,
           enabled: source.enabled,
           priority: source.priority,
           requires_auth: source.requiresAuth,
-          credentials: source.credentials as { [key: string]: string }
+          credentials: source.credentials as { [key: string]: string },
         })),
         language: settings.language,
 
@@ -497,11 +541,22 @@ export function Settings() {
         enable_json_logging: settings.enableJsonLogging,
       };
 
-      console.log('Saving config with OpenAI key:', settings.openaiApiKey ? `***${settings.openaiApiKey.slice(-4)}` : '(empty)');
+      console.log(
+        'Saving config with OpenAI key:',
+        settings.openaiApiKey
+          ? `***${settings.openaiApiKey.slice(-4)}`
+          : '(empty)'
+      );
       console.log('Full updates object:', updates);
       const response = await api.updateConfig(updates);
       console.log('Save response:', response);
-      console.log('Saved settings:', settings);
+
+      // If we saved a new API key, store the masked version and clear the field
+      if (settings.openaiApiKey && response.openai_api_key) {
+        setSavedApiKeyMask(response.openai_api_key);
+        setSettings((prev) => ({ ...prev, openaiApiKey: '' }));
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
@@ -529,10 +584,38 @@ export function Settings() {
       enableAIParsing: false,
       openaiApiKey: '',
       metadataSources: [
-        { id: 'audible', name: 'Audible', enabled: true, priority: 1, requiresAuth: false, credentials: {} },
-        { id: 'goodreads', name: 'Goodreads', enabled: true, priority: 2, requiresAuth: true, credentials: { apiKey: '', apiSecret: '' } },
-        { id: 'openlibrary', name: 'Open Library', enabled: false, priority: 3, requiresAuth: true, credentials: { apiKey: '' } },
-        { id: 'google-books', name: 'Google Books', enabled: false, priority: 4, requiresAuth: true, credentials: { apiKey: '' } },
+        {
+          id: 'audible',
+          name: 'Audible',
+          enabled: true,
+          priority: 1,
+          requiresAuth: false,
+          credentials: {},
+        },
+        {
+          id: 'goodreads',
+          name: 'Goodreads',
+          enabled: true,
+          priority: 2,
+          requiresAuth: true,
+          credentials: { apiKey: '', apiSecret: '' },
+        },
+        {
+          id: 'openlibrary',
+          name: 'Open Library',
+          enabled: false,
+          priority: 3,
+          requiresAuth: true,
+          credentials: { apiKey: '' },
+        },
+        {
+          id: 'google-books',
+          name: 'Google Books',
+          enabled: false,
+          priority: 4,
+          requiresAuth: true,
+          credentials: { apiKey: '' },
+        },
       ],
       language: 'en',
       concurrentScans: 4,
@@ -547,7 +630,16 @@ export function Settings() {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', maxHeight: '100vh', overflow: 'hidden', p: 2 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden',
+        p: 2,
+      }}
+    >
       <Typography variant="h4" gutterBottom sx={{ flexShrink: 0 }}>
         Settings
       </Typography>
@@ -558,7 +650,15 @@ export function Settings() {
         </Alert>
       )}
 
-      <Paper sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Paper
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
             value={tabValue}
@@ -604,8 +704,10 @@ export function Settings() {
               />
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="caption">
-                  <strong>Library vs Import Paths:</strong> The library path is where organized audiobooks live.
-                  Import paths (configured in File Manager) are watched for new files to import into the library.
+                  <strong>Library vs Import Paths:</strong> The library path is
+                  where organized audiobooks live. Import paths (configured in
+                  File Manager) are watched for new files to import into the
+                  library.
                 </Typography>
               </Alert>
             </Grid>
@@ -616,17 +718,34 @@ export function Settings() {
                 select
                 label="File Organization Strategy"
                 value={settings.organizationStrategy}
-                onChange={(e) => handleChange('organizationStrategy', e.target.value)}
+                onChange={(e) =>
+                  handleChange('organizationStrategy', e.target.value)
+                }
                 helperText="How files are organized into the library"
               >
-                <MenuItem value="auto">Auto (tries Reflink → Hard Link → Copy)</MenuItem>
-                <MenuItem value="reflink">Reflink (CoW - fastest, space-efficient)</MenuItem>
-                <MenuItem value="hardlink">Hard Link (fast, space-efficient)</MenuItem>
-                <MenuItem value="symlink">Symbolic Link (fast, but fragile)</MenuItem>
-                <MenuItem value="copy">Copy (slow, uses double space, safest)</MenuItem>
+                <MenuItem value="auto">
+                  Auto (tries Reflink → Hard Link → Copy)
+                </MenuItem>
+                <MenuItem value="reflink">
+                  Reflink (CoW - fastest, space-efficient)
+                </MenuItem>
+                <MenuItem value="hardlink">
+                  Hard Link (fast, space-efficient)
+                </MenuItem>
+                <MenuItem value="symlink">
+                  Symbolic Link (fast, but fragile)
+                </MenuItem>
+                <MenuItem value="copy">
+                  Copy (slow, uses double space, safest)
+                </MenuItem>
               </TextField>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Auto mode tries methods in order of efficiency: Reflink (CoW clone) → Hard Link → Copy as fallback.
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: 'block' }}
+              >
+                Auto mode tries methods in order of efficiency: Reflink (CoW
+                clone) → Hard Link → Copy as fallback.
               </Typography>
             </Grid>
 
@@ -635,7 +754,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.scanOnStartup}
-                    onChange={(e) => handleChange('scanOnStartup', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('scanOnStartup', e.target.checked)
+                    }
                   />
                 }
                 label="Scan library on startup"
@@ -647,7 +768,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.autoOrganize}
-                    onChange={(e) => handleChange('autoOrganize', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('autoOrganize', e.target.checked)
+                    }
                   />
                 }
                 label="Automatically organize audiobooks"
@@ -659,27 +782,74 @@ export function Settings() {
                 fullWidth
                 label="Folder Naming Pattern"
                 value={settings.folderNamingPattern}
-                onChange={(e) => handleChange('folderNamingPattern', e.target.value)}
+                onChange={(e) =>
+                  handleChange('folderNamingPattern', e.target.value)
+                }
                 helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}."
               />
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
                 <Typography variant="caption">
-                  <strong>Smart Path Handling:</strong> Empty fields (like {'{series}'}) are automatically removed from paths.
-                  If a book has no series, that segment disappears gracefully—no duplicate slashes or empty folders.
+                  <strong>Smart Path Handling:</strong> Empty fields (like{' '}
+                  {'{series}'}) are automatically removed from paths. If a book
+                  has no series, that segment disappears gracefully—no duplicate
+                  slashes or empty folders.
                 </Typography>
               </Alert>
-              <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    wordBreak: 'break-word',
+                    display: 'block',
+                    fontWeight: 'bold',
+                    mb: 0.5,
+                  }}
+                >
                   With Series:
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}>
-                  {generateExample(settings.folderNamingPattern, exampleWithSeries, true)}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}
+                >
+                  {generateExample(
+                    settings.folderNamingPattern,
+                    exampleWithSeries,
+                    true
+                  )}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    wordBreak: 'break-word',
+                    display: 'block',
+                    fontWeight: 'bold',
+                    mb: 0.5,
+                  }}
+                >
                   Without Series:
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block' }}>
-                  {generateExample(settings.folderNamingPattern, exampleNoSeries, true)}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ wordBreak: 'break-word', display: 'block' }}
+                >
+                  {generateExample(
+                    settings.folderNamingPattern,
+                    exampleNoSeries,
+                    true
+                  )}
                 </Typography>
               </Box>
             </Grid>
@@ -689,30 +859,83 @@ export function Settings() {
                 fullWidth
                 label="File Naming Pattern"
                 value={settings.fileNamingPattern}
-                onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
+                onChange={(e) =>
+                  handleChange('fileNamingPattern', e.target.value)
+                }
                 helperText="Pattern for individual audiobook files. All folder fields plus {track_number}, {total_tracks}, {bitrate}, {codec}, {quality} (parsed from media)"
               />
-              <Box sx={{ mt: 1, p: 2, bgcolor: 'action.hover', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    wordBreak: 'break-word',
+                    display: 'block',
+                    fontWeight: 'bold',
+                    mb: 0.5,
+                  }}
+                >
                   With Series (single file):
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}>
-                  {generateExample(settings.fileNamingPattern, exampleWithSeries, false)}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}
+                >
+                  {generateExample(
+                    settings.fileNamingPattern,
+                    exampleWithSeries,
+                    false
+                  )}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word', display: 'block', fontWeight: 'bold', mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{
+                    wordBreak: 'break-word',
+                    display: 'block',
+                    fontWeight: 'bold',
+                    mb: 0.5,
+                  }}
+                >
                   Without Series (multi-file):
                 </Typography>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ wordBreak: 'break-word' }}>
-                  {generateExample(settings.fileNamingPattern, exampleNoSeries, false).replace('.m4b', ' 03 of 50.mp3')}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  sx={{ wordBreak: 'break-word' }}
+                >
+                  {generateExample(
+                    settings.fileNamingPattern,
+                    exampleNoSeries,
+                    false
+                  ).replace('.m4b', ' 03 of 50.mp3')}
                 </Typography>
               </Box>
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="caption">
-                  <strong>Multi-file audiobooks:</strong> For books with multiple files (e.g., 50 MP3s), the system automatically appends track numbers.
-                  Pattern detection: Uses hyphens if pattern contains "-", underscores if "_", otherwise spaces.
-                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator 03 of 50.mp3"<br/>
-                  <strong>Override:</strong> Include {'{track_number}'} and {'{total_tracks}'} in your pattern to control exact formatting.
-                  Example: "{'{title}'} - Part {'{track_number}'} of {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of 50.m4b"
+                  <strong>Multi-file audiobooks:</strong> For books with
+                  multiple files (e.g., 50 MP3s), the system automatically
+                  appends track numbers. Pattern detection: Uses hyphens if
+                  pattern contains "-", underscores if "_", otherwise spaces.
+                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator 03
+                  of 50.mp3"
+                  <br />
+                  <strong>Override:</strong> Include {'{track_number}'} and{' '}
+                  {'{total_tracks}'} in your pattern to control exact
+                  formatting. Example: "{'{title}'} - Part {'{track_number}'} of{' '}
+                  {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of
+                  50.m4b"
                 </Typography>
               </Alert>
             </Grid>
@@ -727,13 +950,16 @@ export function Settings() {
 
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Import Paths</strong> are watched for new audiobook files. Files found here are scanned and imported into the main library path where they are organized.
+                <strong>Import Paths</strong> are watched for new audiobook
+                files. Files found here are scanned and imported into the main
+                library path where they are organized.
               </Alert>
 
               <Box>
                 {importFolders.length === 0 ? (
                   <Alert severity="warning" sx={{ mb: 2 }}>
-                    No import folders configured. Add folders to automatically import audiobooks from specific locations.
+                    No import folders configured. Add folders to automatically
+                    import audiobooks from specific locations.
                   </Alert>
                 ) : (
                   <List>
@@ -741,7 +967,10 @@ export function Settings() {
                       <ListItem
                         key={folder.id}
                         secondaryAction={
-                          <IconButton edge="end" onClick={() => handleRemoveImportFolder(folder.id)}>
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleRemoveImportFolder(folder.id)}
+                          >
                             <DeleteIcon />
                           </IconButton>
                         }
@@ -774,7 +1003,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.createBackups}
-                    onChange={(e) => handleChange('createBackups', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('createBackups', e.target.checked)
+                    }
                   />
                 }
                 label="Create backups before modifying files"
@@ -793,7 +1024,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableDiskQuota}
-                    onChange={(e) => handleChange('enableDiskQuota', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('enableDiskQuota', e.target.checked)
+                    }
                   />
                 }
                 label="Enable disk quota limit"
@@ -807,9 +1040,16 @@ export function Settings() {
                   type="number"
                   label="Maximum Disk Usage"
                   value={settings.diskQuotaPercent}
-                  onChange={(e) => handleChange('diskQuotaPercent', parseInt(e.target.value) || 0)}
+                  onChange={(e) =>
+                    handleChange(
+                      'diskQuotaPercent',
+                      parseInt(e.target.value) || 0
+                    )
+                  }
                   InputProps={{
-                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ),
                   }}
                   inputProps={{ min: 1, max: 100 }}
                   helperText="Maximum percentage of disk space the library can use"
@@ -822,7 +1062,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableUserQuotas}
-                    onChange={(e) => handleChange('enableUserQuotas', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('enableUserQuotas', e.target.checked)
+                    }
                   />
                 }
                 label="Enable per-user storage quotas (multi-user mode)"
@@ -836,9 +1078,16 @@ export function Settings() {
                   type="number"
                   label="Default User Quota"
                   value={settings.defaultUserQuotaGB}
-                  onChange={(e) => handleChange('defaultUserQuotaGB', parseInt(e.target.value) || 0)}
+                  onChange={(e) =>
+                    handleChange(
+                      'defaultUserQuotaGB',
+                      parseInt(e.target.value) || 0
+                    )
+                  }
                   InputProps={{
-                    endAdornment: <InputAdornment position="end">GB</InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">GB</InputAdornment>
+                    ),
                   }}
                   inputProps={{ min: 1, max: 10000 }}
                   helperText="Storage limit per user"
@@ -862,7 +1111,9 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.autoFetchMetadata}
-                    onChange={(e) => handleChange('autoFetchMetadata', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('autoFetchMetadata', e.target.checked)
+                    }
                   />
                 }
                 label="Automatically fetch missing metadata"
@@ -882,15 +1133,19 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableAIParsing}
-                    onChange={(e) => handleChange('enableAIParsing', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('enableAIParsing', e.target.checked)
+                    }
                   />
                 }
                 label="Enable AI-powered filename parsing"
               />
               <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
                 <Typography variant="caption">
-                  <strong>What is this?</strong> Uses OpenAI to intelligently parse complex audiobook filenames into title, author, series, narrator, etc.
-                  This dramatically improves metadata extraction from poorly named files where traditional parsing fails.
+                  <strong>What is this?</strong> Uses OpenAI to intelligently
+                  parse complex audiobook filenames into title, author, series,
+                  narrator, etc. This dramatically improves metadata extraction
+                  from poorly named files where traditional parsing fails.
                 </Typography>
               </Alert>
             </Grid>
@@ -901,37 +1156,70 @@ export function Settings() {
                 label="OpenAI API Key"
                 type="password"
                 value={settings.openaiApiKey}
-                onChange={(e) => handleChange('openaiApiKey', e.target.value)}
+                onChange={(e) => {
+                  handleChange('openaiApiKey', e.target.value);
+                  // Clear saved mask when user starts typing
+                  if (e.target.value && savedApiKeyMask) {
+                    setSavedApiKeyMask('');
+                  }
+                }}
                 disabled={!settings.enableAIParsing}
-                placeholder={settings.openaiApiKey && settings.openaiApiKey.startsWith('***') ? 'Key is set (enter new key to change)' : 'sk-...'}
+                placeholder={
+                  savedApiKeyMask
+                    ? `Key saved: ${savedApiKeyMask} (enter new key to change)`
+                    : 'sk-...'
+                }
                 helperText={
                   settings.enableAIParsing
-                    ? (settings.openaiApiKey && settings.openaiApiKey.startsWith('***')
-                        ? "Key is currently set. Enter a new key to update it."
-                        : "Get your API key from https://platform.openai.com/api-keys")
-                    : "Enable AI parsing to configure API key"
+                    ? savedApiKeyMask
+                      ? 'Key is currently set. Enter a new key to update it.'
+                      : 'Get your API key from https://platform.openai.com/api-keys'
+                    : 'Enable AI parsing to configure API key'
                 }
                 InputProps={{
-                  endAdornment: settings.enableAIParsing && settings.openaiApiKey && (
-                    <InputAdornment position="end">
-                      <Button
-                        size="small"
-                        onClick={async () => {
-                          try {
-                            // Use the current value from the field, not saved config
-                            const response = await api.testAIConnection(settings.openaiApiKey);
-                            if (response.success) {
-                              alert('✅ Connection successful!');
+                  endAdornment: settings.enableAIParsing &&
+                    (settings.openaiApiKey || savedApiKeyMask) && (
+                      <InputAdornment position="end">
+                        <Button
+                          size="small"
+                          onClick={async () => {
+                            try {
+                              let keyToTest = settings.openaiApiKey;
+
+                              // If user hasn't entered a new key, test the saved one by not passing a key
+                              // Backend will use the key from config
+                              if (!keyToTest && savedApiKeyMask) {
+                                const response = await api.testAIConnection();
+                                if (response.success) {
+                                  alert('✅ Connection successful!');
+                                }
+                                return;
+                              }
+
+                              // Test with the key user just entered
+                              if (keyToTest && keyToTest.length >= 20) {
+                                const response =
+                                  await api.testAIConnection(keyToTest);
+                                if (response.success) {
+                                  alert('✅ Connection successful!');
+                                }
+                              } else {
+                                alert(
+                                  '❌ Please enter a valid API key (minimum 20 characters)'
+                                );
+                              }
+                            } catch (error) {
+                              alert(
+                                '❌ Connection failed: ' +
+                                  (error as Error).message
+                              );
                             }
-                          } catch (error) {
-                            alert('❌ Connection failed: ' + (error as Error).message);
-                          }
-                        }}
-                      >
-                        Test
-                      </Button>
-                    </InputAdornment>
-                  ),
+                          }}
+                        >
+                          Test
+                        </Button>
+                      </InputAdornment>
+                    ),
                 }}
               />
             </Grid>
@@ -942,8 +1230,9 @@ export function Settings() {
               </Typography>
               <Alert severity="info" sx={{ mb: 2 }}>
                 <Typography variant="caption">
-                  Sources are queried in order. If a field is missing from the first source,
-                  the system automatically falls back to the next enabled source to fill in additional fields.
+                  Sources are queried in order. If a field is missing from the
+                  first source, the system automatically falls back to the next
+                  enabled source to fill in additional fields.
                 </Typography>
               </Alert>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -955,10 +1244,14 @@ export function Settings() {
                         alignItems: 'center',
                         py: 1.5,
                         px: 1,
-                        bgcolor: source.enabled ? 'transparent' : 'action.disabledBackground',
+                        bgcolor: source.enabled
+                          ? 'transparent'
+                          : 'action.disabledBackground',
                       }}
                     >
-                      <Box sx={{ display: 'flex', flexDirection: 'column', mr: 1 }}>
+                      <Box
+                        sx={{ display: 'flex', flexDirection: 'column', mr: 1 }}
+                      >
                         <Button
                           size="small"
                           onClick={() => handleSourceReorder(source.id, 'up')}
@@ -970,19 +1263,25 @@ export function Settings() {
                         <Button
                           size="small"
                           onClick={() => handleSourceReorder(source.id, 'down')}
-                          disabled={index === settings.metadataSources.length - 1}
+                          disabled={
+                            index === settings.metadataSources.length - 1
+                          }
                           sx={{ minWidth: 'auto', p: 0.5 }}
                         >
                           ▼
                         </Button>
                       </Box>
                       <DragHandleIcon sx={{ mr: 2, color: 'text.disabled' }} />
-                      <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', flex: 1 }}
+                      >
                         <Typography
                           variant="body1"
                           sx={{
                             fontWeight: source.enabled ? 500 : 400,
-                            color: source.enabled ? 'text.primary' : 'text.disabled',
+                            color: source.enabled
+                              ? 'text.primary'
+                              : 'text.disabled',
                           }}
                         >
                           {source.priority}. {source.name}
@@ -999,12 +1298,19 @@ export function Settings() {
                       {source.requiresAuth && (
                         <IconButton
                           size="small"
-                          onClick={() => setExpandedSource(expandedSource === source.id ? null : source.id)}
+                          onClick={() =>
+                            setExpandedSource(
+                              expandedSource === source.id ? null : source.id
+                            )
+                          }
                           sx={{ mr: 1 }}
                         >
                           <ExpandMoreIcon
                             sx={{
-                              transform: expandedSource === source.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                              transform:
+                                expandedSource === source.id
+                                  ? 'rotate(180deg)'
+                                  : 'rotate(0deg)',
                               transition: 'transform 0.3s',
                             }}
                           />
@@ -1014,7 +1320,11 @@ export function Settings() {
                         size="small"
                         onClick={() => handleSourceToggle(source.id)}
                         startIcon={
-                          source.enabled ? <CheckBoxIcon /> : <CheckBoxOutlineBlankIcon />
+                          source.enabled ? (
+                            <CheckBoxIcon />
+                          ) : (
+                            <CheckBoxOutlineBlankIcon />
+                          )
                         }
                       >
                         {source.enabled ? 'Enabled' : 'Disabled'}
@@ -1022,8 +1332,23 @@ export function Settings() {
                     </Box>
                     {source.requiresAuth && (
                       <Collapse in={expandedSource === source.id}>
-                        <Box sx={{ p: 2, bgcolor: 'background.default', borderTop: 1, borderColor: 'divider' }}>
-                          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <Box
+                          sx={{
+                            p: 2,
+                            bgcolor: 'background.default',
+                            borderTop: 1,
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography
+                            variant="subtitle2"
+                            gutterBottom
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              mb: 2,
+                            }}
+                          >
                             <SettingsIcon sx={{ mr: 1, fontSize: 18 }} />
                             API Configuration
                           </Typography>
@@ -1036,7 +1361,13 @@ export function Settings() {
                                     size="small"
                                     label="API Key"
                                     value={source.credentials.apiKey || ''}
-                                    onChange={(e) => handleCredentialChange(source.id, 'apiKey', e.target.value)}
+                                    onChange={(e) =>
+                                      handleCredentialChange(
+                                        source.id,
+                                        'apiKey',
+                                        e.target.value
+                                      )
+                                    }
                                     placeholder="Enter your Goodreads API key"
                                   />
                                 </Grid>
@@ -1047,18 +1378,35 @@ export function Settings() {
                                     label="API Secret"
                                     type="password"
                                     value={source.credentials.apiSecret || ''}
-                                    onChange={(e) => handleCredentialChange(source.id, 'apiSecret', e.target.value)}
+                                    onChange={(e) =>
+                                      handleCredentialChange(
+                                        source.id,
+                                        'apiSecret',
+                                        e.target.value
+                                      )
+                                    }
                                     placeholder="Enter your Goodreads API secret"
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Get your API credentials at: <a href="https://www.goodreads.com/api" target="_blank" rel="noopener noreferrer">goodreads.com/api</a>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Get your API credentials at:{' '}
+                                    <a
+                                      href="https://www.goodreads.com/api"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      goodreads.com/api
+                                    </a>
                                   </Typography>
                                 </Grid>
                               </>
                             )}
-                            {(source.id === 'openlibrary' || source.id === 'google-books') && (
+                            {(source.id === 'openlibrary' ||
+                              source.id === 'google-books') && (
                               <>
                                 <Grid item xs={12}>
                                   <TextField
@@ -1066,16 +1414,37 @@ export function Settings() {
                                     size="small"
                                     label="API Key"
                                     value={source.credentials.apiKey || ''}
-                                    onChange={(e) => handleCredentialChange(source.id, 'apiKey', e.target.value)}
+                                    onChange={(e) =>
+                                      handleCredentialChange(
+                                        source.id,
+                                        'apiKey',
+                                        e.target.value
+                                      )
+                                    }
                                     placeholder={`Enter your ${source.name} API key`}
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
-                                  <Typography variant="caption" color="text.secondary">
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
                                     {source.id === 'google-books' ? (
-                                      <>Get your API key at: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></>
+                                      <>
+                                        Get your API key at:{' '}
+                                        <a
+                                          href="https://console.cloud.google.com/apis/credentials"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Google Cloud Console
+                                        </a>
+                                      </>
                                     ) : (
-                                      <>Open Library API is free and doesn't require authentication for basic usage</>
+                                      <>
+                                        Open Library API is free and doesn't
+                                        require authentication for basic usage
+                                      </>
                                     )}
                                   </Typography>
                                 </Grid>
@@ -1085,9 +1454,7 @@ export function Settings() {
                         </Box>
                       </Collapse>
                     )}
-                    {index < settings.metadataSources.length - 1 && (
-                      <Divider />
-                    )}
+                    {index < settings.metadataSources.length - 1 && <Divider />}
                   </Box>
                 ))}
               </Paper>
@@ -1120,7 +1487,9 @@ export function Settings() {
                 type="number"
                 label="Concurrent Scans"
                 value={settings.concurrentScans}
-                onChange={(e) => handleChange('concurrentScans', parseInt(e.target.value) || 1)}
+                onChange={(e) =>
+                  handleChange('concurrentScans', parseInt(e.target.value) || 1)
+                }
                 inputProps={{ min: 1, max: 16 }}
                 helperText="Number of folders to scan simultaneously"
               />
@@ -1138,11 +1507,25 @@ export function Settings() {
                 <RadioGroup
                   row
                   value={settings.memoryLimitType}
-                  onChange={(e) => handleChange('memoryLimitType', e.target.value)}
+                  onChange={(e) =>
+                    handleChange('memoryLimitType', e.target.value)
+                  }
                 >
-                  <FormControlLabel value="items" control={<Radio />} label="Number of Items" />
-                  <FormControlLabel value="percent" control={<Radio />} label="% of System Memory" />
-                  <FormControlLabel value="absolute" control={<Radio />} label="Absolute MB" />
+                  <FormControlLabel
+                    value="items"
+                    control={<Radio />}
+                    label="Number of Items"
+                  />
+                  <FormControlLabel
+                    value="percent"
+                    control={<Radio />}
+                    label="% of System Memory"
+                  />
+                  <FormControlLabel
+                    value="absolute"
+                    control={<Radio />}
+                    label="Absolute MB"
+                  />
                 </RadioGroup>
               </FormControl>
             </Grid>
@@ -1154,7 +1537,9 @@ export function Settings() {
                   type="number"
                   label="Cache Size (items)"
                   value={settings.cacheSize}
-                  onChange={(e) => handleChange('cacheSize', parseInt(e.target.value) || 100)}
+                  onChange={(e) =>
+                    handleChange('cacheSize', parseInt(e.target.value) || 100)
+                  }
                   inputProps={{ min: 100, max: 10000 }}
                   helperText="Number of audiobook records to cache in memory"
                 />
@@ -1168,9 +1553,16 @@ export function Settings() {
                   type="number"
                   label="Memory Limit"
                   value={settings.memoryLimitPercent}
-                  onChange={(e) => handleChange('memoryLimitPercent', parseInt(e.target.value) || 1)}
+                  onChange={(e) =>
+                    handleChange(
+                      'memoryLimitPercent',
+                      parseInt(e.target.value) || 1
+                    )
+                  }
                   InputProps={{
-                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ),
                   }}
                   inputProps={{ min: 1, max: 90 }}
                   helperText="Maximum percentage of system memory to use"
@@ -1185,9 +1577,16 @@ export function Settings() {
                   type="number"
                   label="Memory Limit"
                   value={settings.memoryLimitMB}
-                  onChange={(e) => handleChange('memoryLimitMB', parseInt(e.target.value) || 128)}
+                  onChange={(e) =>
+                    handleChange(
+                      'memoryLimitMB',
+                      parseInt(e.target.value) || 128
+                    )
+                  }
                   InputProps={{
-                    endAdornment: <InputAdornment position="end">MB</InputAdornment>,
+                    endAdornment: (
+                      <InputAdornment position="end">MB</InputAdornment>
+                    ),
                   }}
                   inputProps={{ min: 128, max: 16384 }}
                   helperText="Absolute memory limit in megabytes"
@@ -1229,8 +1628,13 @@ export function Settings() {
                 <MenuItem value="text">Text (human-readable)</MenuItem>
                 <MenuItem value="json">JSON (structured)</MenuItem>
               </TextField>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                JSON logging is recommended for log aggregation and analysis tools
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 1, display: 'block' }}
+              >
+                JSON logging is recommended for log aggregation and analysis
+                tools
               </Typography>
             </Grid>
 
@@ -1239,19 +1643,35 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableJsonLogging}
-                    onChange={(e) => handleChange('enableJsonLogging', e.target.checked)}
+                    onChange={(e) =>
+                      handleChange('enableJsonLogging', e.target.checked)
+                    }
                   />
                 }
                 label="Enable JSON structured logging to separate file"
               />
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', ml: 4 }}
+              >
                 Creates a separate .json log file in addition to the main log
               </Typography>
             </Grid>
           </Grid>
         </TabPanel>
 
-        <Box sx={{ p: 2, display: 'flex', gap: 2, justifyContent: 'flex-end', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Box
+          sx={{
+            p: 2,
+            display: 'flex',
+            gap: 2,
+            justifyContent: 'flex-end',
+            borderTop: 1,
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+          }}
+        >
           <Button
             variant="outlined"
             startIcon={<RestartAltIcon />}
@@ -1311,11 +1731,18 @@ export function Settings() {
       </Dialog>
 
       {/* Import Folder Dialog */}
-      <Dialog open={addFolderDialogOpen} onClose={() => setAddFolderDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog
+        open={addFolderDialogOpen}
+        onClose={() => setAddFolderDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>Add Import Path (Watch Location)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Import paths</strong> are separate from your main library. They are watched for new audiobook files that will be scanned, organized, and moved to your library path.
+            <strong>Import paths</strong> are separate from your main library.
+            They are watched for new audiobook files that will be scanned,
+            organized, and moved to your library path.
           </Alert>
 
           {!showFolderBrowser ? (
@@ -1363,8 +1790,19 @@ export function Settings() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setAddFolderDialogOpen(false); setShowFolderBrowser(false); }}>Cancel</Button>
-          <Button onClick={handleAddImportFolder} variant="contained" disabled={!newFolderPath.trim()}>
+          <Button
+            onClick={() => {
+              setAddFolderDialogOpen(false);
+              setShowFolderBrowser(false);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAddImportFolder}
+            variant="contained"
+            disabled={!newFolderPath.trim()}
+          >
             Add Path
           </Button>
         </DialogActions>

@@ -30,7 +30,12 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
 }) => {
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <CircularProgress />
       </Box>
     );
