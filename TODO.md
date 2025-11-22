@@ -1,3 +1,9 @@
+<!-- file: TODO.md -->
+<!-- version: 1.6.0 -->
+<!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
+
+# Project TODO
+
 - [x] ✅ **Backend**: Database migration system with version tracking
 - [x] ✅ **Backend**: Complete audiobook CRUD API (create, read, update, delete,
       batch)
@@ -56,6 +62,14 @@
   - ✅ GET /api/v1/config - Get current configuration
   - ✅ PUT /api/v1/config - Update configuration at runtime
   - ✅ Supports updating root_dir, database_path, playlist_dir, API keys
+
+## New Requirements - November 21, 2025
+
+- [ ] **Scanner & Hash Tracking**: Persist both the original import hash and the post-organization hash for every book so that when a library copy is removed we can detect the import copy (matching original hash), recopy it, and compare the new hash to detect drift.
+- [ ] **Book Detail Page & Delete Flow**: Confirm each book has a dedicated detail view showing files, metadata, and all versions; enhance the delete dialog with a "Prevent Reimporting of this file" checkbox that records the hash in a do-not-import list.
+- [ ] **Quantity / State Lifecycle**: Add a per-book quantity/reference counter or state machine (wanted/imported/organized) plus soft-delete flags, a background purge job, and a do-not-import hash list that survives deletes so the UI can hide removed entries while preventing future reimports.
+- [ ] **Settings Tab for Banned Hashes**: Add a new tab on the Settings page to view/remove entries in the do-not-import hash list so users can unblock imports later.
+- [ ] **Containerized E2E Suite**: Ensure the Docker test image can execute the Selenium/pytest E2E suite end-to-end, expand the failing tests, and add a VS Code task to run them inside the container for consistent automation.
 
 ## 🚨 CRITICAL FIXES COMPLETED - 2024-11-20
 
@@ -398,6 +412,19 @@
   - [ ] Extract to `series_position` field in database
   - [ ] Apply to both filename parsing AND album tag parsing
   - [ ] Handle both "Vol. 01" and "Volume 1" style formats
+
+### Event Transport Regression (Nov 21, 2025)
+
+- [ ] Fix SSE lifetime in `internal/server.handleEvents` so `/api/events`
+  streams remain open (remove premature context timeouts, keep heartbeats
+  flowing)
+- [ ] Add client-side EventSource manager with exponential backoff (3s → 6s →
+  12s, cap at 60s) and shared connection for Dashboard + Library
+- [ ] Replace `/api/v1/health` polling with existing `/api/health` endpoint or
+  add a v1 alias so reconnect overlay stops 404 spam
+- [ ] When health probe succeeds after outage, auto-refresh UI to clear stuck
+  "Attempt N" overlay and rehydrate state
+- [ ] Log reconnection attempts + last error reason in UI for easier diagnosis
 
 ### Template Variables in Organized Paths
 

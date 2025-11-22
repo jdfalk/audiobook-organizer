@@ -1,0 +1,18 @@
+# file: .dockerignore
+# version: 1.0.0
+# guid: 5baf4c69-7e4c-4d37-8e5b-673d26ce7fd2
+
+.git
+.gitignore
+.gitmodules
+.vscode
+logs
+logs/**
+temp_out
+temp_out/**
+test_results
+test_results/**
+node_modules
+web/node_modules
+web/dist
+.DS_Store

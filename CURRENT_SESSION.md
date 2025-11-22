@@ -1,3 +1,7 @@
+<!-- file: CURRENT_SESSION.md -->
+<!-- version: 1.1.0 -->
+<!-- guid: 4f8cde73-8a89-4a1c-ba0d-6f2a781eced2 -->
+
 # Current Development Session - November 21, 2025
 
 ## 🎯 IMMEDIATE PROBLEM TO FIX
@@ -5,7 +9,7 @@
 We have **duplicate book records** and **missing metadata extraction**. The
 library structure shows:
 
-```
+```text
 library/Unknown Author/{series}/
 ├── My Quiet Blacksmith Life in Another World/
 │   └── My Quiet Blacksmith Life in Another World - Unknown Author - read by {narrator}.m4b
@@ -34,15 +38,25 @@ library/Unknown Author/{series}/
 
 - **Initial Fix**: Broadcast now sends to clients with no subscriptions +
   frontend auto-reconnects
-- **Current Status**: Still seeing repeated
-  `Failed to load resource: The network connection was lost` in browser console
-  and reconnect loop every 3 seconds
+- **Observed Behavior (Nov 21 logs)**:
+  - `/api/events` connections last **~17–18 seconds** before server closes the
+    stream (`events.go:247` "connection closed" followed by 200 response with
+    16–18s duration)
+  - Browser console fills with `EventSource connection lost, reconnecting in
+    3s...` while other fetches (`/status`, `/events`, `/health`) fail in lockstep
+  - Multiple EventSource consumers (Dashboard, Library) reconnect at slightly
+    different times, so we see two clients cycling every ~17 seconds
+- **Current Status**: Reconnect loop never stabilizes because server proactively
+  closes the SSE stream and frontend retries immediately with fixed 3s delay
 - **New Requirement**:
   - Implement exponential backoff (or capped linear) for EventSource reconnects
     to avoid rapid loops
-  - Investigate why `/api/events` closes after ~20s despite heartbeat
+  - Investigate why `/api/events` closes after ~20 seconds despite heartbeat
+    (likely Gin read/write timeout or context deadline)
   - Ensure both Dashboard + Library EventSources share same connection/pool if
     possible
+  - When health probe succeeds after a prolonged outage, automatically refresh
+    the page so UI recovers from stale state
 - **Files Already Touched**:
   - `internal/realtime/events.go` v1.0.0 → v1.1.0
   - `web/src/pages/Library.tsx` v1.16.0 → v1.17.0 (needs revisit)
@@ -147,8 +161,11 @@ library/Unknown Author/{series}/
    literals in filesystem
 5. **Duplicate books created** - Hash-based detection added but untested
 6. **EventSource reconnection loop** - `/api/events` drops frequently; need
-   backoff + root-cause fix
-7. **Incorrect dashboard counts** - API still reports total books = 8
+  backoff + root-cause fix
+7. **Health endpoint mismatch** - Frontend polls `/api/v1/health` but server
+  only exposes `/api/health`, resulting in perpetual 404s and stuck "Attempt
+  73" overlay even when backend is healthy
+8. **Incorrect dashboard counts** - API still reports total books = 8
    (library+import). Need separate counts: `library_books`, `import_books`
    (unique) + update Dashboard + Library page. Also import path `total_size`
    returning negative numbers.
@@ -204,6 +221,31 @@ library/Unknown Author/{series}/
      `import_book_count`, `total_book_count`
    - Fix import path size math (negative values)
    - Update Dashboard + Library UI to use new fields
+8. **Fix health endpoint + overlay**:
+   - Either add `/api/v1/health` route or change frontend polling to
+     `/api/health`
+   - Reconnect overlay should increment attempts only when fetch fails, and
+     reload automatically when the health call succeeds
+
+## 🧾 SERVER RESTART LOGS (Nov 21 @ 10:48–10:53)
+
+- Server launched via `~/audiobook-organizer-embedded serve --port 8888`
+- Pebble replay successful; migrations already at version 5
+- **Encryption warning**: Failed to decrypt `openai_api_key`
+  (`illegal base64 data at input byte 3`) so backend currently thinks key is
+  unset
+- Operation queue + event hub initialize cleanly; `/api/events` shows repeated
+  register/unregister cycles at 16–18s cadence
+- `/api/v1/health` receives continuous 404s—only `/api/health` exists per Gin
+  route dump
+- Heartbeat log every 5s (`[DEBUG] Heartbeat: Got 1 library folders`) proves the
+  hub loop continues even while clients churn
+- Dashboard + Library reloads at 10:51 and 10:52 confirm API endpoints respond
+  quickly; issue is purely connection lifecycle + wrong health URL
+
+> Actionable takeaway: fix SSE lifetime on the server, add exponential backoff,
+> share a single client connection, and point the reconnect overlay at
+> `/api/health` so it can detect recovery and auto-refresh.
 
 ## 🔧 DEBUGGING COMMANDS
 
