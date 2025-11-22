@@ -1,5 +1,5 @@
 <!-- file: tests/e2e/README.md -->
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: 5d6e7f89-0123-4567-89ab-cdef01234567 -->
 
 # End-to-End Tests for Audiobook Organizer
@@ -57,6 +57,35 @@ Set environment variable `TEST_BASE_URL` to test against different instances:
 export TEST_BASE_URL=http://localhost:8080
 pytest tests/e2e/ -v
 ```
+
+Bundled sample audiobook fixtures live under `testdata/audio/librivox/` (first six
+tracks from several Librivox releases, checked in via Git LFS). Point your test
+server at these fixtures for deterministic metadata/organize flows.
+
+## Dockerized Test Image
+
+Build the standardized test image (contains Go 1.23, Node.js 22, Chromium, and
+Python/Selenium tooling):
+
+```bash
+docker build -f Dockerfile.test -t audiobook-organizer-test .
+```
+
+Then run any combination of test suites inside the container:
+
+```bash
+# Go + frontend unit tests
+docker run --rm audiobook-organizer-test bash -lc "go test ./... && npm test --prefix web"
+
+# E2E tests (requires the server running on the host)
+docker run --rm --network host \
+  -e TEST_BASE_URL=http://host.docker.internal:8080 \
+  audiobook-organizer-test \
+  bash -lc "xvfb-run -a pytest tests/e2e -v"
+```
+
+`xvfb-run` ensures Chromium has a display when the container lacks a GUI. You
+can adjust `TEST_BASE_URL` or add extra pytest flags as needed.
 
 ## Debugging
 
