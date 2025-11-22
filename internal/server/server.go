@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -48,6 +48,23 @@ func stringPtr(s string) *string {
 
 func intPtr(i int) *int {
 	return &i
+}
+
+func applyOrganizedFileMetadata(book *database.Book, newPath string) {
+	hash, err := scanner.ComputeFileHash(newPath)
+	if err != nil {
+		log.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
+	} else if hash != "" {
+		book.FileHash = stringPtr(hash)
+		book.OrganizedFileHash = stringPtr(hash)
+		if book.OriginalFileHash == nil {
+			book.OriginalFileHash = stringPtr(hash)
+		}
+	}
+	if info, err := os.Stat(newPath); err == nil {
+		size := info.Size()
+		book.FileSize = &size
+	}
 }
 
 // Server represents the HTTP server
@@ -696,13 +713,8 @@ func (s *Server) listSeries(c *gin.Context) {
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
-		// Default to user's home directory if no path provided
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get home directory"})
-			return
-		}
-		path = homeDir
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path query parameter is required"})
+		return
 	}
 
 	// Security check: prevent directory traversal attacks
@@ -934,6 +946,7 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 							}
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
+								applyOrganizedFileMetadata(dbBook, newPath)
 								if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
 									_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
 								} else {
@@ -989,6 +1002,7 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 							}
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
+								applyOrganizedFileMetadata(dbBook, newPath)
 								_, _ = database.GlobalStore.UpdateBook(dbBook.ID, dbBook)
 							}
 						}
@@ -1155,6 +1169,7 @@ func (s *Server) startScan(c *gin.Context) {
 						// Update DB path if changed
 						if newPath != dbBook.FilePath {
 							dbBook.FilePath = newPath
+							applyOrganizedFileMetadata(dbBook, newPath)
 							if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
 								_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
 							} else {
@@ -1284,6 +1299,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 			// Update book's file path in database
 			book.FilePath = newPath
+			applyOrganizedFileMetadata(&book, newPath)
 			if _, err := database.GlobalStore.UpdateBook(book.ID, &book); err != nil {
 				errDetails := fmt.Sprintf("Failed to update book path: %s", err.Error())
 				_ = progress.Log("warn", errDetails, nil)

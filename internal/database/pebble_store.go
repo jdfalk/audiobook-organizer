@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.3.0
+// version: 1.5.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -577,6 +577,36 @@ func (p *PebbleStore) GetBookByFileHash(hash string) (*Book, error) {
 	return p.GetBookByID(id)
 }
 
+func (p *PebbleStore) GetBookByOriginalHash(hash string) (*Book, error) {
+	indexKey := []byte(fmt.Sprintf("book:originalhash:%s", hash))
+	value, closer, err := p.db.Get(indexKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	id := string(value)
+	return p.GetBookByID(id)
+}
+
+func (p *PebbleStore) GetBookByOrganizedHash(hash string) (*Book, error) {
+	indexKey := []byte(fmt.Sprintf("book:organizedhash:%s", hash))
+	value, closer, err := p.db.Get(indexKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	id := string(value)
+	return p.GetBookByID(id)
+}
+
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	prefix := []byte(fmt.Sprintf("book:series:%d:", seriesID))
@@ -673,6 +703,22 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		}
 	}
 
+	if book.OriginalFileHash != nil && *book.OriginalFileHash != "" {
+		origKey := []byte(fmt.Sprintf("book:originalhash:%s", *book.OriginalFileHash))
+		if err := batch.Set(origKey, []byte(book.ID), nil); err != nil {
+			batch.Close()
+			return nil, err
+		}
+	}
+
+	if book.OrganizedFileHash != nil && *book.OrganizedFileHash != "" {
+		orgKey := []byte(fmt.Sprintf("book:organizedhash:%s", *book.OrganizedFileHash))
+		if err := batch.Set(orgKey, []byte(book.ID), nil); err != nil {
+			batch.Close()
+			return nil, err
+		}
+	}
+
 	// Series index
 	if book.SeriesID != nil {
 		seriesKey := []byte(fmt.Sprintf("book:series:%d:%s", *book.SeriesID, book.ID))
@@ -735,6 +781,45 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 			batch.Close()
 			return nil, err
 		}
+	}
+
+	updateHashIndex := func(oldVal, newVal *string, prefix string) error {
+		var oldStr, newStr string
+		if oldVal != nil {
+			oldStr = *oldVal
+		}
+		if newVal != nil {
+			newStr = *newVal
+		}
+		if oldStr == newStr {
+			return nil
+		}
+		if oldStr != "" {
+			oldKey := []byte(fmt.Sprintf("book:%s:%s", prefix, oldStr))
+			if err := batch.Delete(oldKey, nil); err != nil {
+				return err
+			}
+		}
+		if newStr != "" {
+			newKey := []byte(fmt.Sprintf("book:%s:%s", prefix, newStr))
+			if err := batch.Set(newKey, []byte(id), nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if err := updateHashIndex(oldBook.FileHash, book.FileHash, "hash"); err != nil {
+		batch.Close()
+		return nil, err
+	}
+	if err := updateHashIndex(oldBook.OriginalFileHash, book.OriginalFileHash, "originalhash"); err != nil {
+		batch.Close()
+		return nil, err
+	}
+	if err := updateHashIndex(oldBook.OrganizedFileHash, book.OrganizedFileHash, "organizedhash"); err != nil {
+		batch.Close()
+		return nil, err
 	}
 
 	// Update series index if changed

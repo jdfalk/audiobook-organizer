@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -66,6 +66,12 @@ var migrations = []Migration{
 		Version:     5,
 		Description: "Add media info and version management fields to books",
 		Up:          migration005Up,
+		Down:        nil,
+	},
+	{
+		Version:     6,
+		Description: "Add original and organized file hash tracking",
+		Up:          migration006Up,
 		Down:        nil,
 	},
 }
@@ -251,6 +257,52 @@ func migration005Up(store Store) error {
 	}
 
 	log.Println("  - Media info and version management fields added successfully")
+	return nil
+}
+
+// migration006Up adds original and organized file hash tracking columns
+func migration006Up(store Store) error {
+	log.Println("  - Adding original/organized file hash columns to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN original_file_hash TEXT",
+		"ALTER TABLE books ADD COLUMN organized_file_hash TEXT",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	indexStatements := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash)",
+		"CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash)",
+	}
+
+	for _, stmt := range indexStatements {
+		log.Printf("    - Creating index: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	// Backfill original hash so future duplicate detection works immediately
+	if _, err := sqliteStore.db.Exec("UPDATE books SET original_file_hash = file_hash WHERE original_file_hash IS NULL AND file_hash IS NOT NULL"); err != nil {
+		return fmt.Errorf("failed to backfill original_file_hash: %w", err)
+	}
+
 	return nil
 }
 

@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -20,6 +20,12 @@ import (
 type Organizer struct {
 	config *config.Config
 }
+
+const (
+	defaultTitle = "Unknown Title"
+)
+
+var leftoverPlaceholderRegex = regexp.MustCompile(`\{[a-z_]+\}`)
 
 // NewOrganizer creates a new organizer instance
 func NewOrganizer(cfg *config.Config) *Organizer {
@@ -118,15 +124,23 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 
 	// Get author name from embedded Author object or default
 	authorName := "Unknown Author"
-	if book.Author != nil && book.Author.Name != "" {
-		authorName = book.Author.Name
+	if book.Author != nil {
+		if trimmed := strings.TrimSpace(book.Author.Name); trimmed != "" {
+			authorName = trimmed
+		}
+	}
+
+	title := strings.TrimSpace(book.Title)
+	if title == "" {
+		title = defaultTitle
 	}
 
 	// Get series info from embedded Series object
 	seriesName := ""
 	if book.Series != nil {
-		seriesName = book.Series.Name
+		seriesName = strings.TrimSpace(book.Series.Name)
 	}
+
 	seriesNum := ""
 	if book.SeriesSequence != nil && *book.SeriesSequence > 0 {
 		seriesNum = fmt.Sprintf("%d", *book.SeriesSequence)
@@ -140,13 +154,15 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 		return fmt.Sprintf("%d", *i)
 	}
 
+	narrator := strings.TrimSpace(stringOrEmpty(book.Narrator))
+
 	// Replacements map
 	replacements := map[string]string{
-		"{title}":         book.Title,
+		"{title}":         title,
 		"{author}":        authorName,
 		"{series}":        seriesName,
 		"{series_number}": seriesNum,
-		"{narrator}":      stringOrEmpty(book.Narrator),
+		"{narrator}":      narrator,
 		"{publisher}":     stringOrEmpty(book.Publisher),
 		"{language}":      stringOrEmpty(book.Language),
 		"{edition}":       stringOrEmpty(book.Edition),
@@ -161,13 +177,15 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 
 	// Perform replacements
 	for placeholder, value := range replacements {
-		if value == "" {
+		if strings.TrimSpace(value) == "" {
 			result = removeEmptySegment(result, placeholder)
+			result = strings.ReplaceAll(result, placeholder, "")
 		} else {
 			result = strings.ReplaceAll(result, placeholder, value)
 		}
 	}
 
+	result = leftoverPlaceholderRegex.ReplaceAllString(result, "")
 	result = cleanupPattern(result)
 	return result
 }

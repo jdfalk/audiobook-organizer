@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package database
@@ -233,7 +233,7 @@ func TestVersionManagement(t *testing.T) {
 	}
 
 	// Get books by version group
-	books, err := store.GetBooksByVersionGroup("group1")
+	books, err := store.GetBooksByVersionGroup(groupID)
 	if err != nil {
 		// If error is about missing column, skip this part of the test
 		if len(err.Error()) > 0 && (err.Error() == "no such column: bitrate_kbps" || len(err.Error()) > 20 && err.Error()[len(err.Error())-20:] == "no such column: bitrate_kbps") {
@@ -258,6 +258,57 @@ func TestVersionManagement(t *testing.T) {
 	}
 	if !foundPrimary {
 		t.Error("No primary version found")
+	}
+}
+
+// TestBookHashLookups verifies hash indexes remain consistent across updates.
+func TestBookHashLookups(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	fileHash := "fh1"
+	originalHash := "orig1"
+	organizedHash := "org1"
+
+	book := &Book{
+		Title:             "Hashable",
+		FilePath:          "/tmp/hashable.mp3",
+		FileHash:          &fileHash,
+		OriginalFileHash:  &originalHash,
+		OrganizedFileHash: &organizedHash,
+	}
+
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	assertLookup := func(name, hash string, lookup func(string) (*Book, error)) {
+		t.Helper()
+		result, err := lookup(hash)
+		if err != nil {
+			t.Fatalf("%s lookup failed: %v", name, err)
+		}
+		if result == nil || result.ID != created.ID {
+			t.Fatalf("%s lookup returned wrong book", name)
+		}
+	}
+
+	assertLookup("file", fileHash, store.GetBookByFileHash)
+	assertLookup("original", originalHash, store.GetBookByOriginalHash)
+	assertLookup("organized", organizedHash, store.GetBookByOrganizedHash)
+
+	newOrganized := "org2"
+	created.OrganizedFileHash = &newOrganized
+	if _, err := store.UpdateBook(created.ID, created); err != nil {
+		t.Fatalf("Failed to update organized hash: %v", err)
+	}
+
+	assertLookup("organized-new", newOrganized, store.GetBookByOrganizedHash)
+	if result, err := store.GetBookByOrganizedHash(organizedHash); err != nil {
+		t.Fatalf("organized old lookup errored: %v", err)
+	} else if result != nil {
+		t.Fatalf("expected no book for stale organized hash")
 	}
 }
 

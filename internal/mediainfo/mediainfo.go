@@ -1,5 +1,5 @@
 // file: internal/mediainfo/mediainfo.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2d3c4-b5a6-7c8d-9e0f-1a2b3c4d5e6f
 
 package mediainfo
@@ -115,6 +115,7 @@ func extractM4AInfo(m tag.Metadata, info *MediaInfo) {
 
 func extractFLACInfo(m tag.Metadata, info *MediaInfo) {
 	info.Codec = "FLAC"
+	info.Channels = 2
 	raw := m.Raw()
 
 	if sampleRate, ok := raw["sample_rate"]; ok {
@@ -136,7 +137,6 @@ func extractFLACInfo(m tag.Metadata, info *MediaInfo) {
 	}
 
 	info.Bitrate = (info.SampleRate * info.BitDepth * info.Channels) / 1000
-	info.Channels = 2
 }
 
 func extractOGGInfo(m tag.Metadata, info *MediaInfo) {

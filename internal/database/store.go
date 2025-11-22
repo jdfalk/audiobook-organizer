@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -40,6 +40,8 @@ type Store interface {
 	GetBookByID(id string) (*Book, error) // ID is ULID string
 	GetBookByFilePath(path string) (*Book, error)
 	GetBookByFileHash(hash string) (*Book, error)
+	GetBookByOriginalHash(hash string) (*Book, error)
+	GetBookByOrganizedHash(hash string) (*Book, error)
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
@@ -176,6 +178,13 @@ type Book struct {
 	// File hash tracking for deduplication
 	FileHash *string `json:"file_hash,omitempty"`
 	FileSize *int64  `json:"file_size,omitempty"`
+	// Lifecycle tracking
+	OriginalFileHash    *string    `json:"original_file_hash,omitempty"`
+	OrganizedFileHash   *string    `json:"organized_file_hash,omitempty"`
+	LibraryState        *string    `json:"library_state,omitempty"`
+	Quantity            *int       `json:"quantity,omitempty"`
+	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
+	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
 	Author *Author `json:"author,omitempty" db:"-"`
 	Series *Series `json:"series,omitempty" db:"-"`

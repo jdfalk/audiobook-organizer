@@ -1,19 +1,23 @@
 // file: internal/metadata/metadata.go
-// version: 1.4.0
+// version: 1.6.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dhowden/tag"
 )
+
+var yearPattern = regexp.MustCompile(`(\d{4})`)
 
 // Metadata holds audio file metadata
 type Metadata struct {
@@ -33,9 +37,44 @@ type Metadata struct {
 	ISBN13    string
 }
 
+type fieldCandidate struct {
+	value  string
+	source string
+}
+
+func pickFirstNonEmpty(candidates ...fieldCandidate) (string, string) {
+	for _, candidate := range candidates {
+		if trimmed := cleanTagValue(candidate.value); trimmed != "" {
+			return trimmed, candidate.source
+		}
+	}
+	return "", ""
+}
+
+func setFieldSource(sources map[string]string, field, source string) {
+	if sources == nil || source == "" {
+		return
+	}
+	sources[field] = source
+}
+
+func sourceOrUnknown(sources map[string]string, field string) string {
+	if sources == nil {
+		return "unset"
+	}
+	if value, ok := sources[field]; ok && value != "" {
+		return value
+	}
+	return "unset"
+}
+
 // ExtractMetadata reads metadata from audio files
 func ExtractMetadata(filePath string) (Metadata, error) {
 	var metadata Metadata
+	log.Printf("[DEBUG] metadata: extracting tags for %s", filePath)
+	fieldSources := map[string]string{}
+	seriesIndexSource := ""
+	fallbackUsed := false
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -43,101 +82,298 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	}
 	defer f.Close()
 
-	// Extract metadata using tag library
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		// If tag library fails, try to extract info from filename
+		log.Printf("[WARN] metadata: failed to read tags for %s: %v; falling back to filename parsing", filePath, err)
 		metadata = extractFromFilename(filePath)
+		if metadata.SeriesIndex == 0 {
+			metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
+		}
 		return metadata, nil
 	}
 
-	metadata.Title = m.Title()
-	metadata.Artist = m.Artist()
-	metadata.Album = m.Album()
-	metadata.Genre = m.Genre()
-	metadata.Year = m.Year()
+	raw := m.Raw()
+	if len(raw) > 0 {
+		rawKeys := make([]string, 0, len(raw))
+		for key := range raw {
+			rawKeys = append(rawKeys, key)
+		}
+		sort.Strings(rawKeys)
+		log.Printf("[TRACE] metadata: raw tag keys for %s: %v", filePath, rawKeys)
+	}
 
-	// Try to extract series information from various fields
-	// Check album or grouping tag
-	if grouping, ok := m.Raw()["TGID"]; ok && grouping != "" {
-		metadata.Series = grouping.(string)
-	} else if grouping, ok := m.Raw()["GRP1"]; ok && grouping != "" {
-		metadata.Series = grouping.(string)
-	} else if strings.Contains(metadata.Album, " - ") {
-		// Sometimes series is part of the album name
-		parts := strings.Split(metadata.Album, " - ")
-		if len(parts) > 1 {
-			metadata.Series = parts[0]
+	albumValue, albumSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Album(), source: "tag.Album"},
+		fieldCandidate{value: getRawString(raw, "TALB", "\xa9alb", "©alb", "album"), source: "raw.album"},
+	)
+	metadata.Album = cleanTagValue(albumValue)
+	if metadata.Album != "" {
+		setFieldSource(fieldSources, "album", albumSource)
+	}
+
+	titleValue, titleSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Title(), source: "tag.Title"},
+		fieldCandidate{value: getRawString(raw, "\xa9nam", "©nam", "title", "TIT2"), source: "raw.title"},
+		fieldCandidate{value: metadata.Album, source: "album"},
+	)
+	metadata.Title = cleanTagValue(titleValue)
+	if metadata.Title != "" {
+		setFieldSource(fieldSources, "title", titleSource)
+	} else {
+		metadata.Title = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
+		setFieldSource(fieldSources, "title", "filename default (basename)")
+	}
+
+	composerValue, composerSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Composer(), source: "tag.Composer"},
+		fieldCandidate{value: getRawString(raw, "TCOM", "\xa9wrt", "composer"), source: "raw.composer"},
+	)
+	if composerValue != "" {
+		metadata.Artist = composerValue
+		setFieldSource(fieldSources, "author", composerSource+" (composer)")
+	} else {
+		artistValue, artistSource := pickFirstNonEmpty(
+			fieldCandidate{value: m.Artist(), source: "tag.Artist"},
+			fieldCandidate{value: getRawString(raw, "TPE1", "artist", "\xa9ART", "©ART", "aART"), source: "raw.artist"},
+		)
+		metadata.Artist = cleanTagValue(artistValue)
+		if metadata.Artist != "" {
+			setFieldSource(fieldSources, "author", artistSource)
 		}
 	}
 
-	// Check for comments that might include series info
-	if m.Comment() != "" {
-		metadata.Comments = m.Comment()
-		// Try to extract series info from comments
-		if metadata.Series == "" {
-			seriesMatches := []string{"Series:", "Series :", "Part of:"}
-			for _, match := range seriesMatches {
-				if strings.Contains(metadata.Comments, match) {
-					parts := strings.Split(metadata.Comments, match)
-					if len(parts) > 1 {
-						seriesPart := strings.TrimSpace(parts[1])
-						endPos := strings.IndexAny(seriesPart, "\n\r.,;")
-						if endPos > 0 {
-							metadata.Series = seriesPart[:endPos]
-						} else {
-							metadata.Series = seriesPart
-						}
-						break
+	genreValue, genreSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Genre(), source: "tag.Genre"},
+		fieldCandidate{value: getRawString(raw, "TCON", "genre", "\xa9gen", "©gen"), source: "raw.genre"},
+	)
+	metadata.Genre = cleanTagValue(genreValue)
+	if metadata.Genre != "" {
+		setFieldSource(fieldSources, "genre", genreSource)
+	}
+
+	narratorValue, narratorSource := pickFirstNonEmpty(
+		fieldCandidate{value: getRawString(raw, "PERFORMER", "Performer", "TXXX:NARRATOR", "TXXX:Narrator", "NARRATOR", "Narrator", "©nrt", "\xa9nrt"), source: "raw.narrator"},
+		fieldCandidate{value: getRawString(raw, "TXXX:Reader", "READER"), source: "raw.reader"},
+	)
+	metadata.Narrator = cleanTagValue(narratorValue)
+	if metadata.Narrator != "" {
+		setFieldSource(fieldSources, "narrator", narratorSource)
+	}
+
+	languageValue, languageSource := pickFirstNonEmpty(
+		fieldCandidate{value: getRawString(raw, "TLAN", "LANGUAGE"), source: "raw.language"},
+	)
+	metadata.Language = cleanTagValue(languageValue)
+	if metadata.Language != "" {
+		setFieldSource(fieldSources, "language", languageSource)
+	}
+
+	publisherValue, publisherSource := pickFirstNonEmpty(
+		fieldCandidate{value: getRawString(raw, "TPUB", "publisher", "©pub", "\xa9pub"), source: "raw.publisher"},
+	)
+	metadata.Publisher = cleanTagValue(publisherValue)
+	if metadata.Publisher != "" {
+		setFieldSource(fieldSources, "publisher", publisherSource)
+	}
+
+	commentValue, commentSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Comment(), source: "tag.Comment"},
+		fieldCandidate{value: getRawString(raw, "COMM", "comment", "©cmt", "\xa9cmt"), source: "raw.comment"},
+	)
+	metadata.Comments = cleanTagValue(commentValue)
+	if metadata.Comments != "" {
+		setFieldSource(fieldSources, "comment", commentSource)
+	}
+
+	metadata.Year = m.Year()
+	yearSource := "tag.Year"
+	if metadata.Year == 0 {
+		yearSource = ""
+		if yearStr := getRawString(raw, "TDRC", "TYER", "TDOR", "©day", "\xa9day"); yearStr != "" {
+			if parsedYear, convErr := strconv.Atoi(extractYearDigits(yearStr)); convErr == nil {
+				metadata.Year = parsedYear
+				yearSource = "raw.year"
+			}
+		}
+	}
+	if metadata.Year != 0 && yearSource != "" {
+		setFieldSource(fieldSources, "year", yearSource)
+	}
+
+	seriesValue, seriesSource := pickFirstNonEmpty(
+		fieldCandidate{value: getRawString(raw, "TXXX:SERIES", "SERIES", "SERIES_NAME", "SERIESNAME", "GRP1", "TGID", "©grp", "\xa9grp"), source: "raw.series"},
+	)
+	metadata.Series = cleanTagValue(seriesValue)
+	if metadata.Series == "" && strings.Contains(metadata.Album, " - ") {
+		parts := strings.Split(metadata.Album, " - ")
+		if len(parts) > 1 {
+			metadata.Series = strings.TrimSpace(parts[0])
+			seriesSource = "album-prefix"
+		}
+	}
+	if metadata.Series == "" && metadata.Comments != "" {
+		if extracted := extractSeriesFromComments(metadata.Comments); extracted != "" {
+			metadata.Series = extracted
+			seriesSource = "comment-extraction"
+		}
+	}
+	if metadata.Series != "" {
+		setFieldSource(fieldSources, "series", seriesSource)
+	}
+
+	metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
+	if metadata.SeriesIndex > 0 {
+		seriesIndexSource = "title"
+	}
+	if metadata.SeriesIndex == 0 {
+		if idx := DetectVolumeNumber(metadata.Album); idx > 0 {
+			metadata.SeriesIndex = idx
+			seriesIndexSource = "album"
+		}
+	}
+	if metadata.SeriesIndex == 0 && metadata.Comments != "" {
+		if idx := DetectVolumeNumber(metadata.Comments); idx > 0 {
+			metadata.SeriesIndex = idx
+			seriesIndexSource = "comment"
+		}
+	}
+
+	if metadata.Title == "" || metadata.Artist == "" || metadata.Narrator == "" || metadata.Series == "" {
+		fallback := extractFromFilename(filePath)
+		fallbackUsed = true
+		if metadata.Title == "" && fallback.Title != "" {
+			metadata.Title = fallback.Title
+			setFieldSource(fieldSources, "title", "filename pattern")
+		}
+		if metadata.Artist == "" && fallback.Artist != "" {
+			metadata.Artist = fallback.Artist
+			setFieldSource(fieldSources, "author", "filename pattern")
+		}
+		if metadata.Narrator == "" && fallback.Narrator != "" {
+			metadata.Narrator = fallback.Narrator
+			setFieldSource(fieldSources, "narrator", "filename pattern")
+		}
+		if metadata.Series == "" && fallback.Series != "" {
+			metadata.Series = fallback.Series
+			setFieldSource(fieldSources, "series", "filename pattern")
+		}
+		if metadata.SeriesIndex == 0 && fallback.SeriesIndex > 0 {
+			metadata.SeriesIndex = fallback.SeriesIndex
+			seriesIndexSource = "filename pattern"
+		}
+	}
+
+	if metadata.ISBN13 == "" {
+		isbn13Value, isbn13Source := pickFirstNonEmpty(
+			fieldCandidate{value: getRawString(raw, "TXXX:ISBN13", "TXXX:ISBN", "ISBN13", "ISBN"), source: "raw.isbn13"},
+		)
+		metadata.ISBN13 = cleanTagValue(isbn13Value)
+		if metadata.ISBN13 != "" {
+			setFieldSource(fieldSources, "isbn13", isbn13Source)
+		}
+	}
+	if metadata.ISBN10 == "" {
+		isbn10Value, isbn10Source := pickFirstNonEmpty(
+			fieldCandidate{value: getRawString(raw, "TXXX:ISBN10", "ISBN10"), source: "raw.isbn10"},
+		)
+		metadata.ISBN10 = cleanTagValue(isbn10Value)
+		if metadata.ISBN10 != "" {
+			setFieldSource(fieldSources, "isbn10", isbn10Source)
+		}
+	}
+
+	if seriesIndexSource == "" && metadata.SeriesIndex > 0 {
+		seriesIndexSource = "detected"
+	}
+	if fallbackUsed {
+		log.Printf("[TRACE] metadata: filename fallback filled gaps for %s", filePath)
+	}
+	log.Printf(
+		"[TRACE] metadata: sources for %s | title=%s | author=%s | series=%s | series_index=%s | narrator=%s | album=%s | publisher=%s | language=%s",
+		filePath,
+		sourceOrUnknown(fieldSources, "title"),
+		sourceOrUnknown(fieldSources, "author"),
+		sourceOrUnknown(fieldSources, "series"),
+		seriesIndexSource,
+		sourceOrUnknown(fieldSources, "narrator"),
+		sourceOrUnknown(fieldSources, "album"),
+		sourceOrUnknown(fieldSources, "publisher"),
+		sourceOrUnknown(fieldSources, "language"),
+	)
+
+	log.Printf("[DEBUG] metadata: extracted for %s (title=%q author=%q series=%q position=%d)", filePath, metadata.Title, metadata.Artist, metadata.Series, metadata.SeriesIndex)
+	return metadata, nil
+}
+
+func cleanTagValue(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func getRawString(raw map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if raw == nil {
+			continue
+		}
+		if value, ok := raw[key]; ok {
+			switch typed := value.(type) {
+			case string:
+				if s := strings.TrimSpace(typed); s != "" {
+					return s
+				}
+			case []string:
+				for _, s := range typed {
+					if trimmed := strings.TrimSpace(s); trimmed != "" {
+						return trimmed
 					}
+				}
+			case []byte:
+				if s := strings.TrimSpace(string(typed)); s != "" {
+					return s
+				}
+			default:
+				if s := strings.TrimSpace(fmt.Sprint(typed)); s != "" && s != "<nil>" {
+					return s
 				}
 			}
 		}
 	}
+	return ""
+}
 
-	// Try to extract extended fields from raw tag map using common frames/atoms
-	// Note: Availability varies by format and tagging tool; this is best-effort.
-	raw := m.Raw()
-	// Language (ID3: TLAN)
-	if v, ok := raw["TLAN"]; ok {
-		if s, sok := v.(string); sok {
-			metadata.Language = strings.TrimSpace(s)
-		}
-	}
-	// Publisher (ID3: TPUB, MP4: ©pub)
-	if v, ok := raw["TPUB"]; ok {
-		if s, sok := v.(string); sok {
-			metadata.Publisher = strings.TrimSpace(s)
-		}
-	} else if v, ok := raw["©pub"]; ok {
-		if s, sok := v.(string); sok {
-			metadata.Publisher = strings.TrimSpace(s)
-		}
-	}
-	// Narrator (often custom TXXX frames; also MP4 freeform keys)
-	for _, key := range []string{"TXXX:NARRATOR", "TXXX:Narrator", "NARRATOR", "Narrator", "©nrt"} {
-		if v, ok := raw[key]; ok {
-			if s, sok := v.(string); sok {
-				metadata.Narrator = strings.TrimSpace(s)
-				break
+func extractSeriesFromComments(comment string) string {
+	seriesMatches := []string{"Series:", "Series :", "Part of:"}
+	for _, marker := range seriesMatches {
+		if strings.Contains(comment, marker) {
+			parts := strings.Split(comment, marker)
+			if len(parts) > 1 {
+				section := strings.TrimSpace(parts[1])
+				end := strings.IndexAny(section, "\n\r.,;")
+				if end > 0 {
+					return section[:end]
+				}
+				return section
 			}
 		}
 	}
-	// ISBNs (custom frames)
-	for k, target := range map[string]*string{
-		"TXXX:ISBN":   &metadata.ISBN13,
-		"TXXX:ISBN13": &metadata.ISBN13,
-		"TXXX:ISBN10": &metadata.ISBN10,
-		"ISBN":        &metadata.ISBN13,
-	} {
-		if v, ok := raw[k]; ok {
-			if s, sok := v.(string); sok {
-				*target = strings.TrimSpace(s)
-			}
-		}
-	}
+	return ""
+}
 
-	return metadata, nil
+func extractYearDigits(value string) string {
+	yearPattern := regexp.MustCompile(`(\d{4})`)
+	if match := yearPattern.FindStringSubmatch(value); len(match) > 1 {
+		return match[1]
+	}
+	return value
 }
 
 // extractFromFilename tries to extract metadata from filename when tags are unavailable
@@ -202,6 +438,10 @@ func extractFromFilename(filePath string) Metadata {
 	// If we still don't have an artist, try to get from parent directory
 	if metadata.Artist == "" {
 		metadata.Artist = extractAuthorFromDirectory(filePath)
+	}
+
+	if metadata.SeriesIndex == 0 {
+		metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
 	}
 
 	return metadata

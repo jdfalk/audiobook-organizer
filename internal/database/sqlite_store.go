@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.5.0
+// version: 1.7.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -12,6 +12,34 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+type rowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+const bookSelectColumns = `
+	id, title, author_id, series_id, series_sequence,
+	file_path, original_filename, format, duration,
+	work_id, narrator, edition, language, publisher,
+	print_year, audiobook_release_year, isbn10, isbn13,
+	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
+	bit_depth, quality, is_primary_version, version_group_id, version_notes,
+	original_file_hash, organized_file_hash
+`
+
+func scanBook(scanner rowScanner, book *Book) error {
+	return scanner.Scan(
+		&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
+		&book.SeriesSequence, &book.FilePath, &book.OriginalFilename,
+		&book.Format, &book.Duration, &book.WorkID, &book.Narrator,
+		&book.Edition, &book.Language, &book.Publisher, &book.PrintYear,
+		&book.AudiobookReleaseYear, &book.ISBN10, &book.ISBN13,
+		&book.FileHash, &book.FileSize, &book.Bitrate, &book.Codec,
+		&book.SampleRate, &book.Channels, &book.BitDepth, &book.Quality,
+		&book.IsPrimaryVersion, &book.VersionGroupID, &book.VersionNotes,
+		&book.OriginalFileHash, &book.OrganizedFileHash,
+	)
+}
 
 // SQLiteStore implements the Store interface using SQLite3
 type SQLiteStore struct {
@@ -95,6 +123,17 @@ func (s *SQLiteStore) createTables() error {
 		isbn13 TEXT,
 		file_hash TEXT,
 		file_size INTEGER,
+		bitrate_kbps INTEGER,
+		codec TEXT,
+		sample_rate_hz INTEGER,
+		channels INTEGER,
+		bit_depth INTEGER,
+		quality TEXT,
+		is_primary_version BOOLEAN DEFAULT 1,
+		version_group_id TEXT,
+		version_notes TEXT,
+		original_file_hash TEXT,
+		organized_file_hash TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -104,6 +143,8 @@ func (s *SQLiteStore) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_books_series ON books(series_id);
 	CREATE INDEX IF NOT EXISTS idx_books_file_path ON books(file_path);
 	CREATE INDEX IF NOT EXISTS idx_books_file_hash ON books(file_hash);
+	CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash);
+	CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash);
 
 	CREATE TABLE IF NOT EXISTS playlists (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,13 +240,24 @@ func (s *SQLiteStore) createTables() error {
 func (s *SQLiteStore) ensureExtendedBookColumns() error {
 	// Map of desired columns (name -> type)
 	columns := map[string]string{
-		"work_id":   "TEXT",
-		"narrator":  "TEXT",
-		"edition":   "TEXT",
-		"language":  "TEXT",
-		"publisher": "TEXT",
-		"isbn10":    "TEXT",
-		"isbn13":    "TEXT",
+		"work_id":             "TEXT",
+		"narrator":            "TEXT",
+		"edition":             "TEXT",
+		"language":            "TEXT",
+		"publisher":           "TEXT",
+		"isbn10":              "TEXT",
+		"isbn13":              "TEXT",
+		"bitrate_kbps":        "INTEGER",
+		"codec":               "TEXT",
+		"sample_rate_hz":      "INTEGER",
+		"channels":            "INTEGER",
+		"bit_depth":           "INTEGER",
+		"quality":             "TEXT",
+		"is_primary_version":  "BOOLEAN DEFAULT 1",
+		"version_group_id":    "TEXT",
+		"version_notes":       "TEXT",
+		"original_file_hash":  "TEXT",
+		"organized_file_hash": "TEXT",
 	}
 
 	// Fetch existing columns
@@ -239,6 +291,16 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		alter := fmt.Sprintf("ALTER TABLE books ADD COLUMN %s %s", name, colType)
 		if _, err := s.db.Exec(alter); err != nil {
 			return fmt.Errorf("failed adding column %s: %w", name, err)
+		}
+	}
+
+	indexStatements := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash)",
+		"CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash)",
+	}
+	for _, stmt := range indexStatements {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed creating index with statement %s: %w", stmt, err)
 		}
 	}
 	return nil
@@ -525,9 +587,7 @@ func (s *SQLiteStore) DeleteWork(id string) error {
 }
 
 func (s *SQLiteStore) GetBooksByWorkID(workID string) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
-	          FROM books WHERE work_id = ? ORDER BY title`
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE work_id = ? ORDER BY title`, bookSelectColumns)
 	rows, err := s.db.Query(query, workID)
 	if err != nil {
 		return nil, err
@@ -537,9 +597,7 @@ func (s *SQLiteStore) GetBooksByWorkID(workID string) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -550,9 +608,7 @@ func (s *SQLiteStore) GetBooksByWorkID(workID string) ([]Book, error) {
 // Book operations
 
 func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
-	          FROM books ORDER BY title LIMIT ? OFFSET ?`
+	query := fmt.Sprintf(`SELECT %s FROM books ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
 	rows, err := s.db.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
@@ -562,9 +618,7 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -574,12 +628,8 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 
 func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
-	          FROM books WHERE id = ?`
-	err := s.db.QueryRow(query, id).Scan(&book.ID, &book.Title, &book.AuthorID,
-		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE id = ?`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, id), &book)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -591,13 +641,8 @@ func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 
 func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13, file_hash, file_size
-	          FROM books WHERE file_path = ?`
-	err := s.db.QueryRow(query, path).Scan(&book.ID, &book.Title, &book.AuthorID,
-		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13,
-		&book.FileHash, &book.FileSize)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE file_path = ?`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, path), &book)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -609,13 +654,34 @@ func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 
 func (s *SQLiteStore) GetBookByFileHash(hash string) (*Book, error) {
 	var book Book
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13, file_hash, file_size
-	          FROM books WHERE file_hash = ? LIMIT 1`
-	err := s.db.QueryRow(query, hash).Scan(&book.ID, &book.Title, &book.AuthorID,
-		&book.SeriesID, &book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-		&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13,
-		&book.FileHash, &book.FileSize)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE file_hash = ? LIMIT 1`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, hash), &book)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (s *SQLiteStore) GetBookByOriginalHash(hash string) (*Book, error) {
+	var book Book
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE original_file_hash = ? LIMIT 1`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, hash), &book)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (s *SQLiteStore) GetBookByOrganizedHash(hash string) (*Book, error) {
+	var book Book
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE organized_file_hash = ? LIMIT 1`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, hash), &book)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -626,9 +692,7 @@ func (s *SQLiteStore) GetBookByFileHash(hash string) (*Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
-	          FROM books WHERE series_id = ? ORDER BY series_sequence, title`
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? ORDER BY series_sequence, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, seriesID)
 	if err != nil {
 		return nil, err
@@ -638,9 +702,7 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -649,9 +711,7 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-	                 work_id, narrator, edition, language, publisher, isbn10, isbn13
-	          FROM books WHERE author_id = ? ORDER BY title`
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE author_id = ? ORDER BY title`, bookSelectColumns)
 	rows, err := s.db.Query(query, authorID)
 	if err != nil {
 		return nil, err
@@ -661,9 +721,7 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -682,12 +740,21 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	}
 
 	query := `INSERT INTO books (
-		id, title, author_id, series_id, series_sequence, file_path, format, duration,
-		work_id, narrator, edition, language, publisher, isbn10, isbn13)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.db.Exec(query, book.ID, book.Title, book.AuthorID, book.SeriesID,
-		book.SeriesSequence, book.FilePath, book.Format, book.Duration,
-		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher, book.ISBN10, book.ISBN13)
+		id, title, author_id, series_id, series_sequence, file_path, original_filename,
+		format, duration, work_id, narrator, edition, language, publisher,
+		print_year, audiobook_release_year, isbn10, isbn13,
+		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
+		bit_depth, quality, is_primary_version, version_group_id, version_notes,
+		original_file_hash, organized_file_hash
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err := s.db.Exec(query,
+		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
+		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
+		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
+		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
+		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
+		book.OriginalFileHash, book.OrganizedFileHash,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -695,12 +762,24 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 }
 
 func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
-	query := `UPDATE books SET title = ?, author_id = ?, series_id = ?, series_sequence = ?,
-			  file_path = ?, format = ?, duration = ?, work_id = ?, narrator = ?, edition = ?, language = ?,
-			  publisher = ?, isbn10 = ?, isbn13 = ? WHERE id = ?`
-	result, err := s.db.Exec(query, book.Title, book.AuthorID, book.SeriesID,
-		book.SeriesSequence, book.FilePath, book.Format, book.Duration,
-		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher, book.ISBN10, book.ISBN13, id)
+	query := `UPDATE books SET
+		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
+		file_path = ?, original_filename = ?, format = ?, duration = ?,
+		work_id = ?, narrator = ?, edition = ?, language = ?, publisher = ?,
+		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?,
+		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
+		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
+		original_file_hash = ?, organized_file_hash = ?
+	WHERE id = ?`
+	result, err := s.db.Exec(query,
+		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
+		book.FilePath, book.OriginalFilename, book.Format, book.Duration,
+		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
+		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
+		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
+		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
+		book.OriginalFileHash, book.OrganizedFileHash, id,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -731,9 +810,7 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	searchQuery := `SELECT id, title, author_id, series_id, series_sequence, file_path, format, duration,
-				 work_id, narrator, edition, language, publisher, isbn10, isbn13
-				FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`
+	searchQuery := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
 	rows, err := s.db.Query(searchQuery, "%"+query+"%", limit, offset)
 	if err != nil {
 		return nil, err
@@ -743,9 +820,7 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 	var books []Book
 	for rows.Next() {
 		var book Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-			&book.SeriesSequence, &book.FilePath, &book.Format, &book.Duration,
-			&book.WorkID, &book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.ISBN10, &book.ISBN13); err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)
@@ -761,8 +836,7 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 
 // GetBooksByVersionGroup returns all books in a version group
 func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
-	query := `SELECT id, title, author_id, series_id, series_sequence, file_path, original_filename, format, duration, work_id, narrator, edition, language, publisher, print_year, audiobook_release_year, isbn10, isbn13, bitrate_kbps, codec, sample_rate_hz, channels, bit_depth, quality, is_primary_version, version_group_id, version_notes
-			  FROM books WHERE version_group_id = ? ORDER BY is_primary_version DESC, title`
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE version_group_id = ? ORDER BY is_primary_version DESC, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, groupID)
 	if err != nil {
 		return nil, err
@@ -772,15 +846,7 @@ func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	var books []Book
 	for rows.Next() {
 		var book Book
-		err := rows.Scan(
-			&book.ID, &book.Title, &book.AuthorID, &book.SeriesID, &book.SeriesSequence,
-			&book.FilePath, &book.OriginalFilename, &book.Format, &book.Duration, &book.WorkID,
-			&book.Narrator, &book.Edition, &book.Language, &book.Publisher, &book.PrintYear,
-			&book.AudiobookReleaseYear, &book.ISBN10, &book.ISBN13,
-			&book.Bitrate, &book.Codec, &book.SampleRate, &book.Channels, &book.BitDepth, &book.Quality,
-			&book.IsPrimaryVersion, &book.VersionGroupID, &book.VersionNotes,
-		)
-		if err != nil {
+		if err := scanBook(rows, &book); err != nil {
 			return nil, err
 		}
 		books = append(books, book)

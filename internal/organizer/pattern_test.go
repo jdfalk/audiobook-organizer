@@ -1,5 +1,5 @@
 // file: internal/organizer/pattern_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package organizer
@@ -193,6 +193,18 @@ func TestPatternExpansionWithRealData(t *testing.T) {
 			filePattern:    "{title} [{language}]",
 			expectedFolder: "Jeanette Winterson",
 			expectedFile:   "Oranges Are Not The Only Fruit [English].m4b",
+		},
+		// Missing metadata uses defaults where required and strips empty placeholders
+		{
+			name: "missing metadata uses defaults",
+			book: &database.Book{
+				Title:    "",
+				FilePath: "/source/unknown-title.m4b",
+			},
+			folderPattern:  "{author}/{series}",
+			filePattern:    "{title} - {narrator}",
+			expectedFolder: "Unknown Author",
+			expectedFile:   "Unknown Title.m4b",
 		},
 	}
 
