@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -10,10 +10,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
@@ -30,6 +33,7 @@ var databasePath string
 var databaseType string
 var enableSQLite bool
 var playlistDir string
+var metadataInspectFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -325,6 +329,7 @@ func init() {
 	rootCmd.AddCommand(tagCmd)
 	rootCmd.AddCommand(organizeCmd)
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(metadataInspectCmd)
 
 	// Add serve command specific flags
 	serveCmd.Flags().String("port", "8080", "port to run the web server on")
@@ -333,6 +338,67 @@ func init() {
 	serveCmd.Flags().String("write-timeout", "15s", "write timeout (e.g. 15s, 1m)")
 	serveCmd.Flags().String("idle-timeout", "60s", "idle timeout (e.g. 60s, 2m)")
 	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
+
+	metadataInspectCmd.Flags().StringVar(&metadataInspectFile, "file", "", "audio file to inspect (can also pass as positional argument)")
+}
+
+var metadataInspectCmd = &cobra.Command{
+	Use:   "inspect-metadata [file]",
+	Short: "Extract metadata for a single audiobook file",
+	Long: `Runs the metadata extraction pipeline for a single file and prints the
+results, including technical details from mediainfo. Useful for debugging
+broken tags or filename fallbacks without running a full scan.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := metadataInspectFile
+		if target == "" && len(args) > 0 {
+			target = args[0]
+		}
+		if target == "" {
+			return fmt.Errorf("file path must be provided via --file or positional argument")
+		}
+
+		target = filepath.Clean(target)
+		if _, err := os.Stat(target); err != nil {
+			return fmt.Errorf("file not accessible: %w", err)
+		}
+
+		fmt.Printf("Inspecting metadata for %s\n", target)
+		meta, err := metadata.ExtractMetadata(target)
+		if err != nil {
+			return fmt.Errorf("metadata extraction failed: %w", err)
+		}
+
+		fmt.Println("\nMetadata Fields:")
+		printMetadataField("Title", meta.Title)
+		printMetadataField("Author", meta.Artist)
+		printMetadataField("Series", meta.Series)
+		fmt.Printf("  Series Position: %d\n", meta.SeriesIndex)
+		printMetadataField("Narrator", meta.Narrator)
+		printMetadataField("Album", meta.Album)
+		printMetadataField("Genre", meta.Genre)
+		printMetadataField("Language", meta.Language)
+		printMetadataField("Publisher", meta.Publisher)
+		fmt.Printf("  Year: %d\n", meta.Year)
+		printMetadataField("ISBN-10", meta.ISBN10)
+		printMetadataField("ISBN-13", meta.ISBN13)
+		printMetadataField("Comments", meta.Comments)
+
+		if info, miErr := mediainfo.Extract(target); miErr == nil {
+			fmt.Println("\nMedia Info:")
+			printMetadataField("Codec", info.Codec)
+			fmt.Printf("  Bitrate: %dkbps\n", info.Bitrate)
+			fmt.Printf("  Sample Rate: %dHz\n", info.SampleRate)
+			fmt.Printf("  Channels: %d\n", info.Channels)
+			fmt.Printf("  Bit Depth: %d\n", info.BitDepth)
+			printMetadataField("Quality", info.Quality)
+		} else {
+			fmt.Printf("\nMedia info unavailable: %v\n", miErr)
+		}
+
+		fmt.Println("\nDetailed extraction sources are logged with TRACE level in metadata package logs.")
+		return nil
+	},
 }
 
 func initConfig() {
@@ -371,6 +437,17 @@ func initConfig() {
 	}
 
 	config.InitConfig()
+}
+
+func printMetadataField(label, value string) {
+	fmt.Printf("  %s: %s\n", label, formatMetadataValue(value))
+}
+
+func formatMetadataValue(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "(empty)"
+	}
+	return value
 }
 
 // setupFileLogging configures logging to write to both a file and stdout.

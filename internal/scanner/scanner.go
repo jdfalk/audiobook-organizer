@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
+	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/schollz/progressbar/v3"
 )
@@ -136,6 +137,22 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error 
 
 	bar := progressbar.Default(int64(len(books)))
 
+	var aiParser *ai.OpenAIParser
+	aiEnabled := false
+	if config.AppConfig.EnableAIParsing {
+		if config.AppConfig.OpenAIAPIKey == "" {
+			log.Printf("[WARN] scanner: AI parsing enabled but OpenAI API key is not configured")
+		} else {
+			aiParser = ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, true)
+			if aiParser != nil && aiParser.IsEnabled() {
+				aiEnabled = true
+				log.Printf("[DEBUG] scanner: OpenAI parser initialized for filename metadata fallback")
+			} else {
+				log.Printf("[WARN] scanner: failed to initialize OpenAI parser, AI fallback disabled")
+			}
+		}
+	}
+
 	// Worker pool for parallel processing
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, workers)
@@ -163,58 +180,88 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error 
 			if err != nil {
 				fmt.Printf("Warning: Could not extract metadata from %s: %v\n", books[idx].FilePath, err)
 			} else {
-				books[idx].Title = meta.Title
-				books[idx].Author = meta.Artist
-				books[idx].Narrator = meta.Narrator
-				books[idx].Language = meta.Language
-				books[idx].Publisher = meta.Publisher
+				if meta.Title != "" {
+					books[idx].Title = meta.Title
+				}
+				if meta.Artist != "" {
+					books[idx].Author = meta.Artist
+				}
+				if meta.Narrator != "" {
+					books[idx].Narrator = meta.Narrator
+				}
+				if meta.Language != "" {
+					books[idx].Language = meta.Language
+				}
+				if meta.Publisher != "" {
+					books[idx].Publisher = meta.Publisher
+				}
+				if meta.Series != "" {
+					books[idx].Series = meta.Series
+				}
+				if meta.SeriesIndex > 0 {
+					books[idx].Position = meta.SeriesIndex
+				}
+			}
+
+			if info, miErr := mediainfo.Extract(books[idx].FilePath); miErr == nil {
+				if info.Format != "" {
+					books[idx].Format = "." + strings.TrimPrefix(strings.ToLower(info.Format), ".")
+				}
+				if info.Duration > 0 {
+					books[idx].Duration = info.Duration
+				}
+			} else {
+				log.Printf("[DEBUG] scanner: mediainfo extract failed for %s: %v", books[idx].FilePath, miErr)
 			}
 
 			// If metadata is incomplete, try AI parsing first (if enabled), then filepath extraction
-			if books[idx].Title == "" || books[idx].Author == "" {
-				// Try AI parsing if enabled and configured
-				if config.AppConfig.EnableAIParsing && config.AppConfig.OpenAIAPIKey != "" {
-					parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, true)
-					if parser.IsEnabled() {
-						filename := filepath.Base(books[idx].FilePath)
-						// Create a timeout context for AI parsing
-						aiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-						defer cancel()
-
-						aiMeta, err := parser.ParseFilename(aiCtx, filename)
-						if err == nil && aiMeta != nil {
-							if books[idx].Title == "" && aiMeta.Title != "" {
-								books[idx].Title = aiMeta.Title
-							}
-							if books[idx].Author == "" && aiMeta.Author != "" {
-								books[idx].Author = aiMeta.Author
-							}
-							if books[idx].Series == "" && aiMeta.Series != "" {
-								books[idx].Series = aiMeta.Series
-								books[idx].Position = aiMeta.SeriesNum
-							}
-							if books[idx].Narrator == "" && aiMeta.Narrator != "" {
-								books[idx].Narrator = aiMeta.Narrator
-							}
-							if books[idx].Publisher == "" && aiMeta.Publisher != "" {
-								books[idx].Publisher = aiMeta.Publisher
-							}
-						} else if err != nil {
-							fmt.Printf("Warning: AI parsing failed for %s: %v\n", books[idx].FilePath, err)
-						}
+			if aiEnabled && (books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
+				filename := filepath.Base(books[idx].FilePath)
+				log.Printf("[DEBUG] scanner: attempting AI metadata fallback for %s", books[idx].FilePath)
+				aiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				aiMeta, aiErr := aiParser.ParseFilename(aiCtx, filename)
+				cancel()
+				if aiErr == nil && aiMeta != nil {
+					if books[idx].Title == "" && aiMeta.Title != "" {
+						books[idx].Title = aiMeta.Title
 					}
+					if books[idx].Author == "" && aiMeta.Author != "" {
+						books[idx].Author = aiMeta.Author
+					}
+					if books[idx].Series == "" && aiMeta.Series != "" {
+						books[idx].Series = aiMeta.Series
+					}
+					if books[idx].Position == 0 && aiMeta.SeriesNum > 0 {
+						books[idx].Position = aiMeta.SeriesNum
+					}
+					if books[idx].Narrator == "" && aiMeta.Narrator != "" {
+						books[idx].Narrator = aiMeta.Narrator
+					}
+					if books[idx].Publisher == "" && aiMeta.Publisher != "" {
+						books[idx].Publisher = aiMeta.Publisher
+					}
+				} else if aiErr != nil {
+					log.Printf("[WARN] scanner: AI parsing failed for %s: %v", books[idx].FilePath, aiErr)
 				}
+			}
 
-				// Fallback to filepath extraction if still incomplete
-				if books[idx].Title == "" || books[idx].Author == "" {
-					extractInfoFromPath(&books[idx])
-				}
+			// Fallback to filepath extraction if title/author still unknown
+			if books[idx].Title == "" || books[idx].Author == "" {
+				extractInfoFromPath(&books[idx])
+			}
+
+			if books[idx].Position <= 0 {
+				books[idx].Position = metadata.DetectVolumeNumber(books[idx].Title)
 			}
 
 			// Identify series based on title and filepath
 			series, position := matcher.IdentifySeries(books[idx].Title, books[idx].FilePath)
-			books[idx].Series = series
-			books[idx].Position = position
+			if books[idx].Series == "" && series != "" {
+				books[idx].Series = series
+			}
+			if books[idx].Position == 0 && position > 0 {
+				books[idx].Position = position
+			}
 
 			// Save to database (database operations are thread-safe)
 			if err := saveBookToDatabase(&books[idx]); err != nil {
@@ -308,6 +355,10 @@ func extractInfoFromPath(book *Book) {
 	// Extract author from directory name
 	if book.Author == "" {
 		book.Author = extractAuthorFromDirectory(path)
+	}
+
+	if book.Position <= 0 {
+		book.Position = metadata.DetectVolumeNumber(book.Title)
 	}
 }
 
@@ -526,30 +577,47 @@ func saveBookToDatabase(book *Book) error {
 			}
 		}
 
-		// Compute file hash and size for deduplication
+		// Compute file hash variants for deduplication/state mapping
 		var fileHash *string
 		var fileSize *int64
-		if hash, err := computeFileHashQuick(book.FilePath); err == nil && hash != "" {
-			fileHash = &hash
+		var originalFileHash *string
+		var organizedFileHash *string
+		if hash, err := ComputeFileHash(book.FilePath); err == nil && hash != "" {
+			fileHash = stringPtrValue(hash)
+			originalFileHash = stringPtrValue(hash)
 			if size, err := getFileSize(book.FilePath); err == nil {
 				fileSize = &size
 			}
+			if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+				organizedFileHash = stringPtrValue(hash)
+			}
+		}
+
+		var seriesSequence *int
+		if book.Position > 0 {
+			seriesSequence = &book.Position
+		}
+		var duration *int
+		if book.Duration > 0 {
+			duration = &book.Duration
 		}
 
 		dbBook := &database.Book{
-			Title:          book.Title,
-			AuthorID:       authorID,
-			SeriesID:       seriesID,
-			SeriesSequence: &book.Position,
-			FilePath:       book.FilePath,
-			Format:         strings.TrimPrefix(book.Format, "."),
-			Duration:       &book.Duration,
-			WorkID:         workID,
-			Narrator:       nullablePtr(book.Narrator),
-			Language:       nullablePtr(book.Language),
-			Publisher:      nullablePtr(book.Publisher),
-			FileHash:       fileHash,
-			FileSize:       fileSize,
+			Title:             book.Title,
+			AuthorID:          authorID,
+			SeriesID:          seriesID,
+			SeriesSequence:    seriesSequence,
+			FilePath:          book.FilePath,
+			Format:            strings.TrimPrefix(book.Format, "."),
+			Duration:          duration,
+			WorkID:            workID,
+			Narrator:          nullablePtr(book.Narrator),
+			Language:          nullablePtr(book.Language),
+			Publisher:         nullablePtr(book.Publisher),
+			FileHash:          fileHash,
+			FileSize:          fileSize,
+			OriginalFileHash:  originalFileHash,
+			OrganizedFileHash: organizedFileHash,
 		}
 
 		// Upsert semantics with duplicate detection:
@@ -559,30 +627,34 @@ func saveBookToDatabase(book *Book) error {
 			return fmt.Errorf("book lookup failed: %w", err)
 		}
 
-		// 2. If not found by path but we have a file hash, check for duplicates by hash
+		// 2. If not found by path but we have a file hash, check for duplicates via indexes
 		if existing == nil && fileHash != nil && *fileHash != "" {
-			// Get all books to check for hash duplicates
-			allBooks, err := database.GlobalStore.GetAllBooks(10000, 0)
-			if err == nil {
-				for _, existingBook := range allBooks {
-					if existingBook.FileHash != nil && *existingBook.FileHash == *fileHash {
-						// Found duplicate by hash - this is the same file in a different location
-						log.Printf("[DEBUG] Found duplicate book by hash: %s (existing: %s, new: %s)",
-							existingBook.Title, existingBook.FilePath, book.FilePath)
-						// Don't create a new record - update the existing one's path if it's in import folder
-						// and the existing is in library (organized location)
-						if strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
-							!strings.HasPrefix(existingBook.FilePath, config.AppConfig.RootDir) {
-							// New path is in library, old path is in import - update to library path
-							existing = &existingBook
-							break
-						} else {
-							// Either both in import paths, or existing is already in library
-							// Skip creating duplicate
-							log.Printf("[DEBUG] Skipping duplicate: keeping existing path %s", existingBook.FilePath)
-							return nil
-						}
-					}
+			hashLookups := []func(string) (*database.Book, error){
+				database.GlobalStore.GetBookByFileHash,
+				database.GlobalStore.GetBookByOriginalHash,
+				database.GlobalStore.GetBookByOrganizedHash,
+			}
+			for _, lookup := range hashLookups {
+				candidate, err := lookup(*fileHash)
+				if err != nil {
+					continue
+				}
+				if candidate != nil {
+					existing = candidate
+					break
+				}
+			}
+
+			if existing != nil {
+				log.Printf("[DEBUG] Found duplicate book by hash: %s (existing: %s, new: %s)",
+					existing.Title, existing.FilePath, book.FilePath)
+				if config.AppConfig.RootDir != "" &&
+					strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
+					!strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir) {
+					log.Printf("[DEBUG] Promoting organized path for %s", existing.Title)
+				} else {
+					log.Printf("[DEBUG] Skipping duplicate: keeping existing path %s", existing.FilePath)
+					return nil
 				}
 			}
 		}
@@ -591,6 +663,15 @@ func saveBookToDatabase(book *Book) error {
 			_, err = database.GlobalStore.CreateBook(dbBook)
 			return err
 		}
+
+		// Preserve original hash if already stored and we are rescanning a library file
+		if existing.OriginalFileHash != nil {
+			dbBook.OriginalFileHash = existing.OriginalFileHash
+		}
+		if dbBook.OrganizedFileHash == nil && existing.OrganizedFileHash != nil {
+			dbBook.OrganizedFileHash = existing.OrganizedFileHash
+		}
+
 		_, err = database.GlobalStore.UpdateBook(existing.ID, dbBook)
 		return err
 	}
@@ -631,9 +712,9 @@ func saveBookToDatabase(book *Book) error {
 	return err
 }
 
-// computeFileHashQuick computes a SHA256 hash of the file
-// For large audiobook files, this can be slow, so we optimize by hashing chunks for large files
-func computeFileHashQuick(filePath string) (string, error) {
+// ComputeFileHash computes a SHA256 hash of the file, using a chunked strategy
+// for large audiobook files to balance accuracy and performance.
+func ComputeFileHash(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
@@ -705,6 +786,11 @@ func getFileSize(filePath string) (int64, error) {
 		return 0, err
 	}
 	return info.Size(), nil
+}
+
+func stringPtrValue(s string) *string {
+	copy := s
+	return &copy
 }
 
 func nullablePtr(s string) *string {

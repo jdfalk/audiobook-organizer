@@ -1,5 +1,5 @@
 // file: internal/database/database.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f
 
 package database
@@ -67,6 +67,8 @@ func createTables() error {
             file_path TEXT NOT NULL UNIQUE,
             format TEXT,
             duration INTEGER,
+            original_file_hash TEXT,
+            organized_file_hash TEXT,
             FOREIGN KEY (author_id) REFERENCES authors(id),
             FOREIGN KEY (series_id) REFERENCES series(id)
         )
