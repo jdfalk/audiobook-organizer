@@ -1,40 +1,110 @@
 <!-- file: CURRENT_SESSION.md -->
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: 4f8cde73-8a89-4a1c-ba0d-6f2a781eced2 -->
 
-# Current Development Session - November 21, 2025
+# Current Development Session - November 22, 2025
 
-## 🎯 IMMEDIATE PROBLEM TO FIX
+## 🎯 CURRENT STATUS - METADATA FIXES COMPLETE ✅
 
-We have **duplicate book records** and **missing metadata extraction**. The
-library structure shows:
+### What Was Fixed (Nov 21-22)
 
-```text
-library/Unknown Author/{series}/
-├── My Quiet Blacksmith Life in Another World/
-│   └── My Quiet Blacksmith Life in Another World - Unknown Author - read by {narrator}.m4b
-├── Reborn as a Space Mercenary/
-│   ├── Reborn as a Space Mercenary - Unknown Author - read by {narrator}.m4b
-│   └── Reborn as a Space Mercenary - Unknown Author - read by narrator.m4b
-```
+**The Problem**: Metadata extraction was completely broken, returning `Unknown`/`{placeholder}` values despite rich M4B tags.
 
-### Critical Issues
+**Root Causes Identified**:
+1. Case-sensitive raw tag lookups missed data ("publisher" vs "Publisher")
+2. Release group tags like `[PZG]` polluted narrator fields
+3. Volume numbers in "Vol. 01" format not extracted
+4. Series names only looked in explicit tags, not album/title patterns
+5. Narrator extraction didn't check all fallback fields
+6. Publisher field not extracted from raw tags
 
-1. **Template variables not replaced**: `{series}` and `{narrator}` in paths
-   means metadata extraction completely failed
-2. **Volume/Book numbers not detected**: Files contain "Vol. 01" but title
-   doesn't reflect this
-3. **Rich metadata ignored**: M4B files have perfect metadata in tags:
-   - Album: "My Quiet Blacksmith Life in Another World, Vol. 01"
-   - Performer: "Greg Chun" (narrator)
-   - Composer: "Tamamaru" (author)
-   - Publisher: "Podium Audio"
-4. **Duplicate detection partially working**: Scanner created duplicates, some
-   with proper paths, some with template variables
+**Solutions Implemented**:
+1. **Case-insensitive raw tag lookup** in `metadata.ExtractMetadata()`
+2. **Release-group filtering** to skip bracketed tags like `[PZG]`
+3. **Roman numeral support** in volume detection (Vol. IV → 4)
+4. **Series extraction cascade**: raw tags → album-prefix → comment → volume string parsing → album/title fallback
+5. **Narrator extraction priority**: raw.narrator → raw.reader → raw.artist → raw.album_artist → tag.Artist (when composer provided author)
+6. **Publisher extraction** from raw.publisher tag
+7. **Enhanced volume detection**: `extractSeriesFromVolumeString()` parses "Series Name, Vol. 01" patterns
 
-## 📝 WORK COMPLETED THIS SESSION (Last 4 Hours)
+**Results Verified** (via API after cleanup + rescan):
+- 4 books with correct narrator (Greg Chun, Fred Berman, Michelle H. Lee, Cassandra Morris/Graham Halstead)
+- Series extracted from album titles ("My Quiet Blacksmith Life in Another World")
+- Series positions detected (1 from "Vol. 01")
+- Publishers populated (Podium Audio, Seven Seas Siren, Tantor Audio)
 
-### 1. EventSource Connection Issues (REGRESSED ⚠️)
+### Files Modified
+- `cmd/diagnostics.go` v1.0.0 - NEW: CLI diagnostics command (cleanup-invalid, query)
+- `cmd/root.go` v1.7.0 - Registered diagnosticsCmd
+- `internal/metadata/metadata.go` v1.7.0 - Major extraction enhancements
+- `internal/metadata/volume.go` v1.1.0 - Roman numerals, series parsing
+- `internal/metadata/volume_test.go` v1.0.0 - NEW: Volume detection tests
+- `internal/metadata/metadata_internal_test.go` v1.1.0 - NEW: Raw tag tests
+- `internal/metadata/write_test.go` v1.1.0 - Skip segfault tests
+- `internal/server/server.go` v1.26.0 - Scan progress improvements (IN PROGRESS)
+
+### Database State
+- **Cleaned**: 8 invalid records with `{series}`/`{narrator}` placeholders purged
+- **Current**: 4 books in library + 4 in import paths (8 total)
+- **Quality**: All 4 library books have correct metadata fields
+
+## 📝 WORK COMPLETED THIS SESSION
+
+### 1. Diagnostics CLI Command (COMPLETED ✅)
+
+- **Problem**: Legacy `.go.bak` scripts caused lint failures, needed proper CLI integration
+- **Solution**: Created `cmd/diagnostics.go` with two subcommands:
+  - `cleanup-invalid`: Detects and removes books with placeholder values (`{series}`, `{narrator}`)
+    - Supports `--dry-run` flag for preview
+    - Confirmation prompt before deletion
+    - Deleted 8 corrupted records in testing
+  - `query`: Lists books or shows raw Pebble database entries
+    - `--raw` flag for low-level database inspection
+    - `--prefix` filter for targeted queries
+- **Files**: `cmd/diagnostics.go` v1.0.0, `cmd/root.go` v1.7.0
+- **Status**: Fully implemented and tested
+
+### 2. Metadata Extraction Fixes (COMPLETED ✅)
+
+- **Problem**: Files with rich M4B metadata returned Unknown/placeholder values
+- **Investigation**: Test files showed:
+  - Album: "My Quiet Blacksmith Life in Another World, Vol. 01"
+  - Performer: "Greg Chun" but database showed `{narrator}`
+  - Composer: "Tamamaru" correctly extracted as author
+  - Album Artist: `[PZG]` (release group) polluting narrator field
+- **Fixes Implemented**:
+  1. Case-insensitive `getRawString()` helper
+  2. `normalizeRawTagValue()` with release-group filtering
+  3. `looksLikeReleaseGroupTag()` to detect bracketed tags
+  4. Narrator extraction priority chain
+  5. Series extraction cascade (multiple fallback sources)
+  6. `DetectVolumeNumber()` with roman numeral support
+  7. `extractSeriesFromVolumeString()` for "Series, Vol. N" patterns
+  8. Publisher extraction from raw tags
+- **Files**: `internal/metadata/metadata.go` v1.7.0, `internal/metadata/volume.go` v1.1.0
+- **Tests**: Added `volume_test.go`, `metadata_internal_test.go` - all passing
+- **Verification**: `go run . inspect-metadata` shows correct fields, API returns 4 books with proper data
+
+### 3. Database Cleanup (COMPLETED ✅)
+
+- **Action**: `~/audiobook-organizer-embedded diagnostics cleanup-invalid --yes`
+- **Result**: Deleted 8 records with placeholder paths
+- **Follow-up**: Full rescan via `curl -X POST http://localhost:8888/api/v1/operations/scan?force_update=true`
+- **Outcome**: 8 books found (4 library + 4 import paths), all with correct metadata
+
+### 4. Scan Progress Reporting (IN PROGRESS ⚠️)
+
+- **Problem**: Scan shows "Scanning: 0/0" and completion message "Total books found: 8" without separating library vs import
+- **User Request**: "do a quick list of all the files and use that as our total, like rsync does" + "say total books found 4 in library, 4 in import paths"
+- **Changes Applied** (NOT YET TESTED):
+  1. Pre-scan `filepath.Walk` loop to count total files across all folders
+  2. Track `libraryBooks`, `importBooks`, `processedFiles` separately
+  3. Update progress with `processedFiles/totalFilesAcrossFolders` during scan
+  4. Enhanced completion message: "Library: X books, Import paths: Y books (Total: Z)"
+- **Files**: `internal/server/server.go` v1.26.0 (compiled but not runtime tested)
+- **Status**: Code changes complete, needs rebuild and test scan
+
+### 5. EventSource Connection Issues (REGRESSED ⚠️)
 
 - **Initial Fix**: Broadcast now sends to clients with no subscriptions +
   frontend auto-reconnects
@@ -152,23 +222,22 @@ library/Unknown Author/{series}/
 
 ## 🐛 KNOWN BUGS TO FIX
 
-1. **Metadata extraction completely broken** - Returns empty/Unknown for all
-   fields despite rich m4b metadata
-2. **Volume numbers not extracted** - "Vol. 01" in filename/album not captured
-   as series_position
-3. **AI parsing not working** - Either not called or failing silently
-4. **Template variables in organized paths** - `{series}` and `{narrator}`
-   literals in filesystem
-5. **Duplicate books created** - Hash-based detection added but untested
-6. **EventSource reconnection loop** - `/api/events` drops frequently; need
-  backoff + root-cause fix
-7. **Health endpoint mismatch** - Frontend polls `/api/v1/health` but server
-  only exposes `/api/health`, resulting in perpetual 404s and stuck "Attempt
-  73" overlay even when backend is healthy
-8. **Incorrect dashboard counts** - API still reports total books = 8
-   (library+import). Need separate counts: `library_books`, `import_books`
-   (unique) + update Dashboard + Library page. Also import path `total_size`
-   returning negative numbers.
+### High Priority
+
+1. ✅ ~~**Metadata extraction completely broken**~~ - FIXED in v1.7.0
+2. ✅ ~~**Volume numbers not extracted**~~ - FIXED with roman numeral support
+3. ✅ ~~**Template variables in organized paths**~~ - FIXED by metadata extraction fixes
+4. ⚠️ **Scan progress reporting incomplete** - Code applied but not tested (v1.26.0)
+5. ❌ **Web UI not showing books** - Books exist in DB and return via API, but frontend doesn't display them
+6. ❌ **EventSource reconnection loop** - `/api/events` drops every ~17s; need backoff + root-cause fix
+7. ❌ **Health endpoint mismatch** - Frontend polls `/api/v1/health` (404), server only has `/api/health`
+
+### Medium Priority
+
+8. ❌ **Dashboard count separation** - Need separate `library_books` vs `import_books` counts (currently shows total)
+9. ❌ **Import path negative sizes** - `total_size` returning negative numbers
+10. ❓ **Duplicate books** - Hash-based detection added (v1.9.0) but untested
+11. ❓ **AI parsing** - OpenAI integration exists but unknown if working (may not be needed after metadata fixes)
 
 ## 📊 DASHBOARD / DISPLAY REQUIREMENTS
 
@@ -183,49 +252,74 @@ library/Unknown Author/{series}/
 
 ## 📋 NEXT STEPS (Priority Order)
 
-1. **DEBUG metadata extraction**:
-   - Add extensive logging to `metadata.ExtractMetadata()`
-   - Verify mediainfo is actually being called
-   - Check what values are returned vs what's in the file
-   - Test with the actual file:
-     `/Users/jdfalk/Downloads/test_books/[PZG] My Quiet Blacksmith Life.../My Quiet Blacksmith Life... [PZG].m4b`
+### Immediate (Complete Current Work)
 
-2. **Fix AI parsing integration**:
-   - Verify OpenAI key is loaded from config
-   - Add logging when AI parser is created/called
-   - Check error handling - might be failing silently
-   - Confirm AI is getting called when metadata incomplete
+1. ⚠️ **Test scan progress reporting** (v1.26.0):
+   - Build: `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
+   - Kill existing server: `killall audiobook-organizer-embedded`
+   - Restart: `~/audiobook-organizer-embedded serve --port 8888 --debug`
+   - Trigger scan: `curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"`
+   - Verify progress shows actual counts (not 0/0) and completion message separates library vs import
+   - Check logs in `/Users/jdfalk/ao-library/logs/` for formatted messages
 
-3. **Add volume number extraction**:
-   - Create regex patterns for common volume formats
-   - Extract to series_position field
-   - Apply in both filename parsing AND album tag parsing
+### High Priority (User-Facing Issues)
 
-4. **Fix template replacement**:
-   - Organizer should NEVER write literal `{template}` variables
-   - Either replace with actual values or use defaults ("Unknown", "narrator",
-     etc.)
-   - Add validation before writing files
+2. ❌ **Investigate web UI not showing books**:
+   - Books exist in database (verified via `/api/v1/audiobooks`)
+   - Dashboard shows "Books: 4" correctly
+   - Library page may have frontend state/refresh issue
+   - Steps:
+     1. Check browser console for errors when loading Library page
+     2. Verify `/api/v1/audiobooks` returns data in browser Network tab
+     3. Check if frontend is filtering/hiding books based on some criteria
+     4. Test with browser hard refresh (Cmd+Shift+R)
 
-5. **Test duplicate detection**:
-   - Delete corrupted database records
-   - Run Full Rescan
-   - Verify only 4 unique books created (not 8)
-6. **Stabilize EventSource**:
-   - Add exponential backoff (3s, 6s, 12s...) with cap + reset on success
-   - Determine why `/api/events` closes after ~20 seconds (server timeout?
-     proxy? heartbeat not read?)
-   - Consider single shared EventSource across pages
-7. **Expose accurate counts**:
-   - Update backend stats endpoint(s) to return `library_book_count`,
-     `import_book_count`, `total_book_count`
-   - Fix import path size math (negative values)
-   - Update Dashboard + Library UI to use new fields
-8. **Fix health endpoint + overlay**:
-   - Either add `/api/v1/health` route or change frontend polling to
-     `/api/health`
-   - Reconnect overlay should increment attempts only when fetch fails, and
-     reload automatically when the health call succeeds
+3. ❌ **Fix EventSource stability**:
+   - **Server-side**: Why does `/api/events` close after ~17 seconds?
+     - Check for read/write timeouts in Gin server config
+     - Verify heartbeat is being sent AND read by clients
+     - Review `internal/realtime/events.go` connection lifecycle
+   - **Client-side**: Implement exponential backoff
+     - Start: 3s delay
+     - Backoff: 3s → 6s → 12s → 24s (cap at 30s)
+     - Reset to 3s on successful connection
+     - Files: `web/src/pages/Library.tsx`, `web/src/pages/Dashboard.tsx`
+
+4. ❌ **Fix health endpoint mismatch**:
+   - **Option A**: Add `/api/v1/health` route in `internal/server/server.go` (preferred for API versioning)
+   - **Option B**: Change frontend to poll `/api/health`
+   - Update reconnect overlay to auto-refresh page on health recovery
+   - Files: `internal/server/server.go`, `web/src/components/ConnectionStatus.tsx`
+
+### Medium Priority (Data Accuracy)
+
+5. ❌ **Separate dashboard counts**:
+   - Modify `/api/v1/system/status` to return:
+     - `library_book_count`: Books in `root_dir`
+     - `import_book_count`: Books in import paths (unique by hash)
+     - `total_book_count`: Sum of above
+   - Update Dashboard and Library page to display separate counts
+   - Files: `internal/server/server.go`, `web/src/pages/Dashboard.tsx`, `web/src/pages/Library.tsx`
+
+6. ❌ **Fix import path negative sizes**:
+   - Debug `total_size` calculation in library folder stats
+   - Likely int overflow or incorrect aggregation
+   - File: `internal/server/server.go` (library folder stats endpoint)
+
+### Low Priority (Optional Testing)
+
+7. ❓ **Verify duplicate detection**:
+   - Hash-based detection implemented in `internal/scanner/scanner.go` v1.9.0
+   - Test by:
+     1. Copy a file to both library and import paths
+     2. Run full rescan
+     3. Verify only one database record created
+   - May already be working correctly
+
+8. ❓ **Test AI parsing**:
+   - OpenAI integration exists but may not be needed after metadata fixes
+   - Only test if books still have missing metadata after scan
+   - Verify config has valid OpenAI key if needed
 
 ## 🧾 SERVER RESTART LOGS (Nov 21 @ 10:48–10:53)
 

@@ -1,8 +1,35 @@
 <!-- file: TODO.md -->
-<!-- version: 1.6.0 -->
+<!-- version: 1.7.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
+
+## 🚨 CURRENT SPRINT - November 22, 2025
+
+### ✅ Completed Nov 21-22
+- [x] **Metadata extraction fixes** - Fixed case-sensitive tags, release-group filtering, volume detection, series extraction, narrator/publisher fields
+- [x] **Diagnostics CLI** - Created `diagnostics` command with `cleanup-invalid` and `query` subcommands
+- [x] **Database cleanup** - Purged 8 corrupted records with placeholder values
+- [x] **Full rescan verification** - Confirmed 4 books with correct metadata after cleanup
+- [x] **Scan progress implementation** - Added pre-scan file count and separate library/import statistics (needs testing)
+
+### 🔥 High Priority (Next Session)
+- [ ] **Test scan progress reporting** - Rebuild binary, restart server, trigger scan, verify progress shows actual counts and separated statistics
+- [ ] **Fix web UI book display** - Books in DB/API but not showing in frontend Library page
+- [ ] **EventSource stability** - Connection drops every ~17s, need server-side investigation + client exponential backoff
+- [ ] **Health endpoint mismatch** - Frontend polls `/api/v1/health` (404), server only has `/api/health`
+
+### 📊 Medium Priority (Data Quality)
+- [ ] **Separate dashboard counts** - Display library vs import book counts separately
+- [ ] **Fix import path negative sizes** - Debug `total_size` calculation returning negative values
+
+### 🧪 Low Priority (Optional)
+- [ ] **Verify duplicate detection** - Test hash-based duplicate detection implemented in v1.9.0
+- [ ] **Test AI parsing** - Verify OpenAI integration if needed (may not be necessary after metadata fixes)
+
+---
+
+## Legacy TODO Items
 
 - [x] ✅ **Backend**: Database migration system with version tracking
 - [x] ✅ **Backend**: Complete audiobook CRUD API (create, read, update, delete,

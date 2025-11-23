@@ -4,6 +4,20 @@ A comprehensive audiobook management application with a modern web interface and
 powerful Go backend for organizing, managing, and enjoying your audiobook
 collection.
 
+## 📚 Glossary of Terms
+
+To avoid confusion, this application uses specific terminology:
+
+- **Library** / **Library Folder** / **Library Path**: The main root directory (`root_dir`) and its organized subdirectories where your audiobooks are permanently stored in a structured format. This is your primary collection.
+
+- **Import Path** / **Import Folder** / **Monitored Folder**: External directories that are scanned for new audiobook files but are NOT part of your organized library. These are temporary staging locations (like Downloads folders) where the app looks for new content to import into the library.
+
+- **Scan Operation**: The process of discovering audiobook files in both the library and import paths, extracting metadata, and updating the database.
+
+- **Organize Operation**: Moving or copying audiobooks from import paths into the library with proper folder structure and naming.
+
+**Important**: When you see "library folders" in the API or UI, it refers to *import paths* only (for historical reasons). The actual library path is configured separately as `root_dir`.
+
 ## 🎯 MVP Development in Progress
 
 **Current Status**: Backend foundation complete (~45% of MVP), React frontend
