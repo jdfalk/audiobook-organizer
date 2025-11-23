@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.7.0
+// version: 1.7.1
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -244,9 +244,9 @@ var serveCmd = &cobra.Command{
 		// Apply env var overrides (command line takes precedence over DB)
 		config.SyncConfigFromEnv()
 
-		// Log library folders count
-		if folders, err := database.GlobalStore.GetAllLibraryFolders(); err == nil {
-			fmt.Printf("  - Library folders (scan paths): %d configured\n", len(folders))
+		// Log import path count
+		if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
+			fmt.Printf("  - Import paths (scan paths): %d configured\n", len(folders))
 			for _, folder := range folders {
 				fmt.Printf("    * %s (%s)\n", folder.Name, folder.Path)
 			}

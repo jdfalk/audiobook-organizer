@@ -76,21 +76,23 @@ func TestHealthCheck(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
-	w := httptest.NewRecorder()
+	for _, path := range []string{"/api/health", "/api/v1/health"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
 
-	server.router.ServeHTTP(w, req)
+		server.router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
-	assert.Equal(t, "ok", response["status"])
-	assert.NotNil(t, response["timestamp"])
-	assert.NotNil(t, response["version"])
-	assert.NotNil(t, response["metrics"])
+		assert.Equal(t, "ok", response["status"])
+		assert.NotNil(t, response["timestamp"])
+		assert.NotNil(t, response["version"])
+		assert.NotNil(t, response["metrics"])
+	}
 }
 
 // TestListAudiobooks tests the list audiobooks endpoint

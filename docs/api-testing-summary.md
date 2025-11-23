@@ -1,5 +1,5 @@
 <!-- file: docs/api-testing-summary.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->
 <!-- guid: c3d4e5f6-a7b8-9012-cdef-345678901bcd -->
 
 # API Endpoint Testing Summary
@@ -154,7 +154,7 @@ python3 scripts/test-api-endpoints.py http://remote-server:8080
 
 **Location:** `internal/server/server.go:477-554`
 
-#### 9. **TestListLibraryFolders** - Expected items array
+#### 9. **TestListImportPaths** - Expected items array
 
 **Issue:** Response structure - `folders: null` instead of `folders: []`
 
