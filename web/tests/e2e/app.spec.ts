@@ -1,5 +1,5 @@
 // file: tests/e2e/app.spec.ts
-// version: 1.0.0
+// version: 1.0.1
 // guid: 1f2a3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b6c
 
 import { test, expect } from '@playwright/test';
@@ -90,5 +90,13 @@ test.describe('App smoke', () => {
     await page.waitForLoadState('networkidle');
     await page.getByText('Library', { exact: true }).first().click();
     await expect(page).toHaveURL(/.*\/library/);
+  });
+
+  test('navigates to Settings and renders content', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.getByText('Settings', { exact: true }).first().click();
+    await expect(page).toHaveURL(/.*\/settings/);
+    await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
   });
 });
