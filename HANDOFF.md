@@ -1,8 +1,108 @@
 <!-- file: HANDOFF.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a -->
 
-# Development Handoff - November 22, 2025
+# LibraryFolder → ImportPath Refactoring Handoff
+
+**Date**: November 23, 2025
+**Project**: audiobook-organizer
+**Task**: Comprehensive API and Type Rename
+**Branch Strategy**: Work in separate branch, rebase periodically against main
+
+## 🎯 Executive Summary
+
+This document provides complete instructions for renaming `LibraryFolder` to `ImportPath` throughout the entire codebase to resolve confusing terminology where "library folders" actually refers to "import paths" (monitored folders for new content, NOT the main library).
+
+**Scope**: ~150+ occurrences across Go backend, TypeScript frontend, database schemas, API endpoints, tests, and documentation.
+
+**Estimated Effort**: Large refactoring requiring careful attention to maintain functionality.
+
+---
+
+## 📚 Glossary and Terminology
+
+### Current Terminology (Established in README.md)
+
+**Library / Library Folder / Library Path**:
+
+- The main root directory (`root_dir`) configured in `config.yaml`
+- Where audiobooks are permanently stored in organized structure
+- Example: `/Users/jdfalk/ao-library/library/`
+- This is your primary, organized collection
+- NOT stored in the `library_folders` database table
+
+**Import Path / Import Folder / Monitored Folder**:
+
+- External directories scanned for new audiobook files
+- NOT part of your organized library
+- Temporary staging locations (like Downloads folders)
+- Where the app looks for new content to import into library
+- THESE are what's stored in `library_folders` table (confusing name!)
+- Example: `/Users/jdfalk/Downloads/test_books`
+
+**The Problem**:
+The database table `library_folders` and Go type `LibraryFolder` actually store *import paths*, not library folders. This creates significant confusion in the codebase and API.
+
+**The Solution**:
+Rename everything from `LibraryFolder`/`library_folders`/`library/folders` to `ImportPath`/`import_paths`/`import-paths` for clarity and consistency.
+
+---
+
+## 🔄 Periodic Rebasing Requirement
+
+**CRITICAL**: To minimize merge conflicts when this work is complete, you MUST periodically rebase your working branch against `main`.
+
+**Recommended Schedule**:
+
+- Rebase at the end of each major section (database, server, frontend)
+- Rebase at least once per day during active development
+- Rebase immediately before submitting final PR
+
+**Rebase Commands**:
+
+```bash
+# Update main
+git checkout main
+git pull origin main
+
+# Rebase your branch
+git checkout your-refactoring-branch
+git rebase main
+
+# Resolve conflicts if any
+# ... fix conflicts ...
+git rebase --continue
+
+# Force push (your branch only!)
+git push --force-with-lease origin your-refactoring-branch
+```
+
+---
+
+## 🏗️ Architecture Context
+
+### Database Layer
+
+- **PebbleDB** (primary): Key-value store with JSON serialization
+  - Keys: `library:<id>` → will become `import_path:<id>`
+  - Counter: `counter:library` → will become `counter:import_path`
+- **SQLite** (alternative): Relational store with SQL schemas
+  - Table: `library_folders` → will become `import_paths`
+  - Index: `idx_library_folders_path` → will become `idx_import_paths_path`
+
+### API Layer
+
+- **Endpoints**: `/api/v1/library/folders` → will become `/api/v1/import-paths`
+- **HTTP Methods**: GET (list), POST (create), DELETE (remove)
+- **Handler Functions**: `listLibraryFolders` → will become `listImportPaths`
+
+### Frontend Layer
+
+- **TypeScript Interface**: `LibraryFolder` → will become `ImportPath`
+- **API Client**: `getLibraryFolders()` → will become `getImportPaths()`
+- **React Components**: References in Settings, FileManager, Library, Dashboard
+
+---
 
 ## 🎯 Where We Are
 
