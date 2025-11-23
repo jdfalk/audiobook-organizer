@@ -1,5 +1,5 @@
 // file: internal/models/audiobook.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
 
 package models
@@ -125,7 +125,7 @@ type SystemStatus struct {
 	TotalBooks       int              `json:"total_books"`
 	TotalAuthors     int              `json:"total_authors"`
 	TotalSeries      int              `json:"total_series"`
-	LibraryFolders   int              `json:"library_folders"`
+	ImportPaths      int              `json:"import_paths"`
 	ActiveOperations int              `json:"active_operations"`
 	DiskUsage        map[string]int64 `json:"disk_usage"`
 }

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.27.0
+// version: 1.27.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -143,11 +143,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 						} else {
 							log.Printf("[DEBUG] Heartbeat: Failed to count books: %v", err)
 						}
-						if folders, err := database.GlobalStore.GetAllLibraryFolders(); err == nil {
+						if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
 							folderCount = len(folders)
-							log.Printf("[DEBUG] Heartbeat: Got %d library folders", folderCount)
+							log.Printf("[DEBUG] Heartbeat: Got %d import paths", folderCount)
 						} else {
-							log.Printf("[DEBUG] Heartbeat: Failed to get library folders: %v", err)
+							log.Printf("[DEBUG] Heartbeat: Failed to get import paths: %v", err)
 						}
 					}
 
@@ -208,6 +208,7 @@ func (s *Server) setupRoutes() {
 
 	// Health check endpoint (both paths for compatibility)
 	s.router.GET("/api/health", s.healthCheck)
+	s.router.GET("/api/v1/health", s.healthCheck)
 
 	// Real-time events (SSE)
 	s.router.GET("/api/events", s.handleEvents)
@@ -250,10 +251,10 @@ func (s *Server) setupRoutes() {
 		api.POST("/filesystem/exclude", s.createExclusion)
 		api.DELETE("/filesystem/exclude", s.removeExclusion)
 
-		// Library folder routes
-		api.GET("/library/folders", s.listLibraryFolders)
-		api.POST("/library/folders", s.addLibraryFolder)
-		api.DELETE("/library/folders/:id", s.removeLibraryFolder)
+		// Import path routes
+		api.GET("/import-paths", s.listImportPaths)
+		api.POST("/import-paths", s.addImportPath)
+		api.DELETE("/import-paths/:id", s.removeImportPath)
 
 		// Operation routes
 		api.POST("/operations/scan", s.startScan)
@@ -867,12 +868,12 @@ func (s *Server) removeExclusion(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func (s *Server) listLibraryFolders(c *gin.Context) {
+func (s *Server) listImportPaths(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	folders, err := database.GlobalStore.GetAllLibraryFolders()
+	folders, err := database.GlobalStore.GetAllImportPaths()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -880,13 +881,13 @@ func (s *Server) listLibraryFolders(c *gin.Context) {
 
 	// Ensure we never return null - always return empty array
 	if folders == nil {
-		folders = []database.LibraryFolder{}
+		folders = []database.ImportPath{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"folders": folders, "count": len(folders)})
+	c.JSON(http.StatusOK, gin.H{"importPaths": folders, "count": len(folders)})
 }
 
-func (s *Server) addLibraryFolder(c *gin.Context) {
+func (s *Server) addImportPath(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -900,16 +901,16 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	folder, err := database.GlobalStore.CreateLibraryFolder(req.Path, req.Name)
+	folder, err := database.GlobalStore.CreateImportPath(req.Path, req.Name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if req.Enabled != nil && !*req.Enabled {
 		folder.Enabled = false
-		if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, folder); err != nil {
+		if err := database.GlobalStore.UpdateImportPath(folder.ID, folder); err != nil {
 			// Non-fatal; return created folder anyway with note
-			c.JSON(http.StatusCreated, gin.H{"folder": folder, "warning": "created but could not update enabled flag"})
+			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "warning": "created but could not update enabled flag"})
 			return
 		}
 	}
@@ -978,11 +979,11 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 					}
 				}
 
-				// Update book count for this library folder
+				// Update book count for this import path
 				folder.BookCount = len(books)
 				now := time.Now()
 				folder.LastScan = &now
-				if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, folder); err != nil {
+				if err := database.GlobalStore.UpdateImportPath(folder.ID, folder); err != nil {
 					_ = progress.Log("warn", fmt.Sprintf("Failed to update book count: %v", err), nil)
 				}
 
@@ -993,7 +994,7 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 			// Enqueue the scan operation with normal priority
 			_ = operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
 
-			c.JSON(http.StatusCreated, gin.H{"folder": folder, "scan_operation_id": op.ID})
+			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "scan_operation_id": op.ID})
 			return
 		}
 	}
@@ -1031,15 +1032,15 @@ func (s *Server) addLibraryFolder(c *gin.Context) {
 				folder.BookCount = len(books)
 				now := time.Now()
 				folder.LastScan = &now
-				_ = database.GlobalStore.UpdateLibraryFolder(folder.ID, folder)
+				_ = database.GlobalStore.UpdateImportPath(folder.ID, folder)
 			}
 		}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"folder": folder})
+	c.JSON(http.StatusCreated, gin.H{"importPath": folder})
 }
 
-func (s *Server) removeLibraryFolder(c *gin.Context) {
+func (s *Server) removeImportPath(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1047,10 +1048,10 @@ func (s *Server) removeLibraryFolder(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid library folder id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid import path id"})
 		return
 	}
-	if err := database.GlobalStore.DeleteLibraryFolder(id); err != nil {
+	if err := database.GlobalStore.DeleteImportPath(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -1104,13 +1105,13 @@ func (s *Server) startScan(c *gin.Context) {
 			// Full scan: include RootDir if force_update enabled, then all import paths
 			if forceUpdate && config.AppConfig.RootDir != "" {
 				foldersToScan = append(foldersToScan, config.AppConfig.RootDir)
-				_ = progress.Log("info", fmt.Sprintf("Full rescan: including library folder %s", config.AppConfig.RootDir), nil)
+				_ = progress.Log("info", fmt.Sprintf("Full rescan: including library path %s", config.AppConfig.RootDir), nil)
 			}
 
-			// Add all library folders (import paths)
-			folders, err := database.GlobalStore.GetAllLibraryFolders()
+			// Add all import paths (import paths)
+			folders, err := database.GlobalStore.GetAllImportPaths()
 			if err != nil {
-				return fmt.Errorf("failed to get library folders: %w", err)
+				return fmt.Errorf("failed to get import paths: %w", err)
 			}
 			for _, folder := range folders {
 				if folder.Enabled {
@@ -1236,12 +1237,12 @@ func (s *Server) startScan(c *gin.Context) {
 				}
 			}
 
-			// Update book count for this library folder
-			folders, _ := database.GlobalStore.GetAllLibraryFolders()
+			// Update book count for this import path
+			folders, _ := database.GlobalStore.GetAllImportPaths()
 			for _, folder := range folders {
 				if folder.Path == folderPath {
 					folder.BookCount = len(books)
-					if err := database.GlobalStore.UpdateLibraryFolder(folder.ID, &folder); err != nil {
+					if err := database.GlobalStore.UpdateImportPath(folder.ID, &folder); err != nil {
 						_ = progress.Log("warn", fmt.Sprintf("Failed to update book count for folder %s: %v", folderPath, err), nil)
 					}
 					break
@@ -1376,9 +1377,9 @@ func (s *Server) startOrganize(c *gin.Context) {
 		summary := fmt.Sprintf("Organization completed: %d organized, %d failed", organized, failed)
 		_ = progress.Log("info", summary, nil)
 
-		// Trigger automatic rescan of library folder after organize completes
+		// Trigger automatic rescan of library path after organize completes
 		if organized > 0 && config.AppConfig.RootDir != "" {
-			_ = progress.Log("info", "Starting automatic rescan of library folder...", nil)
+			_ = progress.Log("info", "Starting automatic rescan of library path...", nil)
 
 			// Create a new scan operation
 			scanID := ulid.Make().String()
@@ -1651,12 +1652,12 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	}
 
 	// Get import folders
-	importFolders, err := database.GlobalStore.GetAllLibraryFolders()
+	importFolders, err := database.GlobalStore.GetAllImportPaths()
 	if err != nil {
-		log.Printf("[DEBUG] getSystemStatus: Failed to get library folders: %v", err)
-		importFolders = []database.LibraryFolder{}
+		log.Printf("[DEBUG] getSystemStatus: Failed to get import paths: %v", err)
+		importFolders = []database.ImportPath{}
 	} else {
-		log.Printf("[DEBUG] getSystemStatus: Got %d library folders", len(importFolders))
+		log.Printf("[DEBUG] getSystemStatus: Got %d import paths", len(importFolders))
 		for i, f := range importFolders {
 			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
 		}
@@ -1692,7 +1693,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Disk usage for library folders (cached)
+	// Disk usage for import paths (cached)
 	totalSize := cachedLibrarySize
 	if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
 		var newSize int64
