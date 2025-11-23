@@ -1,5 +1,5 @@
 <!-- file: docs/database-architecture.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->
 <!-- guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a -->
 
 # Database Architecture
@@ -126,7 +126,7 @@ database_path: audiobooks.pebble
 - `book:path:<path>` → book_id
 - `book:series:<series_id>:<book_id>` → book_id
 - `book:author:<author_id>:<book_id>` → book_id
-- `library:<id>` → LibraryFolder JSON
+- `import_path:<id>` → ImportPath JSON
 - `library:path:<path>` → library_id
 - `operation:<id>` → Operation JSON
 - `operationlog:<operation_id>:<timestamp>:<seq>` → OperationLog JSON
