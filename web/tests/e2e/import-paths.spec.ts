@@ -1,0 +1,105 @@
+// file: tests/e2e/import-paths.spec.ts
+// version: 1.0.1
+// guid: e3f4a5b6-c7d8-9e0f-1a2b-3c4d5e6f7a8b
+
+import { test, expect } from '@playwright/test';
+
+test.describe('Import paths workflows', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('welcome_wizard_completed', 'true');
+      // Silence EventSource in tests
+      class MockEventSource {
+        url: string;
+        constructor(url: string) {
+          this.url = url;
+        }
+        addEventListener() {}
+        removeEventListener() {}
+        close() {}
+      }
+      // @ts-ignore
+      window.EventSource = MockEventSource;
+    });
+  });
+
+  test('add and remove import path via Settings page (mocked API)', async ({ page }) => {
+    let importPaths: Array<{ id: number; path: string; name: string; enabled: boolean; created_at: string; book_count: number }> = [];
+    let nextId = 1;
+
+    await page.route('**/api/v1/import-paths', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ importPaths }),
+        });
+      }
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as { path: string; name: string };
+        const created = {
+          id: nextId++,
+          path: body.path,
+          name: body.name,
+          enabled: true,
+          created_at: new Date().toISOString(),
+          book_count: 0,
+        };
+        importPaths.push(created);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ importPath: created }),
+        });
+      }
+      if (route.request().method() === 'DELETE') {
+        const idStr = route.request().url().split('/').pop() || '';
+        const id = Number(idStr);
+        importPaths = importPaths.filter((p) => p.id !== id);
+        return route.fulfill({ status: 200 });
+      }
+      return route.fulfill({ status: 200, body: '{}' });
+    });
+
+    await page.route('**/api/v1/system/status', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          library: { book_count: 0, folder_count: 1, total_size: 0 },
+          import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
+          memory: {},
+          runtime: {},
+          operations: { recent: [] },
+        }),
+      });
+    });
+
+    await page.route('**/api/v1/health', (route) => {
+      route.fulfill({ status: 200, body: JSON.stringify({ status: 'ok' }) });
+    });
+
+    await page.goto('/settings');
+
+    await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
+
+    // Add import path
+    await page.getByRole('button', { name: 'Add Import Path' }).click();
+    const dialog = page.getByRole('dialog', { name: /Add Import Path/i });
+    const pathInput = dialog.getByPlaceholder('/path/to/downloads');
+    await pathInput.fill('/tmp/books');
+    const saveButton = dialog.getByRole('button', { name: /Add|Save/i }).first();
+    await saveButton.click();
+
+    await expect(page.getByText('/tmp/books')).toBeVisible();
+    await expect(page.getByText('Tmp')).toBeVisible();
+
+    // Remove import path via DELETE API call (route mock updates state)
+    await page.evaluate(() =>
+      fetch('/api/v1/import-paths/1', { method: 'DELETE' })
+    );
+    await page.reload();
+    await expect(page.getByText('/tmp/books')).not.toBeVisible({ timeout: 5000 });
+  });
+});
