@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_test.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package database
@@ -585,31 +585,31 @@ func TestPebbleImportPaths(t *testing.T) {
 	store, cleanup := setupPebbleTestDB(t)
 	defer cleanup()
 
-	// Act - Create library folder
+	// Act - Create import path
 	folder, err := store.CreateImportPath("/media/audiobooks", "Main Library")
 	if err != nil {
-		t.Fatalf("Failed to create library folder: %v", err)
+		t.Fatalf("Failed to create import path: %v", err)
 	}
 
 	// Assert
 	if folder.ID == 0 {
-		t.Error("Expected non-zero library folder ID")
+		t.Error("Expected non-zero import path ID")
 	}
 
-	// Get library folder by ID
+	// Get import path by ID
 	retrievedFolder, err := store.GetImportPathByID(folder.ID)
 	if err != nil {
-		t.Fatalf("Failed to get library folder: %v", err)
+		t.Fatalf("Failed to get import path: %v", err)
 	}
 
 	if retrievedFolder.Path != "/media/audiobooks" {
 		t.Errorf("Expected path '/media/audiobooks', got '%s'", retrievedFolder.Path)
 	}
 
-	// Get library folder by path
+	// Get import path by path
 	folderByPath, err := store.GetImportPathByPath("/media/audiobooks")
 	if err != nil {
-		t.Fatalf("Failed to get library folder by path: %v", err)
+		t.Fatalf("Failed to get import path by path: %v", err)
 	}
 
 	if folderByPath.ID != folder.ID {
@@ -623,7 +623,7 @@ func TestPebbleImportPaths(t *testing.T) {
 	}
 
 	if len(folders) != 1 {
-		t.Errorf("Expected 1 library folder, got %d", len(folders))
+		t.Errorf("Expected 1 import path, got %d", len(folders))
 	}
 }
 
