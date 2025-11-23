@@ -1,5 +1,5 @@
 // file: internal/metrics/metrics.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 9f8e7d6c-5b4a-3210-9fed-cba876543210
 
 package metrics
@@ -48,8 +48,8 @@ var (
 	})
 	foldersGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "audiobook_organizer",
-		Name:      "library_folders_total",
-		Help:      "Current total number of enabled library folders",
+		Name:      "import_paths_total",
+		Help:      "Current total number of enabled import paths",
 	})
 	memoryAllocGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "audiobook_organizer",

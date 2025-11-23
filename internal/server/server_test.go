@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -292,12 +292,12 @@ func TestBrowseFilesystem(t *testing.T) {
 	}
 }
 
-// TestListLibraryFolders tests listing library folders
-func TestListLibraryFolders(t *testing.T) {
+// TestListImportPaths tests listing import paths
+func TestListImportPaths(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/library/folders", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)
 	w := httptest.NewRecorder()
 
 	server.router.ServeHTTP(w, req)
@@ -307,7 +307,7 @@ func TestListLibraryFolders(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.NotNil(t, response["folders"])
+	assert.NotNil(t, response["importPaths"])
 }
 
 // TestGetOperationStatus tests getting operation status
@@ -587,9 +587,9 @@ func TestEndToEndWorkflow(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
-	// Step 4: List library folders
-	t.Run("list library folders", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/library/folders", nil)
+	// Step 4: List import paths
+	t.Run("list import paths", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)

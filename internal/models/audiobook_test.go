@@ -1,5 +1,5 @@
 // file: internal/models/audiobook_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package models
@@ -412,7 +412,7 @@ func TestSystemStatus(t *testing.T) {
 		TotalBooks:       1000,
 		TotalAuthors:     200,
 		TotalSeries:      50,
-		LibraryFolders:   3,
+		ImportPaths:      3,
 		ActiveOperations: 0,
 		DiskUsage:        diskUsage,
 	}
