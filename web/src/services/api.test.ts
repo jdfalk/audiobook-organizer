@@ -14,7 +14,8 @@ const mockFetch = vi.fn();
 
 describe('api import paths', () => {
   beforeEach(() => {
-    // @ts-expect-error allow override for tests
+    // Allow overriding fetch in tests
+    // @ts-ignore
     global.fetch = mockFetch;
   });
 
