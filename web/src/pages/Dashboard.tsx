@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.4.0
+// version: 1.4.1
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -34,7 +34,7 @@ interface SystemStats {
   import_books: number;
   total_authors: number;
   total_series: number;
-  library_folders: number;
+  import_paths: number;
   total_size_gb: number;
   disk_usage_percent: number;
 }
@@ -54,7 +54,7 @@ export function Dashboard() {
     import_books: 0,
     total_authors: 0,
     total_series: 0,
-    library_folders: 0,
+    import_paths: 0,
     total_size_gb: 0,
     disk_usage_percent: 0,
   });
@@ -77,7 +77,7 @@ export function Dashboard() {
 
       console.log('[Dashboard] System status:', systemStatus);
       console.log(
-        '[Dashboard] Library folder_count:',
+        '[Dashboard] Import path_count:',
         systemStatus.library.folder_count
       );
       console.log('[Dashboard] Book count:', bookCount);
@@ -87,7 +87,7 @@ export function Dashboard() {
         import_books: systemStatus.import_paths?.book_count || 0,
         total_authors: authors.length,
         total_series: seriesList.length,
-        library_folders: systemStatus.import_paths?.folder_count || 0,
+        import_paths: systemStatus.import_paths?.folder_count || 0,
         total_size_gb: systemStatus.library.total_size / (1024 * 1024 * 1024),
         disk_usage_percent: 0, // Calculate if needed
       });
