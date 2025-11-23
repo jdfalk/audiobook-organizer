@@ -1,5 +1,5 @@
 # file: docs/openapi.yaml
-# version: 1.0.0
+# version: 1.0.1
 # guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 openapi: 3.0.3
@@ -328,23 +328,23 @@ paths:
                 items:
                   $ref: "#/components/schemas/Series"
 
-  /library/folders:
+  /import-paths:
     get:
       tags: [Library]
-      summary: List library folders
+      summary: List import paths
       responses:
         "200":
-          description: List of library folders
+          description: List of import paths
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/LibraryFolder"
+                  $ref: "#/components/schemas/ImportPath"
 
     post:
       tags: [Library]
-      summary: Add library folder
+      summary: Add import path
       requestBody:
         required: true
         content:
@@ -361,16 +361,16 @@ paths:
                 - name
       responses:
         "201":
-          description: Folder added
+          description: Import path added
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LibraryFolder"
+                $ref: "#/components/schemas/ImportPath"
 
-  /library/folders/{id}:
+  /import-paths/{id}:
     delete:
       tags: [Library]
-      summary: Remove library folder
+      summary: Remove import path
       parameters:
         - name: id
           in: path
@@ -379,9 +379,9 @@ paths:
             type: integer
       responses:
         "204":
-          description: Folder removed
+          description: Import path removed
         "404":
-          description: Folder not found
+          description: Import path not found
 
   /operations/scan:
     post:
@@ -580,7 +580,7 @@ components:
         - name
         - created_at
 
-    LibraryFolder:
+    ImportPath:
       type: object
       properties:
         id:
