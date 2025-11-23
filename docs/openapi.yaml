@@ -1,5 +1,5 @@
 # file: docs/openapi.yaml
-# version: 1.0.1
+# version: 1.0.2
 # guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 openapi: 3.0.3
@@ -7,7 +7,7 @@ info:
   title: Audiobook Organizer API
   description: |
     REST API for the Audiobook Organizer application.
-    Provides endpoints for managing audiobooks, authors, series, library folders, and metadata.
+    Provides endpoints for managing audiobooks, authors, series, import paths, and metadata.
   version: 1.0.0
   contact:
     name: API Support
