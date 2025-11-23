@@ -1,5 +1,5 @@
 // file: internal/database/web.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 5d6e7f8a-9b0c-1d2e-3f4a-5b6c7d8e9f0a
 
 package database
@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-// Note: Type definitions for LibraryFolder, Operation, OperationLog, and UserPreference
+// Note: Type definitions for ImportPath, Operation, OperationLog, and UserPreference
 // have been moved to store.go to avoid circular dependencies
 
-// Library folder operations
+// Import path operations
 
-// GetLibraryFolders returns all library folders
-func GetLibraryFolders() ([]LibraryFolder, error) {
+// GetImportPaths returns all import paths
+func GetImportPaths() ([]ImportPath, error) {
 	query := `
 		SELECT id, path, name, enabled, created_at, last_scan, book_count
-		FROM library_folders
+		FROM import_paths
 		ORDER BY name
 	`
 	rows, err := DB.Query(query)
@@ -27,9 +27,9 @@ func GetLibraryFolders() ([]LibraryFolder, error) {
 	}
 	defer rows.Close()
 
-	var folders []LibraryFolder
+	var folders []ImportPath
 	for rows.Next() {
-		var folder LibraryFolder
+		var folder ImportPath
 		err := rows.Scan(
 			&folder.ID, &folder.Path, &folder.Name, &folder.Enabled,
 			&folder.CreatedAt, &folder.LastScan, &folder.BookCount,
@@ -43,10 +43,10 @@ func GetLibraryFolders() ([]LibraryFolder, error) {
 	return folders, rows.Err()
 }
 
-// AddLibraryFolder adds a new library folder
-func AddLibraryFolder(path, name string) (*LibraryFolder, error) {
+// AddImportPath adds a new import path
+func AddImportPath(path, name string) (*ImportPath, error) {
 	query := `
-		INSERT INTO library_folders (path, name)
+		INSERT INTO import_paths (path, name)
 		VALUES (?, ?)
 	`
 	result, err := DB.Exec(query, path, name)
@@ -59,19 +59,19 @@ func AddLibraryFolder(path, name string) (*LibraryFolder, error) {
 		return nil, err
 	}
 
-	return GetLibraryFolderByID(int(id))
+	return GetImportPathByID(int(id))
 }
 
-// GetLibraryFolderByID returns a library folder by ID
-func GetLibraryFolderByID(id int) (*LibraryFolder, error) {
+// GetImportPathByID returns an import path by ID
+func GetImportPathByID(id int) (*ImportPath, error) {
 	query := `
 		SELECT id, path, name, enabled, created_at, last_scan, book_count
-		FROM library_folders
+		FROM import_paths
 		WHERE id = ?
 	`
 	row := DB.QueryRow(query, id)
 
-	var folder LibraryFolder
+	var folder ImportPath
 	err := row.Scan(
 		&folder.ID, &folder.Path, &folder.Name, &folder.Enabled,
 		&folder.CreatedAt, &folder.LastScan, &folder.BookCount,
@@ -83,10 +83,10 @@ func GetLibraryFolderByID(id int) (*LibraryFolder, error) {
 	return &folder, nil
 }
 
-// UpdateLibraryFolder updates an existing library folder
-func UpdateLibraryFolder(id int, enabled bool, lastScan *time.Time, bookCount int) error {
+// UpdateImportPath updates an existing import path
+func UpdateImportPath(id int, enabled bool, lastScan *time.Time, bookCount int) error {
 	query := `
-		UPDATE library_folders
+		UPDATE import_paths
 		SET enabled = ?, last_scan = ?, book_count = ?
 		WHERE id = ?
 	`
@@ -94,9 +94,9 @@ func UpdateLibraryFolder(id int, enabled bool, lastScan *time.Time, bookCount in
 	return err
 }
 
-// RemoveLibraryFolder removes a library folder
-func RemoveLibraryFolder(id int) error {
-	query := `DELETE FROM library_folders WHERE id = ?`
+// RemoveImportPath removes an import path
+func RemoveImportPath(id int) error {
+	query := `DELETE FROM import_paths WHERE id = ?`
 	_, err := DB.Exec(query, id)
 	return err
 }
