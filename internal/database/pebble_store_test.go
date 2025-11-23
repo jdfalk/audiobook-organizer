@@ -1,13 +1,15 @@
 // file: internal/database/pebble_store_test.go
-// version: 1.0.0
+// version: 1.0.2
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package database
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/cockroachdb/pebble"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -577,14 +579,14 @@ func TestPebbleCountBooks(t *testing.T) {
 	}
 }
 
-// TestPebbleLibraryFolders tests library folder management
-func TestPebbleLibraryFolders(t *testing.T) {
+// TestPebbleImportPaths tests import path management
+func TestPebbleImportPaths(t *testing.T) {
 	// Arrange
 	store, cleanup := setupPebbleTestDB(t)
 	defer cleanup()
 
 	// Act - Create library folder
-	folder, err := store.CreateLibraryFolder("/media/audiobooks", "Main Library")
+	folder, err := store.CreateImportPath("/media/audiobooks", "Main Library")
 	if err != nil {
 		t.Fatalf("Failed to create library folder: %v", err)
 	}
@@ -595,7 +597,7 @@ func TestPebbleLibraryFolders(t *testing.T) {
 	}
 
 	// Get library folder by ID
-	retrievedFolder, err := store.GetLibraryFolderByID(folder.ID)
+	retrievedFolder, err := store.GetImportPathByID(folder.ID)
 	if err != nil {
 		t.Fatalf("Failed to get library folder: %v", err)
 	}
@@ -605,7 +607,7 @@ func TestPebbleLibraryFolders(t *testing.T) {
 	}
 
 	// Get library folder by path
-	folderByPath, err := store.GetLibraryFolderByPath("/media/audiobooks")
+	folderByPath, err := store.GetImportPathByPath("/media/audiobooks")
 	if err != nil {
 		t.Fatalf("Failed to get library folder by path: %v", err)
 	}
@@ -614,14 +616,73 @@ func TestPebbleLibraryFolders(t *testing.T) {
 		t.Error("Expected same folder ID when retrieved by path")
 	}
 
-	// List all library folders
-	folders, err := store.GetAllLibraryFolders()
+	// List all import paths
+	folders, err := store.GetAllImportPaths()
 	if err != nil {
-		t.Fatalf("Failed to get all library folders: %v", err)
+		t.Fatalf("Failed to get all import paths: %v", err)
 	}
 
 	if len(folders) != 1 {
 		t.Errorf("Expected 1 library folder, got %d", len(folders))
+	}
+}
+
+func TestPebbleMigrateImportPathKeys(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pebble-migrate")
+	db, err := pebble.Open(dbPath, &pebble.Options{})
+	if err != nil {
+		t.Fatalf("Failed to open Pebble: %v", err)
+	}
+	defer db.Close()
+
+	legacyFolder := []byte(`{"id":1,"path":"/legacy","name":"Legacy","enabled":true,"book_count":0}`)
+	if err := db.Set([]byte("library:1"), legacyFolder, pebble.Sync); err != nil {
+		t.Fatalf("Failed to write legacy key: %v", err)
+	}
+	if err := db.Set([]byte("library:path:/legacy"), []byte("1"), pebble.Sync); err != nil {
+		t.Fatalf("Failed to write legacy index key: %v", err)
+	}
+	if err := db.Set([]byte("counter:library"), []byte("2"), pebble.Sync); err != nil {
+		t.Fatalf("Failed to write legacy counter: %v", err)
+	}
+
+	store := &PebbleStore{db: db}
+	if err := store.migrateImportPathKeys(); err != nil {
+		t.Fatalf("migrateImportPathKeys failed: %v", err)
+	}
+
+	if _, closer, err := db.Get([]byte("import_path:1")); err != nil {
+		t.Fatalf("expected migrated import_path key: %v", err)
+	} else {
+		closer.Close()
+	}
+	if _, closer, err := db.Get([]byte("import_path:path:/legacy")); err != nil {
+		t.Fatalf("expected migrated import_path index: %v", err)
+	} else {
+		closer.Close()
+	}
+
+	if _, _, err := db.Get([]byte("library:1")); err != pebble.ErrNotFound {
+		t.Fatalf("expected legacy key removed, got %v", err)
+	}
+	if _, _, err := db.Get([]byte("library:path:/legacy")); err != pebble.ErrNotFound {
+		t.Fatalf("expected legacy index removed, got %v", err)
+	}
+
+	if val, closer, err := db.Get([]byte("counter:import_path")); err != nil {
+		t.Fatalf("expected migrated counter: %v", err)
+	} else {
+		if string(val) != "2" {
+			t.Fatalf("unexpected counter value: %s", string(val))
+		}
+		closer.Close()
+	}
+	if _, _, err := db.Get([]byte("counter:library")); err != pebble.ErrNotFound {
+		t.Fatalf("expected legacy counter removed, got %v", err)
+	}
+
+	if err := store.migrateImportPathKeys(); err != nil {
+		t.Fatalf("idempotent migration failed: %v", err)
 	}
 }
 
