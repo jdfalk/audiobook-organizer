@@ -111,6 +111,7 @@ git push --force-with-lease origin your-refactoring-branch
 **Metadata Extraction - FIXED**: The core problem was solved. Books were showing `{narrator}` and `{series}` placeholders because tag extraction was completely broken. Now working perfectly.
 
 **What Was Fixed**:
+
 1. Case-insensitive raw tag lookups (was missing "Publisher" when looking for "publisher")
 2. Release-group tag filtering (skips bracketed tags like `[PZG]`)
 3. Roman numeral volume detection (Vol. IV → 4)
@@ -119,12 +120,14 @@ git push --force-with-lease origin your-refactoring-branch
 6. Publisher extraction from raw tags
 
 **Diagnostics CLI - NEW**: Created `diagnostics` command with:
+
 - `cleanup-invalid`: Finds and removes books with placeholder values
 - `query`: Lists books or shows raw Pebble database entries
 
 **Database - CLEANED**: Purged 8 corrupted records, rescanned to get clean data.
 
 **Scan Progress - IMPLEMENTED BUT NOT TESTED**: Added code to:
+
 - Pre-scan all folders to count total files (like rsync)
 - Track library vs import book counts separately
 - Show "Scanning: X/Y files" instead of "0/0"
@@ -164,18 +167,21 @@ tail -f /Users/jdfalk/ao-library/logs/latest.log
 **Problem**: Books show in API but not in frontend Library page.
 
 **Investigation Steps**:
-1. Open http://localhost:8888 in browser
+
+1. Open <http://localhost:8888> in browser
 2. Go to Library page
 3. Open browser console (F12) - look for errors
 4. Check Network tab - does `/api/v1/audiobooks` return data?
 5. Hard refresh (Cmd+Shift+R)
 
 **Likely Causes**:
+
 - Frontend is filtering books based on some criteria
 - State management issue (books loaded but not rendered)
 - API response format changed and frontend expects old format
 
 **Files to Check**:
+
 - `web/src/pages/Library.tsx` - book listing logic
 - `web/src/api/api.ts` - API client
 - Browser console for React errors
@@ -185,11 +191,13 @@ tail -f /Users/jdfalk/ao-library/logs/latest.log
 **Problem**: `/api/events` connection closes after ~17 seconds, causing constant reconnects.
 
 **Server-Side Investigation** (`internal/realtime/events.go`):
+
 - Check for read/write timeouts in Gin server config
 - Verify heartbeat is being sent correctly
 - Look for context deadline or connection lifecycle issues
 
 **Client-Side Fix** (`web/src/pages/Library.tsx`, `web/src/pages/Dashboard.tsx`):
+
 - Implement exponential backoff: 3s → 6s → 12s → 24s (cap at 30s)
 - Reset to 3s on successful connection
 - Consider single shared EventSource across pages
@@ -210,6 +218,7 @@ v1.GET("/health", s.healthCheck)
 ## 🗂️ Key Files Reference
 
 ### Backend (Go)
+
 - `cmd/diagnostics.go` v1.0.0 - CLI diagnostics commands
 - `internal/metadata/metadata.go` v1.7.0 - Metadata extraction logic
 - `internal/metadata/volume.go` v1.1.0 - Volume/series detection
@@ -217,12 +226,14 @@ v1.GET("/health", s.healthCheck)
 - `internal/realtime/events.go` v1.1.0 - SSE event broadcasting
 
 ### Frontend (TypeScript/React)
+
 - `web/src/pages/Library.tsx` v1.17.0 - Library page with book list
 - `web/src/pages/Dashboard.tsx` - Dashboard with system stats
 - `web/src/components/ConnectionStatus.tsx` - Reconnect overlay
 - `web/src/api/api.ts` - API client
 
 ### Test Commands
+
 ```bash
 # List books via API
 curl http://localhost:8888/api/v1/audiobooks | jq
@@ -250,6 +261,7 @@ go run . inspect-metadata "/path/to/file.m4b"
 ## 🎓 Context for AI
 
 **User Environment**:
+
 - Server running from: `/Users/jdfalk/ao-library`
 - Library folder: `/Users/jdfalk/ao-library/library/`
 - Import path: `/Users/jdfalk/Downloads/test_books/`
@@ -257,12 +269,14 @@ go run . inspect-metadata "/path/to/file.m4b"
 - Port: 8888
 
 **Testing Workflow**:
+
 1. Make code changes
 2. Build: `go build -o ~/audiobook-organizer-embedded`
 3. Restart: `killall audiobook-organizer-embedded && ~/audiobook-organizer-embedded serve --port 8888 --debug`
-4. Test via curl or web UI at http://localhost:8888
+4. Test via curl or web UI at <http://localhost:8888>
 
 **Key Principles**:
+
 - Never suggest deleting database - must recover from any state
 - Always use VS Code tasks when available (see `.vscode/tasks.json`)
 - Follow file header conventions (file path, version, guid)
