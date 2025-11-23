@@ -152,7 +152,7 @@ git rebase main
 
 ## ⚠️ Important Notes
 
-### DO:
+### DO
 
 - ✅ Follow the checklist item-by-item
 - ✅ Test after each major section
@@ -163,7 +163,7 @@ git rebase main
 - ✅ Use `gofmt` for Go code
 - ✅ Follow naming conventions in CODING_STANDARDS.md
 
-### DON'T:
+### DON'T
 
 - ❌ Skip testing between parts
 - ❌ Rush through without checking off items

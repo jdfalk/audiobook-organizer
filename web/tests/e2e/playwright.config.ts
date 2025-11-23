@@ -1,0 +1,30 @@
+// file: tests/e2e/playwright.config.ts
+// version: 1.0.1
+// guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
+
+import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: '.',
+  timeout: 30 * 1000,
+  fullyParallel: true,
+  retries: 0,
+  workers: 2,
+  reporter: 'list',
+  use: {
+    baseURL: 'http://127.0.0.1:4173',
+    trace: 'on-first-retry',
+    headless: true,
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],
+  webServer: {
+    command: 'npm run dev -- --host --port 4173',
+    url: 'http://127.0.0.1:4173',
+    reuseExistingServer: !process.env.CI,
+  },
+});
