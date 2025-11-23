@@ -1,5 +1,5 @@
 // file: web/src/components/filemanager/ImportPathCard.tsx
-// version: 1.1.0
+// version: 1.1.1
 // guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
 
 import React, { useState } from 'react';
@@ -150,7 +150,11 @@ export const ImportPathCard: React.FC<ImportPathCardProps> = ({
             </Box>
           </Box>
 
-          <IconButton size="small" onClick={handleMenuClick}>
+          <IconButton
+            size="small"
+            aria-label="import path actions"
+            onClick={handleMenuClick}
+          >
             <MoreVertIcon />
           </IconButton>
         </Box>
