@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/test-api-endpoints.py
-# version: 1.1.0
+# version: 1.1.1
 # guid: a1b2c3d4-e5f6-7890-abcd-1234567890ab
 
 """
@@ -172,12 +172,12 @@ class APITester:
         )
 
         # Library folder endpoints
-        self.test_endpoint("GET", "/api/v1/library/folders", description="List library folders")
+        self.test_endpoint("GET", "/api/v1/import-paths", description="List import paths")
 
         # Note: We won't actually add/remove folders in test mode
         print("\n" + "="*80)
-        print("Note: Skipping POST /api/v1/library/folders (would modify system)")
-        print("Note: Skipping DELETE /api/v1/library/folders/:id (would modify system)")
+        print("Note: Skipping POST /api/v1/import-paths (would modify system)")
+        print("Note: Skipping DELETE /api/v1/import-paths/:id (would modify system)")
 
         # Operation endpoints (read-only tests)
         # Note: We won't start actual scans in test mode

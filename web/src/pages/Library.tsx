@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.16.1
+// version: 1.16.3
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -47,7 +47,7 @@ import * as api from '../services/api';
 import { pollOperation } from '../utils/operationPolling';
 
 interface ImportPath {
-  id: string;
+  id: number;
   path: string;
   status: 'idle' | 'scanning';
   book_count: number;
@@ -307,7 +307,7 @@ export const Library = () => {
 
       // Load import paths
       const convertedPaths: ImportPath[] = folders.map((folder) => ({
-        id: folder.id.toString(),
+        id: folder.id,
         path: folder.path,
         status: 'idle',
         book_count: folder.book_count,
@@ -488,12 +488,12 @@ export const Library = () => {
         newImportPath,
         newImportPath.split('/').pop() || 'Library'
       );
-      const folder = detailed.folder;
+      const importPath = detailed.importPath;
       const newPath: ImportPath = {
-        id: folder.id.toString(),
-        path: folder.path,
+        id: importPath.id,
+        path: importPath.path,
         status: detailed.scan_operation_id ? 'scanning' : 'idle',
-        book_count: folder.book_count,
+        book_count: importPath.book_count,
       };
       setImportPaths((prev) => [...prev, newPath]);
       setNewImportPath('');
@@ -518,7 +518,7 @@ export const Library = () => {
               const folders = await api.getImportPaths();
               setImportPaths(
                 folders.map((f) => ({
-                  id: f.id.toString(),
+                  id: f.id,
                   path: f.path,
                   status: 'idle',
                   book_count: f.book_count,
@@ -550,9 +550,9 @@ export const Library = () => {
     }
   };
 
-  const handleRemoveImportPath = async (id: string) => {
+  const handleRemoveImportPath = async (id: number) => {
     try {
-      await api.removeImportPath(parseInt(id));
+      await api.removeImportPath(id);
       setImportPaths((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Failed to remove import path:', error);
@@ -572,7 +572,7 @@ export const Library = () => {
           const folders = await api.getImportPaths();
           setImportPaths(
             folders.map((f) => ({
-              id: f.id.toString(),
+              id: f.id,
               path: f.path,
               status: 'idle',
               book_count: f.book_count,
@@ -592,7 +592,7 @@ export const Library = () => {
     );
   };
 
-  const handleScanImportPath = async (id: string) => {
+  const handleScanImportPath = async (id: number) => {
     try {
       const pathEntry = importPaths.find((p) => p.id === id);
       const path = pathEntry?.path;

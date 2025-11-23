@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.0.1
+// version: 1.0.2
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState } from 'react';
@@ -36,7 +36,7 @@ interface WelcomeWizardProps {
  * WelcomeWizard component for first-run setup
  *
  * Guides users through initial configuration:
- * 1. Set library folder path (where organized books go)
+ * 1. Set library path (where organized books go)
  * 2. Optional OpenAI API key setup
  * 3. Add import/download folder paths
  */
