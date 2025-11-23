@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.23.0
+// version: 1.27.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -206,11 +206,29 @@ func (s *Server) setupRoutes() {
 	// Prometheus metrics endpoint (standard path)
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// Health check endpoint
+	// Health check endpoint (both paths for compatibility)
 	s.router.GET("/api/health", s.healthCheck)
 
 	// Real-time events (SSE)
 	s.router.GET("/api/events", s.handleEvents)
+
+	// Redirect /api/* to /api/v1/* for v1 compatibility
+	s.router.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// If path starts with /api/ but not /api/v1/ and not /api/health and not /api/events
+		if strings.HasPrefix(path, "/api/") &&
+			!strings.HasPrefix(path, "/api/v1/") &&
+			!strings.HasPrefix(path, "/api/health") &&
+			!strings.HasPrefix(path, "/api/events") &&
+			!strings.HasPrefix(path, "/api/metrics") {
+			// Redirect to /api/v1/
+			newPath := strings.Replace(path, "/api/", "/api/v1/", 1)
+			c.Redirect(http.StatusMovedPermanently, newPath)
+			c.Abort()
+			return
+		}
+		c.Next()
+	})
 
 	// API routes
 	api := s.router.Group("/api/v1")
@@ -1107,15 +1125,43 @@ func (s *Server) startScan(c *gin.Context) {
 			return nil
 		}
 
+		// First pass: count total files across all folders
+		totalFilesAcrossFolders := 0
+		for _, folderPath := range foldersToScan {
+			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+				continue
+			}
+			fileCount := 0
+			err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+				if err != nil || info.IsDir() {
+					return nil
+				}
+				ext := strings.ToLower(filepath.Ext(path))
+				for _, supported := range config.AppConfig.SupportedExtensions {
+					if ext == supported {
+						fileCount++
+						break
+					}
+				}
+				return nil
+			})
+			if err == nil {
+				totalFilesAcrossFolders += fileCount
+			}
+		}
+
 		// Scan each folder
 		totalBooks := 0
+		libraryBooks := 0
+		importBooks := 0
+		processedFiles := 0
 		for folderIdx, folderPath := range foldersToScan {
 			if progress.IsCanceled() {
 				_ = progress.Log("info", "Scan canceled", nil)
 				return fmt.Errorf("scan canceled")
 			}
 
-			_ = progress.UpdateProgress(folderIdx, len(foldersToScan), fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
+			_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
 			_ = progress.Log("info", fmt.Sprintf("Scanning folder: %s", folderPath), nil)
 
 			// Check if folder exists
@@ -1137,6 +1183,13 @@ func (s *Server) startScan(c *gin.Context) {
 
 			_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files in %s", len(books), folderPath), nil)
 			totalBooks += len(books)
+			if folderPath == config.AppConfig.RootDir {
+				libraryBooks += len(books)
+			} else {
+				importBooks += len(books)
+			}
+			processedFiles += len(books)
+			_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, fmt.Sprintf("Processed %d/%d files", processedFiles, totalFilesAcrossFolders))
 
 			// Process the books to extract metadata (parallel)
 			// This automatically upserts books by FilePath, creating new records or updating existing ones
@@ -1196,8 +1249,20 @@ func (s *Server) startScan(c *gin.Context) {
 			}
 		}
 
-		_ = progress.UpdateProgress(len(foldersToScan), len(foldersToScan), "Scan completed")
-		_ = progress.Log("info", fmt.Sprintf("Scan completed successfully. Total books found: %d", totalBooks), nil)
+		_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, "Scan completed")
+
+		// Format completion message with separate library/import counts
+		var completionMsg string
+		if libraryBooks > 0 && importBooks > 0 {
+			completionMsg = fmt.Sprintf("Scan completed successfully. Library: %d books, Import paths: %d books (Total: %d)", libraryBooks, importBooks, totalBooks)
+		} else if libraryBooks > 0 {
+			completionMsg = fmt.Sprintf("Scan completed successfully. Library: %d books", libraryBooks)
+		} else if importBooks > 0 {
+			completionMsg = fmt.Sprintf("Scan completed successfully. Import paths: %d books", importBooks)
+		} else {
+			completionMsg = "Scan completed successfully. No books found"
+		}
+		_ = progress.Log("info", completionMsg, nil)
 		return nil
 	}
 

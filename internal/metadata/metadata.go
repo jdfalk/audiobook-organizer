@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -75,6 +75,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	fieldSources := map[string]string{}
 	seriesIndexSource := ""
 	fallbackUsed := false
+	authorFromComposer := false
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -131,6 +132,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	if composerValue != "" {
 		metadata.Artist = composerValue
 		setFieldSource(fieldSources, "author", composerSource+" (composer)")
+		authorFromComposer = true
 	} else {
 		artistValue, artistSource := pickFirstNonEmpty(
 			fieldCandidate{value: m.Artist(), source: "tag.Artist"},
@@ -154,10 +156,17 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	narratorValue, narratorSource := pickFirstNonEmpty(
 		fieldCandidate{value: getRawString(raw, "PERFORMER", "Performer", "TXXX:NARRATOR", "TXXX:Narrator", "NARRATOR", "Narrator", "©nrt", "\xa9nrt"), source: "raw.narrator"},
 		fieldCandidate{value: getRawString(raw, "TXXX:Reader", "READER"), source: "raw.reader"},
+		fieldCandidate{value: getRawString(raw, "\xa9ART", "©ART"), source: "raw.artist"},
+		fieldCandidate{value: getRawString(raw, "aART", "ALBUMARTIST", "AlbumArtist", "Album Artist"), source: "raw.album_artist"},
 	)
 	metadata.Narrator = cleanTagValue(narratorValue)
 	if metadata.Narrator != "" {
 		setFieldSource(fieldSources, "narrator", narratorSource)
+	} else if authorFromComposer {
+		if artistFallback := cleanTagValue(m.Artist()); artistFallback != "" && artistFallback != metadata.Artist {
+			metadata.Narrator = artistFallback
+			setFieldSource(fieldSources, "narrator", "tag.Artist")
+		}
 	}
 
 	languageValue, languageSource := pickFirstNonEmpty(
@@ -204,21 +213,56 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		fieldCandidate{value: getRawString(raw, "TXXX:SERIES", "SERIES", "SERIES_NAME", "SERIESNAME", "GRP1", "TGID", "©grp", "\xa9grp"), source: "raw.series"},
 	)
 	metadata.Series = cleanTagValue(seriesValue)
+	if metadata.Series != "" {
+		setFieldSource(fieldSources, "series", seriesSource)
+	}
 	if metadata.Series == "" && strings.Contains(metadata.Album, " - ") {
 		parts := strings.Split(metadata.Album, " - ")
 		if len(parts) > 1 {
 			metadata.Series = strings.TrimSpace(parts[0])
 			seriesSource = "album-prefix"
+			setFieldSource(fieldSources, "series", seriesSource)
 		}
 	}
 	if metadata.Series == "" && metadata.Comments != "" {
 		if extracted := extractSeriesFromComments(metadata.Comments); extracted != "" {
 			metadata.Series = extracted
 			seriesSource = "comment-extraction"
+			setFieldSource(fieldSources, "series", seriesSource)
 		}
 	}
-	if metadata.Series != "" {
-		setFieldSource(fieldSources, "series", seriesSource)
+	if metadata.Series == "" {
+		if series, idx := extractSeriesFromVolumeString(metadata.Album); series != "" {
+			metadata.Series = series
+			seriesSource = "album-volume"
+			setFieldSource(fieldSources, "series", seriesSource)
+			if metadata.SeriesIndex == 0 && idx > 0 {
+				metadata.SeriesIndex = idx
+				seriesIndexSource = "album-volume"
+			}
+		}
+	}
+	if metadata.Series == "" {
+		if series, idx := extractSeriesFromVolumeString(metadata.Title); series != "" {
+			metadata.Series = series
+			seriesSource = "title-volume"
+			setFieldSource(fieldSources, "series", seriesSource)
+			if metadata.SeriesIndex == 0 && idx > 0 {
+				metadata.SeriesIndex = idx
+				seriesIndexSource = "title-volume"
+			}
+		}
+	}
+	if metadata.Series == "" {
+		if metadata.Album != "" {
+			metadata.Series = metadata.Album
+			seriesSource = "album fallback"
+			setFieldSource(fieldSources, "series", seriesSource)
+		} else if metadata.Title != "" {
+			metadata.Series = metadata.Title
+			seriesSource = "title fallback"
+			setFieldSource(fieldSources, "series", seriesSource)
+		}
 	}
 
 	metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
@@ -320,31 +364,48 @@ func firstNonEmpty(values ...string) string {
 }
 
 func getRawString(raw map[string]interface{}, keys ...string) string {
+	if raw == nil {
+		return ""
+	}
 	for _, key := range keys {
-		if raw == nil {
-			continue
-		}
 		if value, ok := raw[key]; ok {
-			switch typed := value.(type) {
-			case string:
-				if s := strings.TrimSpace(typed); s != "" {
-					return s
-				}
-			case []string:
-				for _, s := range typed {
-					if trimmed := strings.TrimSpace(s); trimmed != "" {
-						return trimmed
-					}
-				}
-			case []byte:
-				if s := strings.TrimSpace(string(typed)); s != "" {
-					return s
-				}
-			default:
-				if s := strings.TrimSpace(fmt.Sprint(typed)); s != "" && s != "<nil>" {
-					return s
+			if normalized := normalizeRawTagValue(value); normalized != "" {
+				return normalized
+			}
+		}
+		for actualKey, actualValue := range raw {
+			if strings.EqualFold(actualKey, key) {
+				if normalized := normalizeRawTagValue(actualValue); normalized != "" {
+					return normalized
 				}
 			}
+		}
+	}
+	return ""
+}
+
+func normalizeRawTagValue(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []string:
+		for _, s := range typed {
+			if trimmed := strings.TrimSpace(s); trimmed != "" && !looksLikeReleaseGroupTag(trimmed) {
+				return trimmed
+			}
+		}
+		for _, s := range typed {
+			if trimmed := strings.TrimSpace(s); trimmed != "" {
+				return trimmed
+			}
+		}
+	case []byte:
+		if s := strings.TrimSpace(string(typed)); s != "" {
+			return s
+		}
+	default:
+		if s := strings.TrimSpace(fmt.Sprint(typed)); s != "" && s != "<nil>" {
+			return s
 		}
 	}
 	return ""
@@ -366,6 +427,17 @@ func extractSeriesFromComments(comment string) string {
 		}
 	}
 	return ""
+}
+
+func looksLikeReleaseGroupTag(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") && len(trimmed) > 2 {
+		return true
+	}
+	return false
 }
 
 func extractYearDigits(value string) string {
