@@ -1,5 +1,5 @@
 // file: web/src/pages/Logs.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6b7c8d9e-0f1a-2b3c-4d5e-6f7a8b9c0d1e
 
 import { useState, useEffect } from 'react';
@@ -79,7 +79,7 @@ export function Logs() {
           Math.floor(Math.random() * 4)
         ] as LogEntry['level'],
         message: [
-          'Scanning library folder: /audiobooks/import',
+          'Scanning import path: /audiobooks/import',
           'Successfully imported audiobook: To Kill a Mockingbird',
           'Failed to fetch metadata from Goodreads',
           'Database connection established',

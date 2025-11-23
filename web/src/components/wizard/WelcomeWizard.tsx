@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState } from 'react';
@@ -129,7 +129,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       // Step 3: Add import folders
       for (const path of importFolders) {
         try {
-          await api.addLibraryFolder(path, path.split('/').pop() || path);
+          await api.addImportPath(path, path.split('/').pop() || path);
         } catch (error) {
           console.error(`Failed to add import folder ${path}:`, error);
         }

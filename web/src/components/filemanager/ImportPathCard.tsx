@@ -1,5 +1,5 @@
-// file: web/src/components/filemanager/LibraryFolderCard.tsx
-// version: 1.0.0
+// file: web/src/components/filemanager/ImportPathCard.tsx
+// version: 1.1.0
 // guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
 
 import React, { useState } from 'react';
@@ -23,8 +23,8 @@ import {
   Error as ErrorIcon,
 } from '@mui/icons-material';
 
-export interface LibraryFolder {
-  id: string;
+export interface ImportPath {
+  id: number;
   path: string;
   status: 'idle' | 'scanning' | 'error' | 'complete';
   progress?: number;
@@ -33,14 +33,14 @@ export interface LibraryFolder {
   error_message?: string;
 }
 
-interface LibraryFolderCardProps {
-  folder: LibraryFolder;
-  onRemove?: (folder: LibraryFolder) => void;
-  onScan?: (folder: LibraryFolder) => void;
+interface ImportPathCardProps {
+  importPath: ImportPath;
+  onRemove?: (importPath: ImportPath) => void;
+  onScan?: (importPath: ImportPath) => void;
 }
 
-export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
-  folder,
+export const ImportPathCard: React.FC<ImportPathCardProps> = ({
+  importPath,
   onRemove,
   onScan,
 }) => {
@@ -56,16 +56,16 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
 
   const handleRemove = () => {
     handleClose();
-    onRemove?.(folder);
+    onRemove?.(importPath);
   };
 
   const handleScan = () => {
     handleClose();
-    onScan?.(folder);
+    onScan?.(importPath);
   };
 
   const getStatusIcon = () => {
-    switch (folder.status) {
+    switch (importPath.status) {
       case 'scanning':
         return <SyncIcon sx={{ animation: 'spin 1s linear infinite' }} />;
       case 'complete':
@@ -78,7 +78,7 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
   };
 
   const getStatusColor = () => {
-    switch (folder.status) {
+    switch (importPath.status) {
       case 'scanning':
         return 'info';
       case 'complete':
@@ -101,50 +101,50 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
           <Box display="flex" gap={2} flex={1} alignItems="flex-start">
             <Box mt={0.5}>{getStatusIcon()}</Box>
             <Box flex={1}>
-              <Typography variant="h6" gutterBottom noWrap title={folder.path}>
-                {folder.path.split('/').pop() || folder.path}
+              <Typography variant="h6" gutterBottom noWrap title={importPath.path}>
+                {importPath.path.split('/').pop() || importPath.path}
               </Typography>
               <Typography
                 variant="caption"
                 color="text.secondary"
                 sx={{ display: 'block', mb: 1 }}
                 noWrap
-                title={folder.path}
+                title={importPath.path}
               >
-                {folder.path}
+                {importPath.path}
               </Typography>
 
               <Box display="flex" gap={1} flexWrap="wrap">
                 <Chip
-                  label={folder.status}
+                  label={importPath.status}
                   size="small"
                   color={
                     getStatusColor() as 'default' | 'success' | 'error' | 'info'
                   }
                 />
-                {folder.book_count !== undefined && (
+                {importPath.book_count !== undefined && (
                   <Chip
-                    label={`${folder.book_count} books`}
+                    label={`${importPath.book_count} books`}
                     size="small"
                     variant="outlined"
                   />
                 )}
-                {folder.last_scan && (
+                {importPath.last_scan && (
                   <Chip
-                    label={`Scanned: ${new Date(folder.last_scan).toLocaleDateString()}`}
+                    label={`Scanned: ${new Date(importPath.last_scan).toLocaleDateString()}`}
                     size="small"
                     variant="outlined"
                   />
                 )}
               </Box>
 
-              {folder.error_message && (
+              {importPath.error_message && (
                 <Typography
                   variant="caption"
                   color="error"
                   sx={{ display: 'block', mt: 1 }}
                 >
-                  {folder.error_message}
+                  {importPath.error_message}
                 </Typography>
               )}
             </Box>
@@ -155,22 +155,22 @@ export const LibraryFolderCard: React.FC<LibraryFolderCardProps> = ({
           </IconButton>
         </Box>
 
-        {folder.status === 'scanning' && folder.progress !== undefined && (
+        {importPath.status === 'scanning' && importPath.progress !== undefined && (
           <Box mt={2}>
-            <LinearProgress variant="determinate" value={folder.progress} />
+            <LinearProgress variant="determinate" value={importPath.progress} />
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ mt: 0.5 }}
             >
-              {Math.round(folder.progress)}% complete
+              {Math.round(importPath.progress)}% complete
             </Typography>
           </Box>
         )}
       </CardContent>
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
-        <MenuItem onClick={handleScan} disabled={folder.status === 'scanning'}>
+        <MenuItem onClick={handleScan} disabled={importPath.status === 'scanning'}>
           <SyncIcon sx={{ mr: 1 }} fontSize="small" />
           Scan Now
         </MenuItem>

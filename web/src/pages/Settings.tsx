@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.19.0
+// version: 1.19.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -84,7 +84,7 @@ export function Settings() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   // Import folder management
-  const [importFolders, setImportFolders] = useState<api.LibraryFolder[]>([]);
+  const [importPaths, setImportFolders] = useState<api.ImportPath[]>([]);
   const [addFolderDialogOpen, setAddFolderDialogOpen] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
@@ -392,7 +392,7 @@ export function Settings() {
   // Import folder management handlers
   const loadImportFolders = async () => {
     try {
-      const folders = await api.getLibraryFolders();
+      const folders = await api.getImportPaths();
       setImportFolders(folders);
     } catch (error) {
       console.error('Failed to load import folders:', error);
@@ -403,7 +403,7 @@ export function Settings() {
     if (!newFolderPath.trim()) return;
 
     try {
-      const folder = await api.addLibraryFolder(
+      const folder = await api.addImportPath(
         newFolderPath,
         newFolderPath.split('/').pop() || 'Import Folder'
       );
@@ -418,7 +418,7 @@ export function Settings() {
 
   const handleRemoveImportFolder = async (id: number) => {
     try {
-      await api.removeLibraryFolder(id);
+      await api.removeImportPath(id);
       setImportFolders((prev) => prev.filter((f) => f.id !== id));
     } catch (error) {
       console.error('Failed to remove import folder:', error);
@@ -956,14 +956,14 @@ export function Settings() {
               </Alert>
 
               <Box>
-                {importFolders.length === 0 ? (
+                {importPaths.length === 0 ? (
                   <Alert severity="warning" sx={{ mb: 2 }}>
                     No import folders configured. Add folders to automatically
                     import audiobooks from specific locations.
                   </Alert>
                 ) : (
                   <List>
-                    {importFolders.map((folder) => (
+                    {importPaths.map((folder) => (
                       <ListItem
                         key={folder.id}
                         secondaryAction={
@@ -1699,7 +1699,7 @@ export function Settings() {
         <DialogTitle>Browse Server Filesystem</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Select the library folder where organized audiobooks will be stored.
+            Select the library path where organized audiobooks will be stored.
           </Typography>
           <Box sx={{ mt: 2 }}>
             <ServerFileBrowser
