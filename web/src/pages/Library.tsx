@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.16.0
+// version: 1.16.1
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -70,7 +70,7 @@ export const Library = () => {
   );
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
-  const [hasLibraryFolders, setHasLibraryFolders] = useState(true);
+  const [hasImportPaths, setHasImportPaths] = useState(true);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] =
     useState<Audiobook | null>(null);
@@ -246,12 +246,12 @@ export const Library = () => {
       const limit = 24;
       const offset = (page - 1) * limit;
 
-      // Fetch audiobooks and library folders
+      // Fetch audiobooks and import paths
       const [books, folders, bookCount] = await Promise.all([
         debouncedSearch
           ? api.searchBooks(debouncedSearch, limit)
           : api.getBooks(limit, offset),
-        api.getLibraryFolders(),
+        api.getImportPaths(),
         debouncedSearch ? Promise.resolve(0) : api.countBooks(),
       ]);
 
@@ -303,7 +303,7 @@ export const Library = () => {
       setTotalPages(
         Math.ceil((debouncedSearch ? books.length : bookCount) / limit)
       );
-      setHasLibraryFolders(folders.length > 0);
+      setHasImportPaths(folders.length > 0);
 
       // Load import paths
       const convertedPaths: ImportPath[] = folders.map((folder) => ({
@@ -484,7 +484,7 @@ export const Library = () => {
     if (!newImportPath.trim()) return;
 
     try {
-      const detailed = await api.addLibraryFolderDetailed(
+      const detailed = await api.addImportPathDetailed(
         newImportPath,
         newImportPath.split('/').pop() || 'Library'
       );
@@ -515,7 +515,7 @@ export const Library = () => {
               op.status === 'canceled'
             ) {
               // Refresh folder list to get updated book counts
-              const folders = await api.getLibraryFolders();
+              const folders = await api.getImportPaths();
               setImportPaths(
                 folders.map((f) => ({
                   id: f.id.toString(),
@@ -552,7 +552,7 @@ export const Library = () => {
 
   const handleRemoveImportPath = async (id: string) => {
     try {
-      await api.removeLibraryFolder(parseInt(id));
+      await api.removeImportPath(parseInt(id));
       setImportPaths((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Failed to remove import path:', error);
@@ -569,7 +569,7 @@ export const Library = () => {
       },
       async (op) => {
         if (type === 'scan') {
-          const folders = await api.getLibraryFolders();
+          const folders = await api.getImportPaths();
           setImportPaths(
             folders.map((f) => ({
               id: f.id.toString(),
@@ -916,7 +916,7 @@ export const Library = () => {
       />
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-        {!hasLibraryFolders ? (
+        {!hasImportPaths ? (
           <Paper
             sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
           >

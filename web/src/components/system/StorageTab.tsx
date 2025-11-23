@@ -1,5 +1,5 @@
 // file: web/src/components/system/StorageTab.tsx
-// version: 1.1.0
+// version: 1.1.2
 // guid: 9e0f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
 
 import { useState, useEffect } from 'react';
@@ -21,7 +21,7 @@ import {
 } from '@mui/icons-material';
 import * as api from '../../services/api';
 
-interface LibraryFolder {
+interface ImportPath {
   id: number;
   path: string;
   name: string;
@@ -33,7 +33,7 @@ interface StorageInfo {
   totalLibrarySize: number;
   bookCount: number;
   folderCount: number;
-  folders: LibraryFolder[];
+  folders: ImportPath[];
 }
 
 export function StorageTab() {
@@ -51,13 +51,13 @@ export function StorageTab() {
     try {
       const [statusData, foldersData] = await Promise.all([
         api.getSystemStatus(),
-        api.getLibraryFolders(),
+        api.getImportPaths(),
       ]);
 
       setStorage({
         totalLibrarySize: statusData.library.total_size,
         bookCount: statusData.library.book_count,
-        folderCount: statusData.library.folder_count,
+        folderCount: statusData.import_paths.folder_count,
         folders: foldersData,
       });
     } catch (err) {

@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.3.0
+// version: 1.3.1
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -335,7 +335,7 @@ export function SystemInfoTab() {
                 <Grid item xs={12} sm={6} md={4}>
                   <Box>
                     <Typography variant="body2" color="text.secondary">
-                      Library Folders
+                      Import Paths
                     </Typography>
                     <Typography variant="h6">
                       {info.database.folderCount}

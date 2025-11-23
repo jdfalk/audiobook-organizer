@@ -1,3 +1,7 @@
+// file: web/src/services/api.ts
+// version: 1.1.0
+// guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
+
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
 
@@ -61,7 +65,7 @@ export interface Work {
   updated_at: string;
 }
 
-export interface LibraryFolder {
+export interface ImportPath {
   id: number;
   path: string;
   name: string;
@@ -271,61 +275,61 @@ export async function getWorks(): Promise<Work[]> {
   return data.works || [];
 }
 
-// Library Folders (Import Paths)
-export async function getLibraryFolders(): Promise<LibraryFolder[]> {
-  const response = await fetch(`${API_BASE}/library/folders`);
-  if (!response.ok) throw new Error('Failed to fetch library folders');
+// Import Paths
+export async function getImportPaths(): Promise<ImportPath[]> {
+  const response = await fetch(`${API_BASE}/import-paths`);
+  if (!response.ok) throw new Error('Failed to fetch import paths');
   const data = await response.json();
-  return data.folders || [];
+  return data.importPaths || [];
 }
 
-export async function addLibraryFolder(
+export async function addImportPath(
   path: string,
   name: string
-): Promise<LibraryFolder> {
-  const response = await fetch(`${API_BASE}/library/folders`, {
+): Promise<ImportPath> {
+  const response = await fetch(`${API_BASE}/import-paths`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, name }),
   });
-  if (!response.ok) throw new Error('Failed to add library folder');
+  if (!response.ok) throw new Error('Failed to add import path');
   const data = await response.json();
-  // Server returns { folder: LibraryFolder, scan_operation_id?: string }
+  // Server returns { importPath, scan_operation_id?: string }
   // Gracefully handle both shapes
-  return (data.folder ? data.folder : data) as LibraryFolder;
+  return (data.importPath ? data.importPath : data) as ImportPath;
 }
 
 // Detailed add returning scan operation id when auto-scan kicks off
-export interface AddLibraryFolderDetailedResponse {
-  folder: LibraryFolder;
+export interface AddImportPathDetailedResponse {
+  importPath: ImportPath;
   scan_operation_id?: string;
 }
 
-export async function addLibraryFolderDetailed(
+export async function addImportPathDetailed(
   path: string,
   name: string
-): Promise<AddLibraryFolderDetailedResponse> {
-  const response = await fetch(`${API_BASE}/library/folders`, {
+): Promise<AddImportPathDetailedResponse> {
+  const response = await fetch(`${API_BASE}/import-paths`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, name }),
   });
-  if (!response.ok) throw new Error('Failed to add library folder');
+  if (!response.ok) throw new Error('Failed to add import path');
   const data = await response.json();
-  if (data.folder) {
-    return { folder: data.folder, scan_operation_id: data.scan_operation_id };
+  if (data.importPath) {
+    return { importPath: data.importPath, scan_operation_id: data.scan_operation_id };
   }
   // Legacy shape fallback
-  return { folder: data };
+  return { importPath: data };
 }
 
 // Operation status polling
 
-export async function removeLibraryFolder(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/library/folders/${id}`, {
+export async function removeImportPath(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/import-paths/${id}`, {
     method: 'DELETE',
   });
-  if (!response.ok) throw new Error('Failed to remove library folder');
+  if (!response.ok) throw new Error('Failed to remove import path');
 }
 
 // Operations

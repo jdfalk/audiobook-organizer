@@ -1,5 +1,5 @@
 // file: web/src/pages/FileManager.tsx
-// version: 1.2.0
+// version: 1.2.1
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
 import { useState, useCallback, useRef } from 'react';
@@ -30,12 +30,12 @@ import {
   DirectoryNode,
 } from '../components/filemanager/DirectoryTree';
 import {
-  LibraryFolderCard,
-  LibraryFolder,
-} from '../components/filemanager/LibraryFolderCard';
+  ImportPathCard,
+  ImportPath,
+} from '../components/filemanager/ImportPathCard';
 
 export function FileManager() {
-  const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
+  const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
   const [selectedPath, setSelectedPath] = useState<string>('');
@@ -53,23 +53,23 @@ export function FileManager() {
       //   body: JSON.stringify({ path: newFolderPath })
       // });
 
-      const newFolder: LibraryFolder = {
-        id: Date.now().toString(),
+      const newFolder: ImportPath = {
+        id: Date.now(),
         path: newFolderPath,
         status: 'idle',
         book_count: 0,
       };
 
-      setLibraryFolders((prev) => [...prev, newFolder]);
+      setImportPaths((prev) => [...prev, newFolder]);
       setNewFolderPath('');
       setAddFolderOpen(false);
     } catch (error) {
-      console.error('Failed to add library folder:', error);
+      console.error('Failed to add import path:', error);
     }
   };
 
-  const handleRemoveFolder = useCallback(async (folder: LibraryFolder) => {
-    if (!confirm(`Remove library folder: ${folder.path}?`)) return;
+  const handleRemoveFolder = useCallback(async (folder: ImportPath) => {
+    if (!confirm(`Remove import path: ${folder.path}?`)) return;
 
     try {
       // TODO: Replace with actual API call
@@ -77,20 +77,20 @@ export function FileManager() {
       //   method: 'DELETE'
       // });
 
-      setLibraryFolders((prev) => prev.filter((f) => f.id !== folder.id));
+      setImportPaths((prev) => prev.filter((f) => f.id !== folder.id));
     } catch (error) {
-      console.error('Failed to remove library folder:', error);
+      console.error('Failed to remove import path:', error);
     }
   }, []);
 
-  const handleScanFolder = useCallback(async (folder: LibraryFolder) => {
+  const handleScanFolder = useCallback(async (folder: ImportPath) => {
     try {
       // TODO: Replace with actual API call
       // await fetch(`/api/v1/library-folders/${folder.id}/scan`, {
       //   method: 'POST'
       // });
 
-      setLibraryFolders((prev) =>
+      setImportPaths((prev) =>
         prev.map((f) =>
           f.id === folder.id
             ? { ...f, status: 'scanning' as const, progress: 0 }
@@ -102,7 +102,7 @@ export function FileManager() {
       let progress = 0;
       const interval = setInterval(() => {
         progress += 10;
-        setLibraryFolders((prev) =>
+        setImportPaths((prev) =>
           prev.map((f) =>
             f.id === folder.id
               ? {
@@ -119,8 +119,8 @@ export function FileManager() {
         if (progress >= 100) clearInterval(interval);
       }, 500);
     } catch (error) {
-      console.error('Failed to scan library folder:', error);
-      setLibraryFolders((prev) =>
+      console.error('Failed to scan import path:', error);
+      setImportPaths((prev) =>
         prev.map((f) =>
           f.id === folder.id
             ? { ...f, status: 'error' as const, error_message: 'Scan failed' }
@@ -188,7 +188,7 @@ export function FileManager() {
             startIcon={<AddIcon />}
             onClick={() => setAddFolderOpen(true)}
           >
-            Add Library Folder
+            Add Import Path
           </Button>
         </Stack>
       </Box>
@@ -208,19 +208,19 @@ export function FileManager() {
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Typography variant="h6" gutterBottom>
-            Library Folders
+            Import Paths
           </Typography>
-          {libraryFolders.length === 0 ? (
+          {importPaths.length === 0 ? (
             <Alert severity="info">
-              No library folders added yet. Click "Add Library Folder" to get
+              No import paths added yet. Click "Add Import Path" to get
               started.
             </Alert>
           ) : (
             <Grid container spacing={2}>
-              {libraryFolders.map((folder) => (
+              {importPaths.map((folder) => (
                 <Grid item xs={12} md={6} lg={4} key={folder.id}>
-                  <LibraryFolderCard
-                    folder={folder}
+                  <ImportPathCard
+                    importPath={folder}
                     onRemove={handleRemoveFolder}
                     onScan={handleScanFolder}
                   />
@@ -284,7 +284,7 @@ export function FileManager() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Add Library Folder</DialogTitle>
+        <DialogTitle>Add Import Path</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
