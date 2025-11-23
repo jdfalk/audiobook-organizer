@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -28,8 +28,8 @@ import (
 // - book:path:<path>           -> book_id (for lookups)
 // - book:series:<series_id>:<id> -> book_id (for series queries)
 // - book:author:<author_id>:<id> -> book_id (for author queries)
-// - library:<id>               -> LibraryFolder JSON
-// - library:path:<path>        -> library_id (for lookups)
+// - import_path:<id>           -> ImportPath JSON
+// - import_path:path:<path>    -> import_path_id (for lookups)
 // - operation:<id>             -> Operation JSON
 // - operationlog:<operation_id>:<timestamp>:<seq> -> OperationLog JSON
 // - preference:<key>           -> UserPreference JSON
@@ -39,7 +39,7 @@ import (
 // - counter:author             -> next author ID
 // - counter:series             -> next series ID
 // - counter:book               -> next book ID
-// - counter:library            -> next library folder ID
+// - counter:import_path        -> next import path ID
 // - counter:operationlog       -> next operation log ID
 // - counter:playlist           -> next playlist ID
 // - counter:playlistitem       -> next playlist item ID
@@ -57,8 +57,13 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	store := &PebbleStore{db: db}
 
+	if err := store.migrateImportPathKeys(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
+	}
+
 	// Initialize counters if they don't exist
-	counters := []string{"author", "series", "book", "library", "operationlog", "playlist", "playlistitem", "preference"}
+	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
 		key := fmt.Sprintf("counter:%s", counter)
 		if _, closer, err := db.Get([]byte(key)); err == pebble.ErrNotFound {
@@ -113,6 +118,59 @@ func newULID() (string, error) {
 		return "", err
 	}
 	return id.String(), nil
+}
+
+// migrateImportPathKeys renames legacy library* keys and counters to import_path* equivalents.
+// Safe to run multiple times and before counter initialization.
+func (p *PebbleStore) migrateImportPathKeys() error {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("library:"),
+		UpperBound: []byte("library;"),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create iterator for legacy keys: %w", err)
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		oldKey := string(iter.Key())
+		newKey := strings.Replace(oldKey, "library:path:", "import_path:path:", 1)
+		if newKey == oldKey {
+			newKey = strings.Replace(oldKey, "library:", "import_path:", 1)
+		}
+		if newKey == oldKey {
+			continue
+		}
+
+		value := append([]byte(nil), iter.Value()...)
+		if err := p.db.Set([]byte(newKey), value, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to write migrated key %s: %w", newKey, err)
+		}
+		if err := p.db.Delete([]byte(oldKey), pebble.Sync); err != nil {
+			return fmt.Errorf("failed to delete legacy key %s: %w", oldKey, err)
+		}
+	}
+
+	if value, closer, err := p.db.Get([]byte("counter:library")); err == nil {
+		defer closer.Close()
+
+		if counterValue, counterCloser, counterErr := p.db.Get([]byte("counter:import_path")); counterErr == nil {
+			counterCloser.Close()
+			value = counterValue // already migrated; keep existing value
+		} else if counterErr != pebble.ErrNotFound {
+			return fmt.Errorf("failed to read import path counter: %w", counterErr)
+		} else if err := p.db.Set([]byte("counter:import_path"), value, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to migrate import path counter: %w", err)
+		}
+
+		if err := p.db.Delete([]byte("counter:library"), pebble.Sync); err != nil {
+			return fmt.Errorf("failed to remove legacy library counter: %w", err)
+		}
+	} else if err != nil && err != pebble.ErrNotFound {
+		return fmt.Errorf("failed to read legacy library counter: %w", err)
+	}
+
+	return nil
 }
 
 // Author operations
@@ -1024,13 +1082,13 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	return books, nil
 }
 
-// Library Folder operations
+// Import path operations
 
-func (p *PebbleStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
-	var folders []LibraryFolder
+func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
+	var importPaths []ImportPath
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("library:0"),
-		UpperBound: []byte("library:;"),
+		LowerBound: []byte("import_path:0"),
+		UpperBound: []byte("import_path:;"),
 	})
 	if err != nil {
 		return nil, err
@@ -1043,18 +1101,18 @@ func (p *PebbleStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
 			continue
 		}
 
-		var folder LibraryFolder
-		if err := json.Unmarshal(iter.Value(), &folder); err != nil {
+		var importPath ImportPath
+		if err := json.Unmarshal(iter.Value(), &importPath); err != nil {
 			return nil, err
 		}
-		folders = append(folders, folder)
+		importPaths = append(importPaths, importPath)
 	}
 
-	return folders, nil
+	return importPaths, nil
 }
 
-func (p *PebbleStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
-	key := []byte(fmt.Sprintf("library:%d", id))
+func (p *PebbleStore) GetImportPathByID(id int) (*ImportPath, error) {
+	key := []byte(fmt.Sprintf("import_path:%d", id))
 	value, closer, err := p.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return nil, nil
@@ -1064,15 +1122,15 @@ func (p *PebbleStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
 	}
 	defer closer.Close()
 
-	var folder LibraryFolder
-	if err := json.Unmarshal(value, &folder); err != nil {
+	var importPath ImportPath
+	if err := json.Unmarshal(value, &importPath); err != nil {
 		return nil, err
 	}
-	return &folder, nil
+	return &importPath, nil
 }
 
-func (p *PebbleStore) GetLibraryFolderByPath(path string) (*LibraryFolder, error) {
-	indexKey := []byte(fmt.Sprintf("library:path:%s", path))
+func (p *PebbleStore) GetImportPathByPath(path string) (*ImportPath, error) {
+	indexKey := []byte(fmt.Sprintf("import_path:path:%s", path))
 	value, closer, err := p.db.Get(indexKey)
 	if err == pebble.ErrNotFound {
 		return nil, nil
@@ -1087,16 +1145,24 @@ func (p *PebbleStore) GetLibraryFolderByPath(path string) (*LibraryFolder, error
 		return nil, err
 	}
 
-	return p.GetLibraryFolderByID(id)
+	return p.GetImportPathByID(id)
 }
 
-func (p *PebbleStore) CreateLibraryFolder(path, name string) (*LibraryFolder, error) {
-	id, err := p.nextID("library")
+func (p *PebbleStore) CreateImportPath(path, name string) (*ImportPath, error) {
+	existing, err := p.GetImportPathByPath(path)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("import path with path %s already exists", path)
+	}
+
+	id, err := p.nextID("import_path")
 	if err != nil {
 		return nil, err
 	}
 
-	folder := &LibraryFolder{
+	importPath := &ImportPath{
 		ID:        id,
 		Path:      path,
 		Name:      name,
@@ -1105,14 +1171,14 @@ func (p *PebbleStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 		BookCount: 0,
 	}
 
-	data, err := json.Marshal(folder)
+	data, err := json.Marshal(importPath)
 	if err != nil {
 		return nil, err
 	}
 
 	batch := p.db.NewBatch()
-	key := []byte(fmt.Sprintf("library:%d", id))
-	indexKey := []byte(fmt.Sprintf("library:path:%s", path))
+	key := []byte(fmt.Sprintf("import_path:%d", id))
+	indexKey := []byte(fmt.Sprintf("import_path:path:%s", path))
 
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
@@ -1127,38 +1193,69 @@ func (p *PebbleStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 		return nil, err
 	}
 
-	return folder, nil
+	return importPath, nil
 }
 
-func (p *PebbleStore) UpdateLibraryFolder(id int, folder *LibraryFolder) error {
-	folder.ID = id
-	data, err := json.Marshal(folder)
+func (p *PebbleStore) UpdateImportPath(id int, importPath *ImportPath) error {
+	importPath.ID = id
+
+	// If the path changed, update the index accordingly
+	current, err := p.GetImportPathByID(id)
 	if err != nil {
 		return err
 	}
+	if current == nil {
+		return fmt.Errorf("import path %d not found", id)
+	}
 
-	key := []byte(fmt.Sprintf("library:%d", id))
-	return p.db.Set(key, data, pebble.Sync)
+	batch := p.db.NewBatch()
+
+	if current.Path != importPath.Path {
+		oldIndexKey := []byte(fmt.Sprintf("import_path:path:%s", current.Path))
+		if err := batch.Delete(oldIndexKey, nil); err != nil {
+			batch.Close()
+			return err
+		}
+		newIndexKey := []byte(fmt.Sprintf("import_path:path:%s", importPath.Path))
+		if err := batch.Set(newIndexKey, []byte(strconv.Itoa(id)), nil); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
+	data, err := json.Marshal(importPath)
+	if err != nil {
+		batch.Close()
+		return err
+	}
+
+	key := []byte(fmt.Sprintf("import_path:%d", id))
+	if err := batch.Set(key, data, nil); err != nil {
+		batch.Close()
+		return err
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
-func (p *PebbleStore) DeleteLibraryFolder(id int) error {
-	folder, err := p.GetLibraryFolderByID(id)
+func (p *PebbleStore) DeleteImportPath(id int) error {
+	importPath, err := p.GetImportPathByID(id)
 	if err != nil {
 		return err
 	}
-	if folder == nil {
+	if importPath == nil {
 		return nil
 	}
 
 	batch := p.db.NewBatch()
 
-	key := []byte(fmt.Sprintf("library:%d", id))
+	key := []byte(fmt.Sprintf("import_path:%d", id))
 	if err := batch.Delete(key, nil); err != nil {
 		batch.Close()
 		return err
 	}
 
-	indexKey := []byte(fmt.Sprintf("library:path:%s", folder.Path))
+	indexKey := []byte(fmt.Sprintf("import_path:path:%s", importPath.Path))
 	if err := batch.Delete(indexKey, nil); err != nil {
 		batch.Close()
 		return err

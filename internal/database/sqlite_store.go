@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.7.0
+// version: 1.7.1
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -165,7 +165,7 @@ func (s *SQLiteStore) createTables() error {
 
 	CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items(playlist_id);
 
-	CREATE TABLE IF NOT EXISTS library_folders (
+	CREATE TABLE IF NOT EXISTS import_paths (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		path TEXT NOT NULL UNIQUE,
 		name TEXT NOT NULL,
@@ -175,7 +175,7 @@ func (s *SQLiteStore) createTables() error {
 		book_count INTEGER NOT NULL DEFAULT 0
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_library_folders_path ON library_folders(path);
+	CREATE INDEX IF NOT EXISTS idx_import_paths_path ON import_paths(path);
 
 	CREATE TABLE IF NOT EXISTS operations (
 		id TEXT PRIMARY KEY,
@@ -855,20 +855,20 @@ func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	return books, rows.Err()
 }
 
-// Library Folder operations
+// Import path operations
 
-func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
+func (s *SQLiteStore) GetAllImportPaths() ([]ImportPath, error) {
 	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
-			  FROM library_folders ORDER BY name`
+			  FROM import_paths ORDER BY name`
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var folders []LibraryFolder
+	var folders []ImportPath
 	for rows.Next() {
-		var folder LibraryFolder
+		var folder ImportPath
 		if err := rows.Scan(&folder.ID, &folder.Path, &folder.Name, &folder.Enabled,
 			&folder.CreatedAt, &folder.LastScan, &folder.BookCount); err != nil {
 			return nil, err
@@ -878,10 +878,10 @@ func (s *SQLiteStore) GetAllLibraryFolders() ([]LibraryFolder, error) {
 	return folders, rows.Err()
 }
 
-func (s *SQLiteStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
-	var folder LibraryFolder
+func (s *SQLiteStore) GetImportPathByID(id int) (*ImportPath, error) {
+	var folder ImportPath
 	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
-			  FROM library_folders WHERE id = ?`
+			  FROM import_paths WHERE id = ?`
 	err := s.db.QueryRow(query, id).Scan(&folder.ID, &folder.Path, &folder.Name,
 		&folder.Enabled, &folder.CreatedAt, &folder.LastScan, &folder.BookCount)
 	if err == sql.ErrNoRows {
@@ -893,10 +893,10 @@ func (s *SQLiteStore) GetLibraryFolderByID(id int) (*LibraryFolder, error) {
 	return &folder, nil
 }
 
-func (s *SQLiteStore) GetLibraryFolderByPath(path string) (*LibraryFolder, error) {
-	var folder LibraryFolder
+func (s *SQLiteStore) GetImportPathByPath(path string) (*ImportPath, error) {
+	var folder ImportPath
 	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
-			  FROM library_folders WHERE path = ?`
+			  FROM import_paths WHERE path = ?`
 	err := s.db.QueryRow(query, path).Scan(&folder.ID, &folder.Path, &folder.Name,
 		&folder.Enabled, &folder.CreatedAt, &folder.LastScan, &folder.BookCount)
 	if err == sql.ErrNoRows {
@@ -908,8 +908,8 @@ func (s *SQLiteStore) GetLibraryFolderByPath(path string) (*LibraryFolder, error
 	return &folder, nil
 }
 
-func (s *SQLiteStore) CreateLibraryFolder(path, name string) (*LibraryFolder, error) {
-	result, err := s.db.Exec("INSERT INTO library_folders (path, name) VALUES (?, ?)", path, name)
+func (s *SQLiteStore) CreateImportPath(path, name string) (*ImportPath, error) {
+	result, err := s.db.Exec("INSERT INTO import_paths (path, name) VALUES (?, ?)", path, name)
 	if err != nil {
 		return nil, err
 	}
@@ -917,7 +917,7 @@ func (s *SQLiteStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 	if err != nil {
 		return nil, err
 	}
-	return &LibraryFolder{
+	return &ImportPath{
 		ID:        int(id),
 		Path:      path,
 		Name:      name,
@@ -927,15 +927,15 @@ func (s *SQLiteStore) CreateLibraryFolder(path, name string) (*LibraryFolder, er
 	}, nil
 }
 
-func (s *SQLiteStore) UpdateLibraryFolder(id int, folder *LibraryFolder) error {
-	_, err := s.db.Exec(`UPDATE library_folders SET path = ?, name = ?, enabled = ?,
+func (s *SQLiteStore) UpdateImportPath(id int, folder *ImportPath) error {
+	_, err := s.db.Exec(`UPDATE import_paths SET path = ?, name = ?, enabled = ?,
 		last_scan = ?, book_count = ? WHERE id = ?`,
 		folder.Path, folder.Name, folder.Enabled, folder.LastScan, folder.BookCount, id)
 	return err
 }
 
-func (s *SQLiteStore) DeleteLibraryFolder(id int) error {
-	_, err := s.db.Exec("DELETE FROM library_folders WHERE id = ?", id)
+func (s *SQLiteStore) DeleteImportPath(id int) error {
+	_, err := s.db.Exec("DELETE FROM import_paths WHERE id = ?", id)
 	return err
 }
 

@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.7.0
+// version: 2.7.1
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -53,13 +53,13 @@ type Store interface {
 	// Version Management
 	GetBooksByVersionGroup(groupID string) ([]Book, error)
 
-	// Library Folders
-	GetAllLibraryFolders() ([]LibraryFolder, error)
-	GetLibraryFolderByID(id int) (*LibraryFolder, error)
-	GetLibraryFolderByPath(path string) (*LibraryFolder, error)
-	CreateLibraryFolder(path, name string) (*LibraryFolder, error)
-	UpdateLibraryFolder(id int, folder *LibraryFolder) error
-	DeleteLibraryFolder(id int) error
+	// Import Paths
+	GetAllImportPaths() ([]ImportPath, error)
+	GetImportPathByID(id int) (*ImportPath, error)
+	GetImportPathByPath(path string) (*ImportPath, error)
+	CreateImportPath(path, name string) (*ImportPath, error)
+	UpdateImportPath(id int, importPath *ImportPath) error
+	DeleteImportPath(id int) error
 
 	// Operations
 	CreateOperation(id, opType string, folderPath *string) (*Operation, error)
@@ -216,8 +216,8 @@ type PlaylistItem struct {
 	Position   int `json:"position"`
 }
 
-// LibraryFolder represents a managed library folder
-type LibraryFolder struct {
+// ImportPath represents a managed import path monitored for new audiobooks
+type ImportPath struct {
 	ID        int        `json:"id"`
 	Path      string     `json:"path"`
 	Name      string     `json:"name"`
