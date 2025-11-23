@@ -1,10 +1,11 @@
 // file: internal/database/migrations.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -46,7 +47,7 @@ var migrations = []Migration{
 	},
 	{
 		Version:     2,
-		Description: "Add library folders and operations tables",
+		Description: "Add import paths and operations tables",
 		Up:          migration002Up,
 		Down:        nil,
 	},
@@ -72,6 +73,12 @@ var migrations = []Migration{
 		Version:     6,
 		Description: "Add original and organized file hash tracking",
 		Up:          migration006Up,
+		Down:        nil,
+	},
+	{
+		Version:     7,
+		Description: "Rename import paths to import paths",
+		Up:          migration007Up,
 		Down:        nil,
 	},
 }
@@ -184,10 +191,10 @@ func migration001Up(store Store) error {
 	return nil
 }
 
-// migration002Up adds library folders and operations support
+// migration002Up adds import paths and operations support
 func migration002Up(store Store) error {
 	// These structures are already supported by the current store interface
-	log.Println("  - Adding library folders and operations support")
+	log.Println("  - Adding import paths and operations support")
 	return nil
 }
 
@@ -301,6 +308,44 @@ func migration006Up(store Store) error {
 	// Backfill original hash so future duplicate detection works immediately
 	if _, err := sqliteStore.db.Exec("UPDATE books SET original_file_hash = file_hash WHERE original_file_hash IS NULL AND file_hash IS NOT NULL"); err != nil {
 		return fmt.Errorf("failed to backfill original_file_hash: %w", err)
+	}
+
+	return nil
+}
+
+// migration007Up renames library folder entities to import paths across backends.
+func migration007Up(store Store) error {
+	log.Println("  - Renaming import paths to import paths")
+
+	switch s := store.(type) {
+	case *PebbleStore:
+		if err := s.migrateImportPathKeys(); err != nil {
+			return fmt.Errorf("failed to migrate Pebble import path keys: %w", err)
+		}
+	case *SQLiteStore:
+		var tableName string
+		if err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='library_folders'`).Scan(&tableName); err != nil {
+			if err == sql.ErrNoRows {
+				// Already renamed or never created.
+				return nil
+			}
+			return fmt.Errorf("failed to check legacy library_folders table: %w", err)
+		}
+
+		statements := []string{
+			"ALTER TABLE library_folders RENAME TO import_paths",
+			"DROP INDEX IF EXISTS idx_library_folders_path",
+			"CREATE INDEX IF NOT EXISTS idx_import_paths_path ON import_paths(path)",
+		}
+
+		for _, stmt := range statements {
+			log.Printf("    - Executing: %s", stmt)
+			if _, err := s.db.Exec(stmt); err != nil {
+				return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+			}
+		}
+	default:
+		log.Println("  - Unknown store type; skipping migration")
 	}
 
 	return nil
