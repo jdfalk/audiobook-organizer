@@ -1,0 +1,53 @@
+# file: .github/workflows/release.yml
+# version: 4.0.0
+# guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
+
+name: Production Release
+
+on:
+    workflow_dispatch:
+        inputs:
+            release-type:
+                description: "Release type"
+                required: true
+                type: choice
+                options:
+                    - auto
+                    - major
+                    - minor
+                    - patch
+                default: "auto"
+            create-draft:
+                description: "Create as draft release"
+                required: false
+                type: boolean
+                default: false
+
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
+
+permissions:
+    contents: write
+    packages: write
+    id-token: write
+    attestations: write
+
+jobs:
+    release:
+        name: Create Production Release
+        uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@main
+        with:
+            release-type: ${{ github.event.inputs.release-type }}
+            prerelease: false
+            draft: ${{ github.event.inputs.create-draft == 'true' }}
+            go-version: "1.24"
+            node-version: "22"
+            build-go: true
+            build-node: true
+            build-docker: true
+            docker-platforms: "linux/amd64,linux/arm64"
+            publish-npm: false
+            publish-github: true
+            publish-docker: true
+        secrets: inherit

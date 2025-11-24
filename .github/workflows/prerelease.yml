@@ -1,0 +1,41 @@
+# file: .github/workflows/prerelease.yml
+# version: 2.0.0
+# guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+
+name: Prerelease on Merge
+
+on:
+    push:
+        branches: [main]
+        paths-ignore:
+            - "**.md"
+            - "docs/**"
+
+concurrency:
+    group: prerelease-${{ github.ref }}
+    cancel-in-progress: false
+
+permissions:
+    contents: write
+    packages: write
+    id-token: write
+    attestations: write
+
+jobs:
+    prerelease:
+        name: Create Prerelease Build
+        uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@main
+        with:
+            release-type: "auto"
+            prerelease: true
+            draft: false
+            go-version: "1.24"
+            node-version: "22"
+            build-go: true
+            build-node: true
+            build-docker: true
+            docker-platforms: "linux/amd64,linux/arm64"
+            publish-npm: false
+            publish-github: true
+            publish-docker: true
+        secrets: inherit
