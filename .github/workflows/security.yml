@@ -1,5 +1,5 @@
 # file: .github/workflows/security.yml
-# version: 2.0.0
+# version: 2.1.0
 # guid: s3c4r5t6-y7a8-b9c0-d1e2-f3a4b5c6d7e8
 
 name: Security Scanning
@@ -33,7 +33,7 @@ jobs:
       node-version: '22'
       python-version: '3.13'
     secrets: inherit
-        uses: actions/checkout@v5
+
 
       - name: Detect project languages
         id: detect
