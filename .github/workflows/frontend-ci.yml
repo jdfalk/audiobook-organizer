@@ -25,9 +25,9 @@ jobs:
     name: Frontend Build and Test
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
-      node-version: '22'
+      node-version: "22"
       skip-go: true
       skip-python: true
       skip-rust: true
-      working-directory: 'web'
+      working-directory: "web"
     secrets: inherit
