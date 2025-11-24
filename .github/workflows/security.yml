@@ -1,12 +1,8 @@
 # file: .github/workflows/security.yml
-# version: 1.1.0
+# version: 2.0.0
 # guid: s3c4r5t6-y7a8-b9c0-d1e2-f3a4b5c6d7e8
 
-# ⚠️  DO NOT EDIT DIRECTLY - This file is managed in ghcommon repository
-# All changes should be made in jdfalk/ghcommon and will be synced to other repositories
-# Edit this file at: https://github.com/jdfalk/ghcommon/edit/main/.github/workflows/security.yml
-
-name: Security
+name: Security Scanning
 
 on:
   push:
@@ -28,26 +24,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  GO_VERSION: "1.24"
-  NODE_VERSION: "22"
-  PYTHON_VERSION: "3.13"
-
 jobs:
-  # Detect what languages/frameworks are in use
-  detect-languages:
-    name: Detect Languages
-    runs-on: ubuntu-latest
-    outputs:
-      languages: ${{ steps.detect.outputs.languages }}
-      languages_json: ${{ steps.detect.outputs.languages_json }}
-      has_go: ${{ steps.detect.outputs.has_go }}
-      has_javascript: ${{ steps.detect.outputs.has_javascript }}
-      has_python: ${{ steps.detect.outputs.has_python }}
-      has_rust: ${{ steps.detect.outputs.has_rust }}
-      has_docker: ${{ steps.detect.outputs.has_docker }}
-    steps:
-      - name: Checkout repository
+  security:
+    name: Security Scan
+    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@main
+    with:
+      go-version: '1.24'
+      node-version: '22'
+      python-version: '3.13'
+    secrets: inherit
         uses: actions/checkout@v5
 
       - name: Detect project languages
