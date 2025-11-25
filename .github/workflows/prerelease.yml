@@ -1,5 +1,5 @@
 # file: .github/workflows/prerelease.yml
-# version: 2.1.0
+# version: 2.2.0
 # guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 name: Prerelease on Merge
@@ -29,13 +29,7 @@ jobs:
             release-type: "auto"
             prerelease: true
             draft: false
-            go-version: "1.24"
-            node-version: "22"
-            build-go: true
-            build-node: true
-            build-docker: true
-            docker-platforms: "linux/amd64,linux/arm64"
-            publish-npm: false
-            publish-github: true
-            publish-docker: true
+            go-enabled: true
+            frontend-enabled: true
+            docker-enabled: true
         secrets: inherit
