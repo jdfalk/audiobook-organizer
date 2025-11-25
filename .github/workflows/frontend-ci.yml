@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.3.0
+# version: 2.4.0
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -26,8 +26,4 @@ jobs:
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@v1.0.0-alpha
     with:
       node-version: "22"
-      skip-build-go: true
-      skip-build-python: true
-      skip-build-rust: true
-      working-directory: "web"
     secrets: inherit
