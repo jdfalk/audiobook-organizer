@@ -1,0 +1,114 @@
+# file: .github/repository-config.yml
+# version: 1.0.0
+# guid: audiobook-organizer-repo-config-001
+
+# Repository Metadata
+repository:
+  name: "audiobook-organizer"
+  type: "application"
+  primary_language: "go"
+  description: "Audiobook organization and management tool"
+
+# Language Detection and Support
+languages:
+  detection:
+    patterns:
+      go:
+        - "go.mod"
+        - "go.sum"
+        - "main.go"
+        - "cmd/"
+        - "internal/"
+      javascript:
+        - "web/package.json"
+        - "web/*.js"
+      docker:
+        - "Dockerfile"
+        - "docker-compose.yml"
+
+    priority:
+      - go
+      - javascript
+      - docker
+
+  versions:
+    go: ["1.24"]
+    node: ["22"]
+
+# Build Configuration
+build:
+  platforms:
+    os: ["ubuntu-latest"]
+    arch: ["amd64", "arm64"]
+
+  docker:
+    enabled: true
+    platforms: ["linux/amd64", "linux/arm64"]
+    registries: ["ghcr.io"]
+
+  cross_compile:
+    enabled: true
+    targets:
+      go:
+        - "linux/amd64"
+        - "linux/arm64"
+        - "darwin/amd64"
+        - "darwin/arm64"
+
+# Release Configuration
+release:
+  enabled: true
+  strategy: "semantic"
+  prerelease_branch: "main"
+  stable_branches: ["main"]
+
+  versioning:
+    scheme: "semver"
+    auto_detect: true
+
+  artifacts:
+    go_binaries: true
+    docker_images: true
+    source: true
+    checksums: true
+
+# Testing Configuration
+testing:
+  enabled: true
+  coverage:
+    enabled: true
+    threshold: 80
+    reports: ["html", "json"]
+
+  unit:
+    enabled: true
+    parallel: true
+
+  integration:
+    enabled: true
+
+# Security Configuration
+security:
+  codeql:
+    enabled: true
+    languages: ["go", "javascript"]
+
+  dependency_review:
+    enabled: true
+    fail_on_severity: "high"
+
+  secrets_scanning:
+    enabled: true
+
+# CI Configuration
+ci:
+  enabled: true
+  on:
+    push: ["main"]
+    pull_request: ["main"]
+
+  caching:
+    enabled: true
+    paths:
+      go: ["~/.cache/go-build", "~/go/pkg/mod"]
+      npm: ["~/.npm"]
