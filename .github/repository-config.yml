@@ -1,5 +1,5 @@
 # file: .github/repository-config.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: audiobook-organizer-repo-config-001
 
 # Repository Metadata
@@ -34,6 +34,11 @@ languages:
   versions:
     go: ["1.25"]
     node: ["22"]
+
+  # Working directories for language-specific builds
+  working_directories:
+    node: "web"
+    frontend: "web"
 
 # Build Configuration
 build:
