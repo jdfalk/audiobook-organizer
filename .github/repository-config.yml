@@ -32,7 +32,7 @@ languages:
       - docker
 
   versions:
-    go: ["1.24"]
+    go: ["1.25"]
     node: ["22"]
 
 # Build Configuration
@@ -43,8 +43,9 @@ build:
 
   docker:
     enabled: true
-    platforms: ["linux/amd64", "linux/arm64"]
+    platforms: ["linux/amd64,linux/arm64"] # buildx handles multi-platform
     registries: ["ghcr.io"]
+    use_qemu: false # Not needed with buildx
 
   cross_compile:
     enabled: true
