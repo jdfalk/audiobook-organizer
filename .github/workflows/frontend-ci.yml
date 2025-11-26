@@ -17,8 +17,13 @@ on:
       - ".github/workflows/frontend-ci.yml"
 
 permissions:
-  contents: read
+  contents: write
+  actions: write
   checks: write
+  packages: write
+  security-events: write
+  id-token: write
+  attestations: write
 
 jobs:
   frontend:
