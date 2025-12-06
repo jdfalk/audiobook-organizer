@@ -1,5 +1,5 @@
 <!-- file: docs/TASK-1-SCAN-PROGRESS-TESTING.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
 
 # Task 1: Test Scan Progress Reporting
@@ -7,6 +7,7 @@
 ## 🎯 Overall Goal
 
 Verify that the scan progress reporting system (implemented in v1.26.0) works correctly by:
+
 1. Triggering a full scan with `force_update=true`
 2. Observing real-time progress events via SSE
 3. Validating that progress shows actual file counts (not 0/0)
@@ -14,6 +15,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 5. Verifying progress is logged in `/Users/jdfalk/ao-library/logs/`
 
 **Success Criteria:**
+
 - Progress events show incrementing file counts during scan
 - Final message clearly states "Library: X books, Import: Y books"
 - No errors in server logs during scan
@@ -28,6 +30,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 **IMPORTANT:** Multiple AIs may work on this task. Follow these rules to prevent conflicts:
 
 1. **Always check lock file first:**
+
    ```bash
    LOCK_FILE="/tmp/task-1-scan-lock-$(whoami).txt"
    if [ -f "$LOCK_FILE" ] && [ -f "$(cat $LOCK_FILE)" ]; then
@@ -37,6 +40,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
    ```
 
 2. **Create lock before proceeding:**
+
    ```bash
    LOCK_FILE="/tmp/task-1-scan-lock-$(whoami).txt"
    STATE_FILE="/tmp/task-1-state-$(date +%s%N).json"
@@ -45,6 +49,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
    ```
 
 3. **Save baseline state (READ-ONLY, non-destructive):**
+
    ```bash
    # Capture complete system state before any changes
    STATE_FILE=$(cat "$LOCK_FILE")
@@ -61,6 +66,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
    ```
 
 4. **At end of task, clean up lock:**
+
    ```bash
    # Remove lock so others can proceed
    rm -f "$LOCK_FILE"
@@ -76,22 +82,28 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 **Steps:**
 
 1. **Check current database state:**
+
    ```bash
    curl -s http://localhost:8888/api/v1/audiobooks | jq '.count'
    curl -s http://localhost:8888/api/v1/system/status | jq '{library_books, import_books}'
    ```
+
    Expected: Should show 4 books total (based on current state)
 
 2. **Verify server is running:**
+
    ```bash
    curl -s http://localhost:8888/api/v1/health | jq '.status'
    ```
+
    Expected: `"ok"`
 
 3. **Check import paths are configured:**
+
    ```bash
    curl -s http://localhost:8888/api/v1/import-paths | jq '.items[] | {path, enabled}'
    ```
+
    Expected: At least one import path exists and is enabled
 
 ### Phase 2: Trigger Full Scan
@@ -99,6 +111,7 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 **Goal:** Start a scan operation with proper progress tracking enabled.
 
 **Request:**
+
 ```bash
 # Terminal 1: Trigger the scan
 curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true" \
@@ -108,6 +121,7 @@ curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true" \
 ```
 
 Expected response:
+
 ```json
 {
   "operation_id": "01ABC123...",
@@ -123,6 +137,7 @@ Expected response:
 **Goal:** Connect to SSE endpoint and observe real-time progress events.
 
 **Setup:**
+
 ```bash
 # Terminal 2: Connect to progress stream
 curl -N -H "Accept: text/event-stream" \
@@ -135,6 +150,7 @@ Replace `<OPERATION_ID>` with the ID from Phase 2.
 **What to Expect:**
 
 Initial events (pre-scan file counting):
+
 ```
 data: {"type":"progress","level":"info","message":"Starting scan of folder: /Users/jdfalk/ao-library/library","timestamp":"2025-12-06T..."}
 
@@ -144,6 +160,7 @@ data: {"type":"progress","level":"info","message":"Scanning 2 total folders (1 i
 ```
 
 Pre-scan file count events:
+
 ```
 data: {"type":"progress","level":"info","message":"Folder /Users/jdfalk/ao-library/library: Found 4 audiobook files","timestamp":"2025-12-06T..."}
 
@@ -151,10 +168,12 @@ data: {"type":"progress","level":"info","message":"Total audiobook files across 
 ```
 
 **Validation Points:**
+
 - ✅ File count should match actual files (not 0)
 - ✅ Count should be consistent with `/api/v1/audiobooks` response
 
 Scanning events:
+
 ```
 data: {"type":"progress","level":"info","message":"Processing books in folder /Users/jdfalk/ao-library/library","timestamp":"2025-12-06T..."}
 
@@ -165,15 +184,18 @@ data: {"type":"progress","level":"info","message":"Processed: 4/4 books","timest
 ```
 
 **Validation Points:**
+
 - ✅ Progress shows incrementing counters (1/4, 2/4, 3/4, 4/4)
 - ✅ No progress events show 0/X
 
 Completion event:
+
 ```
 data: {"type":"progress","level":"info","message":"Scan completed. Library: 4 books, Import: 0 books","timestamp":"2025-12-06T..."}
 ```
 
 **Validation Points:**
+
 - ✅ Message clearly separates library vs import counts
 - ✅ Totals match actual database state
 - ✅ No "N/A" or placeholder values
@@ -183,12 +205,14 @@ data: {"type":"progress","level":"info","message":"Scan completed. Library: 4 bo
 **Goal:** Confirm progress logging to disk succeeded.
 
 **Check logs:**
+
 ```bash
 ls -la /Users/jdfalk/ao-library/logs/
 tail -100 /Users/jdfalk/ao-library/logs/operation-*.log
 ```
 
 Expected:
+
 - Log file exists with name like `operation-01ABC123....log`
 - Contains all progress events from scan
 - No error messages or warnings
@@ -198,12 +222,14 @@ Expected:
 **Goal:** Confirm scan completed successfully and data is consistent.
 
 **Check final state:**
+
 ```bash
 curl -s http://localhost:8888/api/v1/audiobooks | jq '.count'
 curl -s http://localhost:8888/api/v1/system/status | jq '{library_books, import_books, total_books: (.library_books + .import_books)}'
 ```
 
 Expected:
+
 - Book count unchanged (still 4)
 - Library and import counts make sense
 - Total equals sum
@@ -236,6 +262,7 @@ Browser                    Server                     Database
 ### Key Components
 
 **1. Scan Operation Flow** (`internal/server/server.go:startScan`):
+
 ```
 startScan()
   ├─ Create Operation record in database
@@ -251,6 +278,7 @@ startScan()
 ```
 
 **2. Progress Reporting System** (`internal/operations/progress.go`):
+
 ```
 ProgressReporter interface:
   - Log(level, message, metadata)
@@ -264,6 +292,7 @@ Output:
 ```
 
 **3. SSE Event Handler** (`internal/server/server.go:handleEvents`):
+
 ```
 GET /api/events?operation_id=XXX
   ├─ Find operation in database
@@ -292,6 +321,7 @@ For a full scan of library + import paths:
 ### Known Implementation Details
 
 **Pre-scan file counting** (`internal/server/server.go:startScan`, lines ~1135-1150):
+
 ```go
 // First pass: count total files across all folders
 totalFilesAcrossFolders := 0
@@ -302,6 +332,7 @@ for _, folderPath := range foldersToScan {
 ```
 
 **Separate library vs import reporting** (`internal/server/server.go:startScan`, line ~1220):
+
 ```go
 if forceUpdate && config.AppConfig.RootDir != "" {
     // Library books were scanned
@@ -312,6 +343,7 @@ if forceUpdate && config.AppConfig.RootDir != "" {
 ```
 
 **Progress per book** (`internal/server/server.go:startScan`, line ~1180):
+
 ```go
 // Process books with counter
 for idx, book := range books {
@@ -329,12 +361,14 @@ for idx, book := range books {
 ### Issue: No progress events received
 
 **Symptoms:**
+
 - SSE connection established but no data events
 - Only heartbeat comments (`:` prefix)
 
 **Root Causes & Solutions:**
 
 1. **Operation ID doesn't exist:**
+
    ```bash
    # Verify operation was created
    curl -s http://localhost:8888/api/v1/operations | jq '.items[] | select(.type == "scan")'
@@ -356,6 +390,7 @@ for idx, book := range books {
 ### Issue: File count shows 0
 
 **Symptoms:**
+
 ```
 "message": "Folder /path: Found 0 audiobook files"
 ```
@@ -363,18 +398,23 @@ for idx, book := range books {
 **Root Causes:**
 
 1. **Folder doesn't exist or is empty:**
+
    ```bash
    ls -la /Users/jdfalk/ao-library/library/
    ```
-   Should show audiobook files (*.m4b, *.mp3, etc.)
+
+   Should show audiobook files (*.m4b,*.mp3, etc.)
 
 2. **Supported extensions not configured:**
+
    ```bash
    curl -s http://localhost:8888/api/v1/system/status | jq '.config.supported_extensions'
    ```
+
    Should include `.m4b`, `.mp3`, etc.
 
 3. **Permissions issue:**
+
    ```bash
    ls -la /Users/jdfalk/ao-library/
    chmod -R u+rx /Users/jdfalk/ao-library/
@@ -383,27 +423,33 @@ for idx, book := range books {
 ### Issue: Progress shows "0/X" instead of "1/X", "2/X"
 
 **Symptoms:**
+
 ```
 "message": "Processed: 0/4 books"
 "message": "Processed: 0/4 books"
 ```
 
 **Root Cause:**
+
 - Counter not incrementing properly in code
 
 **Check server version:**
+
 ```bash
 curl -s http://localhost:8888/api/v1/system/status | jq '.server_version'
 ```
+
 Should be >= v1.26.0
 
 **If older version:**
+
 - Rebuild: `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
 - Restart server
 
 ### Issue: Progress stops mid-scan
 
 **Symptoms:**
+
 ```
 "message": "Processed: 2/4 books"
 (then no more events, hangs)
@@ -424,6 +470,7 @@ Should be >= v1.26.0
    - Look for error messages in server logs
 
 **Solution:**
+
 - Kill scan: Stop server and restart
 - Skip problematic book: Check logs to identify which book
 - Check disk space: `df -h`
@@ -431,22 +478,27 @@ Should be >= v1.26.0
 ### Issue: Final message missing library/import breakdown
 
 **Symptoms:**
+
 ```
 "message": "Scan completed."
 (no "Library: X, Import: Y" breakdown)
 ```
 
 **Root Cause:**
+
 - Old code version or incomplete implementation
 
 **Solution:**
+
 - Verify code changes: Check `internal/server/server.go` around line 1220
 - Should have:
+
   ```go
   _ = progress.Log("info", fmt.Sprintf(
       "Scan completed. Library: %d books, Import: %d books",
       libraryBookCount, importBookCount), nil)
   ```
+
 - If missing, rebuild and redeploy
 
 ---
@@ -456,6 +508,7 @@ Should be >= v1.26.0
 ### Scenario: Full Rescan with force_update
 
 **Setup:**
+
 ```bash
 # Start fresh
 curl -X POST http://localhost:8888/api/v1/operations/scan \
@@ -476,6 +529,7 @@ curl -X POST http://localhost:8888/api/v1/operations/scan \
 ### Scenario: Selective Folder Scan
 
 **Setup:**
+
 ```bash
 # Scan specific import path
 curl -X POST http://localhost:8888/api/v1/operations/scan \
@@ -483,6 +537,7 @@ curl -X POST http://localhost:8888/api/v1/operations/scan \
 ```
 
 **Expected Results:**
+
 - Only that folder's books processed
 - Progress reflects only that folder's counts
 - No library books included
@@ -512,11 +567,13 @@ curl -X POST http://localhost:8888/api/v1/operations/scan \
 ### Server Debug Logs
 
 Enable detailed logging:
+
 ```bash
 AUDIOBOOK_DEBUG=1 ~/audiobook-organizer-embedded serve --port 8888 --debug
 ```
 
 Watch logs:
+
 ```bash
 tail -f /Users/jdfalk/ao-library/logs/debug.log
 ```
@@ -524,16 +581,19 @@ tail -f /Users/jdfalk/ao-library/logs/debug.log
 ### Operation Log Files
 
 After each scan, a log file is created:
+
 ```bash
 ls -la /Users/jdfalk/ao-library/logs/operation-*.log
 ```
 
 Check specific operation:
+
 ```bash
 cat /Users/jdfalk/ao-library/logs/operation-01ABC123....log
 ```
 
 Expected contents:
+
 ```
 [2025-12-06 14:30:45] INFO Starting scan of folder: /Users/jdfalk/ao-library/library
 [2025-12-06 14:30:45] INFO Folder /Users/jdfalk/ao-library/library: Found 4 audiobook files
@@ -560,6 +620,7 @@ Expected contents:
 ## 📞 Success Criteria Summary
 
 Test passes when:
+
 1. ✅ Scan triggered successfully via POST /operations/scan
 2. ✅ Progress events stream in real-time via SSE
 3. ✅ File counts are accurate (not 0)
@@ -574,20 +635,23 @@ Test passes when:
 
 **This task is FULLY IDEMPOTENT and safe for multiple AIs:**
 
-### What This Means:
+### What This Means
+
 - **Phases 1-2 (Verification):** Read-only operations, can run unlimited times
 - **Phase 3 (SSE Monitoring):** Read-only, non-destructive
 - **Phase 4 (Log Checking):** Read-only, non-destructive
 - **Phase 5 (Database Validation):** Read-only, non-destructive
 
-### Only State-Changing Operation:
+### Only State-Changing Operation
+
 - **Phase 2: POST /operations/scan** - Explicitly triggered scan
   - Multiple scans can run safely (queued by server)
   - Use lock file to prevent exact overlap
   - Each scan creates separate operation ID
   - Safe to retry if previous scan incomplete
 
-### Multi-AI Coordination:
+### Multi-AI Coordination
+
 ```bash
 # Each AI instance should use unique lock file:
 LOCK_FILE="/tmp/task-1-scan-lock-$(whoami)-$(hostname).txt"
@@ -610,7 +674,8 @@ echo "$(date +%s%N)" > "$LOCK_FILE"
 rm -f "$LOCK_FILE"
 ```
 
-### Safety Guarantees:
+### Safety Guarantees
+
 1. ✅ **No data loss** - Only reads data, one explicit scan per test run
 2. ✅ **No race conditions** - Server queues operations safely
 3. ✅ **Idempotent verification** - Running checks multiple times is safe
@@ -618,14 +683,16 @@ rm -f "$LOCK_FILE"
 5. ✅ **Isolated** - Each test run has unique operation ID
 6. ✅ **Atomic** - Either scan completes fully or fails cleanly
 
-### If Multiple AIs Run Simultaneously:
+### If Multiple AIs Run Simultaneously
+
 - ✅ Both can run verification phases in parallel (read-only)
 - ✅ Scans will queue (server handles it)
 - ✅ Each gets separate operation_id
 - ⚠️ SSE events may show both scans
 - ⚠️ Final state will be consistent (last scan wins)
 
-### Recovery (if needed):
+### Recovery (if needed)
+
 ```bash
 # Check what state we're in:
 curl -s http://localhost:8888/api/v1/operations | jq '.items[] | {id, type, status}'
@@ -647,6 +714,7 @@ curl -s http://localhost:8888/api/v1/system/status | jq '{library_books, import_
 ## ⚠️ CRITICAL: Lock File Cleanup
 
 If this task is interrupted, clean up manually:
+
 ```bash
 # Remove any stale locks
 rm -f /tmp/task-1-scan-lock-*.txt
