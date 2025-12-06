@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/shell.instructions.md -->
-<!-- version: 1.2.1 -->
+<!-- version: 1.3.0 -->
 <!-- guid: 5b4a3c2d-1e0f-9a8b-7c6d-5e4f3a2b1c0d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -56,3 +56,37 @@ Shell:
 # version: 1.0.0
 # guid: 123e4567-e89b-12d3-a456-426614174000
 ```
+
+## HEREDOC (Here Document) Usage
+
+**CRITICAL**: When using heredocs, the ending delimiter MUST be EXACTLY the same as the opening delimiter.
+
+### Correct Usage
+
+```bash
+cat > file.txt << 'EOF'
+content here
+EOF
+```
+
+**NEVER** do this:
+
+```bash
+cat > file.txt << 'EOF'
+content here
+END  # WRONG - must be EOF
+```
+
+The ending delimiter must:
+- Match the opening delimiter character-for-character
+- Be on its own line with no leading or trailing whitespace
+- Not be indented (unless using `<<-` which strips leading tabs)
+
+### Common Delimiters
+
+- `EOF` - End Of File (most common)
+- `END` - Less common but acceptable
+- `HEREDOC` - Descriptive alternative
+- Any unique string that won't appear in the content
+
+**Rule**: Whatever delimiter you start with (EOF, END, HEREDOC, etc.), you MUST end with that EXACT same delimiter.
