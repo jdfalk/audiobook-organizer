@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/general-coding.instructions.md -->
-<!-- version: 2.1.0 -->
+<!-- version: 2.2.0 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -48,9 +48,26 @@ The repositories use the `copilot-agent-util` command-line tool for enhanced log
 - Follow the installation instructions in that repository's README
 - The tool is required for proper VS Code task execution and logging
 
+## 🚨 CRITICAL: Use MCP GitHub Tools for Git Operations
+
+**MANDATORY RULE: Always use MCP GitHub tools for git operations instead of manual commands or VS Code tasks.**
+
+When performing git operations (commit, push, pull, file operations), use the MCP GitHub tools:
+
+- `mcp_gitkraken_git_add_or_commit` - Add and commit files
+- `mcp_gitkraken_git_push` - Push commits to remote
+- `mcp_github_create_or_update_file` - Create or update files in GitHub
+- `mcp_github_push_files` - Push multiple files in a single commit
+
+**Benefits:**
+- Direct GitHub integration without shell commands
+- Consistent error handling and authentication
+- Proper logging and audit trail
+- Works across all environments
+
 ## 🚨 CRITICAL: Use VS Code Tasks First
 
-**MANDATORY RULE: Always attempt to use VS Code tasks before manual commands.**
+**MANDATORY RULE: Always attempt to use VS Code tasks before manual commands (except for git operations - use MCP tools for those).**
 
 When performing ANY operation (git, build, test, etc.), follow this priority:
 
