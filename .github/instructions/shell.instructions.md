@@ -67,7 +67,7 @@ Shell:
    ```bash
    # Use echo
    echo "content" > file.txt
-   
+
    # Use printf
    printf "line1\nline2\n" > file.txt
    ```
@@ -76,7 +76,7 @@ Shell:
    ```bash
    # Use tee
    echo "content" | tee file.txt
-   
+
    # Use sed/awk
    sed 's/old/new/' input.txt > output.txt
    ```
