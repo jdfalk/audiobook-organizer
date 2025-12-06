@@ -226,7 +226,7 @@ export async function getBooks(limit = 100, offset = 0): Promise<Book[]> {
   );
   if (!response.ok) throw new Error('Failed to fetch books');
   const data = await response.json();
-  return data.audiobooks || [];
+  return data.items || [];
 }
 
 export async function getBook(id: string): Promise<Book> {
@@ -241,7 +241,7 @@ export async function searchBooks(query: string, limit = 50): Promise<Book[]> {
   );
   if (!response.ok) throw new Error('Failed to search books');
   const data = await response.json();
-  return data.audiobooks || [];
+  return data.items || [];
 }
 
 export async function countBooks(): Promise<number> {
