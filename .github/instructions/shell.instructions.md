@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/shell.instructions.md -->
-<!-- version: 1.3.1 -->
+<!-- version: 1.4.0 -->
 <!-- guid: 5b4a3c2d-1e0f-9a8b-7c6d-5e4f3a2b1c0d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -57,42 +57,53 @@ Shell:
 # guid: 123e4567-e89b-12d3-a456-426614174000
 ```
 
-## HEREDOC (Here Document) Usage - AVOID IF POSSIBLE
+## HEREDOC (Here Document) - LAST RESORT ONLY
 
-**CRITICAL**: If you use heredocs, the ending delimiter MUST be EXACTLY the same as the opening delimiter.
+**ABSOLUTELY CRITICAL**: HEREDOC should ONLY be used as a final last resort after exhausting every other option.
 
-**Best Practice: DON'T USE HEREDOC** - Use simpler alternatives instead:
+**Priority Order (MUST follow this order):**
 
-```bash
-# ❌ AVOID (HEREDOC - easy to mess up)
-cat > file.txt << 'EOF'
-content here
-EOF
+1. **FIRST**: Use built-in shell constructs
+   ```bash
+   # Use echo
+   echo "content" > file.txt
+   
+   # Use printf
+   printf "line1\nline2\n" > file.txt
+   ```
 
-# ✅ BETTER - Use echo with redirection
-echo "content here" > file.txt
+2. **SECOND**: Use standard Unix tools
+   ```bash
+   # Use tee
+   echo "content" | tee file.txt
+   
+   # Use sed/awk
+   sed 's/old/new/' input.txt > output.txt
+   ```
 
-# ✅ BETTER - Use printf
-printf "line1\nline2\n" > file.txt
+3. **THIRD**: Use scripting languages (Python, etc.)
+   ```bash
+   # Python for complex operations
+   python3 -c "open('file.txt', 'w').write('content')"
+   ```
 
-# ✅ BETTER - Use tee
-echo "content" | tee file.txt
-```
+4. **FOURTH**: Use MCP tools or specialized utilities
+   ```bash
+   # Use MCP GitHub tools for file creation
+   mcp_github_create_or_update_file
+   ```
 
-### If You MUST Use HEREDOC
+5. **ONLY IF ABSOLUTELY NOTHING ELSE WORKS**: HEREDOC
+   ```bash
+   cat > file.txt << 'EOF'
+   multi-line content
+   that cannot be done any other way
+   EOF
+   ```
 
-The ending delimiter MUST match the opening delimiter exactly, on its own line, no indentation (unless using `<<-`):
+**If you find yourself using HEREDOC, you have failed to exhaust all other options first.**
 
-```bash
-# ✅ CORRECT
-cat > file.txt << 'EOF'
-content here
-EOF
-
-# ❌ WRONG - Delimiter mismatch
-cat > file.txt << 'EOF'
-content here
-END  # WRONG - must be EOF
-```
-
-**Rule**: Avoid HEREDOC when possible. Use echo, printf, or tee instead. Only use HEREDOC for truly multi-line content that requires it.
+**Delimiter Rules (if you MUST use HEREDOC as absolute last resort):**
+- Ending delimiter MUST match opening delimiter EXACTLY
+- Must be on its own line with no indentation (unless using `<<-`)
+- Example: `<< 'EOF'` requires ending with `EOF` on its own line, nothing else
