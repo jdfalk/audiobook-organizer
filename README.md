@@ -151,8 +151,6 @@ If needed, the app can fall back to external tools:
 
 These are only used if the native TagLib write fails.
 
-````
-
 ## Usage
 
 ```bash
