@@ -7,12 +7,14 @@
 ## 🚨 CURRENT SPRINT - December 6, 2025
 
 ### ✅ Completed Dec 6, 2025
+
 - [x] **Web UI book display FIXED** - Issue was hasImportPaths check blocking all books + API returning `items` not `audiobooks`
 - [x] **EventSource reconnection FIXED** - Added exponential backoff (3s→6s→12s→24s, cap at 30s) and onopen handler to reset attempts
 - [x] **Health endpoint FIXED** - Both `/api/health` and `/api/v1/health` now available (was already fixed)
 - [x] **API response field fix** - Fixed frontend API client to use `items` instead of `audiobooks` field
 
 ### ✅ Completed Nov 21-22
+
 - [x] **Metadata extraction fixes** - Fixed case-sensitive tags, release-group filtering, volume detection, series extraction, narrator/publisher fields
 - [x] **Diagnostics CLI** - Created `diagnostics` command with `cleanup-invalid` and `query` subcommands
 - [x] **Database cleanup** - Purged 8 corrupted records with placeholder values
@@ -20,13 +22,16 @@
 - [x] **Scan progress implementation** - Added pre-scan file count and separate library/import statistics (needs testing)
 
 ### 🔥 High Priority (Next Session)
+
 - [ ] **Test scan progress reporting** - Trigger scan, verify progress shows actual file counts
 
 ### 📊 Medium Priority (Data Quality)
+
 - [ ] **Separate dashboard counts** - Display library vs import book counts separately
 - [ ] **Fix import path negative sizes** - Debug `total_size` calculation returning negative values
 
 ### 🧪 Low Priority (Optional)
+
 - [ ] **Verify duplicate detection** - Test hash-based duplicate detection implemented in v1.9.0
 - [ ] **Test AI parsing** - Verify OpenAI integration if needed (may not be necessary after metadata fixes)
 

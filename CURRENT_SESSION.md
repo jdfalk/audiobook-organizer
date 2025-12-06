@@ -11,6 +11,7 @@
 **The Problem**: Metadata extraction was completely broken, returning `Unknown`/`{placeholder}` values despite rich M4B tags.
 
 **Root Causes Identified**:
+
 1. Case-sensitive raw tag lookups missed data ("publisher" vs "Publisher")
 2. Release group tags like `[PZG]` polluted narrator fields
 3. Volume numbers in "Vol. 01" format not extracted
@@ -19,6 +20,7 @@
 6. Publisher field not extracted from raw tags
 
 **Solutions Implemented**:
+
 1. **Case-insensitive raw tag lookup** in `metadata.ExtractMetadata()`
 2. **Release-group filtering** to skip bracketed tags like `[PZG]`
 3. **Roman numeral support** in volume detection (Vol. IV → 4)
@@ -28,12 +30,14 @@
 7. **Enhanced volume detection**: `extractSeriesFromVolumeString()` parses "Series Name, Vol. 01" patterns
 
 **Results Verified** (via API after cleanup + rescan):
+
 - 4 books with correct narrator (Greg Chun, Fred Berman, Michelle H. Lee, Cassandra Morris/Graham Halstead)
 - Series extracted from album titles ("My Quiet Blacksmith Life in Another World")
 - Series positions detected (1 from "Vol. 01")
 - Publishers populated (Podium Audio, Seven Seas Siren, Tantor Audio)
 
 ### Files Modified
+
 - `cmd/diagnostics.go` v1.0.0 - NEW: CLI diagnostics command (cleanup-invalid, query)
 - `cmd/root.go` v1.7.0 - Registered diagnosticsCmd
 - `internal/metadata/metadata.go` v1.7.0 - Major extraction enhancements
@@ -44,6 +48,7 @@
 - `internal/server/server.go` v1.26.0 - Scan progress improvements (IN PROGRESS)
 
 ### Database State
+
 - **Cleaned**: 8 invalid records with `{series}`/`{narrator}` placeholders purged
 - **Current**: 4 books in library + 4 in import paths (8 total)
 - **Quality**: All 4 library books have correct metadata fields
@@ -234,10 +239,10 @@
 
 ### Medium Priority
 
-8. ❌ **Dashboard count separation** - Need separate `library_books` vs `import_books` counts (currently shows total)
-9. ❌ **Import path negative sizes** - `total_size` returning negative numbers
-10. ❓ **Duplicate books** - Hash-based detection added (v1.9.0) but untested
-11. ❓ **AI parsing** - OpenAI integration exists but unknown if working (may not be needed after metadata fixes)
+1. ❌ **Dashboard count separation** - Need separate `library_books` vs `import_books` counts (currently shows total)
+2. ❌ **Import path negative sizes** - `total_size` returning negative numbers
+3. ❓ **Duplicate books** - Hash-based detection added (v1.9.0) but untested
+4. ❓ **AI parsing** - OpenAI integration exists but unknown if working (may not be needed after metadata fixes)
 
 ## 📊 DASHBOARD / DISPLAY REQUIREMENTS
 
@@ -264,7 +269,7 @@
 
 ### High Priority (User-Facing Issues)
 
-2. ❌ **Investigate web UI not showing books**:
+1. ❌ **Investigate web UI not showing books**:
    - Books exist in database (verified via `/api/v1/audiobooks`)
    - Dashboard shows "Books: 4" correctly
    - Library page may have frontend state/refresh issue
@@ -274,7 +279,7 @@
      3. Check if frontend is filtering/hiding books based on some criteria
      4. Test with browser hard refresh (Cmd+Shift+R)
 
-3. ❌ **Fix EventSource stability**:
+2. ❌ **Fix EventSource stability**:
    - **Server-side**: Why does `/api/events` close after ~17 seconds?
      - Check for read/write timeouts in Gin server config
      - Verify heartbeat is being sent AND read by clients
@@ -285,7 +290,7 @@
      - Reset to 3s on successful connection
      - Files: `web/src/pages/Library.tsx`, `web/src/pages/Dashboard.tsx`
 
-4. ❌ **Fix health endpoint mismatch**:
+3. ❌ **Fix health endpoint mismatch**:
    - **Option A**: Add `/api/v1/health` route in `internal/server/server.go` (preferred for API versioning)
    - **Option B**: Change frontend to poll `/api/health`
    - Update reconnect overlay to auto-refresh page on health recovery
@@ -293,7 +298,7 @@
 
 ### Medium Priority (Data Accuracy)
 
-5. ❌ **Separate dashboard counts**:
+1. ❌ **Separate dashboard counts**:
    - Modify `/api/v1/system/status` to return:
      - `library_book_count`: Books in `root_dir`
      - `import_book_count`: Books in import paths (unique by hash)
@@ -301,14 +306,14 @@
    - Update Dashboard and Library page to display separate counts
    - Files: `internal/server/server.go`, `web/src/pages/Dashboard.tsx`, `web/src/pages/Library.tsx`
 
-6. ❌ **Fix import path negative sizes**:
+2. ❌ **Fix import path negative sizes**:
    - Debug `total_size` calculation in library folder stats
    - Likely int overflow or incorrect aggregation
    - File: `internal/server/server.go` (library folder stats endpoint)
 
 ### Low Priority (Optional Testing)
 
-7. ❓ **Verify duplicate detection**:
+1. ❓ **Verify duplicate detection**:
    - Hash-based detection implemented in `internal/scanner/scanner.go` v1.9.0
    - Test by:
      1. Copy a file to both library and import paths
@@ -316,7 +321,7 @@
      3. Verify only one database record created
    - May already be working correctly
 
-8. ❓ **Test AI parsing**:
+2. ❓ **Test AI parsing**:
    - OpenAI integration exists but may not be needed after metadata fixes
    - Only test if books still have missing metadata after scan
    - Verify config has valid OpenAI key if needed
