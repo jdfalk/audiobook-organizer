@@ -37,7 +37,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Cached library size to avoid expensive recalculation on frequent status checks
+// Cached library and import path sizes to avoid expensive recalculation on frequent status checks
 var cachedLibrarySize int64
 var cachedImportSize int64
 var cachedSizeComputedAt time.Time
@@ -1841,9 +1841,13 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":             "running",
+		"library_book_count": libraryBookCount,
+		"import_book_count":  importBookCount,
+		"total_book_count":   libraryBookCount + importBookCount,
 		"library_size_bytes": librarySize,
 		"import_size_bytes":  importSize,
 		"total_size_bytes":   totalSize,
+		"root_directory":     rootDir,
 		"library": gin.H{
 			"book_count":   libraryBookCount,
 			"folder_count": 1, // Always 1 for RootDir

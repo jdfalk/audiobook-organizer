@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.17.0
+// version: 1.18.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -486,6 +486,23 @@ export const Library = () => {
       .length;
   };
 
+  const libraryBookCount =
+    systemStatus?.library_book_count ??
+    systemStatus?.library.book_count ??
+    0;
+  const importBookCount =
+    systemStatus?.import_book_count ??
+    systemStatus?.import_paths?.book_count ??
+    0;
+  const librarySizeBytes =
+    systemStatus?.library_size_bytes ??
+    systemStatus?.library.total_size ??
+    0;
+  const importSizeBytes =
+    systemStatus?.import_size_bytes ??
+    systemStatus?.import_paths?.total_size ??
+    0;
+
   // Import path management handlers
   const handleAddImportPath = async () => {
     if (!newImportPath.trim()) return;
@@ -719,13 +736,15 @@ export const Library = () => {
                   'Not configured - Please set library path in Settings'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Books: {systemStatus.library.book_count} | Import Paths:{' '}
+                Library Books: {libraryBookCount} | Import Books:{' '}
+                {importBookCount} | Import Paths:{' '}
                 {systemStatus.import_paths?.folder_count || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Size:{' '}
-                {(systemStatus.library.total_size / (1024 * 1024)).toFixed(2)}{' '}
-                MB
+                Library Size: {(librarySizeBytes / (1024 * 1024)).toFixed(2)} MB
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Import Size: {(importSizeBytes / (1024 * 1024)).toFixed(2)} MB
               </Typography>
               {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
                 <Box mt={1}>

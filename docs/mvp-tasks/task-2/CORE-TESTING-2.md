@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-2-CORE-TESTING.md -->
-<!-- version: 2.0.0 -->
+<!-- file: docs/mvp-tasks/task-2/CORE-TESTING.md -->
+<!-- version: 2.0.1 -->
 <!-- guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b -->
 
 # Task 2: Core Testing - Separate Dashboard Counts
