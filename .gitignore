@@ -65,3 +65,6 @@ Thumbs.db
 .Trashes
 
 test_results/
+.pytest_cache/
+# .coverage
+# htmlcov/
