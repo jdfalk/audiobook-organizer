@@ -27,5 +27,5 @@ concurrency:
 jobs:
   security:
     name: Security Scan
-    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@v1.0.0-rc.1
+    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@v1.0.0-rc.2
     secrets: inherit
