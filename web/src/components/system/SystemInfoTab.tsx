@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.3.1
+// version: 1.4.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -64,6 +64,11 @@ export function SystemInfoTab() {
     setError(null);
     try {
       const status = await api.getSystemStatus();
+      const librarySize =
+        status.library_size_bytes ?? status.library.total_size;
+      const libraryBooks =
+        status.library_book_count ?? status.library.book_count;
+      const folderCount = status.import_paths?.folder_count ?? 0;
 
       // Map API SystemStatus to SystemInfo format
       setInfo({
@@ -87,9 +92,9 @@ export function SystemInfoTab() {
           numGoroutines: status.runtime.num_goroutine,
         },
         database: {
-          size: status.library.total_size,
-          books: status.library.book_count,
-          folderCount: status.library.folder_count,
+          size: librarySize,
+          books: libraryBooks,
+          folderCount,
         },
       });
     } catch (err) {
