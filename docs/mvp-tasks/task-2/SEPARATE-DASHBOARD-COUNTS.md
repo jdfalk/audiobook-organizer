@@ -1,5 +1,5 @@
 <!-- file: docs/TASK-2-SEPARATE-DASHBOARD-COUNTS.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e -->
 
 # Task 2: Separate Dashboard Counts (Library vs Import)
@@ -7,16 +7,31 @@
 ## 🎯 Overall Goal
 
 Implement and verify separate tracking of book counts for:
+
 - **Library Books**: Books in the configured root directory (`RootDir`)
 - **Import Books**: Books detected in import paths but not yet organized
 - **Display**: Show both counts separately on Dashboard and Library pages
 
 **Success Criteria:**
+
 - ✅ Dashboard shows two separate counts: "Library: X" and "Import: Y"
 - ✅ Library page respects the separation
 - ✅ `/api/v1/system/status` returns distinct `library_book_count` and `import_book_count`
 - ✅ Counts are accurate and persistent after scans
 - ✅ No data loss or duplication
+
+---
+
+## 📦 Split Documentation (read-first)
+
+This legacy file is kept for history. Active, organized documentation is split:
+
+- `TASK-2-README.md` — overview and navigation
+- `TASK-2-CORE-TESTING.md` — core phases, safety/locks
+- `TASK-2-ADVANCED-SCENARIOS.md` — edge cases, performance, code deep dive
+- `TASK-2-TROUBLESHOOTING.md` — issues, root causes, fixes
+
+Use the split files for current work.
 
 ---
 
@@ -27,6 +42,7 @@ Implement and verify separate tracking of book counts for:
 **Goal:** Determine current implementation state WITHOUT modifying anything.
 
 **Idempotency Check:**
+
 ```bash
 # SAFE - READ ONLY - Can run multiple times
 STATE_FILE="/tmp/dashboard-counts-state-$(date +%s).json"
@@ -42,12 +58,14 @@ cat "$STATE_FILE" | jq '.'
 ```
 
 **Verify before proceeding:**
+
 ```bash
 # Check what fields exist in current response
 cat "$STATE_FILE" | jq 'keys'
 ```
 
 Expected fields:
+
 - ✅ `library_book_count` - Already implemented in v1.26.0
 - ✅ `import_book_count` - Already implemented in v1.26.0
 - ✅ `total_book_count` - Should equal sum of above
@@ -59,6 +77,7 @@ If these fields exist, go to Phase 2. If not, implementation needed first.
 **Goal:** Confirm server code properly separates library vs import counts.
 
 **Idempotent Verification:**
+
 ```bash
 # Read-only check - safe to run anytime
 echo "=== CHECKING BACKEND CODE ==="
@@ -74,6 +93,7 @@ fi
 ```
 
 Expected code pattern:
+
 ```go
 libraryBookCount := 0
 importBookCount := 0
@@ -92,6 +112,7 @@ for _, book := range allBooks {
 **Goal:** Confirm Dashboard and Library pages show separate counts.
 
 **Idempotent UI Verification:**
+
 ```bash
 # Read-only check - no state changes
 echo "=== CHECKING FRONTEND CODE ==="
@@ -116,6 +137,7 @@ fi
 **Goal:** Verify counts are calculated correctly without changing anything.
 
 **Idempotent Test:**
+
 ```bash
 echo "=== TESTING COUNT ACCURACY ==="
 
@@ -144,6 +166,7 @@ echo "  Total   - API reports: $TOTAL_FROM_API, Expected: $((LIBRARY_ACTUAL + IM
 **Goal:** Verify counts remain accurate after a scan operation (idempotent test).
 
 **Idempotent Scan Test:**
+
 ```bash
 echo "=== PRE-SCAN STATE ==="
 
@@ -208,6 +231,7 @@ echo "Total is sum: $([ "$((AFTER_LIBRARY + AFTER_IMPORT))" -eq "$(echo "$AFTER_
 **Already Implemented** (in v1.26.0+):
 
 Backend (`internal/server/server.go:getSystemStatus`):
+
 ```go
 // Separate counts: books in RootDir (library) vs import paths
 libraryBookCount := 0
@@ -232,12 +256,14 @@ c.JSON(http.StatusOK, gin.H{
 ```
 
 Frontend (`web/src/pages/Dashboard.tsx`, `web/src/pages/Library.tsx`):
+
 - Should display both counts
 - May need UI updates to show them prominently
 
 ### API Response Format
 
 Expected `/api/v1/system/status` response:
+
 ```json
 {
   "library_book_count": 4,
@@ -263,6 +289,7 @@ curl -s http://localhost:8888/api/v1/system/status | jq '.root_directory'
 ```
 
 If `RootDir` is empty or misconfigured:
+
 - All books classified as "import"
 - Library count always 0
 - This is expected behavior - need to fix config, not code
@@ -272,6 +299,7 @@ If `RootDir` is empty or misconfigured:
 ## ✅ Verification Checklist
 
 ### Backend Verification
+
 - [ ] `/api/v1/system/status` returns `library_book_count` field
 - [ ] `/api/v1/system/status` returns `import_book_count` field
 - [ ] Sum of library + import equals `total_book_count`
@@ -281,6 +309,7 @@ If `RootDir` is empty or misconfigured:
 - [ ] Counts update correctly after scan
 
 ### Frontend Verification
+
 - [ ] Dashboard displays library count
 - [ ] Dashboard displays import count
 - [ ] Library page shows both counts
@@ -289,6 +318,7 @@ If `RootDir` is empty or misconfigured:
 - [ ] Mobile view displays counts properly
 
 ### Integration Verification
+
 - [ ] Counts accurate with 0 library books
 - [ ] Counts accurate with 0 import books
 - [ ] Counts accurate with mixed books
@@ -328,39 +358,49 @@ go build -o ~/audiobook-organizer-embedded
 ## 📊 Test Scenarios
 
 ### Scenario A: Pure Library Books Only
+
 **Setup:**
+
 - Root directory: `/Users/jdfalk/ao-library/library/`
 - Import paths: (none or empty)
 - Database: 4 books
 
 **Expected Result:**
+
 - `library_book_count`: 4
 - `import_book_count`: 0
 - `total_book_count`: 4
 
 **Verification:**
+
 ```bash
 curl -s http://localhost:8888/api/v1/system/status | jq '{library_book_count, import_book_count, total_book_count}'
 ```
 
 ### Scenario B: Import Books Only
+
 **Setup:**
+
 - Root directory: (empty or not set)
 - Import paths: `/Users/jdfalk/import-path/`
 - Database: 4 books (all in import path)
 
 **Expected Result:**
+
 - `library_book_count`: 0
 - `import_book_count`: 4
 - `total_book_count`: 4
 
 ### Scenario C: Mixed Library + Import
+
 **Setup:**
+
 - Root directory: `/Users/jdfalk/ao-library/library/`
 - Import paths: `/Users/jdfalk/import-path/`
 - Database: 6 books (4 in library, 2 in import)
 
 **Expected Result:**
+
 - `library_book_count`: 4
 - `import_book_count`: 2
 - `total_book_count`: 6
@@ -370,15 +410,18 @@ curl -s http://localhost:8888/api/v1/system/status | jq '{library_book_count, im
 ## 📝 Code Locations
 
 **Backend Implementation:**
+
 - File: `internal/server/server.go`
 - Function: `getSystemStatus()`
 - Lines: ~1648-1720 (approximate)
 
 **Frontend Display:**
+
 - File: `web/src/pages/Dashboard.tsx`
 - File: `web/src/pages/Library.tsx`
 
 **Database Schema:**
+
 - File: `internal/database/schema.go`
 - Note: No schema changes needed - counts are computed, not stored
 
@@ -387,16 +430,19 @@ curl -s http://localhost:8888/api/v1/system/status | jq '{library_book_count, im
 ## 🔗 Dependencies & Related Tasks
 
 **Depends on:**
+
 - ✅ Task 1: Scan Progress Reporting (must be working for testing)
 - ✅ Database with books initialized
 - ✅ RootDir configured correctly
 
 **Affects:**
+
 - UI displaying book statistics
 - Dashboard counts
 - Library organization workflow
 
 **Does NOT affect:**
+
 - Actual book data or files
 - Scan operations (they work independently)
 - API functionality
@@ -406,6 +452,7 @@ curl -s http://localhost:8888/api/v1/system/status | jq '{library_book_count, im
 ## 📞 Success Criteria Summary
 
 Test passes when:
+
 1. ✅ `/api/v1/system/status` returns distinct `library_book_count` and `import_book_count`
 2. ✅ Library count equals actual books in `RootDir`
 3. ✅ Import count equals books outside `RootDir`
