@@ -23,15 +23,15 @@ This is **Part 3** of the comprehensive Task 1 documentation:
 
 ## Troubleshooting Index
 
-| Problem | Root Causes | Reference |
-|---------|-------------|-----------|
-| Server not responding | Not started, crashed, port in use, binary corrupt | Issue #1 |
-| No progress events | Scan already done, wrong op ID, SSE broken | Issue #2 |
-| Progress shows 0/X | Counter bug, old binary, concurrent bug | Issue #3 |
-| Progress stops mid-scan | File hang, deadlock, DB locked | Issue #4 |
-| Wrong final message | Books not scanned, RootDir wrong, wrong location | Issue #5 |
-| No log files created | Directory missing, no permissions | Issue #6 |
-| Locks stuck | Previous failure, crashed agent, orphaned state | Issue #7 |
+| Problem                 | Root Causes                                       | Reference |
+| ----------------------- | ------------------------------------------------- | --------- |
+| Server not responding   | Not started, crashed, port in use, binary corrupt | Issue #1  |
+| No progress events      | Scan already done, wrong op ID, SSE broken        | Issue #2  |
+| Progress shows 0/X      | Counter bug, old binary, concurrent bug           | Issue #3  |
+| Progress stops mid-scan | File hang, deadlock, DB locked                    | Issue #4  |
+| Wrong final message     | Books not scanned, RootDir wrong, wrong location  | Issue #5  |
+| No log files created    | Directory missing, no permissions                 | Issue #6  |
+| Locks stuck             | Previous failure, crashed agent, orphaned state   | Issue #7  |
 
 ---
 
@@ -741,18 +741,18 @@ timeout 120 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 
 ## Quick Reference: Common Fixes
 
-| Issue | Quick Fix |
-|-------|-----------|
+| Issue                | Quick Fix                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
 | "Connection refused" | `killall audiobook-organizer-embedded && ~/audiobook-organizer-embedded serve --port 8888 --debug &` |
-| No SSE events | Check operation status with `curl http://localhost:8888/api/v1/operations/<ID>` |
-| Progress 0/X | Rebuild with `go build -o ~/audiobook-organizer-embedded` |
-| Stuck scan | Restart with `killall -9 && sleep 3 && rm -f /tmp/* && ~/audiobook-organizer-embedded...` |
-| Locks stuck | `rm -f /tmp/task-1-*.txt` |
-| DB corrupted | `rm -rf /Users/jdfalk/ao-library/*.db* && restart server` |
+| No SSE events        | Check operation status with `curl http://localhost:8888/api/v1/operations/<ID>`                      |
+| Progress 0/X         | Rebuild with `go build -o ~/audiobook-organizer-embedded`                                            |
+| Stuck scan           | Restart with `killall -9 && sleep 3 && rm -f /tmp/* && ~/audiobook-organizer-embedded...`            |
+| Locks stuck          | `rm -f /tmp/task-1-*.txt`                                                                            |
+| DB corrupted         | `rm -rf /Users/jdfalk/ao-library/*.db* && restart server`                                            |
 
 ---
 
-**Document Version:** 2.0.0  
-**Last Updated:** December 6, 2025  
-**Total Lines:** 600+  
+**Document Version:** 2.0.0
+**Last Updated:** December 6, 2025
+**Total Lines:** 600+
 **Total Words:** ~8,500

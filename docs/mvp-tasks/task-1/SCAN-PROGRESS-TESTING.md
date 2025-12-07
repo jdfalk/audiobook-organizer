@@ -1,5 +1,5 @@
 <!-- file: docs/TASK-1-SCAN-PROGRESS-TESTING.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.0.1 -->
 <!-- guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
 
 # Task 1: Test Scan Progress Reporting
@@ -20,6 +20,19 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 - Final message clearly states "Library: X books, Import: Y books"
 - No errors in server logs during scan
 - Frontend receives and displays progress updates
+
+---
+
+## 📦 Split Documentation (read-first)
+
+This single file is kept for history, but the task is now split into concise parts to avoid length limits:
+
+- `TASK-1-README.md` — overview and navigation
+- `TASK-1-CORE-TESTING.md` — phases 1-5 and safety/locks
+- `TASK-1-ADVANCED-SCENARIOS.md` — large libraries, concurrency, recovery drills, code deep dive
+- `TASK-1-TROUBLESHOOTING.md` — issues, root causes, and fixes
+
+Use the split files for active work; keep this document as a legacy reference.
 
 ---
 
