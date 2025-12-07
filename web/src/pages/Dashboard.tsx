@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.4.1
+// version: 1.5.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -30,11 +30,14 @@ import {
 import * as api from '../services/api';
 
 interface SystemStats {
-  total_books: number;
+  library_books: number;
   import_books: number;
+  total_books: number;
   total_authors: number;
   total_series: number;
   import_paths: number;
+  library_size_gb: number;
+  import_size_gb: number;
   total_size_gb: number;
   disk_usage_percent: number;
 }
@@ -50,11 +53,14 @@ interface RecentOperation {
 export function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<SystemStats>({
-    total_books: 0,
+    library_books: 0,
     import_books: 0,
+    total_books: 0,
     total_authors: 0,
     total_series: 0,
     import_paths: 0,
+    library_size_gb: 0,
+    import_size_gb: 0,
     total_size_gb: 0,
     disk_usage_percent: 0,
   });
@@ -82,13 +88,34 @@ export function Dashboard() {
       );
       console.log('[Dashboard] Book count:', bookCount);
 
+      const libraryBooks =
+        systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
+      const importBooks =
+        systemStatus.import_book_count ??
+        systemStatus.import_paths?.book_count ??
+        0;
+      const totalBooks =
+        systemStatus.total_book_count ?? libraryBooks + importBooks;
+      const librarySizeBytes =
+        systemStatus.library_size_bytes ?? systemStatus.library.total_size ?? 0;
+      const importSizeBytes =
+        systemStatus.import_size_bytes ??
+        systemStatus.import_paths?.total_size ??
+        0;
+      const totalSizeBytes =
+        systemStatus.total_size_bytes ??
+        librarySizeBytes + importSizeBytes;
+
       setStats({
-        total_books: systemStatus.library.book_count,
-        import_books: systemStatus.import_paths?.book_count || 0,
+        library_books: libraryBooks,
+        import_books: importBooks,
+        total_books: totalBooks,
         total_authors: authors.length,
         total_series: seriesList.length,
         import_paths: systemStatus.import_paths?.folder_count || 0,
-        total_size_gb: systemStatus.library.total_size / (1024 * 1024 * 1024),
+        library_size_gb: librarySizeBytes / (1024 * 1024 * 1024),
+        import_size_gb: importSizeBytes / (1024 * 1024 * 1024),
+        total_size_gb: totalSizeBytes / (1024 * 1024 * 1024),
         disk_usage_percent: 0, // Calculate if needed
       });
 
@@ -183,7 +210,7 @@ export function Dashboard() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Library Books"
-            value={stats.total_books}
+            value={stats.library_books}
             icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />

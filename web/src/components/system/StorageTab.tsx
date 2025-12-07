@@ -1,5 +1,5 @@
 // file: web/src/components/system/StorageTab.tsx
-// version: 1.1.2
+// version: 1.2.0
 // guid: 9e0f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
 
 import { useState, useEffect } from 'react';
@@ -53,11 +53,15 @@ export function StorageTab() {
         api.getSystemStatus(),
         api.getImportPaths(),
       ]);
+      const librarySize =
+        statusData.library_size_bytes ?? statusData.library.total_size;
+      const libraryBookCount =
+        statusData.library_book_count ?? statusData.library.book_count;
 
       setStorage({
-        totalLibrarySize: statusData.library.total_size,
-        bookCount: statusData.library.book_count,
-        folderCount: statusData.import_paths.folder_count,
+        totalLibrarySize: librarySize,
+        bookCount: libraryBookCount,
+        folderCount: statusData.import_paths?.folder_count || 0,
         folders: foldersData,
       });
     } catch (err) {

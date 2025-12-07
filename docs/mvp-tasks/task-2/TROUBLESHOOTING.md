@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-2-TROUBLESHOOTING.md -->
-<!-- version: 2.0.0 -->
+<!-- file: docs/mvp-tasks/task-2/TROUBLESHOOTING.md -->
+<!-- version: 2.0.1 -->
 <!-- guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d -->
 
 # Task 2: Troubleshooting - Separate Dashboard Counts
