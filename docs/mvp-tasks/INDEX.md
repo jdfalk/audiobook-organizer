@@ -71,12 +71,14 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Goal:** Fix negative/incorrect import_size_bytes values.
 
 **Key Files:**
+
 - [README.md](task-3/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-3/CORE-TESTING.md) — Core size verification tests
 - [ADVANCED-SCENARIOS.md](task-3/ADVANCED-SCENARIOS.md) — Symlinks, sparse files, performance
 - [TROUBLESHOOTING.md](task-3/TROUBLESHOOTING.md) — Size mismatch debugging
 
 **Success Criteria:**
+
 - ✅ `import_size_bytes` never negative
 - ✅ API reports match `du -sh` measurements
 - ✅ Int64 overflow handled correctly
@@ -91,12 +93,14 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Goal:** Validate SHA256-based duplicate detection.
 
 **Key Files:**
+
 - [README.md](task-4/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-4/CORE-TESTING.md) — Hash verification and query testing
 - [ADVANCED-SCENARIOS.md](task-4/ADVANCED-SCENARIOS.md) — False positives/negatives, performance
 - [TROUBLESHOOTING.md](task-4/TROUBLESHOOTING.md) — Hash mismatch issues
 
 **Success Criteria:**
+
 - ✅ SHA256 hashes computed correctly
 - ✅ Duplicate queries return exact matches
 - ✅ False positive/negative detection validated
@@ -111,12 +115,14 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Goal:** Implement dual-hash tracking and state machine.
 
 **Key Files:**
+
 - [README.md](task-5/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-5/CORE-TESTING.md) — Hash schema and state transitions
 - [ADVANCED-SCENARIOS.md](task-5/ADVANCED-SCENARIOS.md) — Reimport prevention, purge jobs
 - [TROUBLESHOOTING.md](task-5/TROUBLESHOOTING.md) — State machine issues
 
 **Success Criteria:**
+
 - ✅ `original_hash` and `library_hash` tracked separately
 - ✅ State machine: wanted → imported → organized → soft_deleted
 - ✅ `do_not_import` table prevents reimport
@@ -131,12 +137,14 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Goal:** Create dedicated book detail view with enhanced delete dialog.
 
 **Key Files:**
+
 - [README.md](task-6/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-6/CORE-TESTING.md) — Page rendering and delete flow
 - [ADVANCED-SCENARIOS.md](task-6/ADVANCED-SCENARIOS.md) — Multi-format books, error states
 - [TROUBLESHOOTING.md](task-6/TROUBLESHOOTING.md) — Navigation and UI issues
 
 **Success Criteria:**
+
 - ✅ Book detail page shows Info, Files, Versions tabs
 - ✅ Delete dialog includes reimport prevention checkbox
 - ✅ Blocklist confirmation prevents accidents
@@ -151,12 +159,14 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Goal:** Containerized Selenium/pytest test suite for all MVP workflows.
 
 **Key Files:**
+
 - [README.md](task-7/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-7/CORE-TESTING.md) — Test execution phases
 - [ADVANCED-SCENARIOS.md](task-7/ADVANCED-SCENARIOS.md) — Performance, cross-browser, flaky tests
 - [TROUBLESHOOTING.md](task-7/TROUBLESHOOTING.md) — Docker, networking, selectors
 
 **Success Criteria:**
+
 - ✅ All tests pass with green status
 - ✅ Coverage includes all MVP tasks
 - ✅ Runs in Docker container
