@@ -1,0 +1,59 @@
+# file: .github/dependency-review-config.yml
+# version: 1.0.0
+# guid: dep-review-cfg-2025-12-07
+
+# Dependency Review Configuration
+# This file configures the dependency-review-action for automated security scanning
+
+# Fail the build if vulnerabilities of moderate or higher severity are found
+fail-on-severity: moderate
+
+# Allow these licenses
+allow-licenses:
+  - MIT
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - ISC
+  - 0BSD
+  - CC0-1.0
+  - Unlicense
+  - MPL-2.0
+  - LGPL-2.1
+  - LGPL-3.0
+
+# Deny these licenses
+deny-licenses:
+  - GPL-3.0
+  - AGPL-3.0
+  - SSPL-1.0
+
+# Allow specific packages even if they have denied licenses
+# allow-dependencies-licenses:
+#   - pkg:npm/some-package@1.0.0
+
+# Deny specific packages
+# deny-packages:
+#   - pkg:npm/vulnerable-package
+
+# Allow certain vulnerabilities (use sparingly and only temporarily)
+# allow-ghsas:
+#   - GHSA-xxxx-xxxx-xxxx
+
+# Comment on pull requests with summary
+comment-summary-in-pr: always
+
+# Fail on scopes (dependencies vs devDependencies)
+fail-on-scopes:
+  - runtime
+  - development
+
+# Vulnerability database
+vulnerability-check: true
+
+# License compliance
+license-check: true
+
+# Retry configuration
+retry-on-snapshot-warnings: true
+retry-on-snapshot-warnings-timeout: 120
