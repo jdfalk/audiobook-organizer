@@ -37,7 +37,7 @@ permissions:
 jobs:
     release:
         name: Create Production Release
-        uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@v1.0.0-rc.4
+        uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@v1.0.0-rc.5
         with:
             release-type: ${{ github.event.inputs.release-type }}
             prerelease: false
