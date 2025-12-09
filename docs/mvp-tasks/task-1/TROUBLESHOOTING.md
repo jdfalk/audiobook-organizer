@@ -8,9 +8,9 @@
 
 This is **Part 3** of the comprehensive Task 1 documentation:
 
-- **Part 1:** TASK-1-CORE-TESTING.md (basic phases 1-5)
-- **Part 2:** TASK-1-ADVANCED-SCENARIOS.md (advanced testing)
-- **Part 3:** TASK-1-TROUBLESHOOTING.md (this file - troubleshooting)
+- **Part 1:** CORE-TESTING.md (basic phases 1-5)
+- **Part 2:** ADVANCED-SCENARIOS.md (advanced testing)
+- **Part 3:** TROUBLESHOOTING.md (this file - troubleshooting)
 
 **Reference this file** if you encounter issues during testing:
 - Server not responding
