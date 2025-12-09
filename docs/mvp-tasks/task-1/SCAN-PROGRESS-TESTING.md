@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-1-SCAN-PROGRESS-TESTING.md -->
-<!-- version: 2.0.1 -->
+<!-- file: docs/mvp-tasks/task-1/SCAN-PROGRESS-TESTING.md -->
+<!-- version: 2.0.2 -->
 <!-- guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
 
 # Task 1: Test Scan Progress Reporting

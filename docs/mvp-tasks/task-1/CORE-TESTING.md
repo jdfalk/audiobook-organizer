@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-1-CORE-TESTING.md -->
-<!-- version: 2.0.0 -->
+<!-- file: docs/mvp-tasks/task-1/CORE-TESTING.md -->
+<!-- version: 2.0.1 -->
 <!-- guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
 
 # Task 1: Core Scan Progress Testing
@@ -717,7 +717,7 @@ fi
 
 ---
 
-**Document Version:** 2.0.0
+**Document Version:** 2.0.1
 **Last Updated:** December 6, 2025
 **Total Lines:** 600+
 **Total Words:** ~8,500
