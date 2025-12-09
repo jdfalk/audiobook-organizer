@@ -29,9 +29,9 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 
 This comprehensive task is split across three documents for clarity:
 
-1. **TASK-1-CORE-TESTING.md** (this file) - Core testing phases and basic validation
-2. **TASK-1-ADVANCED-SCENARIOS.md** - Advanced scenarios, code details, performance testing
-3. **TASK-1-TROUBLESHOOTING.md** - Comprehensive troubleshooting guide and recovery procedures
+1. **CORE-TESTING.md** (this file) - Core testing phases and basic validation
+2. **ADVANCED-SCENARIOS.md** - Advanced scenarios, code details, performance testing
+3. **TROUBLESHOOTING.md** - Comprehensive troubleshooting guide and recovery procedures
 
 **Read in this order for complete understanding:**
 1. Start here to understand basic testing flow
@@ -700,8 +700,8 @@ echo "✅ Import count: $IMPORT_COUNT books"
 4. ✅ Database state is consistent
 
 **Next steps:**
-- Move to **TASK-1-ADVANCED-SCENARIOS.md** for complex testing
-- Reference **TASK-1-TROUBLESHOOTING.md** if issues occur
+- Move to **ADVANCED-SCENARIOS.md** for complex testing
+- Reference **TROUBLESHOOTING.md** if issues occur
 
 **Cleanup (run at end):**
 

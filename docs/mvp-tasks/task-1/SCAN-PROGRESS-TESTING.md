@@ -27,10 +27,10 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 
 This single file is kept for history, but the task is now split into concise parts to avoid length limits:
 
-- `TASK-1-README.md` — overview and navigation
-- `TASK-1-CORE-TESTING.md` — phases 1-5 and safety/locks
-- `TASK-1-ADVANCED-SCENARIOS.md` — large libraries, concurrency, recovery drills, code deep dive
-- `TASK-1-TROUBLESHOOTING.md` — issues, root causes, and fixes
+- `README.md` — overview and navigation
+- `CORE-TESTING.md` — phases 1-5 and safety/locks
+- `ADVANCED-SCENARIOS.md` — large libraries, concurrency, recovery drills, code deep dive
+- `TROUBLESHOOTING.md` — issues, root causes, and fixes
 
 Use the split files for active work; keep this document as a legacy reference.
 
