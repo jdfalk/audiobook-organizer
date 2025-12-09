@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-1-ADVANCED-SCENARIOS.md -->
-<!-- version: 2.0.0 -->
+<!-- file: docs/mvp-tasks/task-1/ADVANCED-SCENARIOS.md -->
+<!-- version: 2.0.1 -->
 <!-- guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e -->
 
 # Task 1: Advanced Scenarios & Code Deep Dive
@@ -628,11 +628,11 @@ This advanced section covers:
 ✅ **Code implementation** - Explains how it works
 ✅ **Performance monitoring** - Explains metrics tracking
 
-**Next:** If issues occur, reference **TASK-1-TROUBLESHOOTING.md**
+**Next:** If issues occur, reference **TROUBLESHOOTING.md**
 
 ---
 
-**Document Version:** 2.0.0
+**Document Version:** 2.0.1
 **Last Updated:** December 6, 2025
 **Total Lines:** 550+
 **Total Words:** ~7,500
