@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.6.1
+# version: 2.6.2
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -28,7 +28,7 @@ permissions:
 jobs:
   frontend:
     name: Frontend Build and Test
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@v1.0.0-rc.7
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
       node-version: "22"
     secrets: inherit
