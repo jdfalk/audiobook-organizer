@@ -8,9 +8,9 @@
 
 This is **Part 2** of the comprehensive Task 1 documentation:
 
-- **Part 1:** TASK-1-CORE-TESTING.md (basic phases 1-5)
-- **Part 2:** TASK-1-ADVANCED-SCENARIOS.md (this file - advanced testing)
-- **Part 3:** TASK-1-TROUBLESHOOTING.md (troubleshooting and recovery)
+- **Part 1:** CORE-TESTING.md (basic phases 1-5)
+- **Part 2:** ADVANCED-SCENARIOS.md (this file - advanced testing)
+- **Part 3:** TROUBLESHOOTING.md (troubleshooting and recovery)
 
 **Start here** if you've completed all phases in Part 1 and want to:
 - Test complex scenarios
