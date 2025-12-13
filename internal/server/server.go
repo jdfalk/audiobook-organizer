@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.27.2
+// version: 1.27.3
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -945,7 +946,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 				// Process the books to extract metadata (parallel)
 				if len(books) > 0 {
 					_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
-					if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
+					if err := scanner.ProcessBooksParallel(ctx, books, workers, nil); err != nil {
 						return fmt.Errorf("failed to process books: %w", err)
 					}
 					// Auto-organize if enabled
@@ -1130,6 +1131,7 @@ func (s *Server) startScan(c *gin.Context) {
 		totalFilesAcrossFolders := 0
 		for _, folderPath := range foldersToScan {
 			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+				_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
 				continue
 			}
 			fileCount := 0
@@ -1147,22 +1149,34 @@ func (s *Server) startScan(c *gin.Context) {
 				return nil
 			})
 			if err == nil {
+				_ = progress.Log("info", fmt.Sprintf("Folder %s: Found %d audiobook files", folderPath, fileCount), nil)
 				totalFilesAcrossFolders += fileCount
 			}
 		}
+		_ = progress.Log("info", fmt.Sprintf("Total audiobook files across all folders: %d", totalFilesAcrossFolders), nil)
+		if totalFilesAcrossFolders == 0 {
+			_ = progress.Log("warn", "No audiobook files detected during pre-scan; totals will update as files are processed", nil)
+		}
+
+		progressTotal := totalFilesAcrossFolders
+		var processedFiles atomic.Int32
 
 		// Scan each folder
 		totalBooks := 0
 		libraryBooks := 0
 		importBooks := 0
-		processedFiles := 0
 		for folderIdx, folderPath := range foldersToScan {
 			if progress.IsCanceled() {
 				_ = progress.Log("info", "Scan canceled", nil)
 				return fmt.Errorf("scan canceled")
 			}
 
-			_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
+			currentProcessed := int(processedFiles.Load())
+			displayTotal := totalFilesAcrossFolders
+			if currentProcessed > displayTotal {
+				displayTotal = currentProcessed
+			}
+			_ = progress.UpdateProgress(currentProcessed, displayTotal, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
 			_ = progress.Log("info", fmt.Sprintf("Scanning folder: %s", folderPath), nil)
 
 			// Check if folder exists
@@ -1189,14 +1203,29 @@ func (s *Server) startScan(c *gin.Context) {
 			} else {
 				importBooks += len(books)
 			}
-			processedFiles += len(books)
-			_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, fmt.Sprintf("Processed %d/%d files", processedFiles, totalFilesAcrossFolders))
+			// Prepare per-book progress reporting
+			targetTotal := progressTotal
+			if targetTotal == 0 {
+				targetTotal = len(books)
+			}
+			progressCallback := func(_ int, _ int, bookPath string) {
+				current := processedFiles.Add(1)
+				displayTotal := targetTotal
+				if int(current) > displayTotal {
+					displayTotal = int(current)
+				}
+				message := fmt.Sprintf("Processed: %d/%d books", current, displayTotal)
+				if bookPath != "" {
+					message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
+				}
+				_ = progress.UpdateProgress(int(current), displayTotal, message)
+			}
 
 			// Process the books to extract metadata (parallel)
 			// This automatically upserts books by FilePath, creating new records or updating existing ones
 			if len(books) > 0 {
 				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
-				if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
+				if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
 				} else {
 					_ = progress.Log("info", fmt.Sprintf("Successfully processed %d books", len(books)), nil)
@@ -1250,19 +1279,23 @@ func (s *Server) startScan(c *gin.Context) {
 			}
 		}
 
-		_ = progress.UpdateProgress(processedFiles, totalFilesAcrossFolders, "Scan completed")
-
 		// Format completion message with separate library/import counts
 		var completionMsg string
 		if libraryBooks > 0 && importBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed successfully. Library: %d books, Import paths: %d books (Total: %d)", libraryBooks, importBooks, totalBooks)
+			completionMsg = fmt.Sprintf("Scan completed. Library: %d books, Import: %d books (Total: %d)", libraryBooks, importBooks, totalBooks)
 		} else if libraryBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed successfully. Library: %d books", libraryBooks)
+			completionMsg = fmt.Sprintf("Scan completed. Library: %d books", libraryBooks)
 		} else if importBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed successfully. Import paths: %d books", importBooks)
+			completionMsg = fmt.Sprintf("Scan completed. Import: %d books", importBooks)
 		} else {
-			completionMsg = "Scan completed successfully. No books found"
+			completionMsg = "Scan completed. No books found"
 		}
+		finalProcessed := int(processedFiles.Load())
+		finalTotal := totalFilesAcrossFolders
+		if finalProcessed > finalTotal {
+			finalTotal = finalProcessed
+		}
+		_ = progress.UpdateProgress(finalProcessed, finalTotal, completionMsg)
 		_ = progress.Log("info", completionMsg, nil)
 		return nil
 	}
@@ -1406,7 +1439,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 					// Process the books to extract metadata
 					if len(books) > 0 {
-						if err := scanner.ProcessBooksParallel(ctx, books, workers); err != nil {
+						if err := scanner.ProcessBooksParallel(ctx, books, workers, nil); err != nil {
 							return fmt.Errorf("failed to process books: %w", err)
 						}
 					}
