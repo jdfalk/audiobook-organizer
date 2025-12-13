@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.27.2
+// version: 1.28.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -35,8 +35,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// Cached library size to avoid expensive recalculation on frequent status checks
-var cachedLibrarySize int64
+// Cached import path size to avoid expensive recalculation on frequent status checks
+var cachedImportPathsSize int64
 var cachedSizeComputedAt time.Time
 
 const librarySizeCacheTTL = 60 * time.Second
@@ -1694,7 +1694,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	runtime.ReadMemStats(&memStats)
 
 	// Disk usage for import paths (cached)
-	totalSize := cachedLibrarySize
+	importPathsSize := cachedImportPathsSize
 	if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
 		var newSize int64
 		for _, folder := range importFolders {
@@ -1710,9 +1710,9 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 				})
 			}
 		}
-		cachedLibrarySize = newSize
+		cachedImportPathsSize = newSize
 		cachedSizeComputedAt = time.Now()
-		totalSize = newSize
+		importPathsSize = newSize
 	}
 
 	// Calculate size for library vs import paths
@@ -1728,10 +1728,18 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			})
 		}
 	}
-	importSize = totalSize - librarySize
+	importSize = importPathsSize
+	totalSizeBytes := librarySize + importSize
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "running",
+		"status":             "running",
+		"library_book_count": libraryBookCount,
+		"import_book_count":  importBookCount,
+		"total_book_count":   libraryBookCount + importBookCount,
+		"library_size_bytes": librarySize,
+		"import_size_bytes":  importSize,
+		"total_size_bytes":   totalSizeBytes,
+		"root_directory":     rootDir,
 		"library": gin.H{
 			"book_count":   libraryBookCount,
 			"folder_count": 1, // Always 1 for RootDir

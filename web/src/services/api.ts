@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -110,6 +110,13 @@ export interface ActiveOperationSummary {
 
 export interface SystemStatus {
   status: string;
+  library_book_count?: number;
+  import_book_count?: number;
+  total_book_count?: number;
+  library_size_bytes?: number;
+  import_size_bytes?: number;
+  total_size_bytes?: number;
+  root_directory?: string;
   library: {
     book_count: number;
     folder_count: number;
