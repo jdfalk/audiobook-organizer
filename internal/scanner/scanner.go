@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.10.0
+// version: 1.10.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -124,11 +125,11 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 
 // ProcessBooks processes the discovered books to extract metadata and identify series
 func ProcessBooks(books []Book) error {
-	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans)
+	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans, nil)
 }
 
 // ProcessBooksParallel processes books with parallel workers for improved performance
-func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error {
+func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string)) error {
 	if workers < 1 {
 		workers = 1
 	}
@@ -136,6 +137,8 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error 
 	fmt.Printf("Processing audiobook metadata (using %d workers)...\n", workers)
 
 	bar := progressbar.Default(int64(len(books)))
+	total := len(books)
+	var processed atomic.Int32
 
 	var aiParser *ai.OpenAIParser
 	aiEnabled := false
@@ -173,6 +176,10 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int) error 
 			defer func() {
 				<-semaphore // Release
 				bar.Add(1)
+				if progressFn != nil {
+					current := processed.Add(1)
+					progressFn(int(current), total, books[idx].FilePath)
+				}
 			}()
 
 			// Extract metadata from the file
