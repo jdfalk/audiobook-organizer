@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.10.1
+// version: 1.10.2
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -29,6 +29,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/schollz/progressbar/v3"
 )
+
+var saveBook = saveBookToDatabase
 
 // Book represents an audiobook file
 type Book struct {
@@ -271,7 +273,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			}
 
 			// Save to database (database operations are thread-safe)
-			if err := saveBookToDatabase(&books[idx]); err != nil {
+			if err := saveBook(&books[idx]); err != nil {
 				errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
 			}
 		}(i)
