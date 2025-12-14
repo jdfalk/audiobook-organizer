@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.7.1
+// version: 1.8.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database

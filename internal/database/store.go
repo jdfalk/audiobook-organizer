@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.7.1
+// version: 2.8.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -125,6 +125,13 @@ type Store interface {
 	GetBookStats(bookNumericID int) (*BookStats, error)
 	IncrementUserListenStats(userID string, seconds int) error
 	GetUserStats(userID string) (*UserStats, error)
+
+	// Hash blocklist (do_not_import)
+	IsHashBlocked(hash string) (bool, error)
+	AddBlockedHash(hash, reason string) error
+	RemoveBlockedHash(hash string) error
+	GetAllBlockedHashes() ([]DoNotImport, error)
+	GetBlockedHashByHash(hash string) (*DoNotImport, error)
 }
 
 // Common data structures used by all store implementations
@@ -258,6 +265,13 @@ type UserPreference struct {
 	Key       string    `json:"key"`
 	Value     *string   `json:"value,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// DoNotImport represents a blocked file hash to prevent reimport
+type DoNotImport struct {
+	Hash      string    `json:"hash"`
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Extended models (Pebble only; SQLite may ignore)
