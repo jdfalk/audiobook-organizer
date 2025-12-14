@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-4-TROUBLESHOOTING.md -->
-<!-- version: 1.0.0 -->
+<!-- file: docs/mvp-tasks/task-4/4-TROUBLESHOOTING.md -->
+<!-- version: 1.0.1 -->
 <!-- guid: 1e8b9c2d-4f5a-4b6c-8e7d-1a9b2c3d4e5f -->
 
 # Task 4: Troubleshooting - Duplicate Detection
