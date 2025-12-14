@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.8.0
+// version: 1.9.1
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -691,6 +691,74 @@ func (s *SQLiteStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 	return &book, nil
 }
 
+// GetDuplicateBooks returns groups of books with identical file hashes
+// Only returns groups with 2+ books (actual duplicates)
+func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
+	// Find all hashes that have duplicates (appear more than once)
+	// Use COALESCE to handle null hashes and prefer organized_file_hash
+	hashQuery := `
+		SELECT COALESCE(organized_file_hash, file_hash) as hash, COUNT(*) as count
+		FROM books
+		WHERE COALESCE(organized_file_hash, file_hash) IS NOT NULL
+		GROUP BY COALESCE(organized_file_hash, file_hash)
+		HAVING count > 1
+		ORDER BY count DESC
+	`
+
+	hashRows, err := s.db.Query(hashQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query duplicate hashes: %w", err)
+	}
+	defer hashRows.Close()
+
+	var duplicateGroups [][]Book
+	for hashRows.Next() {
+		var hash string
+		var count int
+		if err := hashRows.Scan(&hash, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan hash row: %w", err)
+		}
+
+		// Get all books with this hash
+		booksQuery := fmt.Sprintf(`
+			SELECT %s FROM books
+			WHERE COALESCE(organized_file_hash, file_hash) = ?
+			ORDER BY file_path
+		`, bookSelectColumns)
+
+		bookRows, err := s.db.Query(booksQuery, hash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query books for hash %s: %w", hash, err)
+		}
+
+		var group []Book
+		for bookRows.Next() {
+			var book Book
+			if err := scanBook(bookRows, &book); err != nil {
+				bookRows.Close()
+				return nil, fmt.Errorf("failed to scan book: %w", err)
+			}
+			group = append(group, book)
+		}
+		bookRows.Close()
+
+		if err := bookRows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating book rows: %w", err)
+		}
+
+		// Only add groups with 2+ books
+		if len(group) >= 2 {
+			duplicateGroups = append(duplicateGroups, group)
+		}
+	}
+
+	if err := hashRows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating hash rows: %w", err)
+	}
+
+	return duplicateGroups, nil
+}
+
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? ORDER BY series_sequence, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, seriesID)
@@ -1163,56 +1231,64 @@ func (s *SQLiteStore) GetPlaylistItems(playlistID int) ([]PlaylistItem, error) {
 	return items, rows.Err()
 }
 
-// IsHashBlocked checks if a hash is in the do_not_import table
+// Hash Blocklist Methods
+
+// IsHashBlocked checks if a hash is in the blocklist
 func (s *SQLiteStore) IsHashBlocked(hash string) (bool, error) {
-var count int
-err := s.db.QueryRow("SELECT COUNT(*) FROM do_not_import WHERE hash = ?", hash).Scan(&count)
-return count > 0, err
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM do_not_import WHERE hash = ?", hash).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
-// AddBlockedHash adds a hash to the do_not_import table
+// AddBlockedHash adds a hash to the blocklist
 func (s *SQLiteStore) AddBlockedHash(hash, reason string) error {
-_, err := s.db.Exec(`INSERT INTO do_not_import (hash, reason, created_at) 
-VALUES (?, ?, ?) ON CONFLICT(hash) DO UPDATE SET reason = excluded.reason`,
-hash, reason, time.Now())
-return err
+	_, err := s.db.Exec(
+		"INSERT OR REPLACE INTO do_not_import (hash, reason, created_at) VALUES (?, ?, ?)",
+		hash, reason, time.Now(),
+	)
+	return err
 }
 
-// RemoveBlockedHash removes a hash from the do_not_import table
+// RemoveBlockedHash removes a hash from the blocklist
 func (s *SQLiteStore) RemoveBlockedHash(hash string) error {
-_, err := s.db.Exec("DELETE FROM do_not_import WHERE hash = ?", hash)
-return err
+	_, err := s.db.Exec("DELETE FROM do_not_import WHERE hash = ?", hash)
+	return err
 }
 
 // GetAllBlockedHashes returns all blocked hashes
 func (s *SQLiteStore) GetAllBlockedHashes() ([]DoNotImport, error) {
-rows, err := s.db.Query("SELECT hash, reason, created_at FROM do_not_import ORDER BY created_at DESC")
-if err != nil {
-return nil, err
-}
-defer rows.Close()
+	rows, err := s.db.Query("SELECT hash, reason, created_at FROM do_not_import ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-var hashes []DoNotImport
-for rows.Next() {
-var h DoNotImport
-if err := rows.Scan(&h.Hash, &h.Reason, &h.CreatedAt); err != nil {
-return nil, err
-}
-hashes = append(hashes, h)
-}
-return hashes, rows.Err()
+	var blocked []DoNotImport
+	for rows.Next() {
+		var item DoNotImport
+		if err := rows.Scan(&item.Hash, &item.Reason, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		blocked = append(blocked, item)
+	}
+	return blocked, rows.Err()
 }
 
-// GetBlockedHashByHash returns a specific blocked hash
+// GetBlockedHashByHash retrieves a specific blocked hash entry
 func (s *SQLiteStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
-var h DoNotImport
-err := s.db.QueryRow("SELECT hash, reason, created_at FROM do_not_import WHERE hash = ?", hash).
-Scan(&h.Hash, &h.Reason, &h.CreatedAt)
-if err == sql.ErrNoRows {
-return nil, nil
-}
-if err != nil {
-return nil, err
-}
-return &h, nil
+	var item DoNotImport
+	err := s.db.QueryRow(
+		"SELECT hash, reason, created_at FROM do_not_import WHERE hash = ?",
+		hash,
+	).Scan(&item.Hash, &item.Reason, &item.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
 }
