@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -79,6 +79,12 @@ var migrations = []Migration{
 		Version:     7,
 		Description: "Rename import paths to import paths",
 		Up:          migration007Up,
+		Down:        nil,
+	},
+	{
+		Version:     8,
+		Description: "Add do_not_import table for hash blocklist",
+		Up:          migration008Up,
 		Down:        nil,
 	},
 }
@@ -344,6 +350,37 @@ func migration007Up(store Store) error {
 				return fmt.Errorf("failed to execute '%s': %w", stmt, err)
 			}
 		}
+	default:
+		log.Println("  - Unknown store type; skipping migration")
+	}
+
+	return nil
+}
+
+func migration008Up(store Store) error {
+	log.Println("  - Adding do_not_import table for hash blocklist")
+
+	switch s := store.(type) {
+	case *SQLiteStore:
+		statements := []string{
+			`CREATE TABLE IF NOT EXISTS do_not_import (
+				hash TEXT PRIMARY KEY NOT NULL,
+				reason TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			)`,
+			"CREATE INDEX IF NOT EXISTS idx_do_not_import_hash ON do_not_import(hash)",
+		}
+
+		for _, stmt := range statements {
+			log.Printf("    - Executing: %s", stmt)
+			if _, err := s.db.Exec(stmt); err != nil {
+				return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+			}
+		}
+	case *PebbleStore:
+		// For PebbleDB, we just need to log that the keyspace is available
+		// No schema changes needed for Pebble
+		log.Println("    - Pebble keyspace for do_not_import enabled")
 	default:
 		log.Println("  - Unknown store type; skipping migration")
 	}
