@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.27.3
+// version: 1.28.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -38,7 +39,9 @@ import (
 
 // Cached library size to avoid expensive recalculation on frequent status checks
 var cachedLibrarySize int64
+var cachedImportSize int64
 var cachedSizeComputedAt time.Time
+var cacheLock sync.RWMutex
 
 const librarySizeCacheTTL = 60 * time.Second
 
@@ -66,6 +69,71 @@ func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 		size := info.Size()
 		book.FileSize = &size
 	}
+}
+
+// calculateLibrarySizes computes library and import path sizes with caching
+func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64) {
+	cacheLock.RLock()
+	if time.Since(cachedSizeComputedAt) < librarySizeCacheTTL {
+		librarySize = cachedLibrarySize
+		importSize = cachedImportSize
+		cacheLock.RUnlock()
+		log.Printf("[DEBUG] Using cached sizes: library=%d, import=%d", librarySize, importSize)
+		return
+	}
+	cacheLock.RUnlock()
+
+	// Cache expired, recalculate
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+
+	// Double-check in case another goroutine just updated
+	if time.Since(cachedSizeComputedAt) < librarySizeCacheTTL {
+		return cachedLibrarySize, cachedImportSize
+	}
+
+	log.Printf("[DEBUG] Recalculating library sizes (cache expired)")
+
+	// Calculate library size
+	librarySize = 0
+	if rootDir != "" {
+		if info, err := os.Stat(rootDir); err == nil && info.IsDir() {
+			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					librarySize += info.Size()
+				}
+				return nil
+			})
+		}
+	}
+
+	// Calculate import path sizes independently (not by subtraction)
+	importSize = 0
+	for _, folder := range importFolders {
+		if !folder.Enabled {
+			continue
+		}
+		if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
+			filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					// Skip files that are under rootDir to avoid double counting
+					if rootDir != "" && strings.HasPrefix(path, rootDir) {
+						return nil
+					}
+					importSize += info.Size()
+				}
+				return nil
+			})
+		}
+	}
+
+	// Update cache
+	cachedLibrarySize = librarySize
+	cachedImportSize = importSize
+	cachedSizeComputedAt = time.Now()
+
+	log.Printf("[DEBUG] Calculated new sizes: library=%d, import=%d", librarySize, importSize)
+	return
 }
 
 // Server represents the HTTP server
@@ -1696,7 +1764,8 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 		}
 	}
 
-	// Separate counts: books in RootDir (library) vs import paths
+	// Use database-based counts for efficiency
+	// Get all books to count library vs import paths
 	allBooks, err := database.GlobalStore.GetAllBooks(100000, 0)
 	if err != nil {
 		allBooks = []database.Book{}
@@ -1726,40 +1795,8 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Calculate size for library vs import paths (independently to avoid negative values)
-	librarySize := int64(0)
-	importSize := int64(0)
-
-	if rootDir != "" {
-		if info, err := os.Stat(rootDir); err == nil && info.IsDir() {
-			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-				if err == nil && !info.IsDir() {
-					librarySize += info.Size()
-				}
-				return nil
-			})
-		}
-	}
-
-	// Calculate import path sizes independently (not by subtraction)
-	for _, folder := range importFolders {
-		if !folder.Enabled {
-			continue
-		}
-		if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
-			filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
-				if err == nil && !info.IsDir() {
-					// Skip files that are under rootDir to avoid double counting
-					if rootDir != "" && strings.HasPrefix(path, rootDir) {
-						return nil
-					}
-					importSize += info.Size()
-				}
-				return nil
-			})
-		}
-	}
-
+	// Use cached size calculations to avoid expensive file system walks
+	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
 	totalSize := librarySize + importSize
 
 	c.JSON(http.StatusOK, gin.H{
