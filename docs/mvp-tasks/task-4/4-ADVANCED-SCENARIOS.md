@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-4-ADVANCED-SCENARIOS.md -->
-<!-- version: 1.0.0 -->
+<!-- file: docs/mvp-tasks/task-4/4-ADVANCED-SCENARIOS.md -->
+<!-- version: 1.0.1 -->
 <!-- guid: 9f3c2d1e-8b4a-4d5c-9e7f-1a8b2c3d4e5f -->
 
 # Task 4: Advanced Scenarios & Code Deep Dive (Duplicate Detection)
@@ -82,4 +82,4 @@ CREATE INDEX idx_books_content_hash ON books(content_hash);
 - Consider parallel hashing (goroutines) if scan becomes bottleneck.
 - Cache hashes; re-hash only if file mtime changes (incremental scan optimization).
 
-When an edge condition is identified, document in `TASK-4-TROUBLESHOOTING.md`.
+When an edge condition is identified, document in `4-TROUBLESHOOTING.md`.

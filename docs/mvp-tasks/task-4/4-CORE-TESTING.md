@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-4-CORE-TESTING.md -->
-<!-- version: 1.0.0 -->
+<!-- file: docs/mvp-tasks/task-4/4-CORE-TESTING.md -->
+<!-- version: 1.0.1 -->
 <!-- guid: 2b5e8c1f-9d4a-4e6b-8f7c-1a9b2c3d4e5f -->
 
 # Task 4: Core Duplicate Detection Testing
@@ -157,4 +157,4 @@ rm -f /tmp/test-duplicate-*.m4b /tmp/test-duplicate-*.mp3
 rm -f /tmp/task-4-lock.txt /tmp/task-4-state-*.json
 ```
 
-If failures occur, switch to `TASK-4-TROUBLESHOOTING.md`.
+If failures occur, switch to `4-TROUBLESHOOTING.md`.

@@ -1,5 +1,5 @@
-<!-- file: docs/TASK-4-README.md -->
-<!-- version: 1.0.0 -->
+<!-- file: docs/mvp-tasks/task-4/README.md -->
+<!-- version: 1.0.1 -->
 <!-- guid: 8c2d9e1f-7a3b-4c5d-9e7f-1a8b3c4d5e6f -->
 
 # Task 4: Duplicate Detection Testing - Complete Documentation
@@ -18,12 +18,12 @@ This task validates the hash-based duplicate detection system implemented in v1.
 
 ## 📂 Document Set
 
-| Document                       | Purpose                                           |
-| ------------------------------ | ------------------------------------------------- |
-| `TASK-4-CORE-TESTING.md`       | Core validation flow, phases, safety/locks        |
-| `TASK-4-ADVANCED-SCENARIOS.md` | Edge cases (partial files, symlinks, bit-perfect) |
-| `TASK-4-TROUBLESHOOTING.md`    | Issues, root causes, and fixes                    |
-| `TASK-4-README.md` (this file) | Overview, navigation, quick commands              |
+| Document                  | Purpose                                           |
+| ------------------------- | ------------------------------------------------- |
+| `4-CORE-TESTING.md`       | Core validation flow, phases, safety/locks        |
+| `4-ADVANCED-SCENARIOS.md` | Edge cases (partial files, symlinks, bit-perfect) |
+| `4-TROUBLESHOOTING.md`    | Issues, root causes, and fixes                    |
+| `README.md` (this file)   | Overview, navigation, quick commands              |
 
 **Reading order:** README → Core → Advanced → Troubleshooting.
 
@@ -58,9 +58,9 @@ curl -s -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"
 
 ## 🧭 Navigation
 
-- Need the main flow? → `TASK-4-CORE-TESTING.md`
-- Handling edge cases? → `TASK-4-ADVANCED-SCENARIOS.md`
-- Something broken? → `TASK-4-TROUBLESHOOTING.md`
+- Need the main flow? → `4-CORE-TESTING.md`
+- Handling edge cases? → `4-ADVANCED-SCENARIOS.md`
+- Something broken? → `4-TROUBLESHOOTING.md`
 
 ## 🧩 Current State (from TODO)
 
