@@ -1726,31 +1726,10 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	// Disk usage for import paths (cached)
-	totalSize := cachedLibrarySize
-	if time.Since(cachedSizeComputedAt) > librarySizeCacheTTL {
-		var newSize int64
-		for _, folder := range importFolders {
-			if !folder.Enabled {
-				continue
-			}
-			if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
-				filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
-					if err == nil && !info.IsDir() {
-						newSize += info.Size()
-					}
-					return nil
-				})
-			}
-		}
-		cachedLibrarySize = newSize
-		cachedSizeComputedAt = time.Now()
-		totalSize = newSize
-	}
-
-	// Calculate size for library vs import paths
+	// Calculate size for library vs import paths (independently to avoid negative values)
 	librarySize := int64(0)
 	importSize := int64(0)
+
 	if rootDir != "" {
 		if info, err := os.Stat(rootDir); err == nil && info.IsDir() {
 			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
@@ -1761,10 +1740,33 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			})
 		}
 	}
-	importSize = totalSize - librarySize
+
+	// Calculate import path sizes independently (not by subtraction)
+	for _, folder := range importFolders {
+		if !folder.Enabled {
+			continue
+		}
+		if info, err := os.Stat(folder.Path); err == nil && info.IsDir() {
+			filepath.Walk(folder.Path, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					// Skip files that are under rootDir to avoid double counting
+					if rootDir != "" && strings.HasPrefix(path, rootDir) {
+						return nil
+					}
+					importSize += info.Size()
+				}
+				return nil
+			})
+		}
+	}
+
+	totalSize := librarySize + importSize
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "running",
+		"status":             "running",
+		"library_size_bytes": librarySize,
+		"import_size_bytes":  importSize,
+		"total_size_bytes":   totalSize,
 		"library": gin.H{
 			"book_count":   libraryBookCount,
 			"folder_count": 1, // Always 1 for RootDir
