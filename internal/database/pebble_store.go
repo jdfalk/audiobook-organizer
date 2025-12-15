@@ -665,15 +665,17 @@ func (p *PebbleStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 	return p.GetBookByID(id)
 }
 
+// GetDuplicateBooks returns groups of books with identical file hashes
+// Only returns groups with 2+ books (actual duplicates)
 func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
-	// Find all books grouped by hash (preferring organized_file_hash over file_hash)
-	// and return only groups with 2+ books
+	// Map to group books by hash (preferring organized_file_hash over file_hash)
 	hashGroups := make(map[string][]Book)
 
-	// Iterate through all books to collect them by hash
+	// Iterate through all books to find duplicates
+	prefix := []byte("book:id:")
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("book:0"),
-		UpperBound: []byte("book:;"),
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -694,7 +696,7 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 			return nil, fmt.Errorf("failed to unmarshal book: %w", err)
 		}
 
-		// Use organized_file_hash if available, otherwise use file_hash
+		// Use organized_file_hash if available, otherwise file_hash
 		var hash string
 		if book.OrganizedFileHash != nil && *book.OrganizedFileHash != "" {
 			hash = *book.OrganizedFileHash
@@ -702,13 +704,17 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 			hash = *book.FileHash
 		}
 
-		// Only group books that have a hash
+		// Only track books with valid hashes
 		if hash != "" {
 			hashGroups[hash] = append(hashGroups[hash], book)
 		}
 	}
 
-	// Build result: only include groups with 2+ books, sorted by file_path
+	if err := iter.Error(); err != nil {
+		return nil, fmt.Errorf("iterator error: %w", err)
+	}
+
+	// Extract groups with 2+ books (actual duplicates), sorted by file_path
 	var duplicateGroups [][]Book
 	for _, group := range hashGroups {
 		if len(group) >= 2 {
@@ -2134,9 +2140,10 @@ func (p *PebbleStore) incrementIntKey(key string, delta int) error {
 	return p.db.Set([]byte(key), []byte(strconv.Itoa(cur)), pebble.Sync)
 }
 
-// IsHashBlocked checks if a hash is in the blocked list
+// Blocked hash (do-not-import) methods
 func (p *PebbleStore) IsHashBlocked(hash string) (bool, error) {
-	_, closer, err := p.db.Get([]byte("blocklist:" + hash))
+	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
+	_, closer, err := p.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return false, nil
 	}
@@ -2147,31 +2154,33 @@ func (p *PebbleStore) IsHashBlocked(hash string) (bool, error) {
 	return true, nil
 }
 
-// AddBlockedHash adds a hash to the blocked list
 func (p *PebbleStore) AddBlockedHash(hash, reason string) error {
-	dni := DoNotImport{
+	item := DoNotImport{
 		Hash:      hash,
 		Reason:    reason,
 		CreatedAt: time.Now(),
 	}
-	data, err := json.Marshal(dni)
+	data, err := json.Marshal(item)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal blocked hash: %w", err)
 	}
-	return p.db.Set([]byte("blocklist:"+hash), data, pebble.Sync)
+
+	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
+	return p.db.Set(key, data, pebble.Sync)
 }
 
-// RemoveBlockedHash removes a hash from the blocked list
 func (p *PebbleStore) RemoveBlockedHash(hash string) error {
-	return p.db.Delete([]byte("blocklist:"+hash), pebble.Sync)
+	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
+	return p.db.Delete(key, pebble.Sync)
 }
 
-// GetAllBlockedHashes returns all blocked hashes
 func (p *PebbleStore) GetAllBlockedHashes() ([]DoNotImport, error) {
-	var hashes []DoNotImport
+	var items []DoNotImport
+	prefix := []byte("blocked:hash:")
+
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("blocklist:"),
-		UpperBound: []byte("blocklist;"), // ASCII ; is after :
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
 	})
 	if err != nil {
 		return nil, err
@@ -2179,18 +2188,19 @@ func (p *PebbleStore) GetAllBlockedHashes() ([]DoNotImport, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		var dni DoNotImport
-		if err := json.Unmarshal(iter.Value(), &dni); err != nil {
-			continue
+		var item DoNotImport
+		if err := json.Unmarshal(iter.Value(), &item); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal blocked hash: %w", err)
 		}
-		hashes = append(hashes, dni)
+		items = append(items, item)
 	}
-	return hashes, iter.Error()
+
+	return items, iter.Error()
 }
 
-// GetBlockedHashByHash returns a specific blocked hash
 func (p *PebbleStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
-	v, closer, err := p.db.Get([]byte("blocklist:" + hash))
+	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
+	value, closer, err := p.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return nil, nil
 	}
@@ -2199,9 +2209,10 @@ func (p *PebbleStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 	}
 	defer closer.Close()
 
-	var dni DoNotImport
-	if err := json.Unmarshal(v, &dni); err != nil {
-		return nil, err
+	var item DoNotImport
+	if err := json.Unmarshal(value, &item); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal blocked hash: %w", err)
 	}
-	return &dni, nil
+
+	return &item, nil
 }
