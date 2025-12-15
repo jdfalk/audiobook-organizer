@@ -669,6 +669,7 @@ func (p *PebbleStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 // Only returns groups with 2+ books (actual duplicates)
 func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 	// Map to group books by hash (preferring organized_file_hash over file_hash)
+
 	hashGroups := make(map[string][]Book)
 
 	// Iterate through all books to find duplicates
