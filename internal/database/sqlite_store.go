@@ -1162,3 +1162,57 @@ func (s *SQLiteStore) GetPlaylistItems(playlistID int) ([]PlaylistItem, error) {
 	}
 	return items, rows.Err()
 }
+
+// IsHashBlocked checks if a hash is in the do_not_import table
+func (s *SQLiteStore) IsHashBlocked(hash string) (bool, error) {
+var count int
+err := s.db.QueryRow("SELECT COUNT(*) FROM do_not_import WHERE hash = ?", hash).Scan(&count)
+return count > 0, err
+}
+
+// AddBlockedHash adds a hash to the do_not_import table
+func (s *SQLiteStore) AddBlockedHash(hash, reason string) error {
+_, err := s.db.Exec(`INSERT INTO do_not_import (hash, reason, created_at) 
+VALUES (?, ?, ?) ON CONFLICT(hash) DO UPDATE SET reason = excluded.reason`,
+hash, reason, time.Now())
+return err
+}
+
+// RemoveBlockedHash removes a hash from the do_not_import table
+func (s *SQLiteStore) RemoveBlockedHash(hash string) error {
+_, err := s.db.Exec("DELETE FROM do_not_import WHERE hash = ?", hash)
+return err
+}
+
+// GetAllBlockedHashes returns all blocked hashes
+func (s *SQLiteStore) GetAllBlockedHashes() ([]DoNotImport, error) {
+rows, err := s.db.Query("SELECT hash, reason, created_at FROM do_not_import ORDER BY created_at DESC")
+if err != nil {
+return nil, err
+}
+defer rows.Close()
+
+var hashes []DoNotImport
+for rows.Next() {
+var h DoNotImport
+if err := rows.Scan(&h.Hash, &h.Reason, &h.CreatedAt); err != nil {
+return nil, err
+}
+hashes = append(hashes, h)
+}
+return hashes, rows.Err()
+}
+
+// GetBlockedHashByHash returns a specific blocked hash
+func (s *SQLiteStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
+var h DoNotImport
+err := s.db.QueryRow("SELECT hash, reason, created_at FROM do_not_import WHERE hash = ?", hash).
+Scan(&h.Hash, &h.Reason, &h.CreatedAt)
+if err == sql.ErrNoRows {
+return nil, nil
+}
+if err != nil {
+return nil, err
+}
+return &h, nil
+}

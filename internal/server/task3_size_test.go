@@ -1,5 +1,5 @@
 // file: internal/server/task3_size_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +25,6 @@ func clearSizeCache() {
 }
 
 // TestCalculateLibrarySizesNoNegative verifies that importSize is never negative
-clearSizeCache()
-
 func TestCalculateLibrarySizesNoNegative(t *testing.T) {
 	clearSizeCache()
 
@@ -74,8 +73,6 @@ func TestCalculateLibrarySizesNoNegative(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesIndependentCalculation ensures import and library sizes are independent
-clearSizeCache()
-
 func TestCalculateLibrarySizesIndependentCalculation(t *testing.T) {
 	clearSizeCache()
 
@@ -113,9 +110,9 @@ func TestCalculateLibrarySizesIndependentCalculation(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesNoDoubleCounting ensures files in overlapping paths aren't double-counted
-clearSizeCache()
-
 func TestCalculateLibrarySizesNoDoubleCounting(t *testing.T) {
+	clearSizeCache()
+	
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -150,9 +147,9 @@ func TestCalculateLibrarySizesNoDoubleCounting(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesEnabledCheck verifies only enabled import paths are counted
-clearSizeCache()
-
 func TestCalculateLibrarySizesEnabledCheck(t *testing.T) {
+	clearSizeCache()
+	
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -189,9 +186,9 @@ func TestCalculateLibrarySizesEnabledCheck(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesCaching verifies that caching works correctly
-clearSizeCache()
-
 func TestCalculateLibrarySizesCaching(t *testing.T) {
+	clearSizeCache()
+	
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -214,9 +211,9 @@ func TestCalculateLibrarySizesCaching(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesEmptyDirectories verifies handling of empty directories
-clearSizeCache()
-
 func TestCalculateLibrarySizesEmptyDirectories(t *testing.T) {
+	clearSizeCache()
+	
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -238,9 +235,9 @@ func TestCalculateLibrarySizesEmptyDirectories(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesLargeFiles verifies handling of large files (overflow prevention)
-clearSizeCache()
-
 func TestCalculateLibrarySizesLargeFiles(t *testing.T) {
+	clearSizeCache()
+	
 	if testing.Short() {
 		t.Skip("Skipping large file test in short mode")
 	}
@@ -265,9 +262,9 @@ func TestCalculateLibrarySizesLargeFiles(t *testing.T) {
 }
 
 // TestCalculateLibrarySizesNonExistentPaths verifies handling of non-existent paths
-clearSizeCache()
-
 func TestCalculateLibrarySizesNonExistentPaths(t *testing.T) {
+	clearSizeCache()
+	
 	rootDir := "/nonexistent/library/path"
 	importDir := "/nonexistent/import/path"
 

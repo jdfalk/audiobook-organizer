@@ -45,6 +45,15 @@ var cacheLock sync.RWMutex
 
 const librarySizeCacheTTL = 60 * time.Second
 
+// resetLibrarySizeCache resets the library size cache (for testing)
+func resetLibrarySizeCache() {
+	cacheLock.Lock()
+	defer cacheLock.Unlock()
+	cachedLibrarySize = 0
+	cachedImportSize = 0
+	cachedSizeComputedAt = time.Time{}
+}
+
 // Helper functions for pointer conversions
 func stringPtr(s string) *string {
 	return &s
