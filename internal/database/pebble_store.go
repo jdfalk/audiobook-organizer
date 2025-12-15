@@ -2075,3 +2075,75 @@ func (p *PebbleStore) incrementIntKey(key string, delta int) error {
 	cur += delta
 	return p.db.Set([]byte(key), []byte(strconv.Itoa(cur)), pebble.Sync)
 }
+
+// IsHashBlocked checks if a hash is in the blocked list
+func (p *PebbleStore) IsHashBlocked(hash string) (bool, error) {
+	_, closer, err := p.db.Get([]byte("blocklist:" + hash))
+	if err == pebble.ErrNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	closer.Close()
+	return true, nil
+}
+
+// AddBlockedHash adds a hash to the blocked list
+func (p *PebbleStore) AddBlockedHash(hash, reason string) error {
+	dni := DoNotImport{
+		Hash:      hash,
+		Reason:    reason,
+		CreatedAt: time.Now(),
+	}
+	data, err := json.Marshal(dni)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte("blocklist:"+hash), data, pebble.Sync)
+}
+
+// RemoveBlockedHash removes a hash from the blocked list
+func (p *PebbleStore) RemoveBlockedHash(hash string) error {
+	return p.db.Delete([]byte("blocklist:"+hash), pebble.Sync)
+}
+
+// GetAllBlockedHashes returns all blocked hashes
+func (p *PebbleStore) GetAllBlockedHashes() ([]DoNotImport, error) {
+	var hashes []DoNotImport
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("blocklist:"),
+		UpperBound: []byte("blocklist;"), // ASCII ; is after :
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var dni DoNotImport
+		if err := json.Unmarshal(iter.Value(), &dni); err != nil {
+			continue
+		}
+		hashes = append(hashes, dni)
+	}
+	return hashes, iter.Error()
+}
+
+// GetBlockedHashByHash returns a specific blocked hash
+func (p *PebbleStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
+	v, closer, err := p.db.Get([]byte("blocklist:" + hash))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var dni DoNotImport
+	if err := json.Unmarshal(v, &dni); err != nil {
+		return nil, err
+	}
+	return &dni, nil
+}
