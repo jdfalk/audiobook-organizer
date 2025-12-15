@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -315,6 +315,7 @@ func (s *Server) setupRoutes() {
 		// Audiobook routes
 		api.GET("/audiobooks", s.listAudiobooks)
 		api.GET("/audiobooks/count", s.countAudiobooks)
+		api.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
 		api.GET("/audiobooks/:id", s.getAudiobook)
 		api.PUT("/audiobooks/:id", s.updateAudiobook)
 		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
@@ -499,6 +500,36 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books), "limit": limit, "offset": offset})
+}
+
+func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	duplicateGroups, err := database.GlobalStore.GetDuplicateBooks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure we never return null - always return empty array
+	if duplicateGroups == nil {
+		duplicateGroups = [][]database.Book{}
+	}
+
+	// Calculate total duplicates count (sum of all books in duplicate groups minus the count of groups)
+	totalDuplicates := 0
+	for _, group := range duplicateGroups {
+		totalDuplicates += len(group) - 1 // Count extras in each group
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"groups":          duplicateGroups,
+		"group_count":     len(duplicateGroups),
+		"duplicate_count": totalDuplicates,
+	})
 }
 
 func (s *Server) countAudiobooks(c *gin.Context) {
