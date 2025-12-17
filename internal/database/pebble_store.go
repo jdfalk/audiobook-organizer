@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -663,6 +663,64 @@ func (p *PebbleStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 
 	id := string(value)
 	return p.GetBookByID(id)
+}
+
+func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
+	// Find all books grouped by hash (preferring organized_file_hash over file_hash)
+	// and return only groups with 2+ books
+	hashGroups := make(map[string][]Book)
+
+	// Iterate through all books to collect them by hash
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip index keys (they have : in specific patterns)
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":hash:") ||
+			strings.Contains(key, ":organizedhash:") {
+			continue
+		}
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal book: %w", err)
+		}
+
+		// Use organized_file_hash if available, otherwise use file_hash
+		var hash string
+		if book.OrganizedFileHash != nil && *book.OrganizedFileHash != "" {
+			hash = *book.OrganizedFileHash
+		} else if book.FileHash != nil && *book.FileHash != "" {
+			hash = *book.FileHash
+		}
+
+		// Only group books that have a hash
+		if hash != "" {
+			hashGroups[hash] = append(hashGroups[hash], book)
+		}
+	}
+
+	// Build result: only include groups with 2+ books, sorted by file_path
+	var duplicateGroups [][]Book
+	for _, group := range hashGroups {
+		if len(group) >= 2 {
+			// Sort by file_path within each group
+			sort.Slice(group, func(i, j int) bool {
+				return group[i].FilePath < group[j].FilePath
+			})
+			duplicateGroups = append(duplicateGroups, group)
+		}
+	}
+
+	return duplicateGroups, nil
 }
 
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {

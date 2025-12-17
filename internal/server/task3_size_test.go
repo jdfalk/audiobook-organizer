@@ -112,7 +112,10 @@ func TestCalculateLibrarySizesIndependentCalculation(t *testing.T) {
 // TestCalculateLibrarySizesNoDoubleCounting ensures files in overlapping paths aren't double-counted
 func TestCalculateLibrarySizesNoDoubleCounting(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -149,7 +152,10 @@ func TestCalculateLibrarySizesNoDoubleCounting(t *testing.T) {
 // TestCalculateLibrarySizesEnabledCheck verifies only enabled import paths are counted
 func TestCalculateLibrarySizesEnabledCheck(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -188,7 +194,10 @@ func TestCalculateLibrarySizesEnabledCheck(t *testing.T) {
 // TestCalculateLibrarySizesCaching verifies that caching works correctly
 func TestCalculateLibrarySizesCaching(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -213,7 +222,10 @@ func TestCalculateLibrarySizesCaching(t *testing.T) {
 // TestCalculateLibrarySizesEmptyDirectories verifies handling of empty directories
 func TestCalculateLibrarySizesEmptyDirectories(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	rootDir, err := os.MkdirTemp("", "library-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(rootDir)
@@ -237,7 +249,10 @@ func TestCalculateLibrarySizesEmptyDirectories(t *testing.T) {
 // TestCalculateLibrarySizesLargeFiles verifies handling of large files (overflow prevention)
 func TestCalculateLibrarySizesLargeFiles(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	if testing.Short() {
 		t.Skip("Skipping large file test in short mode")
 	}
@@ -264,7 +279,10 @@ func TestCalculateLibrarySizesLargeFiles(t *testing.T) {
 // TestCalculateLibrarySizesNonExistentPaths verifies handling of non-existent paths
 func TestCalculateLibrarySizesNonExistentPaths(t *testing.T) {
 	clearSizeCache()
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 0f0b6cb (fix(cache): resolve test cache interference in library size calculations)
 	rootDir := "/nonexistent/library/path"
 	importDir := "/nonexistent/import/path"
 

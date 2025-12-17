@@ -42,6 +42,7 @@ type Store interface {
 	GetBookByFileHash(hash string) (*Book, error)
 	GetBookByOriginalHash(hash string) (*Book, error)
 	GetBookByOrganizedHash(hash string) (*Book, error)
+	GetDuplicateBooks() ([][]Book, error) // Returns groups of duplicate books
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
