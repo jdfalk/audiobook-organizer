@@ -1,0 +1,13 @@
+# file: .trivyignore
+# version: 1.0.0
+# guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+
+# Trivy Ignore File
+# Add vulnerability IDs that should be ignored during scans
+# Format: CVE-YYYY-NNNNN or GHSA-xxxx-xxxx-xxxx
+#
+# Example:
+# CVE-2024-12345
+# GHSA-1234-5678-9012
+
+# Add ignored vulnerabilities below this line
