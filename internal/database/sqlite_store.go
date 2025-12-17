@@ -719,8 +719,8 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 			return nil, fmt.Errorf("failed to scan hash row: %w", err)
 		}
 
-			// Get all books with this hash
-			booksQuery := fmt.Sprintf(`
+		// Get all books with this hash
+		booksQuery := fmt.Sprintf(`
 				SELECT %s FROM books
 				WHERE COALESCE(organized_file_hash, file_hash) = ?
 				ORDER BY file_path
@@ -742,18 +742,18 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 		}
 		bookRows.Close()
 
-			if err := bookRows.Err(); err != nil {
-				return nil, fmt.Errorf("error iterating book rows: %w", err)
-			}
+		if err := bookRows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating book rows: %w", err)
+		}
 		// Only add groups with 2+ books
 		if len(group) >= 2 {
 			duplicateGroups = append(duplicateGroups, group)
 		}
 	}
 
-		if err := hashRows.Err(); err != nil {
-			return nil, fmt.Errorf("error iterating hash rows: %w", err)
-		}
+	if err := hashRows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating hash rows: %w", err)
+	}
 	return duplicateGroups, nil
 }
 
