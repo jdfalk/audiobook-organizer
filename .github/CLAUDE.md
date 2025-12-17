@@ -1,5 +1,5 @@
 <!-- file: .github/CLAUDE.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.2.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
 
 # CLAUDE.md
@@ -10,26 +10,13 @@
 
 ## 🚨 CRITICAL: Documentation Update Protocol
 
-**NEVER edit markdown files directly. ALWAYS use the documentation update
-system:**
+This repository no longer uses doc-update scripts. Follow these rules instead:
 
-1. **Create GitHub Issue First** (if none exists):
-
-   ```bash
-   ./scripts/create-issue-update.sh "Update [filename] - [description]" "Detailed description of what needs to be updated"
-   ```
-
-2. **Create Documentation Update**:
-
-   ```bash
-   ./scripts/create-doc-update.sh [filename] "[content]" [mode] --issue [issue-number]
-   ```
-
-3. **Link to Issue**: Every documentation change MUST reference a GitHub issue
-   for tracking and context.
-
-**Failure to follow this protocol will result in workflow conflicts and lost
-changes.**
+- Edit documentation directly in the target files.
+- Keep the required header (file path, version, guid) and bump the version on any change.
+- Do not use create-doc-update.sh or related scripts; they are retired.
+- For git operations: 1) MCP GitHub tools (preferred), 2) safe-ai-util (fallback), 3) native git (last resort). Use VS Code tasks for non-git operations only.
+- Follow the guidance in `.github/instructions/general-coding.instructions.md`.
 
 ## Canonical Source for Agent Instructions
 
