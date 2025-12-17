@@ -1,5 +1,5 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 2.0.2 -->
+<!-- version: 2.0.3 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
 
 # Copilot/AI Agent Coding Instructions System
@@ -16,7 +16,8 @@ This repository no longer uses doc-update scripts. Follow these rules instead:
 - Keep the required file header (file path, version, guid) and bump the version on any change.
 - Do not use create-doc-update.sh or related scripts; they are retired.
 - Follow `.github/instructions/general-coding.instructions.md` and language-specific instruction files for rules.
-- Prefer MCP GitHub tools or safe-ai-util for git operations (add/commit/push). Use VS Code tasks for non-git operations like build, lint, and generation.
+- Git operations preference: 1) MCP GitHub tools (preferred), 2) safe-ai-util (fallback), 3) native git (last resort). Use VS Code tasks for non-git operations like build, lint, and generation.
+- Use specialized subagents when possible: CI Workflow Doctor, Dependency Auditor, Documentation Curator, Git Hygiene Guardian, Lint & Format Conductor, Test Orchestrator, and others in `.github/prompts/` for targeted expertise.
 
 ## System Overview
 
