@@ -745,7 +745,6 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 		if err := bookRows.Err(); err != nil {
 			return nil, fmt.Errorf("error iterating book rows: %w", err)
 		}
-
 		// Only add groups with 2+ books
 		if len(group) >= 2 {
 			duplicateGroups = append(duplicateGroups, group)
@@ -755,7 +754,6 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 	if err := hashRows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating hash rows: %w", err)
 	}
-
 	return duplicateGroups, nil
 }
 
