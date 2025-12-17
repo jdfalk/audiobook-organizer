@@ -1,0 +1,79 @@
+# file: trivy.yaml
+# version: 1.0.0
+# guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+
+# Trivy Configuration
+# See https://aquasecurity.github.io/trivy/latest/docs/configuration/
+
+# Scan settings
+scan:
+  # Security checks to enable
+  security-checks:
+    - vuln
+    - config
+    - secret
+
+  # Skip files matching these patterns
+  skip-files:
+    - "**/node_modules/**"
+    - "**/vendor/**"
+    - "**/.venv/**"
+    - "**/venv/**"
+    - "**/*.test.js"
+    - "**/*.spec.js"
+    - "**/test/**"
+    - "**/tests/**"
+
+# Vulnerability settings
+vulnerability:
+  # Type of vulnerabilities to detect
+  type:
+    - os
+    - library
+
+  # Minimum severity level to report
+  # Options: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL
+  severity:
+    - UNKNOWN
+    - LOW
+    - MEDIUM
+    - HIGH
+    - CRITICAL
+
+# Secret scanning settings
+secret:
+  config: .github/trivy-secret.yaml
+
+# Misconfiguration scanning
+misconfiguration:
+  # Include only these check IDs (empty means all)
+  include-check-ids: []
+
+  # Exclude these check IDs
+  exclude-check-ids: []
+
+  # Trace configuration errors
+  trace: false
+
+# Output settings
+format: sarif
+output: trivy-results.sarif
+
+# Cache settings
+cache:
+  # Clear cache before scanning
+  clear: false
+
+  # Cache directory
+  dir: /tmp/trivy
+
+# Timeout settings
+timeout: 5m
+
+# Database settings
+db:
+  # Skip database update
+  skip-update: false
+
+  # Database repository
+  repository: ghcr.io/aquasecurity/trivy-db
