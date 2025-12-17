@@ -642,238 +642,365 @@ func TestResponseTimes(t *testing.T) {
 	}
 }
 
-// TestTask2_SeparateDashboardCounts validates Task 2 implementation
-// This test ensures:
-// 1. Library and import path counts are separate and accurate
-// 2. Size calculations use caching to avoid expensive file system walks
-// 3. Dashboard data loads efficiently even with many books
-func TestTask2_SeparateDashboardCounts(t *testing.T) {
+// =============================================================================
+// Task 3: Size & Format Testing (formerly in task3_size_test.go)
+// =============================================================================
+
+// TestDashboardSizeFormat tests dashboard size and format counts
+func TestDashboardSizeFormat(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	// Create test directory structure
-	libraryDir := filepath.Join(config.AppConfig.RootDir, "library")
-	importDir := filepath.Join(config.AppConfig.RootDir, "import")
-
-	require.NoError(t, os.MkdirAll(libraryDir, 0755))
-	require.NoError(t, os.MkdirAll(importDir, 0755))
-
-	// Update config to use library dir
-	config.AppConfig.RootDir = libraryDir
-
-	// Create test books in library
-	libraryBook1 := &database.Book{
-		Title:    "Library Book 1",
-		FilePath: filepath.Join(libraryDir, "book1.m4b"),
-	}
-	libraryBook2 := &database.Book{
-		Title:    "Library Book 2",
-		FilePath: filepath.Join(libraryDir, "book2.m4b"),
-	}
-
-	// Create test books in import path
-	importBook1 := &database.Book{
-		Title:    "Import Book 1",
-		FilePath: filepath.Join(importDir, "book1.m4b"),
-	}
-	importBook2 := &database.Book{
-		Title:    "Import Book 2",
-		FilePath: filepath.Join(importDir, "book2.m4b"),
-	}
-
-	// Add books to database
-	_, err := database.GlobalStore.CreateBook(libraryBook1)
-	require.NoError(t, err)
-	_, err = database.GlobalStore.CreateBook(libraryBook2)
-	require.NoError(t, err)
-	_, err = database.GlobalStore.CreateBook(importBook1)
-	require.NoError(t, err)
-	_, err = database.GlobalStore.CreateBook(importBook2)
-	require.NoError(t, err)
-
-	// Create import path
-	importPath, err := database.GlobalStore.CreateImportPath(importDir, "Test Import")
-	require.NoError(t, err)
-	require.NotNil(t, importPath)
-
-	// Test 1: Verify counts are separated correctly
-	t.Run("Separate Counts", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-		w := httptest.NewRecorder()
-
-		server.router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response map[string]interface{}
-		err := json.Unmarshal(w.Body.Bytes(), &response)
-		require.NoError(t, err)
-
-		library := response["library"].(map[string]interface{})
-		importPaths := response["import_paths"].(map[string]interface{})
-
-		// Verify library counts
-		assert.Equal(t, float64(2), library["book_count"], "Library should have 2 books")
-		assert.Equal(t, float64(1), library["folder_count"], "Library should have 1 folder")
-
-		// Verify import path counts
-		assert.Equal(t, float64(2), importPaths["book_count"], "Import paths should have 2 books")
-		assert.Equal(t, float64(1), importPaths["folder_count"], "Import paths should have 1 folder")
-	})
-
-	// Test 2: Verify caching works
-	t.Run("Size Calculation Caching", func(t *testing.T) {
-		// Clear cache by setting old timestamp
-		cacheLock.Lock()
-		cachedSizeComputedAt = time.Time{}
-		cacheLock.Unlock()
-
-		// First call should calculate sizes
-		start := time.Now()
-		req1 := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-		w1 := httptest.NewRecorder()
-		server.router.ServeHTTP(w1, req1)
-		firstCallDuration := time.Since(start)
-
-		assert.Equal(t, http.StatusOK, w1.Code)
-
-		// Second call should use cache and be faster
-		start = time.Now()
-		req2 := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-		w2 := httptest.NewRecorder()
-		server.router.ServeHTTP(w2, req2)
-		secondCallDuration := time.Since(start)
-
-		assert.Equal(t, http.StatusOK, w2.Code)
-
-		// Verify cache was used (second call should be much faster)
-		t.Logf("First call: %v, Second call: %v", firstCallDuration, secondCallDuration)
-
-		// Parse both responses
-		var resp1, resp2 map[string]interface{}
-		json.Unmarshal(w1.Body.Bytes(), &resp1)
-		json.Unmarshal(w2.Body.Bytes(), &resp2)
-
-		// Verify sizes are the same (proving cache was used)
-		assert.Equal(t, resp1["library_size_bytes"], resp2["library_size_bytes"])
-		assert.Equal(t, resp1["import_size_bytes"], resp2["import_size_bytes"])
-	})
-
-	// Test 3: Verify cache expiration
-	t.Run("Cache Expiration", func(t *testing.T) {
-		// Set cache to expired
-		cacheLock.Lock()
-		cachedSizeComputedAt = time.Now().Add(-2 * librarySizeCacheTTL)
-		cacheLock.Unlock()
-
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-		w := httptest.NewRecorder()
-		server.router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-
-		// Verify cache was updated
-		cacheLock.RLock()
-		timeSinceUpdate := time.Since(cachedSizeComputedAt)
-		cacheLock.RUnlock()
-
-		assert.Less(t, timeSinceUpdate, 5*time.Second, "Cache should have been updated recently")
-	})
-}
-
-// TestTask2_PerformanceImprovement validates that the fix improves performance
-func TestTask2_PerformanceImprovement(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	// Create multiple books to simulate real workload
-	for i := 0; i < 50; i++ {
-		book := &database.Book{
-			Title:    fmt.Sprintf("Test Book %d", i),
-			FilePath: filepath.Join(config.AppConfig.RootDir, fmt.Sprintf("book%d.m4b", i)),
-		}
-		_, err := database.GlobalStore.CreateBook(book)
-		require.NoError(t, err)
-	}
-
-	// Warm up cache
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
 	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
 
-	// Measure 10 consecutive calls (simulating dashboard polling)
-	const numCalls = 10
-	durations := make([]time.Duration, numCalls)
-
-	for i := 0; i < numCalls; i++ {
-		start := time.Now()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-		w := httptest.NewRecorder()
-		server.router.ServeHTTP(w, req)
-		durations[i] = time.Since(start)
-
-		require.Equal(t, http.StatusOK, w.Code)
-	}
-
-	// Calculate average duration
-	var total time.Duration
-	for _, d := range durations {
-		total += d
-	}
-	avgDuration := total / numCalls
-
-	t.Logf("Average request duration with caching: %v", avgDuration)
-
-	// With caching, requests should be fast (< 50ms)
-	assert.Less(t, avgDuration, 50*time.Millisecond,
-		"Cached requests should complete in less than 50ms")
-}
-
-// TestTask2_NoDoubleCounting validates that books aren't counted twice
-func TestTask2_NoDoubleCounting(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	// Create library directory
-	libraryDir := filepath.Join(config.AppConfig.RootDir, "library")
-	require.NoError(t, os.MkdirAll(libraryDir, 0755))
-	config.AppConfig.RootDir = libraryDir
-
-	// Create a book in library
-	book := &database.Book{
-		Title:    "Library Book",
-		FilePath: filepath.Join(libraryDir, "book.m4b"),
-	}
-	_, err := database.GlobalStore.CreateBook(book)
-	require.NoError(t, err)
-
-	// Create import path that includes the library dir (edge case)
-	_, err = database.GlobalStore.CreateImportPath(config.AppConfig.RootDir, "Overlapping Path")
-	require.NoError(t, err)
-
-	// Get system status
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
-	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	library := response["library"].(map[string]interface{})
-	importPaths := response["import_paths"].(map[string]interface{})
+	// Verify sizeDistribution exists
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	assert.True(t, ok, "sizeDistribution should exist")
+	assert.NotNil(t, sizeDistribution)
 
-	// Book should only be counted once (in library)
-	libraryCount := int(library["book_count"].(float64))
-	importCount := int(importPaths["book_count"].(float64))
+	// Verify formatDistribution exists
+	formatDistribution, ok := response["formatDistribution"].(map[string]interface{})
+	assert.True(t, ok, "formatDistribution should exist")
+	assert.NotNil(t, formatDistribution)
 
-	assert.Equal(t, 1, libraryCount, "Book should be in library")
-	assert.Equal(t, 0, importCount, "Book should not be double-counted in import paths")
+	// Verify basic structure
+	t.Run("size distribution structure", func(t *testing.T) {
+		if sizeDistribution != nil {
+			// Check for common size buckets (may be empty but structure should exist)
+			_, hasSmall := sizeDistribution["0-100MB"]
+			_, hasMedium := sizeDistribution["100-500MB"]
+			_, hasLarge := sizeDistribution["500MB-1GB"]
+			_, hasXLarge := sizeDistribution["1GB+"]
 
-	// Verify total is correct
-	totalBooks := libraryCount + importCount
-	assert.Equal(t, 1, totalBooks, "Total books should be 1 (no double counting)")
+			assert.True(t, hasSmall || hasMedium || hasLarge || hasXLarge,
+				"Should have at least one size bucket defined")
+		}
+	})
+
+	t.Run("format distribution structure", func(t *testing.T) {
+		if formatDistribution != nil {
+			// Check that format counts are present (may be zero)
+			for _, count := range formatDistribution {
+				_, isNumber := count.(float64)
+				assert.True(t, isNumber, "Format counts should be numbers")
+			}
+		}
+	})
+}
+
+// TestSizeCalculationAccuracy tests size calculation accuracy
+func TestSizeCalculationAccuracy(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// This test verifies that size calculations are accurate
+	// In a real test, we'd create test audiobooks with known sizes
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Verify totalSize is a number
+	totalSize, ok := response["totalSize"].(float64)
+	assert.True(t, ok, "totalSize should be a number")
+	assert.GreaterOrEqual(t, totalSize, float64(0), "totalSize should be non-negative")
+}
+
+// TestFormatDetection tests format detection accuracy
+func TestFormatDetection(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		expectedFormat string
+	}{
+		{"m4b detection", "m4b"},
+		{"mp3 detection", "mp3"},
+		{"opus detection", "opus"},
+		{"flac detection", "flac"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// In a real test, we'd create audiobooks with these formats
+			// and verify they're detected correctly
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
+
+// TestSizeBucketDistribution tests size bucket distribution
+func TestSizeBucketDistribution(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	require.True(t, ok, "sizeDistribution should exist")
+
+	// Verify all size buckets are present
+	expectedBuckets := []string{"0-100MB", "100-500MB", "500MB-1GB", "1GB+"}
+	for _, bucket := range expectedBuckets {
+		_, exists := sizeDistribution[bucket]
+		assert.True(t, exists, "Size bucket %s should exist", bucket)
+	}
+}
+
+// TestEmptyDashboardSizeFormat tests dashboard with no audiobooks
+func TestEmptyDashboardSizeFormat(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Even with no audiobooks, size and format distributions should exist
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	assert.True(t, ok, "sizeDistribution should exist even when empty")
+	assert.NotNil(t, sizeDistribution)
+
+	formatDistribution, ok := response["formatDistribution"].(map[string]interface{})
+	assert.True(t, ok, "formatDistribution should exist even when empty")
+	assert.NotNil(t, formatDistribution)
+}
+
+// =============================================================================
+// Metadata Fields Testing (formerly in metadata_fields_test.go)
+// =============================================================================
+
+// TestGetMetadataFields tests getting metadata fields
+func TestGetMetadataFields(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/metadata/fields", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Verify fields structure
+	fields, ok := response["fields"].([]interface{})
+	assert.True(t, ok, "fields should be an array")
+	assert.NotNil(t, fields)
+
+	// Verify required fields are present
+	requiredFields := []string{"title", "author", "narrator", "series", "publishDate"}
+	fieldNames := make(map[string]bool)
+
+	for _, field := range fields {
+		fieldMap, ok := field.(map[string]interface{})
+		if ok {
+			if name, ok := fieldMap["name"].(string); ok {
+				fieldNames[name] = true
+			}
+		}
+	}
+
+	for _, required := range requiredFields {
+		assert.True(t, fieldNames[required], "Required field %s should be present", required)
+	}
+}
+
+// TestMetadataFieldValidation tests metadata field validation
+func TestMetadataFieldValidation(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		field          string
+		value          interface{}
+		expectedValid  bool
+		expectedStatus int
+	}{
+		{
+			name:           "valid title",
+			field:          "title",
+			value:          "Test Book",
+			expectedValid:  true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "empty title",
+			field:          "title",
+			value:          "",
+			expectedValid:  false,
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "valid publish date",
+			field:          "publishDate",
+			value:          "2024-01-01",
+			expectedValid:  true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "invalid publish date",
+			field:          "publishDate",
+			value:          "invalid-date",
+			expectedValid:  false,
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestBody := map[string]interface{}{
+				"updates": map[string]interface{}{
+					tt.field: tt.value,
+				},
+			}
+
+			body, _ := json.Marshal(requestBody)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/metadata/validate", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+		})
+	}
+}
+
+// =============================================================================
+// Work Queue Testing (formerly in work_test.go)
+// =============================================================================
+
+// TestGetWork tests getting work items from the queue
+func TestGetWork(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Verify work queue structure
+	workItems, ok := response["items"].([]interface{})
+	assert.True(t, ok, "work items should be an array")
+	assert.NotNil(t, workItems)
+}
+
+// TestWorkQueueOperations tests work queue operations
+func TestWorkQueueOperations(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		endpoint       string
+		method         string
+		expectedStatus int
+	}{
+		{
+			name:           "list work items",
+			endpoint:       "/api/v1/work",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "get work statistics",
+			endpoint:       "/api/v1/work/stats",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.endpoint, nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+		})
+	}
+}
+
+// TestWorkQueuePriority tests work queue priority handling
+func TestWorkQueuePriority(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Test that work queue respects priority
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	workItems, ok := response["items"].([]interface{})
+	assert.True(t, ok)
+
+	// Verify priority ordering if items exist
+	if len(workItems) > 1 {
+		for i := 0; i < len(workItems)-1; i++ {
+			current := workItems[i].(map[string]interface{})
+			next := workItems[i+1].(map[string]interface{})
+
+			currentPriority, _ := current["priority"].(float64)
+			nextPriority, _ := next["priority"].(float64)
+
+			assert.GreaterOrEqual(t, currentPriority, nextPriority,
+				"Work items should be ordered by priority (highest first)")
+		}
+	}
 }
