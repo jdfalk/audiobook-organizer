@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.10.3
+// version: 1.11.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -592,6 +592,15 @@ func saveBookToDatabase(book *Book) error {
 		var originalFileHash *string
 		var organizedFileHash *string
 		if hash, err := ComputeFileHash(book.FilePath); err == nil && hash != "" {
+			// Check if this hash is blocked
+			blocked, err := database.GlobalStore.IsHashBlocked(hash)
+			if err != nil {
+				log.Printf("Warning: failed to check hash blocklist: %v", err)
+			} else if blocked {
+				log.Printf("Skipping file %s: hash %s is blocked", book.FilePath, hash)
+				return nil // Skip this file
+			}
+
 			fileHash = stringPtrValue(hash)
 			originalFileHash = stringPtrValue(hash)
 			if size, err := getFileSize(book.FilePath); err == nil {
