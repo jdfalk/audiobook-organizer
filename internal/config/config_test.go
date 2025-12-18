@@ -353,4 +353,3 @@ func TestConfigurationValidation(t *testing.T) {
 		t.Errorf("Database type '%s' is not a valid type. Expected one of: %v", dbType, validTypes)
 	}
 }
-
