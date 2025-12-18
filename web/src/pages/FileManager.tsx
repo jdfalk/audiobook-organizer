@@ -130,9 +130,7 @@ export function FileManager() {
     }
   }, []);
 
-  const handleLoadChildren = async (
-    _path: string
-  ): Promise<DirectoryNode[]> => {
+  const handleLoadChildren = async (): Promise<DirectoryNode[]> => {
     // TODO: Replace with actual API call
     // const response = await fetch(`/api/v1/filesystem/browse?path=${encodeURIComponent(path)}`);
     // const data = await response.json();
@@ -199,7 +197,7 @@ export function FileManager() {
       <input
         ref={folderInputRef}
         type="file"
-        // @ts-ignore - webkitdirectory is not in TypeScript types
+        // @ts-expect-error - webkitdirectory is not in TypeScript types but required for directory selection
         webkitdirectory=""
         directory=""
         multiple

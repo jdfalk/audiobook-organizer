@@ -37,7 +37,7 @@ global.IntersectionObserver = class IntersectionObserver {
     return [];
   }
   unobserve() {}
-} as any;
+} as unknown as IntersectionObserver;
 
 // Mock localStorage for jsdom environment
 const storage = new Map<string, string>();
@@ -74,7 +74,7 @@ class MockEventSource {
   }
 }
 
-// @ts-ignore
+// @ts-expect-error - EventSource is not properly typed in global namespace
 global.EventSource = MockEventSource;
 
 // Mock fetch to avoid network calls in tests

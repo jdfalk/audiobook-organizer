@@ -454,10 +454,10 @@ export function Settings() {
         source.id === sourceId
           ? {
               ...source,
-              credentials: { ...source.credentials, [field]: value } as any,
+              credentials: { ...source.credentials, [field]: value },
             }
           : source
-      ) as any,
+      ),
     }));
     setSaved(false);
   };

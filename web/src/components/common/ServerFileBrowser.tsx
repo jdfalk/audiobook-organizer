@@ -75,12 +75,7 @@ export function ServerFileBrowser({
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
 
-  useEffect(() => {
-    fetchDirectory(currentPath);
-    setEditPath(currentPath);
-  }, [currentPath]);
-
-  const fetchDirectory = async (path: string) => {
+  const fetchDirectory = useCallback(async (path: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -101,7 +96,12 @@ export function ServerFileBrowser({
     } finally {
       setLoading(false);
     }
-  };
+  }, [allowDirSelect, onSelect]);
+
+  useEffect(() => {
+    fetchDirectory(currentPath);
+    setEditPath(currentPath);
+  }, [currentPath, fetchDirectory]);
 
   const handleItemClick = (item: api.FileSystemItem) => {
     if (item.is_dir) {

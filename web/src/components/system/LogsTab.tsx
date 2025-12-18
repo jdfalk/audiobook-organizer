@@ -43,7 +43,6 @@ interface LogEntry {
 
 export function LogsTab() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [levelFilter, setLevelFilter] = useState<string>('all');
@@ -53,7 +52,6 @@ export function LogsTab() {
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const fetchLogs = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await api.getSystemLogs({
         level: levelFilter !== 'all' ? levelFilter : undefined,
@@ -75,10 +73,8 @@ export function LogsTab() {
     } catch (error) {
       console.error('Failed to fetch logs:', error);
       setLogs([]);
-    } finally {
-      setLoading(false);
     }
-  }, [levelFilter, page, rowsPerPage, searchQuery, sourceFilter]);
+  }, [levelFilter, page, rowsPerPage, searchQuery]);
 
   useEffect(() => {
     fetchLogs();

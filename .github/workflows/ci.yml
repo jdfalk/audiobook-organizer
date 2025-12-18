@@ -31,7 +31,7 @@ jobs:
     name: Run CI
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
-      go-version: "1.23"
+      go-version: "1.25"
       node-version: "22"
       python-version: "3.13"
       rust-version: "1.76"
