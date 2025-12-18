@@ -1,12 +1,16 @@
 # file: Dockerfile
-# version: 1.0.0
+# version: 1.1.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
 # Builds both Go backend and React frontend, serving both from a single container
 
 # Stage 1: Build Go application
-FROM golang:1.23-alpine AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS go-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG BUILDPLATFORM
 
 WORKDIR /build
 
@@ -23,13 +27,13 @@ COPY . .
 # Build the application
 # CGO_ENABLED=0 for static binary
 # -ldflags for smaller binary and version info
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
     -o audiobook-organizer \
     .
 
 # Stage 2: Build frontend
-FROM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /build/web
 
@@ -44,12 +48,13 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 3: Final production image
-FROM alpine:latest
+FROM alpine:3.20
 
-# Install runtime dependencies
-RUN apk --no-cache add \
+# Install runtime dependencies (disable maintainer scripts to avoid QEMU trigger issues)
+RUN apk add --no-cache --no-scripts \
     ca-certificates \
     tzdata \
+    && update-ca-certificates || true \
     && addgroup -g 1000 audiobook \
     && adduser -D -u 1000 -G audiobook audiobook
 
