@@ -1,12 +1,12 @@
 <!-- file: TODO.md -->
-<!-- version: 1.12.0 -->
+<!-- version: 1.13.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
 
 ## 🚨 BLOCKING ISSUES - December 18, 2025 (CRITICAL)
 
-### Workflow Build Failures
+### Current Focus: Workflow Stabilization & ghcommon Pre-release Strategy
 
 #### **CRITICAL-001**: Go Version Mismatch in Docker Build ✅ FIXED
 - **Status**: ✅ RESOLVED
@@ -17,18 +17,19 @@
 - **Affected Workflows**: Prerelease, Release Production
 - **Date Fixed**: December 18, 2025
 
-#### **CRITICAL-002**: NPM Cache Missing Lock File
-- **Status**: IN PROGRESS - SOLUTION IDENTIFIED
+#### **CRITICAL-002**: NPM Cache Missing Lock File ⚠️ IN PROGRESS
+- **Status**: ⚠️ IN PROGRESS - SOLUTION IDENTIFIED
 - **Error**: `Dependencies lock file is not found...Supported file patterns: package-lock.json,npm-shrinkwrap.json,yarn.lock`
-- **Root Cause**: `actions/setup-node@v6` auto-cache feature requires lock file
+- **Root Cause**: `actions/setup-node@v6` auto-cache feature requires lock file, but we need manual caching
 - **Solution**: Use manual caching from reusable-advanced-cache.yml (already implemented in ghcommon@main)
 - **Implementation Steps**:
-  1. Disable setup-node cache parameter in reusable-ci.yml
-  2. Pass cache configuration to advanced-cache workflow
-  3. Update repository-config.yml with npm cache settings
+  1. ✅ Verify ghcommon@main has reusable-advanced-cache.yml
+  2. ⚠️ Update reusable-ci.yml to disable setup-node cache and use advanced-cache
+  3. ⚠️ Update repository-config.yml with npm cache settings
+  4. ⚠️ Test with audiobook-organizer workflows
 - **Files**: frontend-ci.yml, reusable-ci.yml, repository-config.yml
-- **Priority**: CRITICAL - Blocking CI/CD pipeline
-- **Notes**: ghcommon@main has manual caching implemented, just needs configuration
+- **Priority**: CRITICAL - Blocking frontend CI/CD pipeline
+- **Notes**: Manual caching pattern exists, just needs proper integration
 
 #### **CRITICAL-003**: Outdated ghcommon Workflow Versions ✅ FIXED
 - **Status**: ✅ RESOLVED
@@ -41,6 +42,23 @@
   - frontend-ci.yml: already using @main
 - **Rationale**: ghcommon working toward 1.0.0 stable, use @main during development
 - **Date Fixed**: December 18, 2025
+
+#### **CRITICAL-004**: ghcommon Pre-release & Tagging Strategy ⚠️ NEW
+- **Status**: ⚠️ NOT STARTED - HIGH PRIORITY
+- **Issue**: Need structured pre-release tagging for ghcommon before 1.0.0
+- **Strategy**:
+  1. Create pre-release tags (v0.9.x, v0.10.x, etc.) for testing
+  2. Test each pre-release across all repos (audiobook-organizer, subtitle-extract, etc.)
+  3. Only release 1.0.0 when all repos work consistently with workflows
+  4. Use semantic versioning for pre-releases to track breaking changes
+- **Action Items**:
+  - [ ] Review current ghcommon main branch state
+  - [ ] Create first pre-release tag (v0.9.0-beta.1 or similar)
+  - [ ] Document pre-release testing process
+  - [ ] Test pre-release tag with audiobook-organizer
+  - [ ] Iterate until stable, then release 1.0.0
+- **Priority**: HIGH - Needed before 1.0.0 release
+- **Notes**: Don't release broken workflows; pre-releases let us test safely
 
 ### Architecture Issues
 
