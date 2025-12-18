@@ -1,5 +1,5 @@
 // file: web/src/pages/FileManager.tsx
-// version: 1.2.1
+// version: 1.2.2
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
 import { useState, useCallback, useRef } from 'react';
@@ -157,8 +157,10 @@ export function FileManager() {
     if (!files || files.length === 0) return;
 
     // Get the directory path from the first file
-    const firstFile = files[0];
-    const webkitPath = (firstFile as any).webkitRelativePath;
+      const firstFile = files[0];
+      const webkitPath = (
+        firstFile as File & { webkitRelativePath?: string }
+      ).webkitRelativePath;
     if (webkitPath) {
       const folderPath = webkitPath.split('/')[0];
       setNewFolderPath(folderPath);

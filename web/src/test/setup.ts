@@ -1,10 +1,12 @@
 // file: web/src/test/setup.ts
-// version: 1.0.4
+// version: 1.0.5
 // guid: 8f9a0b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c
 
 import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+
+const ResponseCtor = globalThis.Response;
 
 // Cleanup after each test case
 afterEach(() => {
@@ -76,13 +78,23 @@ class MockEventSource {
 global.EventSource = MockEventSource;
 
 // Mock fetch to avoid network calls in tests
-const okJson = (data: unknown) =>
-  Promise.resolve(
-    new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  );
+const okJson = (data: unknown) => {
+  if (ResponseCtor) {
+    return Promise.resolve(
+      new ResponseCtor(JSON.stringify(data), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  }
+
+  // Fallback for environments without Response
+  return Promise.resolve({
+    json: () => Promise.resolve(data),
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  } as unknown as Response);
+};
 
 global.fetch = (input: RequestInfo | URL) => {
   const url = typeof input === 'string' ? input : input.toString();

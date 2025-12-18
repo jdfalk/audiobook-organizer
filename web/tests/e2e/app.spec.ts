@@ -1,5 +1,5 @@
 // file: tests/e2e/app.spec.ts
-// version: 1.0.1
+// version: 1.0.2
 // guid: 1f2a3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b6c
 
 import { test, expect } from '@playwright/test';
@@ -16,8 +16,8 @@ const mockApi = async (page: import('@playwright/test').Page) => {
       removeEventListener() {}
       close() {}
     }
-    // @ts-ignore
-    window.EventSource = MockEventSource;
+    (window as unknown as { EventSource: typeof EventSource }).EventSource =
+      MockEventSource as unknown as typeof EventSource;
   });
 
   await page.route('**/api/v1/system/status', (route) => {

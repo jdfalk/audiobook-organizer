@@ -1,5 +1,5 @@
 // file: tests/e2e/import-paths.spec.ts
-// version: 1.0.1
+// version: 1.0.2
 // guid: e3f4a5b6-c7d8-9e0f-1a2b-3c4d5e6f7a8b
 
 import { test, expect } from '@playwright/test';
@@ -18,8 +18,8 @@ test.describe('Import paths workflows', () => {
         removeEventListener() {}
         close() {}
       }
-      // @ts-ignore
-      window.EventSource = MockEventSource;
+      (window as unknown as { EventSource: typeof EventSource }).EventSource =
+        MockEventSource as unknown as typeof EventSource;
     });
   });
 
