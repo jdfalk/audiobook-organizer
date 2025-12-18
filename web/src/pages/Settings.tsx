@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.19.1
+// version: 1.19.2
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -1184,7 +1184,7 @@ export function Settings() {
                           size="small"
                           onClick={async () => {
                             try {
-                              let keyToTest = settings.openaiApiKey;
+                              const keyToTest = settings.openaiApiKey;
 
                               // If user hasn't entered a new key, test the saved one by not passing a key
                               // Backend will use the key from config

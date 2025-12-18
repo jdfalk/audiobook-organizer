@@ -1,8 +1,8 @@
 // file: web/src/components/system/LogsTab.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8d9e0f1a-2b3c-4d5e-6f7a-8b9c0d1e2f3a
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -43,7 +43,7 @@ interface LogEntry {
 
 export function LogsTab() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [levelFilter, setLevelFilter] = useState<string>('all');
@@ -52,21 +52,7 @@ export function LogsTab() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [levelFilter, sourceFilter, page, rowsPerPage]);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, levelFilter, sourceFilter]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.getSystemLogs({
@@ -92,7 +78,21 @@ export function LogsTab() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [levelFilter, page, rowsPerPage, searchQuery, sourceFilter]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      fetchLogs();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchLogs]);
 
   const getLevelIcon = (level: string) => {
     switch (level) {
