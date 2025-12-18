@@ -1,39 +1,224 @@
 <!-- file: TODO.md -->
-<!-- version: 1.8.0 -->
+<!-- version: 1.10.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
+
+## 🔥 CRITICAL CI/CD FIXES - December 18, 2025
+
+### Frontend Build Errors and Warnings (11 Issues)
+
+#### TypeScript/ESLint Errors (6 items)
+
+- [x] **TODO-001**: Fix @ts-ignore in web/src/test/setup.ts:77
+  - **COMPLETED**: Replaced with @ts-expect-error with explanation
+- [x] **TODO-002**: Fix @ts-ignore in web/src/pages/FileManager.tsx:202
+  - **COMPLETED**: Replaced with @ts-expect-error with explanation
+
+- [x] **TODO-003**: Remove unused variable in web/src/pages/FileManager.tsx:134
+  - **COMPLETED**: Removed unused \_path parameter
+
+- [x] **TODO-004**: Remove unused variable in
+      web/src/components/system/LogsTab.tsx:46
+  - **COMPLETED**: Removed unused setLoading state setter
+
+- [x] **TODO-005**: Remove unused import in
+      web/src/components/common/ServerFileBrowser.tsx:5
+  - **COMPLETED**: useCallback is now used (wrapped fetchDirectory)
+
+- [x] **TODO-006**: Fix 'any' type in web/src/test/setup.ts:40
+  - **COMPLETED**: Replaced with `as unknown as IntersectionObserver`
+
+#### TypeScript 'any' Type Errors (2 items)
+
+- [x] **TODO-007**: Fix 'any' type in web/src/pages/Settings.tsx:460
+  - **COMPLETED**: Removed both 'as any' casts from credentials mapping
+
+- [x] **TODO-008**: Fix 'any' type in web/src/pages/Settings.tsx:457
+  - **COMPLETED**: Removed both 'as any' casts from credentials mapping
+
+#### React Hooks Warnings (3 items)
+
+- [x] **TODO-009**: Fix React Hook dependency in
+      web/src/components/system/LogsTab.tsx:81
+  - **COMPLETED**: Removed sourceFilter from dependency array (not used in
+    fetchLogs)
+
+- [x] **TODO-010**: Fix React Hook dependency in
+      web/src/components/common/ServerFileBrowser.tsx:81
+  - **COMPLETED**: Wrapped fetchDirectory in useCallback and added to
+    dependencies
+
+- [ ] **TODO-011**: Verify all ESLint rules are passing
+  - **File**: `web/`
+  - **Issue**: Run `npm run lint` to verify all issues are resolved
+  - **Fix**: Execute lint command and ensure clean output
+  - **Priority**: High
+  - **Category**: Validation
+  - **Status**: Ready for testing
+
+### CI Workflow Configuration (1 item)
+
+- [x] **TODO-017**: Update CI workflow to use Go 1.25
+  - **COMPLETED**: Updated ci.yml go-version from "1.23" to "1.25"
+
+### Docker Build Issues (2 items)
+
+- [x] **TODO-014**: Create missing Dockerfile
+  - **COMPLETED**: Created multi-stage Dockerfile with Go 1.25-alpine
+
+- [x] **TODO-015**: Update Dockerfile Go version to 1.25
+  - **COMPLETED**: Created with golang:1.25-alpine base image
+
+### Node.js/NPM Build Issues (2 items)
+
+- [ ] **TODO-012**: Fix npm cache path resolution error
+  - **File**: `.github/workflows/ci.yml` or reusable workflow
+  - **Issue**: "Some specified paths were not resolved, unable to cache
+    dependencies"
+  - **Root Cause**: cache-dependency-path may need to be `web/package-lock.json`
+  - **Fix**: This is in the reusable workflow - need to verify
+    cache-dependency-path configuration
+  - **Priority**: High
+  - **Category**: CI/CD
+  - **Status**: Needs investigation of reusable workflow
+
+- [ ] **TODO-013**: Fix punycode deprecation warning
+  - **File**: `web/package.json` or dependencies
+  - **Issue**: "(node:2311) [DEP0040] DeprecationWarning: The `punycode` module
+    is deprecated"
+  - **Fix**: Update dependencies that use deprecated punycode module
+  - **Priority**: Low
+  - **Category**: Dependencies
+  - **Status**: Non-critical, can be addressed later
+
+# <<<<<<< Updated upstream
+
+- [ ] **TODO-018**: CI Pipeline failure tracking - Frontend blocking entire
+      pipeline
+  - **File**: CI/CD pipeline (dependent on TODO-001 through TODO-011)
+  - **Issue**: "❌ CI Pipeline failed: Frontend CI - Error: Process completed
+    with exit code 1"
+  - **Root Cause**: Frontend TypeScript/ESLint errors (TODO-001 through
+    TODO-011) causing build failure
+  - **Context**: Pipeline shows:
+    ```
+    JOB_WORKFLOW_LINT: skipped
+    JOB_WORKFLOW_SCRIPTS: skipped
+    JOB_GO: skipped
+    JOB_PYTHON: skipped
+    JOB_RUST: skipped
+    JOB_FRONTEND: failure
+    JOB_DOCKER: skipped
+    JOB_DOCS: skipped
+    ```
+  - **Fix**: All frontend linting errors (TODO-001 through TODO-011) are marked
+    as completed - need to verify build passes
+  - **Action Items**:
+    1. Run `cd web && npm run lint` locally to verify all ESLint errors are
+       fixed
+    2. Run `cd web && npm run build` to verify frontend builds successfully
+    3. Push changes and verify CI pipeline passes
+    4. Once frontend passes, other jobs should run (Go, Docker, etc.)
+  - **Priority**: Critical (Blocking entire CI/CD pipeline)
+  - **Category**: CI/CD
+  - **Status**: Ready for verification (all prerequisite TODOs completed)
+
+- [ ] **TODO-019**: ESLint configuration migration to v9.x
+  - **File**: `web/.eslintrc.json` (needs to be migrated to `eslint.config.js`)
+  - **Issue**: "ESLint couldn't find an eslint.config.(js|mjs|cjs) file"
+  - **Root Cause**: ESLint v9.0.0+ requires new config file format
+  - **Fix**: Migrate from `.eslintrc.json` to `eslint.config.js` using migration
+    guide
+  - **Migration Guide**:
+    https://eslint.org/docs/latest/use/configure/migration-guide
+  - **Priority**: High (Blocking lint command)
+  - **Category**: Build/Development
+  - **Status**: New issue discovered during verification
+  - **Note**: This may be why the original linting in CI failed
+
+- [ ] **TODO-020**: TypeScript compilation errors - Missing dependencies/types
+  - **File**: `web/` directory - multiple TypeScript files
+  - **Issue**: TypeScript build shows "Cannot find module" errors for react,
+    @mui/material, etc.
+  - **Sample Errors**:
+    - "Cannot find module '@testing-library/react' or its corresponding type
+      declarations"
+    - "Cannot find module 'react' or its corresponding type declarations"
+    - "Cannot find module '@mui/material' or its corresponding type
+      declarations"
+  - **Root Cause**: Either:
+    1. Dependencies not installed (`npm install` needed)
+    2. Type definitions missing
+    3. tsconfig.json misconfiguration
+  - **Fix**:
+    1. Run `npm install` in web/ directory to ensure all dependencies are
+       installed
+    2. Verify package.json has all required @types/\* packages
+    3. Check tsconfig.json paths and module resolution
+  - **Priority**: Critical (Blocking build)
+  - **Category**: Build/Dependencies
+  - **Status**: New issue discovered during verification
+
+> > > > > > > Stashed changes
+
+### Python Script Issues (1 item)
+
+- [ ] **TODO-016**: Fix generate_release_summary.py error handling
+  - **File**: `.github/workflows/scripts/generate_release_summary.py`
+  - **Issue**: Script exits with code 1 without creating summary report
+  - **Fix**: Add error handling and ensure report is generated even on partial
+    failures
+  - **Output**: Should create summary in GitHub Actions summary or PR comment
+  - **Priority**: High
+  - **Category**: CI/CD
+  - **Status**: Requires script analysis
+
+---
 
 ## 🚨 CURRENT SPRINT - December 6, 2025
 
 ### ✅ Completed Dec 6, 2025
 
-- [x] **Web UI book display FIXED** - Issue was hasImportPaths check blocking all books + API returning `items` not `audiobooks`
-- [x] **EventSource reconnection FIXED** - Added exponential backoff (3s→6s→12s→24s, cap at 30s) and onopen handler to reset attempts
-- [x] **Health endpoint FIXED** - Both `/api/health` and `/api/v1/health` now available (was already fixed)
-- [x] **API response field fix** - Fixed frontend API client to use `items` instead of `audiobooks` field
+- [x] **Web UI book display FIXED** - Issue was hasImportPaths check blocking
+      all books + API returning `items` not `audiobooks`
+- [x] **EventSource reconnection FIXED** - Added exponential backoff
+      (3s→6s→12s→24s, cap at 30s) and onopen handler to reset attempts
+- [x] **Health endpoint FIXED** - Both `/api/health` and `/api/v1/health` now
+      available (was already fixed)
+- [x] **API response field fix** - Fixed frontend API client to use `items`
+      instead of `audiobooks` field
 
 ### ✅ Completed Nov 21-22
 
-- [x] **Metadata extraction fixes** - Fixed case-sensitive tags, release-group filtering, volume detection, series extraction, narrator/publisher fields
-- [x] **Diagnostics CLI** - Created `diagnostics` command with `cleanup-invalid` and `query` subcommands
+- [x] **Metadata extraction fixes** - Fixed case-sensitive tags, release-group
+      filtering, volume detection, series extraction, narrator/publisher fields
+- [x] **Diagnostics CLI** - Created `diagnostics` command with `cleanup-invalid`
+      and `query` subcommands
 - [x] **Database cleanup** - Purged 8 corrupted records with placeholder values
-- [x] **Full rescan verification** - Confirmed 4 books with correct metadata after cleanup
-- [x] **Scan progress implementation** - Added pre-scan file count and separate library/import statistics (needs testing)
+- [x] **Full rescan verification** - Confirmed 4 books with correct metadata
+      after cleanup
+- [x] **Scan progress implementation** - Added pre-scan file count and separate
+      library/import statistics (needs testing)
 
 ### 🔥 High Priority (Next Session)
 
-- [ ] **Test scan progress reporting** - Trigger scan, verify progress shows actual file counts
+- [ ] **Test scan progress reporting** - Trigger scan, verify progress shows
+      actual file counts
 
 ### 📊 Medium Priority (Data Quality)
 
-- [ ] **Separate dashboard counts** - Display library vs import book counts separately
-- [ ] **Fix import path negative sizes** - Debug `total_size` calculation returning negative values
+- [ ] **Separate dashboard counts** - Display library vs import book counts
+      separately
+- [ ] **Fix import path negative sizes** - Debug `total_size` calculation
+      returning negative values
 
 ### 🧪 Low Priority (Optional)
 
-- [ ] **Verify duplicate detection** - Test hash-based duplicate detection implemented in v1.9.0
-- [ ] **Test AI parsing** - Verify OpenAI integration if needed (may not be necessary after metadata fixes)
+- [ ] **Verify duplicate detection** - Test hash-based duplicate detection
+      implemented in v1.9.0
+- [ ] **Test AI parsing** - Verify OpenAI integration if needed (may not be
+      necessary after metadata fixes)
 
 ---
 
@@ -100,11 +285,24 @@
 
 ## New Requirements - November 21, 2025
 
-- [ ] **Scanner & Hash Tracking**: Persist both the original import hash and the post-organization hash for every book so that when a library copy is removed we can detect the import copy (matching original hash), recopy it, and compare the new hash to detect drift.
-- [ ] **Book Detail Page & Delete Flow**: Confirm each book has a dedicated detail view showing files, metadata, and all versions; enhance the delete dialog with a "Prevent Reimporting of this file" checkbox that records the hash in a do-not-import list.
-- [ ] **Quantity / State Lifecycle**: Add a per-book quantity/reference counter or state machine (wanted/imported/organized) plus soft-delete flags, a background purge job, and a do-not-import hash list that survives deletes so the UI can hide removed entries while preventing future reimports.
-- [ ] **Settings Tab for Banned Hashes**: Add a new tab on the Settings page to view/remove entries in the do-not-import hash list so users can unblock imports later.
-- [ ] **Containerized E2E Suite**: Ensure the Docker test image can execute the Selenium/pytest E2E suite end-to-end, expand the failing tests, and add a VS Code task to run them inside the container for consistent automation.
+- [ ] **Scanner & Hash Tracking**: Persist both the original import hash and the
+      post-organization hash for every book so that when a library copy is
+      removed we can detect the import copy (matching original hash), recopy it,
+      and compare the new hash to detect drift.
+- [ ] **Book Detail Page & Delete Flow**: Confirm each book has a dedicated
+      detail view showing files, metadata, and all versions; enhance the delete
+      dialog with a "Prevent Reimporting of this file" checkbox that records the
+      hash in a do-not-import list.
+- [ ] **Quantity / State Lifecycle**: Add a per-book quantity/reference counter
+      or state machine (wanted/imported/organized) plus soft-delete flags, a
+      background purge job, and a do-not-import hash list that survives deletes
+      so the UI can hide removed entries while preventing future reimports.
+- [ ] **Settings Tab for Banned Hashes**: Add a new tab on the Settings page to
+      view/remove entries in the do-not-import hash list so users can unblock
+      imports later.
+- [ ] **Containerized E2E Suite**: Ensure the Docker test image can execute the
+      Selenium/pytest E2E suite end-to-end, expand the failing tests, and add a
+      VS Code task to run them inside the container for consistent automation.
 
 ## 🚨 CRITICAL FIXES COMPLETED - 2024-11-20
 
@@ -451,14 +649,14 @@
 ### Event Transport Regression (Nov 21, 2025)
 
 - [ ] Fix SSE lifetime in `internal/server.handleEvents` so `/api/events`
-  streams remain open (remove premature context timeouts, keep heartbeats
-  flowing)
+      streams remain open (remove premature context timeouts, keep heartbeats
+      flowing)
 - [ ] Add client-side EventSource manager with exponential backoff (3s → 6s →
-  12s, cap at 60s) and shared connection for Dashboard + Library
+      12s, cap at 60s) and shared connection for Dashboard + Library
 - [ ] Replace `/api/v1/health` polling with existing `/api/health` endpoint or
-  add a v1 alias so reconnect overlay stops 404 spam
+      add a v1 alias so reconnect overlay stops 404 spam
 - [ ] When health probe succeeds after outage, auto-refresh UI to clear stuck
-  "Attempt N" overlay and rehydrate state
+      "Attempt N" overlay and rehydrate state
 - [ ] Log reconnection attempts + last error reason in UI for easier diagnosis
 
 ### Template Variables in Organized Paths
