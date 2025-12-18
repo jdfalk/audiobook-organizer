@@ -2,6 +2,7 @@
 # version: 2.3.2
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
+# CI should be using the upstream shared ci
 name: Continuous Integration
 
 on:
