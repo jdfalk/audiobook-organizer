@@ -6,14 +6,20 @@
 
 ## 📖 Overview
 
-This task validates the hash-based duplicate detection system implemented in v1.9.0. The goal is to ensure duplicate audiobooks are correctly identified via content hashing (SHA256), reported through the API, and surfaced in the UI without false positives.
+This task validates the hash-based duplicate detection system implemented in
+v1.9.0. The goal is to ensure duplicate audiobooks are correctly identified via
+content hashing (SHA256), reported through the API, and surfaced in the UI
+without false positives.
 
 **Deliverables:**
 
-- API returns accurate duplicate book groups via `/api/v1/audiobooks/duplicates`.
+- API returns accurate duplicate book groups via
+  `/api/v1/audiobooks/duplicates`.
 - Duplicates computed using SHA256 file hashes (not metadata fuzzy matching).
-- UI displays duplicate groups with clear labeling and actionable options (keep/delete).
-- No false positives (distinct books incorrectly grouped) or false negatives (duplicates missed).
+- UI displays duplicate groups with clear labeling and actionable options
+  (keep/delete).
+- No false positives (distinct books incorrectly grouped) or false negatives
+  (duplicates missed).
 - Tests and troubleshooting steps validated.
 
 ## 📂 Document Set
@@ -29,9 +35,12 @@ This task validates the hash-based duplicate detection system implemented in v1.
 
 ## 🎯 Success Criteria
 
-- `/api/v1/audiobooks/duplicates` returns groups of books with identical SHA256 hashes.
-- Each group contains 2+ books with same content hash but may differ in path/metadata.
-- UI shows duplicate count on Dashboard and allows navigation to duplicate management view.
+- `/api/v1/audiobooks/duplicates` returns groups of books with identical SHA256
+  hashes.
+- Each group contains 2+ books with same content hash but may differ in
+  path/metadata.
+- UI shows duplicate count on Dashboard and allows navigation to duplicate
+  management view.
 - No crashes, no negative counts, no grouping of distinct files.
 
 ## 🚀 Quick Start
@@ -53,7 +62,8 @@ curl -s -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"
 ## 🔐 Multi-AI Safety
 
 - Use lock/state files under `/tmp/task-4-*` to avoid concurrent runs.
-- Test with read-only queries first; avoid deleting files during validation phase.
+- Test with read-only queries first; avoid deleting files during validation
+  phase.
 - Capture duplicate groups before attempting any cleanup operations.
 
 ## 🧭 Navigation
@@ -70,7 +80,8 @@ curl -s -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"
 
 ## ✅ Next Actions
 
-1. Run Core Phases (check implementation, scan to compute hashes, query API, verify groups).
+1. Run Core Phases (check implementation, scan to compute hashes, query API,
+   verify groups).
 2. If duplicates incorrect or endpoint missing, follow Troubleshooting.
 3. Validate with known duplicate files (copy same file to multiple paths).
 4. Log results and mark TODO when complete.

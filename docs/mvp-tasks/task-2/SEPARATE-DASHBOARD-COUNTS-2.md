@@ -16,7 +16,8 @@ Implement and verify separate tracking of book counts for:
 
 - ✅ Dashboard shows two separate counts: "Library: X" and "Import: Y"
 - ✅ Library page respects the separation
-- ✅ `/api/v1/system/status` returns distinct `library_book_count` and `import_book_count`
+- ✅ `/api/v1/system/status` returns distinct `library_book_count` and
+  `import_book_count`
 - ✅ Counts are accurate and persistent after scans
 - ✅ No data loss or duplication
 
@@ -163,7 +164,8 @@ echo "  Total   - API reports: $TOTAL_FROM_API, Expected: $((LIBRARY_ACTUAL + IM
 
 ### Phase 5: Test After Scan
 
-**Goal:** Verify counts remain accurate after a scan operation (idempotent test).
+**Goal:** Verify counts remain accurate after a scan operation (idempotent
+test).
 
 **Idempotent Scan Test:**
 
@@ -351,7 +353,9 @@ go build -o ~/audiobook-organizer-embedded
 ~/audiobook-organizer-embedded serve --port 8888 --debug
 ```
 
-**Key Principle:** All state-changing operations (scans, modifications) should be explicitly triggered. If following the idempotent verification steps above, nothing is modified.
+**Key Principle:** All state-changing operations (scans, modifications) should
+be explicitly triggered. If following the idempotent verification steps above,
+nothing is modified.
 
 ---
 
@@ -453,7 +457,8 @@ curl -s http://localhost:8888/api/v1/system/status | jq '{library_book_count, im
 
 Test passes when:
 
-1. ✅ `/api/v1/system/status` returns distinct `library_book_count` and `import_book_count`
+1. ✅ `/api/v1/system/status` returns distinct `library_book_count` and
+   `import_book_count`
 2. ✅ Library count equals actual books in `RootDir`
 3. ✅ Import count equals books outside `RootDir`
 4. ✅ Total equals library + import

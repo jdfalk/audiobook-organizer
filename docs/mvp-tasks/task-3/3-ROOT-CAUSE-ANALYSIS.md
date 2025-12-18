@@ -4,15 +4,15 @@
 
 # Task 3 Root Cause Analysis
 
-**Date:** December 14, 2025
-**Found In:** `internal/server/server.go` function `getSystemStatus()`
-**Severity:** CRITICAL - MVP-blocking
+**Date:** December 14, 2025 **Found In:** `internal/server/server.go` function
+`getSystemStatus()` **Severity:** CRITICAL - MVP-blocking
 
 ---
 
 ## Issue Description
 
-The `/api/v1/system/status` endpoint can return negative `import_size_bytes` values due to a mathematical error.
+The `/api/v1/system/status` endpoint can return negative `import_size_bytes`
+values due to a mathematical error.
 
 ---
 
@@ -28,7 +28,8 @@ importSize = totalSize - librarySize  // BUG: Can be negative!
 
 - `totalSize` = cached sum of files in import paths
 - `librarySize` = sum of files in root directory
-- `importSize = totalSize - librarySize` ← **Can go negative if librarySize > totalSize**
+- `importSize = totalSize - librarySize` ← **Can go negative if librarySize >
+  totalSize**
 
 **Why it happens:**
 
@@ -79,7 +80,9 @@ totalSize := librarySize + importSize
 ## Additional Issues to Address
 
 1. **Cache naming:** `cachedLibrarySize` misleadingly caches import sizes
-2. **Overlapping paths:** Files in rootDir subdirectories could be double-counted
-3. **API response fields:** Should be named `library_size_bytes`, `import_size_bytes`, `total_size_bytes` not just `total_size`
+2. **Overlapping paths:** Files in rootDir subdirectories could be
+   double-counted
+3. **API response fields:** Should be named `library_size_bytes`,
+   `import_size_bytes`, `total_size_bytes` not just `total_size`
 
 ---

@@ -82,7 +82,9 @@ test.describe('App smoke', () => {
     await expect(
       page.getByText('Audiobook Organizer', { exact: true }).first()
     ).toBeVisible();
-    await expect(page.getByText('Dashboard', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText('Dashboard', { exact: true }).first()
+    ).toBeVisible();
   });
 
   test('shows import path empty state on Library page', async ({ page }) => {
@@ -97,6 +99,8 @@ test.describe('App smoke', () => {
     await page.waitForLoadState('networkidle');
     await page.getByText('Settings', { exact: true }).first().click();
     await expect(page).toHaveURL(/.*\/settings/);
-    await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText('Settings', { exact: true }).first()
+    ).toBeVisible();
   });
 });

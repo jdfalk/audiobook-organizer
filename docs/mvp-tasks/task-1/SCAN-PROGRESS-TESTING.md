@@ -6,7 +6,8 @@
 
 ## 🎯 Overall Goal
 
-Verify that the scan progress reporting system (implemented in v1.26.0) works correctly by:
+Verify that the scan progress reporting system (implemented in v1.26.0) works
+correctly by:
 
 1. Triggering a full scan with `force_update=true`
 2. Observing real-time progress events via SSE
@@ -25,11 +26,13 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 
 ## 📦 Split Documentation (read-first)
 
-This single file is kept for history, but the task is now split into concise parts to avoid length limits:
+This single file is kept for history, but the task is now split into concise
+parts to avoid length limits:
 
 - `README.md` — overview and navigation
 - `CORE-TESTING.md` — phases 1-5 and safety/locks
-- `ADVANCED-SCENARIOS.md` — large libraries, concurrency, recovery drills, code deep dive
+- `ADVANCED-SCENARIOS.md` — large libraries, concurrency, recovery drills, code
+  deep dive
 - `TROUBLESHOOTING.md` — issues, root causes, and fixes
 
 Use the split files for active work; keep this document as a legacy reference.
@@ -40,7 +43,8 @@ Use the split files for active work; keep this document as a legacy reference.
 
 ### ⚠️ CRITICAL: Idempotency & Multi-Agent Safety
 
-**IMPORTANT:** Multiple AIs may work on this task. Follow these rules to prevent conflicts:
+**IMPORTANT:** Multiple AIs may work on this task. Follow these rules to prevent
+conflicts:
 
 1. **Always check lock file first:**
 
@@ -333,7 +337,8 @@ For a full scan of library + import paths:
 
 ### Known Implementation Details
 
-**Pre-scan file counting** (`internal/server/server.go:startScan`, lines ~1135-1150):
+**Pre-scan file counting** (`internal/server/server.go:startScan`, lines
+~1135-1150):
 
 ```go
 // First pass: count total files across all folders
@@ -344,7 +349,8 @@ for _, folderPath := range foldersToScan {
 }
 ```
 
-**Separate library vs import reporting** (`internal/server/server.go:startScan`, line ~1220):
+**Separate library vs import reporting** (`internal/server/server.go:startScan`,
+line ~1220):
 
 ```go
 if forceUpdate && config.AppConfig.RootDir != "" {
@@ -416,7 +422,7 @@ for idx, book := range books {
    ls -la /Users/jdfalk/ao-library/library/
    ```
 
-   Should show audiobook files (*.m4b,*.mp3, etc.)
+   Should show audiobook files (_.m4b,_.mp3, etc.)
 
 2. **Supported extensions not configured:**
 
@@ -456,7 +462,8 @@ Should be >= v1.26.0
 
 **If older version:**
 
-- Rebuild: `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
+- Rebuild:
+  `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
 - Restart server
 
 ### Issue: Progress stops mid-scan
@@ -475,7 +482,8 @@ Should be >= v1.26.0
    - Book might have permission issue or corrupt metadata
 
 2. **Parallel processing deadlock:**
-   - Check worker count: `curl -s http://localhost:8888/api/v1/system/status | jq '.concurrent_workers'`
+   - Check worker count:
+     `curl -s http://localhost:8888/api/v1/system/status | jq '.concurrent_workers'`
    - Try reducing workers if system resources constrained
 
 3. **Database connection lost:**
@@ -569,7 +577,8 @@ curl -X POST http://localhost:8888/api/v1/operations/scan \
 - [ ] Progress shows incrementing numbers (1/4, 2/4, 3/4, 4/4)
 - [ ] Final message shows "Library: 4, Import: 0" breakdown
 - [ ] Server logs contain no errors
-- [ ] Operation log file created at `/Users/jdfalk/ao-library/logs/operation-*.log`
+- [ ] Operation log file created at
+      `/Users/jdfalk/ao-library/logs/operation-*.log`
 - [ ] Database counts match after scan
 - [ ] Frontend receives and displays progress (optional, nice-to-have)
 

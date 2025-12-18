@@ -4,7 +4,8 @@
 
 # Task 5: Core Hash Tracking & State Testing
 
-This file defines the core flow to validate dual-hash tracking and state lifecycle management.
+This file defines the core flow to validate dual-hash tracking and state
+lifecycle management.
 
 ## 🔒 Safety & Locks
 

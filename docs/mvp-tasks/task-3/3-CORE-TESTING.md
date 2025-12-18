@@ -4,7 +4,8 @@
 
 # Task 3: Core Size Validation & Fix Flow
 
-This file defines the core, repeatable flow to detect and fix negative or incorrect import/library size reporting.
+This file defines the core, repeatable flow to detect and fix negative or
+incorrect import/library size reporting.
 
 ## 🔒 Safety & Locks
 
@@ -98,7 +99,8 @@ Pass criteria:
 
 - No negative values
 - `total_size_bytes` equals sum
-- Values move in expected direction after scan (no large jumps to negative/overflow)
+- Values move in expected direction after scan (no large jumps to
+  negative/overflow)
 
 ## Phase 4: Restart & Persist
 
@@ -113,7 +115,8 @@ sleep 3
 curl -s http://localhost:8888/api/v1/system/status | jq '{library_size_bytes, import_size_bytes, total_size_bytes}'
 ```
 
-Pass criteria: values unchanged (or changed only by real FS changes), never negative.
+Pass criteria: values unchanged (or changed only by real FS changes), never
+negative.
 
 ## Phase 5: Cleanup
 

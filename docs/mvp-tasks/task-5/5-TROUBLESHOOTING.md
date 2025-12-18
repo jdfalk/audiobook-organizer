@@ -4,7 +4,8 @@
 
 # Task 5: Troubleshooting - Hash Tracking & State Lifecycle
 
-Use this guide when hash tracking fails, states are incorrect, or reimport prevention doesn't work.
+Use this guide when hash tracking fails, states are incorrect, or reimport
+prevention doesn't work.
 
 ## Quick Index
 
@@ -88,8 +89,10 @@ rg "state.*organized|State.*Organized" internal/server internal/operations -n
 
 **Fix:**
 
-- Update organize handler to set `State = "organized"` after successful operation.
-- Update delete handler to set `State = "soft_deleted"` and `SoftDeletedAt = time.Now()`.
+- Update organize handler to set `State = "organized"` after successful
+  operation.
+- Update delete handler to set `State = "soft_deleted"` and
+  `SoftDeletedAt = time.Now()`.
 - Re-run operation to verify state change.
 
 ## Issue 4: Blocked Hashes UI Missing
@@ -137,4 +140,5 @@ curl -s http://localhost:8888/api/v1/audiobooks/BOOK_ID | jq '{file_path, librar
 rm -f /tmp/task-5-lock.txt /tmp/task-5-state-*.json /tmp/test-import-*.m4b
 ```
 
-If unresolved, capture server logs showing import/organize/delete flows and escalate to code review.
+If unresolved, capture server logs showing import/organize/delete flows and
+escalate to code review.

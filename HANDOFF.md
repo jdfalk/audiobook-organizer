@@ -4,18 +4,22 @@
 
 # LibraryFolder → ImportPath Refactoring Handoff
 
-**Date**: November 23, 2025
-**Project**: audiobook-organizer
-**Task**: Comprehensive API and Type Rename
-**Branch Strategy**: Work in separate branch, rebase periodically against main
+**Date**: November 23, 2025 **Project**: audiobook-organizer **Task**:
+Comprehensive API and Type Rename **Branch Strategy**: Work in separate branch,
+rebase periodically against main
 
 ## 🎯 Executive Summary
 
-This document provides complete instructions for renaming `LibraryFolder` to `ImportPath` throughout the entire codebase to resolve confusing terminology where "library folders" actually refers to "import paths" (monitored folders for new content, NOT the main library).
+This document provides complete instructions for renaming `LibraryFolder` to
+`ImportPath` throughout the entire codebase to resolve confusing terminology
+where "library folders" actually refers to "import paths" (monitored folders for
+new content, NOT the main library).
 
-**Scope**: ~150+ occurrences across Go backend, TypeScript frontend, database schemas, API endpoints, tests, and documentation.
+**Scope**: ~150+ occurrences across Go backend, TypeScript frontend, database
+schemas, API endpoints, tests, and documentation.
 
-**Estimated Effort**: Large refactoring requiring careful attention to maintain functionality.
+**Estimated Effort**: Large refactoring requiring careful attention to maintain
+functionality.
 
 ---
 
@@ -40,17 +44,20 @@ This document provides complete instructions for renaming `LibraryFolder` to `Im
 - THESE are what's stored in `library_folders` table (confusing name!)
 - Example: `/Users/jdfalk/Downloads/test_books`
 
-**The Problem**:
-The database table `library_folders` and Go type `LibraryFolder` actually store *import paths*, not library folders. This creates significant confusion in the codebase and API.
+**The Problem**: The database table `library_folders` and Go type
+`LibraryFolder` actually store _import paths_, not library folders. This creates
+significant confusion in the codebase and API.
 
-**The Solution**:
-Rename everything from `LibraryFolder`/`library_folders`/`library/folders` to `ImportPath`/`import_paths`/`import-paths` for clarity and consistency.
+**The Solution**: Rename everything from
+`LibraryFolder`/`library_folders`/`library/folders` to
+`ImportPath`/`import_paths`/`import-paths` for clarity and consistency.
 
 ---
 
 ## 🔄 Periodic Rebasing Requirement
 
-**CRITICAL**: To minimize merge conflicts when this work is complete, you MUST periodically rebase your working branch against `main`.
+**CRITICAL**: To minimize merge conflicts when this work is complete, you MUST
+periodically rebase your working branch against `main`.
 
 **Recommended Schedule**:
 
@@ -108,15 +115,20 @@ git push --force-with-lease origin your-refactoring-branch
 
 ### ✅ Major Accomplishments (Nov 21-22)
 
-**Metadata Extraction - FIXED**: The core problem was solved. Books were showing `{narrator}` and `{series}` placeholders because tag extraction was completely broken. Now working perfectly.
+**Metadata Extraction - FIXED**: The core problem was solved. Books were showing
+`{narrator}` and `{series}` placeholders because tag extraction was completely
+broken. Now working perfectly.
 
 **What Was Fixed**:
 
-1. Case-insensitive raw tag lookups (was missing "Publisher" when looking for "publisher")
+1. Case-insensitive raw tag lookups (was missing "Publisher" when looking for
+   "publisher")
 2. Release-group tag filtering (skips bracketed tags like `[PZG]`)
 3. Roman numeral volume detection (Vol. IV → 4)
-4. Series extraction from multiple sources (tags, album patterns, title patterns)
-5. Narrator extraction priority chain (raw.narrator → raw.reader → raw.artist → raw.album_artist → tag.Artist)
+4. Series extraction from multiple sources (tags, album patterns, title
+   patterns)
+5. Narrator extraction priority chain (raw.narrator → raw.reader → raw.artist →
+   raw.album_artist → tag.Artist)
 6. Publisher extraction from raw tags
 
 **Diagnostics CLI - NEW**: Created `diagnostics` command with:
@@ -135,10 +147,14 @@ git push --force-with-lease origin your-refactoring-branch
 
 ### 🔴 What's Broken
 
-1. **Web UI not showing books** - Books exist in DB and return via API, but Library page is empty
-2. **EventSource drops every ~17 seconds** - `/api/events` connection closes, causing reconnect loop
-3. **Health endpoint 404** - Frontend polls `/api/v1/health` but server only has `/api/health`
-4. **Scan progress not tested** - Code is in `internal/server/server.go` v1.26.0 but needs rebuild and test
+1. **Web UI not showing books** - Books exist in DB and return via API, but
+   Library page is empty
+2. **EventSource drops every ~17 seconds** - `/api/events` connection closes,
+   causing reconnect loop
+3. **Health endpoint 404** - Frontend polls `/api/v1/health` but server only has
+   `/api/health`
+4. **Scan progress not tested** - Code is in `internal/server/server.go` v1.26.0
+   but needs rebuild and test
 
 ## 📋 What To Do Next
 
@@ -160,7 +176,8 @@ curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"
 tail -f /Users/jdfalk/ao-library/logs/latest.log
 ```
 
-**Expected**: Progress shows "Scanning: 4/8 files" instead of "0/0", completion message shows "Library: 4 books, Import paths: 4 books (Total: 8)"
+**Expected**: Progress shows "Scanning: 4/8 files" instead of "0/0", completion
+message shows "Library: 4 books, Import paths: 4 books (Total: 8)"
 
 ### Step 2: Fix Web UI Display (15-30 minutes)
 
@@ -188,7 +205,8 @@ tail -f /Users/jdfalk/ao-library/logs/latest.log
 
 ### Step 3: Fix EventSource Stability (30-60 minutes)
 
-**Problem**: `/api/events` connection closes after ~17 seconds, causing constant reconnects.
+**Problem**: `/api/events` connection closes after ~17 seconds, causing constant
+reconnects.
 
 **Server-Side Investigation** (`internal/realtime/events.go`):
 
@@ -196,7 +214,8 @@ tail -f /Users/jdfalk/ao-library/logs/latest.log
 - Verify heartbeat is being sent correctly
 - Look for context deadline or connection lifecycle issues
 
-**Client-Side Fix** (`web/src/pages/Library.tsx`, `web/src/pages/Dashboard.tsx`):
+**Client-Side Fix** (`web/src/pages/Library.tsx`,
+`web/src/pages/Dashboard.tsx`):
 
 - Implement exponential backoff: 3s → 6s → 12s → 24s (cap at 30s)
 - Reset to 3s on successful connection
@@ -204,7 +223,8 @@ tail -f /Users/jdfalk/ao-library/logs/latest.log
 
 ### Step 4: Fix Health Endpoint (10 minutes)
 
-**Option A** (Preferred): Add `/api/v1/health` route in `internal/server/server.go`
+**Option A** (Preferred): Add `/api/v1/health` route in
+`internal/server/server.go`
 
 ```go
 // In setupRoutes():
@@ -213,7 +233,8 @@ v1.GET("/health", s.healthCheck)
 
 **Option B**: Change frontend to poll `/api/health` instead
 
-**Also Update**: `web/src/components/ConnectionStatus.tsx` to auto-refresh page when health check succeeds after failure
+**Also Update**: `web/src/components/ConnectionStatus.tsx` to auto-refresh page
+when health check succeeds after failure
 
 ## 🗂️ Key Files Reference
 
@@ -255,7 +276,8 @@ go run . inspect-metadata "/path/to/file.m4b"
 
 - **Location**: `/Users/jdfalk/ao-library/audiobooks.pebble/`
 - **Books**: 8 total (4 in library, 4 in import paths)
-- **Metadata Quality**: All 4 library books have correct narrator, series, publisher, series_position
+- **Metadata Quality**: All 4 library books have correct narrator, series,
+  publisher, series_position
 - **Clean**: No corrupted/placeholder records
 
 ## 🎓 Context for AI
@@ -272,7 +294,8 @@ go run . inspect-metadata "/path/to/file.m4b"
 
 1. Make code changes
 2. Build: `go build -o ~/audiobook-organizer-embedded`
-3. Restart: `killall audiobook-organizer-embedded && ~/audiobook-organizer-embedded serve --port 8888 --debug`
+3. Restart:
+   `killall audiobook-organizer-embedded && ~/audiobook-organizer-embedded serve --port 8888 --debug`
 4. Test via curl or web UI at <http://localhost:8888>
 
 **Key Principles**:
@@ -297,4 +320,5 @@ go run . inspect-metadata "/path/to/file.m4b"
 2. **Dashboard count separation** - 20 minutes, improves data visibility
 3. **EventSource backoff** - 15 minutes client-side only, reduces log spam
 
-Start with testing scan progress (Step 1), then tackle web UI display issue (Step 2) as it's user-facing and critical.
+Start with testing scan progress (Step 1), then tackle web UI display issue
+(Step 2) as it's user-facing and critical.

@@ -103,8 +103,7 @@ export function Dashboard() {
         systemStatus.import_paths?.total_size ??
         0;
       const totalSizeBytes =
-        systemStatus.total_size_bytes ??
-        librarySizeBytes + importSizeBytes;
+        systemStatus.total_size_bytes ?? librarySizeBytes + importSizeBytes;
 
       setStats({
         library_books: libraryBooks,

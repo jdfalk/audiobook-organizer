@@ -58,9 +58,9 @@ export TEST_BASE_URL=http://localhost:8080
 pytest tests/e2e/ -v
 ```
 
-Bundled sample audiobook fixtures live under `testdata/audio/librivox/` (first six
-tracks from several Librivox releases, checked in via Git LFS). Point your test
-server at these fixtures for deterministic metadata/organize flows.
+Bundled sample audiobook fixtures live under `testdata/audio/librivox/` (first
+six tracks from several Librivox releases, checked in via Git LFS). Point your
+test server at these fixtures for deterministic metadata/organize flows.
 
 ## Dockerized Test Image
 

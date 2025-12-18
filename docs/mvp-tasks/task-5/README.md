@@ -6,14 +6,22 @@
 
 ## 📖 Overview
 
-This task implements persistent hash tracking and book state management to prevent unwanted reimports and enable safe delete workflows. Core requirement: track both **original import hash** and **post-organization hash** for each book to detect when library copies are removed and reimport originals without data loss.
+This task implements persistent hash tracking and book state management to
+prevent unwanted reimports and enable safe delete workflows. Core requirement:
+track both **original import hash** and **post-organization hash** for each book
+to detect when library copies are removed and reimport originals without data
+loss.
 
 **Deliverables:**
 
-- DB stores `original_hash` (import copy) and `library_hash` (organized copy) for each book.
-- Scanner computes and persists both hashes during import and organize operations.
-- Delete workflow records hashes in `do_not_import` blocklist to prevent future reimports.
-- State machine tracks book lifecycle: `wanted` → `imported` → `organized` → `soft_deleted`.
+- DB stores `original_hash` (import copy) and `library_hash` (organized copy)
+  for each book.
+- Scanner computes and persists both hashes during import and organize
+  operations.
+- Delete workflow records hashes in `do_not_import` blocklist to prevent future
+  reimports.
+- State machine tracks book lifecycle: `wanted` → `imported` → `organized` →
+  `soft_deleted`.
 - Background purge job cleans soft-deleted entries after retention period.
 - Settings page provides UI to manage blocked hashes.
 
@@ -30,10 +38,12 @@ This task implements persistent hash tracking and book state management to preve
 
 ## 🎯 Success Criteria
 
-- DB schema includes `original_hash`, `library_hash`, `state`, `soft_deleted_at`, `quantity` fields.
+- DB schema includes `original_hash`, `library_hash`, `state`,
+  `soft_deleted_at`, `quantity` fields.
 - `do_not_import` table with hash, reason, timestamp.
 - Scanner skips files matching `do_not_import` hashes.
-- Delete dialog offers "Prevent Reimporting" checkbox that adds hash to blocklist.
+- Delete dialog offers "Prevent Reimporting" checkbox that adds hash to
+  blocklist.
 - Settings page shows blocked hashes with unblock action.
 - Background job purges soft-deleted books after N days (configurable).
 
@@ -56,7 +66,8 @@ rg "prevent.*import|do_not_import" web/src -n
 ## 🔐 Multi-AI Safety
 
 - Use lock/state files under `/tmp/task-5-*`.
-- Test hash tracking with non-production copies; avoid deleting real library files.
+- Test hash tracking with non-production copies; avoid deleting real library
+  files.
 - Capture DB state before/after delete operations.
 
 ## 🧭 Navigation

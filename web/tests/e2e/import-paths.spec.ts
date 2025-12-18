@@ -23,8 +23,17 @@ test.describe('Import paths workflows', () => {
     });
   });
 
-  test('add and remove import path via Settings page (mocked API)', async ({ page }) => {
-    let importPaths: Array<{ id: number; path: string; name: string; enabled: boolean; created_at: string; book_count: number }> = [];
+  test('add and remove import path via Settings page (mocked API)', async ({
+    page,
+  }) => {
+    let importPaths: Array<{
+      id: number;
+      path: string;
+      name: string;
+      enabled: boolean;
+      created_at: string;
+      book_count: number;
+    }> = [];
     let nextId = 1;
 
     await page.route('**/api/v1/import-paths', (route) => {
@@ -36,7 +45,10 @@ test.describe('Import paths workflows', () => {
         });
       }
       if (route.request().method() === 'POST') {
-        const body = route.request().postDataJSON() as { path: string; name: string };
+        const body = route.request().postDataJSON() as {
+          path: string;
+          name: string;
+        };
         const created = {
           id: nextId++,
           path: body.path,
@@ -82,14 +94,18 @@ test.describe('Import paths workflows', () => {
 
     await page.goto('/settings');
 
-    await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText('Settings', { exact: true }).first()
+    ).toBeVisible();
 
     // Add import path
     await page.getByRole('button', { name: 'Add Import Path' }).click();
     const dialog = page.getByRole('dialog', { name: /Add Import Path/i });
     const pathInput = dialog.getByPlaceholder('/path/to/downloads');
     await pathInput.fill('/tmp/books');
-    const saveButton = dialog.getByRole('button', { name: /Add|Save/i }).first();
+    const saveButton = dialog
+      .getByRole('button', { name: /Add|Save/i })
+      .first();
     await saveButton.click();
 
     await expect(page.getByText('/tmp/books')).toBeVisible();
@@ -100,6 +116,8 @@ test.describe('Import paths workflows', () => {
       fetch('/api/v1/import-paths/1', { method: 'DELETE' })
     );
     await page.reload();
-    await expect(page.getByText('/tmp/books')).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('/tmp/books')).not.toBeVisible({
+      timeout: 5000,
+    });
   });
 });

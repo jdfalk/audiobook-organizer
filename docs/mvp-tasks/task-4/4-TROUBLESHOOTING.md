@@ -4,7 +4,8 @@
 
 # Task 4: Troubleshooting - Duplicate Detection
 
-Use this guide when duplicate detection is missing, incorrect, or surfacing false results.
+Use this guide when duplicate detection is missing, incorrect, or surfacing
+false results.
 
 ## Quick Index
 
@@ -49,7 +50,8 @@ func getDuplicates(c *gin.Context) {
 
 ## Issue 2: Hashes Not Computed
 
-**Symptoms:** Duplicate endpoint returns empty array; DB rows have null/empty `content_hash`.
+**Symptoms:** Duplicate endpoint returns empty array; DB rows have null/empty
+`content_hash`.
 
 **Steps:**
 
@@ -95,8 +97,10 @@ shasum -a 256 /path/to/file2.m4b
 
 **Fix:**
 
-- Ensure grouping uses `content_hash` (file SHA256), not metadata fields like title/author.
-- If using fuzzy matching, disable it for duplicate detection; only exact hash matches.
+- Ensure grouping uses `content_hash` (file SHA256), not metadata fields like
+  title/author.
+- If using fuzzy matching, disable it for duplicate detection; only exact hash
+  matches.
 
 ## Issue 4: False Negatives (Duplicates Missed)
 
@@ -117,7 +121,8 @@ curl -s http://localhost:8888/api/v1/audiobooks?search=book1 | jq '.items[] | {t
 
 - Ensure both files were scanned (check import paths configured).
 - Re-run scan if files added after initial scan.
-- Verify no errors during hash computation (large files timing out, permissions).
+- Verify no errors during hash computation (large files timing out,
+  permissions).
 
 ## Cleanup
 
@@ -125,4 +130,5 @@ curl -s http://localhost:8888/api/v1/audiobooks?search=book1 | jq '.items[] | {t
 rm -f /tmp/task-4-lock.txt /tmp/task-4-state-*.json /tmp/test-duplicate-*
 ```
 
-If unresolved, capture server logs showing scan/hash operations and escalate to code review.
+If unresolved, capture server logs showing scan/hash operations and escalate to
+code review.

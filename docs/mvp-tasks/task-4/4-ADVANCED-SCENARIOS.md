@@ -4,7 +4,8 @@
 
 # Task 4: Advanced Scenarios & Code Deep Dive (Duplicate Detection)
 
-Use these scenarios when core testing passes but edge conditions need validation.
+Use these scenarios when core testing passes but edge conditions need
+validation.
 
 ## 🧮 Partial File Duplicates
 
@@ -18,7 +19,8 @@ Use these scenarios when core testing passes but edge conditions need validation
 ```
 
 - Hash entire file content, not just metadata or first N bytes.
-- Document: "Duplicates" means identical binary content, not semantic duplicates.
+- Document: "Duplicates" means identical binary content, not semantic
+  duplicates.
 
 ## 🔗 Symlinks and Hardlinks
 
@@ -33,10 +35,12 @@ find /library -type l -maxdepth 5 2>/dev/null
 
 ## 📦 Bit-Perfect vs. Metadata Changes
 
-**Risk:** File with updated ID3 tags has different hash but is same audio content.
+**Risk:** File with updated ID3 tags has different hash but is same audio
+content.
 
 - SHA256 on entire file includes tags; updated tags = different hash.
-- For audio-only duplicate detection (ignore metadata drift), need separate audio stream hashing (out of scope for MVP).
+- For audio-only duplicate detection (ignore metadata drift), need separate
+  audio stream hashing (out of scope for MVP).
 
 ## 🚫 Missing or Corrupted Files
 
@@ -60,11 +64,13 @@ ALTER TABLE books ADD COLUMN content_hash TEXT;
 CREATE INDEX idx_books_content_hash ON books(content_hash);
 ```
 
-- Indexed for fast duplicate queries: `SELECT * FROM books WHERE content_hash IN (SELECT content_hash FROM books GROUP BY content_hash HAVING COUNT(*) > 1)`.
+- Indexed for fast duplicate queries:
+  `SELECT * FROM books WHERE content_hash IN (SELECT content_hash FROM books GROUP BY content_hash HAVING COUNT(*) > 1)`.
 
 ## 🧰 Backend Code Checklist
 
-- Scanner computes SHA256 during file read; stores in `content_hash` or `file_hash` column.
+- Scanner computes SHA256 during file read; stores in `content_hash` or
+  `file_hash` column.
 - Duplicate endpoint groups by hash, returns only groups with count > 1.
 - API returns array of arrays (each inner array = duplicate group).
 - No false grouping (different hashes lumped together).
@@ -78,8 +84,10 @@ CREATE INDEX idx_books_content_hash ON books(content_hash);
 
 ## 🔬 Performance Considerations
 
-- Hashing large files (multi-GB audiobooks) during scan may be slow; show progress.
+- Hashing large files (multi-GB audiobooks) during scan may be slow; show
+  progress.
 - Consider parallel hashing (goroutines) if scan becomes bottleneck.
-- Cache hashes; re-hash only if file mtime changes (incremental scan optimization).
+- Cache hashes; re-hash only if file mtime changes (incremental scan
+  optimization).
 
 When an edge condition is identified, document in `4-TROUBLESHOOTING.md`.

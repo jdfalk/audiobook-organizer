@@ -8,8 +8,8 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 ## 📚 Quick Navigation
 
-| Task | Name                                                                      | Purpose                             | Status       |
-| ---- | ------------------------------------------------------------------------- | ----------------------------------- | ------------ |
+| Task | Name                                                                      | Purpose                             | Status        |
+| ---- | ------------------------------------------------------------------------- | ----------------------------------- | ------------- |
 | 1    | [Scan Progress Reporting](#task-1-scan-progress-reporting)                | Real-time scan progress tracking    | ✅ Documented |
 | 2    | [Separate Dashboard Counts](#task-2-separate-dashboard-counts)            | Library vs Import count separation  | ✅ Documented |
 | 3    | [Import Size Reporting](#task-3-import-size-reporting)                    | Fix negative/incorrect size metrics | ✅ Documented |
@@ -27,9 +27,12 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Key Files:**
 
 - [README.md](task-1/README.md) — Overview and quick start
-- [CORE-TESTING.md](task-1/CORE-TESTING.md) — Core test phases (API, WebSocket, state)
-- [SCAN-PROGRESS-TESTING.md](task-1/SCAN-PROGRESS-TESTING.md) — Dedicated progress validation
-- [ADVANCED-SCENARIOS.md](task-1/ADVANCED-SCENARIOS.md) — Edge cases and performance
+- [CORE-TESTING.md](task-1/CORE-TESTING.md) — Core test phases (API, WebSocket,
+  state)
+- [SCAN-PROGRESS-TESTING.md](task-1/SCAN-PROGRESS-TESTING.md) — Dedicated
+  progress validation
+- [ADVANCED-SCENARIOS.md](task-1/ADVANCED-SCENARIOS.md) — Edge cases and
+  performance
 - [TROUBLESHOOTING.md](task-1/TROUBLESHOOTING.md) — Common issues and fixes
 
 **Success Criteria:**
@@ -51,13 +54,16 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 - [README.md](task-2/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-2/CORE-TESTING.md) — Core verification phases
-- [SEPARATE-DASHBOARD-COUNTS.md](task-2/SEPARATE-DASHBOARD-COUNTS.md) — Legacy comprehensive guide
-- [ADVANCED-SCENARIOS.md](task-2/ADVANCED-SCENARIOS.md) — Mixed counts and edge cases
+- [SEPARATE-DASHBOARD-COUNTS.md](task-2/SEPARATE-DASHBOARD-COUNTS.md) — Legacy
+  comprehensive guide
+- [ADVANCED-SCENARIOS.md](task-2/ADVANCED-SCENARIOS.md) — Mixed counts and edge
+  cases
 - [TROUBLESHOOTING.md](task-2/TROUBLESHOOTING.md) — Count mismatch issues
 
 **Success Criteria:**
 
-- ✅ `/api/v1/system/status` returns `library_book_count` and `import_book_count`
+- ✅ `/api/v1/system/status` returns `library_book_count` and
+  `import_book_count`
 - ✅ Dashboard displays both counts separately
 - ✅ Library page respects the separation
 - ✅ Counts remain accurate after scans
@@ -74,7 +80,8 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 - [README.md](task-3/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-3/CORE-TESTING.md) — Core size verification tests
-- [ADVANCED-SCENARIOS.md](task-3/ADVANCED-SCENARIOS.md) — Symlinks, sparse files, performance
+- [ADVANCED-SCENARIOS.md](task-3/ADVANCED-SCENARIOS.md) — Symlinks, sparse
+  files, performance
 - [TROUBLESHOOTING.md](task-3/TROUBLESHOOTING.md) — Size mismatch debugging
 
 **Success Criteria:**
@@ -95,8 +102,10 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 **Key Files:**
 
 - [README.md](task-4/README.md) — Overview and quick start
-- [CORE-TESTING.md](task-4/CORE-TESTING.md) — Hash verification and query testing
-- [ADVANCED-SCENARIOS.md](task-4/ADVANCED-SCENARIOS.md) — False positives/negatives, performance
+- [CORE-TESTING.md](task-4/CORE-TESTING.md) — Hash verification and query
+  testing
+- [ADVANCED-SCENARIOS.md](task-4/ADVANCED-SCENARIOS.md) — False
+  positives/negatives, performance
 - [TROUBLESHOOTING.md](task-4/TROUBLESHOOTING.md) — Hash mismatch issues
 
 **Success Criteria:**
@@ -118,7 +127,8 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 - [README.md](task-5/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-5/CORE-TESTING.md) — Hash schema and state transitions
-- [ADVANCED-SCENARIOS.md](task-5/ADVANCED-SCENARIOS.md) — Reimport prevention, purge jobs
+- [ADVANCED-SCENARIOS.md](task-5/ADVANCED-SCENARIOS.md) — Reimport prevention,
+  purge jobs
 - [TROUBLESHOOTING.md](task-5/TROUBLESHOOTING.md) — State machine issues
 
 **Success Criteria:**
@@ -140,7 +150,8 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 - [README.md](task-6/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-6/CORE-TESTING.md) — Page rendering and delete flow
-- [ADVANCED-SCENARIOS.md](task-6/ADVANCED-SCENARIOS.md) — Multi-format books, error states
+- [ADVANCED-SCENARIOS.md](task-6/ADVANCED-SCENARIOS.md) — Multi-format books,
+  error states
 - [TROUBLESHOOTING.md](task-6/TROUBLESHOOTING.md) — Navigation and UI issues
 
 **Success Criteria:**
@@ -162,8 +173,10 @@ Master index for all 7 MVP-blocking tasks with organized documentation.
 
 - [README.md](task-7/README.md) — Overview and quick start
 - [CORE-TESTING.md](task-7/CORE-TESTING.md) — Test execution phases
-- [ADVANCED-SCENARIOS.md](task-7/ADVANCED-SCENARIOS.md) — Performance, cross-browser, flaky tests
-- [TROUBLESHOOTING.md](task-7/TROUBLESHOOTING.md) — Docker, networking, selectors
+- [ADVANCED-SCENARIOS.md](task-7/ADVANCED-SCENARIOS.md) — Performance,
+  cross-browser, flaky tests
+- [TROUBLESHOOTING.md](task-7/TROUBLESHOOTING.md) — Docker, networking,
+  selectors
 
 **Success Criteria:**
 
@@ -277,6 +290,7 @@ Task 7 (E2E Tests) ← Validates all 1-6
 ## 🔄 Last Updated
 
 <!-- Updated when structure/content changes -->
+
 - Document created: December 7, 2025
 - All 7 tasks organized and documented
 - Master index ready for navigation

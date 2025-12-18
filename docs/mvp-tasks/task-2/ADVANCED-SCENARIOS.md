@@ -98,10 +98,14 @@ curl -s http://localhost:8888/api/v1/system/status | jq 'with_entries(select(["l
 
 ## Code Deep Dive (Pointers)
 
-- **Backend aggregation:** `internal/server/server.go` (status handler). Check how root directory vs import paths are counted.
-- **Scanner results:** Count calculation likely near scan completion; search for `library_book_count` usages.
-- **Frontend Dashboard:** `web/src/pages/Dashboard.tsx` for rendering of library/import counts.
-- **Frontend Library page:** `web/src/pages/Library.tsx` for any per-path display.
+- **Backend aggregation:** `internal/server/server.go` (status handler). Check
+  how root directory vs import paths are counted.
+- **Scanner results:** Count calculation likely near scan completion; search for
+  `library_book_count` usages.
+- **Frontend Dashboard:** `web/src/pages/Dashboard.tsx` for rendering of
+  library/import counts.
+- **Frontend Library page:** `web/src/pages/Library.tsx` for any per-path
+  display.
 
 ## Validation Checklist (Advanced)
 
@@ -112,4 +116,5 @@ curl -s http://localhost:8888/api/v1/system/status | jq 'with_entries(select(["l
 
 ---
 
-**Next:** If any failures appear, jump to `TASK-2-TROUBLESHOOTING.md`. Otherwise, record results and close TODO item.
+**Next:** If any failures appear, jump to `TASK-2-TROUBLESHOOTING.md`.
+Otherwise, record results and close TODO item.

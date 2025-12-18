@@ -75,28 +75,31 @@ export function ServerFileBrowser({
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
 
-  const fetchDirectory = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.browseFilesystem(path);
-      setItems(result.items);
-      setCurrentPath(result.path);
-      setDiskInfo(result.disk_info);
+  const fetchDirectory = useCallback(
+    async (path: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await api.browseFilesystem(path);
+        setItems(result.items);
+        setCurrentPath(result.path);
+        setDiskInfo(result.disk_info);
 
-      // Automatically notify parent of current path after successful fetch (if directory selection is allowed)
-      if (allowDirSelect && onSelect) {
-        onSelect(result.path, true);
+        // Automatically notify parent of current path after successful fetch (if directory selection is allowed)
+        if (allowDirSelect && onSelect) {
+          onSelect(result.path, true);
+        }
+      } catch (err) {
+        console.error('Failed to browse filesystem:', err);
+        setError(
+          err instanceof Error ? err.message : 'Failed to browse filesystem'
+        );
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to browse filesystem:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to browse filesystem'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [allowDirSelect, onSelect]);
+    },
+    [allowDirSelect, onSelect]
+  );
 
   useEffect(() => {
     fetchDirectory(currentPath);

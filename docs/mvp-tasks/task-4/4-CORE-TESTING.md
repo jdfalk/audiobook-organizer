@@ -4,7 +4,8 @@
 
 # Task 4: Core Duplicate Detection Testing
 
-This file defines the core flow to validate duplicate detection via SHA256 hashing.
+This file defines the core flow to validate duplicate detection via SHA256
+hashing.
 
 ## 🔒 Safety & Locks
 

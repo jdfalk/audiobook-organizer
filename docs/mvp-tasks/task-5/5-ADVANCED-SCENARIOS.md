@@ -4,7 +4,8 @@
 
 # Task 5: Advanced Scenarios & Code Deep Dive (Hash Tracking)
 
-Use these scenarios when core testing passes but edge conditions need validation.
+Use these scenarios when core testing passes but edge conditions need
+validation.
 
 ## 🔄 Hash Drift Detection
 
@@ -24,7 +25,8 @@ Use these scenarios when core testing passes but edge conditions need validation
 
 ## 📦 Multi-Version Edge Case
 
-**Scenario:** Same book, different editions (unabridged, abridged), same import path.
+**Scenario:** Same book, different editions (unabridged, abridged), same import
+path.
 
 ```bash
 # book-unabridged.m4b -> hash X
@@ -45,7 +47,8 @@ SELECT id, title, soft_deleted_at FROM books WHERE state = 'soft_deleted' AND so
 ```
 
 - Job runs daily/weekly.
-- Permanently deletes books and their hashes from `do_not_import` (optional: keep hashes if user wants permanent block).
+- Permanently deletes books and their hashes from `do_not_import` (optional:
+  keep hashes if user wants permanent block).
 - Configurable retention in Settings: `soft_delete_retention_days`.
 
 ## 🚫 Orphaned Import Copies
@@ -59,7 +62,8 @@ SELECT id, title, soft_deleted_at FROM books WHERE state = 'soft_deleted' AND so
 
 **Handling:**
 
-- Re-scan detects missing import; mark `original_hash` as null or keep for reference.
+- Re-scan detects missing import; mark `original_hash` as null or keep for
+  reference.
 - Library copy still functional; no reimport needed.
 
 ## 🔁 Quantity / Reference Counting
@@ -78,10 +82,12 @@ SELECT id, title, soft_deleted_at FROM books WHERE state = 'soft_deleted' AND so
 
 ## 🧰 Backend Code Checklist
 
-- Migration adds fields: `original_hash`, `library_hash`, `state`, `soft_deleted_at`, `quantity`.
+- Migration adds fields: `original_hash`, `library_hash`, `state`,
+  `soft_deleted_at`, `quantity`.
 - Migration creates `do_not_import` table with hash index.
 - Scanner checks `do_not_import` before importing; logs skip reason.
-- Delete handler updates `state`, `soft_deleted_at`, and inserts into `do_not_import` if flag set.
+- Delete handler updates `state`, `soft_deleted_at`, and inserts into
+  `do_not_import` if flag set.
 - Settings API provides CRUD for `do_not_import` entries.
 
 ## 🪛 Frontend Checklist

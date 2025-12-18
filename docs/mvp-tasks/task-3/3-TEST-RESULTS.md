@@ -4,8 +4,7 @@
 
 # Task 3: Test Results - Import Size Reporting Fix
 
-**Date:** December 14, 2025
-**Status:** ✅ FIXED AND VALIDATED
+**Date:** December 14, 2025 **Status:** ✅ FIXED AND VALIDATED
 
 ---
 
@@ -15,7 +14,8 @@
 
 **File:** `internal/server/server.go` lines 1719-1761
 
-**Change:** Replaced the buggy subtraction logic with independent calculation of library and import sizes.
+**Change:** Replaced the buggy subtraction logic with independent calculation of
+library and import sizes.
 
 **Before (Buggy):**
 
@@ -48,7 +48,8 @@ totalSize := librarySize + importSize
 - `import_size_bytes` (int64)
 - `total_size_bytes` (int64)
 
-These fields complement the existing nested structure and provide direct access to size data.
+These fields complement the existing nested structure and provide direct access
+to size data.
 
 ---
 
@@ -105,8 +106,8 @@ du -s /tmp/task-3-test-library /tmp/task-3-test-import1 /tmp/task-3-test-import2
 
 ### Validation Results
 
-| Check                    | Expected          | Actual            | Status |
-| ------------------------ | ----------------- | ----------------- | ------ |
+| Check                    | Expected          | Actual            | Status  |
+| ------------------------ | ----------------- | ----------------- | ------- |
 | Library size             | 73,400,320 bytes  | 73,400,320 bytes  | ✅ PASS |
 | Import size (total)      | 47,185,920 bytes  | 47,185,920 bytes  | ✅ PASS |
 | Total = library + import | 120,586,240 bytes | 120,586,240 bytes | ✅ PASS |
@@ -117,11 +118,10 @@ du -s /tmp/task-3-test-library /tmp/task-3-test-import1 /tmp/task-3-test-import2
 
 ## Critical Tests Passed
 
-✅ **Non-Negative Values:** All sizes are > 0 and positive
-✅ **Math Correctness:** `total = library + import` exactly
-✅ **On-Disk Match:** API values match `du` measurements
-✅ **Double-Counting:** No overlapping path issues detected
-✅ **API Fields:** New `*_bytes` fields present and correct
+✅ **Non-Negative Values:** All sizes are > 0 and positive ✅ **Math
+Correctness:** `total = library + import` exactly ✅ **On-Disk Match:** API
+values match `du` measurements ✅ **Double-Counting:** No overlapping path
+issues detected ✅ **API Fields:** New `*_bytes` fields present and correct
 
 ---
 
@@ -155,14 +155,16 @@ Need to test:
 ### Known Limitation
 
 - No longer using cache means slightly more disk I/O on each status call
-- For production, consider invalidating cache on scan completion instead of on each call
+- For production, consider invalidating cache on scan completion instead of on
+  each call
 - Current approach ensures always correct values
 
 ---
 
 ## Files Modified
 
-- [internal/server/server.go](../../../internal/server/server.go#L1719-L1768) - Fixed getSystemStatus()
+- [internal/server/server.go](../../../internal/server/server.go#L1719-L1768) -
+  Fixed getSystemStatus()
 
 ## Documentation Updated
 

@@ -13,9 +13,12 @@
 This repository no longer uses doc-update scripts. Follow these rules instead:
 
 - Edit documentation directly in the target files.
-- Keep the required header (file path, version, guid) and bump the version on any change.
+- Keep the required header (file path, version, guid) and bump the version on
+  any change.
 - Do not use create-doc-update.sh or related scripts; they are retired.
-- For git operations: 1) MCP GitHub tools (preferred), 2) safe-ai-util (fallback), 3) native git (last resort). Use VS Code tasks for non-git operations only.
+- For git operations: 1) MCP GitHub tools (preferred), 2) safe-ai-util
+  (fallback), 3) native git (last resort). Use VS Code tasks for non-git
+  operations only.
 - Follow the guidance in `.github/instructions/general-coding.instructions.md`.
 
 ## Canonical Source for Agent Instructions

@@ -324,7 +324,10 @@ export async function addImportPathDetailed(
   if (!response.ok) throw new Error('Failed to add import path');
   const data = await response.json();
   if (data.importPath) {
-    return { importPath: data.importPath, scan_operation_id: data.scan_operation_id };
+    return {
+      importPath: data.importPath,
+      scan_operation_id: data.scan_operation_id,
+    };
   }
   // Legacy shape fallback
   return { importPath: data };

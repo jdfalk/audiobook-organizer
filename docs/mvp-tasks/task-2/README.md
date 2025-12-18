@@ -6,11 +6,14 @@
 
 ## 📖 Overview
 
-This task ensures **library** and **import** audiobook counts are calculated, persisted, and displayed separately across the backend API and the Dashboard/Library UI.
+This task ensures **library** and **import** audiobook counts are calculated,
+persisted, and displayed separately across the backend API and the
+Dashboard/Library UI.
 
 **Deliverables:**
 
-- Backend returns distinct `library_book_count`, `import_book_count`, and `total_book_count`.
+- Backend returns distinct `library_book_count`, `import_book_count`, and
+  `total_book_count`.
 - Dashboard and Library views show separate counts with correct labeling.
 - Scans keep counts accurate across library/import paths.
 - Tests and troubleshooting steps validated.
@@ -29,20 +32,26 @@ This task ensures **library** and **import** audiobook counts are calculated, pe
 
 ## 🎯 Success Criteria
 
-- API: `/api/v1/system/status` exposes `library_book_count`, `import_book_count`, `total_book_count` with total = library + import.
-- UI: Dashboard and Library pages show "Library: X" and "Import: Y" consistently.
+- API: `/api/v1/system/status` exposes `library_book_count`,
+  `import_book_count`, `total_book_count` with total = library + import.
+- UI: Dashboard and Library pages show "Library: X" and "Import: Y"
+  consistently.
 - Scan operations update counts accurately for both root and import paths.
 - No negative counts, no double counting, no missing counts.
 
 ## 🚀 Quick Start
 
-1. Run core phases in `TASK-2-CORE-TESTING.md` (pre-checks → backend → frontend → validation → cleanup).
+1. Run core phases in `TASK-2-CORE-TESTING.md` (pre-checks → backend → frontend
+   → validation → cleanup).
 2. If counts mismatch or UI stale, jump to `TASK-2-TROUBLESHOOTING.md`.
-3. For edge cases (large libraries, mixed paths, offline UI), see `TASK-2-ADVANCED-SCENARIOS.md`.
+3. For edge cases (large libraries, mixed paths, offline UI), see
+   `TASK-2-ADVANCED-SCENARIOS.md`.
 
 ## 🔐 Multi-AI Safety
 
-Follow the same lock/state protocol used in Task 1. Create per-user lock files under `/tmp/task-2-*` and clean them after tests. Core doc includes ready-to-run snippets.
+Follow the same lock/state protocol used in Task 1. Create per-user lock files
+under `/tmp/task-2-*` and clean them after tests. Core doc includes ready-to-run
+snippets.
 
 ## 🎛️ Key Commands
 

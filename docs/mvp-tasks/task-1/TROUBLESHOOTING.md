@@ -13,6 +13,7 @@ This is **Part 3** of the comprehensive Task 1 documentation:
 - **Part 3:** TROUBLESHOOTING.md (this file - troubleshooting)
 
 **Reference this file** if you encounter issues during testing:
+
 - Server not responding
 - No progress events
 - Stuck scans
@@ -38,6 +39,7 @@ This is **Part 3** of the comprehensive Task 1 documentation:
 ## Issue #1: Server Not Responding
 
 **Symptoms:**
+
 ```
 curl: (7) Failed to connect to localhost port 8888: Connection refused
 ```
@@ -61,6 +63,7 @@ ls -lh ~/audiobook-organizer-embedded
 ### Root Cause A: Server Not Started
 
 **Indicators:**
+
 - `pgrep` returns nothing
 - `lsof :8888` shows nothing
 - Binary exists and is executable
@@ -83,6 +86,7 @@ curl http://localhost:8888/api/v1/health | jq .
 ```
 
 **If still doesn't work:** Check startup logs:
+
 ```bash
 # Look for error messages during startup
 tail -20 /Users/jdfalk/ao-library/logs/debug.log 2>/dev/null | grep -i error
@@ -91,6 +95,7 @@ tail -20 /Users/jdfalk/ao-library/logs/debug.log 2>/dev/null | grep -i error
 ### Root Cause B: Server Crashed
 
 **Indicators:**
+
 - Process was running but now missing
 - Previous errors in logs
 - Recent core dump
@@ -120,6 +125,7 @@ tail -5 /Users/jdfalk/ao-library/logs/debug.log
 ### Root Cause C: Port Already in Use
 
 **Indicators:**
+
 ```
 lsof -i :8888
 COMMAND   PID USER   FD   TYPE            DEVICE SIZE/OFF NODE NAME
@@ -143,6 +149,7 @@ OPERATION_ID=$(curl -s -X POST "http://localhost:8889/api/v1/operations/scan" | 
 ### Root Cause D: Binary Corrupted or Old
 
 **Indicators:**
+
 - Binary exists but is very small (<2MB)
 - Binary runs but crashes immediately
 - No embedded frontend assets
@@ -175,6 +182,7 @@ curl http://localhost:8888/api/v1/health | jq .
 ## Issue #2: No Progress Events
 
 **Symptoms:**
+
 ```
 SSE connection establishes
 But only :heartbeat lines received
@@ -204,6 +212,7 @@ curl -v "http://localhost:8888/api/events?operation_id=$OPERATION_ID" 2>&1 | hea
 ### Root Cause A: Scan Already Completed
 
 **Indicators:**
+
 ```
 curl: status = "completed"
 Log file exists with all events
@@ -227,6 +236,7 @@ timeout 60 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 ### Root Cause B: Wrong Operation ID
 
 **Indicators:**
+
 - Operation ID doesn't exist
 - Curl returns 404
 - No operation found in database
@@ -248,6 +258,7 @@ timeout 60 curl -N "http://localhost:8888/api/events?operation_id=$RECENT_SCAN"
 ### Root Cause C: SSE Not Implemented
 
 **Indicators:**
+
 - Any request to `/api/events` returns error
 - Server logs show "endpoint not found"
 - Only heartbeats, never any data
@@ -285,6 +296,7 @@ timeout 30 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION" | 
 ## Issue #3: Progress Shows 0/X
 
 **Symptoms:**
+
 ```
 event: progress
 data: {..., "message": "Processed: 0/4 books", ...}
@@ -293,6 +305,7 @@ data: {..., "message": "Processed: 0/4 books", ...}
 ```
 
 **Indicators:**
+
 - Counter stays at 0
 - Denominator (total) is correct
 - Only numerator is wrong
@@ -323,6 +336,7 @@ for processed := 0; processed < len(books); processed++ {
 **Solution:**
 
 1. Check if this bug exists:
+
 ```bash
 cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
 grep -n "Processed:" internal/server/server.go
@@ -330,6 +344,7 @@ grep -n "Processed:" internal/server/server.go
 ```
 
 2. If bug found, fix it:
+
 ```bash
 # (use editor or sed to fix)
 # After fixing, rebuild:
@@ -348,6 +363,7 @@ timeout 30 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION" | 
 **Root Cause B: Old Binary Version**
 
 **Indicators:**
+
 - Binary was built before v1.26.0
 - Progress feature recently added
 - Binary is older than v1.26.0
@@ -381,6 +397,7 @@ timeout 30 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION" | 
 ## Issue #4: Progress Stops Mid-Scan
 
 **Symptoms:**
+
 ```
 Processed: 1/4 books
 Processed: 2/4 books
@@ -405,6 +422,7 @@ tail -50 /Users/jdfalk/ao-library/logs/debug.log | tail -20
 ### Root Cause A: Processing Hangs on File
 
 **Indicators:**
+
 - Process still running
 - CPU usage low (< 5%)
 - Memory stable
@@ -447,6 +465,7 @@ timeout 120 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 ### Root Cause B: Parallel Worker Deadlock
 
 **Indicators:**
+
 - Process running
 - CPU at 0% or very low
 - Memory stable
@@ -474,6 +493,7 @@ timeout 120 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 ### Root Cause C: Database Lock
 
 **Indicators:**
+
 - Server still running
 - API responding
 - But scan frozen
@@ -507,14 +527,17 @@ curl http://localhost:8888/api/v1/health | jq .
 ## Issue #5: Final Message Wrong
 
 **Symptoms:**
+
 ```
 "Scan completed. Library: 0 books, Import: 0 books"
 ```
+
 when you know there are 4 books
 
 **Root Cause A: Books Not Actually Scanned**
 
 **Check:**
+
 ```bash
 # Look in log for file count
 tail -100 /Users/jdfalk/ao-library/logs/operation-*.log | grep "Found"
@@ -525,6 +548,7 @@ find /Users/jdfalk/ao-library/library -type f -name "*.m4b" -o -name "*.mp3" | w
 ```
 
 **Solution:**
+
 ```bash
 # Verify files exist
 find /Users/jdfalk/ao-library/library -type f \( -name "*.m4b" -o -name "*.mp3" \) | head -5
@@ -540,12 +564,14 @@ chmod -R 755 /Users/jdfalk/ao-library/library/*/
 ### Root Cause B: Wrong RootDir Configured
 
 **Check:**
+
 ```bash
 curl -s http://localhost:8888/api/v1/system/status | jq '.root_directory'
 # Should show: "/Users/jdfalk/ao-library/library"
 ```
 
 **If wrong:**
+
 ```bash
 # Need to fix app configuration
 # Check config file location
@@ -558,6 +584,7 @@ env | grep -i "audiobook\|library"
 ### Root Cause C: Books In Different Location
 
 **Check:**
+
 ```bash
 # Find where books actually are
 find /Users/jdfalk/ao-library -type f \( -name "*.m4b" -o -name "*.mp3" \) | head -5
@@ -572,6 +599,7 @@ mv /Users/jdfalk/ao-library/import/*.m4b /Users/jdfalk/ao-library/library/ 2>/de
 ## Issue #6: No Log Files Created
 
 **Symptoms:**
+
 ```
 /Users/jdfalk/ao-library/logs/ is empty
 No operation-*.log files
@@ -619,6 +647,7 @@ grep -r "logs" /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/interna
 ## Issue #7: Lock Files Stuck
 
 **Symptoms:**
+
 ```
 Test fails with: "❌ Task 1 already running"
 But you know no test is running
@@ -752,7 +781,5 @@ timeout 120 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 
 ---
 
-**Document Version:** 2.0.1
-**Last Updated:** December 6, 2025
-**Total Lines:** 600+
-**Total Words:** ~8,500
+**Document Version:** 2.0.1 **Last Updated:** December 6, 2025 **Total Lines:**
+600+ **Total Words:** ~8,500

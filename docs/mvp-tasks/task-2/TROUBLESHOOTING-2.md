@@ -6,7 +6,8 @@
 
 ## 📚 When to Use
 
-Open this file if counts are missing, incorrect, or the UI is stale. For the test flow, start with `TASK-2-CORE-TESTING.md`.
+Open this file if counts are missing, incorrect, or the UI is stale. For the
+test flow, start with `TASK-2-CORE-TESTING.md`.
 
 ## Quick Index
 
@@ -98,4 +99,5 @@ rm -f /tmp/task-2-lock-*.txt /tmp/task-2-state-*.json
 
 ---
 
-**If unresolved:** capture logs (`/Users/jdfalk/ao-library/logs`) and escalate to code review. Return to `TASK-2-CORE-TESTING.md` after fixes.
+**If unresolved:** capture logs (`/Users/jdfalk/ao-library/logs`) and escalate
+to code review. Return to `TASK-2-CORE-TESTING.md` after fixes.
