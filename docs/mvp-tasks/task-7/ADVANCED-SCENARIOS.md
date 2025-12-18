@@ -4,7 +4,8 @@
 
 # Task 7: Advanced Scenarios & Code Deep Dive (E2E Tests)
 
-Use these scenarios when core tests pass but edge conditions or optimization needed.
+Use these scenarios when core tests pass but edge conditions or optimization
+needed.
 
 ## 🚀 Performance Testing
 
@@ -96,7 +97,7 @@ services:
   app:
     build: .
     ports:
-      - "8888:8888"
+      - '8888:8888'
     networks:
       - test-network
 

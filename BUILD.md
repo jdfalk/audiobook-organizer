@@ -143,8 +143,8 @@ The embedded frontend adds the following to the binary:
 go test ./...
 ```
 
-To run the same packages through the `#runTests` tool, pass the absolute path
-to the module root or a specific package. Example:
+To run the same packages through the `#runTests` tool, pass the absolute path to
+the module root or a specific package. Example:
 
 ```text
 #runTests {"files":["${workspaceFolder}/internal/server"]}
@@ -152,9 +152,9 @@ to the module root or a specific package. Example:
 
 Targeting a specific package keeps execution fast and avoids Selenium E2E
 dependencies. Running the entire workspace through `#runTests` will also invoke
-the Python end-to-end suite under `tests/e2e`, which requires a reachable app
-at `TEST_BASE_URL` (defaults to `http://localhost:8080`). Start the server first
-if you intend to run those browser tests.
+the Python end-to-end suite under `tests/e2e`, which requires a reachable app at
+`TEST_BASE_URL` (defaults to `http://localhost:8080`). Start the server first if
+you intend to run those browser tests.
 
 ### JavaScript/TypeScript Frontend Tests
 
@@ -175,16 +175,15 @@ folder or an individual spec file:
 
 The tool automatically invokes the `npm test` script (Vitest) as long as
 `node_modules` exists. Running `#runTests` with
-`"files":["${workspaceFolder}/web"]` aggregates all frontend specs alongside
-the Go tests so you can see pass/fail results for every stack layer in one
-place.
+`"files":["${workspaceFolder}/web"]` aggregates all frontend specs alongside the
+Go tests so you can see pass/fail results for every stack layer in one place.
 
 ### Metadata Debugging Utility
 
-Use the built-in CLI command to inspect the metadata pipeline for a single
-audio file without running a full scan. The command prints both the logical
-metadata fields and the technical mediainfo summary, while the standard log
-output includes TRACE-level field-source diagnostics added in `metadata.go`.
+Use the built-in CLI command to inspect the metadata pipeline for a single audio
+file without running a full scan. The command prints both the logical metadata
+fields and the technical mediainfo summary, while the standard log output
+includes TRACE-level field-source diagnostics added in `metadata.go`.
 
 ```bash
 go run . inspect-metadata --file /path/to/book.m4b
@@ -199,8 +198,8 @@ volume numbers are detected, and whether filename fallback filled any gaps.
 ## Dockerized Test Image
 
 A standalone Dockerfile (`Dockerfile.test`) lives at the repository root for
-fully isolated test runs. It installs Go 1.23, Node.js 22, Chromium/Chromedriver,
-and the Python Selenium stack.
+fully isolated test runs. It installs Go 1.23, Node.js 22,
+Chromium/Chromedriver, and the Python Selenium stack.
 
 ```bash
 # Build the image

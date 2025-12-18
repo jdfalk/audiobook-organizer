@@ -6,7 +6,8 @@
 
 ## 🎯 Overall Goal
 
-Verify that the scan progress reporting system (implemented in v1.26.0) works correctly by:
+Verify that the scan progress reporting system (implemented in v1.26.0) works
+correctly by:
 
 1. Triggering a full scan with `force_update=true`
 2. Observing real-time progress events via SSE
@@ -30,10 +31,13 @@ Verify that the scan progress reporting system (implemented in v1.26.0) works co
 This comprehensive task is split across three documents for clarity:
 
 1. **CORE-TESTING.md** (this file) - Core testing phases and basic validation
-2. **ADVANCED-SCENARIOS.md** - Advanced scenarios, code details, performance testing
-3. **TROUBLESHOOTING.md** - Comprehensive troubleshooting guide and recovery procedures
+2. **ADVANCED-SCENARIOS.md** - Advanced scenarios, code details, performance
+   testing
+3. **TROUBLESHOOTING.md** - Comprehensive troubleshooting guide and recovery
+   procedures
 
 **Read in this order for complete understanding:**
+
 1. Start here to understand basic testing flow
 2. Move to Advanced Scenarios for complex setups
 3. Reference Troubleshooting only when issues occur
@@ -42,7 +46,8 @@ This comprehensive task is split across three documents for clarity:
 
 ## ⚠️ CRITICAL: Idempotency & Multi-Agent Safety
 
-**IMPORTANT:** Multiple AIs may work on this task. Follow these rules to prevent conflicts:
+**IMPORTANT:** Multiple AIs may work on this task. Follow these rules to prevent
+conflicts:
 
 ### Lock File Protocol
 
@@ -102,9 +107,8 @@ fi
 
 **Goal:** Ensure the system is in a known state before triggering scan.
 
-**Duration:** ~1 minute
-**Destructive:** No (read-only verification)
-**Can be run by multiple agents:** Yes (all read-only)
+**Duration:** ~1 minute **Destructive:** No (read-only verification) **Can be
+run by multiple agents:** Yes (all read-only)
 
 ### Step 1.1: Check Server Running
 
@@ -152,6 +156,7 @@ fi
 ```
 
 **Expected:**
+
 - Same count both times (indicates no concurrent operations)
 - Should match number of books in `/Users/jdfalk/ao-library/library/`
 
@@ -172,6 +177,7 @@ fi
 ```
 
 **Expected:**
+
 - Either shows import paths array or empty array
 - Should be same configuration as before
 
@@ -192,6 +198,7 @@ fi
 ```
 
 **Expected:**
+
 - Empty array `[]`
 - If operations exist, they must complete first
 
@@ -219,6 +226,7 @@ fi
 ```
 
 **Expected:**
+
 - Directory exists and is writable
 - No permission errors
 
@@ -228,9 +236,9 @@ fi
 
 **Goal:** Start a scan operation with proper progress tracking enabled.
 
-**Duration:** Immediate (returns operation ID)
-**Destructive:** No (modifies database but can be rolled back)
-**Can be run by multiple agents:** No (one at a time)
+**Duration:** Immediate (returns operation ID) **Destructive:** No (modifies
+database but can be rolled back) **Can be run by multiple agents:** No (one at a
+time)
 
 ### Step 2.1: Trigger Scan with Force Update
 
@@ -278,6 +286,7 @@ echo "$OPERATION_ID" > /tmp/task-1-operation-id.txt
 ```
 
 **Important Notes:**
+
 - The `force_update=true` flag means all books will be reprocessed
 - Operation status starts as "queued"
 - Should transition to "processing" within 1 second
@@ -306,6 +315,7 @@ fi
 ```
 
 **Expected:**
+
 - Operation exists in database
 - Status is either "queued" or "processing"
 - Timestamps are recent
@@ -316,9 +326,8 @@ fi
 
 **Goal:** Connect to SSE endpoint and observe real-time progress events.
 
-**Duration:** 5-30 seconds (depends on library size)
-**Destructive:** No (read-only)
-**Can be run by multiple agents:** Yes (all reading same stream)
+**Duration:** 5-30 seconds (depends on library size) **Destructive:** No
+(read-only) **Can be run by multiple agents:** Yes (all reading same stream)
 
 ### Step 3.1: Connect to SSE Stream
 
@@ -351,6 +360,7 @@ echo "✅ SSE stream capture complete"
 The event stream will show progression through several stages:
 
 **Stage 1: Initial startup (events 1-4)**
+
 ```
 event: progress
 data: {"type":"progress","level":"info","message":"Starting scan of folder: /Users/jdfalk/ao-library/library","timestamp":"2025-12-06T14:30:45.123Z"}
@@ -360,11 +370,13 @@ data: {"type":"progress","level":"info","message":"Full rescan: including librar
 ```
 
 **Validation for Stage 1:**
+
 - ✅ First message indicates folder being scanned
 - ✅ Message mentions "Full rescan" (because force_update=true)
 - ✅ Timestamps are current
 
 **Stage 2: Pre-scan file counting (events 5-7)**
+
 ```
 event: progress
 data: {"type":"progress","level":"info","message":"Scanning 2 total folders (1 import paths)","timestamp":"2025-12-06T14:30:45.125Z"}
@@ -377,21 +389,26 @@ data: {"type":"progress","level":"info","message":"Total audiobook files across 
 ```
 
 **Validation for Stage 2:**
+
 - ✅ File count should NOT be 0 (must match actual files)
 - ✅ File count should be consistent across both messages
-- ✅ Count matches number of m4b/mp3 files in `/Users/jdfalk/ao-library/library/`
+- ✅ Count matches number of m4b/mp3 files in
+  `/Users/jdfalk/ao-library/library/`
 
 **Stage 3: Processing initiation (event 8)**
+
 ```
 event: progress
 data: {"type":"progress","level":"info","message":"Processing books in folder /Users/jdfalk/ao-library/library","timestamp":"2025-12-06T14:30:46.502Z"}
 ```
 
 **Validation:**
+
 - ✅ Message indicates processing is starting
 - ✅ Mentions correct folder path
 
 **Stage 4: Per-book progress (events 9-12)**
+
 ```
 event: progress
 data: {"type":"progress","level":"info","message":"Processed: 1/4 books","timestamp":"2025-12-06T14:30:47.123Z"}
@@ -407,6 +424,7 @@ data: {"type":"progress","level":"info","message":"Processed: 4/4 books","timest
 ```
 
 **Validation for Stage 4 - CRITICAL:**
+
 - ✅ Progress shows incrementing counters (1/4, then 2/4, then 3/4, then 4/4)
 - ✅ NEVER shows 0/4 or 0/X (common bug)
 - ✅ Denominator (total) matches Stage 2 file count
@@ -414,6 +432,7 @@ data: {"type":"progress","level":"info","message":"Processed: 4/4 books","timest
 - ✅ Time between events is reasonable (1-2 seconds per book)
 
 **Stage 5: Completion (event 13)**
+
 ```
 event: progress
 data: {"type":"progress","level":"info","message":"Scan completed. Library: 4 books, Import: 0 books","timestamp":"2025-12-06T14:30:51.500Z"}
@@ -422,6 +441,7 @@ data: {"type":"progress","level":"info","message":"Scan completed. Library: 4 bo
 ```
 
 **Validation for Stage 5 - CRITICAL:**
+
 - ✅ Message clearly separates library vs import counts
 - ✅ Library count matches pre-scan file count
 - ✅ Import count makes sense (0 if no import paths, or actual count)
@@ -482,9 +502,8 @@ Processed: 4/4 books
 
 **Goal:** Confirm progress logging to disk succeeded.
 
-**Duration:** ~10 seconds
-**Destructive:** No (read-only)
-**Can be run by multiple agents:** Yes
+**Duration:** ~10 seconds **Destructive:** No (read-only) **Can be run by
+multiple agents:** Yes
 
 ### Step 4.1: Locate Log File
 
@@ -512,6 +531,7 @@ echo "   Size: $(ls -lh $LOG_FILE | awk '{print $5}')"
 ```
 
 **Expected:**
+
 - Log file exists with operation ID in name
 - File is readable
 - File has reasonable size (> 500 bytes)
@@ -558,6 +578,7 @@ fi
 ```
 
 **Expected:**
+
 - Log contains all 4 required message types
 - Log shows no errors or fatal conditions
 - Log is well-formatted with timestamps
@@ -593,9 +614,8 @@ echo "$LOG_FILE" > /tmp/task-1-log-file.txt
 
 **Goal:** Confirm scan completed successfully and data is consistent.
 
-**Duration:** ~20 seconds
-**Destructive:** No (read-only)
-**Can be run by multiple agents:** Yes
+**Duration:** ~20 seconds **Destructive:** No (read-only) **Can be run by
+multiple agents:** Yes
 
 ### Step 5.1: Check Operation Status
 
@@ -622,6 +642,7 @@ fi
 ```
 
 **Expected:**
+
 - Status is "completed"
 - If still "processing", wait a bit and check again
 
@@ -651,6 +672,7 @@ fi
 ```
 
 **Expected:**
+
 - Final count should be stable
 - Should match actual files in directory
 
@@ -685,6 +707,7 @@ echo "✅ Import count: $IMPORT_COUNT books"
 ```
 
 **Expected:**
+
 - Library count > 0
 - Total = library + import
 - Consistent with final count
@@ -694,12 +717,14 @@ echo "✅ Import count: $IMPORT_COUNT books"
 ## Summary & Next Steps
 
 **If all phases pass:**
+
 1. ✅ Scan progress reporting is working correctly
 2. ✅ Real-time SSE streaming is functioning
 3. ✅ Log files are being created properly
 4. ✅ Database state is consistent
 
 **Next steps:**
+
 - Move to **ADVANCED-SCENARIOS.md** for complex testing
 - Reference **TROUBLESHOOTING.md** if issues occur
 
@@ -717,7 +742,5 @@ fi
 
 ---
 
-**Document Version:** 2.0.1
-**Last Updated:** December 6, 2025
-**Total Lines:** 600+
-**Total Words:** ~8,500
+**Document Version:** 2.0.1 **Last Updated:** December 6, 2025 **Total Lines:**
+600+ **Total Words:** ~8,500

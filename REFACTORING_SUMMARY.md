@@ -4,15 +4,16 @@
 
 # LibraryFolder → ImportPath Refactoring - Quick Reference
 
-**Date**: November 23, 2025
-**Read This First**: Quick overview before diving into detailed checklists
+**Date**: November 23, 2025 **Read This First**: Quick overview before diving
+into detailed checklists
 
 ---
 
 ## 📋 Documents in This Package
 
 1. **HANDOFF.md** - High-level context and current project state
-2. **REFACTORING_CHECKLIST.md** (THIS IS THE MAIN GUIDE) - Complete step-by-step checklist with every file and line number
+2. **REFACTORING_CHECKLIST.md** (THIS IS THE MAIN GUIDE) - Complete step-by-step
+   checklist with every file and line number
 3. **CODING_STANDARDS.md** - Full Go and TypeScript coding standards
 4. **REFACTORING_SUMMARY.md** (this file) - Quick reference and overview
 
@@ -22,7 +23,8 @@
 
 Rename `LibraryFolder` to `ImportPath` throughout the entire codebase.
 
-**Why?**: "Library folders" is confusing - it actually refers to import paths (monitored directories for new content), not the main library.
+**Why?**: "Library folders" is confusing - it actually refers to import paths
+(monitored directories for new content), not the main library.
 
 **Scope**: ~150+ occurrences across:
 
@@ -98,7 +100,8 @@ git rebase main
 
 **Server Layer**:
 
-- `internal/server/server.go` - API routes and handlers (major file, ~20 occurrences)
+- `internal/server/server.go` - API routes and handlers (major file, ~20
+  occurrences)
 - `internal/server/server_test.go` - API tests
 
 **Models & Metrics**:
@@ -119,7 +122,8 @@ git rebase main
 
 **Components**:
 
-- `web/src/components/filemanager/LibraryFolderCard.tsx` → Rename to `ImportPathCard.tsx`
+- `web/src/components/filemanager/LibraryFolderCard.tsx` → Rename to
+  `ImportPathCard.tsx`
 - `web/src/components/system/StorageTab.tsx`
 - `web/src/components/system/SystemInfoTab.tsx`
 - `web/src/components/wizard/WelcomeWizard.tsx`
@@ -234,7 +238,8 @@ When complete, you should have:
 
 If stuck:
 
-1. **Review the glossary** in HANDOFF.md - make sure you understand library vs import path
+1. **Review the glossary** in HANDOFF.md - make sure you understand library vs
+   import path
 2. **Check REFACTORING_CHECKLIST.md** - every file and line number is listed
 3. **Review CODING_STANDARDS.md** - for style questions
 4. **Test frequently** - catch issues early
@@ -364,4 +369,5 @@ You're done when:
 
 ---
 
-**Good luck! Follow REFACTORING_CHECKLIST.md step-by-step and test frequently.** 🚀
+**Good luck! Follow REFACTORING_CHECKLIST.md step-by-step and test frequently.**
+🚀

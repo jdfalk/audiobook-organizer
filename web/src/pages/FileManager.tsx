@@ -155,10 +155,9 @@ export function FileManager() {
     if (!files || files.length === 0) return;
 
     // Get the directory path from the first file
-      const firstFile = files[0];
-      const webkitPath = (
-        firstFile as File & { webkitRelativePath?: string }
-      ).webkitRelativePath;
+    const firstFile = files[0];
+    const webkitPath = (firstFile as File & { webkitRelativePath?: string })
+      .webkitRelativePath;
     if (webkitPath) {
       const folderPath = webkitPath.split('/')[0];
       setNewFolderPath(folderPath);
@@ -212,8 +211,7 @@ export function FileManager() {
           </Typography>
           {importPaths.length === 0 ? (
             <Alert severity="info">
-              No import paths added yet. Click "Add Import Path" to get
-              started.
+              No import paths added yet. Click "Add Import Path" to get started.
             </Alert>
           ) : (
             <Grid container spacing={2}>

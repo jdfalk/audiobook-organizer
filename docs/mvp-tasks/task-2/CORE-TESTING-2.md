@@ -6,7 +6,8 @@
 
 ## 🎯 Goals
 
-- Verify backend exposes `library_book_count`, `import_book_count`, `total_book_count`.
+- Verify backend exposes `library_book_count`, `import_book_count`,
+  `total_book_count`.
 - Verify counts are accurate (total = library + import) after a scan.
 - Verify Dashboard and Library pages display separate counts correctly.
 - Keep process idempotent and safe for multi-agent execution.
@@ -56,7 +57,8 @@ curl -s http://localhost:8888/api/v1/audiobooks | jq '.count'
 
 - Health returns status ok.
 - System status has the three count fields.
-- `total_book_count` equals the count endpoint (or is consistent with library+import).
+- `total_book_count` equals the count endpoint (or is consistent with
+  library+import).
 
 ## Phase 2: Backend Verification (Read-Only)
 
@@ -94,7 +96,8 @@ rg "library_book_count|import_book_count" web/src/pages/Library.tsx
 
 ## Phase 4: Functional Test (Scan + Validate)
 
-Trigger a scan to refresh counts, then validate API and UI data. (Destructive only in the sense of reprocessing counts; safe for data.)
+Trigger a scan to refresh counts, then validate API and UI data. (Destructive
+only in the sense of reprocessing counts; safe for data.)
 
 ```bash
 echo "=== PHASE 4: SCAN AND VALIDATE ==="
@@ -145,4 +148,5 @@ fi
 
 ---
 
-**Next:** If any discrepancy appears, go to `TASK-2-TROUBLESHOOTING.md`. For edge cases or performance concerns, see `TASK-2-ADVANCED-SCENARIOS.md`.
+**Next:** If any discrepancy appears, go to `TASK-2-TROUBLESHOOTING.md`. For
+edge cases or performance concerns, see `TASK-2-ADVANCED-SCENARIOS.md`.

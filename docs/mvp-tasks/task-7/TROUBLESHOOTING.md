@@ -73,7 +73,8 @@ docker-compose -f docker-compose.test.yml config | grep APP_URL
 **Fix:**
 
 - If server in separate container, use service name: `APP_URL=http://app:8888`.
-- If server on host, use `host.docker.internal:8888` (Mac/Windows) or `172.17.0.1:8888` (Linux).
+- If server on host, use `host.docker.internal:8888` (Mac/Windows) or
+  `172.17.0.1:8888` (Linux).
 - Update test config:
 
 ```python
@@ -192,4 +193,5 @@ docker-compose -f docker-compose.test.yml down -v
 rm -rf test-results/screenshots/* test-results/logs/*
 ```
 
-If unresolved, capture full test output, screenshots, and docker logs for review.
+If unresolved, capture full test output, screenshots, and docker logs for
+review.

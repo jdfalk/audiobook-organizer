@@ -6,11 +6,15 @@
 
 ## 📖 Overview
 
-This task implements a dedicated book detail view showing comprehensive information (files, metadata, versions) and enhances the delete workflow with reimport prevention controls. Core requirement: provide users with full context before deletion and offer granular control over future import behavior.
+This task implements a dedicated book detail view showing comprehensive
+information (files, metadata, versions) and enhances the delete workflow with
+reimport prevention controls. Core requirement: provide users with full context
+before deletion and offer granular control over future import behavior.
 
 **Deliverables:**
 
-- Book detail page/modal showing all metadata fields, file info, version group, and history.
+- Book detail page/modal showing all metadata fields, file info, version group,
+  and history.
 - File list showing audio files, cover art, and related resources with sizes.
 - Version tab showing all editions/formats linked to this book.
 - Enhanced delete dialog with "Prevent Reimporting of this file" checkbox.
@@ -31,7 +35,8 @@ This task implements a dedicated book detail view showing comprehensive informat
 ## 🎯 Success Criteria
 
 - Clicking a book in Library view opens detail page/modal.
-- Detail view shows: title, author, series, narrator, publisher, year, description, duration, quality.
+- Detail view shows: title, author, series, narrator, publisher, year,
+  description, duration, quality.
 - File section lists all files with paths, sizes, formats.
 - Versions section shows linked editions with quality comparison.
 - Delete button opens enhanced dialog with reimport prevention checkbox.

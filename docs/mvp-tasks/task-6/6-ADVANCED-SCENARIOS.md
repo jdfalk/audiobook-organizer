@@ -4,7 +4,8 @@
 
 # Task 6: Advanced Scenarios & Code Deep Dive (Book Detail & Delete)
 
-Use these scenarios when core testing passes but edge conditions need validation.
+Use these scenarios when core testing passes but edge conditions need
+validation.
 
 ## 📚 Multi-File Books (Series/Multi-Part)
 
@@ -19,7 +20,8 @@ Use these scenarios when core testing passes but edge conditions need validation
 **Handling:**
 
 - List all related files in Files tab.
-- Decision: block import of any file from the set (hash all files) or just the primary?
+- Decision: block import of any file from the set (hash all files) or just the
+  primary?
 - Prefer blocking all file hashes to prevent partial reimports.
 
 ## 🔗 Version Group Delete
@@ -105,6 +107,7 @@ Use these scenarios when core testing passes but edge conditions need validation
 
 - Detail page loads single book; no pagination issues.
 - Versions query should be fast (indexed by version_group_id).
-- Delete operation should be near-instant (DB updates only, no file I/O unless hard delete).
+- Delete operation should be near-instant (DB updates only, no file I/O unless
+  hard delete).
 
 When an edge condition is identified, document in `TASK-6-TROUBLESHOOTING.md`.

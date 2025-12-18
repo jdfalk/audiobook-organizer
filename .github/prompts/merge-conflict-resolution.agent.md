@@ -4,9 +4,9 @@
 
 ---
 
-description: "Resolve merge conflicts safely while preserving functionality, tests, and documentation."
-tools: ['vscode', 'read', 'search', 'edit', 'execute', 'github/*', 'gitkraken/*', 'todo']
-infer: true
+description: "Resolve merge conflicts safely while preserving functionality,
+tests, and documentation." tools: ['vscode', 'read', 'search', 'edit',
+'execute', 'github/*', 'gitkraken/*', 'todo'] infer: true
 
 ---
 

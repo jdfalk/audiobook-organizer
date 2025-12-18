@@ -13,6 +13,7 @@ This is **Part 2** of the comprehensive Task 1 documentation:
 - **Part 3:** TROUBLESHOOTING.md (troubleshooting and recovery)
 
 **Start here** if you've completed all phases in Part 1 and want to:
+
 - Test complex scenarios
 - Understand implementation details
 - Validate edge cases
@@ -26,6 +27,7 @@ This is **Part 2** of the comprehensive Task 1 documentation:
 **Purpose:** Validate scan progress with real-world data volume
 
 **Setup Requirements:**
+
 - 1000+ audiobook files in `/Users/jdfalk/ao-library/library/`
 - Available disk space for database
 - Memory: 500MB+ available
@@ -131,6 +133,7 @@ fi
 ```
 
 **Expected Results:**
+
 - 1000 books: should complete in 5-20 minutes
 - Rate: 50-200 books/minute
 - Memory stable (no OOM errors)
@@ -255,6 +258,7 @@ echo "✅ Database is consistent"
 ```
 
 **Expected Behavior:**
+
 - Each operation gets unique ID
 - Operations execute sequentially (one at a time)
 - Queue properly orders: queued → processing → completed
@@ -309,6 +313,7 @@ timeout 120 curl -N "http://localhost:8888/api/events?operation_id=$OPERATION" 2
 ```
 
 **What to Monitor:**
+
 - Should see warning or error for unreadable file
 - Scan should continue (not crash)
 - Other files should process normally
@@ -348,6 +353,7 @@ echo "✅ Database is usable (book count: $COUNT)"
 ```
 
 **Expected Behavior:**
+
 - Scan continues despite file error
 - Error is logged in SSE stream
 - Database remains consistent
@@ -387,6 +393,7 @@ func (s *Server) startScan(c *gin.Context) {
 ```
 
 **Key Points:**
+
 - Non-blocking (returns immediately)
 - Creates database record for tracking
 - Enqueues work for background processing
@@ -395,6 +402,7 @@ func (s *Server) startScan(c *gin.Context) {
 ### File 2: Progress Reporting (`internal/operations/progress.go`)
 
 **Interface:**
+
 ```go
 type ProgressReporter interface {
     Log(level, message string, metadata map[string]interface{}) error
@@ -407,6 +415,7 @@ type ProgressReporter interface {
 2. **SSE broadcasting** - sends to all connected clients
 
 **Usage in scan:**
+
 ```go
 progress.Log("info", "Starting scan...", nil)
 // Simultaneously:
@@ -455,6 +464,7 @@ func HandleSSE(c *gin.Context) {
 ```
 
 **Key Features:**
+
 - Heartbeat every 30 seconds (keeps connection alive)
 - Real-time event delivery
 - Proper cleanup on disconnect
@@ -581,11 +591,13 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 ### Performance Baseline
 
 **Expected for 4-book library:**
+
 - Duration: 3-5 seconds
 - Memory: 50-100 MB
 - CPU: 20-40%
 
 **Expected for 1000-book library:**
+
 - Duration: 5-20 minutes
 - Memory: 200-500 MB (stable)
 - CPU: 40-60% (average)
@@ -595,6 +607,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 ## Validation Checklist for Advanced Scenarios
 
 ### After Scenario A (Large Library):
+
 - [ ] Scan completed without hanging
 - [ ] Progress events showed incrementing counters throughout
 - [ ] Memory usage was stable (no growth over time)
@@ -603,6 +616,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 - [ ] Log file contains all events
 
 ### After Scenario B (Concurrent Operations):
+
 - [ ] All 3 operations got unique IDs
 - [ ] Operations executed sequentially (not in parallel)
 - [ ] Each transitioned: queued → processing → completed
@@ -610,6 +624,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 - [ ] No conflicts or interference between operations
 
 ### After Scenario C (Failure Recovery):
+
 - [ ] Scan continued despite unreadable file
 - [ ] Error was logged
 - [ ] Other files were processed successfully
@@ -622,17 +637,14 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 
 This advanced section covers:
 
-✅ **Large library testing** - Validates scalability
-✅ **Concurrent operations** - Validates queue behavior
-✅ **Error recovery** - Validates resilience
-✅ **Code implementation** - Explains how it works
-✅ **Performance monitoring** - Explains metrics tracking
+✅ **Large library testing** - Validates scalability ✅ **Concurrent
+operations** - Validates queue behavior ✅ **Error recovery** - Validates
+resilience ✅ **Code implementation** - Explains how it works ✅ **Performance
+monitoring** - Explains metrics tracking
 
 **Next:** If issues occur, reference **TROUBLESHOOTING.md**
 
 ---
 
-**Document Version:** 2.0.1
-**Last Updated:** December 6, 2025
-**Total Lines:** 550+
-**Total Words:** ~7,500
+**Document Version:** 2.0.1 **Last Updated:** December 6, 2025 **Total Lines:**
+550+ **Total Words:** ~7,500

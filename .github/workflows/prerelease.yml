@@ -5,32 +5,32 @@
 name: Prerelease on Merge
 
 on:
-    push:
-        branches: [main]
-        paths-ignore:
-            - "**.md"
-            - "docs/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 concurrency:
-    group: prerelease-${{ github.ref }}
-    cancel-in-progress: false
+  group: prerelease-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-    contents: write
-    packages: write
-    id-token: write
-    attestations: write
-    security-events: write
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+  security-events: write
 
 jobs:
-    prerelease:
-        name: Create Prerelease Build
-        uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@v1.0.0-rc.7
-        with:
-            release-type: "auto"
-            prerelease: true
-            draft: false
-            go-enabled: true
-            frontend-enabled: true
-            docker-enabled: true
-        secrets: inherit
+  prerelease:
+    name: Create Prerelease Build
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@v1.0.0-rc.7
+    with:
+      release-type: "auto"
+      prerelease: true
+      draft: false
+      go-enabled: true
+      frontend-enabled: true
+      docker-enabled: true
+    secrets: inherit

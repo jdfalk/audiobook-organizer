@@ -6,12 +6,16 @@
 
 ## 📖 Overview
 
-This task implements and validates a containerized end-to-end test suite using Selenium/pytest to ensure all critical user workflows function correctly. Core requirement: automated tests run in Docker container with consistent results, covering all MVP features.
+This task implements and validates a containerized end-to-end test suite using
+Selenium/pytest to ensure all critical user workflows function correctly. Core
+requirement: automated tests run in Docker container with consistent results,
+covering all MVP features.
 
 **Deliverables:**
 
 - Dockerized E2E test environment with Selenium, pytest, and browser drivers.
-- Test suite covering: library setup, scan, import, organize, metadata edit, delete workflows.
+- Test suite covering: library setup, scan, import, organize, metadata edit,
+  delete workflows.
 - VS Code task to run tests inside container for consistent automation.
 - Tests pass reliably without flakiness (retry logic, proper waits).
 - CI integration ready (tests can run in GitHub Actions).
@@ -31,7 +35,8 @@ This task implements and validates a containerized end-to-end test suite using S
 
 - Docker image builds successfully with all test dependencies.
 - `docker-compose up test` or VS Code task runs full E2E suite.
-- Tests cover: dashboard load, library scan, import file, organize, metadata edit, delete with prevention.
+- Tests cover: dashboard load, library scan, import file, organize, metadata
+  edit, delete with prevention.
 - All tests pass with green status; no false failures.
 - Test logs and screenshots captured on failure for debugging.
 - README documents how to run tests locally and in CI.

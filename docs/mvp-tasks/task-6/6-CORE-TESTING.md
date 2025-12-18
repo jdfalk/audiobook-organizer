@@ -4,7 +4,8 @@
 
 # Task 6: Core Book Detail & Delete Flow Testing
 
-This file defines the core flow to validate book detail page and enhanced delete workflow.
+This file defines the core flow to validate book detail page and enhanced delete
+workflow.
 
 ## 🔒 Safety & Locks
 

@@ -4,7 +4,9 @@
 
 # LibraryFolder → ImportPath Refactoring Package
 
-**Welcome!** This directory contains complete documentation for refactoring the audiobook-organizer codebase to rename `LibraryFolder` to `ImportPath` throughout.
+**Welcome!** This directory contains complete documentation for refactoring the
+audiobook-organizer codebase to rename `LibraryFolder` to `ImportPath`
+throughout.
 
 ---
 
@@ -16,7 +18,9 @@ Quick overview, quick start guide, and key concepts. Read this first!
 
 ### 📋 **MAIN GUIDE**: [REFACTORING_CHECKLIST.md](REFACTORING_CHECKLIST.md)
 
-**This is your primary working document.** Complete item-by-item checklist with every file, line number, and change required. This has ~200 specific items to check off.
+**This is your primary working document.** Complete item-by-item checklist with
+every file, line number, and change required. This has ~200 specific items to
+check off.
 
 **Parts**:
 
@@ -30,7 +34,8 @@ Quick overview, quick start guide, and key concepts. Read this first!
 
 ### 📖 **CONTEXT**: [HANDOFF.md](HANDOFF.md)
 
-High-level project context, glossary, architecture overview, and current state. Useful for understanding the "why" behind this refactoring.
+High-level project context, glossary, architecture overview, and current state.
+Useful for understanding the "why" behind this refactoring.
 
 ### 📐 **STANDARDS**: [CODING_STANDARDS.md](CODING_STANDARDS.md)
 
@@ -71,7 +76,8 @@ git rebase main
 
 ### The Problem
 
-The codebase uses `LibraryFolder` to refer to "import paths" (monitored directories for new audiobooks), but this is confusing because:
+The codebase uses `LibraryFolder` to refer to "import paths" (monitored
+directories for new audiobooks), but this is confusing because:
 
 - "Library" actually refers to the main organized collection (`root_dir`)
 - "Library folders" sounds like folders IN the library

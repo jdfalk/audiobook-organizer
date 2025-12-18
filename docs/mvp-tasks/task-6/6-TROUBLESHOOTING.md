@@ -4,7 +4,8 @@
 
 # Task 6: Troubleshooting - Book Detail Page & Delete Flow
 
-Use this guide when detail page doesn't load, delete fails, or reimport prevention doesn't work.
+Use this guide when detail page doesn't load, delete fails, or reimport
+prevention doesn't work.
 
 ## Quick Index
 
@@ -33,14 +34,16 @@ find web/src -name "*Detail*" -o -name "*AudiobookDetail*"
 
 **Fix:**
 
-- Create component: `web/src/components/BookDetail.tsx` or `pages/BookDetail.tsx`.
+- Create component: `web/src/components/BookDetail.tsx` or
+  `pages/BookDetail.tsx`.
 - Add route in `App.tsx`:
 
 ```tsx
 <Route path="/audiobooks/:id" element={<BookDetail />} />
 ```
 
-- Add navigation from Library: `onClick={() => navigate(`/audiobooks/${book.id}`)}`.
+- Add navigation from Library:
+  `onClick={() => navigate(`/audiobooks/${book.id}`)}`.
 
 ## Issue 2: Detail API Returns Incomplete Data
 
@@ -92,7 +95,12 @@ rg "prevent.*reimport|Prevent.*Reimport" web/src/components -n
 
 ```tsx
 <FormControlLabel
-  control={<Checkbox checked={preventReimport} onChange={(e) => setPreventReimport(e.target.checked)} />}
+  control={
+    <Checkbox
+      checked={preventReimport}
+      onChange={e => setPreventReimport(e.target.checked)}
+    />
+  }
   label="Prevent this file from being imported again"
 />
 ```
@@ -160,4 +168,5 @@ rg "files.*tab|Files.*Tab" web/src/components -n
 rm -f /tmp/task-6-lock.txt /tmp/task-6-state-*.json /tmp/task-6-pre-delete.json
 ```
 
-If unresolved, capture browser console errors and server logs for detail page load and delete operations.
+If unresolved, capture browser console errors and server logs for detail page
+load and delete operations.

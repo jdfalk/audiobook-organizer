@@ -8,7 +8,8 @@
 
 ### What Was Fixed (Nov 21-22)
 
-**The Problem**: Metadata extraction was completely broken, returning `Unknown`/`{placeholder}` values despite rich M4B tags.
+**The Problem**: Metadata extraction was completely broken, returning
+`Unknown`/`{placeholder}` values despite rich M4B tags.
 
 **Root Causes Identified**:
 
@@ -24,21 +25,27 @@
 1. **Case-insensitive raw tag lookup** in `metadata.ExtractMetadata()`
 2. **Release-group filtering** to skip bracketed tags like `[PZG]`
 3. **Roman numeral support** in volume detection (Vol. IV → 4)
-4. **Series extraction cascade**: raw tags → album-prefix → comment → volume string parsing → album/title fallback
-5. **Narrator extraction priority**: raw.narrator → raw.reader → raw.artist → raw.album_artist → tag.Artist (when composer provided author)
+4. **Series extraction cascade**: raw tags → album-prefix → comment → volume
+   string parsing → album/title fallback
+5. **Narrator extraction priority**: raw.narrator → raw.reader → raw.artist →
+   raw.album_artist → tag.Artist (when composer provided author)
 6. **Publisher extraction** from raw.publisher tag
-7. **Enhanced volume detection**: `extractSeriesFromVolumeString()` parses "Series Name, Vol. 01" patterns
+7. **Enhanced volume detection**: `extractSeriesFromVolumeString()` parses
+   "Series Name, Vol. 01" patterns
 
 **Results Verified** (via API after cleanup + rescan):
 
-- 4 books with correct narrator (Greg Chun, Fred Berman, Michelle H. Lee, Cassandra Morris/Graham Halstead)
-- Series extracted from album titles ("My Quiet Blacksmith Life in Another World")
+- 4 books with correct narrator (Greg Chun, Fred Berman, Michelle H. Lee,
+  Cassandra Morris/Graham Halstead)
+- Series extracted from album titles ("My Quiet Blacksmith Life in Another
+  World")
 - Series positions detected (1 from "Vol. 01")
 - Publishers populated (Podium Audio, Seven Seas Siren, Tantor Audio)
 
 ### Files Modified
 
-- `cmd/diagnostics.go` v1.0.0 - NEW: CLI diagnostics command (cleanup-invalid, query)
+- `cmd/diagnostics.go` v1.0.0 - NEW: CLI diagnostics command (cleanup-invalid,
+  query)
 - `cmd/root.go` v1.7.0 - Registered diagnosticsCmd
 - `internal/metadata/metadata.go` v1.7.0 - Major extraction enhancements
 - `internal/metadata/volume.go` v1.1.0 - Roman numerals, series parsing
@@ -49,7 +56,8 @@
 
 ### Database State
 
-- **Cleaned**: 8 invalid records with `{series}`/`{narrator}` placeholders purged
+- **Cleaned**: 8 invalid records with `{series}`/`{narrator}` placeholders
+  purged
 - **Current**: 4 books in library + 4 in import paths (8 total)
 - **Quality**: All 4 library books have correct metadata fields
 
@@ -57,9 +65,11 @@
 
 ### 1. Diagnostics CLI Command (COMPLETED ✅)
 
-- **Problem**: Legacy `.go.bak` scripts caused lint failures, needed proper CLI integration
+- **Problem**: Legacy `.go.bak` scripts caused lint failures, needed proper CLI
+  integration
 - **Solution**: Created `cmd/diagnostics.go` with two subcommands:
-  - `cleanup-invalid`: Detects and removes books with placeholder values (`{series}`, `{narrator}`)
+  - `cleanup-invalid`: Detects and removes books with placeholder values
+    (`{series}`, `{narrator}`)
     - Supports `--dry-run` flag for preview
     - Confirmation prompt before deletion
     - Deleted 8 corrupted records in testing
@@ -86,27 +96,35 @@
   6. `DetectVolumeNumber()` with roman numeral support
   7. `extractSeriesFromVolumeString()` for "Series, Vol. N" patterns
   8. Publisher extraction from raw tags
-- **Files**: `internal/metadata/metadata.go` v1.7.0, `internal/metadata/volume.go` v1.1.0
+- **Files**: `internal/metadata/metadata.go` v1.7.0,
+  `internal/metadata/volume.go` v1.1.0
 - **Tests**: Added `volume_test.go`, `metadata_internal_test.go` - all passing
-- **Verification**: `go run . inspect-metadata` shows correct fields, API returns 4 books with proper data
+- **Verification**: `go run . inspect-metadata` shows correct fields, API
+  returns 4 books with proper data
 
 ### 3. Database Cleanup (COMPLETED ✅)
 
 - **Action**: `~/audiobook-organizer-embedded diagnostics cleanup-invalid --yes`
 - **Result**: Deleted 8 records with placeholder paths
-- **Follow-up**: Full rescan via `curl -X POST http://localhost:8888/api/v1/operations/scan?force_update=true`
-- **Outcome**: 8 books found (4 library + 4 import paths), all with correct metadata
+- **Follow-up**: Full rescan via
+  `curl -X POST http://localhost:8888/api/v1/operations/scan?force_update=true`
+- **Outcome**: 8 books found (4 library + 4 import paths), all with correct
+  metadata
 
 ### 4. Scan Progress Reporting (IN PROGRESS ⚠️)
 
-- **Problem**: Scan shows "Scanning: 0/0" and completion message "Total books found: 8" without separating library vs import
-- **User Request**: "do a quick list of all the files and use that as our total, like rsync does" + "say total books found 4 in library, 4 in import paths"
+- **Problem**: Scan shows "Scanning: 0/0" and completion message "Total books
+  found: 8" without separating library vs import
+- **User Request**: "do a quick list of all the files and use that as our total,
+  like rsync does" + "say total books found 4 in library, 4 in import paths"
 - **Changes Applied** (NOT YET TESTED):
   1. Pre-scan `filepath.Walk` loop to count total files across all folders
   2. Track `libraryBooks`, `importBooks`, `processedFiles` separately
   3. Update progress with `processedFiles/totalFilesAcrossFolders` during scan
-  4. Enhanced completion message: "Library: X books, Import paths: Y books (Total: Z)"
-- **Files**: `internal/server/server.go` v1.26.0 (compiled but not runtime tested)
+  4. Enhanced completion message: "Library: X books, Import paths: Y books
+     (Total: Z)"
+- **Files**: `internal/server/server.go` v1.26.0 (compiled but not runtime
+  tested)
 - **Status**: Code changes complete, needs rebuild and test scan
 
 ### 5. EventSource Connection Issues (REGRESSED ⚠️)
@@ -117,8 +135,9 @@
   - `/api/events` connections last **~17–18 seconds** before server closes the
     stream (`events.go:247` "connection closed" followed by 200 response with
     16–18s duration)
-  - Browser console fills with `EventSource connection lost, reconnecting in
-    3s...` while other fetches (`/status`, `/events`, `/health`) fail in lockstep
+  - Browser console fills with
+    `EventSource connection lost, reconnecting in 3s...` while other fetches
+    (`/status`, `/events`, `/health`) fail in lockstep
   - Multiple EventSource consumers (Dashboard, Library) reconnect at slightly
     different times, so we see two clients cycling every ~17 seconds
 - **Current Status**: Reconnect loop never stabilizes because server proactively
@@ -231,18 +250,25 @@
 
 1. ✅ ~~**Metadata extraction completely broken**~~ - FIXED in v1.7.0
 2. ✅ ~~**Volume numbers not extracted**~~ - FIXED with roman numeral support
-3. ✅ ~~**Template variables in organized paths**~~ - FIXED by metadata extraction fixes
-4. ⚠️ **Scan progress reporting incomplete** - Code applied but not tested (v1.26.0)
-5. ❌ **Web UI not showing books** - Books exist in DB and return via API, but frontend doesn't display them
-6. ❌ **EventSource reconnection loop** - `/api/events` drops every ~17s; need backoff + root-cause fix
-7. ❌ **Health endpoint mismatch** - Frontend polls `/api/v1/health` (404), server only has `/api/health`
+3. ✅ ~~**Template variables in organized paths**~~ - FIXED by metadata
+   extraction fixes
+4. ⚠️ **Scan progress reporting incomplete** - Code applied but not tested
+   (v1.26.0)
+5. ❌ **Web UI not showing books** - Books exist in DB and return via API, but
+   frontend doesn't display them
+6. ❌ **EventSource reconnection loop** - `/api/events` drops every ~17s; need
+   backoff + root-cause fix
+7. ❌ **Health endpoint mismatch** - Frontend polls `/api/v1/health` (404),
+   server only has `/api/health`
 
 ### Medium Priority
 
-1. ❌ **Dashboard count separation** - Need separate `library_books` vs `import_books` counts (currently shows total)
+1. ❌ **Dashboard count separation** - Need separate `library_books` vs
+   `import_books` counts (currently shows total)
 2. ❌ **Import path negative sizes** - `total_size` returning negative numbers
 3. ❓ **Duplicate books** - Hash-based detection added (v1.9.0) but untested
-4. ❓ **AI parsing** - OpenAI integration exists but unknown if working (may not be needed after metadata fixes)
+4. ❓ **AI parsing** - OpenAI integration exists but unknown if working (may not
+   be needed after metadata fixes)
 
 ## 📊 DASHBOARD / DISPLAY REQUIREMENTS
 
@@ -260,11 +286,14 @@
 ### Immediate (Complete Current Work)
 
 1. ⚠️ **Test scan progress reporting** (v1.26.0):
-   - Build: `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
+   - Build:
+     `cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer && go build -o ~/audiobook-organizer-embedded`
    - Kill existing server: `killall audiobook-organizer-embedded`
    - Restart: `~/audiobook-organizer-embedded serve --port 8888 --debug`
-   - Trigger scan: `curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"`
-   - Verify progress shows actual counts (not 0/0) and completion message separates library vs import
+   - Trigger scan:
+     `curl -X POST "http://localhost:8888/api/v1/operations/scan?force_update=true"`
+   - Verify progress shows actual counts (not 0/0) and completion message
+     separates library vs import
    - Check logs in `/Users/jdfalk/ao-library/logs/` for formatted messages
 
 ### High Priority (User-Facing Issues)
@@ -291,10 +320,12 @@
      - Files: `web/src/pages/Library.tsx`, `web/src/pages/Dashboard.tsx`
 
 3. ❌ **Fix health endpoint mismatch**:
-   - **Option A**: Add `/api/v1/health` route in `internal/server/server.go` (preferred for API versioning)
+   - **Option A**: Add `/api/v1/health` route in `internal/server/server.go`
+     (preferred for API versioning)
    - **Option B**: Change frontend to poll `/api/health`
    - Update reconnect overlay to auto-refresh page on health recovery
-   - Files: `internal/server/server.go`, `web/src/components/ConnectionStatus.tsx`
+   - Files: `internal/server/server.go`,
+     `web/src/components/ConnectionStatus.tsx`
 
 ### Medium Priority (Data Accuracy)
 
@@ -304,7 +335,8 @@
      - `import_book_count`: Books in import paths (unique by hash)
      - `total_book_count`: Sum of above
    - Update Dashboard and Library page to display separate counts
-   - Files: `internal/server/server.go`, `web/src/pages/Dashboard.tsx`, `web/src/pages/Library.tsx`
+   - Files: `internal/server/server.go`, `web/src/pages/Dashboard.tsx`,
+     `web/src/pages/Library.tsx`
 
 2. ❌ **Fix import path negative sizes**:
    - Debug `total_size` calculation in library folder stats

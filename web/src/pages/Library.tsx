@@ -208,8 +208,13 @@ export const Library = () => {
         es.close();
         reconnectAttempts.current++;
         // Exponential backoff: 3s, 6s, 12s, 24s, capped at 30s
-        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts.current - 1), 30000);
-        console.warn(`EventSource connection lost (attempt ${reconnectAttempts.current}), reconnecting in ${delay/1000}s...`);
+        const delay = Math.min(
+          3000 * Math.pow(2, reconnectAttempts.current - 1),
+          30000
+        );
+        console.warn(
+          `EventSource connection lost (attempt ${reconnectAttempts.current}), reconnecting in ${delay / 1000}s...`
+        );
         setTimeout(setupEventSource, delay);
       };
 
@@ -487,17 +492,13 @@ export const Library = () => {
   };
 
   const libraryBookCount =
-    systemStatus?.library_book_count ??
-    systemStatus?.library.book_count ??
-    0;
+    systemStatus?.library_book_count ?? systemStatus?.library.book_count ?? 0;
   const importBookCount =
     systemStatus?.import_book_count ??
     systemStatus?.import_paths?.book_count ??
     0;
   const librarySizeBytes =
-    systemStatus?.library_size_bytes ??
-    systemStatus?.library.total_size ??
-    0;
+    systemStatus?.library_size_bytes ?? systemStatus?.library.total_size ?? 0;
   const importSizeBytes =
     systemStatus?.import_size_bytes ??
     systemStatus?.import_paths?.total_size ??
@@ -954,23 +955,32 @@ export const Library = () => {
               {importPaths.length === 0 ? (
                 <>
                   You haven't added any import paths yet. Get started by:
-                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
+                  <ul
+                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
+                  >
                     <li>
-                      Importing individual audiobook files using the "Import Files"
-                      button below
+                      Importing individual audiobook files using the "Import
+                      Files" button below
                     </li>
                     <li>
-                      Adding import paths using the "Add Import Path" button below
-                      (watches folders for new files)
+                      Adding import paths using the "Add Import Path" button
+                      below (watches folders for new files)
                     </li>
                   </ul>
                 </>
               ) : (
                 <>
                   No audiobooks found in your library. Try:
-                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
-                    <li>Scanning your import paths using the "Scan All" button below</li>
-                    <li>Adding more import paths where audiobooks are located</li>
+                  <ul
+                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
+                  >
+                    <li>
+                      Scanning your import paths using the "Scan All" button
+                      below
+                    </li>
+                    <li>
+                      Adding more import paths where audiobooks are located
+                    </li>
                   </ul>
                 </>
               )}

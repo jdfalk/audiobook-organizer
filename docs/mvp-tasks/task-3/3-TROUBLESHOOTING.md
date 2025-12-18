@@ -96,4 +96,5 @@ for d in $IMPORT_DIRS; do du -sk "$d" 2>/dev/null | awk '{print $1*1024 " bytes"
 rm -f /tmp/task-3-lock.txt /tmp/task-3-state-*.json /tmp/task-3-measure-*.txt
 ```
 
-If unresolved, capture server logs and open a code review referencing `TASK-3-CORE-TESTING.md` results.
+If unresolved, capture server logs and open a code review referencing
+`TASK-3-CORE-TESTING.md` results.

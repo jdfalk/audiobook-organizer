@@ -101,7 +101,12 @@ export const ImportPathCard: React.FC<ImportPathCardProps> = ({
           <Box display="flex" gap={2} flex={1} alignItems="flex-start">
             <Box mt={0.5}>{getStatusIcon()}</Box>
             <Box flex={1}>
-              <Typography variant="h6" gutterBottom noWrap title={importPath.path}>
+              <Typography
+                variant="h6"
+                gutterBottom
+                noWrap
+                title={importPath.path}
+              >
                 {importPath.path.split('/').pop() || importPath.path}
               </Typography>
               <Typography
@@ -159,22 +164,29 @@ export const ImportPathCard: React.FC<ImportPathCardProps> = ({
           </IconButton>
         </Box>
 
-        {importPath.status === 'scanning' && importPath.progress !== undefined && (
-          <Box mt={2}>
-            <LinearProgress variant="determinate" value={importPath.progress} />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 0.5 }}
-            >
-              {Math.round(importPath.progress)}% complete
-            </Typography>
-          </Box>
-        )}
+        {importPath.status === 'scanning' &&
+          importPath.progress !== undefined && (
+            <Box mt={2}>
+              <LinearProgress
+                variant="determinate"
+                value={importPath.progress}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
+                {Math.round(importPath.progress)}% complete
+              </Typography>
+            </Box>
+          )}
       </CardContent>
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
-        <MenuItem onClick={handleScan} disabled={importPath.status === 'scanning'}>
+        <MenuItem
+          onClick={handleScan}
+          disabled={importPath.status === 'scanning'}
+        >
           <SyncIcon sx={{ mr: 1 }} fontSize="small" />
           Scan Now
         </MenuItem>

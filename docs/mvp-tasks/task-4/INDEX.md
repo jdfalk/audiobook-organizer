@@ -15,9 +15,11 @@
 
 ## 🎯 Task Overview
 
-**Goal:** Validate hash-based duplicate detection system (SHA256) for audiobooks.
+**Goal:** Validate hash-based duplicate detection system (SHA256) for
+audiobooks.
 
 **Key Components:**
+
 - API endpoint: `/api/v1/audiobooks/duplicates`
 - Backend: SHA256 hash computation during scan
 - Database: `content_hash` or `file_hash` column
@@ -26,17 +28,20 @@
 ## 🚦 Recommended Reading Order
 
 ### For First-Time Testing
+
 1. **README.md** - Understand task goals and success criteria
 2. **4-CORE-TESTING.md** - Execute main validation flow
 3. **4-ADVANCED-SCENARIOS.md** - Test edge cases if needed
 4. **4-TROUBLESHOOTING.md** - Refer when issues arise
 
 ### For Debugging/Issues
+
 1. **4-TROUBLESHOOTING.md** - Find your specific issue
 2. **4-CORE-TESTING.md** - Review relevant test phase
 3. **4-ADVANCED-SCENARIOS.md** - Check if edge case applies
 
 ### For Implementation Review
+
 1. **README.md** - Success criteria and deliverables
 2. **4-ADVANCED-SCENARIOS.md** - Code checklist and schema requirements
 3. **4-CORE-TESTING.md** - Verification procedures
@@ -86,7 +91,8 @@ shasum -a 256 /path/to/audiobook.m4b
 - [ ] UI displays duplicate count on dashboard
 - [ ] UI provides duplicate management interface
 - [ ] Performance acceptable for large libraries (multi-GB files)
-- [ ] Edge cases documented and handled (symlinks, metadata changes, missing files)
+- [ ] Edge cases documented and handled (symlinks, metadata changes, missing
+      files)
 
 ## 📞 Support Resources
 
@@ -97,6 +103,5 @@ shasum -a 256 /path/to/audiobook.m4b
 
 ---
 
-**Last Updated:** 2025-12-14
-**Task Status:** Implementation complete (v1.9.0), testing in progress
-**Priority:** Low (Optional MVP feature)
+**Last Updated:** 2025-12-14 **Task Status:** Implementation complete (v1.9.0),
+testing in progress **Priority:** Low (Optional MVP feature)

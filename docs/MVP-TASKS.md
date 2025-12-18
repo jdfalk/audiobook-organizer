@@ -4,7 +4,8 @@
 
 # MVP Tasks Documentation
 
-**All MVP task documentation has been organized into a structured folder hierarchy.**
+**All MVP task documentation has been organized into a structured folder
+hierarchy.**
 
 ## 📂 Location
 
@@ -75,4 +76,5 @@ docs/mvp-tasks/
 
 ---
 
-**For the complete MVP task index and navigation, see [mvp-tasks/INDEX.md](mvp-tasks/INDEX.md)**
+**For the complete MVP task index and navigation, see
+[mvp-tasks/INDEX.md](mvp-tasks/INDEX.md)**
