@@ -10,11 +10,11 @@ This document outlines the versioning scheme and standards used by ghcommon reus
 
 ### Language Versions (from ghcommon defaults)
 
-| Language | Default Version | Notes |
-|----------|----------------|-------|
+| Language | Default Version      | Notes                                    |
+| -------- | -------------------- | ---------------------------------------- |
 | Go       | 1.24 (default input) | Actual setup uses 1.23 for compatibility |
-| Node.js  | 22 | |
-| Python   | 3.13 | |
+| Node.js  | 22                   |                                          |
+| Python   | 3.13                 |                                          |
 
 ### Workflow Reference Pattern
 
@@ -35,13 +35,13 @@ inputs:
     required: false
     type: string
     default: '1.24'
-    
+
   node-version:
     description: 'Node.js version to use'
     required: false
     type: string
     default: '22'
-    
+
   python-version:
     description: 'Python version to use'
     required: false
@@ -72,31 +72,31 @@ inputs:
     required: false
     type: string
     default: 'auto'
-    
+
   prerelease:
     description: 'Create a prerelease'
     required: false
     type: boolean
     default: false
-    
+
   draft:
     description: 'Create a draft release'
     required: false
     type: boolean
     default: false
-    
+
   go-enabled:
     description: 'Enable Go build'
     required: false
     type: boolean
     default: false
-    
+
   frontend-enabled:
     description: 'Enable frontend build'
     required: false
     type: boolean
     default: false
-    
+
   docker-enabled:
     description: 'Enable Docker build'
     required: false
@@ -127,13 +127,13 @@ The ghcommon workflows implement automatic semantic versioning:
 
 ### Release Types
 
-| Type | Behavior | Example |
-|------|----------|---------|
-| `auto` | Determines version from commit messages | feat: → minor, fix: → patch |
-| `major` | Forces major version bump | 1.2.3 → 2.0.0 |
-| `minor` | Forces minor version bump | 1.2.3 → 1.3.0 |
-| `patch` | Forces patch version bump | 1.2.3 → 1.2.4 |
-| `prerelease` | Creates prerelease version | 1.2.3 → 1.2.4-rc.1 |
+| Type         | Behavior                                | Example                     |
+| ------------ | --------------------------------------- | --------------------------- |
+| `auto`       | Determines version from commit messages | feat: → minor, fix: → patch |
+| `major`      | Forces major version bump               | 1.2.3 → 2.0.0               |
+| `minor`      | Forces minor version bump               | 1.2.3 → 1.3.0               |
+| `patch`      | Forces patch version bump               | 1.2.3 → 1.2.4               |
+| `prerelease` | Creates prerelease version              | 1.2.3 → 1.2.4-rc.1          |
 
 ### Conventional Commits
 
