@@ -1,8 +1,71 @@
 <!-- file: TODO.md -->
-<!-- version: 1.10.0 -->
+<!-- version: 1.12.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
+
+## 🚨 BLOCKING ISSUES - December 18, 2025 (CRITICAL)
+
+### Workflow Build Failures
+
+#### **CRITICAL-001**: Go Version Mismatch in Docker Build ✅ FIXED
+- **Status**: ✅ RESOLVED
+- **Error**: `go: go.mod requires go >= 1.25 (running go 1.23.12; GOTOOLCHAIN=local)`
+- **Root Cause**: Dockerfile used `golang:1.23-alpine` but go.mod requires `go 1.25`
+- **Fix Applied**: Updated Dockerfile to use `golang:1.25-alpine`
+- **File**: Dockerfile (version bumped to 1.2.0)
+- **Affected Workflows**: Prerelease, Release Production
+- **Date Fixed**: December 18, 2025
+
+#### **CRITICAL-002**: NPM Cache Missing Lock File
+- **Status**: IN PROGRESS - SOLUTION IDENTIFIED
+- **Error**: `Dependencies lock file is not found...Supported file patterns: package-lock.json,npm-shrinkwrap.json,yarn.lock`
+- **Root Cause**: `actions/setup-node@v6` auto-cache feature requires lock file
+- **Solution**: Use manual caching from reusable-advanced-cache.yml (already implemented in ghcommon@main)
+- **Implementation Steps**:
+  1. Disable setup-node cache parameter in reusable-ci.yml
+  2. Pass cache configuration to advanced-cache workflow
+  3. Update repository-config.yml with npm cache settings
+- **Files**: frontend-ci.yml, reusable-ci.yml, repository-config.yml
+- **Priority**: CRITICAL - Blocking CI/CD pipeline
+- **Notes**: ghcommon@main has manual caching implemented, just needs configuration
+
+#### **CRITICAL-003**: Outdated ghcommon Workflow Versions ✅ FIXED
+- **Status**: ✅ RESOLVED
+- **Issue**: audiobook-organizer workflows pinned to @v1.0.0-rc.7
+- **Symptom**: Latest ghcommon fixes (manual caching, etc.) not being applied
+- **Fix Applied**: Updated all workflows to use @main
+  - prerelease.yml: v1.0.0-rc.7 → @main (version 2.5.0)
+  - release-prod.yml: v1.0.0-rc.7 → @main (version 4.6.0)
+  - security.yml: v1.0.0-rc.7 → @main (version 2.7.0)
+  - frontend-ci.yml: already using @main
+- **Rationale**: ghcommon working toward 1.0.0 stable, use @main during development
+- **Date Fixed**: December 18, 2025
+
+### Architecture Issues
+
+#### **TODO-ARCH-001**: Implement repository-config.yml as Single Source of Truth
+- **Status**: NOT IMPLEMENTED
+- **Current**: Each workflow has hardcoded configuration
+- **Goal**: All reusable workflows should read from repository-config.yml
+- **Benefits**: Consistency, easier maintenance, clearer configuration
+- **Files Affected**: reusable-ci.yml, reusable-release.yml, reusable-advanced-cache.yml
+- **Client Workflows**: frontend-ci.yml, prerelease.yml, release-prod.yml, security.yml, stale.yml
+- **Priority**: HIGH - Architectural improvement
+
+#### **TODO-ARCH-002**: Switch to Manual Caching Strategy
+- **Status**: NOT IMPLEMENTED
+- **Current**: Using setup-node built-in caching (failing)
+- **Goal**: Use reusable-advanced-cache.yml for all dependency caching
+- **Benefits**: More control, better debugging, consistent with other repos
+- **Priority**: HIGH - Part of overall caching strategy
+
+#### **TODO-ARCH-003**: Simplify Client Workflows
+- **Status**: NOT STARTED
+- **Current**: Client workflows duplicate configuration
+- **Goal**: Client workflows should only pass minimal options to reusable workflows
+- **Example**: Just specify project type, paths, and special requirements
+- **Priority**: MEDIUM - Maintainability improvement
 
 ## 🔥 CRITICAL CI/CD FIXES - December 18, 2025
 

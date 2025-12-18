@@ -1,5 +1,5 @@
 # file: .github/workflows/security.yml
-# version: 2.6.1
+# version: 2.7.0
 # guid: s3c4r5t6-y7a8-b9c0-d1e2-f3a4b5c6d7e8
 
 name: Security Scanning
@@ -27,5 +27,5 @@ concurrency:
 jobs:
   security:
     name: Security Scan
-    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@v1.0.0-rc.7
+    uses: jdfalk/ghcommon/.github/workflows/reusable-security.yml@main
     secrets: inherit
