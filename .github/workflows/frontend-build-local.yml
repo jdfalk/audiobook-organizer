@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-build-local.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: 3b8e9a7f-1c2d-4e5f-9a0b-1c2d3e4f5a6b
 
 name: Frontend Build (Local)
@@ -32,8 +32,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: "web/package-lock.json"
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install dependencies
         working-directory: web
