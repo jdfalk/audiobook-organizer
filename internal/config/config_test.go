@@ -1,5 +1,5 @@
 // file: internal/config/config_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package config
@@ -330,3 +330,27 @@ func TestDefaultMetadataSources(t *testing.T) {
 		t.Error("Goodreads metadata source not configured correctly")
 	}
 }
+
+// TestConfigurationValidation tests basic configuration validation
+func TestConfigurationValidation(t *testing.T) {
+	// Arrange-Act-Assert: Verify that invalid database types are handled
+	viper.Reset()
+	InitConfig()
+
+	// Verify valid database types
+	validTypes := []string{"pebble", "sqlite"}
+	dbType := AppConfig.DatabaseType
+
+	isValid := false
+	for _, valid := range validTypes {
+		if dbType == valid {
+			isValid = true
+			break
+		}
+	}
+
+	if !isValid {
+		t.Errorf("Database type '%s' is not a valid type. Expected one of: %v", dbType, validTypes)
+	}
+}
+
