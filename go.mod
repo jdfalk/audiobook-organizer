@@ -1,8 +1,6 @@
 module github.com/jdfalk/audiobook-organizer
 
-go 1.23
-
-toolchain go1.23.3
+go 1.24.0
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
