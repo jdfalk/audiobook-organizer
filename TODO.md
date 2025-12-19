@@ -130,13 +130,14 @@
   - **COMPLETED**: Wrapped fetchDirectory in useCallback and added to
     dependencies
 
-- [ ] **TODO-011**: Verify all ESLint rules are passing
+- [x] **TODO-011**: Verify all ESLint rules are passing
   - **File**: `web/`
   - **Issue**: Run `npm run lint` to verify all issues are resolved
   - **Fix**: Execute lint command and ensure clean output
   - **Priority**: High
   - **Category**: Validation
-  - **Status**: Ready for testing
+  - **Status**: COMPLETED - All ESLint rules passing with zero errors
+  - **COMPLETED**: Migrated to ESLint 9 flat config, all linting passes
 
 ### CI Workflow Configuration (1 item)
 
@@ -203,9 +204,9 @@
     4. Once frontend passes, other jobs should run (Go, Docker, etc.)
   - **Priority**: Critical (Blocking entire CI/CD pipeline)
   - **Category**: CI/CD
-  - **Status**: Ready for verification (all prerequisite TODOs completed)
+  - **Status**: COMPLETED - All frontend issues fixed, build and lint passing
 
-- [ ] **TODO-019**: ESLint configuration migration to v9.x
+- [x] **TODO-019**: ESLint configuration migration to v9.x
   - **File**: `web/.eslintrc.json` (needs to be migrated to `eslint.config.js`)
   - **Issue**: "ESLint couldn't find an eslint.config.(js|mjs|cjs) file"
   - **Root Cause**: ESLint v9.0.0+ requires new config file format
@@ -215,10 +216,10 @@
     https://eslint.org/docs/latest/use/configure/migration-guide
   - **Priority**: High (Blocking lint command)
   - **Category**: Build/Development
-  - **Status**: New issue discovered during verification
-  - **Note**: This may be why the original linting in CI failed
+  - **Status**: COMPLETED - Migrated to eslint.config.mjs with ESLint 9
+  - **COMPLETED**: Created eslint.config.mjs, removed .eslintrc.json, all linting passing
 
-- [ ] **TODO-020**: TypeScript compilation errors - Missing dependencies/types
+- [x] **TODO-020**: TypeScript compilation errors - Missing dependencies/types
   - **File**: `web/` directory - multiple TypeScript files
   - **Issue**: TypeScript build shows "Cannot find module" errors for react,
     @mui/material, etc.
@@ -239,9 +240,7 @@
     3. Check tsconfig.json paths and module resolution
   - **Priority**: Critical (Blocking build)
   - **Category**: Build/Dependencies
-  - **Status**: New issue discovered during verification
-
-> > > > > > > Stashed changes
+  - **Status**: COMPLETED - Fixed type narrowing and IntersectionObserver mock, build passing
 
 ### Python Script Issues (1 item)
 
