@@ -448,17 +448,24 @@ export function Settings() {
     field: string,
     value: string
   ) => {
-    setSettings((prev) => ({
-      ...prev,
-      metadataSources: prev.metadataSources.map((source) =>
-        source.id === sourceId
-          ? {
-              ...source,
-              credentials: { ...source.credentials, [field]: value },
-            }
-          : source
-      ),
-    }));
+    setSettings((prev) => {
+      const updatedSources = prev.metadataSources.map((source) => {
+        if (source.id !== sourceId) return source;
+        
+        return {
+          ...source,
+          credentials: { 
+            ...source.credentials, 
+            [field]: value 
+          },
+        } as typeof source;
+      });
+
+      return {
+        ...prev,
+        metadataSources: updatedSources,
+      };
+    });
     setSaved(false);
   };
 

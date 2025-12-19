@@ -30,14 +30,19 @@ Object.defineProperty(window, 'matchMedia', {
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
+  readonly root: Element | null = null;
+  readonly rootMargin: string = '';
+  readonly thresholds: ReadonlyArray<number> = [];
+  
   constructor() {}
-  disconnect() {}
-  observe() {}
-  takeRecords() {
+  
+  disconnect(): void {}
+  observe(): void {}
+  takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  unobserve() {}
-} as unknown as IntersectionObserver;
+  unobserve(): void {}
+} as unknown as typeof IntersectionObserver;
 
 // Mock localStorage for jsdom environment
 const storage = new Map<string, string>();
