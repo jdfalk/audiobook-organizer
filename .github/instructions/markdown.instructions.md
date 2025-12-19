@@ -111,6 +111,4 @@ Markdown:
 <!-- file: path/to/file.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 123e4567-e89b-12d3-a456-426614174000 -->
-<!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
-<!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 ```
