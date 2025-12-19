@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/intelligent_sync_to_repos.py
-# version: 1.0.0
+# version: 1.0.1
 # guid: a1b2c3d4-e5f6-7890-1234-567890abcdef
 
 """
@@ -73,6 +73,8 @@ MANAGED_FILES = {
     ".github/pull-request-descriptions.md",
     ".github/test-generation.md",
     ".github/AGENTS.md",
+    # VS Code workspace defaults to match repo lint/format
+    ".vscode/settings.json",
 }
 
 # Old files that should be cleaned up (moved to new structure)
