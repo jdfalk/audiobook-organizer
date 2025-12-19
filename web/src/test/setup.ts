@@ -96,7 +96,7 @@ const okJson = (data: unknown) => {
   } as unknown as Response);
 };
 
-global.fetch = (input: RequestInfo | URL) => {
+global.fetch = (input: Parameters<typeof fetch>[0]) => {
   const url = typeof input === 'string' ? input : input.toString();
 
   if (url.includes('/api/v1/system/status')) {
