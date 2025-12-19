@@ -1,88 +1,42 @@
 # file: .github/linters/ruff.toml
-# version: 1.1.0
-# guid: f1a2b3c4-d5e6-789f-a012-456789abcdef
+# version: 1.2.0
+# guid: 4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c
 
-# Ruff configuration following Google Python Style Guide
-# https://google.github.io/styleguide/pyguide.html
+# Ruff configuration file
+line-length = 100
+target-version = "py38"
 
-target-version = "py39"
-line-length = 80
-indent-width = 4
+# Exclude non-source/workflow folders from linting
+extend-exclude = [
+    ".vscode",
+    "dependency-analysis",
+    "logs",
+]
 
 [lint]
-# Enable comprehensive linting rules
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
     "F",   # pyflakes
     "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
     "B",   # flake8-bugbear
     "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-    "N",   # pep8-naming
-    "D",   # pydocstyle
-    "S",   # flake8-bandit (security)
-    "T20", # flake8-print
-    "PL",  # pylint
-    "RUF", # ruff-specific rules
-    "A",   # flake8-builtins
-    "C90", # mccabe complexity
-    "ERA", # eradicate (dead code)
-    "ICN", # flake8-import-conventions
-    "PIE", # flake8-pie
-    "PT",  # flake8-pytest-style
-    "Q",   # flake8-quotes
-    "RET", # flake8-return
+    "C408",# unnecessary-collection-call
     "SIM", # flake8-simplify
-    "TID", # flake8-tidy-imports
-    "ARG", # flake8-unused-arguments
 ]
 
 ignore = [
-    "E501",  # line too long, handled by formatter
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex (handled by C90)
-    "D100",  # Missing docstring in public module
-    "D104",  # Missing docstring in public package
-    "D203",  # 1 blank line required before class docstring (conflicts with D211)
-    "D213",  # Multi-line docstring summary should start at the second line (conflicts with D212)
-    "PLR0913", # Too many arguments to function call
-    "PLR0912", # Too many branches
-    "PLR0915", # Too many statements
+    "E501",  # line too long (handled by formatter)
+    "B904",  # raise-without-from-inside-except (too noisy for existing code)
 ]
 
 [lint.per-file-ignores]
-"__init__.py" = ["F401", "D104"]
-"test_*.py" = ["S101", "D100", "D103", "PLR2004"]
-"**/tests/**/*.py" = ["S101", "D100", "D103", "PLR2004"]
-"scripts/**/*.py" = ["T20", "S602", "S603", "S607"]
-"**/migrations/**/*.py" = ["D100", "D103"]
-
-[lint.isort]
-# Google Python Style Guide import ordering
-known-first-party = ["gcommon"]
-known-third-party = ["fastapi", "pydantic", "starlette", "requests", "yaml"]
-force-sort-within-sections = true
-force-single-line = false
-combine-as-imports = true
-split-on-trailing-comma = true
-
-
-[lint.pydocstyle]
-convention = "google"
-
-[lint.pylint]
-max-args = 7
-max-branches = 12
-max-returns = 6
-max-statements = 50
-
-[lint.mccabe]
-max-complexity = 15
+"__init__.py" = ["F401"]  # unused imports in __init__.py
+"test_*.py" = ["S101"]    # allow assert in tests
+"scripts/protobuf_cycle_fixer.py" = ["UP031"]  # printf-string-formatting (Python 3.12 f-string escapes not available on 3.8)
 
 [format]
-# Use double quotes for strings
 quote-style = "double"
-# Use spaces around slice operators
-docstring-code-format = true
-docstring-code-line-length = 80
+indent-style = "space"

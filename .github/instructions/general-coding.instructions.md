@@ -44,7 +44,8 @@ For more details and the full system, see
 The repositories use the `copilot-agent-util` command-line tool for enhanced logging, error handling, and automation in VS Code tasks. This Rust-based utility provides consistent output formatting and task management across all repositories.
 
 **If the `copilot-agent-util` tool is not available in your environment:**
-- Install it from the source repository: https://github.com/jdfalk/copilot-agent-util-rust
+
+- Install it from the source repository: <https://github.com/jdfalk/copilot-agent-util-rust>
 - Follow the installation instructions in that repository's README
 - The tool is required for proper VS Code task execution and logging
 
@@ -140,6 +141,7 @@ When creating automation scripts, configuration tools, or data processing utilit
 ### Examples
 
 **✅ CORRECT - Use Python for:**
+
 - GitHub API interactions
 - Configuration file processing
 - Multi-step automation workflows
@@ -147,12 +149,14 @@ When creating automation scripts, configuration tools, or data processing utilit
 - Data validation and transformation
 
 **❌ INCORRECT - Don't use shell for:**
+
 - Complex JSON parsing
 - API authentication and error handling
 - Multi-repository operations
 - Scripts requiring robust error recovery
 
 **✅ ACCEPTABLE - Shell scripts for:**
+
 - Simple `cp`, `mv`, `mkdir` operations
 - Basic git commands with minimal logic
 - Environment variable setup
@@ -171,63 +175,91 @@ containing:
 **Header format varies by language/file type:**
 
 - **Markdown:**
+
   ```markdown
   <!-- file: path/to/file.md -->
   <!-- version: 1.1.0 -->
   <!-- guid: 123e4567-e89b-12d3-a456-426614174000 -->
   ```
+
 - **Python:**
+
   ```python
   #!/usr/bin/env python3
   # file: path/to/file.py
   # version: 1.1.0
   # guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
 - **Go:**
+
   ```go
   // file: path/to/file.go
   // version: 1.1.0
   // guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
 - **JavaScript/TypeScript:**
+
   ```js
   // file: path/to/file.js
   // version: 1.1.0
   // guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
 - **Shell (bash/sh):**
+
   ```bash
   #!/bin/bash
   # file: path/to/script.sh
   # version: 1.1.0
   # guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
   (Header must come after the shebang line)
 - **CSS:**
+
   ```css
   /* file: path/to/file.css */
   /* version: 1.1.0 */
   /* guid: 123e4567-e89b-12d3-a456-426614174000 */
   ```
+
 - **R:**
+
   ```r
   # file: path/to/file.R
   # version: 1.1.0
   # guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
+  For executable R scripts:
+
+  ```r
+  #!/usr/bin/env Rscript
+  # file: path/to/script.R
+  # version: 1.1.0
+  # guid: 123e4567-e89b-12d3-a456-426614174000
+  ```
+
+  (Header must come after the shebang line)
 - **JSON:**
+
   ```jsonc
   // file: path/to/file.json
   // version: 1.1.0
   // guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
 - **TOML:**
+
   ```toml
   [section]
   # file: path/to/file.toml
   # version: 1.1.0
   # guid: 123e4567-e89b-12d3-a456-426614174000
   ```
+
   (Header must be inside a section as TOML doesn't support top-level comments)
 
 **All files must include this header in the correct format for their type.**

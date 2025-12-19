@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/r.instructions.md -->
-<!-- version: 1.2.1 -->
+<!-- version: 1.3.0 -->
 <!-- guid: 6c5b4a3c-2d1e-0f9a-8b7c-6d5e4f3a2b1c -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -51,6 +51,15 @@ All R files must begin with a standard header as described in the
 
 ```r
 # file: path/to/file.R
+# version: 1.0.0
+# guid: 123e4567-e89b-12d3-a456-426614174000
+```
+
+For executable R scripts (Rscript), include shebang BEFORE the file header:
+
+```r
+#!/usr/bin/env Rscript
+# file: path/to/script.R
 # version: 1.0.0
 # guid: 123e4567-e89b-12d3-a456-426614174000
 ```

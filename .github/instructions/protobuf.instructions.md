@@ -134,6 +134,7 @@ pkg/module/proto/
 - **Types**: `{type_category}.proto` for shared types
 
 **Examples**:
+
 ```
 pkg/auth/proto/
 ├── user_info.proto          # Contains: message AuthUserInfo
@@ -220,6 +221,7 @@ enum AuthProviderType {
    ```
 
 3. **Other module imports third**:
+
    ```protobuf
    import "pkg/auth/proto/messages/user_info.proto";
    import "pkg/config/proto/messages/config_data.proto";
@@ -481,6 +483,7 @@ service AuthService {
 ### Avoiding Common Naming Conflicts
 
 #### High-Conflict Type Names (Always Use Prefixes)
+
 - `HealthStatus` → `{Module}HealthStatus` (auth, database, metrics, web, etc.)
 - `Configuration` → `{Module}Configuration`
 - `Metadata` → `{Module}Metadata`
@@ -490,16 +493,19 @@ service AuthService {
 - `Error` → `{Module}Error` or use `CommonError`
 
 #### Low-Conflict Type Names (Prefixes Recommended)
+
 - Domain-specific terms: `SubtitleRecord`, `AuthToken`, `MetricValue`
 - Action-specific: `LoginAttempt`, `ProcessingJob`, `SearchQuery`
 
 #### Safe Type Names (Prefixes Optional)
+
 - Very specific domain terms: `TranscriptionSegment`, `OAuth2Configuration`
 - Highly technical terms: `WebRTCConfiguration`, `DatabaseMigration`
 
 ### Cross-Module Dependencies
 
 #### Using Common Types
+
 ```protobuf
 // In auth module - import common types
 import "pkg/common/proto/error.proto";
@@ -513,6 +519,7 @@ message AuthUserListResponse {
 ```
 
 #### Avoiding Circular Dependencies
+
 ```protobuf
 // ❌ WRONG: auth imports subtitle, subtitle imports auth
 // pkg/auth/proto/user_info.proto
@@ -676,6 +683,7 @@ go mod graph | grep -E ".*->.*->.*"
 ### Migration Priority Order
 
 #### Phase 1: High-Risk Conflicts (Immediate)
+
 - Messages that exist in multiple modules with same name
 - Core types used across many services
 - Public API message types
@@ -691,11 +699,13 @@ message DatabaseHealthStatus { ... } // In database module
 ```
 
 #### Phase 2: Internal Types (Medium Priority)
+
 - Request/Response messages
 - Configuration types
 - Internal data structures
 
 #### Phase 3: Simple Types (Low Priority)
+
 - Basic enums with clear context
 - Module-specific types with no conflict potential
 
