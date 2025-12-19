@@ -804,7 +804,7 @@ Avoid these features.
 
 Standard library modules and classes that internally use these features are okay to use (for example, `abc.ABCMeta`, `dataclasses`, and `enum`).
 
-#### 2.20 Modern Python: from __future__ imports
+#### 2.20 Modern Python: from **future** imports
 
 ##### 2.20.1 Definition
 
@@ -822,7 +822,7 @@ Such code may not work on very old interpreter versions prior to the introductio
 
 New language version semantic changes may be gated behind a special future import to enable them on a per-file basis within earlier runtimes.
 
-##### from __future__ imports
+##### from **future** imports
 
 Use of `from __future__ import` statements is encouraged. It allows a given source file to start using more modern Python syntax features today. Once you no longer need to run on a version where the features are hidden behind a `__future__` import, feel free to remove those lines.
 
