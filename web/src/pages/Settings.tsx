@@ -451,12 +451,12 @@ export function Settings() {
     setSettings((prev) => {
       const updatedSources = prev.metadataSources.map((source) => {
         if (source.id !== sourceId) return source;
-        
+
         return {
           ...source,
-          credentials: { 
-            ...source.credentials, 
-            [field]: value 
+          credentials: {
+            ...source.credentials,
+            [field]: value
           },
         } as typeof source;
       });
