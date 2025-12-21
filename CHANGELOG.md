@@ -4,7 +4,18 @@
 
 ### Added / Changed
 
-#### Latest Changes (Metadata, UI Enhancements, Testing, Documentation)
+#### Latest Changes (Metadata, UI Enhancements, Testing, Documentation, Release Workflow Integration)
+
+- **Release Workflow Integration**: Full integration with pinned composite
+  actions for cross-platform builds
+
+  - Go builds: GoReleaser-managed releases and publishes
+  - Python packages: Build-only mode with artifact staging
+  - Rust crates: Optimized release builds with test suite
+  - Frontend: Node.js optimization with production builds
+  - Docker images: Multi-platform container builds to GitHub Container Registry
+  - All artifacts coordinated through reusable-release orchestrator
+  - GitHub Packages integration for artifact storage and distribution
 
 - **Metadata Integration**: Open Library API integration for external metadata
   fetching
