@@ -1,30 +1,48 @@
 <!-- file: TODO.md -->
-<!-- version: 1.13.0 -->
+<!-- version: 1.13.2 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
+
+## 🤖 Background Agent Queue (manage_todo_list)
+
+- [ ] TODO-LIST-001: Plan security workflow actionization (create security
+      action repos, map inputs/outputs, migration steps)
+- [ ] TODO-LIST-002: Audit remaining workflows for action conversion (inventory
+      and prioritize conversions)
+- [ ] TODO-LIST-003: Validate new composite actions CI/CD pipelines
+- [ ] TODO-LIST-004: Verify action tags and releases (v1/v1.0/v1.0.0)
+- [ ] TODO-LIST-005: Update reusable workflows to use new actions and verify
 
 ## 🚨 BLOCKING ISSUES - December 18, 2025 (CRITICAL)
 
 ### Current Focus: Workflow Stabilization & ghcommon Pre-release Strategy
 
 #### **CRITICAL-001**: Go Version Mismatch in Docker Build ✅ FIXED
+
 - **Status**: ✅ RESOLVED
-- **Error**: `go: go.mod requires go >= 1.25 (running go 1.23.12; GOTOOLCHAIN=local)`
-- **Root Cause**: Dockerfile used `golang:1.23-alpine` but go.mod requires `go 1.25`
+- **Error**:
+  `go: go.mod requires go >= 1.25 (running go 1.23.12; GOTOOLCHAIN=local)`
+- **Root Cause**: Dockerfile used `golang:1.23-alpine` but go.mod requires
+  `go 1.25`
 - **Fix Applied**: Updated Dockerfile to use `golang:1.25-alpine`
 - **File**: Dockerfile (version bumped to 1.2.0)
 - **Affected Workflows**: Prerelease, Release Production
 - **Date Fixed**: December 18, 2025
 
 #### **CRITICAL-002**: NPM Cache Missing Lock File ⚠️ IN PROGRESS
+
 - **Status**: ⚠️ IN PROGRESS - SOLUTION IDENTIFIED
-- **Error**: `Dependencies lock file is not found...Supported file patterns: package-lock.json,npm-shrinkwrap.json,yarn.lock`
-- **Root Cause**: `actions/setup-node@v6` auto-cache feature requires lock file, but we need manual caching
-- **Solution**: Use manual caching from reusable-advanced-cache.yml (already implemented in ghcommon@main)
+- **Error**:
+  `Dependencies lock file is not found...Supported file patterns: package-lock.json,npm-shrinkwrap.json,yarn.lock`
+- **Root Cause**: `actions/setup-node@v6` auto-cache feature requires lock file,
+  but we need manual caching
+- **Solution**: Use manual caching from reusable-advanced-cache.yml (already
+  implemented in ghcommon@main)
 - **Implementation Steps**:
   1. ✅ Verify ghcommon@main has reusable-advanced-cache.yml
-  2. ⚠️ Update reusable-ci.yml to disable setup-node cache and use advanced-cache
+  2. ⚠️ Update reusable-ci.yml to disable setup-node cache and use
+     advanced-cache
   3. ⚠️ Update repository-config.yml with npm cache settings
   4. ⚠️ Test with audiobook-organizer workflows
 - **Files**: frontend-ci.yml, reusable-ci.yml, repository-config.yml
@@ -32,6 +50,7 @@
 - **Notes**: Manual caching pattern exists, just needs proper integration
 
 #### **CRITICAL-003**: Outdated ghcommon Workflow Versions ✅ FIXED
+
 - **Status**: ✅ RESOLVED
 - **Issue**: audiobook-organizer workflows pinned to @v1.0.0-rc.7
 - **Symptom**: Latest ghcommon fixes (manual caching, etc.) not being applied
@@ -40,15 +59,18 @@
   - release-prod.yml: v1.0.0-rc.7 → @main (version 4.6.0)
   - security.yml: v1.0.0-rc.7 → @main (version 2.7.0)
   - frontend-ci.yml: already using @main
-- **Rationale**: ghcommon working toward 1.0.0 stable, use @main during development
+- **Rationale**: ghcommon working toward 1.0.0 stable, use @main during
+  development
 - **Date Fixed**: December 18, 2025
 
 #### **CRITICAL-004**: ghcommon Pre-release & Tagging Strategy ⚠️ NEW
+
 - **Status**: ⚠️ NOT STARTED - HIGH PRIORITY
 - **Issue**: Need structured pre-release tagging for ghcommon before 1.0.0
 - **Strategy**:
   1. Create pre-release tags (v0.9.x, v0.10.x, etc.) for testing
-  2. Test each pre-release across all repos (audiobook-organizer, subtitle-extract, etc.)
+  2. Test each pre-release across all repos (audiobook-organizer,
+     subtitle-extract, etc.)
   3. Only release 1.0.0 when all repos work consistently with workflows
   4. Use semantic versioning for pre-releases to track breaking changes
 - **Action Items**:
@@ -63,15 +85,19 @@
 ### Architecture Issues
 
 #### **TODO-ARCH-001**: Implement repository-config.yml as Single Source of Truth
+
 - **Status**: NOT IMPLEMENTED
 - **Current**: Each workflow has hardcoded configuration
 - **Goal**: All reusable workflows should read from repository-config.yml
 - **Benefits**: Consistency, easier maintenance, clearer configuration
-- **Files Affected**: reusable-ci.yml, reusable-release.yml, reusable-advanced-cache.yml
-- **Client Workflows**: frontend-ci.yml, prerelease.yml, release-prod.yml, security.yml, stale.yml
+- **Files Affected**: reusable-ci.yml, reusable-release.yml,
+  reusable-advanced-cache.yml
+- **Client Workflows**: frontend-ci.yml, prerelease.yml, release-prod.yml,
+  security.yml, stale.yml
 - **Priority**: HIGH - Architectural improvement
 
 #### **TODO-ARCH-002**: Switch to Manual Caching Strategy
+
 - **Status**: NOT IMPLEMENTED
 - **Current**: Using setup-node built-in caching (failing)
 - **Goal**: Use reusable-advanced-cache.yml for all dependency caching
@@ -79,9 +105,11 @@
 - **Priority**: HIGH - Part of overall caching strategy
 
 #### **TODO-ARCH-003**: Simplify Client Workflows
+
 - **Status**: NOT STARTED
 - **Current**: Client workflows duplicate configuration
-- **Goal**: Client workflows should only pass minimal options to reusable workflows
+- **Goal**: Client workflows should only pass minimal options to reusable
+  workflows
 - **Example**: Just specify project type, paths, and special requirements
 - **Priority**: MEDIUM - Maintainability improvement
 
@@ -94,17 +122,21 @@
 - [x] **TODO-001**: Fix @ts-ignore in web/src/test/setup.ts:77
   - **COMPLETED**: Replaced with @ts-expect-error with explanation
 - [x] **TODO-002**: Fix @ts-ignore in web/src/pages/FileManager.tsx:202
+
   - **COMPLETED**: Replaced with @ts-expect-error with explanation
 
 - [x] **TODO-003**: Remove unused variable in web/src/pages/FileManager.tsx:134
+
   - **COMPLETED**: Removed unused \_path parameter
 
 - [x] **TODO-004**: Remove unused variable in
       web/src/components/system/LogsTab.tsx:46
+
   - **COMPLETED**: Removed unused setLoading state setter
 
 - [x] **TODO-005**: Remove unused import in
       web/src/components/common/ServerFileBrowser.tsx:5
+
   - **COMPLETED**: useCallback is now used (wrapped fetchDirectory)
 
 - [x] **TODO-006**: Fix 'any' type in web/src/test/setup.ts:40
@@ -113,6 +145,7 @@
 #### TypeScript 'any' Type Errors (2 items)
 
 - [x] **TODO-007**: Fix 'any' type in web/src/pages/Settings.tsx:460
+
   - **COMPLETED**: Removed both 'as any' casts from credentials mapping
 
 - [x] **TODO-008**: Fix 'any' type in web/src/pages/Settings.tsx:457
@@ -122,11 +155,13 @@
 
 - [x] **TODO-009**: Fix React Hook dependency in
       web/src/components/system/LogsTab.tsx:81
+
   - **COMPLETED**: Removed sourceFilter from dependency array (not used in
     fetchLogs)
 
 - [x] **TODO-010**: Fix React Hook dependency in
       web/src/components/common/ServerFileBrowser.tsx:81
+
   - **COMPLETED**: Wrapped fetchDirectory in useCallback and added to
     dependencies
 
@@ -146,6 +181,7 @@
 ### Docker Build Issues (2 items)
 
 - [x] **TODO-014**: Create missing Dockerfile
+
   - **COMPLETED**: Created multi-stage Dockerfile with Go 1.25-alpine
 
 - [x] **TODO-015**: Update Dockerfile Go version to 1.25
@@ -154,6 +190,7 @@
 ### Node.js/NPM Build Issues (2 items)
 
 - [ ] **TODO-012**: Fix npm cache path resolution error
+
   - **File**: `.github/workflows/ci.yml` or reusable workflow
   - **Issue**: "Some specified paths were not resolved, unable to cache
     dependencies"
@@ -177,6 +214,7 @@
 
 - [ ] **TODO-018**: CI Pipeline failure tracking - Frontend blocking entire
       pipeline
+
   - **File**: CI/CD pipeline (dependent on TODO-001 through TODO-011)
   - **Issue**: "❌ CI Pipeline failed: Frontend CI - Error: Process completed
     with exit code 1"
@@ -206,6 +244,7 @@
   - **Status**: Ready for verification (all prerequisite TODOs completed)
 
 - [ ] **TODO-019**: ESLint configuration migration to v9.x
+
   - **File**: `web/.eslintrc.json` (needs to be migrated to `eslint.config.js`)
   - **Issue**: "ESLint couldn't find an eslint.config.(js|mjs|cjs) file"
   - **Root Cause**: ESLint v9.0.0+ requires new config file format
@@ -390,26 +429,31 @@
 ### ✅ Bug Fixes and UX Improvements
 
 1. **Library Page Path Display** (v1.13.0)
+
    - Enhanced "Path: Not configured" message with helpful text and warning color
    - Added "Please set library path in Settings" guidance
 
 2. **Folder Browser UX** (v1.2.0)
+
    - Removed two-step selection process (Select This Folder + bottom button)
    - Current browsed path now automatically selected for parent component
    - Simplified user experience for folder selection
 
 3. **Organize Operation** (v1.18.0)
+
    - Fixed "organizing 0/0" issue by filtering books before operation
    - Now only organizes books NOT already in root directory
    - Skips books whose files don't exist
    - Added log message showing count of books needing organization
 
 4. **Auto-Rescan After Organize** (v1.19.0)
+
    - Automatically triggers library rescan after successful organize
    - Rescan runs with low priority to avoid blocking other operations
    - Picks up newly organized books and extracts metadata
 
 5. **AI Metadata Parsing Integration** (v1.8.0)
+
    - Integrated OpenAI parser into scanner workflow
    - When tag extraction fails or is incomplete, AI parser attempts to extract:
      - Title, Author, Series, Narrator, Publisher from filename
@@ -417,12 +461,14 @@
    - Falls back to filepath extraction if AI parsing fails
 
 6. **Dashboard Import Folders Count** (v1.3.0)
+
    - Fixed "Import Folders: 0" display issue
    - Changed from folders.length to systemStatus.library.folder_count
    - Now uses consistent data source with backend metrics
 
 7. **Re-fetch Metadata UI** (v1.3.0 AudiobookCard, v1.3.0 AudiobookGrid, v1.14.0
    Library)
+
    - Added "Parse with AI" menu item to audiobook cards
    - Wired up handleParseWithAI handler
    - Uses existing backend endpoint: POST /api/v1/audiobooks/:id/parse-with-ai
@@ -433,6 +479,7 @@
    - Prevents accidental commit of encryption secrets
 
 - [x] ✅ **Backend**: Settings API safety restrictions
+
   - ✅ Safety restrictions on database_type and enable_sqlite (read-only at
     runtime)
 
@@ -449,6 +496,7 @@
   - ✅ Author auto-creation if not exists
   - ✅ Optional organize flag to trigger file organization
 - [x] ✅ **Backend**: Metadata source integration (Open Library)
+
   - ✅ Created OpenLibraryClient with SearchByTitle, SearchByTitleAndAuthor,
     GetBookByISBN methods
   - ✅ Returns title, author, description, publisher, publish_year, ISBN,
@@ -490,6 +538,7 @@
   - ✅ Date sorting (descending - newest first) for created_at and updated_at
     fields
 - [x] ✅ **Frontend**: Metadata editor with inline editing
+
   - ✅ MetadataEditDialog component with comprehensive edit form
   - ✅ InlineEditField component created for quick inline edits
   - ✅ "Fetch Metadata" button with CloudDownload icon in AudiobookCard menu
@@ -509,6 +558,7 @@
   - ✅ Uses setupTestDB pattern with temporary database and cleanup
   - ✅ Network tests use t.Skip for rate limits
 - [x] ✅ **Docs**: OpenAPI/Swagger documentation
+
   - ✅ Created docs/openapi.yaml with complete OpenAPI 3.0.3 specification
   - ✅ Documented 20+ endpoints across 9 tags (Audiobooks, Authors, Series,
     Library, Operations, Metadata, Versions, System, Backup)
@@ -581,6 +631,7 @@
 ### Library & Import Management
 
 - [ ] **Add Library Path Configuration**
+
   - [ ] Add central library path setting in Settings page (where organized
         audiobooks go)
   - [ ] Add UI in Settings to manage download/import folders with server
@@ -620,6 +671,7 @@
 ### Multi-User & Security
 
 - [ ] **Multi-User Interface**
+
   - [ ] User profiles and authentication system
   - [ ] Per-user playback tracking and statistics
   - [ ] User-specific library views and permissions
