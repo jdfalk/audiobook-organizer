@@ -143,7 +143,7 @@ check_frontend() {
     echo -e "${YELLOW}💅 Running Prettier...${NC}"
     if npm list prettier > /dev/null 2>&1; then
         FRONTEND_FILES_RELATIVE=$(echo "$FRONTEND_FILES" | sed 's|webui/||g')
-        echo "$FRONTEND_FILES_RELATIVE" | xargs npx prettier --write || {
+        echo "$FRONTEND_FILES_RELATIVE" | xargs npx prettier --config ../. prettierrc --write || {
             echo -e "${RED}❌ Prettier failed. Please fix formatting issues.${NC}"
             cd ..
             return 1
