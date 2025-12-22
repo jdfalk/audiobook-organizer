@@ -8,14 +8,18 @@ Sample random files from the full file list for testing.
 Creates a representative sample of 1000 files.
 """
 
+import os
 import random
 import sys
 from pathlib import Path
 
 
 def main():
-    input_file = Path("/Users/jdfalk/repos/scratch/file-list-books")
-    output_file = Path("/Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/testdata/sample-1000-files.txt")
+    # Use environment variable or default path
+    scratch_dir = Path(os.getenv("SCRATCH_DIR", str(Path.home() / "scratch")))
+    input_file = scratch_dir / "file-list-books"
+    script_dir = Path(__file__).parent.resolve()
+    output_file = script_dir.parent / "testdata" / "sample-1000-files.txt"
 
     # Ensure testdata directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)

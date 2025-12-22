@@ -29,7 +29,7 @@ The test script validates that the audiobook-organizer can:
 ### Process the full file list
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 ./scripts/test-organize-import.py /Users/jdfalk/repos/scratch/file-list-books
 ```
 

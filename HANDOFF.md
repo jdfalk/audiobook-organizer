@@ -162,7 +162,7 @@ broken. Now working perfectly.
 
 ```bash
 # Build
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go build -o ~/audiobook-organizer-embedded
 
 # Restart server

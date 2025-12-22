@@ -53,7 +53,7 @@ Reference this for naming, formatting, and style questions.
 
 ```bash
 # 1. Create branch
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 git checkout -b refactor/library-folder-to-import-path
 
 # 2. Open main checklist

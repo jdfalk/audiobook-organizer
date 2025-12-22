@@ -18,10 +18,11 @@ GHCOMMON_DIR="$(dirname "$SCRIPT_DIR")"
 GHCOMMON_INSTRUCTIONS_DIR="$GHCOMMON_DIR/.github/instructions"
 
 # Target repositories
+REPO_BASE="${REPO_BASE_DIR:-$HOME/repos}"
 REPOS=(
-    "/Users/jdfalk/repos/github.com/jdfalk/subtitle-manager"
-    "/Users/jdfalk/repos/github.com/jdfalk/gcommon"
-    "/Users/jdfalk/repos/github.com/jdfalk/codex-cli"
+    "$REPO_BASE/subtitle-manager"
+    "$REPO_BASE/gcommon"
+    "$REPO_BASE/codex-cli"
 )
 
 log_info() {

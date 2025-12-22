@@ -22,7 +22,7 @@ files lack embedded metadata tags.
 ### Test with 20,000 files (recommended starting point)
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 ./scripts/test-organize-import-v3.py /Users/jdfalk/repos/scratch/file-list-books --limit 20000
 ```
 
