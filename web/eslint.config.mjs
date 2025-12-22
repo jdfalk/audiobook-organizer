@@ -1,5 +1,5 @@
 // file: web/eslint.config.mjs
-// version: 1.1.0
+// version: 1.1.7
 // guid: 456e7890-b12c-34d5-c678-901234567890
 
 import js from '@eslint/js';
@@ -9,11 +9,32 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
+const sharedGlobals = {
+  ...globals.browser,
+  ...globals.es2020,
+  ...globals.node,
+  React: 'readonly',
+  RequestInit: 'readonly',
+  HeadersInit: 'readonly',
+  process: 'readonly',
+  __dirname: 'readonly',
+  global: 'readonly',
+};
+
+const baseJsConfig = {
+  ...js.configs.recommended,
+  rules: {
+    ...js.configs.recommended.rules,
+    // TypeScript handles globals/types; disable to avoid false positives.
+    'no-undef': 'off',
+  },
+};
+
 export default [
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
-  js.configs.recommended,
+  baseJsConfig,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -25,12 +46,7 @@ export default [
           jsx: true,
         },
       },
-      globals: {
-        ...globals.browser,
-        ...globals.es2020,
-        ...globals.node,
-        React: 'readonly',
-      },
+      globals: sharedGlobals,
     },
     plugins: {
       '@typescript-eslint': typescript,
@@ -52,6 +68,22 @@ export default [
           varsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  {
+    files: ['**/*'],
+    languageOptions: {
+      globals: {
+        React: 'readonly',
+        RequestInit: 'readonly',
+        HeadersInit: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+        global: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'off',
     },
   },
 ];

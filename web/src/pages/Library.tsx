@@ -48,6 +48,7 @@ import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog'
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
+import { SortField } from '../types';
 import * as api from '../services/api';
 import { pollOperation } from '../utils/operationPolling';
 
@@ -64,8 +65,7 @@ export const Library = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortBy, setSortBy] =
-    useState<import('../components/audiobooks/SearchBar').SortOption>('title');
+  const [sortBy, setSortBy] = useState<SortField>(SortField.Title);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
   const [page, setPage] = useState(1);
@@ -321,14 +321,17 @@ export const Library = () => {
       // Apply client-side sorting
       const sortedBooks = [...convertedBooks].sort((a, b) => {
         switch (sortBy) {
-          case 'title':
+          case SortField.Title:
             return a.title.localeCompare(b.title);
-          case 'author':
+          case SortField.Author:
             return (a.author || '').localeCompare(b.author || '');
-          case 'date_added':
+          case SortField.Year: {
+            const aYear = a.audiobook_release_year || a.print_year || 0;
+            const bYear = b.audiobook_release_year || b.print_year || 0;
+            return bYear - aYear;
+          }
+          case SortField.CreatedAt:
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-          case 'date_modified':
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
           default:
             return 0;
         }

@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.5.0
+// version: 1.5.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -17,6 +17,7 @@ export interface Book {
   series_name?: string;
   series_position?: number;
   file_path: string;
+  format?: string;
   duration?: number;
   narrator?: string;
   language?: string;
