@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.18.0
+// version: 1.19.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -19,6 +19,9 @@ import {
   DialogActions,
   TextField,
   IconButton,
+  FormControlLabel,
+  Checkbox,
+  Snackbar,
   Collapse,
   List,
   ListItem,
@@ -31,6 +34,7 @@ import {
   FolderOpen as FolderOpenIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
+  DeleteSweep as DeleteSweepIcon,
   ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -97,6 +101,18 @@ export const Library = () => {
   const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
+  const [softDeletedCount, setSoftDeletedCount] = useState(0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bookPendingDelete, setBookPendingDelete] = useState<Audiobook | null>(null);
+  const [deleteOptions, setDeleteOptions] = useState({ softDelete: true, blockHash: true });
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
+  const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
+  const [purgeDeleteFiles, setPurgeDeleteFiles] = useState(false);
+  const [purgeInProgress, setPurgeInProgress] = useState(false);
+  const [alert, setAlert] = useState<{
+    severity: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -242,6 +258,15 @@ export const Library = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const refreshSoftDeletedCount = useCallback(async () => {
+    try {
+      const { count } = await api.getSoftDeletedBooks(100000, 0);
+      setSoftDeletedCount(count);
+    } catch (e) {
+      console.error('Failed to load soft-deleted books', e);
+    }
+  }, []);
+
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
     try {
@@ -275,6 +300,11 @@ export const Library = () => {
         created_at: book.created_at,
         updated_at: book.updated_at,
         lastPlayed: undefined,
+        library_state: book.library_state,
+        marked_for_deletion: book.marked_for_deletion,
+        marked_for_deletion_at: book.marked_for_deletion_at,
+        original_file_hash: book.original_file_hash,
+        organized_file_hash: book.organized_file_hash,
       }));
 
       // Apply client-side sorting
@@ -348,13 +378,18 @@ export const Library = () => {
     })();
   }, [loadAudiobooks]);
 
+  useEffect(() => {
+    refreshSoftDeletedCount();
+  }, [refreshSoftDeletedCount]);
+
   const handleEdit = useCallback((audiobook: Audiobook) => {
     setEditingAudiobook(audiobook);
   }, []);
 
   const handleDelete = useCallback((audiobook: Audiobook) => {
-    console.log('Delete audiobook:', audiobook);
-    // TODO: Implement delete confirmation
+    setBookPendingDelete(audiobook);
+    setDeleteOptions({ softDelete: true, blockHash: true });
+    setDeleteDialogOpen(true);
   }, []);
 
   const handleSaveMetadata = async (audiobook: Audiobook) => {
@@ -373,6 +408,57 @@ export const Library = () => {
     } catch (error) {
       console.error('Failed to save audiobook:', error);
       throw error;
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!bookPendingDelete) return;
+    setDeleteInProgress(true);
+    try {
+      await api.deleteBook(bookPendingDelete.id, {
+        softDelete: deleteOptions.softDelete,
+        blockHash: deleteOptions.blockHash,
+      });
+      setAlert({
+        severity: 'success',
+        message: deleteOptions.softDelete
+          ? 'Audiobook was soft deleted and hidden from the library.'
+          : 'Audiobook was deleted.',
+      });
+      setDeleteDialogOpen(false);
+      setBookPendingDelete(null);
+      await loadAudiobooks();
+      await refreshSoftDeletedCount();
+    } catch (error) {
+      console.error('Failed to delete audiobook:', error);
+      setAlert({ severity: 'error', message: 'Failed to delete audiobook. Please try again.' });
+    } finally {
+      setDeleteInProgress(false);
+    }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setBookPendingDelete(null);
+  };
+
+  const handleConfirmPurge = async () => {
+    setPurgeInProgress(true);
+    try {
+      const result = await api.purgeSoftDeletedBooks(purgeDeleteFiles);
+      setAlert({
+        severity: 'success',
+        message: `Purged ${result.purged} soft-deleted ${result.purged === 1 ? 'book' : 'books'}.`,
+      });
+      setPurgeDialogOpen(false);
+      setPurgeDeleteFiles(false);
+      await loadAudiobooks();
+      await refreshSoftDeletedCount();
+    } catch (error) {
+      console.error('Failed to purge soft-deleted books', error);
+      setAlert({ severity: 'error', message: 'Failed to purge soft-deleted books.' });
+    } finally {
+      setPurgeInProgress(false);
     }
   };
 
@@ -632,6 +718,18 @@ export const Library = () => {
         overflow: 'hidden',
       }}
     >
+      <Snackbar
+        open={!!alert}
+        autoHideDuration={5000}
+        onClose={() => setAlert(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        {alert ? (
+          <Alert severity={alert.severity} onClose={() => setAlert(null)} sx={{ width: '100%' }}>
+            {alert.message}
+          </Alert>
+        ) : undefined}
+      </Snackbar>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Library</Typography>
         <Stack direction="row" spacing={2}>
@@ -647,6 +745,15 @@ export const Library = () => {
             {getActiveFilterCount() > 0 && (
               <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 1 }} />
             )}
+          </Button>
+          <Button
+            startIcon={<DeleteSweepIcon />}
+            onClick={() => setPurgeDialogOpen(true)}
+            variant="outlined"
+            color="secondary"
+            disabled={softDeletedCount === 0}
+          >
+            Purge Deleted {softDeletedCount > 0 ? `(${softDeletedCount})` : ''}
           </Button>
         </Stack>
       </Box>
@@ -998,6 +1105,104 @@ export const Library = () => {
           onClose={handleVersionManagementClose}
           onUpdate={handleVersionUpdate}
         />
+
+        <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
+          <DialogTitle>Delete Audiobook</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              {bookPendingDelete
+                ? `Are you sure you want to delete "${bookPendingDelete.title}"?`
+                : 'Are you sure you want to delete this audiobook?'}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={deleteOptions.softDelete}
+                  onChange={(e) =>
+                    setDeleteOptions((prev) => ({ ...prev, softDelete: e.target.checked }))
+                  }
+                />
+              }
+              label="Soft delete (hide from library, keep for purge)"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={deleteOptions.blockHash}
+                  onChange={(e) =>
+                    setDeleteOptions((prev) => ({ ...prev, blockHash: e.target.checked }))
+                  }
+                />
+              }
+              label="Prevent reimporting this file (block hash)"
+            />
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Soft deleting keeps the record for auditing and purging. Use purge to permanently
+              remove it later.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+            <Button
+              onClick={handleConfirmDelete}
+              color="error"
+              variant="contained"
+              disabled={deleteInProgress}
+            >
+              {deleteInProgress ? 'Deleting...' : deleteOptions.softDelete ? 'Soft Delete' : 'Delete'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={purgeDialogOpen}
+          onClose={() => {
+            setPurgeDialogOpen(false);
+            setPurgeDeleteFiles(false);
+          }}
+        >
+          <DialogTitle>Purge Soft-Deleted Books</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              {softDeletedCount === 0
+                ? 'There are no soft-deleted books to purge.'
+                : `This will permanently remove ${softDeletedCount} soft-deleted ${
+                    softDeletedCount === 1 ? 'book' : 'books'
+                  } from the library.`}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={purgeDeleteFiles}
+                  onChange={(e) => setPurgeDeleteFiles(e.target.checked)}
+                />
+              }
+              label="Also delete files from disk (if they still exist)"
+            />
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              This cannot be undone. Purge removes the records entirely and deletes files when
+              selected.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setPurgeDialogOpen(false);
+                setPurgeDeleteFiles(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmPurge}
+              color="error"
+              variant="contained"
+              disabled={purgeInProgress || softDeletedCount === 0}
+            >
+              {purgeInProgress ? 'Purging...' : 'Purge Now'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Import Path Management Dialog */}
         <Dialog

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -565,18 +565,19 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 			continue
 		}
 
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			return nil, err
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
 		if skipped < offset {
 			skipped++
 			continue
 		}
-
-		if count >= limit {
+		if limit > 0 && count >= limit {
 			break
-		}
-
-		var book Book
-		if err := json.Unmarshal(iter.Value(), &book); err != nil {
-			return nil, err
 		}
 		books = append(books, book)
 		count++
@@ -696,6 +697,9 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 		if err := json.Unmarshal(iter.Value(), &book); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal book: %w", err)
 		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
 
 		// Use organized_file_hash if available, otherwise file_hash
 		var hash string
@@ -750,7 +754,7 @@ func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 		if err != nil {
 			return nil, err
 		}
-		if book != nil {
+		if book != nil && (book.MarkedForDeletion == nil || !*book.MarkedForDeletion) {
 			books = append(books, *book)
 		}
 	}
@@ -778,7 +782,7 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 		if err != nil {
 			return nil, err
 		}
-		if book != nil {
+		if book != nil && (book.MarkedForDeletion == nil || !*book.MarkedForDeletion) {
 			books = append(books, *book)
 		}
 	}
@@ -1097,10 +1101,63 @@ func (p *PebbleStore) CountBooks() (int, error) {
 			strings.Contains(key, ":author:") {
 			continue
 		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			return 0, err
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
 		count++
 	}
 
 	return count, nil
+}
+
+func (p *PebbleStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
+	var books []Book
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	skipped := 0
+	collected := 0
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":version:") {
+			continue
+		}
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			return nil, err
+		}
+		if book.MarkedForDeletion == nil || !*book.MarkedForDeletion {
+			continue
+		}
+		if olderThan != nil && book.MarkedForDeletionAt != nil && book.MarkedForDeletionAt.After(*olderThan) {
+			continue
+		}
+
+		if skipped < offset {
+			skipped++
+			continue
+		}
+		if limit > 0 && collected >= limit {
+			break
+		}
+		books = append(books, book)
+		collected++
+	}
+
+	return books, nil
 }
 
 // GetBooksByVersionGroup returns all books in a version group
@@ -1125,6 +1182,10 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 
 		var book Book
 		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
 			continue
 		}
 

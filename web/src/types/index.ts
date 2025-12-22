@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.4.0
+// version: 1.5.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -39,6 +39,13 @@ export interface Audiobook {
   is_primary_version?: boolean;
   version_group_id?: string; // Links multiple versions of same book
   version_notes?: string; // e.g., 'Remastered 2020', 'Original Recording'
+  file_hash?: string;
+  original_file_hash?: string;
+  organized_file_hash?: string;
+  library_state?: string;
+  quantity?: number;
+  marked_for_deletion?: boolean;
+  marked_for_deletion_at?: string;
 
   created_at: string;
   updated_at: string;

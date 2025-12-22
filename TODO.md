@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.13.3 -->
+<!-- version: 1.13.4 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -24,6 +24,10 @@
 6. ✅ **State Machine** - Book lifecycle (imported → organized → deleted)
 7. ✅ **Enhanced Delete** - Soft delete + hash blocking options
 8. ✅ **Migration 9** - Database schema for state tracking
+9. ✅ **Soft Delete Purge Flow** - Backend + UI support for safely removing deleted books
+   - Library/API now hide soft-deleted records by default
+   - New endpoints: list soft-deleted books and purge them (optional file removal)
+   - Library page delete dialog supports soft delete + hash blocking; purge dialog removes leftovers
 
 **Status**: See CHANGELOG.md for latest status and progress
 
@@ -451,6 +455,8 @@
       or state machine (wanted/imported/organized) plus soft-delete flags, a
       background purge job, and a do-not-import hash list that survives deletes
       so the UI can hide removed entries while preventing future reimports.
+  - ✅ Manual purge flow implemented (API endpoint + UI purge dialog, optional file removal)
+  - [ ] Background purge job still needed for automatic cleanup
 - [ ] **Settings Tab for Banned Hashes**: Add a new tab on the Settings page to
       view/remove entries in the do-not-import hash list so users can unblock
       imports later.

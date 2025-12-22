@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.9.1
+// version: 1.10.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -24,21 +24,101 @@ const bookSelectColumns = `
 	print_year, audiobook_release_year, isbn10, isbn13,
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
-	original_file_hash, organized_file_hash
+	original_file_hash, organized_file_hash, library_state, quantity,
+	marked_for_deletion, marked_for_deletion_at
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
-	return scanner.Scan(
-		&book.ID, &book.Title, &book.AuthorID, &book.SeriesID,
-		&book.SeriesSequence, &book.FilePath, &book.OriginalFilename,
-		&book.Format, &book.Duration, &book.WorkID, &book.Narrator,
-		&book.Edition, &book.Language, &book.Publisher, &book.PrintYear,
-		&book.AudiobookReleaseYear, &book.ISBN10, &book.ISBN13,
-		&book.FileHash, &book.FileSize, &book.Bitrate, &book.Codec,
-		&book.SampleRate, &book.Channels, &book.BitDepth, &book.Quality,
-		&book.IsPrimaryVersion, &book.VersionGroupID, &book.VersionNotes,
-		&book.OriginalFileHash, &book.OrganizedFileHash,
+	var (
+		authorID, seriesID, seriesSequence, duration, printYear, releaseYear sql.NullInt64
+		fileSize, bitrate, sampleRate, channels, bitDepth, quantity          sql.NullInt64
+		title, filePath, format                                              string
+		originalFilename                                                     sql.NullString
+		workID, narrator, edition, language, publisher                       sql.NullString
+		isbn10, isbn13, fileHash, quality, codec                             sql.NullString
+		originalFileHash, organizedFileHash                                  sql.NullString
+		versionGroupID, versionNotes                                         sql.NullString
+		isPrimaryVersion                                                     sql.NullBool
+		libraryState                                                         sql.NullString
+		markedForDeletion                                                    sql.NullBool
+		markedForDeletionAt                                                  sql.NullTime
 	)
+
+	if err := scanner.Scan(
+		&book.ID, &title, &authorID, &seriesID, &seriesSequence,
+		&filePath, &originalFilename, &format, &duration,
+		&workID, &narrator, &edition, &language, &publisher,
+		&printYear, &releaseYear, &isbn10, &isbn13,
+		&fileHash, &fileSize, &bitrate, &codec, &sampleRate, &channels,
+		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
+		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
+		&markedForDeletion, &markedForDeletionAt,
+	); err != nil {
+		return err
+	}
+
+	book.Title = title
+	book.FilePath = filePath
+	book.OriginalFilename = nullableString(originalFilename)
+	book.Format = format
+	book.AuthorID = nullableInt(authorID)
+	book.SeriesID = nullableInt(seriesID)
+	book.SeriesSequence = nullableInt(seriesSequence)
+	book.Duration = nullableInt(duration)
+	book.WorkID = nullableString(workID)
+	book.Narrator = nullableString(narrator)
+	book.Edition = nullableString(edition)
+	book.Language = nullableString(language)
+	book.Publisher = nullableString(publisher)
+	book.PrintYear = nullableInt(printYear)
+	book.AudiobookReleaseYear = nullableInt(releaseYear)
+	book.ISBN10 = nullableString(isbn10)
+	book.ISBN13 = nullableString(isbn13)
+	book.FileHash = nullableString(fileHash)
+	if fileSize.Valid {
+		size := fileSize.Int64
+		book.FileSize = &size
+	}
+	book.Bitrate = nullableInt(bitrate)
+	book.Codec = nullableString(codec)
+	book.SampleRate = nullableInt(sampleRate)
+	book.Channels = nullableInt(channels)
+	book.BitDepth = nullableInt(bitDepth)
+	book.Quality = nullableString(quality)
+	if isPrimaryVersion.Valid {
+		val := isPrimaryVersion.Bool
+		book.IsPrimaryVersion = &val
+	}
+	book.VersionGroupID = nullableString(versionGroupID)
+	book.VersionNotes = nullableString(versionNotes)
+	book.OriginalFileHash = nullableString(originalFileHash)
+	book.OrganizedFileHash = nullableString(organizedFileHash)
+	book.LibraryState = nullableString(libraryState)
+	book.Quantity = nullableInt(quantity)
+	if markedForDeletion.Valid {
+		val := markedForDeletion.Bool
+		book.MarkedForDeletion = &val
+	}
+	if markedForDeletionAt.Valid {
+		book.MarkedForDeletionAt = &markedForDeletionAt.Time
+	}
+	return nil
+}
+
+func nullableString(ns sql.NullString) *string {
+	if !ns.Valid {
+		return nil
+	}
+	val := ns.String
+	return &val
+}
+
+func nullableInt(ni sql.NullInt64) *int {
+	if !ni.Valid {
+		return nil
+	}
+	val := int(ni.Int64)
+	return &val
 }
 
 // SQLiteStore implements the Store interface using SQLite3
@@ -134,6 +214,10 @@ func (s *SQLiteStore) createTables() error {
 		version_notes TEXT,
 		original_file_hash TEXT,
 		organized_file_hash TEXT,
+		library_state TEXT DEFAULT 'imported',
+		quantity INTEGER DEFAULT 1,
+		marked_for_deletion BOOLEAN DEFAULT 0,
+		marked_for_deletion_at DATETIME,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -145,6 +229,8 @@ func (s *SQLiteStore) createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_books_file_hash ON books(file_hash);
 	CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash);
 	CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash);
+	CREATE INDEX IF NOT EXISTS idx_books_library_state ON books(library_state);
+	CREATE INDEX IF NOT EXISTS idx_books_marked_for_deletion ON books(marked_for_deletion);
 
 	CREATE TABLE IF NOT EXISTS playlists (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,24 +326,28 @@ func (s *SQLiteStore) createTables() error {
 func (s *SQLiteStore) ensureExtendedBookColumns() error {
 	// Map of desired columns (name -> type)
 	columns := map[string]string{
-		"work_id":             "TEXT",
-		"narrator":            "TEXT",
-		"edition":             "TEXT",
-		"language":            "TEXT",
-		"publisher":           "TEXT",
-		"isbn10":              "TEXT",
-		"isbn13":              "TEXT",
-		"bitrate_kbps":        "INTEGER",
-		"codec":               "TEXT",
-		"sample_rate_hz":      "INTEGER",
-		"channels":            "INTEGER",
-		"bit_depth":           "INTEGER",
-		"quality":             "TEXT",
-		"is_primary_version":  "BOOLEAN DEFAULT 1",
-		"version_group_id":    "TEXT",
-		"version_notes":       "TEXT",
-		"original_file_hash":  "TEXT",
-		"organized_file_hash": "TEXT",
+		"work_id":                "TEXT",
+		"narrator":               "TEXT",
+		"edition":                "TEXT",
+		"language":               "TEXT",
+		"publisher":              "TEXT",
+		"isbn10":                 "TEXT",
+		"isbn13":                 "TEXT",
+		"bitrate_kbps":           "INTEGER",
+		"codec":                  "TEXT",
+		"sample_rate_hz":         "INTEGER",
+		"channels":               "INTEGER",
+		"bit_depth":              "INTEGER",
+		"quality":                "TEXT",
+		"is_primary_version":     "BOOLEAN DEFAULT 1",
+		"version_group_id":       "TEXT",
+		"version_notes":          "TEXT",
+		"original_file_hash":     "TEXT",
+		"organized_file_hash":    "TEXT",
+		"library_state":          "TEXT DEFAULT 'imported'",
+		"quantity":               "INTEGER DEFAULT 1",
+		"marked_for_deletion":    "BOOLEAN DEFAULT 0",
+		"marked_for_deletion_at": "DATETIME",
 	}
 
 	// Fetch existing columns
@@ -297,6 +387,8 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 	indexStatements := []string{
 		"CREATE INDEX IF NOT EXISTS idx_books_original_hash ON books(original_file_hash)",
 		"CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash)",
+		"CREATE INDEX IF NOT EXISTS idx_books_library_state ON books(library_state)",
+		"CREATE INDEX IF NOT EXISTS idx_books_marked_for_deletion ON books(marked_for_deletion)",
 	}
 	for _, stmt := range indexStatements {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -608,7 +700,13 @@ func (s *SQLiteStore) GetBooksByWorkID(workID string) ([]Book, error) {
 // Book operations
 
 func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
 	rows, err := s.db.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
@@ -700,6 +798,7 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 		SELECT COALESCE(organized_file_hash, file_hash) as hash, COUNT(*) as count
 		FROM books
 		WHERE COALESCE(organized_file_hash, file_hash) IS NOT NULL
+		  AND COALESCE(marked_for_deletion, 0) = 0
 		GROUP BY COALESCE(organized_file_hash, file_hash)
 		HAVING count > 1
 		ORDER BY count DESC
@@ -723,6 +822,7 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 		booksQuery := fmt.Sprintf(`
 				SELECT %s FROM books
 				WHERE COALESCE(organized_file_hash, file_hash) = ?
+				  AND COALESCE(marked_for_deletion, 0) = 0
 				ORDER BY file_path
 			`, bookSelectColumns)
 
@@ -758,7 +858,7 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? ORDER BY series_sequence, title`, bookSelectColumns)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY series_sequence, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, seriesID)
 	if err != nil {
 		return nil, err
@@ -777,7 +877,7 @@ func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 }
 
 func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books WHERE author_id = ? ORDER BY title`, bookSelectColumns)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE author_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title`, bookSelectColumns)
 	rows, err := s.db.Query(query, authorID)
 	if err != nil {
 		return nil, err
@@ -811,15 +911,15 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		print_year, audiobook_release_year, isbn10, isbn13,
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
-		original_file_hash, organized_file_hash
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
-		book.OriginalFileHash, book.OrganizedFileHash,
+		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
 	)
 	if err != nil {
 		return nil, err
@@ -835,7 +935,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?,
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
-		original_file_hash = ?, organized_file_hash = ?
+		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
+		marked_for_deletion = ?, marked_for_deletion_at = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -844,7 +945,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
-		book.OriginalFileHash, book.OrganizedFileHash, id,
+		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
+		book.MarkedForDeletion, book.MarkedForDeletionAt, id,
 	)
 	if err != nil {
 		return nil, err
@@ -876,7 +978,7 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	searchQuery := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
+	searchQuery := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
 	rows, err := s.db.Query(searchQuery, "%"+query+"%", limit, offset)
 	if err != nil {
 		return nil, err
@@ -896,13 +998,46 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 
 func (s *SQLiteStore) CountBooks() (int, error) {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM books").Scan(&count)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&count)
 	return count, err
+}
+
+func (s *SQLiteStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE COALESCE(marked_for_deletion, 0) = 1`, bookSelectColumns)
+	args := []interface{}{}
+	if olderThan != nil {
+		query += " AND marked_for_deletion_at IS NOT NULL AND marked_for_deletion_at <= ?"
+		args = append(args, olderThan.UTC())
+	}
+	query += " ORDER BY (marked_for_deletion_at IS NULL), marked_for_deletion_at DESC, title LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
 }
 
 // GetBooksByVersionGroup returns all books in a version group
 func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books WHERE version_group_id = ? ORDER BY is_primary_version DESC, title`, bookSelectColumns)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE version_group_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY is_primary_version DESC, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, groupID)
 	if err != nil {
 		return nil, err
