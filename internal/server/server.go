@@ -340,6 +340,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
 		api.GET("/audiobooks/soft-deleted", s.listSoftDeletedAudiobooks)
 		api.DELETE("/audiobooks/purge-soft-deleted", s.purgeSoftDeletedAudiobooks)
+		api.POST("/audiobooks/:id/restore", s.restoreAudiobook)
 		api.GET("/audiobooks/:id", s.getAudiobook)
 		api.PUT("/audiobooks/:id", s.updateAudiobook)
 		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
@@ -704,6 +705,36 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 			}
 		}
 	}
+}
+
+func (s *Server) restoreAudiobook(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	id := c.Param("id")
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	book.MarkedForDeletion = boolPtr(false)
+	book.MarkedForDeletionAt = nil
+	// Restore to imported state so the UI can re-process if needed
+	book.LibraryState = stringPtr("imported")
+
+	updated, err := database.GlobalStore.UpdateBook(id, book)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "audiobook restored",
+		"book":    updated,
+	})
 }
 
 func (s *Server) countAudiobooks(c *gin.Context) {

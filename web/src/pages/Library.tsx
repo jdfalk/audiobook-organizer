@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.20.0
+// version: 1.21.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -112,6 +112,7 @@ export const Library = () => {
   const [purgeDeleteFiles, setPurgeDeleteFiles] = useState(false);
   const [purgeInProgress, setPurgeInProgress] = useState(false);
   const [purgingBookId, setPurgingBookId] = useState<string | null>(null);
+  const [restoringBookId, setRestoringBookId] = useState<string | null>(null);
   const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info';
     message: string;
@@ -466,6 +467,24 @@ export const Library = () => {
       setAlert({ severity: 'error', message: 'Failed to purge audiobook.' });
     } finally {
       setPurgingBookId(null);
+    }
+  };
+
+  const handleRestoreOne = async (book: Audiobook) => {
+    setRestoringBookId(book.id);
+    try {
+      await api.restoreSoftDeletedBook(book.id);
+      setAlert({
+        severity: 'success',
+        message: `"${book.title}" was restored to the library.`,
+      });
+      await loadAudiobooks();
+      await loadSoftDeleted();
+    } catch (error) {
+      console.error('Failed to restore audiobook', error);
+      setAlert({ severity: 'error', message: 'Failed to restore audiobook.' });
+    } finally {
+      setRestoringBookId(null);
     }
   };
 
@@ -1168,6 +1187,15 @@ export const Library = () => {
                       }
                     />
                     <ListItemSecondaryAction>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{ mr: 1 }}
+                        onClick={() => handleRestoreOne(book)}
+                        disabled={restoringBookId === book.id || purgeInProgress || purgingBookId === book.id}
+                      >
+                        {restoringBookId === book.id ? 'Restoring...' : 'Restore'}
+                      </Button>
                       <Button
                         size="small"
                         color="error"
