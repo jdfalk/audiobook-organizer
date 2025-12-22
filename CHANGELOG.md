@@ -4,41 +4,76 @@
 
 ### Added / Changed
 
+#### December 22, 2025 - MVP Implementation Sprint (Continued)
+
+- **Blocked Hashes Management UI**: Complete Settings tab for hash management
+  (PR #69)
+
+  - BlockedHashesTab component with CRUD operations
+  - Table view with hash truncation, reason, and creation date
+  - Add dialog with SHA256 validation (64 hex characters)
+  - Delete confirmation dialog with full hash display
+  - Empty state with helpful onboarding
+  - Snackbar notifications for success/error feedback
+  - API integration: getBlockedHashes, addBlockedHash, removeBlockedHash
+
+- **State Machine Transitions**: Book lifecycle implementation (PR #70)
+
+  - Scanner sets initial state to 'imported' with quantity=1 for new books
+  - Organizer transitions state to 'organized' after successful file
+    organization
+  - Delete endpoint transitions to 'deleted' for soft deletes
+  - Helper functions: stringPtr(), intPtr(), boolPtr()
+
+- **Enhanced Delete Endpoint**: Flexible deletion with hash blocking (PR #70)
+  - Soft delete support via query param: `?soft_delete=true`
+  - Hash blocking support via query param: `?block_hash=true`
+  - Returns status indicating whether hash was blocked
+  - Backwards compatible (defaults to hard delete)
+  - Sets library_state='deleted' and marked_for_deletion=true for soft deletes
+
 #### December 22, 2025 - MVP Implementation Sprint
 
-- **All Tests Passing**: Fixed all failing Go tests across server and scanner packages
+- **All Tests Passing**: Fixed all failing Go tests across server and scanner
+  packages
+
   - Fixed scanner panic with nil database check
   - Fixed test bug in TestIntegrationLargeScaleMixedFormats (string conversion)
   - 19 packages tested, all passing
-  
+
 - **Dashboard Analytics API**: New `/api/v1/dashboard` endpoint
+
   - Size distribution with 4 buckets (0-100MB, 100-500MB, 500MB-1GB, 1GB+)
   - Format distribution tracking (m4b, mp3, m4a, flac, etc.)
   - Total size calculation
   - Recent operations summary
-  
+
 - **Metadata Management API**: Comprehensive metadata field validation
+
   - `/api/v1/metadata/fields` - Lists all fields with validation rules
   - publishDate validation with YYYY-MM-DD format checking
   - Field types, required flags, patterns, and custom validators
-  
+
 - **Work Queue API**: Edition and work grouping
+
   - `/api/v1/work` - List all work items with associated books
   - `/api/v1/work/stats` - Statistics (total works, books, editions)
-  
+
 - **Blocked Hashes Management**: Hash blocklist for preventing reimports
+
   - `GET /api/v1/blocked-hashes` - List all blocked hashes with reasons
   - `POST /api/v1/blocked-hashes` - Add hash to blocklist
   - `DELETE /api/v1/blocked-hashes/:hash` - Remove from blocklist
   - SHA256 hash validation
-  
+
 - **State Machine Implementation**: Book lifecycle tracking (Migration 9)
+
   - `library_state` field - Track book status (imported/organized/deleted)
   - `quantity` field - Reference counting
   - `marked_for_deletion` field - Soft delete flag
   - `marked_for_deletion_at` timestamp
   - Indices for efficient state and deletion queries
-  
+
 - **Documentation**: Comprehensive session reports
   - MVP_IMPLEMENTATION_STATUS.md - Detailed task tracking
   - SESSION_SUMMARY.md - Session accomplishments
