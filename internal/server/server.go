@@ -63,6 +63,10 @@ func intPtr(i int) *int {
 	return &i
 }
 
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := scanner.ComputeFileHash(newPath)
 	if err != nil {
@@ -613,8 +617,54 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 	}
 	id := c.Param("id") // ULID string
 
+	// Check for query parameters for enhanced delete options
+	blockHash := c.Query("block_hash") == "true"
+	softDelete := c.Query("soft_delete") == "true"
+
+	// Get the book first to access its hash
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// If soft delete requested, mark for deletion instead of hard delete
+	if softDelete {
+		now := time.Now()
+		book.MarkedForDeletion = boolPtr(true)
+		book.MarkedForDeletionAt = &now
+		book.LibraryState = stringPtr("deleted")
+		
+		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Optionally block the hash
+		if blockHash && book.FileHash != nil && *book.FileHash != "" {
+			if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - soft delete"); err != nil {
+				log.Printf("Warning: failed to block hash during soft delete: %v", err)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "audiobook soft deleted",
+			"blocked":     blockHash && book.FileHash != nil,
+			"soft_delete": true,
+		})
+		return
+	}
+
+	// Hard delete path
+	// Optionally block the hash before deleting
+	if blockHash && book.FileHash != nil && *book.FileHash != "" {
+		if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - prevent reimport"); err != nil {
+			log.Printf("Warning: failed to block hash before delete: %v", err)
+			// Continue with delete even if blocking fails
+		}
+	}
+
 	if err := database.GlobalStore.DeleteBook(id); err != nil {
-		// Check if error is "not found"
 		if err.Error() == "book not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 			return
@@ -623,7 +673,10 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "audiobook deleted",
+		"blocked": blockHash && book.FileHash != nil,
+	})
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
@@ -1515,8 +1568,9 @@ func (s *Server) startOrganize(c *gin.Context) {
 				continue
 			}
 
-			// Update book's file path in database
+			// Update book's file path and state in database
 			book.FilePath = newPath
+			book.LibraryState = stringPtr("organized")
 			applyOrganizedFileMetadata(&book, newPath)
 			if _, err := database.GlobalStore.UpdateBook(book.ID, &book); err != nil {
 				errDetails := fmt.Sprintf("Failed to update book path: %s", err.Error())

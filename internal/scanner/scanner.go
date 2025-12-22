@@ -636,6 +636,8 @@ func saveBookToDatabase(book *Book) error {
 			FileSize:          fileSize,
 			OriginalFileHash:  originalFileHash,
 			OrganizedFileHash: organizedFileHash,
+			LibraryState:      stringPtr("imported"),
+			Quantity:          intPtr(1),
 		}
 
 		// Upsert semantics with duplicate detection:
@@ -814,6 +816,14 @@ func getFileSize(filePath string) (int64, error) {
 func stringPtrValue(s string) *string {
 	copy := s
 	return &copy
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
+
+func intPtr(i int) *int {
+	return &i
 }
 
 func nullablePtr(s string) *string {
