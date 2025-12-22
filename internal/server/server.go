@@ -351,6 +351,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/system/logs", s.getSystemLogs)
 		api.GET("/config", s.getConfig)
 		api.PUT("/config", s.updateConfig)
+		api.GET("/dashboard", s.getDashboard)
 
 		// Backup routes
 		api.POST("/backup/create", s.createBackup)
@@ -364,6 +365,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/metadata/export", s.exportMetadata)
 		api.POST("/metadata/import", s.importMetadata)
 		api.GET("/metadata/search", s.searchMetadata)
+		api.GET("/metadata/fields", s.getMetadataFields)
 		api.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
 
 		// AI-powered parsing routes
@@ -384,6 +386,10 @@ func (s *Server) setupRoutes() {
 		api.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
 		api.PUT("/audiobooks/:id/set-primary", s.setAudiobookPrimary)
 		api.GET("/version-groups/:id", s.getVersionGroup)
+
+		// Work queue routes (alternative singular form for compatibility)
+		api.GET("/work", s.listWork)
+		api.GET("/work/stats", s.getWorkStats)
 	}
 
 	// Serve static files (React frontend)
@@ -2773,6 +2779,224 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 		"message":    "audiobook updated with AI-parsed metadata",
 		"book":       updatedBook,
 		"confidence": metadata.Confidence,
+	})
+}
+
+// getDashboard returns dashboard statistics with size and format distributions
+func (s *Server) getDashboard(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get all books
+	allBooks, err := database.GlobalStore.GetAllBooks(100000, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve books"})
+		return
+	}
+
+	// Calculate size distribution
+	sizeDistribution := map[string]int{
+		"0-100MB":    0,
+		"100-500MB":  0,
+		"500MB-1GB":  0,
+		"1GB+":       0,
+	}
+
+	// Calculate format distribution and total size
+	formatDistribution := make(map[string]int)
+	var totalSize int64 = 0
+
+	for _, book := range allBooks {
+		// Size distribution
+		if book.FileSize != nil {
+			totalSize += *book.FileSize
+			sizeMB := float64(*book.FileSize) / (1024 * 1024)
+			sizeGB := sizeMB / 1024
+
+			if sizeMB < 100 {
+				sizeDistribution["0-100MB"]++
+			} else if sizeMB < 500 {
+				sizeDistribution["100-500MB"]++
+			} else if sizeGB < 1 {
+				sizeDistribution["500MB-1GB"]++
+			} else {
+				sizeDistribution["1GB+"]++
+			}
+		}
+
+		// Format distribution
+		ext := strings.ToLower(filepath.Ext(book.FilePath))
+		if ext != "" {
+			ext = strings.TrimPrefix(ext, ".")
+			formatDistribution[ext]++
+		}
+	}
+
+	// Get recent operations
+	recentOps, err := database.GlobalStore.GetRecentOperations(5)
+	if err != nil {
+		recentOps = []database.Operation{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"sizeDistribution":   sizeDistribution,
+		"formatDistribution": formatDistribution,
+		"recentOperations":   recentOps,
+		"totalSize":          totalSize,
+		"totalBooks":         len(allBooks),
+	})
+}
+
+// getMetadataFields returns available metadata fields with their types and validation rules
+func (s *Server) getMetadataFields(c *gin.Context) {
+	fields := []map[string]interface{}{
+		{
+			"name":        "title",
+			"type":        "string",
+			"required":    true,
+			"maxLength":   500,
+			"description": "Book title",
+		},
+		{
+			"name":        "author",
+			"type":        "string",
+			"required":    false,
+			"description": "Author name",
+		},
+		{
+			"name":        "narrator",
+			"type":        "string",
+			"required":    false,
+			"description": "Narrator name",
+		},
+		{
+			"name":        "publisher",
+			"type":        "string",
+			"required":    false,
+			"description": "Publisher name",
+		},
+		{
+			"name":        "publishDate",
+			"type":        "integer",
+			"required":    false,
+			"min":         1000,
+			"max":         9999,
+			"description": "Publication year",
+		},
+		{
+			"name":        "series",
+			"type":        "string",
+			"required":    false,
+			"description": "Series name",
+		},
+		{
+			"name":        "language",
+			"type":        "string",
+			"required":    false,
+			"pattern":     "^[a-z]{2}$",
+			"description": "ISO 639-1 language code (e.g., 'en', 'es')",
+		},
+		{
+			"name":        "isbn10",
+			"type":        "string",
+			"required":    false,
+			"pattern":     "^[0-9]{9}[0-9X]$",
+			"description": "ISBN-10",
+		},
+		{
+			"name":        "isbn13",
+			"type":        "string",
+			"required":    false,
+			"pattern":     "^97[89][0-9]{10}$",
+			"description": "ISBN-13",
+		},
+		{
+			"name":        "series_sequence",
+			"type":        "integer",
+			"required":    false,
+			"min":         1,
+			"description": "Position in series",
+		},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"fields": fields,
+	})
+}
+
+// listWork returns all work items (audiobooks grouped by work entity)
+func (s *Server) listWork(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get all works
+	works, err := database.GlobalStore.GetAllWorks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve works"})
+		return
+	}
+
+	// For each work, get associated books
+	items := make([]map[string]interface{}, 0, len(works))
+	for _, work := range works {
+		books, err := database.GlobalStore.GetBooksByWorkID(work.ID)
+		if err != nil {
+			books = []database.Book{}
+		}
+
+		items = append(items, map[string]interface{}{
+			"id":         work.ID,
+			"title":      work.Title,
+			"author_id":  work.AuthorID,
+			"book_count": len(books),
+			"books":      books,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": items,
+		"total": len(items),
+	})
+}
+
+// getWorkStats returns statistics about work items
+func (s *Server) getWorkStats(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	works, err := database.GlobalStore.GetAllWorks()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve works"})
+		return
+	}
+
+	totalWorks := len(works)
+	totalBooks := 0
+	worksWithMultipleEditions := 0
+
+	for _, work := range works {
+		books, err := database.GlobalStore.GetBooksByWorkID(work.ID)
+		if err != nil {
+			continue
+		}
+		bookCount := len(books)
+		totalBooks += bookCount
+		if bookCount > 1 {
+			worksWithMultipleEditions++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_works":                  totalWorks,
+		"total_books":                  totalBooks,
+		"works_with_multiple_editions": worksWithMultipleEditions,
+		"average_editions_per_work":    float64(totalBooks) / float64(max(totalWorks, 1)),
 	})
 }
 
