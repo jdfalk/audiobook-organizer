@@ -1,8 +1,9 @@
 // file: web/src/pages/Library.tsx
-// version: 1.21.0
+// version: 1.22.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -535,10 +536,14 @@ export const Library = () => {
     }
   };
 
-  const handleClick = useCallback((audiobook: Audiobook) => {
-    console.log('View audiobook:', audiobook);
-    // TODO: Navigate to audiobook detail page
-  }, []);
+  const navigate = useNavigate();
+
+  const handleClick = useCallback(
+    (audiobook: Audiobook) => {
+      navigate(`/library/${audiobook.id}`);
+    },
+    [navigate]
+  );
 
   const handleVersionManage = (audiobook: Audiobook) => {
     setVersionManagingAudiobook(audiobook);

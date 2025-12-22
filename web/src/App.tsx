@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 import { useState, useEffect } from 'react';
@@ -8,6 +8,7 @@ import { Box, Backdrop, CircularProgress, Typography, Stack } from '@mui/materia
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';
+import { BookDetail } from './pages/BookDetail';
 import { Works } from './pages/Works';
 import { System } from './pages/System';
 import { Settings } from './pages/Settings';
@@ -110,6 +111,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/library/:id" element={<BookDetail />} />
           <Route path="/works" element={<Works />} />
           <Route path="/system" element={<System />} />
           <Route path="/settings" element={<Settings />} />

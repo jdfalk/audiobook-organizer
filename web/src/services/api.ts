@@ -219,6 +219,10 @@ export interface Config {
   memory_limit_percent: number;
   memory_limit_mb: number;
 
+  // Lifecycle / retention
+  purge_soft_deleted_after_days?: number;
+  purge_soft_deleted_delete_files?: boolean;
+
   // Logging
   log_level: string;
   log_format: string;

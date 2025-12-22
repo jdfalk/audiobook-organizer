@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.19.2
+// version: 1.20.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -154,6 +154,10 @@ export function Settings() {
     memoryLimitPercent: 25, // % of system memory
     memoryLimitMB: 512, // MB
 
+    // Lifecycle / retention
+    purgeSoftDeletedAfterDays: 30,
+    purgeSoftDeletedDeleteFiles: false,
+
     // Logging
     logLevel: 'info',
     logFormat: 'text', // 'text' or 'json'
@@ -253,6 +257,10 @@ export function Settings() {
         cacheSize: config.cache_size || 1000,
         memoryLimitPercent: config.memory_limit_percent || 25,
         memoryLimitMB: config.memory_limit_mb || 512,
+
+        // Lifecycle / retention
+        purgeSoftDeletedAfterDays: config.purge_soft_deleted_after_days ?? 30,
+        purgeSoftDeletedDeleteFiles: config.purge_soft_deleted_delete_files ?? false,
 
         // Logging
         logLevel: config.log_level || 'info',
@@ -516,6 +524,10 @@ export function Settings() {
         cache_size: settings.cacheSize,
         memory_limit_percent: settings.memoryLimitPercent,
         memory_limit_mb: settings.memoryLimitMB,
+
+        // Lifecycle / retention
+        purge_soft_deleted_after_days: settings.purgeSoftDeletedAfterDays,
+        purge_soft_deleted_delete_files: settings.purgeSoftDeletedDeleteFiles,
 
         // Logging
         log_level: settings.logLevel,
@@ -1434,6 +1446,44 @@ export function Settings() {
                 />
               </Grid>
             )}
+
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" gutterBottom>
+                Lifecycle &amp; Retention
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Control how long soft-deleted books remain before automatic purge runs.
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Auto-Purge After (days)"
+                value={settings.purgeSoftDeletedAfterDays}
+                onChange={(e) =>
+                  handleChange('purgeSoftDeletedAfterDays', parseInt(e.target.value) || 0)
+                }
+                inputProps={{ min: 0, max: 365 }}
+                helperText="Set to 0 to disable automatic purge"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.purgeSoftDeletedDeleteFiles}
+                    onChange={(e) => handleChange('purgeSoftDeletedDeleteFiles', e.target.checked)}
+                  />
+                }
+                label="Delete files from disk during purge"
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                Disable to keep files on disk while clearing database records.
+              </Typography>
+            </Grid>
 
             <Grid item xs={12}>
               <Divider sx={{ my: 2 }} />
