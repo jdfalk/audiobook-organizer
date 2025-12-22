@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.3.0
+// version: 1.4.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -280,7 +280,7 @@ export async function getSoftDeletedBooks(
   const data = await response.json();
   return {
     items: data.items || [],
-    count: data.count ?? (data.items ? data.items.length : 0),
+    count: data.total ?? data.count ?? (data.items ? data.items.length : 0),
   };
 }
 

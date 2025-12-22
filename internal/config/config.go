@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -59,6 +59,10 @@ type Config struct {
 	MemoryLimitPercent int    `json:"memory_limit_percent"` // % of system memory
 	MemoryLimitMB      int    `json:"memory_limit_mb"`      // absolute MB
 
+	// Lifecycle / retention
+	PurgeSoftDeletedAfterDays   int  `json:"purge_soft_deleted_after_days"`
+	PurgeSoftDeletedDeleteFiles bool `json:"purge_soft_deleted_delete_files"`
+
 	// Logging
 	LogLevel          string `json:"log_level"`  // 'debug', 'info', 'warn', 'error'
 	LogFormat         string `json:"log_format"` // 'text' or 'json'
@@ -111,6 +115,10 @@ func InitConfig() {
 	viper.SetDefault("memory_limit_percent", 25)
 	viper.SetDefault("memory_limit_mb", 512)
 
+	// Lifecycle / retention defaults
+	viper.SetDefault("purge_soft_deleted_after_days", 30)
+	viper.SetDefault("purge_soft_deleted_delete_files", false)
+
 	// Set logging defaults
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
@@ -154,6 +162,10 @@ func InitConfig() {
 		CacheSize:          viper.GetInt("cache_size"),
 		MemoryLimitPercent: viper.GetInt("memory_limit_percent"),
 		MemoryLimitMB:      viper.GetInt("memory_limit_mb"),
+
+		// Lifecycle / retention
+		PurgeSoftDeletedAfterDays:   viper.GetInt("purge_soft_deleted_after_days"),
+		PurgeSoftDeletedDeleteFiles: viper.GetBool("purge_soft_deleted_delete_files"),
 
 		// Logging
 		LogLevel:          viper.GetString("log_level"),
