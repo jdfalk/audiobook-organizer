@@ -228,9 +228,7 @@ export interface Config {
 
 // Books
 export async function getBooks(limit = 100, offset = 0): Promise<Book[]> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks?limit=${limit}&offset=${offset}`
-  );
+  const response = await fetch(`${API_BASE}/audiobooks?limit=${limit}&offset=${offset}`);
   if (!response.ok) throw new Error('Failed to fetch books');
   const data = await response.json();
   return data.items || [];
@@ -290,10 +288,7 @@ export async function getImportPaths(): Promise<ImportPath[]> {
   return data.importPaths || [];
 }
 
-export async function addImportPath(
-  path: string,
-  name: string
-): Promise<ImportPath> {
+export async function addImportPath(path: string, name: string): Promise<ImportPath> {
   const response = await fetch(`${API_BASE}/import-paths`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -374,13 +369,8 @@ export async function getOperationLogs(id: string): Promise<OperationLog[]> {
   return data.logs || [];
 }
 
-export async function getOperationLogsTail(
-  id: string,
-  tail: number
-): Promise<OperationLog[]> {
-  const response = await fetch(
-    `${API_BASE}/operations/${id}/logs?tail=${tail}`
-  );
+export async function getOperationLogsTail(id: string, tail: number): Promise<OperationLog[]> {
+  const response = await fetch(`${API_BASE}/operations/${id}/logs?tail=${tail}`);
   if (!response.ok) throw new Error('Failed to fetch operation logs tail');
   const data = await response.json();
   return data.items || data.logs || [];
@@ -408,10 +398,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
 }
 
 // Organize operation
-export async function startOrganize(
-  folderPath?: string,
-  priority?: number
-): Promise<Operation> {
+export async function startOrganize(folderPath?: string, priority?: number): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/organize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -465,10 +452,7 @@ export async function getBookVersions(bookId: string): Promise<Book[]> {
   return data.versions || [];
 }
 
-export async function linkBookVersion(
-  bookId: string,
-  otherBookId: string
-): Promise<void> {
+export async function linkBookVersion(bookId: string, otherBookId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/versions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -524,9 +508,7 @@ export async function searchMetadata(
   const params = new URLSearchParams({ title });
   if (author) params.append('author', author);
 
-  const response = await fetch(
-    `${API_BASE}/metadata/search?${params.toString()}`
-  );
+  const response = await fetch(`${API_BASE}/metadata/search?${params.toString()}`);
   if (!response.ok) throw new Error('Failed to search metadata');
   return response.json();
 }
@@ -534,12 +516,9 @@ export async function searchMetadata(
 export async function fetchBookMetadata(
   bookId: string
 ): Promise<{ message: string; book: Book; source: string }> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/fetch-metadata`,
-    {
-      method: 'POST',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/fetch-metadata`, {
+    method: 'POST',
+  });
   if (!response.ok) throw new Error('Failed to fetch metadata');
   return response.json();
 }
@@ -556,9 +535,7 @@ export interface AIParseResult {
   confidence: 'high' | 'medium' | 'low';
 }
 
-export async function parseFilenameWithAI(
-  filename: string
-): Promise<{ metadata: AIParseResult }> {
+export async function parseFilenameWithAI(filename: string): Promise<{ metadata: AIParseResult }> {
   const response = await fetch(`${API_BASE}/ai/parse-filename`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -588,12 +565,9 @@ export async function testAIConnection(
 export async function parseAudiobookWithAI(
   bookId: string
 ): Promise<{ message: string; book: Book; confidence: string }> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/parse-with-ai`,
-    {
-      method: 'POST',
-    }
-  );
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/parse-with-ai`, {
+    method: 'POST',
+  });
   if (!response.ok) throw new Error('Failed to parse audiobook with AI');
   return response.json();
 }
@@ -619,12 +593,8 @@ export interface FilesystemBrowseResult {
   };
 }
 
-export async function browseFilesystem(
-  path: string
-): Promise<FilesystemBrowseResult> {
-  const response = await fetch(
-    `${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`
-  );
+export async function browseFilesystem(path: string): Promise<FilesystemBrowseResult> {
+  const response = await fetch(`${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`);
   if (!response.ok) throw new Error('Failed to browse filesystem');
   return response.json();
 }

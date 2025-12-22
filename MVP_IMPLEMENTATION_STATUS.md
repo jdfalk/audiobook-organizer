@@ -7,7 +7,7 @@
 #### Go Tests Status - ✅ ALL PASSING
 - **internal/backup**: ✅ PASS (all tests passing)
 - **internal/config**: ✅ PASS (all tests passing)
-- **internal/database**: ✅ PASS (all tests passing)  
+- **internal/database**: ✅ PASS (all tests passing)
 - **internal/fileops**: ✅ PASS (all tests passing)
 - **internal/mediainfo**: ✅ PASS (all tests passing)
 - **internal/metadata**: ✅ PASS (all tests passing)

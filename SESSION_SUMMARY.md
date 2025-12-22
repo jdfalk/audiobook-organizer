@@ -42,7 +42,7 @@
   - Progress tracking in operations queue
 - **TODO**: Manual end-to-end testing needed
 
-### Task 2: Separate Dashboard Counts  
+### Task 2: Separate Dashboard Counts
 - **Backend**: ✅ COMPLETE
   - `/api/v1/system/status` returns library_book_count, import_book_count, total_book_count
   - Counts calculated by checking if path starts with RootDir
