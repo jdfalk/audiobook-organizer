@@ -4,6 +4,36 @@
 
 # Project TODO
 
+## ✅ RECENTLY COMPLETED - December 22, 2025
+
+### MVP Implementation Sprint - Tasks 1-5 Complete!
+
+**Pull Requests:**
+- ✅ **PR #68**: Backend MVP endpoints (MERGED)
+- ⏳ **PR #69**: Blocked Hashes UI (Ready for review)
+- ⏳ **PR #70**: State Machine Transitions (Ready for review)
+
+**What's Done:**
+1. ✅ **All Tests Passing** - 19 Go packages, 100% pass rate
+2. ✅ **Dashboard API** - `/api/v1/dashboard` with size/format distributions
+3. ✅ **Metadata API** - `/api/v1/metadata/fields` with validation
+4. ✅ **Work Queue API** - `/api/v1/work` endpoints
+5. ✅ **Blocked Hashes** - Full CRUD API + Settings tab UI
+6. ✅ **State Machine** - Book lifecycle (imported → organized → deleted)
+7. ✅ **Enhanced Delete** - Soft delete + hash blocking options
+8. ✅ **Migration 9** - Database schema for state tracking
+
+**Status**: See `CURRENT_STATUS.md` for detailed handoff document
+
+**Next Steps:**
+- [ ] Review and merge PR #69 (Blocked Hashes UI)
+- [ ] Review and merge PR #70 (State Transitions)
+- [ ] Manual testing of new features
+- [ ] Build BookDetail.tsx component (Task 6)
+- [ ] Expand E2E test coverage (Task 7)
+
+---
+
 ## 🤖 Background Agent Queue (manage_todo_list)
 
 - [ ] TODO-LIST-001: Plan security workflow actionization (create security
