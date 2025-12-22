@@ -23,9 +23,7 @@ test.describe('Import paths workflows', () => {
     });
   });
 
-  test('add and remove import path via Settings page (mocked API)', async ({
-    page,
-  }) => {
+  test('add and remove import path via Settings page (mocked API)', async ({ page }) => {
     let importPaths: Array<{
       id: number;
       path: string;
@@ -94,27 +92,21 @@ test.describe('Import paths workflows', () => {
 
     await page.goto('/settings');
 
-    await expect(
-      page.getByText('Settings', { exact: true }).first()
-    ).toBeVisible();
+    await expect(page.getByText('Settings', { exact: true }).first()).toBeVisible();
 
     // Add import path
     await page.getByRole('button', { name: 'Add Import Path' }).click();
     const dialog = page.getByRole('dialog', { name: /Add Import Path/i });
     const pathInput = dialog.getByPlaceholder('/path/to/downloads');
     await pathInput.fill('/tmp/books');
-    const saveButton = dialog
-      .getByRole('button', { name: /Add|Save/i })
-      .first();
+    const saveButton = dialog.getByRole('button', { name: /Add|Save/i }).first();
     await saveButton.click();
 
     await expect(page.getByText('/tmp/books')).toBeVisible();
     await expect(page.getByText('Tmp')).toBeVisible();
 
     // Remove import path via DELETE API call (route mock updates state)
-    await page.evaluate(() =>
-      fetch('/api/v1/import-paths/1', { method: 'DELETE' })
-    );
+    await page.evaluate(() => fetch('/api/v1/import-paths/1', { method: 'DELETE' }));
     await page.reload();
     await expect(page.getByText('/tmp/books')).not.toBeVisible({
       timeout: 5000,

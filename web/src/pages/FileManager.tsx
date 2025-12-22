@@ -25,14 +25,8 @@ import {
   NavigateNext as NavigateNextIcon,
   FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material';
-import {
-  DirectoryTree,
-  DirectoryNode,
-} from '../components/filemanager/DirectoryTree';
-import {
-  ImportPathCard,
-  ImportPath,
-} from '../components/filemanager/ImportPathCard';
+import { DirectoryTree, DirectoryNode } from '../components/filemanager/DirectoryTree';
+import { ImportPathCard, ImportPath } from '../components/filemanager/ImportPathCard';
 
 export function FileManager() {
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
@@ -92,9 +86,7 @@ export function FileManager() {
 
       setImportPaths((prev) =>
         prev.map((f) =>
-          f.id === folder.id
-            ? { ...f, status: 'scanning' as const, progress: 0 }
-            : f
+          f.id === folder.id ? { ...f, status: 'scanning' as const, progress: 0 } : f
         )
       );
 
@@ -108,10 +100,7 @@ export function FileManager() {
               ? {
                   ...f,
                   progress,
-                  status:
-                    progress >= 100
-                      ? ('complete' as const)
-                      : ('scanning' as const),
+                  status: progress >= 100 ? ('complete' as const) : ('scanning' as const),
                 }
               : f
           )
@@ -122,9 +111,7 @@ export function FileManager() {
       console.error('Failed to scan import path:', error);
       setImportPaths((prev) =>
         prev.map((f) =>
-          f.id === folder.id
-            ? { ...f, status: 'error' as const, error_message: 'Scan failed' }
-            : f
+          f.id === folder.id ? { ...f, status: 'error' as const, error_message: 'Scan failed' } : f
         )
       );
     }
@@ -148,16 +135,13 @@ export function FileManager() {
     folderInputRef.current?.click();
   };
 
-  const handleFolderSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFolderSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     // Get the directory path from the first file
     const firstFile = files[0];
-    const webkitPath = (firstFile as File & { webkitRelativePath?: string })
-      .webkitRelativePath;
+    const webkitPath = (firstFile as File & { webkitRelativePath?: string }).webkitRelativePath;
     if (webkitPath) {
       const folderPath = webkitPath.split('/')[0];
       setNewFolderPath(folderPath);
@@ -167,19 +151,10 @@ export function FileManager() {
 
   return (
     <Box>
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={3}
-      >
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">File Manager</Typography>
         <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            startIcon={<FolderOpenIcon />}
-            onClick={handleBrowseFolder}
-          >
+          <Button variant="outlined" startIcon={<FolderOpenIcon />} onClick={handleBrowseFolder}>
             Browse for Folder
           </Button>
           <Button
@@ -235,10 +210,7 @@ export function FileManager() {
                 Directory Browser
               </Typography>
 
-              <Breadcrumbs
-                separator={<NavigateNextIcon fontSize="small" />}
-                sx={{ mb: 2 }}
-              >
+              <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 2 }}>
                 <Link
                   underline="hover"
                   color="inherit"
@@ -276,12 +248,7 @@ export function FileManager() {
         )}
       </Grid>
 
-      <Dialog
-        open={addFolderOpen}
-        onClose={() => setAddFolderOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={addFolderOpen} onClose={() => setAddFolderOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Import Path</DialogTitle>
         <DialogContent>
           <TextField
@@ -298,11 +265,7 @@ export function FileManager() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddFolderOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleAddFolder}
-            variant="contained"
-            disabled={!newFolderPath.trim()}
-          >
+          <Button onClick={handleAddFolder} variant="contained" disabled={!newFolderPath.trim()}>
             Add Folder
           </Button>
         </DialogActions>

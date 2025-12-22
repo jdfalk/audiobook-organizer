@@ -1,4 +1,5 @@
 # Audiobook Organizer - Current Status & Handoff Document
+
 **Generated**: December 22, 2025 15:53 UTC  
 **For**: Next development session
 
@@ -16,22 +17,26 @@
 ## 📋 Active Pull Requests (Ready for Review)
 
 ### PR #69: Blocked Hashes Management UI
+
 **Status**: ✅ Ready to merge  
 **Branch**: `feature/blocked-hashes-ui`  
-**URL**: https://github.com/jdfalk/audiobook-organizer/pull/69  
+**URL**: https://github.com/jdfalk/audiobook-organizer/pull/69
 
 **What it does:**
+
 - Complete Settings tab for managing blocked file hashes
 - Users can view, add, and remove blocked hashes
 - SHA256 validation (64 hex characters)
 - Prevents reimporting deleted files
 
 **Files changed:**
+
 - `web/src/components/settings/BlockedHashesTab.tsx` (new, 283 lines)
 - `web/src/pages/Settings.tsx` (tab integration)
 - `web/src/services/api.ts` (3 new API functions)
 
 **Testing needed:**
+
 - [ ] Open Settings → Blocked Hashes tab
 - [ ] Add a test hash
 - [ ] Delete a hash
@@ -40,27 +45,32 @@
 ---
 
 ### PR #70: State Machine Transitions & Enhanced Delete
+
 **Status**: ✅ Ready to merge  
 **Branch**: `feature/state-transitions`  
-**URL**: https://github.com/jdfalk/audiobook-organizer/pull/70  
+**URL**: https://github.com/jdfalk/audiobook-organizer/pull/70
 
 **What it does:**
+
 - Implements book lifecycle state machine
 - Scanner sets state='imported' for new books
 - Organizer sets state='organized' after organizing
 - Enhanced delete with soft delete and hash blocking
 
 **Files changed:**
+
 - `internal/scanner/scanner.go` (state initialization)
 - `internal/server/server.go` (delete enhancement, organize state update)
 
 **API changes:**
+
 ```bash
 # New delete options
 DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ```
 
 **Testing needed:**
+
 - [ ] Scan books → verify state='imported'
 - [ ] Organize books → verify state='organized'
 - [ ] Soft delete → verify state='deleted'
@@ -71,6 +81,7 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ## 🏗️ What Was Built This Session
 
 ### Session 1 (PR #68 - Merged)
+
 1. **Fixed All Tests** - 100% passing across 19 packages
 2. **Dashboard API** - `/api/v1/dashboard` with size/format distributions
 3. **Metadata API** - `/api/v1/metadata/fields` with validation rules
@@ -79,11 +90,13 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 6. **State Machine Schema** - Migration 9 with lifecycle fields
 
 ### Session 2 (PR #69 - Pending)
+
 1. **Settings Tab UI** - Complete blocked hashes management interface
 2. **Hash Validation** - Client-side SHA256 format checking
 3. **Empty State** - Helpful onboarding for first-time users
 
 ### Session 3 (PR #70 - Pending)
+
 1. **State Transitions** - Import → Organize → Delete lifecycle
 2. **Soft Delete** - Mark books for deletion without removing files
 3. **Enhanced Delete** - Optional hash blocking on delete
@@ -93,38 +106,45 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ## 📊 MVP Task Status (7 Tasks)
 
 ### ✅ Task 1: Scan Progress Reporting - COMPLETE
+
 - Backend: All endpoints working
 - Frontend: Progress display functional
 - **Status**: Needs manual end-to-end testing only
 
 ### ✅ Task 2: Separate Dashboard Counts - COMPLETE
+
 - Backend: Returns library_book_count, import_book_count, total_book_count
 - Frontend: Dashboard displays correct counts
 - **Status**: Needs manual verification with test data
 
 ### ✅ Task 3: Import Size Reporting - COMPLETE
+
 - Backend: Dashboard endpoint with size/format distributions
 - Frontend: Size statistics displayed
 - **Status**: Needs testing with real audiobook files
 
 ### ✅ Task 4: Duplicate Detection - COMPLETE
+
 - Backend: SHA256 hashing and hash blocking
 - Scanner: Skips blocked hashes
 - **Status**: Needs end-to-end duplicate testing
 
 ### ✅ Task 5: Hash Tracking & State Lifecycle - 95% COMPLETE
+
 - Backend: ✅ Complete (PR #68, #70)
 - Frontend: ✅ Complete (PR #69)
 - **Status**: Only manual testing remains
 - **Blockers**: None - just merge PRs #69 and #70
 
 ### ⚠️ Task 6: Book Detail Page & Delete Flow - 50% COMPLETE
+
 - Backend: ✅ Complete (enhanced delete in PR #70)
 - Frontend: ❌ Missing (BookDetail.tsx component)
 - **Status**: Needs 4-6 hours of frontend work
 - **Blockers**: None - can start after merging PRs
 
 ### ⚠️ Task 7: E2E Test Suite - 30% COMPLETE
+
 - Framework: ✅ Exists (Selenium + pytest)
 - Tests: ⚠️ Basic only
 - **Status**: Needs 6-8 hours to expand coverage
@@ -135,6 +155,7 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ## 🎯 What to Do Next (Priority Order)
 
 ### Immediate (Your Action Required)
+
 1. **Review PR #69** - Blocked Hashes UI
 2. **Review PR #70** - State Transitions
 3. **Merge both PRs** if approved
@@ -144,17 +165,18 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
    - Test soft delete
 
 ### Short Term (4-6 hours)
+
 1. **Create BookDetail.tsx** (Task 6)
    - Component with Info/Files/Versions tabs
    - Navigation from Library list
    - Display all book metadata
-   
 2. **Enhanced Delete Dialog** (Task 6)
    - Update AudiobookCard.tsx delete confirmation
    - Add "Prevent Reimport" checkbox
    - Wire up `?block_hash=true` parameter
 
 ### Medium Term (6-8 hours)
+
 1. **Expand E2E Tests** (Task 7)
    - Test each MVP task systematically
    - Add screenshot capture
@@ -170,6 +192,7 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ## 🗄️ Database Schema (Current State)
 
 ### Migration 9 (Applied in PR #68)
+
 ```sql
 -- State machine fields
 ALTER TABLE books ADD COLUMN library_state TEXT DEFAULT 'imported';
@@ -183,6 +206,7 @@ CREATE INDEX idx_books_marked_for_deletion ON books(marked_for_deletion);
 ```
 
 ### do_not_import table (Migration 8)
+
 ```sql
 CREATE TABLE do_not_import (
     hash TEXT PRIMARY KEY NOT NULL,
@@ -196,6 +220,7 @@ CREATE TABLE do_not_import (
 ## 🔌 API Endpoints (Complete List)
 
 ### New in This Sprint
+
 ```
 GET    /api/v1/dashboard               # Size/format analytics
 GET    /api/v1/metadata/fields         # Metadata schema
@@ -210,6 +235,7 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 ```
 
 ### Existing (Working)
+
 ```
 GET    /api/v1/system/status          # System info + counts
 GET    /api/v1/audiobooks             # List books
@@ -229,6 +255,7 @@ GET    /api/v1/operations/:id/logs    # Operation logs
 ## 📁 Code Organization
 
 ### Backend (Go)
+
 ```
 internal/
 ├── server/server.go          # API endpoints + routing
@@ -244,6 +271,7 @@ internal/
 ```
 
 ### Frontend (React + TypeScript)
+
 ```
 web/src/
 ├── pages/
@@ -265,21 +293,25 @@ web/src/
 ## 🧪 Testing Status
 
 ### Unit Tests
+
 - ✅ All 19 Go packages passing
 - ✅ Scanner tests passing
 - ✅ Server tests passing
 - ✅ Database tests passing
 
 ### Integration Tests
+
 - ✅ Scanner integration tests passing
 - ✅ Organize workflow tests passing
 
 ### E2E Tests
+
 - ⚠️ Basic framework exists
 - ❌ MVP-specific tests missing
 - ❌ CI integration pending
 
 ### Manual Testing
+
 - ⚠️ Needs systematic testing of new features
 - ❌ Test scenarios not documented
 
@@ -288,13 +320,16 @@ web/src/
 ## 🐛 Known Issues
 
 ### Critical
+
 - None currently
 
 ### Minor
+
 - Frontend has pre-existing TypeScript errors in Settings.tsx (unrelated to PRs)
 - Binary file size >50MB (GitHub warns, but not blocking)
 
 ### Tech Debt
+
 - No state transition validation (e.g., can't go from deleted back to imported)
 - Soft deleted books not filtered from main list yet
 - No purge endpoint for permanently removing soft-deleted books
@@ -304,17 +339,20 @@ web/src/
 ## 💡 Recommendations for Next Session
 
 ### If continuing with MVP:
+
 1. **Merge PRs #69 and #70 first** - Get them in main
 2. **Manual test everything** - Validate it all works
 3. **Build BookDetail.tsx** - Last major UI component
 4. **Write E2E tests** - Lock in the behavior
 
 ### If pivoting to other work:
+
 - PRs #69 and #70 can sit - they're complete and stable
 - All tests passing, no regressions
 - Can merge anytime without risk
 
 ### Quick Wins Available:
+
 1. Add purge endpoint for soft-deleted books (30 min)
 2. Filter soft-deleted books from Library view (30 min)
 3. Add state transition validation (1 hour)
@@ -325,6 +363,7 @@ web/src/
 ## 📖 Documentation Generated
 
 All in repository root:
+
 - `MVP_IMPLEMENTATION_STATUS.md` - Detailed task breakdown
 - `SESSION_SUMMARY.md` - Quick reference
 - `FINAL_REPORT.md` - Complete session analysis
@@ -337,12 +376,14 @@ All in repository root:
 ## 🚀 Quick Start Commands
 
 ### Run the server
+
 ```bash
 cd /path/to/audiobook-organizer
 ./audiobook-organizer serve --port 8888
 ```
 
 ### Run tests
+
 ```bash
 go test ./...                    # All tests
 go test ./internal/server -v    # Server tests only
@@ -350,6 +391,7 @@ go test ./internal/scanner -v   # Scanner tests only
 ```
 
 ### Test new features manually
+
 ```bash
 # Dashboard
 curl http://localhost:8888/api/v1/dashboard | jq '.'
@@ -367,6 +409,7 @@ curl -X DELETE "http://localhost:8888/api/v1/audiobooks/:id?soft_delete=true&blo
 ```
 
 ### Frontend development
+
 ```bash
 cd web
 npm install
@@ -387,6 +430,7 @@ npm run build  # Production build
 ## ✅ Success Criteria
 
 MVP is complete when:
+
 - [x] All Go tests pass
 - [x] Dashboard shows size/format distribution (API done, UI done)
 - [x] System status shows separate counts (done)
@@ -408,7 +452,9 @@ MVP is complete when:
 
 ## 🎉 Summary
 
-**Excellent progress!** The audiobook organizer is ~75% complete for MVP. Two PRs are ready to merge, all tests are passing, and the architecture is solid. The remaining work is primarily frontend UI (BookDetail page) and testing.
+**Excellent progress!** The audiobook organizer is ~75% complete for MVP. Two
+PRs are ready to merge, all tests are passing, and the architecture is solid.
+The remaining work is primarily frontend UI (BookDetail page) and testing.
 
 **No blockers.** Everything needed for completion is clear and achievable.
 
@@ -416,4 +462,4 @@ MVP is complete when:
 
 ---
 
-*End of Status Document*
+_End of Status Document_

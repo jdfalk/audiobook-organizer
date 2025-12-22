@@ -4,29 +4,36 @@
 
 # AGENTS.md
 
-> **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow instructions are in
-> the [.github/](.github/) directory.
+> **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow
+> instructions are in the [.github/](.github/) directory.
 
 ## 🚨 CRITICAL: Documentation Update Protocol
 
-This repository uses a direct-edit documentation workflow. The legacy doc-update scripts and
-workflows are retired.
+This repository uses a direct-edit documentation workflow. The legacy doc-update
+scripts and workflows are retired.
 
 - Edit documentation directly in the target files.
-- Always keep the required header (file path, version, guid) and bump the version on any change.
-- Do not use create-doc-update.sh, doc_update_manager.py, or .github/doc-updates/.
-- Prefer VS Code tasks for git operations (Git Add All, Git Commit, Git Push) when available.
-  - These tasks use the `copilot-agent-util` Rust utility for enhanced logging, error handling, and
-    safety.
-  - Download: <https://github.com/jdfalk/copilot-agent-util-rust/releases/latest>
+- Always keep the required header (file path, version, guid) and bump the
+  version on any change.
+- Do not use create-doc-update.sh, doc_update_manager.py, or
+  .github/doc-updates/.
+- Prefer VS Code tasks for git operations (Git Add All, Git Commit, Git Push)
+  when available.
+  - These tasks use the `copilot-agent-util` Rust utility for enhanced logging,
+    error handling, and safety.
+  - Download:
+    <https://github.com/jdfalk/copilot-agent-util-rust/releases/latest>
 
 ## ⚠️ CRITICAL: File Version Updates
 
-**When modifying any file with a version header, ALWAYS update the version number:**
+**When modifying any file with a version header, ALWAYS update the version
+number:**
 
 - **Patch version** (x.y.Z): Bug fixes, typos, minor formatting changes
-- **Minor version** (x.Y.z): New features, significant content additions, template changes
-- **Major version** (X.y.z): Breaking changes, structural overhauls, format changes
+- **Minor version** (x.Y.z): New features, significant content additions,
+  template changes
+- **Major version** (X.y.z): Breaking changes, structural overhauls, format
+  changes
 
 **Examples:**
 
@@ -34,8 +41,8 @@ workflows are retired.
 - Add new section: `1.2.3` → `1.3.0`
 - Change template structure: `1.2.3` → `2.0.0`
 
-**This applies to ALL files with version headers including documentation, templates, and
-configuration files.**
+**This applies to ALL files with version headers including documentation,
+templates, and configuration files.**
 
 ## Key Copilot/Agent Documents
 

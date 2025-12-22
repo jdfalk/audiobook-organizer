@@ -633,9 +633,7 @@ export async function addBlockedHash(
   return response.json();
 }
 
-export async function removeBlockedHash(
-  hash: string
-): Promise<{ message: string; hash: string }> {
+export async function removeBlockedHash(hash: string): Promise<{ message: string; hash: string }> {
   const response = await fetch(`${API_BASE}/blocked-hashes/${hash}`, {
     method: 'DELETE',
   });

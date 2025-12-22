@@ -26,7 +26,9 @@ infer: true
 
 ## 🚨 CRITICAL: NEVER USE HEREDOC
 
-**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`, `<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and banned from all operations.
+**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`,
+`<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and
+banned from all operations.
 
 **Instead, ALWAYS use**:
 
@@ -36,16 +38,19 @@ infer: true
 - Python scripts for complex file operations
 - Any other method that does NOT involve HEREDOC
 
-**If you find yourself about to use HEREDOC, STOP and use a different approach.**
+**If you find yourself about to use HEREDOC, STOP and use a different
+approach.**
 
-name: Security Scanner Coordinator
-argument-hint: 'Provide codebase, policies, baseline, and allowed tools.'
+name: Security Scanner Coordinator argument-hint: 'Provide codebase, policies,
+baseline, and allowed tools.'
 
 purpose:
 
 - Coordinate SAST (static) and DAST (dynamic) security testing tools.
-- Run language-specific security scanners (bandit, gosec, cargo-audit, npm audit).
-- Scan for hardcoded secrets using truffleHog, gitleaks, or GitHub secret scanning.
+- Run language-specific security scanners (bandit, gosec, cargo-audit, npm
+  audit).
+- Scan for hardcoded secrets using truffleHog, gitleaks, or GitHub secret
+  scanning.
 - Perform container image vulnerability scanning with Trivy or Grype.
 - Check security headers and HTTPS configuration for web applications.
 - Generate unified security reports aggregating findings from multiple tools.
@@ -55,7 +60,8 @@ purpose:
 typical-inputs:
 
 - scanPaths: directories or files to scan (., src/, specific files)
-- scanType: sast (static code analysis), dast (runtime testing), secrets, containers
+- scanType: sast (static code analysis), dast (runtime testing), secrets,
+  containers
 - severity: minimum severity to report (critical, high, medium, low)
 - containerImages: Docker images to scan for vulnerabilities
 - webEndpoints: URLs for DAST testing (<https://example.com/api>)
@@ -72,23 +78,30 @@ typical-outputs:
 
 limits:
 
-- Not for fixing vulnerabilities automatically (requires code changes and review).
-- Cannot test runtime behavior without deployed application (DAST requires live endpoints).
+- Not for fixing vulnerabilities automatically (requires code changes and
+  review).
+- Cannot test runtime behavior without deployed application (DAST requires live
+  endpoints).
 - Not for penetration testing or adversarial security assessments.
-- Avoid scanning production systems without proper authorization and coordination.
+- Avoid scanning production systems without proper authorization and
+  coordination.
 
 style-alignment:
 
-- Security Instructions: CVE prioritization, CVSS scoring, responsible disclosure.
-- SAST tools: bandit (Python), gosec (Go), cargo-audit (Rust), eslint-plugin-security (JS).
-- Secret scanning: truffleHog/gitleaks for git history, fail CI on secret detection.
-- Container scanning: Trivy or Grype with --severity HIGH, scan on build and schedule.
+- Security Instructions: CVE prioritization, CVSS scoring, responsible
+  disclosure.
+- SAST tools: bandit (Python), gosec (Go), cargo-audit (Rust),
+  eslint-plugin-security (JS).
+- Secret scanning: truffleHog/gitleaks for git history, fail CI on secret
+  detection.
+- Container scanning: Trivy or Grype with --severity HIGH, scan on build and
+  schedule.
 - DAST: OWASP ZAP or similar for web applications, test in staging environment.
-- Reporting: SARIF for GitHub integration, JSON for programmatic processing, HTML for stakeholders.
+- Reporting: SARIF for GitHub integration, JSON for programmatic processing,
+  HTML for stakeholders.
 - Remediation: Prioritize by CVSS score, availability of fix, and exposure risk.
 
 handoffs:
 
-- label: Apply Security Fixes
-  agent: agent
-  prompt: 'Apply remediation suggestions and re-scan.'
+- label: Apply Security Fixes agent: agent prompt: 'Apply remediation
+  suggestions and re-scan.'

@@ -70,8 +70,7 @@ export function ServerFileBrowser({
   const [items, setItems] = useState<api.FileSystemItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [diskInfo, setDiskInfo] =
-    useState<api.FilesystemBrowseResult['disk_info']>();
+  const [diskInfo, setDiskInfo] = useState<api.FilesystemBrowseResult['disk_info']>();
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
 
@@ -91,9 +90,7 @@ export function ServerFileBrowser({
         }
       } catch (err) {
         console.error('Failed to browse filesystem:', err);
-        setError(
-          err instanceof Error ? err.message : 'Failed to browse filesystem'
-        );
+        setError(err instanceof Error ? err.message : 'Failed to browse filesystem');
       } finally {
         setLoading(false);
       }
@@ -177,9 +174,7 @@ export function ServerFileBrowser({
   });
 
   // Filter items based on showFiles prop
-  const filteredItems = showFiles
-    ? sortedItems
-    : sortedItems.filter((item) => item.is_dir);
+  const filteredItems = showFiles ? sortedItems : sortedItems.filter((item) => item.is_dir);
 
   const pathParts = getPathParts(currentPath);
 
@@ -202,12 +197,8 @@ export function ServerFileBrowser({
           </Typography>
           {diskInfo && (
             <Stack direction="row" spacing={1}>
-              {diskInfo.readable && (
-                <Chip label="Readable" size="small" color="success" />
-              )}
-              {diskInfo.writable && (
-                <Chip label="Writable" size="small" color="success" />
-              )}
+              {diskInfo.readable && <Chip label="Readable" size="small" color="success" />}
+              {diskInfo.writable && <Chip label="Writable" size="small" color="success" />}
             </Stack>
           )}
         </Stack>
@@ -235,10 +226,7 @@ export function ServerFileBrowser({
           </Stack>
         ) : (
           <Stack direction="row" spacing={1} alignItems="center">
-            <Breadcrumbs
-              separator={<NavigateNextIcon fontSize="small" />}
-              sx={{ flex: 1 }}
-            >
+            <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ flex: 1 }}>
               {pathParts.map((part, index) => (
                 <Link
                   key={index}
@@ -280,11 +268,7 @@ export function ServerFileBrowser({
               <ListItem>
                 <ListItemText
                   primary="No items found"
-                  secondary={
-                    showFiles
-                      ? 'This directory is empty'
-                      : 'No subdirectories found'
-                  }
+                  secondary={showFiles ? 'This directory is empty' : 'No subdirectories found'}
                 />
               </ListItem>
             )}
@@ -294,12 +278,7 @@ export function ServerFileBrowser({
                 disablePadding
                 secondaryAction={
                   item.is_dir && item.excluded ? (
-                    <Chip
-                      icon={<BlockIcon />}
-                      label="Excluded"
-                      size="small"
-                      color="warning"
-                    />
+                    <Chip icon={<BlockIcon />} label="Excluded" size="small" color="warning" />
                   ) : null
                 }
               >
@@ -310,9 +289,7 @@ export function ServerFileBrowser({
                 >
                   <ListItemIcon>
                     {item.is_dir ? (
-                      <FolderIcon
-                        color={item.excluded ? 'disabled' : 'primary'}
-                      />
+                      <FolderIcon color={item.excluded ? 'disabled' : 'primary'} />
                     ) : (
                       <FileIcon color="action" />
                     )}
@@ -322,9 +299,7 @@ export function ServerFileBrowser({
                     secondary={
                       !item.is_dir && item.size !== undefined
                         ? `${formatBytes(item.size)}${
-                            item.mod_time
-                              ? ` • ${formatDate(item.mod_time)}`
-                              : ''
+                            item.mod_time ? ` • ${formatDate(item.mod_time)}` : ''
                           }`
                         : null
                     }

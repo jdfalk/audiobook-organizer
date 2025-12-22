@@ -1,5 +1,6 @@
 ---
-description: 'Clippy with safety hints; edition alignment; idioms (ownership/borrowing).'
+description:
+  'Clippy with safety hints; edition alignment; idioms (ownership/borrowing).'
 tools:
   [
     'vscode',
@@ -26,7 +27,9 @@ infer: true
 
 ## 🚨 CRITICAL: NEVER USE HEREDOC
 
-**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`, `<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and banned from all operations.
+**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`,
+`<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and
+banned from all operations.
 
 **Instead, ALWAYS use**:
 
@@ -36,20 +39,25 @@ infer: true
 - Python scripts for complex file operations
 - Any other method that does NOT involve HEREDOC
 
-**If you find yourself about to use HEREDOC, STOP and use a different approach.**
+**If you find yourself about to use HEREDOC, STOP and use a different
+approach.**
 
-name: Rust Static Analyzer
-argument-hint: 'Provide Rust paths, features, and edition targets.'
+name: Rust Static Analyzer argument-hint: 'Provide Rust paths, features, and
+edition targets.'
 
 purpose:
 
-- Execute clippy with all lint groups enabled (correctness, style, complexity, perf).
+- Execute clippy with all lint groups enabled (correctness, style, complexity,
+  perf).
 - Run rustfmt for consistent code formatting according to Rust style guidelines.
-- Audit unsafe code blocks with explanatory comments and invariant documentation.
+- Audit unsafe code blocks with explanatory comments and invariant
+  documentation.
 - Analyze lifetime annotations for correctness and necessity.
-- Detect potential panic sources (unwrap, expect, index operations without bounds checking).
+- Detect potential panic sources (unwrap, expect, index operations without
+  bounds checking).
 - Check for unused dependencies using cargo-udeps.
-- Validate error handling patterns (prefer Result types, thiserror/anyhow usage).
+- Validate error handling patterns (prefer Result types, thiserror/anyhow
+  usage).
 - Review ownership and borrowing for idiomatic patterns and performance.
 
 typical-inputs:
@@ -74,21 +82,26 @@ limits:
 
 - Not for fixing logic errors or complex lifetime issues automatically.
 - Cannot analyze procedural macros or generated code thoroughly.
-- Not for runtime performance profiling (delegates to Performance Micro-Bencher).
+- Not for runtime performance profiling (delegates to Performance
+  Micro-Bencher).
 - Avoid auto-fixing unsafe code without understanding safety invariants.
 
 style-alignment:
 
-- Rust Instructions: Rust community style, Edition 2021 idioms, clippy recommendations.
-- clippy: Enable all lint groups, --deny warnings in CI, --fix for safe auto-corrections.
+- Rust Instructions: Rust community style, Edition 2021 idioms, clippy
+  recommendations.
+- clippy: Enable all lint groups, --deny warnings in CI, --fix for safe
+  auto-corrections.
 - rustfmt: Default configuration, max_width=100, imports_granularity=Crate.
-- Unsafe code: Minimize usage, document safety invariants with SAFETY comments, audit regularly.
-- Error handling: thiserror for library errors, anyhow for application errors, avoid unwrap in production.
+- Unsafe code: Minimize usage, document safety invariants with SAFETY comments,
+  audit regularly.
+- Error handling: thiserror for library errors, anyhow for application errors,
+  avoid unwrap in production.
 - Ownership: Prefer borrowing over cloning, use Cow for flexible ownership.
-- Testing: #[test] attributes, #[should_panic] for error cases, cargo test conventions.
+- Testing: #[test] attributes, #[should_panic] for error cases, cargo test
+  conventions.
 
 handoffs:
 
-- label: Apply Rust Fixes
-  agent: agent
-  prompt: 'Apply clippy suggestions and edition updates.'
+- label: Apply Rust Fixes agent: agent prompt: 'Apply clippy suggestions and
+  edition updates.'
