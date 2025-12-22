@@ -462,4 +462,20 @@ The remaining work is primarily frontend UI (BookDetail page) and testing.
 
 ---
 
+## 🚧 Latest Updates (This Session)
+
+- Added Book Detail page with soft delete / restore / purge controls and wired Library navigation.
+- Exposed retention settings (auto-purge days, delete-files flag) in Settings.
+- Added Selenium E2E coverage for retention controls, soft-deleted review section, and book-detail navigation (tests added but not yet executed).
+- Backend already has auto-purge job and restore endpoint; soft-deleted list supports per-item purge/restore in UI.
+- Go tests: ✅ `go test ./...`; UI/E2E: not run (new tests only).
+
+## 🧭 Next Steps
+
+1. Add navigation entry or breadcrumbs to reach Book Detail more easily.
+2. Run/extend smoke tests for the restore/purge flow (new Selenium tests).
+3. (Optional) Make Book Detail richer (metadata tabs, versions/files) and add per-book restore/purge events to activity log.
+
+---
+
 _End of Status Document_
