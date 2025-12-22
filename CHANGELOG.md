@@ -23,6 +23,8 @@
   - Library view hides soft-deleted records by default and surfaces a purge
     button with count
   - Added soft-deleted review list with per-item purge and restore actions
+  - New Book Detail page with soft-delete/restore/purge controls per book
+  - Settings page now exposes retention controls for auto-purge cadence and file deletion
   - Added purge dialog to permanently remove soft-deleted books (optional file
     deletion)
 - **Testing**
