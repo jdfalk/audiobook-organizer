@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.13.7 -->
+<!-- version: 1.14.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -44,7 +44,8 @@
 - [ ] Review and merge PR #69 (Blocked Hashes UI)
 - [ ] Review and merge PR #70 (State Transitions)
 - [ ] Manual testing of new features
-- [ ] Build BookDetail.tsx component (Task 6)
+- [x] Build BookDetail.tsx component (Task 6) — detail view now includes info/files/versions tabs,
+      soft-delete/restore/purge controls, and version management entry
 - [ ] Expand E2E test coverage (Task 7)
 
 ---
@@ -964,6 +965,10 @@
 - [ ] Fuzz tests for filename parser / AI parse fallback
 - [ ] Frontend component snapshot tests
 - [ ] End-to-end test harness (Playwright or Cypress) for critical flows
+- [ ] Playwright UI coverage (current: minimal smoke + import-path mock)
+  - Current specs: `web/tests/e2e/app.spec.ts` (smoke nav with mocked API/SSE), `web/tests/e2e/import-paths.spec.ts` (Settings add/remove import path via route mocks). Config: `web/tests/e2e/playwright.config.ts`, run with `cd web && npm run test:e2e`.
+  - Needed coverage: Library list interactions (search/sort/view toggle, pagination), navigation into Book Detail, Book Detail tabs/actions (soft delete/block, restore, purge, metadata fetch, AI parse, version manager button, hash copy toast), soft-deleted list restore/purge, version linking dialog happy-path, Settings retention toggles (purge settings), dashboard tiles render, import paths end-to-end (add/remove/update via UI, not just mocked route), file manager browse dialogs, operation status banners.
+  - Add stable API fixtures or route mocks per page; ensure wizard is bypassed, SSE mocked; use headless dev server via existing Playwright config; keep tests idempotent and non-networked.
 - [ ] Chaos test for operation cancellation mid-scan
 
 ### DevOps / CI/CD

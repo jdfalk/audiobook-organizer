@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.20.0
+// version: 1.21.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect } from 'react';
@@ -89,7 +89,45 @@ export function Settings() {
   const [newFolderPath, setNewFolderPath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
 
-  const [settings, setSettings] = useState({
+  interface UiMetadataSource {
+    id: string;
+    name: string;
+    enabled: boolean;
+    priority: number;
+    requiresAuth: boolean;
+    credentials: { [key: string]: string };
+  }
+
+  interface SettingsState {
+    libraryPath: string;
+    organizationStrategy: string;
+    scanOnStartup: boolean;
+    autoOrganize: boolean;
+    folderNamingPattern: string;
+    fileNamingPattern: string;
+    createBackups: boolean;
+    enableDiskQuota: boolean;
+    diskQuotaPercent: number;
+    enableUserQuotas: boolean;
+    defaultUserQuotaGB: number;
+    autoFetchMetadata: boolean;
+    enableAIParsing: boolean;
+    openaiApiKey: string;
+    metadataSources: UiMetadataSource[];
+    language: string;
+    concurrentScans: number;
+    memoryLimitType: string;
+    cacheSize: number;
+    memoryLimitPercent: number;
+    memoryLimitMB: number;
+    logLevel: string;
+    logFormat: string;
+    enableJsonLogging: boolean;
+    purgeSoftDeletedAfterDays: number;
+    purgeSoftDeletedDeleteFiles: boolean;
+  }
+
+  const initialSettings: SettingsState = {
     // Library settings
     libraryPath: '/path/to/audiobooks/library',
     organizationStrategy: 'auto', // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
@@ -162,7 +200,9 @@ export function Settings() {
     logLevel: 'info',
     logFormat: 'text', // 'text' or 'json'
     enableJsonLogging: false,
-  });
+  };
+
+  const [settings, setSettings] = useState<SettingsState>(initialSettings);
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
   const [savedApiKeyMask, setSavedApiKeyMask] = useState<string>(''); // Track if we have a saved key
@@ -560,65 +600,7 @@ export function Settings() {
   const handleReset = () => {
     if (!confirm('Reset all settings to defaults?')) return;
 
-    setSettings({
-      libraryPath: '/path/to/audiobooks/library',
-      organizationStrategy: 'auto',
-      scanOnStartup: false,
-      autoOrganize: true,
-      folderNamingPattern: '{author}/{series}/{title} ({print_year})',
-      fileNamingPattern: '{title} - {author} - read by {narrator}',
-      createBackups: true,
-      enableDiskQuota: false,
-      diskQuotaPercent: 80,
-      enableUserQuotas: false,
-      defaultUserQuotaGB: 100,
-      autoFetchMetadata: true,
-      enableAIParsing: false,
-      openaiApiKey: '',
-      metadataSources: [
-        {
-          id: 'audible',
-          name: 'Audible',
-          enabled: true,
-          priority: 1,
-          requiresAuth: false,
-          credentials: {},
-        },
-        {
-          id: 'goodreads',
-          name: 'Goodreads',
-          enabled: true,
-          priority: 2,
-          requiresAuth: true,
-          credentials: { apiKey: '', apiSecret: '' },
-        },
-        {
-          id: 'openlibrary',
-          name: 'Open Library',
-          enabled: false,
-          priority: 3,
-          requiresAuth: true,
-          credentials: { apiKey: '' },
-        },
-        {
-          id: 'google-books',
-          name: 'Google Books',
-          enabled: false,
-          priority: 4,
-          requiresAuth: true,
-          credentials: { apiKey: '' },
-        },
-      ],
-      language: 'en',
-      concurrentScans: 4,
-      memoryLimitType: 'items',
-      cacheSize: 1000,
-      memoryLimitPercent: 25,
-      memoryLimitMB: 512,
-      logLevel: 'info',
-      logFormat: 'text',
-      enableJsonLogging: false,
-    });
+    setSettings(initialSettings);
   };
 
   return (
