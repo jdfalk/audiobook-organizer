@@ -77,16 +77,17 @@
 - 🔲 **TODO**: Verify hash blocking works
 
 #### Task 5: Hash Tracking & State Lifecycle
-**Status**: ✅ IMPLEMENTED (needs testing)
+**Status**: ✅ IMPLEMENTED (needs UI + testing)
 - ✅ Dual hash tracking (`original_file_hash`, `organized_file_hash`)
 - ✅ `do_not_import` table exists
 - ✅ Hash blocking check in scanner
-- ❌ **Missing**: State machine (wanted/imported/organized/soft_deleted)
-- ❌ **Missing**: Settings UI for viewing blocked hashes
-- 🔲 **TODO**: Add state field to books table
-- 🔲 **TODO**: Implement state transitions
-- 🔲 **TODO**: Add blocked hashes API endpoint
+- ✅ **DONE**: State machine fields added (library_state, quantity, marked_for_deletion)
+- ✅ **DONE**: Migration 9 for state fields with indices
+- ✅ **DONE**: Blocked hashes API endpoints (GET/POST/DELETE /api/v1/blocked-hashes)
+- ❌ **Missing**: Settings UI tab for viewing blocked hashes
 - 🔲 **TODO**: Create Settings tab for blocked hashes
+- 🔲 **TODO**: Implement state transition logic
+- 🔲 **TODO**: Manual testing
 
 #### Task 6: Book Detail Page & Delete Flow
 **Status**: ❌ NOT IMPLEMENTED
