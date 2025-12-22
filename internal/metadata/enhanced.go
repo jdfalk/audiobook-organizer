@@ -80,6 +80,22 @@ func DefaultValidationRules() map[string]ValidationRule {
 			Required:      false,
 			AllowedValues: []string{"m4b", "mp3", "m4a", "aac", "ogg", "flac", "wma"},
 		},
+		"publishDate": {
+			Field:    "publishDate",
+			Required: false,
+			CustomValidator: func(v interface{}) error {
+				str, ok := v.(string)
+				if !ok {
+					return fmt.Errorf("publishDate must be a string")
+				}
+				// Try parsing as date (YYYY-MM-DD format)
+				_, err := time.Parse("2006-01-02", str)
+				if err != nil {
+					return fmt.Errorf("publishDate must be in YYYY-MM-DD format")
+				}
+				return nil
+			},
+		},
 	}
 }
 
