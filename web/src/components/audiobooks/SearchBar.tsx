@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React from 'react';
@@ -21,17 +21,17 @@ import {
   GridView as GridViewIcon,
   ViewList as ViewListIcon,
 } from '@mui/icons-material';
+import { SortField } from '../../types';
 
 export type ViewMode = 'grid' | 'list';
-export type SortOption = 'title' | 'author' | 'date_added' | 'date_modified';
 
 interface SearchBarProps {
   value: string;
   onChange: (value: string) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  sortBy?: SortOption;
-  onSortChange?: (sort: SortOption) => void;
+  sortBy?: SortField;
+  onSortChange?: (sort: SortField) => void;
   placeholder?: string;
 }
 
@@ -40,7 +40,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onChange,
   viewMode,
   onViewModeChange,
-  sortBy = 'title',
+  sortBy = SortField.Title,
   onSortChange,
   placeholder = 'Search audiobooks...',
 }) => {
@@ -91,12 +91,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             labelId="sort-select-label"
             value={sortBy}
             label="Sort by"
-            onChange={(e) => onSortChange(e.target.value as SortOption)}
+            onChange={(e) => onSortChange(e.target.value as SortField)}
           >
-            <MenuItem value="title">Title</MenuItem>
-            <MenuItem value="author">Author</MenuItem>
-            <MenuItem value="date_added">Date Added</MenuItem>
-            <MenuItem value="date_modified">Date Modified</MenuItem>
+            <MenuItem value={SortField.Title}>Title</MenuItem>
+            <MenuItem value={SortField.Author}>Author</MenuItem>
+            <MenuItem value={SortField.Year}>Year</MenuItem>
+            <MenuItem value={SortField.CreatedAt}>Date Added</MenuItem>
           </Select>
         </FormControl>
       )}
