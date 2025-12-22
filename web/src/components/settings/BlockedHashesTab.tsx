@@ -39,7 +39,11 @@ export default function BlockedHashesTab() {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [newHash, setNewHash] = useState('');
   const [newReason, setNewReason] = useState('');
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({
     open: false,
     message: '',
     severity: 'success',
@@ -70,7 +74,11 @@ export default function BlockedHashesTab() {
 
     // Validate hash format (64 character hex for SHA256)
     if (!/^[a-fA-F0-9]{64}$/.test(newHash)) {
-      setSnackbar({ open: true, message: 'Hash must be 64 hexadecimal characters (SHA256)', severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: 'Hash must be 64 hexadecimal characters (SHA256)',
+        severity: 'error',
+      });
       return;
     }
 
@@ -130,14 +138,11 @@ export default function BlockedHashesTab() {
             Blocked File Hashes
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Files with these hashes will be skipped during import to prevent reimporting deleted or unwanted audiobooks.
+            Files with these hashes will be skipped during import to prevent reimporting deleted or
+            unwanted audiobooks.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setAddDialogOpen(true)}
-        >
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
           Block Hash
         </Button>
       </Box>
@@ -157,13 +162,10 @@ export default function BlockedHashesTab() {
             No Blocked Hashes
           </Typography>
           <Typography variant="body2" color="text.secondary" paragraph>
-            When you delete an audiobook and choose to prevent reimporting, its file hash will appear here.
+            When you delete an audiobook and choose to prevent reimporting, its file hash will
+            appear here.
           </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => setAddDialogOpen(true)}
-          >
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
             Add Blocked Hash
           </Button>
         </Paper>
@@ -210,8 +212,8 @@ export default function BlockedHashesTab() {
         <DialogTitle>Block File Hash</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" paragraph>
-            Enter the SHA256 hash of a file you want to prevent from being imported. This is typically used for files
-            you've deleted and don't want to reimport.
+            Enter the SHA256 hash of a file you want to prevent from being imported. This is
+            typically used for files you've deleted and don't want to reimport.
           </Typography>
           <TextField
             label="File Hash (SHA256)"
@@ -252,10 +254,15 @@ export default function BlockedHashesTab() {
         <DialogTitle>Unblock Hash?</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to unblock this hash? Files with this hash will be able to be imported again.
+            Are you sure you want to unblock this hash? Files with this hash will be able to be
+            imported again.
           </Typography>
           {selectedHash && (
-            <Typography variant="body2" fontFamily="monospace" sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+            <Typography
+              variant="body2"
+              fontFamily="monospace"
+              sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}
+            >
               {selectedHash}
             </Typography>
           )}
@@ -274,7 +281,10 @@ export default function BlockedHashesTab() {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>
