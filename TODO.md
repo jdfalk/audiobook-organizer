@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.13.6 -->
+<!-- version: 1.13.7 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -31,6 +31,11 @@
    - Soft-deleted review list added to Library page with per-item purge
    - Background purge job with configurable retention and optional file deletion
    - Restore action available from soft-deleted list to un-delete items
+
+## 🎯 Next Session Starting Points
+
+- Add navigation entry/breadcrumbs to reach Book Detail page easily from anywhere.
+- Run Selenium smoke covering restore/purge flow (new tests in `tests/e2e/test_soft_delete_and_retention.py`).
 
 **Status**: See CHANGELOG.md for latest status and progress
 
