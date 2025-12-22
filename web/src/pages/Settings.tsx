@@ -35,6 +35,7 @@ import {
 } from '@mui/material';
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
+import BlockedHashesTab from '../components/settings/BlockedHashesTab';
 import {
   Save as SaveIcon,
   RestartAlt as RestartAltIcon,
@@ -675,6 +676,7 @@ export function Settings() {
             <Tab label="Library" />
             <Tab label="Metadata" />
             <Tab label="Performance" />
+            <Tab label="Blocked Hashes" />
           </Tabs>
         </Box>
 
@@ -1666,6 +1668,10 @@ export function Settings() {
               </Typography>
             </Grid>
           </Grid>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          <BlockedHashesTab />
         </TabPanel>
 
         <Box
