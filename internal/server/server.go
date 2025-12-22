@@ -634,7 +634,7 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		book.MarkedForDeletion = boolPtr(true)
 		book.MarkedForDeletionAt = &now
 		book.LibraryState = stringPtr("deleted")
-		
+
 		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -2857,10 +2857,10 @@ func (s *Server) getDashboard(c *gin.Context) {
 
 	// Calculate size distribution
 	sizeDistribution := map[string]int{
-		"0-100MB":    0,
-		"100-500MB":  0,
-		"500MB-1GB":  0,
-		"1GB+":       0,
+		"0-100MB":   0,
+		"100-500MB": 0,
+		"500MB-1GB": 0,
+		"1GB+":      0,
 	}
 
 	// Calculate format distribution and total size

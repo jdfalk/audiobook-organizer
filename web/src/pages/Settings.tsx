@@ -35,7 +35,6 @@ import {
 } from '@mui/material';
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
-import BlockedHashesTab from '../components/settings/BlockedHashesTab';
 import {
   Save as SaveIcon,
   RestartAlt as RestartAltIcon,
@@ -173,10 +172,7 @@ export function Settings() {
   const loadConfig = async () => {
     try {
       const config = await api.getConfig();
-      console.log(
-        '[Settings] Loaded config, OpenAI key:',
-        config.openai_api_key
-      );
+      console.log('[Settings] Loaded config, OpenAI key:', config.openai_api_key);
       // Store masked key if present
       if (config.openai_api_key && config.openai_api_key.includes('***')) {
         setSavedApiKeyMask(config.openai_api_key);
@@ -189,11 +185,8 @@ export function Settings() {
         scanOnStartup: config.scan_on_startup ?? false,
         autoOrganize: config.auto_organize ?? true,
         folderNamingPattern:
-          config.folder_naming_pattern ||
-          '{author}/{series}/{title} ({print_year})',
-        fileNamingPattern:
-          config.file_naming_pattern ||
-          '{title} - {author} - read by {narrator}',
+          config.folder_naming_pattern || '{author}/{series}/{title} ({print_year})',
+        fileNamingPattern: config.file_naming_pattern || '{title} - {author} - read by {narrator}',
         createBackups: config.create_backups ?? true,
 
         // Storage quotas
@@ -214,8 +207,7 @@ export function Settings() {
                 enabled: source.enabled,
                 priority: source.priority,
                 requiresAuth: source.requires_auth,
-                credentials:
-                  source.credentials || ({} as { [key: string]: string }),
+                credentials: source.credentials || ({} as { [key: string]: string }),
               }))
             : [
                 {
@@ -344,10 +336,7 @@ export function Settings() {
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
-      result = result.replace(
-        new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'),
-        value
-      );
+      result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
     });
 
     // Clean up paths: remove empty segments (e.g., when series is empty)
@@ -436,37 +425,24 @@ export function Settings() {
     setSettings((prev) => ({
       ...prev,
       metadataSources: prev.metadataSources.map((source) =>
-        source.id === sourceId
-          ? { ...source, enabled: !source.enabled }
-          : source
+        source.id === sourceId ? { ...source, enabled: !source.enabled } : source
       ),
     }));
     setSaved(false);
   };
 
-  const handleCredentialChange = (
-    sourceId: string,
-    field: string,
-    value: string
-  ) => {
-    setSettings((prev) => {
-      const updatedSources = prev.metadataSources.map((source) => {
-        if (source.id !== sourceId) return source;
-
-        return {
-          ...source,
-          credentials: {
-            ...source.credentials,
-            [field]: value
-          },
-        } as typeof source;
-      });
-
-      return {
-        ...prev,
-        metadataSources: updatedSources,
-      };
-    });
+  const handleCredentialChange = (sourceId: string, field: string, value: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      metadataSources: prev.metadataSources.map((source) =>
+        source.id === sourceId
+          ? {
+              ...source,
+              credentials: { ...source.credentials, [field]: value },
+            }
+          : source
+      ),
+    }));
     setSaved(false);
   };
 
@@ -521,9 +497,7 @@ export function Settings() {
         auto_fetch_metadata: settings.autoFetchMetadata,
         enable_ai_parsing: settings.enableAIParsing,
         // Only include API key if user entered a new one
-        ...(settings.openaiApiKey
-          ? { openai_api_key: settings.openaiApiKey }
-          : {}),
+        ...(settings.openaiApiKey ? { openai_api_key: settings.openaiApiKey } : {}),
         metadata_sources: settings.metadataSources.map((source) => ({
           id: source.id,
           name: source.name,
@@ -551,9 +525,7 @@ export function Settings() {
 
       console.log(
         'Saving config with OpenAI key:',
-        settings.openaiApiKey
-          ? `***${settings.openaiApiKey.slice(-4)}`
-          : '(empty)'
+        settings.openaiApiKey ? `***${settings.openaiApiKey.slice(-4)}` : '(empty)'
       );
       console.log('Full updates object:', updates);
       const response = await api.updateConfig(updates);
@@ -676,7 +648,6 @@ export function Settings() {
             <Tab label="Library" />
             <Tab label="Metadata" />
             <Tab label="Performance" />
-            <Tab label="Blocked Hashes" />
           </Tabs>
         </Box>
 
@@ -713,10 +684,9 @@ export function Settings() {
               />
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="caption">
-                  <strong>Library vs Import Paths:</strong> The library path is
-                  where organized audiobooks live. Import paths (configured in
-                  File Manager) are watched for new files to import into the
-                  library.
+                  <strong>Library vs Import Paths:</strong> The library path is where organized
+                  audiobooks live. Import paths (configured in File Manager) are watched for new
+                  files to import into the library.
                 </Typography>
               </Alert>
             </Grid>
@@ -727,34 +697,18 @@ export function Settings() {
                 select
                 label="File Organization Strategy"
                 value={settings.organizationStrategy}
-                onChange={(e) =>
-                  handleChange('organizationStrategy', e.target.value)
-                }
+                onChange={(e) => handleChange('organizationStrategy', e.target.value)}
                 helperText="How files are organized into the library"
               >
-                <MenuItem value="auto">
-                  Auto (tries Reflink → Hard Link → Copy)
-                </MenuItem>
-                <MenuItem value="reflink">
-                  Reflink (CoW - fastest, space-efficient)
-                </MenuItem>
-                <MenuItem value="hardlink">
-                  Hard Link (fast, space-efficient)
-                </MenuItem>
-                <MenuItem value="symlink">
-                  Symbolic Link (fast, but fragile)
-                </MenuItem>
-                <MenuItem value="copy">
-                  Copy (slow, uses double space, safest)
-                </MenuItem>
+                <MenuItem value="auto">Auto (tries Reflink → Hard Link → Copy)</MenuItem>
+                <MenuItem value="reflink">Reflink (CoW - fastest, space-efficient)</MenuItem>
+                <MenuItem value="hardlink">Hard Link (fast, space-efficient)</MenuItem>
+                <MenuItem value="symlink">Symbolic Link (fast, but fragile)</MenuItem>
+                <MenuItem value="copy">Copy (slow, uses double space, safest)</MenuItem>
               </TextField>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 1, display: 'block' }}
-              >
-                Auto mode tries methods in order of efficiency: Reflink (CoW
-                clone) → Hard Link → Copy as fallback.
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Auto mode tries methods in order of efficiency: Reflink (CoW clone) → Hard Link →
+                Copy as fallback.
               </Typography>
             </Grid>
 
@@ -763,9 +717,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.scanOnStartup}
-                    onChange={(e) =>
-                      handleChange('scanOnStartup', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('scanOnStartup', e.target.checked)}
                   />
                 }
                 label="Scan library on startup"
@@ -777,9 +729,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.autoOrganize}
-                    onChange={(e) =>
-                      handleChange('autoOrganize', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('autoOrganize', e.target.checked)}
                   />
                 }
                 label="Automatically organize audiobooks"
@@ -791,17 +741,14 @@ export function Settings() {
                 fullWidth
                 label="Folder Naming Pattern"
                 value={settings.folderNamingPattern}
-                onChange={(e) =>
-                  handleChange('folderNamingPattern', e.target.value)
-                }
+                onChange={(e) => handleChange('folderNamingPattern', e.target.value)}
                 helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}."
               />
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
                 <Typography variant="caption">
-                  <strong>Smart Path Handling:</strong> Empty fields (like{' '}
-                  {'{series}'}) are automatically removed from paths. If a book
-                  has no series, that segment disappears gracefully—no duplicate
-                  slashes or empty folders.
+                  <strong>Smart Path Handling:</strong> Empty fields (like {'{series}'}) are
+                  automatically removed from paths. If a book has no series, that segment disappears
+                  gracefully—no duplicate slashes or empty folders.
                 </Typography>
               </Alert>
               <Box
@@ -831,11 +778,7 @@ export function Settings() {
                   color="text.secondary"
                   sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}
                 >
-                  {generateExample(
-                    settings.folderNamingPattern,
-                    exampleWithSeries,
-                    true
-                  )}
+                  {generateExample(settings.folderNamingPattern, exampleWithSeries, true)}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -854,11 +797,7 @@ export function Settings() {
                   color="text.secondary"
                   sx={{ wordBreak: 'break-word', display: 'block' }}
                 >
-                  {generateExample(
-                    settings.folderNamingPattern,
-                    exampleNoSeries,
-                    true
-                  )}
+                  {generateExample(settings.folderNamingPattern, exampleNoSeries, true)}
                 </Typography>
               </Box>
             </Grid>
@@ -868,9 +807,7 @@ export function Settings() {
                 fullWidth
                 label="File Naming Pattern"
                 value={settings.fileNamingPattern}
-                onChange={(e) =>
-                  handleChange('fileNamingPattern', e.target.value)
-                }
+                onChange={(e) => handleChange('fileNamingPattern', e.target.value)}
                 helperText="Pattern for individual audiobook files. All folder fields plus {track_number}, {total_tracks}, {bitrate}, {codec}, {quality} (parsed from media)"
               />
               <Box
@@ -900,11 +837,7 @@ export function Settings() {
                   color="text.secondary"
                   sx={{ wordBreak: 'break-word', display: 'block', mb: 1 }}
                 >
-                  {generateExample(
-                    settings.fileNamingPattern,
-                    exampleWithSeries,
-                    false
-                  )}
+                  {generateExample(settings.fileNamingPattern, exampleWithSeries, false)}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -924,26 +857,22 @@ export function Settings() {
                   display="block"
                   sx={{ wordBreak: 'break-word' }}
                 >
-                  {generateExample(
-                    settings.fileNamingPattern,
-                    exampleNoSeries,
-                    false
-                  ).replace('.m4b', ' 03 of 50.mp3')}
+                  {generateExample(settings.fileNamingPattern, exampleNoSeries, false).replace(
+                    '.m4b',
+                    ' 03 of 50.mp3'
+                  )}
                 </Typography>
               </Box>
               <Alert severity="info" sx={{ mt: 1 }}>
                 <Typography variant="caption">
-                  <strong>Multi-file audiobooks:</strong> For books with
-                  multiple files (e.g., 50 MP3s), the system automatically
-                  appends track numbers. Pattern detection: Uses hyphens if
-                  pattern contains "-", underscores if "_", otherwise spaces.
-                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator 03
-                  of 50.mp3"
+                  <strong>Multi-file audiobooks:</strong> For books with multiple files (e.g., 50
+                  MP3s), the system automatically appends track numbers. Pattern detection: Uses
+                  hyphens if pattern contains "-", underscores if "_", otherwise spaces. Example:
+                  "Title - Narrator-03-of-50.mp3" or "Title Narrator 03 of 50.mp3"
                   <br />
-                  <strong>Override:</strong> Include {'{track_number}'} and{' '}
-                  {'{total_tracks}'} in your pattern to control exact
-                  formatting. Example: "{'{title}'} - Part {'{track_number}'} of{' '}
-                  {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of
+                  <strong>Override:</strong> Include {'{track_number}'} and {'{total_tracks}'} in
+                  your pattern to control exact formatting. Example: "{'{title}'} - Part{' '}
+                  {'{track_number}'} of {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of
                   50.m4b"
                 </Typography>
               </Alert>
@@ -959,16 +888,15 @@ export function Settings() {
 
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>Import Paths</strong> are watched for new audiobook
-                files. Files found here are scanned and imported into the main
-                library path where they are organized.
+                <strong>Import Paths</strong> are watched for new audiobook files. Files found here
+                are scanned and imported into the main library path where they are organized.
               </Alert>
 
               <Box>
                 {importPaths.length === 0 ? (
                   <Alert severity="warning" sx={{ mb: 2 }}>
-                    No import folders configured. Add folders to automatically
-                    import audiobooks from specific locations.
+                    No import folders configured. Add folders to automatically import audiobooks
+                    from specific locations.
                   </Alert>
                 ) : (
                   <List>
@@ -1012,9 +940,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.createBackups}
-                    onChange={(e) =>
-                      handleChange('createBackups', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('createBackups', e.target.checked)}
                   />
                 }
                 label="Create backups before modifying files"
@@ -1033,9 +959,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableDiskQuota}
-                    onChange={(e) =>
-                      handleChange('enableDiskQuota', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('enableDiskQuota', e.target.checked)}
                   />
                 }
                 label="Enable disk quota limit"
@@ -1049,16 +973,9 @@ export function Settings() {
                   type="number"
                   label="Maximum Disk Usage"
                   value={settings.diskQuotaPercent}
-                  onChange={(e) =>
-                    handleChange(
-                      'diskQuotaPercent',
-                      parseInt(e.target.value) || 0
-                    )
-                  }
+                  onChange={(e) => handleChange('diskQuotaPercent', parseInt(e.target.value) || 0)}
                   InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">%</InputAdornment>
-                    ),
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
                   }}
                   inputProps={{ min: 1, max: 100 }}
                   helperText="Maximum percentage of disk space the library can use"
@@ -1071,9 +988,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableUserQuotas}
-                    onChange={(e) =>
-                      handleChange('enableUserQuotas', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('enableUserQuotas', e.target.checked)}
                   />
                 }
                 label="Enable per-user storage quotas (multi-user mode)"
@@ -1088,15 +1003,10 @@ export function Settings() {
                   label="Default User Quota"
                   value={settings.defaultUserQuotaGB}
                   onChange={(e) =>
-                    handleChange(
-                      'defaultUserQuotaGB',
-                      parseInt(e.target.value) || 0
-                    )
+                    handleChange('defaultUserQuotaGB', parseInt(e.target.value) || 0)
                   }
                   InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">GB</InputAdornment>
-                    ),
+                    endAdornment: <InputAdornment position="end">GB</InputAdornment>,
                   }}
                   inputProps={{ min: 1, max: 10000 }}
                   helperText="Storage limit per user"
@@ -1120,9 +1030,7 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.autoFetchMetadata}
-                    onChange={(e) =>
-                      handleChange('autoFetchMetadata', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('autoFetchMetadata', e.target.checked)}
                   />
                 }
                 label="Automatically fetch missing metadata"
@@ -1142,19 +1050,17 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableAIParsing}
-                    onChange={(e) =>
-                      handleChange('enableAIParsing', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('enableAIParsing', e.target.checked)}
                   />
                 }
                 label="Enable AI-powered filename parsing"
               />
               <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
                 <Typography variant="caption">
-                  <strong>What is this?</strong> Uses OpenAI to intelligently
-                  parse complex audiobook filenames into title, author, series,
-                  narrator, etc. This dramatically improves metadata extraction
-                  from poorly named files where traditional parsing fails.
+                  <strong>What is this?</strong> Uses OpenAI to intelligently parse complex
+                  audiobook filenames into title, author, series, narrator, etc. This dramatically
+                  improves metadata extraction from poorly named files where traditional parsing
+                  fails.
                 </Typography>
               </Alert>
             </Grid>
@@ -1207,21 +1113,15 @@ export function Settings() {
 
                               // Test with the key user just entered
                               if (keyToTest && keyToTest.length >= 20) {
-                                const response =
-                                  await api.testAIConnection(keyToTest);
+                                const response = await api.testAIConnection(keyToTest);
                                 if (response.success) {
                                   alert('✅ Connection successful!');
                                 }
                               } else {
-                                alert(
-                                  '❌ Please enter a valid API key (minimum 20 characters)'
-                                );
+                                alert('❌ Please enter a valid API key (minimum 20 characters)');
                               }
                             } catch (error) {
-                              alert(
-                                '❌ Connection failed: ' +
-                                  (error as Error).message
-                              );
+                              alert('❌ Connection failed: ' + (error as Error).message);
                             }
                           }}
                         >
@@ -1239,9 +1139,9 @@ export function Settings() {
               </Typography>
               <Alert severity="info" sx={{ mb: 2 }}>
                 <Typography variant="caption">
-                  Sources are queried in order. If a field is missing from the
-                  first source, the system automatically falls back to the next
-                  enabled source to fill in additional fields.
+                  Sources are queried in order. If a field is missing from the first source, the
+                  system automatically falls back to the next enabled source to fill in additional
+                  fields.
                 </Typography>
               </Alert>
               <Paper variant="outlined" sx={{ p: 2 }}>
@@ -1253,14 +1153,10 @@ export function Settings() {
                         alignItems: 'center',
                         py: 1.5,
                         px: 1,
-                        bgcolor: source.enabled
-                          ? 'transparent'
-                          : 'action.disabledBackground',
+                        bgcolor: source.enabled ? 'transparent' : 'action.disabledBackground',
                       }}
                     >
-                      <Box
-                        sx={{ display: 'flex', flexDirection: 'column', mr: 1 }}
-                      >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', mr: 1 }}>
                         <Button
                           size="small"
                           onClick={() => handleSourceReorder(source.id, 'up')}
@@ -1272,34 +1168,25 @@ export function Settings() {
                         <Button
                           size="small"
                           onClick={() => handleSourceReorder(source.id, 'down')}
-                          disabled={
-                            index === settings.metadataSources.length - 1
-                          }
+                          disabled={index === settings.metadataSources.length - 1}
                           sx={{ minWidth: 'auto', p: 0.5 }}
                         >
                           ▼
                         </Button>
                       </Box>
                       <DragHandleIcon sx={{ mr: 2, color: 'text.disabled' }} />
-                      <Box
-                        sx={{ display: 'flex', alignItems: 'center', flex: 1 }}
-                      >
+                      <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                         <Typography
                           variant="body1"
                           sx={{
                             fontWeight: source.enabled ? 500 : 400,
-                            color: source.enabled
-                              ? 'text.primary'
-                              : 'text.disabled',
+                            color: source.enabled ? 'text.primary' : 'text.disabled',
                           }}
                         >
                           {source.priority}. {source.name}
                         </Typography>
                         {source.requiresAuth && (
-                          <Typography
-                            variant="caption"
-                            sx={{ ml: 1, color: 'text.secondary' }}
-                          >
+                          <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>
                             (requires API key)
                           </Typography>
                         )}
@@ -1308,18 +1195,14 @@ export function Settings() {
                         <IconButton
                           size="small"
                           onClick={() =>
-                            setExpandedSource(
-                              expandedSource === source.id ? null : source.id
-                            )
+                            setExpandedSource(expandedSource === source.id ? null : source.id)
                           }
                           sx={{ mr: 1 }}
                         >
                           <ExpandMoreIcon
                             sx={{
                               transform:
-                                expandedSource === source.id
-                                  ? 'rotate(180deg)'
-                                  : 'rotate(0deg)',
+                                expandedSource === source.id ? 'rotate(180deg)' : 'rotate(0deg)',
                               transition: 'transform 0.3s',
                             }}
                           />
@@ -1328,13 +1211,7 @@ export function Settings() {
                       <Button
                         size="small"
                         onClick={() => handleSourceToggle(source.id)}
-                        startIcon={
-                          source.enabled ? (
-                            <CheckBoxIcon />
-                          ) : (
-                            <CheckBoxOutlineBlankIcon />
-                          )
-                        }
+                        startIcon={source.enabled ? <CheckBoxIcon /> : <CheckBoxOutlineBlankIcon />}
                       >
                         {source.enabled ? 'Enabled' : 'Disabled'}
                       </Button>
@@ -1371,11 +1248,7 @@ export function Settings() {
                                     label="API Key"
                                     value={source.credentials.apiKey || ''}
                                     onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiKey',
-                                        e.target.value
-                                      )
+                                      handleCredentialChange(source.id, 'apiKey', e.target.value)
                                     }
                                     placeholder="Enter your Goodreads API key"
                                   />
@@ -1388,20 +1261,13 @@ export function Settings() {
                                     type="password"
                                     value={source.credentials.apiSecret || ''}
                                     onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiSecret',
-                                        e.target.value
-                                      )
+                                      handleCredentialChange(source.id, 'apiSecret', e.target.value)
                                     }
                                     placeholder="Enter your Goodreads API secret"
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
+                                  <Typography variant="caption" color="text.secondary">
                                     Get your API credentials at:{' '}
                                     <a
                                       href="https://www.goodreads.com/api"
@@ -1414,8 +1280,7 @@ export function Settings() {
                                 </Grid>
                               </>
                             )}
-                            {(source.id === 'openlibrary' ||
-                              source.id === 'google-books') && (
+                            {(source.id === 'openlibrary' || source.id === 'google-books') && (
                               <>
                                 <Grid item xs={12}>
                                   <TextField
@@ -1424,20 +1289,13 @@ export function Settings() {
                                     label="API Key"
                                     value={source.credentials.apiKey || ''}
                                     onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiKey',
-                                        e.target.value
-                                      )
+                                      handleCredentialChange(source.id, 'apiKey', e.target.value)
                                     }
                                     placeholder={`Enter your ${source.name} API key`}
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
+                                  <Typography variant="caption" color="text.secondary">
                                     {source.id === 'google-books' ? (
                                       <>
                                         Get your API key at:{' '}
@@ -1451,8 +1309,8 @@ export function Settings() {
                                       </>
                                     ) : (
                                       <>
-                                        Open Library API is free and doesn't
-                                        require authentication for basic usage
+                                        Open Library API is free and doesn't require authentication
+                                        for basic usage
                                       </>
                                     )}
                                   </Typography>
@@ -1496,9 +1354,7 @@ export function Settings() {
                 type="number"
                 label="Concurrent Scans"
                 value={settings.concurrentScans}
-                onChange={(e) =>
-                  handleChange('concurrentScans', parseInt(e.target.value) || 1)
-                }
+                onChange={(e) => handleChange('concurrentScans', parseInt(e.target.value) || 1)}
                 inputProps={{ min: 1, max: 16 }}
                 helperText="Number of folders to scan simultaneously"
               />
@@ -1516,25 +1372,15 @@ export function Settings() {
                 <RadioGroup
                   row
                   value={settings.memoryLimitType}
-                  onChange={(e) =>
-                    handleChange('memoryLimitType', e.target.value)
-                  }
+                  onChange={(e) => handleChange('memoryLimitType', e.target.value)}
                 >
-                  <FormControlLabel
-                    value="items"
-                    control={<Radio />}
-                    label="Number of Items"
-                  />
+                  <FormControlLabel value="items" control={<Radio />} label="Number of Items" />
                   <FormControlLabel
                     value="percent"
                     control={<Radio />}
                     label="% of System Memory"
                   />
-                  <FormControlLabel
-                    value="absolute"
-                    control={<Radio />}
-                    label="Absolute MB"
-                  />
+                  <FormControlLabel value="absolute" control={<Radio />} label="Absolute MB" />
                 </RadioGroup>
               </FormControl>
             </Grid>
@@ -1546,9 +1392,7 @@ export function Settings() {
                   type="number"
                   label="Cache Size (items)"
                   value={settings.cacheSize}
-                  onChange={(e) =>
-                    handleChange('cacheSize', parseInt(e.target.value) || 100)
-                  }
+                  onChange={(e) => handleChange('cacheSize', parseInt(e.target.value) || 100)}
                   inputProps={{ min: 100, max: 10000 }}
                   helperText="Number of audiobook records to cache in memory"
                 />
@@ -1563,15 +1407,10 @@ export function Settings() {
                   label="Memory Limit"
                   value={settings.memoryLimitPercent}
                   onChange={(e) =>
-                    handleChange(
-                      'memoryLimitPercent',
-                      parseInt(e.target.value) || 1
-                    )
+                    handleChange('memoryLimitPercent', parseInt(e.target.value) || 1)
                   }
                   InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">%</InputAdornment>
-                    ),
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>,
                   }}
                   inputProps={{ min: 1, max: 90 }}
                   helperText="Maximum percentage of system memory to use"
@@ -1586,16 +1425,9 @@ export function Settings() {
                   type="number"
                   label="Memory Limit"
                   value={settings.memoryLimitMB}
-                  onChange={(e) =>
-                    handleChange(
-                      'memoryLimitMB',
-                      parseInt(e.target.value) || 128
-                    )
-                  }
+                  onChange={(e) => handleChange('memoryLimitMB', parseInt(e.target.value) || 128)}
                   InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">MB</InputAdornment>
-                    ),
+                    endAdornment: <InputAdornment position="end">MB</InputAdornment>,
                   }}
                   inputProps={{ min: 128, max: 16384 }}
                   helperText="Absolute memory limit in megabytes"
@@ -1637,13 +1469,8 @@ export function Settings() {
                 <MenuItem value="text">Text (human-readable)</MenuItem>
                 <MenuItem value="json">JSON (structured)</MenuItem>
               </TextField>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 1, display: 'block' }}
-              >
-                JSON logging is recommended for log aggregation and analysis
-                tools
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                JSON logging is recommended for log aggregation and analysis tools
               </Typography>
             </Grid>
 
@@ -1652,26 +1479,16 @@ export function Settings() {
                 control={
                   <Switch
                     checked={settings.enableJsonLogging}
-                    onChange={(e) =>
-                      handleChange('enableJsonLogging', e.target.checked)
-                    }
+                    onChange={(e) => handleChange('enableJsonLogging', e.target.checked)}
                   />
                 }
                 label="Enable JSON structured logging to separate file"
               />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: 'block', ml: 4 }}
-              >
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
                 Creates a separate .json log file in addition to the main log
               </Typography>
             </Grid>
           </Grid>
-        </TabPanel>
-
-        <TabPanel value={tabValue} index={3}>
-          <BlockedHashesTab />
         </TabPanel>
 
         <Box
@@ -1685,30 +1502,17 @@ export function Settings() {
             bgcolor: 'background.paper',
           }}
         >
-          <Button
-            variant="outlined"
-            startIcon={<RestartAltIcon />}
-            onClick={handleReset}
-          >
+          <Button variant="outlined" startIcon={<RestartAltIcon />} onClick={handleReset}>
             Reset to Defaults
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={handleSave}
-          >
+          <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave}>
             Save Settings
           </Button>
         </Box>
       </Paper>
 
       {/* Library Path Browser Dialog */}
-      <Dialog
-        open={browserOpen}
-        onClose={handleBrowserCancel}
-        maxWidth="md"
-        fullWidth
-      >
+      <Dialog open={browserOpen} onClose={handleBrowserCancel} maxWidth="md" fullWidth>
         <DialogTitle>Browse Server Filesystem</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -1733,11 +1537,7 @@ export function Settings() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleBrowserCancel}>Cancel</Button>
-          <Button
-            onClick={handleBrowserConfirm}
-            variant="contained"
-            disabled={!selectedPath}
-          >
+          <Button onClick={handleBrowserConfirm} variant="contained" disabled={!selectedPath}>
             Select Folder
           </Button>
         </DialogActions>
@@ -1753,9 +1553,8 @@ export function Settings() {
         <DialogTitle>Add Import Path (Watch Location)</DialogTitle>
         <DialogContent>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>Import paths</strong> are separate from your main library.
-            They are watched for new audiobook files that will be scanned,
-            organized, and moved to your library path.
+            <strong>Import paths</strong> are separate from your main library. They are watched for
+            new audiobook files that will be scanned, organized, and moved to your library path.
           </Alert>
 
           {!showFolderBrowser ? (
@@ -1779,10 +1578,7 @@ export function Settings() {
             </Box>
           ) : (
             <Box>
-              <Button
-                onClick={() => setShowFolderBrowser(false)}
-                sx={{ mb: 2 }}
-              >
+              <Button onClick={() => setShowFolderBrowser(false)} sx={{ mb: 2 }}>
                 ← Back to Manual Entry
               </Button>
               <ServerFileBrowser
