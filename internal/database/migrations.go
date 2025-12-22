@@ -87,6 +87,12 @@ var migrations = []Migration{
 		Up:          migration008Up,
 		Down:        nil,
 	},
+	{
+		Version:     9,
+		Description: "Add state machine and lifecycle fields to books",
+		Up:          migration009Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -385,6 +391,51 @@ func migration008Up(store Store) error {
 		log.Println("  - Unknown store type; skipping migration")
 	}
 
+	return nil
+}
+
+// migration009Up adds state machine and lifecycle tracking fields to books table
+func migration009Up(store Store) error {
+	log.Println("  - Adding state machine and lifecycle fields to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN library_state TEXT DEFAULT 'imported'",
+		"ALTER TABLE books ADD COLUMN quantity INTEGER DEFAULT 1",
+		"ALTER TABLE books ADD COLUMN marked_for_deletion BOOLEAN DEFAULT 0",
+		"ALTER TABLE books ADD COLUMN marked_for_deletion_at DATETIME",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	// Create index for state queries
+	indexStatements := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_library_state ON books(library_state)",
+		"CREATE INDEX IF NOT EXISTS idx_books_marked_for_deletion ON books(marked_for_deletion)",
+	}
+
+	for _, stmt := range indexStatements {
+		log.Printf("    - Creating index: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	log.Println("  - State machine fields added successfully")
 	return nil
 }
 
