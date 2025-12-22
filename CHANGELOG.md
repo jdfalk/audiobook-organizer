@@ -13,11 +13,16 @@
     `ListSoftDeletedBooks` for admin actions
   - New endpoints: `GET /api/v1/audiobooks/soft-deleted` and
     `DELETE /api/v1/audiobooks/purge-soft-deleted` (optional file removal)
+- **Automated retention**
+  - Configurable retention: `purge_soft_deleted_after_days` (default 30 days)
+    and `purge_soft_deleted_delete_files` to control file deletion
+  - Background purge job runs on an interval using configured retention rules
 - **Frontend delete/purge UX**
   - Library page delete dialog supports soft delete with optional hash blocking
     and refreshes soft-delete counts
   - Library view hides soft-deleted records by default and surfaces a purge
     button with count
+  - Added soft-deleted review list with per-item purge actions
   - Added purge dialog to permanently remove soft-deleted books (optional file
     deletion)
 - **Testing**

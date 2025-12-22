@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.19.0
+// version: 1.20.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -102,6 +102,8 @@ export const Library = () => {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectAttempts = useRef(0);
   const [softDeletedCount, setSoftDeletedCount] = useState(0);
+  const [softDeletedBooks, setSoftDeletedBooks] = useState<Audiobook[]>([]);
+  const [softDeletedLoading, setSoftDeletedLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookPendingDelete, setBookPendingDelete] = useState<Audiobook | null>(null);
   const [deleteOptions, setDeleteOptions] = useState({ softDelete: true, blockHash: true });
@@ -109,6 +111,7 @@ export const Library = () => {
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [purgeDeleteFiles, setPurgeDeleteFiles] = useState(false);
   const [purgeInProgress, setPurgeInProgress] = useState(false);
+  const [purgingBookId, setPurgingBookId] = useState<string | null>(null);
   const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info';
     message: string;
@@ -258,12 +261,18 @@ export const Library = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const refreshSoftDeletedCount = useCallback(async () => {
+  const loadSoftDeleted = useCallback(async () => {
+    setSoftDeletedLoading(true);
     try {
-      const { count } = await api.getSoftDeletedBooks(100000, 0);
+      const { items, count } = await api.getSoftDeletedBooks(500, 0);
+      setSoftDeletedBooks(items);
       setSoftDeletedCount(count);
     } catch (e) {
       console.error('Failed to load soft-deleted books', e);
+      setSoftDeletedBooks([]);
+      setSoftDeletedCount(0);
+    } finally {
+      setSoftDeletedLoading(false);
     }
   }, []);
 
@@ -379,8 +388,8 @@ export const Library = () => {
   }, [loadAudiobooks]);
 
   useEffect(() => {
-    refreshSoftDeletedCount();
-  }, [refreshSoftDeletedCount]);
+    loadSoftDeleted();
+  }, [loadSoftDeleted]);
 
   const handleEdit = useCallback((audiobook: Audiobook) => {
     setEditingAudiobook(audiobook);
@@ -428,7 +437,7 @@ export const Library = () => {
       setDeleteDialogOpen(false);
       setBookPendingDelete(null);
       await loadAudiobooks();
-      await refreshSoftDeletedCount();
+      await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to delete audiobook:', error);
       setAlert({ severity: 'error', message: 'Failed to delete audiobook. Please try again.' });
@@ -442,6 +451,24 @@ export const Library = () => {
     setBookPendingDelete(null);
   };
 
+  const handlePurgeOne = async (book: Audiobook) => {
+    setPurgingBookId(book.id);
+    try {
+      await api.deleteBook(book.id, { softDelete: false, blockHash: false });
+      setAlert({
+        severity: 'success',
+        message: `"${book.title}" was purged from the library.`,
+      });
+      await loadAudiobooks();
+      await loadSoftDeleted();
+    } catch (error) {
+      console.error('Failed to purge audiobook', error);
+      setAlert({ severity: 'error', message: 'Failed to purge audiobook.' });
+    } finally {
+      setPurgingBookId(null);
+    }
+  };
+
   const handleConfirmPurge = async () => {
     setPurgeInProgress(true);
     try {
@@ -453,7 +480,7 @@ export const Library = () => {
       setPurgeDialogOpen(false);
       setPurgeDeleteFiles(false);
       await loadAudiobooks();
-      await refreshSoftDeletedCount();
+      await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to purge soft-deleted books', error);
       setAlert({ severity: 'error', message: 'Failed to purge soft-deleted books.' });
@@ -1073,6 +1100,90 @@ export const Library = () => {
             )}
           </Stack>
         )}
+
+        <Paper sx={{ p: 2, mt: 3 }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={2}
+            flexWrap="wrap"
+            rowGap={1}
+          >
+            <Box>
+              <Typography variant="h6">Soft-Deleted Books</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Review recently deleted items before purging them permanently.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Chip
+                label={`${softDeletedCount} ${softDeletedCount === 1 ? 'item' : 'items'}`}
+                color={softDeletedCount > 0 ? 'warning' : 'default'}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={loadSoftDeleted}
+                disabled={softDeletedLoading}
+              >
+                {softDeletedLoading ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </Stack>
+          </Stack>
+          {softDeletedLoading ? (
+            <Typography variant="body2" sx={{ mt: 2 }}>
+              Loading soft-deleted books...
+            </Typography>
+          ) : softDeletedBooks.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No soft-deleted books at the moment.
+            </Alert>
+          ) : (
+            <List dense sx={{ mt: 1 }}>
+              {softDeletedBooks.map((book) => {
+                const deletedAt =
+                  book.marked_for_deletion_at && new Date(book.marked_for_deletion_at);
+                return (
+                  <ListItem key={book.id} alignItems="flex-start">
+                    <ListItemText
+                      primary={book.title || 'Untitled'}
+                      secondary={
+                        <Stack spacing={0.5}>
+                          <Typography variant="body2" color="text.secondary">
+                            {book.author || 'Unknown Author'}
+                          </Typography>
+                          {deletedAt && (
+                            <Typography variant="caption" color="text.secondary">
+                              Soft deleted at {deletedAt.toLocaleString()}
+                            </Typography>
+                          )}
+                          {book.file_path && (
+                            <Typography variant="caption" color="text.secondary">
+                              {book.file_path}
+                            </Typography>
+                          )}
+                        </Stack>
+                      }
+                    />
+                    <ListItemSecondaryAction>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={() => handlePurgeOne(book)}
+                        disabled={purgingBookId === book.id || purgeInProgress}
+                      >
+                        {purgingBookId === book.id ? 'Purging...' : 'Purge now'}
+                      </Button>
+                    </ListItemSecondaryAction>
+                  </ListItem>
+                );
+              })}
+            </List>
+          )}
+        </Paper>
 
         <FilterSidebar
           open={filterOpen}

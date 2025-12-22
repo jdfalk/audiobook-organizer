@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -252,6 +252,24 @@ func (s *Server) Start(cfg ServerConfig) error {
 			}
 		}
 	}()
+
+	// Background purge of soft-deleted books (configurable retention)
+	if config.AppConfig.PurgeSoftDeletedAfterDays > 0 {
+		purgeTicker := time.NewTicker(6 * time.Hour)
+		go func() {
+			defer purgeTicker.Stop()
+			// Initial run on startup
+			s.runAutoPurgeSoftDeleted()
+			for {
+				select {
+				case <-purgeTicker.C:
+					s.runAutoPurgeSoftDeleted()
+				case <-quit:
+					return
+				}
+			}
+		}()
+	}
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	<-quit
@@ -588,6 +606,7 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"items":  books,
 		"count":  len(books),
+		"total":  len(books),
 		"limit":  limit,
 		"offset": offset,
 	})
@@ -610,38 +629,81 @@ func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
 		}
 	}
 
-	books, err := database.GlobalStore.ListSoftDeletedBooks(1_000_000, 0, cutoff)
+	result, err := s.purgeSoftDeletedBooks(deleteFiles, cutoff)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	purged := 0
-	filesDeleted := 0
-	errors := []string{}
+	c.JSON(http.StatusOK, result)
+}
+
+type purgeResult struct {
+	Attempted    int      `json:"attempted"`
+	Purged       int      `json:"purged"`
+	FilesDeleted int      `json:"files_deleted"`
+	Errors       []string `json:"errors"`
+}
+
+func (s *Server) purgeSoftDeletedBooks(deleteFiles bool, cutoff *time.Time) (*purgeResult, error) {
+	if database.GlobalStore == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	books, err := database.GlobalStore.ListSoftDeletedBooks(1_000_000, 0, cutoff)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &purgeResult{
+		Attempted: len(books),
+		Errors:    []string{},
+	}
 
 	for _, book := range books {
 		if deleteFiles && book.FilePath != "" {
 			if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
-				errors = append(errors, fmt.Sprintf("%s: failed to delete file: %v", book.ID, err))
+				res.Errors = append(res.Errors, fmt.Sprintf("%s: failed to delete file: %v", book.ID, err))
 			} else if err == nil {
-				filesDeleted++
+				res.FilesDeleted++
 			}
 		}
 
 		if err := database.GlobalStore.DeleteBook(book.ID); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", book.ID, err))
+			res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", book.ID, err))
 			continue
 		}
-		purged++
+		res.Purged++
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"attempted":     len(books),
-		"purged":        purged,
-		"files_deleted": filesDeleted,
-		"errors":        errors,
-	})
+	return res, nil
+}
+
+func (s *Server) runAutoPurgeSoftDeleted() {
+	if config.AppConfig.PurgeSoftDeletedAfterDays <= 0 {
+		return
+	}
+	if database.GlobalStore == nil {
+		log.Printf("[DEBUG] Auto-purge skipped: database not initialized")
+		return
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -config.AppConfig.PurgeSoftDeletedAfterDays)
+	result, err := s.purgeSoftDeletedBooks(config.AppConfig.PurgeSoftDeletedDeleteFiles, &cutoff)
+	if err != nil {
+		log.Printf("[WARN] Auto-purge failed: %v", err)
+		return
+	}
+
+	if result.Attempted > 0 {
+		log.Printf("[INFO] Auto-purge soft-deleted books: attempted=%d purged=%d files_deleted=%d errors=%d",
+			result.Attempted, result.Purged, result.FilesDeleted, len(result.Errors))
+		if len(result.Errors) > 0 {
+			for _, e := range result.Errors {
+				log.Printf("[WARN] Auto-purge error: %s", e)
+			}
+		}
+	}
 }
 
 func (s *Server) countAudiobooks(c *gin.Context) {
