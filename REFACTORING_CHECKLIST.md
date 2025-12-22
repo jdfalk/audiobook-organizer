@@ -203,7 +203,7 @@ Method implementations:
 
 ```bash
 # Run database tests
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go test ./internal/database/... -v
 
 # Should see all tests passing with new names
@@ -319,14 +319,14 @@ Variable renames:
 
 ```bash
 # Build and test
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go build -o ~/audiobook-organizer-embedded
 
 # Kill old server
 killall audiobook-organizer-embedded
 
 # Start new server
-cd /Users/jdfalk/ao-library
+cd ~/ao-library
 ~/audiobook-organizer-embedded &
 
 # Test new endpoint
@@ -362,7 +362,7 @@ curl -s http://localhost:8888/api/v1/import-paths | jq .
 
 ```bash
 # Run all Go tests
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go test ./... -v
 
 # Should see all passing
@@ -535,11 +535,11 @@ API functions:
 
 ```bash
 # Build frontend
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/web
+cd ~/repos/audiobook-organizer/web
 npm run build
 
 # Rebuild server with embedded frontend
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go build -tags embed -o ~/audiobook-organizer-embedded
 
 # Restart and test in browser
@@ -579,7 +579,7 @@ Search entire codebase for comment updates:
 
 ```bash
 # Find remaining references
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 grep -r "library folder" --include="*.go" --include="*.ts" --include="*.tsx"
 grep -r "library_folder" --include="*.go" --include="*.ts" --include="*.tsx"
 grep -r "LibraryFolder" --include="*.go" --include="*.ts" --include="*.tsx"
@@ -592,7 +592,7 @@ grep -r "LibraryFolder" --include="*.go" --include="*.ts" --include="*.tsx"
 ### 6.1 Backend Tests
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 
 # Run all tests
 go test ./... -v
@@ -606,7 +606,7 @@ go test ./internal/models/... -v
 ### 6.2 Frontend Tests
 
 ```bash
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/web
+cd ~/repos/audiobook-organizer/web
 
 # Run tests
 npm test
@@ -616,10 +616,10 @@ npm test
 
 ```bash
 # Build and start server
-cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
+cd ~/repos/audiobook-organizer
 go build -tags embed -o ~/audiobook-organizer-embedded
 killall audiobook-organizer-embedded
-cd /Users/jdfalk/ao-library
+cd ~/ao-library
 ~/audiobook-organizer-embedded &
 
 # Test API endpoints

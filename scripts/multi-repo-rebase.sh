@@ -94,11 +94,12 @@ trap cleanup_git_settings EXIT INT TERM
 # Dependencies: git, gh (GitHub CLI), GitHub Copilot extension
 
 # Configuration
+REPO_BASE="${REPO_BASE_DIR:-$HOME/repos}"
 REPOS=(
-    "/Users/jdfalk/repos/github.com/jdfalk/gcommon"
-    "/Users/jdfalk/repos/github.com/jdfalk/ghcommon"
-    "/Users/jdfalk/repos/github.com/jdfalk/subtitle-manager"
-    "/Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer"
+    "$REPO_BASE/gcommon"
+    "$REPO_BASE/ghcommon"
+    "$REPO_BASE/subtitle-manager"
+    "$REPO_BASE/audiobook-organizer"
 )
 
 DEFAULT_BRANCH="main"
