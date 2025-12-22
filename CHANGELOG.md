@@ -22,7 +22,7 @@
     and refreshes soft-delete counts
   - Library view hides soft-deleted records by default and surfaces a purge
     button with count
-  - Added soft-deleted review list with per-item purge actions
+  - Added soft-deleted review list with per-item purge and restore actions
   - Added purge dialog to permanently remove soft-deleted books (optional file
     deletion)
 - **Testing**

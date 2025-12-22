@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.13.5 -->
+<!-- version: 1.13.6 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -30,6 +30,7 @@
    - Library page delete dialog supports soft delete + hash blocking; purge dialog removes leftovers
    - Soft-deleted review list added to Library page with per-item purge
    - Background purge job with configurable retention and optional file deletion
+   - Restore action available from soft-deleted list to un-delete items
 
 **Status**: See CHANGELOG.md for latest status and progress
 

@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.4.0
+// version: 1.5.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -299,6 +299,13 @@ export async function purgeSoftDeletedBooks(
   });
   if (!response.ok) throw new Error('Failed to purge soft-deleted books');
   return response.json();
+}
+
+export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/restore`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw new Error('Failed to restore audiobook');
 }
 
 export async function deleteBook(
