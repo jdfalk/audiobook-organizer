@@ -628,3 +628,50 @@ export async function browseFilesystem(
   if (!response.ok) throw new Error('Failed to browse filesystem');
   return response.json();
 }
+
+// Blocked Hashes Management
+export interface BlockedHash {
+  hash: string;
+  reason: string;
+  created_at: string;
+}
+
+export interface BlockedHashesResponse {
+  items: BlockedHash[];
+  total: number;
+}
+
+export async function getBlockedHashes(): Promise<BlockedHashesResponse> {
+  const response = await fetch(`${API_BASE}/blocked-hashes`);
+  if (!response.ok) throw new Error('Failed to fetch blocked hashes');
+  return response.json();
+}
+
+export async function addBlockedHash(
+  hash: string,
+  reason: string
+): Promise<{ message: string; hash: string; reason: string }> {
+  const response = await fetch(`${API_BASE}/blocked-hashes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hash, reason }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to add blocked hash');
+  }
+  return response.json();
+}
+
+export async function removeBlockedHash(
+  hash: string
+): Promise<{ message: string; hash: string }> {
+  const response = await fetch(`${API_BASE}/blocked-hashes/${hash}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || 'Failed to remove blocked hash');
+  }
+  return response.json();
+}
