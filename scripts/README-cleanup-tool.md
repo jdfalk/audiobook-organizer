@@ -82,7 +82,7 @@ The tool identifies repositories for removal based on:
 
 ```text
 2025-08-10 15:30:45,123 - INFO - Starting repository cleanup
-2025-08-10 15:30:45,124 - INFO - Base path: /Users/jdfalk/repos/github.com/jdfalk
+2025-08-10 15:30:45,124 - INFO - Base path: ~/repos
 2025-08-10 15:30:45,124 - INFO - Dry run: True
 2025-08-10 15:30:45,124 - INFO - Interactive: True
 2025-08-10 15:30:45,234 - INFO - GitHub CLI version: gh
@@ -96,7 +96,7 @@ Processing: old-project
 2025-08-10 15:30:46,456 - INFO - Visibility: public
 2025-08-10 15:30:46,456 - INFO - Last updated: 2022-03-15T10:30:45Z
 2025-08-10 15:30:46,456 - WARNING - CLEANUP CANDIDATE: Repository is archived
-2025-08-10 15:30:46,456 - INFO - [DRY RUN] Would remove: /Users/jdfalk/repos/github.com/jdfalk/old-project
+2025-08-10 15:30:46,456 - INFO - [DRY RUN] Would remove: ~/repos/old-project
 
 ============================================================
 CLEANUP SUMMARY
