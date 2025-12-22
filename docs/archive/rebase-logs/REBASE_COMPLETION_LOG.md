@@ -1,7 +1,7 @@
 # Rebase Completion Log - feat/task-3-multi-format-support (Archived)
 
-> Archived: This document has moved to
-> docs/archive/rebase-logs/REBASE_COMPLETION_LOG.md
+This file was archived from the repository root. Original content is preserved
+below.
 
 ## Session Summary
 
