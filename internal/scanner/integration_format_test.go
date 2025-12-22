@@ -6,6 +6,7 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -188,7 +189,7 @@ func TestIntegrationLargeScaleMixedFormats(t *testing.T) {
 	for author := 1; author <= 100; author++ {
 		for book := 1; book <= 3; book++ {
 			format := formats[(author+book)%len(formats)]
-			dirPath := filepath.Join(tmpDir, "Author"+string(rune(author)), "Book"+string(rune(book)))
+			dirPath := filepath.Join(tmpDir, fmt.Sprintf("Author%d", author), fmt.Sprintf("Book%d", book))
 
 			if err := os.MkdirAll(dirPath, 0755); err != nil {
 				t.Fatalf("Failed to create directory: %v", err)
@@ -205,7 +206,7 @@ func TestIntegrationLargeScaleMixedFormats(t *testing.T) {
 	// Test with different worker counts
 	workerCounts := []int{1, 2, 4, 8}
 	for _, workers := range workerCounts {
-		t.Run("workers_"+string(rune(workers+'0')), func(t *testing.T) {
+		t.Run(fmt.Sprintf("workers_%d", workers), func(t *testing.T) {
 			books, err := ScanDirectoryParallel(tmpDir, workers)
 			if err != nil {
 				t.Fatalf("Scan with %d workers failed: %v", workers, err)

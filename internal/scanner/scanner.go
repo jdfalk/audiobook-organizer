@@ -695,6 +695,11 @@ func saveBookToDatabase(book *Book) error {
 	}
 
 	// Fallback legacy path using raw DB for backward compatibility
+	// Only use this path if GlobalStore is not available
+	if database.DB == nil {
+		return fmt.Errorf("database not initialized (neither GlobalStore nor DB available)")
+	}
+
 	var authorIDInt int64
 	err := database.DB.QueryRow("SELECT id FROM authors WHERE name = ?", book.Author).Scan(&authorIDInt)
 	if err != nil {
