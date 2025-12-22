@@ -1,8 +1,11 @@
 <!-- file: REFACTORING_CHECKLIST.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->
 <!-- guid: f1e2d3c4-b5a6-9c8d-7e6f-5a4b3c2d1e0f -->
 
-# LibraryFolder → ImportPath Refactoring Checklist
+# LibraryFolder → ImportPath Refactoring Checklist (Archived)
+
+> Archived: This document has moved to
+> docs/archive/refactoring-libraryfolder-importpath/REFACTORING_CHECKLIST.md
 
 **Purpose**: Complete item-by-item checklist for the refactoring task.
 

@@ -1,11 +1,13 @@
-<!-- file: REFACTORING_README.md -->
-<!-- version: 1.0.1 -->
+<!-- file: docs/archive/refactoring-libraryfolder-importpath/REFACTORING_README.md -->
+<!-- version: 1.0.0 -->
 <!-- guid: d1c2b3a4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
 
 # LibraryFolder → ImportPath Refactoring Package (Archived)
 
-> Archived: This document has moved to
-> docs/archive/refactoring-libraryfolder-importpath/REFACTORING_README.md
+This document has been archived from the repository root. The original content
+is preserved below for reference.
+
+---
 
 **Welcome!** This directory contains complete documentation for refactoring the
 audiobook-organizer codebase to rename `LibraryFolder` to `ImportPath`
@@ -317,19 +319,6 @@ You've succeeded when:
 6. ✅ UI displays "Import Paths" everywhere
 7. ✅ Manual testing successful
 8. ✅ PR created and passing CI
-
----
-
-## 📞 Support
-
-If you need help:
-
-1. **Re-read HANDOFF.md** - make sure you understand the concepts
-2. **Check CODING_STANDARDS.md** - for style/naming questions
-3. **Review REFACTORING_CHECKLIST.md** - ensure you didn't miss items
-4. **Run tests** - they'll tell you what's broken
-5. **Search codebase** - look for remaining old references
-6. **Commit often** - so you can revert if needed
 
 ---
 

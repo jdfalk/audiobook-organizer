@@ -1,11 +1,13 @@
-<!-- file: REFACTORING_SUMMARY.md -->
-<!-- version: 1.0.1 -->
+<!-- file: docs/archive/refactoring-libraryfolder-importpath/REFACTORING_SUMMARY.md -->
+<!-- version: 1.0.0 -->
 <!-- guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b -->
 
 # LibraryFolder → ImportPath Refactoring - Quick Reference (Archived)
 
-> Archived: This document has moved to
-> docs/archive/refactoring-libraryfolder-importpath/REFACTORING_SUMMARY.md
+This document has been archived from the repository root. The original content
+is preserved below for reference.
+
+---
 
 **Date**: November 23, 2025 **Read This First**: Quick overview before diving
 into detailed checklists
