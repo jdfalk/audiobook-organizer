@@ -53,10 +53,8 @@ export function StorageTab() {
         api.getSystemStatus(),
         api.getImportPaths(),
       ]);
-      const librarySize =
-        statusData.library_size_bytes ?? statusData.library.total_size;
-      const libraryBookCount =
-        statusData.library_book_count ?? statusData.library.book_count;
+      const librarySize = statusData.library_size_bytes ?? statusData.library.total_size;
+      const libraryBookCount = statusData.library_book_count ?? statusData.library.book_count;
 
       setStorage({
         totalLibrarySize: librarySize,
@@ -66,9 +64,7 @@ export function StorageTab() {
       });
     } catch (err) {
       console.error('Failed to fetch storage info:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch storage info'
-      );
+      setError(err instanceof Error ? err.message : 'Failed to fetch storage info');
     } finally {
       setLoading(false);
     }
@@ -83,12 +79,7 @@ export function StorageTab() {
 
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="400px"
-      >
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
       </Box>
     );
@@ -96,12 +87,7 @@ export function StorageTab() {
 
   if (error) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="400px"
-      >
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <Typography color="error">{error}</Typography>
       </Box>
     );
@@ -113,12 +99,7 @@ export function StorageTab() {
 
   return (
     <Box>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-      >
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h6">Library Storage</Typography>
         <Button
           variant="outlined"
@@ -145,9 +126,7 @@ export function StorageTab() {
                     <Typography variant="body2" color="text.secondary">
                       Total Library Size
                     </Typography>
-                    <Typography variant="h5">
-                      {formatBytes(storage.totalLibrarySize)}
-                    </Typography>
+                    <Typography variant="h5">{formatBytes(storage.totalLibrarySize)}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={4}>
@@ -155,9 +134,7 @@ export function StorageTab() {
                     <Typography variant="body2" color="text.secondary">
                       Total Books
                     </Typography>
-                    <Typography variant="h5">
-                      {storage.bookCount.toLocaleString()}
-                    </Typography>
+                    <Typography variant="h5">{storage.bookCount.toLocaleString()}</Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={4}>
@@ -187,15 +164,11 @@ export function StorageTab() {
                   color="text.secondary"
                   sx={{ py: 2, textAlign: 'center' }}
                 >
-                  No import folders configured. Add folders in Settings or
-                  Library page.
+                  No import folders configured. Add folders in Settings or Library page.
                 </Typography>
               ) : (
                 storage.folders.map((folder, index) => (
-                  <Box
-                    key={folder.id}
-                    sx={{ mb: index < storage.folders.length - 1 ? 2 : 0 }}
-                  >
+                  <Box key={folder.id} sx={{ mb: index < storage.folders.length - 1 ? 2 : 0 }}>
                     <Stack
                       direction="row"
                       justifyContent="space-between"
@@ -206,18 +179,13 @@ export function StorageTab() {
                         <Typography variant="body2" fontWeight="medium" noWrap>
                           {folder.name || folder.path}
                         </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          noWrap
-                        >
+                        <Typography variant="caption" color="text.secondary" noWrap>
                           {folder.path}
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={2} alignItems="center">
                         <Typography variant="body2" color="text.secondary">
-                          {folder.book_count}{' '}
-                          {folder.book_count === 1 ? 'book' : 'books'}
+                          {folder.book_count} {folder.book_count === 1 ? 'book' : 'books'}
                         </Typography>
                         <Typography
                           variant="caption"
@@ -225,21 +193,15 @@ export function StorageTab() {
                             px: 1,
                             py: 0.5,
                             borderRadius: 1,
-                            bgcolor: folder.enabled
-                              ? 'success.light'
-                              : 'grey.300',
-                            color: folder.enabled
-                              ? 'success.dark'
-                              : 'text.secondary',
+                            bgcolor: folder.enabled ? 'success.light' : 'grey.300',
+                            color: folder.enabled ? 'success.dark' : 'text.secondary',
                           }}
                         >
                           {folder.enabled ? 'Enabled' : 'Disabled'}
                         </Typography>
                       </Stack>
                     </Stack>
-                    {index < storage.folders.length - 1 && (
-                      <Divider sx={{ mt: 1 }} />
-                    )}
+                    {index < storage.folders.length - 1 && <Divider sx={{ mt: 1 }} />}
                   </Box>
                 ))
               )}

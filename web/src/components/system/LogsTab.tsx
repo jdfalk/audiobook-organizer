@@ -104,9 +104,7 @@ export function LogsTab() {
     }
   };
 
-  const getLevelColor = (
-    level: string
-  ): 'error' | 'warning' | 'info' | 'default' => {
+  const getLevelColor = (level: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (level) {
       case 'error':
         return 'error';
@@ -123,11 +121,7 @@ export function LogsTab() {
   const filteredLogs = logs.filter((log) => {
     if (levelFilter !== 'all' && log.level !== levelFilter) return false;
     if (sourceFilter !== 'all' && log.source !== sourceFilter) return false;
-    if (
-      searchQuery &&
-      !log.message.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-      return false;
+    if (searchQuery && !log.message.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
@@ -135,21 +129,14 @@ export function LogsTab() {
     setPage(newPage);
   };
 
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
   return (
     <Box>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-      >
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h6">Logs & Events</Typography>
         <Stack direction="row" spacing={2}>
           <Button
@@ -158,11 +145,7 @@ export function LogsTab() {
           >
             Auto Refresh {autoRefresh && '(5s)'}
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={fetchLogs}
-          >
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchLogs}>
             Refresh
           </Button>
         </Stack>
@@ -221,72 +204,58 @@ export function LogsTab() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredLogs
-              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((log) => (
-                <>
-                  <TableRow key={log.id} hover>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          setExpandedRow(expandedRow === log.id ? null : log.id)
-                        }
-                      >
-                        <ExpandMoreIcon
-                          sx={{
-                            transform:
-                              expandedRow === log.id
-                                ? 'rotate(180deg)'
-                                : 'rotate(0deg)',
-                            transition: 'transform 0.3s',
-                          }}
-                        />
-                      </IconButton>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={getLevelIcon(log.level)}
-                        label={log.level.toUpperCase()}
-                        size="small"
-                        color={getLevelColor(log.level)}
+            {filteredLogs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((log) => (
+              <>
+                <TableRow key={log.id} hover>
+                  <TableCell>
+                    <IconButton
+                      size="small"
+                      onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
+                    >
+                      <ExpandMoreIcon
+                        sx={{
+                          transform: expandedRow === log.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.3s',
+                        }}
                       />
+                    </IconButton>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      icon={getLevelIcon(log.level)}
+                      label={log.level.toUpperCase()}
+                      size="small"
+                      color={getLevelColor(log.level)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(log.timestamp).toLocaleString()}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={log.source || 'system'} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>{log.message}</TableCell>
+                </TableRow>
+                {expandedRow === log.id && log.metadata && (
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ bgcolor: 'background.default' }}>
+                      <Collapse in={expandedRow === log.id}>
+                        <Box sx={{ p: 2 }}>
+                          <Typography variant="subtitle2" gutterBottom>
+                            Metadata:
+                          </Typography>
+                          <pre style={{ margin: 0, fontSize: '0.875rem' }}>
+                            {JSON.stringify(log.metadata, null, 2)}
+                          </pre>
+                        </Box>
+                      </Collapse>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={log.source || 'system'}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{log.message}</TableCell>
                   </TableRow>
-                  {expandedRow === log.id && log.metadata && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        sx={{ bgcolor: 'background.default' }}
-                      >
-                        <Collapse in={expandedRow === log.id}>
-                          <Box sx={{ p: 2 }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              Metadata:
-                            </Typography>
-                            <pre style={{ margin: 0, fontSize: '0.875rem' }}>
-                              {JSON.stringify(log.metadata, null, 2)}
-                            </pre>
-                          </Box>
-                        </Collapse>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </>
-              ))}
+                )}
+              </>
+            ))}
           </TableBody>
         </Table>
         <TablePagination

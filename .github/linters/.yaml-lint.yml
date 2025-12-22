@@ -15,7 +15,7 @@ rules:
     check-multi-line-strings: false
 
   truthy:
-    allowed-values: ["true", "false", "on", "off"]
+    allowed-values: ['true', 'false', 'on', 'off']
 
   comments:
     min-spaces-from-content: 1

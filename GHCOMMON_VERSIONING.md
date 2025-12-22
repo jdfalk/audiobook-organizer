@@ -4,7 +4,8 @@
 
 # ghcommon Workflow Versioning and Standards
 
-This document outlines the versioning scheme and standards used by ghcommon reusable workflows.
+This document outlines the versioning scheme and standards used by ghcommon
+reusable workflows.
 
 ## Version Standards
 
@@ -57,7 +58,7 @@ jobs:
     name: Frontend Build and Test
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
-      node-version: "22"
+      node-version: '22'
     secrets: inherit
 ```
 
@@ -112,7 +113,7 @@ jobs:
     name: Create Prerelease Build
     uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@main
     with:
-      release-type: "auto"
+      release-type: 'auto'
       prerelease: true
       draft: false
       go-enabled: true

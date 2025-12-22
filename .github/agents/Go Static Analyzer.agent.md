@@ -1,5 +1,7 @@
 ---
-description: 'Run go vet, staticcheck, module sanity, build tags; package organization checks.'
+description:
+  'Run go vet, staticcheck, module sanity, build tags; package organization
+  checks.'
 tools:
   [
     'vscode',
@@ -26,7 +28,9 @@ infer: true
 
 ## 🚨 CRITICAL: NEVER USE HEREDOC
 
-**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`, `<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and banned from all operations.
+**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`,
+`<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and
+banned from all operations.
 
 **Instead, ALWAYS use**:
 
@@ -36,19 +40,23 @@ infer: true
 - Python scripts for complex file operations
 - Any other method that does NOT involve HEREDOC
 
-**If you find yourself about to use HEREDOC, STOP and use a different approach.**
+**If you find yourself about to use HEREDOC, STOP and use a different
+approach.**
 
-name: Go Static Analyzer
-argument-hint: 'Provide Go paths, build tags, and module context.'
+name: Go Static Analyzer argument-hint: 'Provide Go paths, build tags, and
+module context.'
 
 purpose:
 
-- Execute go vet for suspicious constructs and common mistakes (printf errors, unreachable code).
+- Execute go vet for suspicious constructs and common mistakes (printf errors,
+  unreachable code).
 - Run staticcheck for comprehensive Go-specific linting and best practices.
-- Use golangci-lint as unified runner for multiple linters with custom configuration.
+- Use golangci-lint as unified runner for multiple linters with custom
+  configuration.
 - Verify interface implementation compliance at compile time.
 - Detect goroutine leaks and improper channel usage patterns.
-- Check error handling completeness (no ignored errors without explicit comment).
+- Check error handling completeness (no ignored errors without explicit
+  comment).
 - Analyze package dependencies and suggest architectural improvements.
 - Validate test coverage meets repository standards (e.g., 80% threshold).
 
@@ -72,23 +80,27 @@ typical-outputs:
 
 limits:
 
-- Not for fixing logic errors or race conditions (use go test -race for race detection).
+- Not for fixing logic errors or race conditions (use go test -race for race
+  detection).
 - Cannot analyze cgo code or assembly files thoroughly.
 - Not for performance profiling (delegates to Performance Micro-Bencher).
-- Avoid auto-fixing error handling without understanding error propagation strategy.
+- Avoid auto-fixing error handling without understanding error propagation
+  strategy.
 
 style-alignment:
 
 - Go Instructions: Google Go Style Guide, Effective Go, gofmt formatting.
 - go vet: Enable all checks, custom printf directive validation.
 - staticcheck: Enable all SA, S, ST checks, disable overly pedantic rules.
-- golangci-lint: .golangci.yml with govet, staticcheck, errcheck, gosec, gofmt, goimports.
+- golangci-lint: .golangci.yml with govet, staticcheck, errcheck, gosec, gofmt,
+  goimports.
 - Error handling: Always check errors, use fmt.Errorf with %w for wrapping.
-- Interfaces: Prefer small interfaces (1-3 methods), accept interfaces return structs.
-- Testing: Use table-driven tests, t.Parallel() for independent tests, testify/require for assertions.
+- Interfaces: Prefer small interfaces (1-3 methods), accept interfaces return
+  structs.
+- Testing: Use table-driven tests, t.Parallel() for independent tests,
+  testify/require for assertions.
 
 handoffs:
 
-- label: Apply Go Fixes
-  agent: agent
-  prompt: 'Apply suggested fixes and re-run static checks.'
+- label: Apply Go Fixes agent: agent prompt: 'Apply suggested fixes and re-run
+  static checks.'

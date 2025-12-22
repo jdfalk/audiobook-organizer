@@ -49,28 +49,18 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   };
 
   const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '')
-      .length;
+    return Object.values(filters).filter((v) => v !== undefined && v !== '').length;
   };
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose}>
       <Box sx={{ width: 320, p: 3 }}>
-        <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="space-between"
-          mb={2}
-        >
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
           <Box display="flex" alignItems="center" gap={1}>
             <FilterListIcon />
             <Typography variant="h6">Filters</Typography>
             {getActiveFilterCount() > 0 && (
-              <Chip
-                label={getActiveFilterCount()}
-                size="small"
-                color="primary"
-              />
+              <Chip label={getActiveFilterCount()} size="small" color="primary" />
             )}
           </Box>
           <Button size="small" onClick={handleClearFilters}>

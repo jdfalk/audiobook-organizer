@@ -299,7 +299,6 @@
 ### High Priority (User-Facing Issues)
 
 1. ❌ **Investigate web UI not showing books**:
-
    - Books exist in database (verified via `/api/v1/audiobooks`)
    - Dashboard shows "Books: 4" correctly
    - Library page may have frontend state/refresh issue
@@ -310,7 +309,6 @@
      4. Test with browser hard refresh (Cmd+Shift+R)
 
 2. ❌ **Fix EventSource stability**:
-
    - **Server-side**: Why does `/api/events` close after ~17 seconds?
      - Check for read/write timeouts in Gin server config
      - Verify heartbeat is being sent AND read by clients
@@ -332,7 +330,6 @@
 ### Medium Priority (Data Accuracy)
 
 1. ❌ **Separate dashboard counts**:
-
    - Modify `/api/v1/system/status` to return:
      - `library_book_count`: Books in `root_dir`
      - `import_book_count`: Books in import paths (unique by hash)
@@ -349,7 +346,6 @@
 ### Low Priority (Optional Testing)
 
 1. ❓ **Verify duplicate detection**:
-
    - Hash-based detection implemented in `internal/scanner/scanner.go` v1.9.0
    - Test by:
      1. Copy a file to both library and import paths

@@ -149,9 +149,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
         </IconButton>
       </Box>
 
-      <CardContent
-        sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}
-      >
+      <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
         <Typography
           gutterBottom
           variant="h6"
@@ -172,24 +170,14 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
         </Typography>
 
         {audiobook.series && (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            noWrap
-            sx={{ mt: 0.5 }}
-          >
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
             {audiobook.series}
             {audiobook.series_number && ` #${audiobook.series_number}`}
           </Typography>
         )}
 
         {audiobook.narrator && (
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            noWrap
-            sx={{ mt: 0.5 }}
-          >
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
             Narrated by: {audiobook.narrator}
           </Typography>
         )}
@@ -204,16 +192,9 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           }}
         >
           {audiobook.version_group_id && (
-            <Chip
-              label="Multiple Versions"
-              size="small"
-              color="info"
-              icon={<CompareIcon />}
-            />
+            <Chip label="Multiple Versions" size="small" color="info" icon={<CompareIcon />} />
           )}
-          {audiobook.genre && (
-            <Chip label={audiobook.genre} size="small" variant="outlined" />
-          )}
+          {audiobook.genre && <Chip label={audiobook.genre} size="small" variant="outlined" />}
           {audiobook.language && (
             <Chip label={audiobook.language} size="small" variant="outlined" />
           )}

@@ -19,10 +19,7 @@ interface AppState {
 
   // Notifications
   notifications: Notification[];
-  addNotification: (
-    message: string,
-    severity: Notification['severity']
-  ) => void;
+  addNotification: (message: string, severity: Notification['severity']) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
 
@@ -44,10 +41,7 @@ export const useAppStore = create<AppState>()(
       addNotification: (message, severity) => {
         const id = `${Date.now()}-${Math.random()}`;
         set((state) => ({
-          notifications: [
-            ...state.notifications,
-            { id, message, severity, timestamp: Date.now() },
-          ],
+          notifications: [...state.notifications, { id, message, severity, timestamp: Date.now() }],
         }));
         // Auto-remove after 5 seconds
         setTimeout(() => {

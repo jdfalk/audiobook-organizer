@@ -65,14 +65,11 @@ export const Library = () => {
   const [filters, setFilters] = useState<FilterOptions>({});
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(
-    null
-  );
+  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(null);
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
-  const [versionManagingAudiobook, setVersionManagingAudiobook] =
-    useState<Audiobook | null>(null);
+  const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Import path management
@@ -81,13 +78,10 @@ export const Library = () => {
   const [addPathDialogOpen, setAddPathDialogOpen] = useState(false);
   const [newImportPath, setNewImportPath] = useState('');
   const [showServerBrowser, setShowServerBrowser] = useState(false);
-  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(
-    null
-  );
+  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(null);
   const [organizeRunning, setOrganizeRunning] = useState(false);
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
-  const [activeOrganizeOp, setActiveOrganizeOp] =
-    useState<api.Operation | null>(null);
+  const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
   const [operationLogs, setOperationLogs] = useState<
     Record<
       string,
@@ -190,9 +184,7 @@ export const Library = () => {
           } else if (evt.type === 'operation.status') {
             const opId = evt.data.operation_id;
             const status = evt.data.status;
-            const finalize = (
-              op: api.Operation | null
-            ): api.Operation | null => {
+            const finalize = (op: api.Operation | null): api.Operation | null => {
               if (!op || op.id !== opId) return op;
               return { ...op, status };
             };
@@ -208,10 +200,7 @@ export const Library = () => {
         es.close();
         reconnectAttempts.current++;
         // Exponential backoff: 3s, 6s, 12s, 24s, capped at 30s
-        const delay = Math.min(
-          3000 * Math.pow(2, reconnectAttempts.current - 1),
-          30000
-        );
+        const delay = Math.min(3000 * Math.pow(2, reconnectAttempts.current - 1), 30000);
         console.warn(
           `EventSource connection lost (attempt ${reconnectAttempts.current}), reconnecting in ${delay / 1000}s...`
         );
@@ -261,9 +250,7 @@ export const Library = () => {
 
       // Fetch audiobooks and import paths
       const [books, folders, bookCount] = await Promise.all([
-        debouncedSearch
-          ? api.searchBooks(debouncedSearch, limit)
-          : api.getBooks(limit, offset),
+        debouncedSearch ? api.searchBooks(debouncedSearch, limit) : api.getBooks(limit, offset),
         api.getImportPaths(),
         debouncedSearch ? Promise.resolve(0) : api.countBooks(),
       ]);
@@ -298,24 +285,16 @@ export const Library = () => {
           case 'author':
             return (a.author || '').localeCompare(b.author || '');
           case 'date_added':
-            return (
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-            );
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
           case 'date_modified':
-            return (
-              new Date(b.updated_at).getTime() -
-              new Date(a.updated_at).getTime()
-            );
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
           default:
             return 0;
         }
       });
 
       setAudiobooks(sortedBooks);
-      setTotalPages(
-        Math.ceil((debouncedSearch ? books.length : bookCount) / limit)
-      );
+      setTotalPages(Math.ceil((debouncedSearch ? books.length : bookCount) / limit));
 
       // Load import paths
       const convertedPaths: ImportPath[] = folders.map((folder) => ({
@@ -338,9 +317,7 @@ export const Library = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -391,9 +368,7 @@ export const Library = () => {
       console.log('Saved audiobook:', audiobook);
 
       // Update local state
-      setAudiobooks((prev) =>
-        prev.map((ab) => (ab.id === audiobook.id ? audiobook : ab))
-      );
+      setAudiobooks((prev) => prev.map((ab) => (ab.id === audiobook.id ? audiobook : ab)));
       setEditingAudiobook(null);
     } catch (error) {
       console.error('Failed to save audiobook:', error);
@@ -412,19 +387,12 @@ export const Library = () => {
       //     updates
       //   })
       // });
-      console.log(
-        'Batch updated:',
-        selectedAudiobooks.length,
-        'audiobooks with',
-        updates
-      );
+      console.log('Batch updated:', selectedAudiobooks.length, 'audiobooks with', updates);
 
       // Update local state
       setAudiobooks((prev) =>
         prev.map((ab) =>
-          selectedAudiobooks.some((selected) => selected.id === ab.id)
-            ? { ...ab, ...updates }
-            : ab
+          selectedAudiobooks.some((selected) => selected.id === ab.id) ? { ...ab, ...updates } : ab
         )
       );
       setSelectedAudiobooks([]);
@@ -469,10 +437,7 @@ export const Library = () => {
   const handleParseWithAI = async (audiobook: Audiobook) => {
     try {
       const result = await api.parseAudiobookWithAI(audiobook.id);
-      console.log(
-        `AI parsing completed with ${result.confidence} confidence:`,
-        result.book
-      );
+      console.log(`AI parsing completed with ${result.confidence} confidence:`, result.book);
       // Reload audiobooks to show updated data
       loadAudiobooks();
     } catch (error) {
@@ -487,22 +452,17 @@ export const Library = () => {
   };
 
   const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '')
-      .length;
+    return Object.values(filters).filter((v) => v !== undefined && v !== '').length;
   };
 
   const libraryBookCount =
     systemStatus?.library_book_count ?? systemStatus?.library.book_count ?? 0;
   const importBookCount =
-    systemStatus?.import_book_count ??
-    systemStatus?.import_paths?.book_count ??
-    0;
+    systemStatus?.import_book_count ?? systemStatus?.import_paths?.book_count ?? 0;
   const librarySizeBytes =
     systemStatus?.library_size_bytes ?? systemStatus?.library.total_size ?? 0;
   const importSizeBytes =
-    systemStatus?.import_size_bytes ??
-    systemStatus?.import_paths?.total_size ??
-    0;
+    systemStatus?.import_size_bytes ?? systemStatus?.import_paths?.total_size ?? 0;
 
   // Import path management handlers
   const handleAddImportPath = async () => {
@@ -534,11 +494,7 @@ export const Library = () => {
         const poll = async () => {
           try {
             const op = await api.getOperationStatus(opId);
-            if (
-              op.status === 'completed' ||
-              op.status === 'failed' ||
-              op.status === 'canceled'
-            ) {
+            if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
               // Refresh folder list to get updated book counts
               const folders = await api.getImportPaths();
               setImportPaths(
@@ -622,16 +578,12 @@ export const Library = () => {
       const pathEntry = importPaths.find((p) => p.id === id);
       const path = pathEntry?.path;
       if (!path) return;
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p))
-      );
+      setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p)));
       const op = await api.startScan(path);
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p))
-      );
+      setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p)));
     }
   };
 
@@ -680,19 +632,10 @@ export const Library = () => {
         overflow: 'hidden',
       }}
     >
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={3}
-      >
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Library</Typography>
         <Stack direction="row" spacing={2}>
-          <Button
-            startIcon={<UploadIcon />}
-            onClick={handleManualImport}
-            variant="contained"
-          >
+          <Button startIcon={<UploadIcon />} onClick={handleManualImport} variant="contained">
             Import Files
           </Button>
           <Button
@@ -702,12 +645,7 @@ export const Library = () => {
           >
             Filters
             {getActiveFilterCount() > 0 && (
-              <Chip
-                label={getActiveFilterCount()}
-                size="small"
-                color="primary"
-                sx={{ ml: 1 }}
-              />
+              <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 1 }} />
             )}
           </Button>
         </Stack>
@@ -728,17 +666,14 @@ export const Library = () => {
               </Typography>
               <Typography
                 variant="body2"
-                color={
-                  systemStatus.library.path ? 'text.secondary' : 'warning.main'
-                }
+                color={systemStatus.library.path ? 'text.secondary' : 'warning.main'}
               >
                 Path:{' '}
                 {systemStatus.library.path ||
                   'Not configured - Please set library path in Settings'}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Library Books: {libraryBookCount} | Import Books:{' '}
-                {importBookCount} | Import Paths:{' '}
+                Library Books: {libraryBookCount} | Import Books: {importBookCount} | Import Paths:{' '}
                 {systemStatus.import_paths?.folder_count || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
@@ -751,8 +686,8 @@ export const Library = () => {
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Organizing: {activeOrganizeOp.progress}/
-                      {activeOrganizeOp.total} {activeOrganizeOp.message}
+                      Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}{' '}
+                      {activeOrganizeOp.message}
                     </Typography>
                     <Button
                       size="small"
@@ -796,9 +731,7 @@ export const Library = () => {
                               setOperationLogs((prev) => {
                                 const arr = prev[activeOrganizeOp.id] || [];
                                 const updated = arr.map((item, i) =>
-                                  i === idx
-                                    ? { ...item, expanded: !item.expanded }
-                                    : item
+                                  i === idx ? { ...item, expanded: !item.expanded } : item
                                 );
                                 return {
                                   ...prev,
@@ -810,10 +743,7 @@ export const Library = () => {
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography
-                              variant="caption"
-                              sx={{ ml: 1.5, color: 'text.secondary' }}
-                            >
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
                               {l.details}
                             </Typography>
                           )}
@@ -827,8 +757,7 @@ export const Library = () => {
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Scanning: {activeScanOp.progress}/{activeScanOp.total}{' '}
-                      {activeScanOp.message}
+                      Scanning: {activeScanOp.progress}/{activeScanOp.total} {activeScanOp.message}
                     </Typography>
                     <Button
                       size="small"
@@ -872,9 +801,7 @@ export const Library = () => {
                               setOperationLogs((prev) => {
                                 const arr = prev[activeScanOp.id] || [];
                                 const updated = arr.map((item, i) =>
-                                  i === idx
-                                    ? { ...item, expanded: !item.expanded }
-                                    : item
+                                  i === idx ? { ...item, expanded: !item.expanded } : item
                                 );
                                 return { ...prev, [activeScanOp.id]: updated };
                               });
@@ -883,10 +810,7 @@ export const Library = () => {
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography
-                              variant="caption"
-                              sx={{ ml: 1.5, color: 'text.secondary' }}
-                            >
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
                               {l.details}
                             </Typography>
                           )}
@@ -899,11 +823,7 @@ export const Library = () => {
               {/* Auto-scroll handled by top-level hook */}
             </Box>
             <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                disabled={organizeRunning}
-                onClick={handleOrganizeLibrary}
-              >
+              <Button variant="outlined" disabled={organizeRunning} onClick={handleOrganizeLibrary}>
                 {organizeRunning ? 'Organizing…' : 'Organize Library'}
               </Button>
               <Button
@@ -944,43 +864,29 @@ export const Library = () => {
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {audiobooks.length === 0 && !loading ? (
-          <Paper
-            sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
-          >
-            <FolderOpenIcon
-              sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }}
-            />
+          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
+            <FolderOpenIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
             <Alert severity="info" sx={{ textAlign: 'center' }}>
               <AlertTitle>No Audiobooks Found</AlertTitle>
               {importPaths.length === 0 ? (
                 <>
                   You haven't added any import paths yet. Get started by:
-                  <ul
-                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
-                  >
+                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
                     <li>
-                      Importing individual audiobook files using the "Import
-                      Files" button below
+                      Importing individual audiobook files using the "Import Files" button below
                     </li>
                     <li>
-                      Adding import paths using the "Add Import Path" button
-                      below (watches folders for new files)
+                      Adding import paths using the "Add Import Path" button below (watches folders
+                      for new files)
                     </li>
                   </ul>
                 </>
               ) : (
                 <>
                   No audiobooks found in your library. Try:
-                  <ul
-                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
-                  >
-                    <li>
-                      Scanning your import paths using the "Scan All" button
-                      below
-                    </li>
-                    <li>
-                      Adding more import paths where audiobooks are located
-                    </li>
+                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
+                    <li>Scanning your import paths using the "Scan All" button below</li>
+                    <li>Adding more import paths where audiobooks are located</li>
                   </ul>
                 </>
               )}
@@ -1103,10 +1009,9 @@ export const Library = () => {
           <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
           <DialogContent>
             <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>Import folders</strong> are watch locations where the
-              scanner looks for new audiobooks. Files discovered here will be
-              copied and organized into your main library path (configured in
-              Settings).
+              <strong>Import folders</strong> are watch locations where the scanner looks for new
+              audiobooks. Files discovered here will be copied and organized into your main library
+              path (configured in Settings).
             </Alert>
 
             {!showServerBrowser ? (
@@ -1130,10 +1035,7 @@ export const Library = () => {
               </Box>
             ) : (
               <Box>
-                <Button
-                  onClick={() => setShowServerBrowser(false)}
-                  sx={{ mb: 2 }}
-                >
+                <Button onClick={() => setShowServerBrowser(false)} sx={{ mb: 2 }}>
                   ← Back to Manual Entry
                 </Button>
                 <ServerFileBrowser
@@ -1185,9 +1087,7 @@ export const Library = () => {
               }}
               onClick={() => setImportPathsExpanded(!importPathsExpanded)}
             >
-              <Typography variant="h6">
-                Import Paths ({importPaths.length})
-              </Typography>
+              <Typography variant="h6">Import Paths ({importPaths.length})</Typography>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Button
                   size="small"
@@ -1197,8 +1097,7 @@ export const Library = () => {
                     handleScanAll();
                   }}
                   disabled={
-                    importPaths.length === 0 ||
-                    importPaths.some((p) => p.status === 'scanning')
+                    importPaths.length === 0 || importPaths.some((p) => p.status === 'scanning')
                   }
                 >
                   Scan All
@@ -1212,9 +1111,7 @@ export const Library = () => {
                 >
                   <ExpandMoreIcon
                     sx={{
-                      transform: importPathsExpanded
-                        ? 'rotate(180deg)'
-                        : 'rotate(0deg)',
+                      transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                       transition: 'transform 0.3s',
                     }}
                   />
@@ -1242,10 +1139,7 @@ export const Library = () => {
                       >
                         <RefreshIcon />
                       </IconButton>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleRemoveImportPath(path.id)}
-                      >
+                      <IconButton edge="end" onClick={() => handleRemoveImportPath(path.id)}>
                         <DeleteIcon />
                       </IconButton>
                     </ListItemSecondaryAction>

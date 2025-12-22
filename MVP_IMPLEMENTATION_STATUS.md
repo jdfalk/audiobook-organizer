@@ -5,6 +5,7 @@
 ### Test Results Summary
 
 #### Go Tests Status - ✅ ALL PASSING
+
 - **internal/backup**: ✅ PASS (all tests passing)
 - **internal/config**: ✅ PASS (all tests passing)
 - **internal/database**: ✅ PASS (all tests passing)
@@ -18,6 +19,7 @@
 - **internal/server**: ✅ PASS (all tests passing - added missing endpoints)
 
 #### Server Test Fixes Completed
+
 1. ✅ **Dashboard Endpoint** (`/api/v1/dashboard`) - IMPLEMENTED
    - Returns size distribution (0-100MB, 100-500MB, 500MB-1GB, 1GB+)
    - Returns format distribution (m4b, mp3, m4a, flac, etc.)
@@ -25,7 +27,8 @@
    - Returns recent operations
 
 2. ✅ **Metadata Endpoints** (`/api/v1/metadata/*`) - IMPLEMENTED
-   - `/api/v1/metadata/fields` - Lists available metadata fields with validation rules
+   - `/api/v1/metadata/fields` - Lists available metadata fields with validation
+     rules
    - Added publishDate validation with date format checking (YYYY-MM-DD)
 
 3. ✅ **Work Endpoints** (`/api/v1/work/*`) - IMPLEMENTED
@@ -36,12 +39,15 @@
    - Added proper nil check before using database.DB fallback path
 
 5. ✅ **Test Bug Fix** - Fixed TestIntegrationLargeScaleMixedFormats
-   - Replaced `string(rune(n))` with `fmt.Sprintf("%d", n)` for proper numeric conversion
+   - Replaced `string(rune(n))` with `fmt.Sprintf("%d", n)` for proper numeric
+     conversion
 
 ### MVP Task Status
 
 #### Task 1: Scan Progress Reporting
+
 **Status**: ✅ IMPLEMENTED (needs testing)
+
 - ✅ `/api/v1/operations/:id/status` endpoint exists
 - ✅ `/api/v1/operations/:id/logs` endpoint exists
 - ✅ SSE/WebSocket support via realtime package
@@ -51,15 +57,20 @@
 - 🔲 **TODO**: Test with different library sizes
 
 #### Task 2: Separate Dashboard Counts
+
 **Status**: ✅ IMPLEMENTED (needs testing)
-- ✅ `/api/v1/system/status` returns `library_book_count`, `import_book_count`, `total_book_count`
+
+- ✅ `/api/v1/system/status` returns `library_book_count`, `import_book_count`,
+  `total_book_count`
 - ✅ Counts calculated by checking if book path starts with RootDir
 - ✅ Frontend expects these fields
 - 🔲 **TODO**: Manual end-to-end testing
 - 🔲 **TODO**: Verify counts update after scan
 
 #### Task 3: Import Size Reporting
+
 **Status**: ✅ IMPLEMENTED
+
 - ✅ Size calculation implemented in `calculateLibrarySizes()`
 - ✅ Returns `library_size_bytes` and `import_size_bytes` in system/status
 - ✅ Caching implemented (60s TTL)
@@ -69,28 +80,37 @@
 - 🔲 **TODO**: Test with real files and verify accuracy
 
 #### Task 4: Duplicate Detection
+
 **Status**: ✅ IMPLEMENTED (needs testing)
+
 - ✅ SHA256 hash computation in `ComputeFileHash()`
-- ✅ Hash stored in `file_hash`, `original_file_hash`, `organized_file_hash` fields
+- ✅ Hash stored in `file_hash`, `original_file_hash`, `organized_file_hash`
+  fields
 - ✅ Duplicate checking via `IsHashBlocked()` in do_not_import table
 - 🔲 **TODO**: Test duplicate detection
 - 🔲 **TODO**: Verify hash blocking works
 
 #### Task 5: Hash Tracking & State Lifecycle
+
 **Status**: ✅ IMPLEMENTED (needs UI + testing)
+
 - ✅ Dual hash tracking (`original_file_hash`, `organized_file_hash`)
 - ✅ `do_not_import` table exists
 - ✅ Hash blocking check in scanner
-- ✅ **DONE**: State machine fields added (library_state, quantity, marked_for_deletion)
+- ✅ **DONE**: State machine fields added (library_state, quantity,
+  marked_for_deletion)
 - ✅ **DONE**: Migration 9 for state fields with indices
-- ✅ **DONE**: Blocked hashes API endpoints (GET/POST/DELETE /api/v1/blocked-hashes)
+- ✅ **DONE**: Blocked hashes API endpoints (GET/POST/DELETE
+  /api/v1/blocked-hashes)
 - ❌ **Missing**: Settings UI tab for viewing blocked hashes
 - 🔲 **TODO**: Create Settings tab for blocked hashes
 - 🔲 **TODO**: Implement state transition logic
 - 🔲 **TODO**: Manual testing
 
 #### Task 6: Book Detail Page & Delete Flow
+
 **Status**: ❌ NOT IMPLEMENTED
+
 - ❌ **Missing**: Book detail page UI
 - ❌ **Missing**: Enhanced delete dialog with reimport prevention
 - ❌ **Missing**: API endpoint to add hash to do_not_import
@@ -100,7 +120,9 @@
 - 🔲 **TODO**: Add confirmation dialog
 
 #### Task 7: E2E Test Suite
+
 **Status**: ⚠️ PARTIAL
+
 - ✅ E2E test framework exists (Selenium + pytest)
 - ✅ Basic tests: settings_workflow, dashboard_workflow, organize_workflow
 - ✅ Docker test image (Dockerfile.test)
@@ -115,6 +137,7 @@
 ### Immediate Action Items
 
 #### Priority 1: Fix Failing Tests ✅ COMPLETED
+
 1. ✅ Fix scanner panic (database.DB nil check) - COMPLETED
 2. ✅ Fix TestIntegrationLargeScaleMixedFormats (test bug) - COMPLETED
 3. ✅ Implement missing `/api/v1/dashboard` endpoint - COMPLETED
@@ -122,21 +145,30 @@
 5. ✅ Implement missing `/api/v1/work/*` endpoints - COMPLETED
 
 #### Priority 2: Manual Testing & Validation (CURRENT FOCUS)
-1. 🔲 **Manual test Task 1 (Scan Progress)** - Start server, trigger scan, verify progress
-2. 🔲 **Manual test Task 2 (Separate Counts)** - Verify library vs import book counts
-3. 🔲 **Manual test Task 3 (Dashboard)** - Check size distribution and format stats
+
+1. 🔲 **Manual test Task 1 (Scan Progress)** - Start server, trigger scan,
+   verify progress
+2. 🔲 **Manual test Task 2 (Separate Counts)** - Verify library vs import book
+   counts
+3. 🔲 **Manual test Task 3 (Dashboard)** - Check size distribution and format
+   stats
 4. 🔲 **Test duplicate detection** - Verify hash blocking works
 5. 🔲 **Test version management** - Link versions and verify primary selection
 
 #### Priority 3: Implement Remaining MVP Features
-1. ❌ **Add State Machine** - Extend books table with state field (wanted/imported/organized/soft_deleted)
-2. ❌ **Blocked Hashes API** - Create endpoint to view/manage do_not_import table
+
+1. ❌ **Add State Machine** - Extend books table with state field
+   (wanted/imported/organized/soft_deleted)
+2. ❌ **Blocked Hashes API** - Create endpoint to view/manage do_not_import
+   table
 3. ❌ **Settings Tab** - Add UI tab for viewing blocked hashes
-4. ❌ **Book Detail Page** - Create BookDetail.tsx with tabs (Info, Files, Versions)
+4. ❌ **Book Detail Page** - Create BookDetail.tsx with tabs (Info, Files,
+   Versions)
 5. ❌ **Enhanced Delete** - Add delete with hash blocking option
 6. ❌ **Expand E2E Tests** - Add tests for MVP Tasks 1-6
 
 #### Priority 3: Documentation & Polish
+
 1. Update CHANGELOG.md with fixes
 2. Add API documentation for new endpoints
 3. Create testing guide for manual MVP validation
@@ -182,6 +214,7 @@
 - **Good**: Error handling is generally solid
 - **Good**: Database abstraction with Store interface
 - **Issue**: Some tests rely on missing API endpoints (need to implement)
-- **Issue**: Scanner test has bug with string(rune()) conversion for large numbers
+- **Issue**: Scanner test has bug with string(rune()) conversion for large
+  numbers
 - **Improvement**: Need more integration tests
 - **Improvement**: E2E tests need expansion for MVP coverage

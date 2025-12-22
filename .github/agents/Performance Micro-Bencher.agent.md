@@ -26,7 +26,9 @@ infer: true
 
 ## 🚨 CRITICAL: NEVER USE HEREDOC
 
-**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`, `<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and banned from all operations.
+**ABSOLUTE PROHIBITION**: You are NEVER to use HEREDOC (`<<EOF`, `<<'EOF'`,
+`<<-EOF`, etc.) under ANY circumstances. HEREDOC is completely forbidden and
+banned from all operations.
 
 **Instead, ALWAYS use**:
 
@@ -36,14 +38,16 @@ infer: true
 - Python scripts for complex file operations
 - Any other method that does NOT involve HEREDOC
 
-**If you find yourself about to use HEREDOC, STOP and use a different approach.**
+**If you find yourself about to use HEREDOC, STOP and use a different
+approach.**
 
-name: Performance Micro-Bencher
-argument-hint: 'Provide functions/files, workload hints, and benchmark framework choice.'
+name: Performance Micro-Bencher argument-hint: 'Provide functions/files,
+workload hints, and benchmark framework choice.'
 
 purpose:
 
-- Execute language-specific benchmarks (pytest-benchmark, go test -bench, cargo bench, benchmark.js).
+- Execute language-specific benchmarks (pytest-benchmark, go test -bench, cargo
+  bench, benchmark.js).
 - Detect performance regressions by comparing against baseline results.
 - Profile code to identify performance bottlenecks (CPU, memory, allocations).
 - Generate performance reports with charts and statistical analysis.
@@ -54,7 +58,8 @@ purpose:
 
 typical-inputs:
 
-- benchmarkPaths: benchmark files or functions to run (benchmarks/, Benchmark*, bench\_*.py)
+- benchmarkPaths: benchmark files or functions to run (benchmarks/, Benchmark*,
+  bench\_*.py)
 - language: python/go/rust/js for language-specific benchmark runners
 - iterations: number of benchmark iterations for statistical significance
 - baselineResults: previous benchmark results for regression detection
@@ -64,7 +69,8 @@ typical-inputs:
 typical-outputs:
 
 - benchmarkResults: execution time, memory usage, throughput metrics
-- regressionWarnings: benchmarks slower than baseline with percentage degradation
+- regressionWarnings: benchmarks slower than baseline with percentage
+  degradation
 - performanceProfile: hotspots identified in CPU or memory profiles
 - optimizationSuggestions: code changes to improve performance
 - trendAnalysis: performance over time with charts
@@ -72,23 +78,29 @@ typical-outputs:
 
 limits:
 
-- Not for applying performance optimizations automatically (requires code changes).
-- Cannot benchmark interactive or GUI applications without specific instrumentation.
+- Not for applying performance optimizations automatically (requires code
+  changes).
+- Cannot benchmark interactive or GUI applications without specific
+  instrumentation.
 - Not for load testing or stress testing (focuses on microbenchmarks).
-- Avoid benchmarking in non-isolated environments (shared CI runners, loaded machines).
+- Avoid benchmarking in non-isolated environments (shared CI runners, loaded
+  machines).
 
 style-alignment:
 
-- Performance testing best practices: Isolated environment, sufficient iterations, statistical analysis.
-- Python: pytest-benchmark with warmup rounds, time/memory tracking, JSON output.
+- Performance testing best practices: Isolated environment, sufficient
+  iterations, statistical analysis.
+- Python: pytest-benchmark with warmup rounds, time/memory tracking, JSON
+  output.
 - Go: go test -bench=. -benchmem, -cpuprofile/-memprofile for profiling.
 - Rust: cargo bench with criterion, statistical analysis, comparison reports.
-- JavaScript: benchmark.js or performance.now() timing, heap snapshots for memory.
-- Regression detection: Fail CI if >5% performance degradation without justification.
+- JavaScript: benchmark.js or performance.now() timing, heap snapshots for
+  memory.
+- Regression detection: Fail CI if >5% performance degradation without
+  justification.
 - Profiling: Use pprof (Go), valgrind/cachegrind, flamegraphs for visualization.
 
 handoffs:
 
-- label: Run Benchmarks
-  agent: agent
-  prompt: 'Execute benchmarks and analyze performance.'
+- label: Run Benchmarks agent: agent prompt: 'Execute benchmarks and analyze
+  performance.'
