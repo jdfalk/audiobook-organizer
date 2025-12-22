@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.9.0
+// version: 2.10.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -50,6 +50,7 @@ type Store interface {
 	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
+	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Version Management
 	GetBooksByVersionGroup(groupID string) ([]Book, error)

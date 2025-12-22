@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -38,6 +38,13 @@ export interface Book {
   is_primary_version?: boolean;
   version_group_id?: string;
   version_notes?: string;
+  file_hash?: string;
+  original_file_hash?: string;
+  organized_file_hash?: string;
+  library_state?: string;
+  quantity?: number;
+  marked_for_deletion?: boolean;
+  marked_for_deletion_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -254,6 +261,60 @@ export async function countBooks(): Promise<number> {
   if (!response.ok) throw new Error('Failed to count books');
   const data = await response.json();
   return data.count || 0;
+}
+
+export async function getSoftDeletedBooks(
+  limit = 100,
+  offset = 0,
+  olderThanDays?: number
+): Promise<{ items: Book[]; count: number }> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (olderThanDays && olderThanDays > 0) {
+    params.set('older_than_days', String(olderThanDays));
+  }
+  const response = await fetch(`${API_BASE}/audiobooks/soft-deleted?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to fetch soft-deleted books');
+  const data = await response.json();
+  return {
+    items: data.items || [],
+    count: data.count ?? (data.items ? data.items.length : 0),
+  };
+}
+
+export async function purgeSoftDeletedBooks(
+  deleteFiles = false,
+  olderThanDays?: number
+): Promise<{ attempted: number; purged: number; files_deleted: number; errors: string[] }> {
+  const params = new URLSearchParams({
+    delete_files: String(deleteFiles),
+  });
+  if (olderThanDays && olderThanDays > 0) {
+    params.set('older_than_days', String(olderThanDays));
+  }
+  const response = await fetch(`${API_BASE}/audiobooks/purge-soft-deleted?${params.toString()}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to purge soft-deleted books');
+  return response.json();
+}
+
+export async function deleteBook(
+  bookId: string,
+  options: { softDelete?: boolean; blockHash?: boolean } = {}
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options.softDelete) params.set('soft_delete', 'true');
+  if (options.blockHash) params.set('block_hash', 'true');
+  const query = params.toString();
+  const url =
+    query.length > 0 ? `${API_BASE}/audiobooks/${bookId}?${query}` : `${API_BASE}/audiobooks/${bookId}`;
+  const response = await fetch(url, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error('Failed to delete audiobook');
 }
 
 // Authors

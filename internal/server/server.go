@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -320,6 +320,8 @@ func (s *Server) setupRoutes() {
 		api.GET("/audiobooks", s.listAudiobooks)
 		api.GET("/audiobooks/count", s.countAudiobooks)
 		api.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
+		api.GET("/audiobooks/soft-deleted", s.listSoftDeletedAudiobooks)
+		api.DELETE("/audiobooks/purge-soft-deleted", s.purgeSoftDeletedAudiobooks)
 		api.GET("/audiobooks/:id", s.getAudiobook)
 		api.PUT("/audiobooks/:id", s.updateAudiobook)
 		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
@@ -480,7 +482,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	seriesIDStr := c.Query("series_id")
 
 	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > 500 {
+	if err != nil || limit <= 0 || limit > 100000 {
 		limit = 50
 	}
 	offset, err := strconv.Atoi(offsetStr)
@@ -544,6 +546,101 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 		"groups":          duplicateGroups,
 		"group_count":     len(duplicateGroups),
 		"duplicate_count": totalDuplicates,
+	})
+}
+
+func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	limitStr := c.DefaultQuery("limit", "50")
+	offsetStr := c.DefaultQuery("offset", "0")
+	olderThanStr := c.Query("older_than_days")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	var cutoff *time.Time
+	if olderThanStr != "" {
+		if days, convErr := strconv.Atoi(olderThanStr); convErr == nil && days > 0 {
+			ts := time.Now().AddDate(0, 0, -days)
+			cutoff = &ts
+		}
+	}
+
+	books, err := database.GlobalStore.ListSoftDeletedBooks(limit, offset, cutoff)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if books == nil {
+		books = []database.Book{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":  books,
+		"count":  len(books),
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	deleteFiles := c.Query("delete_files") == "true"
+	olderThanStr := c.Query("older_than_days")
+
+	var cutoff *time.Time
+	if olderThanStr != "" {
+		if days, err := strconv.Atoi(olderThanStr); err == nil && days > 0 {
+			ts := time.Now().AddDate(0, 0, -days)
+			cutoff = &ts
+		}
+	}
+
+	books, err := database.GlobalStore.ListSoftDeletedBooks(1_000_000, 0, cutoff)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	purged := 0
+	filesDeleted := 0
+	errors := []string{}
+
+	for _, book := range books {
+		if deleteFiles && book.FilePath != "" {
+			if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
+				errors = append(errors, fmt.Sprintf("%s: failed to delete file: %v", book.ID, err))
+			} else if err == nil {
+				filesDeleted++
+			}
+		}
+
+		if err := database.GlobalStore.DeleteBook(book.ID); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", book.ID, err))
+			continue
+		}
+		purged++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"attempted":     len(books),
+		"purged":        purged,
+		"files_deleted": filesDeleted,
+		"errors":        errors,
 	})
 }
 

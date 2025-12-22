@@ -4,6 +4,25 @@
 
 ### Added / Changed
 
+#### December 23, 2025 - Soft Delete Purge Flow
+
+- **Backend lifecycle hygiene**
+  - SQLite schema now persists lifecycle fields (library_state, quantity,
+    marked_for_deletion, marked_for_deletion_at)
+  - Store methods filter soft-deleted records from lists/counts and expose
+    `ListSoftDeletedBooks` for admin actions
+  - New endpoints: `GET /api/v1/audiobooks/soft-deleted` and
+    `DELETE /api/v1/audiobooks/purge-soft-deleted` (optional file removal)
+- **Frontend delete/purge UX**
+  - Library page delete dialog supports soft delete with optional hash blocking
+    and refreshes soft-delete counts
+  - Library view hides soft-deleted records by default and surfaces a purge
+    button with count
+  - Added purge dialog to permanently remove soft-deleted books (optional file
+    deletion)
+- **Testing**
+  - `go test ./...`
+
 #### November 22, 2025 - Metadata Fixes and Diagnostics
 
 - **Diagnostics CLI**: Added `diagnostics` command with `cleanup-invalid` and
