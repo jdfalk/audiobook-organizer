@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.3.0
+// version: 1.4.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -97,6 +97,20 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
+// Sort field enum for type safety
+export enum SortField {
+  Title = 'title',
+  Author = 'author',
+  Year = 'year',
+  CreatedAt = 'created_at',
+}
+
+// Sort order enum for type safety
+export enum SortOrder {
+  Ascending = 'asc',
+  Descending = 'desc',
+}
+
 // Filter options for audiobook queries
 export interface FilterOptions {
   search?: string;
@@ -104,8 +118,8 @@ export interface FilterOptions {
   series?: string;
   genre?: string;
   language?: string;
-  sortBy?: 'title' | 'author' | 'year' | 'created_at';
-  sortOrder?: 'asc' | 'desc';
+  sortBy?: SortField;
+  sortOrder?: SortOrder;
 }
 
 // Pagination parameters
