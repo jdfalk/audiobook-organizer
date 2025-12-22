@@ -390,6 +390,11 @@ func (s *Server) setupRoutes() {
 		// Work queue routes (alternative singular form for compatibility)
 		api.GET("/work", s.listWork)
 		api.GET("/work/stats", s.getWorkStats)
+
+		// Blocked hashes management routes
+		api.GET("/blocked-hashes", s.listBlockedHashes)
+		api.POST("/blocked-hashes", s.addBlockedHash)
+		api.DELETE("/blocked-hashes/:hash", s.removeBlockedHash)
 	}
 
 	// Serve static files (React frontend)
@@ -2997,6 +3002,86 @@ func (s *Server) getWorkStats(c *gin.Context) {
 		"total_books":                  totalBooks,
 		"works_with_multiple_editions": worksWithMultipleEditions,
 		"average_editions_per_work":    float64(totalBooks) / float64(max(totalWorks, 1)),
+	})
+}
+
+// listBlockedHashes returns all blocked hashes
+func (s *Server) listBlockedHashes(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	hashes, err := database.GlobalStore.GetAllBlockedHashes()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get blocked hashes: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": hashes,
+		"total": len(hashes),
+	})
+}
+
+// addBlockedHash adds a hash to the blocklist
+func (s *Server) addBlockedHash(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		Hash   string `json:"hash" binding:"required"`
+		Reason string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate hash format (should be 64 character hex string for SHA256)
+	if len(req.Hash) != 64 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "hash must be 64 characters (SHA256)"})
+		return
+	}
+
+	err := database.GlobalStore.AddBlockedHash(req.Hash, req.Reason)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add blocked hash: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "hash blocked successfully",
+		"hash":    req.Hash,
+		"reason":  req.Reason,
+	})
+}
+
+// removeBlockedHash removes a hash from the blocklist
+func (s *Server) removeBlockedHash(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	hash := c.Param("hash")
+	if hash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "hash parameter required"})
+		return
+	}
+
+	err := database.GlobalStore.RemoveBlockedHash(hash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to remove blocked hash: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "hash unblocked successfully",
+		"hash":    hash,
 	})
 }
 
