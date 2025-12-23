@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -32,6 +32,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestoreIcon from '@mui/icons-material/Restore';
+import EditIcon from '@mui/icons-material/Edit';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import CompareIcon from '@mui/icons-material/Compare';
@@ -42,6 +43,8 @@ import StorageIcon from '@mui/icons-material/Storage';
 import type { Book } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
+import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
+import type { Audiobook } from '../types';
 
 export const BookDetail = () => {
   const { id } = useParams();
@@ -61,6 +64,7 @@ export const BookDetail = () => {
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -185,6 +189,7 @@ export const BookDetail = () => {
         severity: 'success',
         message: result.message || `Metadata refreshed from ${result.source || 'provider'}.`,
       });
+      setActiveTab('info');
     } catch (error) {
       console.error('Failed to fetch metadata', error);
       setAlert({ severity: 'error', message: 'Metadata fetch failed.' });
@@ -220,6 +225,67 @@ export const BookDetail = () => {
     const linked = versions.filter((v) => v.id !== book.id);
     return { primary, linkedCount: linked.length };
   }, [book, versions]);
+
+  const mapBookToAudiobook = (current: Book): Audiobook => ({
+    id: current.id,
+    title: current.title,
+    author: current.author_name,
+    narrator: current.narrator,
+    series: current.series_name,
+    series_number: current.series_position,
+    language: current.language,
+    publisher: current.publisher,
+    description: current.description,
+    duration_seconds: current.duration,
+    file_path: current.file_path,
+    original_filename: current.original_filename,
+    cover_path: current.cover_image,
+    format: current.format,
+    bitrate_kbps: current.bitrate,
+    codec: current.codec,
+    sample_rate_hz: current.sample_rate,
+    channels: current.channels,
+    bit_depth: current.bit_depth,
+    quality: current.quality,
+    is_primary_version: current.is_primary_version,
+    version_group_id: current.version_group_id,
+    version_notes: current.version_notes,
+    file_hash: current.file_hash,
+    original_file_hash: current.original_file_hash,
+    organized_file_hash: current.organized_file_hash,
+    library_state: current.library_state,
+    quantity: current.quantity,
+    marked_for_deletion: current.marked_for_deletion,
+    marked_for_deletion_at: current.marked_for_deletion_at,
+    created_at: current.created_at,
+    updated_at: current.updated_at,
+    work_id: current.work_id,
+  });
+
+  const handleEditSave = async (updated: Audiobook) => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Saving changes...');
+    try {
+      const payload: Partial<Book> = {
+        title: updated.title,
+        description: updated.description,
+        publisher: updated.publisher,
+        language: updated.language,
+        narrator: updated.narrator,
+      };
+      const saved = await api.updateBook(book.id, payload);
+      setBook(saved);
+      setAlert({ severity: 'success', message: 'Metadata updated.' });
+      setEditDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to update metadata', error);
+      setAlert({ severity: 'error', message: 'Failed to update metadata.' });
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -346,6 +412,14 @@ export const BookDetail = () => {
             )}
           </Stack>
           <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => setEditDialogOpen(true)}
+              disabled={actionLoading}
+            >
+              Edit Metadata
+            </Button>
             <Button
               variant="outlined"
               startIcon={<CloudDownloadIcon />}
@@ -699,6 +773,13 @@ export const BookDetail = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MetadataEditDialog
+        open={editDialogOpen}
+        audiobook={book ? mapBookToAudiobook(book) : null}
+        onClose={() => setEditDialogOpen(false)}
+        onSave={handleEditSave}
+      />
 
       <VersionManagement
         audiobookId={book.id}
