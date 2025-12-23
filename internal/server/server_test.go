@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -187,8 +187,8 @@ func TestUpdateAudiobook(t *testing.T) {
 
 	server.router.ServeHTTP(w, req)
 
-	// Expect 400 for invalid request body (binding validation happens before existence check)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	// Expect 404 for non-existent audiobook
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // TestDeleteAudiobook tests deleting an audiobook
@@ -1002,5 +1002,127 @@ func TestWorkQueuePriority(t *testing.T) {
 			assert.GreaterOrEqual(t, currentPriority, nextPriority,
 				"Work items should be ordered by priority (highest first)")
 		}
+	}
+}
+
+func TestGetAudiobookTagsIncludesProvenance(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	author, err := database.GlobalStore.CreateAuthor("Test Author")
+	require.NoError(t, err)
+	series, err := database.GlobalStore.CreateSeries("Test Series", &author.ID)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "book.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Stored Title",
+		AuthorID: &author.ID,
+		SeriesID: &series.ID,
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	state := map[string]metadataFieldState{
+		"title": {
+			FetchedValue:   "Fetched Title",
+			OverrideValue:  "Override Title",
+			OverrideLocked: true,
+		},
+		"narrator": {
+			FetchedValue:   "Fetched Narrator",
+			OverrideValue:  "Override Narrator",
+			OverrideLocked: false,
+		},
+	}
+	require.NoError(t, saveMetadataState(book.ID, state))
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s/tags", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Tags map[string]struct {
+			FileValue      interface{} `json:"file_value"`
+			FetchedValue   interface{} `json:"fetched_value"`
+			StoredValue    interface{} `json:"stored_value"`
+			OverrideValue  interface{} `json:"override_value"`
+			OverrideLocked bool        `json:"override_locked"`
+		} `json:"tags"`
+	}
+
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	require.Contains(t, resp.Tags, "title")
+	assert.Equal(t, "Stored Title", resp.Tags["title"].StoredValue)
+	assert.Equal(t, "Fetched Title", resp.Tags["title"].FetchedValue)
+	assert.Equal(t, "Override Title", resp.Tags["title"].OverrideValue)
+	assert.True(t, resp.Tags["title"].OverrideLocked)
+
+	require.Contains(t, resp.Tags, "author_name")
+	assert.Equal(t, "Test Author", resp.Tags["author_name"].StoredValue)
+	require.Contains(t, resp.Tags, "series_name")
+	assert.Equal(t, "Test Series", resp.Tags["series_name"].StoredValue)
+
+	require.Contains(t, resp.Tags, "narrator")
+	assert.Equal(t, "Fetched Narrator", resp.Tags["narrator"].FetchedValue)
+}
+
+func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "book.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Original Title",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	payload := map[string]interface{}{
+		"title":       "Updated Title",
+		"author_name": "Override Author",
+		"overrides": map[string]interface{}{
+			"narrator": map[string]interface{}{
+				"value":  "Narrator Override",
+				"locked": true,
+			},
+		},
+	}
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/audiobooks/%s", book.ID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	state, err := loadMetadataState(book.ID)
+	require.NoError(t, err)
+
+	if assert.Contains(t, state, "title") {
+		assert.Equal(t, "Updated Title", state["title"].OverrideValue)
+		assert.True(t, state["title"].OverrideLocked)
+	}
+
+	if assert.Contains(t, state, "narrator") {
+		assert.Equal(t, "Narrator Override", state["narrator"].OverrideValue)
+		assert.True(t, state["narrator"].OverrideLocked)
+	}
+
+	if assert.Contains(t, state, "author_name") {
+		assert.Equal(t, "Override Author", state["author_name"].OverrideValue)
+		assert.True(t, state["author_name"].OverrideLocked)
 	}
 }
