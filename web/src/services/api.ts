@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.5.1
+// version: 1.5.2
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -327,6 +327,19 @@ export async function deleteBook(
     method: 'DELETE',
   });
   if (!response.ok) throw new Error('Failed to delete audiobook');
+}
+
+export async function updateBook(bookId: string, updates: Partial<Book>): Promise<Book> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to update audiobook');
+  }
+  return response.json();
 }
 
 // Authors
