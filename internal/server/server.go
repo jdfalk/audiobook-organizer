@@ -67,6 +67,27 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+func stringVal(p *string) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func intVal(p *int) interface{} {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func stringFromSeries(series *database.Series) interface{} {
+	if series == nil {
+		return nil
+	}
+	return series.Name
+}
+
 func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := scanner.ComputeFileHash(newPath)
 	if err != nil {
@@ -344,6 +365,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/audiobooks/:id", s.getAudiobook)
 		api.PUT("/audiobooks/:id", s.updateAudiobook)
 		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
+		api.GET("/audiobooks/:id/tags", s.getAudiobookTags)
 		api.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
 		// Author and series routes
@@ -771,6 +793,230 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, book)
+}
+
+func (s *Server) getAudiobookTags(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	type tagEntry struct {
+		FileValue      interface{} `json:"file_value,omitempty"`
+		FetchedValue   interface{} `json:"fetched_value,omitempty"`
+		StoredValue    interface{} `json:"stored_value,omitempty"`
+		OverrideValue  interface{} `json:"override_value,omitempty"`
+		OverrideLocked bool        `json:"override_locked"`
+	}
+
+	response := struct {
+		MediaInfo map[string]interface{} `json:"media_info,omitempty"`
+		Tags      map[string]tagEntry    `json:"tags,omitempty"`
+	}{
+		MediaInfo: map[string]interface{}{
+			"codec":       stringVal(book.Codec),
+			"bitrate":     intVal(book.Bitrate),
+			"sample_rate": intVal(book.SampleRate),
+			"channels":    intVal(book.Channels),
+			"bit_depth":   intVal(book.BitDepth),
+			"quality":     stringVal(book.Quality),
+			"duration":    intVal(book.Duration),
+		},
+		Tags: map[string]tagEntry{},
+	}
+
+	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+		response.Tags[field] = tagEntry{
+			FileValue:      fileValue,
+			StoredValue:    storedValue,
+			OverrideLocked: false,
+		}
+	}
+
+	var meta metadata.Metadata
+	if book.FilePath != "" {
+		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+			meta = m
+		} else {
+			log.Printf("[WARN] getAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	addEntry("title", meta.Title, book.Title)
+	if book.Author != nil {
+		addEntry("author_name", meta.Artist, book.Author.Name)
+	} else {
+		addEntry("author_name", meta.Artist, nil)
+	}
+	addEntry("narrator", meta.Narrator, stringVal(book.Narrator))
+	addEntry("series_name", meta.Series, stringFromSeries(book.Series))
+	addEntry("publisher", meta.Publisher, stringVal(book.Publisher))
+	addEntry("language", meta.Language, stringVal(book.Language))
+	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
+	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
+	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) getAudiobookTags(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	type tagEntry struct {
+		FileValue      interface{} `json:"file_value,omitempty"`
+		FetchedValue   interface{} `json:"fetched_value,omitempty"`
+		StoredValue    interface{} `json:"stored_value,omitempty"`
+		OverrideValue  interface{} `json:"override_value,omitempty"`
+		OverrideLocked bool        `json:"override_locked"`
+	}
+
+	response := struct {
+		MediaInfo map[string]interface{} `json:"media_info,omitempty"`
+		Tags      map[string]tagEntry    `json:"tags,omitempty"`
+	}{
+		MediaInfo: map[string]interface{}{
+			"codec":       stringVal(book.Codec),
+			"bitrate":     intVal(book.Bitrate),
+			"sample_rate": intVal(book.SampleRate),
+			"channels":    intVal(book.Channels),
+			"bit_depth":   intVal(book.BitDepth),
+			"quality":     stringVal(book.Quality),
+			"duration":    intVal(book.Duration),
+		},
+		Tags: map[string]tagEntry{},
+	}
+
+	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+		response.Tags[field] = tagEntry{
+			FileValue:      fileValue,
+			StoredValue:    storedValue,
+			OverrideLocked: false,
+		}
+	}
+
+	var meta metadata.Metadata
+	if book.FilePath != "" {
+		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+			meta = m
+		} else {
+			log.Printf("[WARN] getAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	addEntry("title", meta.Title, book.Title)
+	if book.Author != nil {
+		addEntry("author_name", meta.Artist, book.Author.Name)
+	} else {
+		addEntry("author_name", meta.Artist, nil)
+	}
+	addEntry("narrator", meta.Narrator, stringVal(book.Narrator))
+	addEntry("series_name", meta.Series, stringFromSeries(book.Series))
+	addEntry("publisher", meta.Publisher, stringVal(book.Publisher))
+	addEntry("language", meta.Language, stringVal(book.Language))
+	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
+	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
+	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) getAudiobookTags(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	id := c.Param("id")
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	type tagEntry struct {
+		FileValue     interface{} `json:"file_value,omitempty"`
+		FetchedValue  interface{} `json:"fetched_value,omitempty"`
+		StoredValue   interface{} `json:"stored_value,omitempty"`
+		OverrideValue interface{} `json:"override_value,omitempty"`
+		OverrideLocked bool       `json:"override_locked"`
+	}
+
+	response := struct {
+		MediaInfo map[string]interface{} `json:"media_info,omitempty"`
+		Tags      map[string]tagEntry    `json:"tags,omitempty"`
+	}{
+		MediaInfo: map[string]interface{}{
+			"codec":       valueOrEmpty(book.Codec),
+			"bitrate":     valueOrEmpty(book.Bitrate),
+			"sample_rate": valueOrEmpty(book.SampleRate),
+			"channels":    valueOrEmpty(book.Channels),
+			"bit_depth":   valueOrEmpty(book.BitDepth),
+			"quality":     valueOrEmpty(book.Quality),
+			"duration":    valueOrEmpty(book.Duration),
+		},
+		Tags: map[string]tagEntry{},
+	}
+
+	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+		response.Tags[field] = tagEntry{
+			FileValue:    fileValue,
+			StoredValue:  storedValue,
+			OverrideLocked: false,
+		}
+	}
+
+	var meta metadata.Metadata
+	if book.FilePath != "" {
+		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+			meta = m
+		} else {
+			log.Printf("[WARN] getAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	addEntry("title", meta.Title, book.Title)
+	addEntry("author_name", meta.Artist, nil)
+	if book.Author != nil {
+		addEntry("author_name", meta.Artist, book.Author.Name)
+	}
+	addEntry("narrator", meta.Narrator, derefString(book.Narrator))
+	addEntry("series_name", meta.Series, derefStringFromSeries(book.Series))
+	addEntry("publisher", meta.Publisher, derefString(book.Publisher))
+	addEntry("language", meta.Language, derefString(book.Language))
+	addEntry("audiobook_release_year", meta.Year, derefInt(book.AudiobookReleaseYear))
+	addEntry("isbn10", meta.ISBN10, derefString(book.ISBN10))
+	addEntry("isbn13", meta.ISBN13, derefString(book.ISBN13))
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
