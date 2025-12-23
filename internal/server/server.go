@@ -1,12 +1,14 @@
 // file: internal/server/server.go
-// version: 1.31.0
+// version: 1.33.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -65,6 +67,74 @@ func intPtr(i int) *int {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+type metadataFieldState struct {
+	FetchedValue   interface{} `json:"fetched_value,omitempty"`
+	OverrideValue  interface{} `json:"override_value,omitempty"`
+	OverrideLocked bool        `json:"override_locked"`
+}
+
+func metadataStateKey(bookID string) string {
+	return fmt.Sprintf("metadata_state_%s", bookID)
+}
+
+func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
+	state := map[string]metadataFieldState{}
+	if database.GlobalStore == nil {
+		return state, fmt.Errorf("database not initialized")
+	}
+
+	pref, err := database.GlobalStore.GetUserPreference(metadataStateKey(bookID))
+	if err != nil {
+		return state, err
+	}
+	if pref == nil || pref.Value == nil || *pref.Value == "" {
+		return state, nil
+	}
+
+	if err := json.Unmarshal([]byte(*pref.Value), &state); err != nil {
+		return state, fmt.Errorf("failed to parse metadata state: %w", err)
+	}
+	return state, nil
+}
+
+func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
+	if database.GlobalStore == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata state: %w", err)
+	}
+	return database.GlobalStore.SetUserPreference(metadataStateKey(bookID), string(data))
+}
+
+func decodeRawValue(raw json.RawMessage) interface{} {
+	if raw == nil {
+		return nil
+	}
+	var value interface{}
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return string(raw)
+	}
+	return value
+}
+
+func updateFetchedMetadataState(bookID string, values map[string]interface{}) error {
+	state, err := loadMetadataState(bookID)
+	if err != nil {
+		return err
+	}
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+	for field, value := range values {
+		entry := state[field]
+		entry.FetchedValue = value
+		state[field] = entry
+	}
+	return saveMetadataState(bookID, state)
 }
 
 func stringVal(p *string) interface{} {
@@ -812,12 +882,40 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 		return
 	}
 
+	state, err := loadMetadataState(book.ID)
+	if err != nil {
+		log.Printf("[ERROR] getAudiobookTags: failed to load metadata state for %s: %v", book.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
+		return
+	}
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+
+	authorName := ""
+	if book.Author != nil {
+		authorName = book.Author.Name
+	} else if book.AuthorID != nil {
+		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+
+	seriesName := ""
+	if book.Series != nil {
+		seriesName = book.Series.Name
+	} else if book.SeriesID != nil {
+		if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			seriesName = series.Name
+		}
+	}
+
 	type tagEntry struct {
-		FileValue     interface{} `json:"file_value,omitempty"`
-		FetchedValue  interface{} `json:"fetched_value,omitempty"`
-		StoredValue   interface{} `json:"stored_value,omitempty"`
-		OverrideValue interface{} `json:"override_value,omitempty"`
-		OverrideLocked bool       `json:"override_locked"`
+		FileValue      interface{} `json:"file_value,omitempty"`
+		FetchedValue   interface{} `json:"fetched_value,omitempty"`
+		StoredValue    interface{} `json:"stored_value,omitempty"`
+		OverrideValue  interface{} `json:"override_value,omitempty"`
+		OverrideLocked bool        `json:"override_locked"`
 	}
 
 	response := struct {
@@ -825,22 +923,28 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 		Tags      map[string]tagEntry    `json:"tags,omitempty"`
 	}{
 		MediaInfo: map[string]interface{}{
-			"codec":       valueOrEmpty(book.Codec),
-			"bitrate":     valueOrEmpty(book.Bitrate),
-			"sample_rate": valueOrEmpty(book.SampleRate),
-			"channels":    valueOrEmpty(book.Channels),
-			"bit_depth":   valueOrEmpty(book.BitDepth),
-			"quality":     valueOrEmpty(book.Quality),
-			"duration":    valueOrEmpty(book.Duration),
+			"codec":       stringVal(book.Codec),
+			"bitrate":     intVal(book.Bitrate),
+			"sample_rate": intVal(book.SampleRate),
+			"channels":    intVal(book.Channels),
+			"bit_depth":   intVal(book.BitDepth),
+			"quality":     stringVal(book.Quality),
+			"duration":    intVal(book.Duration),
 		},
 		Tags: map[string]tagEntry{},
 	}
 
 	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+		entryState := metadataFieldState{}
+		if existing, ok := state[field]; ok {
+			entryState = existing
+		}
 		response.Tags[field] = tagEntry{
-			FileValue:    fileValue,
-			StoredValue:  storedValue,
-			OverrideLocked: false,
+			FileValue:      fileValue,
+			FetchedValue:   entryState.FetchedValue,
+			StoredValue:    storedValue,
+			OverrideValue:  entryState.OverrideValue,
+			OverrideLocked: entryState.OverrideLocked,
 		}
 	}
 
@@ -854,17 +958,14 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	}
 
 	addEntry("title", meta.Title, book.Title)
-	addEntry("author_name", meta.Artist, nil)
-	if book.Author != nil {
-		addEntry("author_name", meta.Artist, book.Author.Name)
-	}
-	addEntry("narrator", meta.Narrator, derefString(book.Narrator))
-	addEntry("series_name", meta.Series, derefStringFromSeries(book.Series))
-	addEntry("publisher", meta.Publisher, derefString(book.Publisher))
-	addEntry("language", meta.Language, derefString(book.Language))
-	addEntry("audiobook_release_year", meta.Year, derefInt(book.AudiobookReleaseYear))
-	addEntry("isbn10", meta.ISBN10, derefString(book.ISBN10))
-	addEntry("isbn13", meta.ISBN13, derefString(book.ISBN13))
+	addEntry("author_name", meta.Artist, authorName)
+	addEntry("narrator", meta.Narrator, stringVal(book.Narrator))
+	addEntry("series_name", meta.Series, seriesName)
+	addEntry("publisher", meta.Publisher, stringVal(book.Publisher))
+	addEntry("language", meta.Language, stringVal(book.Language))
+	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
+	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
+	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
 
 	c.JSON(http.StatusOK, response)
 }
@@ -876,21 +977,232 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 	id := c.Param("id") // ULID string
 
-	var book database.Book
-	if err := c.ShouldBindJSON(&book); err != nil {
+	currentBook, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if currentBook == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if len(body) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request body is required"})
+		return
+	}
+
+	type overridePayload struct {
+		Value        json.RawMessage `json:"value"`
+		Locked       *bool           `json:"locked,omitempty"`
+		FetchedValue json.RawMessage `json:"fetched_value,omitempty"`
+		Clear        bool            `json:"clear,omitempty"`
+	}
+
+	type updateAudiobookPayload struct {
+		database.Book
+		AuthorName      *string                    `json:"author_name,omitempty"`
+		SeriesName      *string                    `json:"series_name,omitempty"`
+		Overrides       map[string]overridePayload `json:"overrides,omitempty"`
+		UnlockOverrides []string                   `json:"unlock_overrides,omitempty"`
+	}
+
+	payload := updateAudiobookPayload{
+		Book: *currentBook,
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	updatedBook, err := database.GlobalStore.UpdateBook(id, &book)
+	rawPayload := map[string]json.RawMessage{}
+	_ = json.Unmarshal(body, &rawPayload)
+
+	resolvedAuthorName := ""
+	if payload.AuthorName != nil {
+		name := strings.TrimSpace(*payload.AuthorName)
+		if name != "" {
+			author, err := database.GlobalStore.GetAuthorByName(name)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve author"})
+				return
+			}
+			if author == nil {
+				author, err = database.GlobalStore.CreateAuthor(name)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create author"})
+					return
+				}
+			}
+			payload.AuthorID = &author.ID
+			resolvedAuthorName = author.Name
+		} else {
+			payload.AuthorID = nil
+		}
+	} else if payload.AuthorID != nil {
+		if author, err := database.GlobalStore.GetAuthorByID(*payload.AuthorID); err == nil && author != nil {
+			resolvedAuthorName = author.Name
+		}
+	}
+
+	resolvedSeriesName := ""
+	if payload.SeriesName != nil {
+		name := strings.TrimSpace(*payload.SeriesName)
+		if name != "" {
+			series, err := database.GlobalStore.GetSeriesByName(name, payload.AuthorID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve series"})
+				return
+			}
+			if series == nil {
+				series, err = database.GlobalStore.CreateSeries(name, payload.AuthorID)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create series"})
+					return
+				}
+			}
+			payload.SeriesID = &series.ID
+			resolvedSeriesName = series.Name
+		} else {
+			payload.SeriesID = nil
+		}
+	} else if payload.SeriesID != nil {
+		if series, err := database.GlobalStore.GetSeriesByID(*payload.SeriesID); err == nil && series != nil {
+			resolvedSeriesName = series.Name
+		}
+	}
+
+	updatedBook, err := database.GlobalStore.UpdateBook(id, &payload.Book)
 	if err != nil {
-		// Check if error is "not found"
 		if err.Error() == "book not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	state, err := loadMetadataState(id)
+	if err != nil {
+		log.Printf("[ERROR] updateAudiobook: failed to load metadata state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
+		return
+	}
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+
+	for field, override := range payload.Overrides {
+		entry := state[field]
+		if override.Clear {
+			entry.OverrideValue = nil
+			entry.OverrideLocked = false
+		} else {
+			if len(override.Value) > 0 {
+				entry.OverrideValue = decodeRawValue(override.Value)
+				entry.OverrideLocked = override.Locked == nil || *override.Locked
+			} else if override.Locked != nil {
+				entry.OverrideLocked = *override.Locked
+			}
+			if len(override.FetchedValue) > 0 {
+				entry.FetchedValue = decodeRawValue(override.FetchedValue)
+			}
+		}
+		state[field] = entry
+	}
+
+	fieldExtractors := map[string]func() (interface{}, bool){
+		"title": func() (interface{}, bool) {
+			return payload.Title, true
+		},
+		"author_name": func() (interface{}, bool) {
+			if resolvedAuthorName == "" {
+				return nil, false
+			}
+			return resolvedAuthorName, true
+		},
+		"series_name": func() (interface{}, bool) {
+			if resolvedSeriesName == "" {
+				return nil, false
+			}
+			return resolvedSeriesName, true
+		},
+		"narrator": func() (interface{}, bool) {
+			if payload.Narrator == nil {
+				return nil, false
+			}
+			return *payload.Narrator, true
+		},
+		"publisher": func() (interface{}, bool) {
+			if payload.Publisher == nil {
+				return nil, false
+			}
+			return *payload.Publisher, true
+		},
+		"language": func() (interface{}, bool) {
+			if payload.Language == nil {
+				return nil, false
+			}
+			return *payload.Language, true
+		},
+		"audiobook_release_year": func() (interface{}, bool) {
+			if payload.AudiobookReleaseYear == nil {
+				return nil, false
+			}
+			return *payload.AudiobookReleaseYear, true
+		},
+		"isbn10": func() (interface{}, bool) {
+			if payload.ISBN10 == nil {
+				return nil, false
+			}
+			return *payload.ISBN10, true
+		},
+		"isbn13": func() (interface{}, bool) {
+			if payload.ISBN13 == nil {
+				return nil, false
+			}
+			return *payload.ISBN13, true
+		},
+	}
+
+	for field, extractor := range fieldExtractors {
+		if _, ok := rawPayload[field]; !ok {
+			continue
+		}
+		if _, hasOverride := payload.Overrides[field]; hasOverride {
+			continue
+		}
+		if value, ok := extractor(); ok {
+			entry := state[field]
+			entry.OverrideValue = value
+			entry.OverrideLocked = true
+			state[field] = entry
+		}
+	}
+
+	for _, field := range payload.UnlockOverrides {
+		entry := state[field]
+		entry.OverrideLocked = false
+		state[field] = entry
+	}
+
+	if err := saveMetadataState(id, state); err != nil {
+		log.Printf("[ERROR] updateAudiobook: failed to save metadata state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist metadata state"})
+		return
+	}
+
+	if resolvedAuthorName != "" && updatedBook.AuthorID != nil {
+		updatedBook.Author = &database.Author{ID: *updatedBook.AuthorID, Name: resolvedAuthorName}
+	}
+	if resolvedSeriesName != "" && updatedBook.SeriesID != nil {
+		updatedBook.Series = &database.Series{ID: *updatedBook.SeriesID, Name: resolvedSeriesName, AuthorID: payload.AuthorID}
 	}
 
 	c.JSON(http.StatusOK, updatedBook)
@@ -2821,6 +3133,35 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update book: %v", err)})
 		return
+	}
+
+	fetchedValues := map[string]interface{}{}
+	if meta.Title != "" {
+		fetchedValues["title"] = meta.Title
+	}
+	if meta.Publisher != "" {
+		fetchedValues["publisher"] = meta.Publisher
+	}
+	if meta.Language != "" {
+		fetchedValues["language"] = meta.Language
+	}
+	if meta.PublishYear != 0 {
+		fetchedValues["audiobook_release_year"] = meta.PublishYear
+	}
+	if meta.Author != "" {
+		fetchedValues["author_name"] = meta.Author
+	}
+	if meta.ISBN != "" {
+		if len(meta.ISBN) == 10 {
+			fetchedValues["isbn10"] = meta.ISBN
+		} else {
+			fetchedValues["isbn13"] = meta.ISBN
+		}
+	}
+	if len(fetchedValues) > 0 {
+		if err := updateFetchedMetadataState(id, fetchedValues); err != nil {
+			log.Printf("[ERROR] fetchAudiobookMetadata: failed to persist fetched metadata state: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

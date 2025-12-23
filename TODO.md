@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.17.0 -->
+<!-- version: 1.17.1 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -980,8 +980,9 @@
   - Extend `GET /api/v1/audiobooks/:id` response to optionally include provenance map (field -> {source: file/db/fetched/override, value, last_updated}).
   - Add override/lock semantics: when a user edits a field, mark it as “locked/override” so later fetches/AI/tag refresh won’t overwrite unless explicitly cleared; include a way to clear lock.
   - Provide metadata history or last-applied source so UI can show conflicts (e.g., file vs fetched vs override).
+  - **Progress**: Tags endpoint now resolves author/series names and returns fetched/override/locked fields from persisted metadata state; update handler persists overrides/fetched metadata on writes.
 - [ ] Backend gaps discovered (Book Detail tags/compare)
-  - Current `GET /audiobooks/:id/tags` returns only file/stored values; no fetched/override provenance, no lock persistence, and author/series names not resolved (only IDs exist in DB). Must extend DB/model to store override/lock and fetched provenance, and hydrate author/series names.
+  - Prior behavior: `GET /audiobooks/:id/tags` returned only file/stored values; no fetched/override provenance, no lock persistence, and author/series names not resolved (only IDs exist in DB). Remaining: move metadata state off user-preferences into durable DB model and wire provenance into book detail response.
   - Update `UpdateBook`/DB to accept override payloads and persist override_locked flags.
   - Add handler/unit tests for the tags endpoint covering file vs fetched vs override vs locked cases.
 - [ ] Frontend Book Detail (Tags/Compare/Overrides)

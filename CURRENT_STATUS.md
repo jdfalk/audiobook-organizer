@@ -1,3 +1,7 @@
+<!-- file: CURRENT_STATUS.md -->
+<!-- version: 1.0.1 -->
+<!-- guid: d5a6b7c8-9e0f-4a1b-8c2d-3e4f5a6b7c8d -->
+
 # Audiobook Organizer - Current Status & Handoff Document
 
 **Generated**: December 22, 2025 15:53 UTC  
@@ -441,6 +445,14 @@ MVP is complete when:
 - [ ] Book detail page exists (TODO - 4-6 hours)
 - [ ] E2E tests cover MVP tasks (TODO - 6-8 hours)
 - [ ] Manual testing documented (TODO - 2-4 hours)
+
+## 🔄 In-Progress Work (Book Detail Metadata/Tags)
+
+- Frontend Book Detail now includes Info/Files/Versions plus Tags and Compare tabs, Edit Metadata, and apply-from-Compare actions (mock-friendly).
+- Playwright (Chromium + WebKit) covers Tags/Compare flows via mocks.
+- Backend now persists fetched/override metadata state (with lock flags) in user preferences, resolves author/series names for tags, and returns fetched/override values from `GET /api/v1/audiobooks/:id/tags`; update handler stores overrides on writes; handler tests added.
+- Backend still needs durable DB model for provenance (currently in user-preferences) and to expose provenance map on `GET /api/v1/audiobooks/:id`.
+- Next agent: implement backend schema/handlers for per-field provenance/override locks; update API payloads; align frontend to real payload; add Go handler tests; keep Playwright mocks aligned to final shape.
 
 **Current**: 7 of 10 complete (70%)  
 **After merging PRs #69 and #70**: 7 of 10 complete  
