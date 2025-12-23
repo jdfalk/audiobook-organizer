@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.15.0 -->
+<!-- version: 1.16.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -975,6 +975,19 @@
   - Add Compare view (File tags vs Stored/Fetched vs Current overrides) when API returns multiple metadata sources.
   - Expand Edit Metadata dialog to include full fields (author/series/year/genre/ISBN/description/publisher/language/etc.) and save via API.
   - Ensure hashes and media details remain visible in Files tab; consider duration/size display if API provides.
+- [ ] Backend support for Book Detail tags/provenance
+  - Add API endpoint to return raw embedded tags + media info + source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with payload including file tags, stored values, fetched metadata, and “locked/override” flags.
+  - Extend `GET /api/v1/audiobooks/:id` response to optionally include provenance map (field -> {source: file/db/fetched/override, value, last_updated}).
+  - Add override/lock semantics: when a user edits a field, mark it as “locked/override” so later fetches/AI/tag refresh won’t overwrite unless explicitly cleared; include a way to clear lock.
+  - Provide metadata history or last-applied source so UI can show conflicts (e.g., file vs fetched vs override).
+- [ ] Frontend Book Detail (Tags/Compare/Overrides)
+  - Tags tab: show raw tags from new endpoint; include media info and tag values (title/author/narrator/series/position/publisher/language/year/genre/ISBN/comments).
+  - Compare view: side-by-side (File tags vs Stored vs Fetched vs Override) with clear indication of locked fields; allow “use file value” / “use fetched value” actions per field when backend supports.
+  - Edit dialog: include all key fields and allow setting/clearing overrides; send override flag with updates.
+- [ ] Playwright coverage for Book Detail (with mocks)
+  - Add fixture/mocks for tags/provenance endpoint (normal case, conflict case with override vs file/fetched).
+  - Tests: render Tags tab with raw tags; render Compare view showing differing sources; override workflow (edit field, mark locked, verify UI shows override badge and Compare tab shows resolution); clear override resets to tag/fetched value; hash copy toast; delete dialog options (soft/hard, block hash); Manage Versions dialog opens.
+  - Keep tests fully mocked (no backend dependency), bypass wizard, mock SSE, run under Chromium + WebKit.
 - [ ] Chaos test for operation cancellation mid-scan
 
 ### DevOps / CI/CD
