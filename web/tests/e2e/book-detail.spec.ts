@@ -186,7 +186,7 @@ test.describe('Book Detail page', () => {
   });
 
   test('soft delete, restore, and purge flow', async ({ page }) => {
-    const state = await setupRoutes(page);
+    await setupRoutes(page);
     await page.goto(`/library/${bookId}`);
 
     await page.getByRole('button', { name: 'Delete' }).click();
