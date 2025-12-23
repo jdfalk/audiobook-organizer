@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.5.2
+// version: 1.6.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -71,6 +71,27 @@ export interface Work {
   original_publish_year?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface TagSourceValues {
+  file_value?: string | number | null;
+  fetched_value?: string | number | null;
+  stored_value?: string | number | null;
+  override_value?: string | number | null;
+  override_locked?: boolean;
+}
+
+export interface BookTags {
+  media_info?: {
+    codec?: string;
+    bitrate?: number;
+    sample_rate?: number;
+    channels?: number;
+    bit_depth?: number;
+    quality?: string;
+    duration?: number;
+  };
+  tags?: Record<string, TagSourceValues>;
 }
 
 export interface ImportPath {
@@ -339,6 +360,12 @@ export async function updateBook(bookId: string, updates: Partial<Book>): Promis
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || 'Failed to update audiobook');
   }
+  return response.json();
+}
+
+export async function getBookTags(bookId: string): Promise<BookTags> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags`);
+  if (!response.ok) throw new Error('Failed to fetch book tags');
   return response.json();
 }
 

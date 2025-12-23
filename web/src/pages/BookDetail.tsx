@@ -28,6 +28,11 @@ import {
   DialogActions,
   IconButton,
   LinearProgress,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -40,7 +45,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import StorageIcon from '@mui/icons-material/Storage';
-import type { Book } from '../services/api';
+import type { Book, BookTags } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
@@ -56,7 +61,9 @@ export const BookDetail = () => {
   const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'versions' | 'tags'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'versions' | 'tags' | 'compare'>(
+    'info'
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({ softDelete: true, blockHash: true });
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
@@ -65,6 +72,9 @@ export const BookDetail = () => {
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [tags, setTags] = useState<BookTags | null>(null);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -95,10 +105,26 @@ export const BookDetail = () => {
     }
   }, [id]);
 
+  const loadTags = useCallback(async () => {
+    if (!id) return;
+    setTagsLoading(true);
+    setTagsError(null);
+    try {
+      const data = await api.getBookTags(id);
+      setTags(data);
+    } catch (error) {
+      console.error('Failed to load tags', error);
+      setTagsError('Unable to load file tags at the moment.');
+    } finally {
+      setTagsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     loadBook();
     loadVersions();
-  }, [id, loadBook, loadVersions]);
+    loadTags();
+  }, [id, loadBook, loadTags, loadVersions]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '—';
@@ -262,6 +288,62 @@ export const BookDetail = () => {
     work_id: current.work_id,
   });
 
+  const getFieldSources = (field: string) => {
+    const entry = tags?.tags?.[field];
+    if (!entry) return null;
+    return {
+      file: entry.file_value,
+      fetched: entry.fetched_value,
+      stored: entry.stored_value,
+      override: entry.override_value,
+      locked: entry.override_locked,
+    };
+  };
+
+  const applySourceValue = async (field: string, source: 'file' | 'fetched' | 'override') => {
+    if (!book) return;
+    const entry = getFieldSources(field);
+    if (!entry) return;
+    const value =
+      source === 'file'
+        ? entry.file
+        : source === 'fetched'
+          ? entry.fetched
+          : entry.override;
+    if (value === undefined) return;
+    setActionLoading(true);
+    setActionLabel(`Applying ${source} value...`);
+    try {
+      const payload: Partial<Book> = {
+        [field]: value as never,
+      };
+      const saved = await api.updateBook(book.id, payload);
+      setBook(saved);
+      // Update local tags state to reflect new stored/override value
+      setTags((prev) => {
+        if (!prev?.tags) return prev;
+        const updated = { ...prev.tags[field] };
+        updated.stored_value = value;
+        updated.override_value = value;
+        updated.override_locked = true;
+        return {
+          ...prev,
+          tags: {
+            ...prev.tags,
+            [field]: updated,
+          },
+        };
+      });
+      setAlert({ severity: 'success', message: 'Field updated.' });
+    } catch (error) {
+      console.error('Failed to apply field value', error);
+      setAlert({ severity: 'error', message: 'Failed to apply field value.' });
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
   const handleEditSave = async (updated: Audiobook) => {
     if (!book) return;
     setActionLoading(true);
@@ -283,6 +365,8 @@ export const BookDetail = () => {
           (updated as unknown as { isbn13?: string }).isbn13 ||
           (updated as unknown as { isbn10?: string }).isbn10 ||
           book.isbn,
+        author_name: updated.author,
+        series_name: updated.series,
       };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
@@ -498,6 +582,7 @@ export const BookDetail = () => {
             value="versions"
           />
           <Tab label="Tags" value="tags" />
+          <Tab label="Compare" value="compare" />
         </Tabs>
       </Paper>
 
@@ -719,6 +804,17 @@ export const BookDetail = () => {
             <InfoIcon />
             <Typography variant="h6">Tags &amp; Media</Typography>
           </Stack>
+          {tagsError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {tagsError}
+            </Alert>
+          )}
+          {tagsLoading && (
+            <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+              <CircularProgress size={18} />
+              <Typography variant="body2">Loading tags...</Typography>
+            </Stack>
+          )}
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
               <Box
@@ -735,18 +831,37 @@ export const BookDetail = () => {
                   Embedded / Media Info
                 </Typography>
                 <Stack spacing={1}>
-                  <Typography variant="body2">Codec: {book.codec || '—'}</Typography>
                   <Typography variant="body2">
-                    Bitrate: {book.bitrate ? `${book.bitrate} kbps` : '—'}
+                    Codec: {tags?.media_info?.codec || book.codec || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Sample Rate: {book.sample_rate ? `${book.sample_rate} Hz` : '—'}
+                    Bitrate:{' '}
+                    {tags?.media_info?.bitrate
+                      ? `${tags.media_info.bitrate} kbps`
+                      : book.bitrate
+                        ? `${book.bitrate} kbps`
+                        : '—'}
                   </Typography>
-                  <Typography variant="body2">Channels: {book.channels ?? '—'}</Typography>
-                  <Typography variant="body2">Bit Depth: {book.bit_depth ?? '—'}</Typography>
-                  <Typography variant="body2">Quality: {book.quality || '—'}</Typography>
                   <Typography variant="body2">
-                    Duration: {formatDuration(book.duration) || '—'}
+                    Sample Rate:{' '}
+                    {tags?.media_info?.sample_rate
+                      ? `${tags.media_info.sample_rate} Hz`
+                      : book.sample_rate
+                        ? `${book.sample_rate} Hz`
+                        : '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Channels: {tags?.media_info?.channels ?? book.channels ?? '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Bit Depth: {tags?.media_info?.bit_depth ?? book.bit_depth ?? '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Quality: {tags?.media_info?.quality || book.quality || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Duration:{' '}
+                    {formatDuration(tags?.media_info?.duration || book.duration) || '—'}
                   </Typography>
                 </Stack>
               </Box>
@@ -783,9 +898,120 @@ export const BookDetail = () => {
               </Box>
             </Grid>
           </Grid>
+          {tags?.tags && (
+            <Box mt={3}>
+              <Typography variant="subtitle2" gutterBottom>
+                File Tags
+              </Typography>
+              <Grid container spacing={1}>
+                {Object.entries(tags.tags).map(([key, values]) => (
+                  <Grid item xs={12} sm={6} md={4} key={key}>
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1,
+                        border: '1px dashed',
+                        borderColor: 'divider',
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                        {key.replace(/_/g, ' ')}
+                      </Typography>
+                      <Typography variant="body2">
+                        {values.file_value ?? values.stored_value ?? '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          )}
           <Alert severity="info" sx={{ mt: 2 }}>
-            Provenance: displaying current stored metadata and media info. File-tag/source breakdown
-            will appear here when provided by the backend.
+            Showing current metadata and media info. File-tag provenance will populate here when
+            available from the backend.
+          </Alert>
+        </Paper>
+      )}
+
+      {activeTab === 'compare' && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+            <CompareIcon />
+            <Typography variant="h6">Compare &amp; Resolve</Typography>
+          </Stack>
+          {tagsError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {tagsError}
+            </Alert>
+          )}
+          {!tags?.tags && !tagsLoading ? (
+            <Alert severity="info">No tag data available yet.</Alert>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Field</TableCell>
+                  <TableCell>File Tag</TableCell>
+                  <TableCell>Fetched</TableCell>
+                  <TableCell>Stored</TableCell>
+                  <TableCell>Override</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {['title', 'author_name', 'narrator', 'series_name', 'publisher', 'language', 'audiobook_release_year'].map(
+                  (field) => {
+                    const entry = getFieldSources(field);
+                    return (
+                      <TableRow key={field}>
+                        <TableCell sx={{ textTransform: 'capitalize' }}>
+                          {field.replace(/_/g, ' ')}
+                        </TableCell>
+                        <TableCell>{entry?.file ?? '—'}</TableCell>
+                        <TableCell>{entry?.fetched ?? '—'}</TableCell>
+                        <TableCell>{entry?.stored ?? '—'}</TableCell>
+                        <TableCell>
+                          {entry?.override ?? '—'}
+                          {entry?.locked && (
+                            <Chip
+                              label="locked"
+                              size="small"
+                              color="warning"
+                              sx={{ ml: 0.5 }}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => applySourceValue(field, 'file')}
+                              disabled={!entry?.file && entry?.file !== 0}
+                            >
+                              Use File
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => applySourceValue(field, 'fetched')}
+                              disabled={!entry?.fetched && entry?.fetched !== 0}
+                            >
+                              Use Fetched
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+                )}
+              </TableBody>
+            </Table>
+          )}
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Locked overrides prevent future fetch/tag updates from changing the field. Apply a source
+            to set/lock a field; unlock/clear will be supported when backend exposes override flags.
           </Alert>
         </Paper>
       )}

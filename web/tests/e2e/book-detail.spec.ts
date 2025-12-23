@@ -1,5 +1,5 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { expect, test } from '@playwright/test';
@@ -53,10 +53,70 @@ const mockEventSource = async (page: import('@playwright/test').Page) => {
 
 const setupRoutes = async (page: import('@playwright/test').Page) => {
   const initialBook = createInitialBook();
+  const tags = {
+    media_info: {
+      codec: 'M4B',
+      bitrate: 192,
+      sample_rate: 44100,
+      channels: 2,
+      bit_depth: 16,
+      quality: '192kbps AAC',
+      duration: 3600,
+    },
+    tags: {
+      title: {
+        file_value: 'File Title',
+        fetched_value: 'Fetched Title',
+        stored_value: initialBook.title,
+        override_value: null,
+        override_locked: false,
+      },
+      author_name: {
+        file_value: 'File Author',
+        fetched_value: 'Fetched Author',
+        stored_value: initialBook.author_name,
+        override_value: null,
+        override_locked: false,
+      },
+      narrator: {
+        file_value: 'File Narrator',
+        fetched_value: 'Fetched Narrator',
+        stored_value: 'Stored Narrator',
+        override_value: 'Override Narrator',
+        override_locked: true,
+      },
+      publisher: {
+        file_value: 'File Publisher',
+        fetched_value: 'Fetched Publisher',
+        stored_value: 'Stored Publisher',
+        override_value: null,
+        override_locked: false,
+      },
+      language: {
+        file_value: 'en',
+        fetched_value: 'en',
+        stored_value: 'en',
+        override_value: null,
+        override_locked: false,
+      },
+      audiobook_release_year: {
+        file_value: 2020,
+        fetched_value: 2021,
+        stored_value: 2022,
+        override_value: null,
+        override_locked: false,
+      },
+    },
+  };
   await page.addInitScript(
-    ({ bookId: injectedBookId, bookData }: { bookId: string; bookData: BookState }) => {
+    ({
+      bookId: injectedBookId,
+      bookData,
+      tagsData,
+    }: { bookId: string; bookData: BookState; tagsData: typeof tags }) => {
       let book = { ...bookData };
       let purged = false;
+      const tagState = { ...tagsData };
 
       const jsonResponse = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), {
@@ -94,6 +154,18 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
             }
             return Promise.resolve(jsonResponse(book));
           }
+          if (method === 'PUT') {
+            const body = init?.body ? JSON.parse(init.body as string) : {};
+            book = { ...book, ...body };
+            Object.keys(body).forEach((key) => {
+              if (tagState.tags[key]) {
+                tagState.tags[key].stored_value = body[key];
+                tagState.tags[key].override_value = body[key];
+                tagState.tags[key].override_locked = true;
+              }
+            });
+            return Promise.resolve(jsonResponse(book));
+          }
           if (method === 'DELETE') {
             const softDelete = url.includes('soft_delete=true');
             if (softDelete) {
@@ -112,6 +184,10 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
 
         if (url.endsWith('/api/v1/audiobooks')) {
           return Promise.resolve(jsonResponse({ items: [book], audiobooks: [book] }));
+        }
+
+        if (url.includes(`/api/v1/audiobooks/${injectedBookId}/tags`)) {
+          return Promise.resolve(jsonResponse(tagState));
         }
 
         // Versions
@@ -153,7 +229,7 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         return originalFetch(input, init);
       };
     },
-    { bookId, bookData: initialBook }
+    { bookId, bookData: initialBook, tagsData: tags }
   );
 
   return {
@@ -217,5 +293,25 @@ test.describe('Book Detail page', () => {
 
     await page.getByRole('button', { name: 'Parse with AI' }).click();
     await expect(page.getByText('AI parsed desc')).toBeVisible();
+  });
+
+  test('renders tags tab with media info and tag values', async ({ page }) => {
+    await setupRoutes(page);
+    await page.goto(`/library/${bookId}`);
+
+    await page.getByRole('tab', { name: 'Tags' }).click();
+    await expect(page.getByText('192 kbps')).toBeVisible();
+    await expect(page.getByText('File Title')).toBeVisible();
+    await expect(page.getByText('File Author')).toBeVisible();
+  });
+
+  test('compare tab applies file value to title', async ({ page }) => {
+    await setupRoutes(page);
+    await page.goto(`/library/${bookId}`);
+
+    await page.getByRole('tab', { name: 'Compare' }).click();
+    await expect(page.getByText('File Title')).toBeVisible();
+    await page.getByRole('button', { name: 'Use File' }).first().click();
+    await expect(page.getByRole('heading', { name: 'File Title' })).toBeVisible();
   });
 });
