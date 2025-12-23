@@ -1,5 +1,5 @@
 // file: tests/e2e/playwright.config.ts
-// version: 1.0.1
+// version: 1.1.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { defineConfig, devices } from '@playwright/test';
@@ -20,6 +20,14 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      // We accept WebKit failures for now; main gate stays on Chromium.
+      expect: {
+        toMatchSnapshot: { maxDiffPixelRatio: 0.05 },
+      },
     },
   ],
   webServer: {
