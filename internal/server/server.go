@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.33.1
+// version: 1.34.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -911,11 +911,14 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	}
 
 	type tagEntry struct {
-		FileValue      interface{} `json:"file_value,omitempty"`
-		FetchedValue   interface{} `json:"fetched_value,omitempty"`
-		StoredValue    interface{} `json:"stored_value,omitempty"`
-		OverrideValue  interface{} `json:"override_value,omitempty"`
-		OverrideLocked bool        `json:"override_locked"`
+		FileValue       interface{} `json:"file_value,omitempty"`
+		FetchedValue    interface{} `json:"fetched_value,omitempty"`
+		StoredValue     interface{} `json:"stored_value,omitempty"`
+		OverrideValue   interface{} `json:"override_value,omitempty"`
+		OverrideLocked  bool        `json:"override_locked"`
+		EffectiveValue  interface{} `json:"effective_value,omitempty"`
+		EffectiveSource string      `json:"effective_source,omitempty"`
+		UpdatedAt       *time.Time  `json:"updated_at,omitempty"`
 	}
 
 	response := struct {
@@ -935,16 +938,39 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	}
 
 	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
-		entryState := metadataFieldState{}
-		if existing, ok := state[field]; ok {
-			entryState = existing
+		entryState := state[field]
+		effectiveSource := ""
+		var effectiveValue interface{}
+		switch {
+		case entryState.OverrideValue != nil:
+			effectiveSource = "override"
+			effectiveValue = entryState.OverrideValue
+		case storedValue != nil:
+			effectiveSource = "stored"
+			effectiveValue = storedValue
+		case entryState.FetchedValue != nil:
+			effectiveSource = "fetched"
+			effectiveValue = entryState.FetchedValue
+		case fileValue != nil:
+			effectiveSource = "file"
+			effectiveValue = fileValue
 		}
+
+		var updatedAt *time.Time
+		if !entryState.UpdatedAt.IsZero() {
+			ts := entryState.UpdatedAt.UTC()
+			updatedAt = &ts
+		}
+
 		response.Tags[field] = tagEntry{
-			FileValue:      fileValue,
-			FetchedValue:   entryState.FetchedValue,
-			StoredValue:    storedValue,
-			OverrideValue:  entryState.OverrideValue,
-			OverrideLocked: entryState.OverrideLocked,
+			FileValue:       fileValue,
+			FetchedValue:    entryState.FetchedValue,
+			StoredValue:     storedValue,
+			OverrideValue:   entryState.OverrideValue,
+			OverrideLocked:  entryState.OverrideLocked,
+			EffectiveValue:  effectiveValue,
+			EffectiveSource: effectiveSource,
+			UpdatedAt:       updatedAt,
 		}
 	}
 

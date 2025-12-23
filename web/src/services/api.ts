@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.6.1
+// version: 1.7.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
