@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.3.0
+// version: 1.3.1
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -314,18 +314,25 @@ export const BookDetail = () => {
     setActionLoading(true);
     setActionLabel(`Applying ${source} value...`);
     try {
-      const payload: Partial<Book> = {
-        [field]: value as never,
-      };
+      const payload: Partial<Book> & {
+        overrides: Record<string, { value: unknown; locked: boolean }>;
+      } = {
+        overrides: {
+          [field]: { value, locked: true },
+        },
+      } as never;
+      if (source === 'file') {
+        payload.overrides[field].fetched_value = entry.fetched;
+      }
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
       // Update local tags state to reflect new stored/override value
       setTags((prev) => {
         if (!prev?.tags) return prev;
         const updated = { ...prev.tags[field] };
-        updated.stored_value = value;
         updated.override_value = value;
         updated.override_locked = true;
+        updated.fetched_value = entry.fetched ?? updated.fetched_value;
         return {
           ...prev,
           tags: {
@@ -338,6 +345,43 @@ export const BookDetail = () => {
     } catch (error) {
       console.error('Failed to apply field value', error);
       setAlert({ severity: 'error', message: 'Failed to apply field value.' });
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const clearOverride = async (field: string) => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Clearing override...');
+    try {
+      const payload: Partial<Book> & {
+        overrides: Record<string, { clear: boolean }>;
+      } = {
+        overrides: {
+          [field]: { clear: true },
+        },
+      } as never;
+      const saved = await api.updateBook(book.id, payload);
+      setBook(saved);
+      setTags((prev) => {
+        if (!prev?.tags) return prev;
+        const updated = { ...prev.tags[field] };
+        updated.override_value = null;
+        updated.override_locked = false;
+        return {
+          ...prev,
+          tags: {
+            ...prev.tags,
+            [field]: updated,
+          },
+        };
+      });
+      setAlert({ severity: 'success', message: 'Override cleared.' });
+    } catch (error) {
+      console.error('Failed to clear override', error);
+      setAlert({ severity: 'error', message: 'Failed to clear override.' });
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -1000,6 +1044,16 @@ export const BookDetail = () => {
                             >
                               Use Fetched
                             </Button>
+                            {entry?.override && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => clearOverride(field)}
+                              >
+                                Clear
+                              </Button>
+                            )}
                           </Stack>
                         </TableCell>
                       </TableRow>

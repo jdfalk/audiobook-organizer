@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.6.0
+// version: 1.6.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -350,7 +350,17 @@ export async function deleteBook(
   if (!response.ok) throw new Error('Failed to delete audiobook');
 }
 
-export async function updateBook(bookId: string, updates: Partial<Book>): Promise<Book> {
+type OverridePayload = {
+  value?: unknown;
+  locked?: boolean;
+  fetched_value?: unknown;
+  clear?: boolean;
+};
+
+export async function updateBook(
+  bookId: string,
+  updates: Partial<Book> & { overrides?: Record<string, OverridePayload>; unlock_overrides?: string[] }
+): Promise<Book> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
