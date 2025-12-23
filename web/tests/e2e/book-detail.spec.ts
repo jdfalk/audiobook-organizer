@@ -1,5 +1,5 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.3.0
+// version: 1.3.1
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { expect, test } from '@playwright/test';
@@ -157,7 +157,23 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
           if (method === 'PUT') {
             const body = init?.body ? JSON.parse(init.body as string) : {};
             book = { ...book, ...body };
+            if (body.overrides) {
+              Object.entries(body.overrides as Record<string, { value?: unknown; clear?: boolean }>)
+                .forEach(([key, override]) => {
+                  if (!tagState.tags[key]) return;
+                  if (override.clear) {
+                    tagState.tags[key].override_value = null;
+                    tagState.tags[key].override_locked = false;
+                    return;
+                  }
+                  if (override.value !== undefined) {
+                    tagState.tags[key].override_value = override.value as never;
+                    tagState.tags[key].override_locked = true;
+                  }
+                });
+            }
             Object.keys(body).forEach((key) => {
+              if (key === 'overrides') return;
               if (tagState.tags[key]) {
                 tagState.tags[key].stored_value = body[key];
                 tagState.tags[key].override_value = body[key];
