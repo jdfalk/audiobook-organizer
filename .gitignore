@@ -198,3 +198,4 @@ audiobooks.pebble/
 
 # Encryption keys
 .encryption_key
+web/test-results/
