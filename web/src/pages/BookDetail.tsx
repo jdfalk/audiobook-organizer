@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -56,7 +56,7 @@ export const BookDetail = () => {
   const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'versions'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'versions' | 'tags'>('info');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({ softDelete: true, blockHash: true });
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
@@ -273,6 +273,16 @@ export const BookDetail = () => {
         publisher: updated.publisher,
         language: updated.language,
         narrator: updated.narrator,
+        series_position: updated.series_number,
+        audiobook_release_year:
+          (updated as unknown as { audiobook_release_year?: number }).audiobook_release_year ||
+          updated.year ||
+          book.audiobook_release_year,
+        print_year: updated.year || book.print_year,
+        isbn:
+          (updated as unknown as { isbn13?: string }).isbn13 ||
+          (updated as unknown as { isbn10?: string }).isbn10 ||
+          book.isbn,
       };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
@@ -487,6 +497,7 @@ export const BookDetail = () => {
             label={`Versions${versionSummary?.linkedCount ? ` (${versionSummary.linkedCount})` : ''}`}
             value="versions"
           />
+          <Tab label="Tags" value="tags" />
         </Tabs>
       </Paper>
 
@@ -699,6 +710,83 @@ export const BookDetail = () => {
           >
             Open Version Manager
           </Button>
+        </Paper>
+      )}
+
+      {activeTab === 'tags' && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+            <InfoIcon />
+            <Typography variant="h6">Tags &amp; Media</Typography>
+          </Stack>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 1,
+                  bgcolor: 'background.default',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  height: '100%',
+                }}
+              >
+                <Typography variant="subtitle2" gutterBottom>
+                  Embedded / Media Info
+                </Typography>
+                <Stack spacing={1}>
+                  <Typography variant="body2">Codec: {book.codec || '—'}</Typography>
+                  <Typography variant="body2">
+                    Bitrate: {book.bitrate ? `${book.bitrate} kbps` : '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Sample Rate: {book.sample_rate ? `${book.sample_rate} Hz` : '—'}
+                  </Typography>
+                  <Typography variant="body2">Channels: {book.channels ?? '—'}</Typography>
+                  <Typography variant="body2">Bit Depth: {book.bit_depth ?? '—'}</Typography>
+                  <Typography variant="body2">Quality: {book.quality || '—'}</Typography>
+                  <Typography variant="body2">
+                    Duration: {formatDuration(book.duration) || '—'}
+                  </Typography>
+                </Stack>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 1,
+                  bgcolor: 'background.default',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  height: '100%',
+                }}
+              >
+                <Typography variant="subtitle2" gutterBottom>
+                  Metadata (Current)
+                </Typography>
+                <Stack spacing={1}>
+                  <Typography variant="body2">Title: {book.title || '—'}</Typography>
+                  <Typography variant="body2">Author: {book.author_name || '—'}</Typography>
+                  <Typography variant="body2">Narrator: {book.narrator || '—'}</Typography>
+                  <Typography variant="body2">Series: {book.series_name || '—'}</Typography>
+                  <Typography variant="body2">
+                    Series Position: {book.series_position ?? '—'}
+                  </Typography>
+                  <Typography variant="body2">Publisher: {book.publisher || '—'}</Typography>
+                  <Typography variant="body2">Language: {book.language || '—'}</Typography>
+                  <Typography variant="body2">
+                    Year: {book.audiobook_release_year || book.print_year || '—'}
+                  </Typography>
+                  <Typography variant="body2">ISBN: {book.isbn || '—'}</Typography>
+                </Stack>
+              </Box>
+            </Grid>
+          </Grid>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Provenance: displaying current stored metadata and media info. File-tag/source breakdown
+            will appear here when provided by the backend.
+          </Alert>
         </Paper>
       )}
 

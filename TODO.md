@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.14.0 -->
+<!-- version: 1.15.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -969,6 +969,12 @@
   - Current specs: `web/tests/e2e/app.spec.ts` (smoke nav with mocked API/SSE), `web/tests/e2e/import-paths.spec.ts` (Settings add/remove import path via route mocks). Config: `web/tests/e2e/playwright.config.ts`, run with `cd web && npm run test:e2e`.
   - Needed coverage: Library list interactions (search/sort/view toggle, pagination), navigation into Book Detail, Book Detail tabs/actions (soft delete/block, restore, purge, metadata fetch, AI parse, version manager button, hash copy toast), soft-deleted list restore/purge, version linking dialog happy-path, Settings retention toggles (purge settings), dashboard tiles render, import paths end-to-end (add/remove/update via UI, not just mocked route), file manager browse dialogs, operation status banners.
   - Add stable API fixtures or route mocks per page; ensure wizard is bypassed, SSE mocked; use headless dev server via existing Playwright config; keep tests idempotent and non-networked.
+- [ ] Book Detail metadata richness
+  - Add Tags tab showing raw embedded/file tags and media info (bitrate/codec/sample rate/channels/publisher/narrator/year/album/series/title) from backend; read-only.
+  - Show provenance on fields (DB/edited, fetched, file tag) when API can supply per-field source flags; fall back gracefully if not available.
+  - Add Compare view (File tags vs Stored/Fetched vs Current overrides) when API returns multiple metadata sources.
+  - Expand Edit Metadata dialog to include full fields (author/series/year/genre/ISBN/description/publisher/language/etc.) and save via API.
+  - Ensure hashes and media details remain visible in Files tab; consider duration/size display if API provides.
 - [ ] Chaos test for operation cancellation mid-scan
 
 ### DevOps / CI/CD
