@@ -1,5 +1,5 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.3.1
+// version: 1.4.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { expect, test } from '@playwright/test';

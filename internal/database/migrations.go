@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
