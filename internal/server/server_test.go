@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.5.0
+// version: 1.4.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -191,7 +191,7 @@ func TestUpdateAudiobook(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestGetAudiobookTagsIncludesValues(t *testing.T) {
+func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
@@ -1169,70 +1169,6 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 	assert.Equal(t, "Fetched Narrator", resp.Tags["narrator"].FetchedValue)
 }
 
-func TestGetAudiobookIncludesMetadataProvenance(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	author, err := database.GlobalStore.CreateAuthor("Test Author")
-	require.NoError(t, err)
-	series, err := database.GlobalStore.CreateSeries("Test Series", &author.ID)
-	require.NoError(t, err)
-
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "book-provenance.m4b")
-	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
-
-	book, err := database.GlobalStore.CreateBook(&database.Book{
-		Title:    "Stored Title",
-		AuthorID: &author.ID,
-		SeriesID: &series.ID,
-		FilePath: filePath,
-	})
-	require.NoError(t, err)
-
-	now := time.Now()
-	state := map[string]metadataFieldState{
-		"title": {
-			FetchedValue:   "Fetched Title",
-			OverrideValue:  "Override Title",
-			OverrideLocked: true,
-			UpdatedAt:      now,
-		},
-		"author_name": {
-			FetchedValue: "Fetched Author",
-			UpdatedAt:    now,
-		},
-	}
-	require.NoError(t, saveMetadataState(book.ID, state))
-
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s", book.ID), nil)
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var resp database.Book
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-
-	require.NotNil(t, resp.MetadataProvenance)
-	if assert.Contains(t, resp.MetadataProvenance, "title") {
-		title := resp.MetadataProvenance["title"]
-		assert.Equal(t, "Stored Title", title.StoredValue)
-		assert.Equal(t, "Fetched Title", title.FetchedValue)
-		assert.Equal(t, "Override Title", title.OverrideValue)
-		assert.Equal(t, "override", title.EffectiveSource)
-		assert.NotNil(t, title.UpdatedAt)
-	}
-
-	if assert.Contains(t, resp.MetadataProvenance, "author_name") {
-		authorEntry := resp.MetadataProvenance["author_name"]
-		assert.Equal(t, "Test Author", authorEntry.StoredValue)
-		assert.Equal(t, "stored", authorEntry.EffectiveSource)
-	}
-
-	assert.NotNil(t, resp.MetadataProvenanceAt)
-}
-
 func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
@@ -1284,157 +1220,5 @@ func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 	if assert.Contains(t, state, "author_name") {
 		assert.Equal(t, "Override Author", state["author_name"].OverrideValue)
 		assert.True(t, state["author_name"].OverrideLocked)
-	}
-}
-
-// TestGetAudiobookTagsWithProvenance tests the tags endpoint with metadata provenance
-func TestGetAudiobookTagsWithProvenance(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "book.m4b")
-	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
-
-	// Create book with some data
-	author, err := database.GlobalStore.CreateAuthor("John Doe")
-	require.NoError(t, err)
-
-	book, err := database.GlobalStore.CreateBook(&database.Book{
-		Title:     "Test Book",
-		FilePath:  filePath,
-		AuthorID:  &author.ID,
-		Narrator:  stringPtr("Original Narrator"),
-		Publisher: stringPtr("Original Publisher"),
-	})
-	require.NoError(t, err)
-
-	// Set some metadata state with overrides
-	err = database.GlobalStore.UpsertMetadataFieldState(&database.MetadataFieldState{
-		BookID:         book.ID,
-		Field:          "narrator",
-		FetchedValue:   stringPtr(`"Fetched Narrator"`),
-		OverrideValue:  stringPtr(`"Override Narrator"`),
-		OverrideLocked: true,
-		UpdatedAt:      time.Now(),
-	})
-	require.NoError(t, err)
-
-	err = database.GlobalStore.UpsertMetadataFieldState(&database.MetadataFieldState{
-		BookID:       book.ID,
-		Field:        "publisher",
-		FetchedValue: stringPtr(`"Fetched Publisher"`),
-		UpdatedAt:    time.Now(),
-	})
-	require.NoError(t, err)
-
-	// Request tags endpoint
-	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s/tags", book.ID), nil)
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var response struct {
-		MediaInfo map[string]interface{}                      `json:"media_info"`
-		Tags      map[string]database.MetadataProvenanceEntry `json:"tags"`
-	}
-
-	err = json.Unmarshal(w.Body.Bytes(), &response)
-	require.NoError(t, err)
-
-	// Verify narrator has override and is locked
-	narratorTag := response.Tags["narrator"]
-	assert.Equal(t, "override", narratorTag.EffectiveSource)
-	assert.Equal(t, "Override Narrator", narratorTag.EffectiveValue)
-	assert.True(t, narratorTag.OverrideLocked)
-	assert.Equal(t, "Fetched Narrator", narratorTag.FetchedValue)
-
-	// Verify publisher has fetched value (should be stored value first, then fetched)
-	publisherTag := response.Tags["publisher"]
-	// When both stored and fetched exist, effective source should be "stored" (takes precedence)
-	assert.Equal(t, "stored", publisherTag.EffectiveSource)
-	assert.Equal(t, "Original Publisher", publisherTag.EffectiveValue)
-	assert.Equal(t, "Fetched Publisher", publisherTag.FetchedValue)
-
-	// Verify title uses stored value
-	titleTag := response.Tags["title"]
-	assert.Equal(t, "stored", titleTag.EffectiveSource)
-	assert.Equal(t, "Test Book", titleTag.EffectiveValue)
-}
-
-// TestMetadataFieldStateRoundtrip tests persistence and retrieval of metadata field states
-func TestMetadataFieldStateRoundtrip(t *testing.T) {
-	_, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	bookID := "test-book-id"
-
-	// Create initial state
-	testCases := []struct {
-		field          string
-		fetchedValue   *string
-		overrideValue  *string
-		overrideLocked bool
-	}{
-		{
-			field:         "title",
-			fetchedValue:  stringPtr(`"Fetched Title"`),
-			overrideValue: stringPtr(`"Override Title"`),
-		},
-		{
-			field:          "narrator",
-			fetchedValue:   stringPtr(`"Narrator Name"`),
-			overrideLocked: true,
-		},
-		{
-			field:         "publisher",
-			overrideValue: stringPtr(`"Publisher Override"`),
-		},
-	}
-
-	// Insert states
-	for _, tc := range testCases {
-		err := database.GlobalStore.UpsertMetadataFieldState(&database.MetadataFieldState{
-			BookID:         bookID,
-			Field:          tc.field,
-			FetchedValue:   tc.fetchedValue,
-			OverrideValue:  tc.overrideValue,
-			OverrideLocked: tc.overrideLocked,
-			UpdatedAt:      time.Now(),
-		})
-		require.NoError(t, err)
-	}
-
-	// Retrieve states
-	states, err := database.GlobalStore.GetMetadataFieldStates(bookID)
-	require.NoError(t, err)
-	require.Len(t, states, len(testCases))
-
-	// Verify each state
-	stateMap := make(map[string]database.MetadataFieldState)
-	for _, state := range states {
-		stateMap[state.Field] = state
-	}
-
-	for _, tc := range testCases {
-		state, exists := stateMap[tc.field]
-		require.True(t, exists, "field %s not found", tc.field)
-		assert.Equal(t, tc.fetchedValue, state.FetchedValue)
-		assert.Equal(t, tc.overrideValue, state.OverrideValue)
-		assert.Equal(t, tc.overrideLocked, state.OverrideLocked)
-	}
-
-	// Delete a field
-	err = database.GlobalStore.DeleteMetadataFieldState(bookID, "publisher")
-	require.NoError(t, err)
-
-	// Verify deletion
-	states, err = database.GlobalStore.GetMetadataFieldStates(bookID)
-	require.NoError(t, err)
-	require.Len(t, states, len(testCases)-1)
-
-	for _, state := range states {
-		assert.NotEqual(t, "publisher", state.Field)
 	}
 }

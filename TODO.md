@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.1 -->
+<!-- version: 1.22.2 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -214,7 +214,6 @@
 
 **Next Steps:**
 
-- [ ] Review and merge PR #69 (Blocked Hashes UI)
 - [x] Review and merge PR #69 (Blocked Hashes UI) — merged 2025-12-22
 - [x] Review and merge PR #70 (State Transitions) — merged 2025-12-22
 - [ ] Finalize metadata provenance branch (current worktree) and push to main
@@ -1172,7 +1171,7 @@
         source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with
         payload including file tags, stored values, fetched metadata, and
         “locked/override” flags.
-  - [ ] Extend `GET /api/v1/audiobooks/:id` response to optionally include
+  - [x] Extend `GET /api/v1/audiobooks/:id` response to optionally include
         provenance map (field -> {source: file/db/fetched/override, value,
         last_updated}).
   - [x] Add override/lock semantics: when a user edits a field, mark it as
