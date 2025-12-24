@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -1167,6 +1167,70 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 
 	require.Contains(t, resp.Tags, "narrator")
 	assert.Equal(t, "Fetched Narrator", resp.Tags["narrator"].FetchedValue)
+}
+
+func TestGetAudiobookIncludesMetadataProvenance(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	author, err := database.GlobalStore.CreateAuthor("Test Author")
+	require.NoError(t, err)
+	series, err := database.GlobalStore.CreateSeries("Test Series", &author.ID)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "book-provenance.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Stored Title",
+		AuthorID: &author.ID,
+		SeriesID: &series.ID,
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	now := time.Now()
+	state := map[string]metadataFieldState{
+		"title": {
+			FetchedValue:   "Fetched Title",
+			OverrideValue:  "Override Title",
+			OverrideLocked: true,
+			UpdatedAt:      now,
+		},
+		"author_name": {
+			FetchedValue: "Fetched Author",
+			UpdatedAt:    now,
+		},
+	}
+	require.NoError(t, saveMetadataState(book.ID, state))
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp database.Book
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	require.NotNil(t, resp.MetadataProvenance)
+	if assert.Contains(t, resp.MetadataProvenance, "title") {
+		title := resp.MetadataProvenance["title"]
+		assert.Equal(t, "Stored Title", title.StoredValue)
+		assert.Equal(t, "Fetched Title", title.FetchedValue)
+		assert.Equal(t, "Override Title", title.OverrideValue)
+		assert.Equal(t, "override", title.EffectiveSource)
+		assert.NotNil(t, title.UpdatedAt)
+	}
+
+	if assert.Contains(t, resp.MetadataProvenance, "author_name") {
+		authorEntry := resp.MetadataProvenance["author_name"]
+		assert.Equal(t, "Test Author", authorEntry.StoredValue)
+		assert.Equal(t, "stored", authorEntry.EffectiveSource)
+	}
+
+	assert.NotNil(t, resp.MetadataProvenanceAt)
 }
 
 func TestUpdateAudiobookPersistsOverrides(t *testing.T) {

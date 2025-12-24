@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.11.0
+// version: 2.12.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -200,8 +200,22 @@ type Book struct {
 	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
-	Author *Author `json:"author,omitempty" db:"-"`
-	Series *Series `json:"series,omitempty" db:"-"`
+	Author               *Author                                   `json:"author,omitempty" db:"-"`
+	Series               *Series                                   `json:"series,omitempty" db:"-"`
+	MetadataProvenance   map[string]MetadataProvenanceEntry        `json:"metadata_provenance,omitempty" db:"-"`
+	MetadataProvenanceAt *time.Time                                `json:"metadata_provenance_at,omitempty" db:"-"`
+}
+
+// MetadataProvenanceEntry represents the source breakdown for a metadata field.
+type MetadataProvenanceEntry struct {
+	FileValue       interface{} `json:"file_value,omitempty"`
+	FetchedValue    interface{} `json:"fetched_value,omitempty"`
+	StoredValue     interface{} `json:"stored_value,omitempty"`
+	OverrideValue   interface{} `json:"override_value,omitempty"`
+	OverrideLocked  bool        `json:"override_locked"`
+	EffectiveValue  interface{} `json:"effective_value,omitempty"`
+	EffectiveSource string      `json:"effective_source,omitempty"`
+	UpdatedAt       *time.Time  `json:"updated_at,omitempty"`
 }
 
 // Work represents a logical title-level grouping that may span multiple editions,
