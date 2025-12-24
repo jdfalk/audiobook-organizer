@@ -200,10 +200,10 @@ type Book struct {
 	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
-	Author               *Author                                   `json:"author,omitempty" db:"-"`
-	Series               *Series                                   `json:"series,omitempty" db:"-"`
-	MetadataProvenance   map[string]MetadataProvenanceEntry        `json:"metadata_provenance,omitempty" db:"-"`
-	MetadataProvenanceAt *time.Time                                `json:"metadata_provenance_at,omitempty" db:"-"`
+	Author               *Author                            `json:"author,omitempty" db:"-"`
+	Series               *Series                            `json:"series,omitempty" db:"-"`
+	MetadataProvenance   map[string]MetadataProvenanceEntry `json:"metadata_provenance,omitempty" db:"-"`
+	MetadataProvenanceAt *time.Time                         `json:"metadata_provenance_at,omitempty" db:"-"`
 }
 
 // MetadataProvenanceEntry represents the source breakdown for a metadata field.
