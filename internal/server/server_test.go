@@ -191,6 +191,102 @@ func TestUpdateAudiobook(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempFile := filepath.Join(t.TempDir(), "book.m4b")
+	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
+
+	created, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Stored Title",
+		FilePath: tempFile,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	now := time.Now()
+	err = saveMetadataState(created.ID, map[string]metadataFieldState{
+		"title": {
+			FetchedValue:   "Fetched Title",
+			OverrideValue:  "Override Title",
+			OverrideLocked: true,
+			UpdatedAt:      now,
+		},
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s/tags", created.ID), nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response struct {
+		Tags map[string]struct {
+			EffectiveValue  interface{} `json:"effective_value"`
+			EffectiveSource string      `json:"effective_source"`
+			StoredValue     interface{} `json:"stored_value"`
+			OverrideValue   interface{} `json:"override_value"`
+			FetchedValue    interface{} `json:"fetched_value"`
+			OverrideLocked  bool        `json:"override_locked"`
+		} `json:"tags"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+
+	entry, ok := response.Tags["title"]
+	require.True(t, ok, "title tag should exist")
+	assert.Equal(t, "Override Title", entry.EffectiveValue)
+	assert.Equal(t, "override", entry.EffectiveSource)
+	assert.Equal(t, "Override Title", entry.OverrideValue)
+	assert.Equal(t, "Fetched Title", entry.FetchedValue)
+	assert.Equal(t, "Stored Title", entry.StoredValue)
+	assert.True(t, entry.OverrideLocked)
+}
+
+func TestUpdateAudiobookOverridesPersist(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempFile := filepath.Join(t.TempDir(), "book-override.m4b")
+	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
+
+	created, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Original Title",
+		FilePath: tempFile,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	body := bytes.NewBufferString(`{"overrides":{"title":{"value":"New Title","locked":true}}}`)
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/audiobooks/%s", created.ID), body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var updated database.Book
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
+	assert.Equal(t, "New Title", updated.Title)
+
+	states, err := database.GlobalStore.GetMetadataFieldStates(created.ID)
+	require.NoError(t, err)
+
+	stateByField := map[string]database.MetadataFieldState{}
+	for _, st := range states {
+		stateByField[st.Field] = st
+	}
+	state, ok := stateByField["title"]
+	require.True(t, ok, "expected metadata state for title")
+	assert.True(t, state.OverrideLocked)
+	assert.NotNil(t, state.OverrideValue)
+	assert.NotZero(t, state.UpdatedAt)
+	assert.Equal(t, "New Title", decodeMetadataValue(state.OverrideValue))
+}
+
 // TestDeleteAudiobook tests deleting an audiobook
 func TestDeleteAudiobook(t *testing.T) {
 	server, cleanup := setupTestServer(t)

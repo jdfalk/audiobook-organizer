@@ -1,5 +1,5 @@
 <!-- file: CURRENT_STATUS.md -->
-<!-- version: 1.0.1 -->
+<!-- version: 1.1.0 -->
 <!-- guid: d5a6b7c8-9e0f-4a1b-8c2d-3e4f5a6b7c8d -->
 
 # Audiobook Organizer - Current Status & Handoff Document
@@ -11,8 +11,8 @@
 
 ## 🎯 Quick Status Overview
 
-**MVP Completion**: ~75% (up from 65%)  
-**All Tests**: ✅ Passing (19 packages)  
+**MVP Completion**: ~77% (Book Detail metadata/provenance nearly done)  
+**All Tests**: ✅ Passing (`go test ./...`)  
 **Build**: ✅ Successful  
 **Pending PRs**: 2 (ready for review)
 
@@ -105,6 +105,14 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 2. **Soft Delete** - Mark books for deletion without removing files
 3. **Enhanced Delete** - Optional hash blocking on delete
 
+### Session 4 (In Worktree - Not Yet on Main)
+
+1. **Metadata Provenance Storage** - Added `metadata_states` table with migration 10 and cleanup on delete
+2. **Tags API Enrichment** - `/audiobooks/:id/tags` now returns effective value/source plus fetched/override/lock state with timestamps
+3. **Update Handler** - Persists overrides/locks and fetched metadata into durable state; applies overrides to outgoing payload
+4. **UI Tags/Compare** - Book Detail shows effective values with source/lock chips; mocks recompute effective values in Playwright tests
+5. **Tests** - New server tests for metadata provenance; Playwright mocks updated (UI/E2E not executed this session)
+
 ---
 
 ## 📊 MVP Task Status (7 Tasks)
@@ -140,18 +148,18 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 - **Status**: Only manual testing remains
 - **Blockers**: None - just merge PRs #69 and #70
 
-### ⚠️ Task 6: Book Detail Page & Delete Flow - 50% COMPLETE
+### ⚠️ Task 6: Book Detail Page & Delete Flow - 75% COMPLETE
 
-- Backend: ✅ Complete (enhanced delete in PR #70)
-- Frontend: ❌ Missing (BookDetail.tsx component)
-- **Status**: Needs 4-6 hours of frontend work
+- Backend: ✅ Complete (enhanced delete in PR #70 plus metadata provenance persistence)
+- Frontend: ⏳ BookDetail metadata/tags/compare implemented; provenance display in place; routing/navigation already exists
+- **Status**: Remaining gap is exposing provenance on `GET /api/v1/audiobooks/:id` (optional) and adding history view; run UI/E2E to validate new flows
 - **Blockers**: None - can start after merging PRs
 
-### ⚠️ Task 7: E2E Test Suite - 30% COMPLETE
+### ⚠️ Task 7: E2E Test Suite - 35% COMPLETE
 
 - Framework: ✅ Exists (Selenium + pytest)
-- Tests: ⚠️ Basic only
-- **Status**: Needs 6-8 hours to expand coverage
+- Tests: ⚠️ Playwright mocks updated for Book Detail tags/compare; Selenium smoke still basic
+- **Status**: Needs 6-8 hours to expand coverage and run new UI tests
 - **Blockers**: None - can run after manual testing
 
 ---
@@ -162,22 +170,21 @@ DELETE /api/v1/audiobooks/:id?soft_delete=true&block_hash=true
 
 1. **Review PR #69** - Blocked Hashes UI
 2. **Review PR #70** - State Transitions
-3. **Merge both PRs** if approved
-4. **Manual testing** (30-60 minutes)
+3. **Manual testing** (30-60 minutes)
    - Test blocked hashes UI
    - Test state transitions
    - Test soft delete
+4. **Finalize metadata provenance branch** (current worktree) and land on main after review
 
 ### Short Term (4-6 hours)
 
-1. **Create BookDetail.tsx** (Task 6)
-   - Component with Info/Files/Versions tabs
-   - Navigation from Library list
-   - Display all book metadata
+1. **Finish BookDetail provenance** (Task 6)
+   - (Optional) expose provenance map on `GET /api/v1/audiobooks/:id`
+   - Add metadata history view if desired
+   - Run Playwright UI coverage for Tags/Compare/override flows
 2. **Enhanced Delete Dialog** (Task 6)
-   - Update AudiobookCard.tsx delete confirmation
-   - Add "Prevent Reimport" checkbox
-   - Wire up `?block_hash=true` parameter
+   - Ensure delete dialog still wires `block_hash` + soft delete after refactors
+   - Re-run manual check after metadata changes
 
 ### Medium Term (6-8 hours)
 
@@ -357,10 +364,10 @@ web/src/
 
 ### Quick Wins Available:
 
-1. Add purge endpoint for soft-deleted books (30 min)
-2. Filter soft-deleted books from Library view (30 min)
-3. Add state transition validation (1 hour)
-4. Fix frontend TypeScript errors (2 hours)
+1. Add provenance to `GET /audiobooks/:id` response (if needed by UI)
+2. Add state transition validation (1 hour)
+3. Filter soft-deleted books from Library view (30 min) — verify still correct after recent changes
+4. Add purge endpoint for soft-deleted books (30 min) — already in place; just document
 
 ---
 
@@ -448,16 +455,15 @@ MVP is complete when:
 
 ## 🔄 In-Progress Work (Book Detail Metadata/Tags)
 
-- Frontend Book Detail now includes Info/Files/Versions plus Tags and Compare tabs, Edit Metadata, and apply-from-Compare actions (mock-friendly).
-- Playwright (Chromium + WebKit) covers Tags/Compare flows via mocks.
-- Backend now persists fetched/override metadata state (with lock flags) in user preferences, resolves author/series names for tags, and returns fetched/override values from `GET /api/v1/audiobooks/:id/tags`; update handler stores overrides on writes; handler tests added.
-- Backend still needs durable DB model for provenance (currently in user-preferences) and to expose provenance map on `GET /api/v1/audiobooks/:id`.
-- Next agent: implement backend schema/handlers for per-field provenance/override locks; update API payloads; align frontend to real payload; add Go handler tests; keep Playwright mocks aligned to final shape.
+- Frontend Book Detail includes Info/Files/Versions plus Tags and Compare tabs, Edit Metadata, and override apply/clear actions (mock-friendly).
+- Playwright (Chromium + WebKit) mocks updated to recompute effective values and include provenance for tags/compare flows.
+- Backend now persists fetched/override metadata state (with lock flags) in the dedicated `metadata_states` table, resolves author/series names for tags, and returns effective value/source plus fetched/override values from `GET /api/v1/audiobooks/:id/tags`; update handler stores overrides on writes; handler tests added.
+- Remaining gap: optionally expose provenance map on `GET /api/v1/audiobooks/:id` and add metadata history view; run UI/E2E to validate overrides/locks end-to-end.
 
-**Current**: 7 of 10 complete (70%)  
-**After merging PRs #69 and #70**: 7 of 10 complete  
-**After BookDetail page**: 8 of 10 complete (80%)  
-**After E2E tests**: 9 of 10 complete (90%)  
+**Current**: 7.5 of 10 complete (~75%)  
+**After merging PRs #69 and #70**: 7.5 of 10 complete  
+**After BookDetail provenance shipped**: 8.5 of 10 complete  
+**After E2E tests**: 9.5 of 10 complete  
 **After manual testing**: 10 of 10 complete (100%)
 
 ---
@@ -476,10 +482,10 @@ The remaining work is primarily frontend UI (BookDetail page) and testing.
 
 ## 🚧 Latest Updates (This Session)
 
-- Added Book Detail page with soft delete / restore / purge controls and wired Library navigation.
-- Exposed retention settings (auto-purge days, delete-files flag) in Settings.
-- Added Selenium E2E coverage for retention controls, soft-deleted review section, and book-detail navigation (tests added but not yet executed).
-- Backend already has auto-purge job and restore endpoint; soft-deleted list supports per-item purge/restore in UI.
+- Added durable metadata provenance via `metadata_states` table/migration 10 with cleanup on book delete.
+- Enriched `/api/v1/audiobooks/:id/tags` to return effective values/sources plus fetched/override/locked state with timestamps and resolved author/series names.
+- Update handler now persists overrides/locks and fetched metadata; applies overrides to payload before save.
+- Book Detail Tags/Compare UI shows effective values with source/lock chips; Playwright mocks recompute effective values; server handler tests added.
 - Go tests: ✅ `go test ./...`; UI/E2E: not run (new tests only).
 
 ## 🧭 Next Steps

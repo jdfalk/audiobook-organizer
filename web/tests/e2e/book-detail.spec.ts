@@ -70,6 +70,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: initialBook.title,
         override_value: null,
         override_locked: false,
+        effective_value: initialBook.title,
+        effective_source: 'stored',
       },
       author_name: {
         file_value: 'File Author',
@@ -77,6 +79,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: initialBook.author_name,
         override_value: null,
         override_locked: false,
+        effective_value: initialBook.author_name,
+        effective_source: 'stored',
       },
       narrator: {
         file_value: 'File Narrator',
@@ -84,6 +88,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: 'Stored Narrator',
         override_value: 'Override Narrator',
         override_locked: true,
+        effective_value: 'Override Narrator',
+        effective_source: 'override',
       },
       publisher: {
         file_value: 'File Publisher',
@@ -91,6 +97,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: 'Stored Publisher',
         override_value: null,
         override_locked: false,
+        effective_value: 'Stored Publisher',
+        effective_source: 'stored',
       },
       language: {
         file_value: 'en',
@@ -98,6 +106,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: 'en',
         override_value: null,
         override_locked: false,
+        effective_value: 'en',
+        effective_source: 'stored',
       },
       audiobook_release_year: {
         file_value: 2020,
@@ -105,6 +115,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         stored_value: 2022,
         override_value: null,
         override_locked: false,
+        effective_value: 2022,
+        effective_source: 'stored',
       },
     },
   };
@@ -117,6 +129,27 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
       let book = { ...bookData };
       let purged = false;
       const tagState = { ...tagsData };
+
+      const recomputeEffective = (field: string) => {
+        const entry = tagState.tags[field as keyof typeof tagState.tags];
+        if (!entry) return;
+        const effective =
+          entry.override_value ?? entry.stored_value ?? entry.fetched_value ?? entry.file_value;
+        let source = '';
+        if (entry.override_value !== null && entry.override_value !== undefined) {
+          source = 'override';
+        } else if (entry.stored_value !== null && entry.stored_value !== undefined) {
+          source = 'stored';
+        } else if (entry.fetched_value !== null && entry.fetched_value !== undefined) {
+          source = 'fetched';
+        } else if (entry.file_value !== null && entry.file_value !== undefined) {
+          source = 'file';
+        }
+        entry.effective_value = effective as never;
+        entry.effective_source = source;
+      };
+
+      Object.keys(tagState.tags).forEach((field) => recomputeEffective(field));
 
       const jsonResponse = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), {
@@ -164,11 +197,13 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
                   if (override.clear) {
                     tagState.tags[key].override_value = null;
                     tagState.tags[key].override_locked = false;
+                    recomputeEffective(key);
                     return;
                   }
                   if (override.value !== undefined) {
                     tagState.tags[key].override_value = override.value as never;
                     tagState.tags[key].override_locked = true;
+                    recomputeEffective(key);
                   }
                 });
             }
@@ -178,6 +213,7 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
                 tagState.tags[key].stored_value = body[key];
                 tagState.tags[key].override_value = body[key];
                 tagState.tags[key].override_locked = true;
+                recomputeEffective(key);
               }
             });
             return Promise.resolve(jsonResponse(book));

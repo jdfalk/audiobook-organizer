@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.17.1 -->
+<!-- version: 1.17.3 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -34,8 +34,9 @@
 
 ## 🎯 Next Session Starting Points
 
-- Add navigation entry/breadcrumbs to reach Book Detail page easily from anywhere.
-- Run Selenium smoke covering restore/purge flow (new tests in `tests/e2e/test_soft_delete_and_retention.py`).
+- Land metadata provenance branch (migration 10, tags endpoint enrichment, overrides/locks) onto main.
+- Consider exposing provenance map on `GET /api/v1/audiobooks/:id` and add history view if needed by UI.
+- Run Playwright Book Detail tags/compare mocks and Selenium soft-delete/retention smoke (`tests/e2e/test_soft_delete_and_retention.py`).
 
 **Status**: See CHANGELOG.md for latest status and progress
 
@@ -43,9 +44,10 @@
 
 - [ ] Review and merge PR #69 (Blocked Hashes UI)
 - [ ] Review and merge PR #70 (State Transitions)
-- [ ] Manual testing of new features
+- [ ] Finalize metadata provenance branch (current worktree) and push to main
+- [ ] Manual testing of new features (blocked hashes, state transitions, metadata overrides/locks)
 - [x] Build BookDetail.tsx component (Task 6) — detail view now includes info/files/versions tabs,
-      soft-delete/restore/purge controls, and version management entry
+      soft-delete/restore/purge controls, version management entry, and Tags/Compare with provenance
 - [ ] Expand E2E test coverage (Task 7)
 
 ---
@@ -976,21 +978,21 @@
   - Expand Edit Metadata dialog to include full fields (author/series/year/genre/ISBN/description/publisher/language/etc.) and save via API.
   - Ensure hashes and media details remain visible in Files tab; consider duration/size display if API provides.
 - [ ] Backend support for Book Detail tags/provenance
-  - Add API endpoint to return raw embedded tags + media info + source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with payload including file tags, stored values, fetched metadata, and “locked/override” flags.
-  - Extend `GET /api/v1/audiobooks/:id` response to optionally include provenance map (field -> {source: file/db/fetched/override, value, last_updated}).
-  - Add override/lock semantics: when a user edits a field, mark it as “locked/override” so later fetches/AI/tag refresh won’t overwrite unless explicitly cleared; include a way to clear lock.
-  - Provide metadata history or last-applied source so UI can show conflicts (e.g., file vs fetched vs override).
-  - **Progress**: Tags endpoint now resolves author/series names and returns fetched/override/locked fields from persisted metadata state; update handler persists overrides/fetched metadata on writes.
-- [ ] Backend gaps discovered (Book Detail tags/compare)
-  - Prior behavior: `GET /audiobooks/:id/tags` returned only file/stored values; no fetched/override provenance, no lock persistence, and author/series names not resolved (only IDs exist in DB). Remaining: move metadata state off user-preferences into durable DB model and wire provenance into book detail response.
+  - [x] Add API endpoint to return raw embedded tags + media info + source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with payload including file tags, stored values, fetched metadata, and “locked/override” flags.
+  - [ ] Extend `GET /api/v1/audiobooks/:id` response to optionally include provenance map (field -> {source: file/db/fetched/override, value, last_updated}).
+  - [x] Add override/lock semantics: when a user edits a field, mark it as “locked/override” so later fetches/AI/tag refresh won’t overwrite unless explicitly cleared; include a way to clear lock.
+  - [ ] Provide metadata history or last-applied source so UI can show conflicts (e.g., file vs fetched vs override).
+  - **Progress**: Metadata provenance now persists in the `metadata_states` table; tags endpoint returns effective value/source plus fetched/override/locked fields; update handler persists overrides/fetched metadata; Go handler tests added.
+- [x] Backend gaps discovered (Book Detail tags/compare)
+  - Prior behavior: `GET /audiobooks/:id/tags` returned only file/stored values; no fetched/override provenance, no lock persistence, and author/series names not resolved (only IDs exist in DB). Status: metadata state moved off user-preferences into durable table; tags handler now returns effective_source/value with resolved names.
   - Update `UpdateBook`/DB to accept override payloads and persist override_locked flags.
   - Add handler/unit tests for the tags endpoint covering file vs fetched vs override vs locked cases.
 - [ ] Frontend Book Detail (Tags/Compare/Overrides)
-  - Tags tab: show raw tags from new endpoint; include media info and tag values (title/author/narrator/series/position/publisher/language/year/genre/ISBN/comments).
+  - Tags tab: show raw tags from new endpoint; include media info and tag values (title/author/narrator/series/position/publisher/language/year/genre/ISBN/comments). Progress: Tags/Compare now display effective source/value chips and lock badges.
   - Compare view: side-by-side (File tags vs Stored vs Fetched vs Override) with clear indication of locked fields; allow “use file value” / “use fetched value” actions per field when backend supports.
   - Edit dialog: include all key fields and allow setting/clearing overrides; send override flag with updates.
 - [ ] Playwright coverage for Book Detail (with mocks)
-  - Add fixture/mocks for tags/provenance endpoint (normal case, conflict case with override vs file/fetched).
+  - Add fixture/mocks for tags/provenance endpoint (normal case, conflict case with override vs file/fetched). Progress: Book-detail mocks now include effective source/value and recompute on overrides.
   - Tests: render Tags tab with raw tags; render Compare view showing differing sources; override workflow (edit field, mark locked, verify UI shows override badge and Compare tab shows resolution); clear override resets to tag/fetched value; hash copy toast; delete dialog options (soft/hard, block hash); Manage Versions dialog opens.
   - Keep tests fully mocked (no backend dependency), bypass wizard, mock SSE, run under Chromium + WebKit.
 - [ ] Chaos test for operation cancellation mid-scan

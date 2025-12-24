@@ -93,6 +93,12 @@ var migrations = []Migration{
 		Up:          migration009Up,
 		Down:        nil,
 	},
+	{
+		Version:     10,
+		Description: "Add metadata_states table for metadata provenance",
+		Up:          migration010Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -436,6 +442,39 @@ func migration009Up(store Store) error {
 	}
 
 	log.Println("  - State machine fields added successfully")
+	return nil
+}
+
+// migration010Up adds metadata_states table for persisted metadata provenance
+func migration010Up(store Store) error {
+	log.Println("  - Adding metadata_states table for metadata provenance")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS metadata_states (
+			book_id TEXT NOT NULL,
+			field TEXT NOT NULL,
+			fetched_value TEXT,
+			override_value TEXT,
+			override_locked BOOLEAN NOT NULL DEFAULT 0,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (book_id, field)
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_metadata_states_book ON metadata_states(book_id)",
+	}
+
+	for _, stmt := range statements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+		}
+	}
+
 	return nil
 }
 

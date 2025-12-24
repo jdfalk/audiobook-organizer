@@ -73,17 +73,38 @@ type metadataFieldState struct {
 	FetchedValue   interface{} `json:"fetched_value,omitempty"`
 	OverrideValue  interface{} `json:"override_value,omitempty"`
 	OverrideLocked bool        `json:"override_locked"`
+	UpdatedAt      time.Time   `json:"updated_at,omitempty"`
 }
 
 func metadataStateKey(bookID string) string {
 	return fmt.Sprintf("metadata_state_%s", bookID)
 }
 
-func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
-	state := map[string]metadataFieldState{}
-	if database.GlobalStore == nil {
-		return state, fmt.Errorf("database not initialized")
+func decodeMetadataValue(raw *string) interface{} {
+	if raw == nil || *raw == "" {
+		return nil
 	}
+	var value interface{}
+	if err := json.Unmarshal([]byte(*raw), &value); err != nil {
+		return *raw
+	}
+	return value
+}
+
+func encodeMetadataValue(value interface{}) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	encoded := string(data)
+	return &encoded, nil
+}
+
+func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
+	state := map[string]metadataFieldState{}
 
 	pref, err := database.GlobalStore.GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
@@ -99,15 +120,92 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	return state, nil
 }
 
+func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
+	state := map[string]metadataFieldState{}
+	if database.GlobalStore == nil {
+		return state, fmt.Errorf("database not initialized")
+	}
+
+	stored, err := database.GlobalStore.GetMetadataFieldStates(bookID)
+	if err != nil {
+		return state, err
+	}
+	for _, entry := range stored {
+		state[entry.Field] = metadataFieldState{
+			FetchedValue:   decodeMetadataValue(entry.FetchedValue),
+			OverrideValue:  decodeMetadataValue(entry.OverrideValue),
+			OverrideLocked: entry.OverrideLocked,
+			UpdatedAt:      entry.UpdatedAt,
+		}
+	}
+	if len(state) > 0 {
+		return state, nil
+	}
+
+	legacy, err := loadLegacyMetadataState(bookID)
+	if err != nil {
+		return state, err
+	}
+	if len(legacy) == 0 {
+		return state, nil
+	}
+
+	if err := saveMetadataState(bookID, legacy); err != nil {
+		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
+	}
+	return legacy, nil
+}
+
 func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
 	if database.GlobalStore == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	data, err := json.Marshal(state)
+
+	existing, err := database.GlobalStore.GetMetadataFieldStates(bookID)
 	if err != nil {
-		return fmt.Errorf("failed to marshal metadata state: %w", err)
+		return err
 	}
-	return database.GlobalStore.SetUserPreference(metadataStateKey(bookID), string(data))
+	existingFields := map[string]struct{}{}
+	for _, entry := range existing {
+		existingFields[entry.Field] = struct{}{}
+	}
+
+	now := time.Now()
+	for field, entry := range state {
+		fetched, err := encodeMetadataValue(entry.FetchedValue)
+		if err != nil {
+			return fmt.Errorf("failed to encode fetched metadata for %s: %w", field, err)
+		}
+		override, err := encodeMetadataValue(entry.OverrideValue)
+		if err != nil {
+			return fmt.Errorf("failed to encode override metadata for %s: %w", field, err)
+		}
+		if entry.UpdatedAt.IsZero() {
+			entry.UpdatedAt = now
+		}
+
+		dbState := database.MetadataFieldState{
+			BookID:         bookID,
+			Field:          field,
+			FetchedValue:   fetched,
+			OverrideValue:  override,
+			OverrideLocked: entry.OverrideLocked,
+			UpdatedAt:      entry.UpdatedAt,
+		}
+
+		if err := database.GlobalStore.UpsertMetadataFieldState(&dbState); err != nil {
+			return fmt.Errorf("failed to persist metadata state for %s: %w", field, err)
+		}
+		delete(existingFields, field)
+	}
+
+	for field := range existingFields {
+		if err := database.GlobalStore.DeleteMetadataFieldState(bookID, field); err != nil {
+			return fmt.Errorf("failed to clean up metadata state for %s: %w", field, err)
+		}
+	}
+
+	return nil
 }
 
 func decodeRawValue(raw json.RawMessage) interface{} {
@@ -132,6 +230,7 @@ func updateFetchedMetadataState(bookID string, values map[string]interface{}) er
 	for field, value := range values {
 		entry := state[field]
 		entry.FetchedValue = value
+		entry.UpdatedAt = time.Now()
 		state[field] = entry
 	}
 	return saveMetadataState(bookID, state)
@@ -1050,6 +1149,91 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	rawPayload := map[string]json.RawMessage{}
 	_ = json.Unmarshal(body, &rawPayload)
 
+	now := time.Now()
+
+	state, err := loadMetadataState(id)
+	if err != nil {
+		log.Printf("[ERROR] updateAudiobook: failed to load metadata state: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
+		return
+	}
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+
+	applyOverrideToPayload := func(field string, value interface{}) {
+		switch field {
+		case "title":
+			if v, ok := value.(string); ok {
+				payload.Title = v
+			}
+		case "author_name":
+			if v, ok := value.(string); ok {
+				payload.AuthorName = &v
+			}
+		case "series_name":
+			if v, ok := value.(string); ok {
+				payload.SeriesName = &v
+			}
+		case "narrator":
+			if v, ok := value.(string); ok {
+				payload.Narrator = stringPtr(v)
+			}
+		case "publisher":
+			if v, ok := value.(string); ok {
+				payload.Publisher = stringPtr(v)
+			}
+		case "language":
+			if v, ok := value.(string); ok {
+				payload.Language = stringPtr(v)
+			}
+		case "audiobook_release_year":
+			switch v := value.(type) {
+			case float64:
+				year := int(v)
+				payload.AudiobookReleaseYear = &year
+			case int:
+				year := v
+				payload.AudiobookReleaseYear = &year
+			}
+		case "isbn10":
+			if v, ok := value.(string); ok {
+				payload.ISBN10 = stringPtr(v)
+			}
+		case "isbn13":
+			if v, ok := value.(string); ok {
+				payload.ISBN13 = stringPtr(v)
+			}
+		}
+	}
+
+	for field, override := range payload.Overrides {
+		entry := state[field]
+		if override.Clear {
+			entry.OverrideValue = nil
+			entry.OverrideLocked = false
+			entry.UpdatedAt = now
+		} else {
+			if len(override.Value) > 0 {
+				val := decodeRawValue(override.Value)
+				entry.OverrideValue = val
+				entry.OverrideLocked = override.Locked == nil || *override.Locked
+				entry.UpdatedAt = now
+				applyOverrideToPayload(field, val)
+			} else if override.Locked != nil {
+				entry.OverrideLocked = *override.Locked
+				entry.UpdatedAt = now
+			}
+			if len(override.FetchedValue) > 0 {
+				entry.FetchedValue = decodeRawValue(override.FetchedValue)
+				if entry.UpdatedAt.IsZero() {
+					entry.UpdatedAt = now
+				}
+			}
+		}
+		state[field] = entry
+	}
+
 	resolvedAuthorName := ""
 	if payload.AuthorName != nil {
 		name := strings.TrimSpace(*payload.AuthorName)
@@ -1102,45 +1286,6 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		if series, err := database.GlobalStore.GetSeriesByID(*payload.SeriesID); err == nil && series != nil {
 			resolvedSeriesName = series.Name
 		}
-	}
-
-	updatedBook, err := database.GlobalStore.UpdateBook(id, &payload.Book)
-	if err != nil {
-		if err.Error() == "book not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	state, err := loadMetadataState(id)
-	if err != nil {
-		log.Printf("[ERROR] updateAudiobook: failed to load metadata state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
-		return
-	}
-	if state == nil {
-		state = map[string]metadataFieldState{}
-	}
-
-	for field, override := range payload.Overrides {
-		entry := state[field]
-		if override.Clear {
-			entry.OverrideValue = nil
-			entry.OverrideLocked = false
-		} else {
-			if len(override.Value) > 0 {
-				entry.OverrideValue = decodeRawValue(override.Value)
-				entry.OverrideLocked = override.Locked == nil || *override.Locked
-			} else if override.Locked != nil {
-				entry.OverrideLocked = *override.Locked
-			}
-			if len(override.FetchedValue) > 0 {
-				entry.FetchedValue = decodeRawValue(override.FetchedValue)
-			}
-		}
-		state[field] = entry
 	}
 
 	fieldExtractors := map[string]func() (interface{}, bool){
@@ -1208,6 +1353,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			entry := state[field]
 			entry.OverrideValue = value
 			entry.OverrideLocked = true
+			entry.UpdatedAt = now
 			state[field] = entry
 		}
 	}
@@ -1215,7 +1361,18 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	for _, field := range payload.UnlockOverrides {
 		entry := state[field]
 		entry.OverrideLocked = false
+		entry.UpdatedAt = now
 		state[field] = entry
+	}
+
+	updatedBook, err := database.GlobalStore.UpdateBook(id, &payload.Book)
+	if err != nil {
+		if err.Error() == "book not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	if err := saveMetadataState(id, state); err != nil {

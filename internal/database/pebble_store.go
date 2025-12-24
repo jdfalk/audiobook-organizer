@@ -43,6 +43,7 @@ import (
 // - counter:operationlog       -> next operation log ID
 // - counter:playlist           -> next playlist ID
 // - counter:playlistitem       -> next playlist item ID
+// - metadata_state:<book_id>:<field> -> MetadataFieldState JSON
 
 type PebbleStore struct {
 	db *pebble.DB
@@ -1051,6 +1052,24 @@ func (p *PebbleStore) DeleteBook(id string) error {
 		}
 	}
 
+	statePrefix := []byte(fmt.Sprintf("metadata_state:%s:", id))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: statePrefix,
+		UpperBound: append(statePrefix, 0xFF),
+	})
+	if err != nil {
+		batch.Close()
+		return err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		if err := batch.Delete(iter.Key(), nil); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
 	return batch.Commit(pebble.Sync)
 }
 
@@ -1573,6 +1592,59 @@ func (p *PebbleStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 	}
 
 	return logs, nil
+}
+
+// Metadata provenance operations
+
+func (p *PebbleStore) metadataStateKey(bookID, field string) []byte {
+	return []byte(fmt.Sprintf("metadata_state:%s:%s", bookID, field))
+}
+
+func (p *PebbleStore) GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error) {
+	var states []MetadataFieldState
+	prefix := []byte(fmt.Sprintf("metadata_state:%s:", bookID))
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		if !strings.HasPrefix(string(iter.Key()), string(prefix)) {
+			break
+		}
+		var state MetadataFieldState
+		if err := json.Unmarshal(iter.Value(), &state); err != nil {
+			return nil, err
+		}
+		states = append(states, state)
+	}
+
+	return states, nil
+}
+
+func (p *PebbleStore) UpsertMetadataFieldState(state *MetadataFieldState) error {
+	if state == nil {
+		return fmt.Errorf("metadata state cannot be nil")
+	}
+	if state.UpdatedAt.IsZero() {
+		state.UpdatedAt = time.Now()
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	return p.db.Set(p.metadataStateKey(state.BookID, state.Field), data, pebble.Sync)
+}
+
+func (p *PebbleStore) DeleteMetadataFieldState(bookID, field string) error {
+	return p.db.Delete(p.metadataStateKey(bookID, field), pebble.Sync)
 }
 
 // User Preference operations
