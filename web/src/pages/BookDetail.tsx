@@ -291,12 +291,32 @@ export const BookDetail = () => {
   const getFieldSources = (field: string) => {
     const entry = tags?.tags?.[field];
     if (!entry) return null;
+    const effective =
+      entry.effective_value ??
+      entry.override_value ??
+      entry.stored_value ??
+      entry.fetched_value ??
+      entry.file_value;
+    const effectiveSource =
+      entry.effective_source ||
+      (entry.override_value !== undefined && entry.override_value !== null
+        ? 'override'
+        : entry.stored_value !== undefined && entry.stored_value !== null
+          ? 'stored'
+          : entry.fetched_value !== undefined && entry.fetched_value !== null
+            ? 'fetched'
+            : entry.file_value !== undefined && entry.file_value !== null
+              ? 'file'
+              : undefined);
     return {
       file: entry.file_value,
       fetched: entry.fetched_value,
       stored: entry.stored_value,
       override: entry.override_value,
       locked: entry.override_locked,
+      effective,
+      source: effectiveSource,
+      updatedAt: entry.updated_at,
     };
   };
 
@@ -333,6 +353,8 @@ export const BookDetail = () => {
         updated.override_value = value;
         updated.override_locked = true;
         updated.fetched_value = entry.fetched ?? updated.fetched_value;
+        updated.effective_value = value as never;
+        updated.effective_source = 'override';
         return {
           ...prev,
           tags: {
@@ -370,6 +392,24 @@ export const BookDetail = () => {
         const updated = { ...prev.tags[field] };
         updated.override_value = null;
         updated.override_locked = false;
+        const effectiveValue =
+          updated.stored_value ??
+          updated.fetched_value ??
+          updated.file_value ??
+          (updated as { effective_value?: unknown }).effective_value ??
+          null;
+        const effectiveSource =
+          (updated.stored_value ?? updated.fetched_value ?? updated.file_value) !== undefined
+            ? updated.stored_value !== undefined && updated.stored_value !== null
+              ? 'stored'
+              : updated.fetched_value !== undefined && updated.fetched_value !== null
+                ? 'fetched'
+                : updated.file_value !== undefined && updated.file_value !== null
+                  ? 'file'
+                  : undefined
+            : undefined;
+        updated.effective_value = effectiveValue as never;
+        updated.effective_source = effectiveSource;
         return {
           ...prev,
           tags: {
@@ -957,19 +997,32 @@ export const BookDetail = () => {
                         border: '1px dashed',
                         borderColor: 'divider',
                         bgcolor: 'background.default',
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                        {key.replace(/_/g, ' ')}
-                      </Typography>
-                      <Typography variant="body2">
-                        {values.file_value ?? values.stored_value ?? '—'}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                  {key.replace(/_/g, ' ')}
+                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Typography variant="body2">
+                    {values.effective_value ??
+                      values.override_value ??
+                      values.stored_value ??
+                      values.fetched_value ??
+                      values.file_value ??
+                      '—'}
+                  </Typography>
+                  {values.effective_source && (
+                    <Chip size="small" label={values.effective_source} variant="outlined" />
+                  )}
+                  {values.override_locked && (
+                    <Chip size="small" label="locked" color="warning" variant="outlined" />
+                  )}
+                </Stack>
+              </Box>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
             Showing current metadata and media info. File-tag provenance will populate here when
@@ -1016,15 +1069,20 @@ export const BookDetail = () => {
                         <TableCell>{entry?.fetched ?? '—'}</TableCell>
                         <TableCell>{entry?.stored ?? '—'}</TableCell>
                         <TableCell>
-                          {entry?.override ?? '—'}
-                          {entry?.locked && (
-                            <Chip
-                              label="locked"
-                              size="small"
-                              color="warning"
-                              sx={{ ml: 0.5 }}
-                            />
-                          )}
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                            <span>{entry?.override ?? '—'}</span>
+                            {entry?.locked && (
+                              <Chip
+                                label="locked"
+                                size="small"
+                                color="warning"
+                                sx={{ ml: 0.5 }}
+                              />
+                            )}
+                            {entry?.source && (
+                              <Chip label={entry.source} size="small" variant="outlined" />
+                            )}
+                          </Stack>
                         </TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1}>

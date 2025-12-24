@@ -79,6 +79,9 @@ export interface TagSourceValues {
   stored_value?: string | number | null;
   override_value?: string | number | null;
   override_locked?: boolean;
+  effective_value?: string | number | null;
+  effective_source?: string;
+  updated_at?: string;
 }
 
 export interface BookTags {

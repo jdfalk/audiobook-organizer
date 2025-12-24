@@ -310,6 +310,18 @@ func (s *SQLiteStore) createTables() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
+
+	CREATE TABLE IF NOT EXISTS metadata_states (
+		book_id TEXT NOT NULL,
+		field TEXT NOT NULL,
+		fetched_value TEXT,
+		override_value TEXT,
+		override_locked BOOLEAN NOT NULL DEFAULT 0,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (book_id, field)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_metadata_states_book ON metadata_states(book_id);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
@@ -974,6 +986,9 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 	if rowsAffected == 0 {
 		return fmt.Errorf("book not found")
 	}
+	if _, err := s.db.Exec("DELETE FROM metadata_states WHERE book_id = ?", id); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1291,6 +1306,50 @@ func (s *SQLiteStore) GetAllUserPreferences() ([]UserPreference, error) {
 		preferences = append(preferences, pref)
 	}
 	return preferences, rows.Err()
+}
+
+// Metadata field provenance operations
+
+func (s *SQLiteStore) GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error) {
+	rows, err := s.db.Query(`SELECT book_id, field, fetched_value, override_value, override_locked, updated_at
+		FROM metadata_states WHERE book_id = ?`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var states []MetadataFieldState
+	for rows.Next() {
+		var state MetadataFieldState
+		if err := rows.Scan(&state.BookID, &state.Field, &state.FetchedValue, &state.OverrideValue, &state.OverrideLocked, &state.UpdatedAt); err != nil {
+			return nil, err
+		}
+		states = append(states, state)
+	}
+	return states, rows.Err()
+}
+
+func (s *SQLiteStore) UpsertMetadataFieldState(state *MetadataFieldState) error {
+	if state == nil {
+		return fmt.Errorf("metadata state cannot be nil")
+	}
+	if state.UpdatedAt.IsZero() {
+		state.UpdatedAt = time.Now()
+	}
+	_, err := s.db.Exec(`INSERT INTO metadata_states (book_id, field, fetched_value, override_value, override_locked, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(book_id, field) DO UPDATE SET
+			fetched_value = excluded.fetched_value,
+			override_value = excluded.override_value,
+			override_locked = excluded.override_locked,
+			updated_at = excluded.updated_at`,
+		state.BookID, state.Field, state.FetchedValue, state.OverrideValue, state.OverrideLocked, state.UpdatedAt)
+	return err
+}
+
+func (s *SQLiteStore) DeleteMetadataFieldState(bookID, field string) error {
+	_, err := s.db.Exec("DELETE FROM metadata_states WHERE book_id = ? AND field = ?", bookID, field)
+	return err
 }
 
 // Playlist operations

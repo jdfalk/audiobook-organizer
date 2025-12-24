@@ -15,6 +15,11 @@ type Store interface {
 	// Lifecycle
 	Close() error
 
+	// Metadata provenance and overrides
+	GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error)
+	UpsertMetadataFieldState(state *MetadataFieldState) error
+	DeleteMetadataFieldState(bookID, field string) error
+
 	// Authors
 	GetAllAuthors() ([]Author, error)
 	GetAuthorByID(id int) (*Author, error)
@@ -366,6 +371,17 @@ type UserStats struct {
 	UserID        string `json:"user_id"`
 	ListenSeconds int    `json:"listen_seconds"`
 	Version       int    `json:"version"`
+}
+
+// MetadataFieldState persists per-field metadata provenance (fetched vs override)
+// using JSON-encoded values to preserve original types.
+type MetadataFieldState struct {
+	BookID         string    `json:"book_id"`
+	Field          string    `json:"field"`
+	FetchedValue   *string   `json:"fetched_value,omitempty"`  // JSON-encoded value
+	OverrideValue  *string   `json:"override_value,omitempty"` // JSON-encoded value
+	OverrideLocked bool      `json:"override_locked"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // Global store instance
