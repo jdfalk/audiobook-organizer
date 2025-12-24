@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -248,6 +248,85 @@ func intVal(p *int) interface{} {
 		return nil
 	}
 	return *p
+}
+
+func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
+	authorName := ""
+	if book.Author != nil {
+		authorName = book.Author.Name
+	} else if book.AuthorID != nil {
+		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+
+	seriesName := ""
+	if book.Series != nil {
+		seriesName = book.Series.Name
+	} else if book.SeriesID != nil {
+		if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			seriesName = series.Name
+		}
+	}
+
+	return authorName, seriesName
+}
+
+func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string) map[string]database.MetadataProvenanceEntry {
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+
+	provenance := map[string]database.MetadataProvenanceEntry{}
+
+	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+		entryState := state[field]
+		effectiveSource := ""
+		var effectiveValue interface{}
+		switch {
+		case entryState.OverrideValue != nil:
+			effectiveSource = "override"
+			effectiveValue = entryState.OverrideValue
+		case storedValue != nil:
+			effectiveSource = "stored"
+			effectiveValue = storedValue
+		case entryState.FetchedValue != nil:
+			effectiveSource = "fetched"
+			effectiveValue = entryState.FetchedValue
+		case fileValue != nil:
+			effectiveSource = "file"
+			effectiveValue = fileValue
+		}
+
+		var updatedAt *time.Time
+		if !entryState.UpdatedAt.IsZero() {
+			ts := entryState.UpdatedAt.UTC()
+			updatedAt = &ts
+		}
+
+		provenance[field] = database.MetadataProvenanceEntry{
+			FileValue:       fileValue,
+			FetchedValue:    entryState.FetchedValue,
+			StoredValue:     storedValue,
+			OverrideValue:   entryState.OverrideValue,
+			OverrideLocked:  entryState.OverrideLocked,
+			EffectiveValue:  effectiveValue,
+			EffectiveSource: effectiveSource,
+			UpdatedAt:       updatedAt,
+		}
+	}
+
+	addEntry("title", meta.Title, book.Title)
+	addEntry("author_name", meta.Artist, authorName)
+	addEntry("narrator", meta.Narrator, stringVal(book.Narrator))
+	addEntry("series_name", meta.Series, seriesName)
+	addEntry("publisher", meta.Publisher, stringVal(book.Publisher))
+	addEntry("language", meta.Language, stringVal(book.Language))
+	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
+	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
+	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
+
+	return provenance
 }
 
 func stringFromSeries(series *database.Series) interface{} {
@@ -961,6 +1040,32 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
+
+	state, err := loadMetadataState(book.ID)
+	if err != nil {
+		log.Printf("[ERROR] getAudiobook: failed to load metadata state for %s: %v", book.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
+		return
+	}
+	if state == nil {
+		state = map[string]metadataFieldState{}
+	}
+
+	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+
+	var meta metadata.Metadata
+	if book.FilePath != "" {
+		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+			meta = m
+		} else {
+			log.Printf("[WARN] getAudiobook: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	book.MetadataProvenance = buildMetadataProvenance(book, state, meta, authorName, seriesName)
+	now := time.Now().UTC()
+	book.MetadataProvenanceAt = &now
+
 	c.JSON(http.StatusOK, book)
 }
 
@@ -991,38 +1096,11 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 		state = map[string]metadataFieldState{}
 	}
 
-	authorName := ""
-	if book.Author != nil {
-		authorName = book.Author.Name
-	} else if book.AuthorID != nil {
-		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
-			authorName = author.Name
-		}
-	}
-
-	seriesName := ""
-	if book.Series != nil {
-		seriesName = book.Series.Name
-	} else if book.SeriesID != nil {
-		if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
-			seriesName = series.Name
-		}
-	}
-
-	type tagEntry struct {
-		FileValue       interface{} `json:"file_value,omitempty"`
-		FetchedValue    interface{} `json:"fetched_value,omitempty"`
-		StoredValue     interface{} `json:"stored_value,omitempty"`
-		OverrideValue   interface{} `json:"override_value,omitempty"`
-		OverrideLocked  bool        `json:"override_locked"`
-		EffectiveValue  interface{} `json:"effective_value,omitempty"`
-		EffectiveSource string      `json:"effective_source,omitempty"`
-		UpdatedAt       *time.Time  `json:"updated_at,omitempty"`
-	}
+	authorName, seriesName := resolveAuthorAndSeriesNames(book)
 
 	response := struct {
-		MediaInfo map[string]interface{} `json:"media_info,omitempty"`
-		Tags      map[string]tagEntry    `json:"tags,omitempty"`
+		MediaInfo map[string]interface{}                  `json:"media_info,omitempty"`
+		Tags      map[string]database.MetadataProvenanceEntry `json:"tags,omitempty"`
 	}{
 		MediaInfo: map[string]interface{}{
 			"codec":       stringVal(book.Codec),
@@ -1033,44 +1111,7 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 			"quality":     stringVal(book.Quality),
 			"duration":    intVal(book.Duration),
 		},
-		Tags: map[string]tagEntry{},
-	}
-
-	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
-		entryState := state[field]
-		effectiveSource := ""
-		var effectiveValue interface{}
-		switch {
-		case entryState.OverrideValue != nil:
-			effectiveSource = "override"
-			effectiveValue = entryState.OverrideValue
-		case storedValue != nil:
-			effectiveSource = "stored"
-			effectiveValue = storedValue
-		case entryState.FetchedValue != nil:
-			effectiveSource = "fetched"
-			effectiveValue = entryState.FetchedValue
-		case fileValue != nil:
-			effectiveSource = "file"
-			effectiveValue = fileValue
-		}
-
-		var updatedAt *time.Time
-		if !entryState.UpdatedAt.IsZero() {
-			ts := entryState.UpdatedAt.UTC()
-			updatedAt = &ts
-		}
-
-		response.Tags[field] = tagEntry{
-			FileValue:       fileValue,
-			FetchedValue:    entryState.FetchedValue,
-			StoredValue:     storedValue,
-			OverrideValue:   entryState.OverrideValue,
-			OverrideLocked:  entryState.OverrideLocked,
-			EffectiveValue:  effectiveValue,
-			EffectiveSource: effectiveSource,
-			UpdatedAt:       updatedAt,
-		}
+		Tags: map[string]database.MetadataProvenanceEntry{},
 	}
 
 	var meta metadata.Metadata
@@ -1082,15 +1123,7 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 		}
 	}
 
-	addEntry("title", meta.Title, book.Title)
-	addEntry("author_name", meta.Artist, authorName)
-	addEntry("narrator", meta.Narrator, stringVal(book.Narrator))
-	addEntry("series_name", meta.Series, seriesName)
-	addEntry("publisher", meta.Publisher, stringVal(book.Publisher))
-	addEntry("language", meta.Language, stringVal(book.Language))
-	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
-	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
-	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
+	response.Tags = buildMetadataProvenance(book, state, meta, authorName, seriesName)
 
 	c.JSON(http.StatusOK, response)
 }

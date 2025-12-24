@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.7.0
+// version: 1.8.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -46,6 +46,8 @@ export interface Book {
   quantity?: number;
   marked_for_deletion?: boolean;
   marked_for_deletion_at?: string;
+  metadata_provenance?: Record<string, TagSourceValues>;
+  metadata_provenance_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -74,12 +76,12 @@ export interface Work {
 }
 
 export interface TagSourceValues {
-  file_value?: string | number | null;
-  fetched_value?: string | number | null;
-  stored_value?: string | number | null;
-  override_value?: string | number | null;
+  file_value?: string | number | boolean | null;
+  fetched_value?: string | number | boolean | null;
+  stored_value?: string | number | boolean | null;
+  override_value?: string | number | boolean | null;
   override_locked?: boolean;
-  effective_value?: string | number | null;
+  effective_value?: string | number | boolean | null;
   effective_source?: string;
   updated_at?: string;
 }
