@@ -1,8 +1,37 @@
+<!-- file: CHANGELOG.md -->
+<!-- version: 1.1.1 -->
+<!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
+
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### December 25, 2025 - Documentation cleanup
+
+- Removed legacy status/handoff/refactoring/rebase documents after migrating
+  their content into TODO and this changelog
+- Archived refactoring and rebase logs were purged from docs/archive to prevent
+  drift; latest state tracked here going forward
+
+#### December 22, 2025 - Merge status and follow-ups
+
+- PR #69 Blocked Hashes Management UI merged 2025-12-22 (Settings tab with hash
+  CRUD, SHA256 validation, confirmations, and snackbars)
+- PR #70 State Machine Transitions & Enhanced Delete merged 2025-12-22 (import →
+  organized lifecycle, soft delete with optional hash blocking, pointer helpers)
+- Manual verification of these flows is pending (see TODO for scenarios and
+  owners)
+
+#### December 22, 2025 - Metadata provenance (worktree, not yet merged)
+
+- `metadata_states` persistence for fetched/override/locked values with source
+  timestamps (migration 10) plus tags endpoint enrichment
+- Book Detail Tags/Compare UI shows provenance/lock chips; Playwright mocks
+  updated to recompute effective values
+- Next steps: expose provenance on `GET /api/v1/audiobooks/:id`, add optional
+  history view, and run UI/E2E before merge
 
 #### December 23, 2025 - Soft Delete Purge Flow
 
@@ -24,7 +53,8 @@
     button with count
   - Added soft-deleted review list with per-item purge and restore actions
   - New Book Detail page with soft-delete/restore/purge controls per book
-  - Settings page now exposes retention controls for auto-purge cadence and file deletion
+  - Settings page now exposes retention controls for auto-purge cadence and file
+    deletion
   - Added purge dialog to permanently remove soft-deleted books (optional file
     deletion)
 - **Testing**
@@ -268,6 +298,16 @@
 - **Naming Pattern Examples**: Live preview with both series and non-series
   books (Nancy Drew + To Kill a Mockingbird)
 
+#### December 21, 2025 - Session summary
+
+- All Go tests passing across 19 packages (scanner nil-check fix; test bug fix
+  for large-format integration case)
+- Added analytics/metadata/work endpoints: `/api/v1/dashboard`,
+  `/api/v1/metadata/fields`, `/api/v1/work`, `/api/v1/work/stats`, plus
+  publishDate validation
+- Duplicate detection and hash blocking verified; commit 25dc32b documents the
+  test fixes
+
 ### Upcoming
 
 - Audio tag reading for MP3 (ID3v2), M4B/M4A (iTunes atoms), FLAC/OGG (Vorbis
@@ -277,3 +317,15 @@
 - Manual endpoint regression run post ULID + metadata changes
 - Git LFS sample audiobook fixtures for integration tests
   - POST `/api/filesystem/exclude` - Create .jabexclude files
+
+#### December 17, 2025 - Rebase feat/task-3 multi-format support
+
+- Rebased branch `feat/task-3-multi-format-support` onto main (hash blocklist
+  methods unified, duplicate detection preserved) with clean build state
+- Detailed log archived at docs/archive/rebase-logs/REBASE_COMPLETION_LOG.md
+  (previously REBASE_COMPLETION_LOG.md)
+
+#### Documentation archives
+
+- LibraryFolder → ImportPath refactoring package (checklist, summary, README,
+  handoff) moved to docs/archive/refactoring-libraryfolder-importpath/

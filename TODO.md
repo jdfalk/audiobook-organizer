@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.18.0 -->
+<!-- version: 1.19.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -13,7 +13,8 @@
 - **Status**: ⚠️ IN PROGRESS - Tests need fixes
 - **Context**: Working on migration 10 (provenance) validation
 - **Current State**:
-  - ✅ Migration 10 analysis complete (schema, API, state machine impact reviewed)
+  - ✅ Migration 10 analysis complete (schema, API, state machine impact
+    reviewed)
   - ✅ Dependencies identified (migrations 1-9, especially 3 & 9)
   - ⚠️ Test errors discovered:
     - `cmd/server/handlers/audiobooks_test.go:135` - Context deadline exceeded
@@ -50,6 +51,37 @@
 - **Priority**: CRITICAL - Foundational for all testing
 - **Related**: SESSION-001, CRITICAL-002 (if database-related)
 
+#### Post-merge follow-ups (PR #69/#70) 🚦 NEW
+
+- [ ] Manual verification: Settings → Blocked Hashes tab add/delete/empty state
+      (PR #69 merged 2025-12-22)
+- [ ] Manual verification: state transitions + enhanced delete with block_hash
+      (import → organized → deleted; soft vs hard delete) (PR #70 merged
+      2025-12-22)
+- [ ] Capture test notes and update docs after verification
+
+#### Metadata provenance branch (worktree) 🚧 IN PROGRESS
+
+- [ ] Persist per-field provenance/override/lock flags, resolve author/series
+      names, and return fetched/override values from
+      `/api/v1/audiobooks/:id/tags`
+- [ ] Update `UpdateBook` to accept and store overrides/locks; extend handler
+      tests for the tags endpoint
+- [ ] Align Book Detail Tags/Compare payload plus Playwright mocks with the new
+      provenance shape
+- [ ] (Optional) Expose provenance map on `GET /api/v1/audiobooks/:id` and add a
+      history view
+- [ ] Run `go test ./...`, `npm run lint`, and `npm run test:e2e -- book-detail`
+      in the worktree
+
+#### Book Detail and E2E coverage (Task 6/7)
+
+- [ ] Finish BookDetail provenance display and delete dialog wiring
+      (block_hash + soft delete)
+- [ ] Expand Selenium/Playwright coverage for tags/compare and soft-delete/purge
+      flows
+- [ ] Document manual testing scenarios for the new flows
+
 ---
 
 ## ✅ RECENTLY COMPLETED - December 22, 2025
@@ -72,30 +104,39 @@
 6. ✅ **State Machine** - Book lifecycle (imported → organized → deleted)
 7. ✅ **Enhanced Delete** - Soft delete + hash blocking options
 8. ✅ **Migration 9** - Database schema for state tracking
-9. ✅ **Soft Delete Purge Flow** - Backend + UI support for safely removing deleted books
+9. ✅ **Soft Delete Purge Flow** - Backend + UI support for safely removing
+   deleted books
    - Library/API now hide soft-deleted records by default
-   - New endpoints: list soft-deleted books and purge them (optional file removal)
-   - Library page delete dialog supports soft delete + hash blocking; purge dialog removes leftovers
+   - New endpoints: list soft-deleted books and purge them (optional file
+     removal)
+   - Library page delete dialog supports soft delete + hash blocking; purge
+     dialog removes leftovers
    - Soft-deleted review list added to Library page with per-item purge
    - Background purge job with configurable retention and optional file deletion
    - Restore action available from soft-deleted list to un-delete items
 
 ## 🎯 Next Session Starting Points
 
-- Land metadata provenance branch (migration 10, tags endpoint enrichment, overrides/locks) onto main.
-- Consider exposing provenance map on `GET /api/v1/audiobooks/:id` and add history view if needed by UI.
-- Run Playwright Book Detail tags/compare mocks and Selenium soft-delete/retention smoke (`tests/e2e/test_soft_delete_and_retention.py`).
+- Land metadata provenance branch (migration 10, tags endpoint enrichment,
+  overrides/locks) onto main.
+- Consider exposing provenance map on `GET /api/v1/audiobooks/:id` and add
+  history view if needed by UI.
+- Run Playwright Book Detail tags/compare mocks and Selenium
+  soft-delete/retention smoke (`tests/e2e/test_soft_delete_and_retention.py`).
 
 **Status**: See CHANGELOG.md for latest status and progress
 
 **Next Steps:**
 
 - [ ] Review and merge PR #69 (Blocked Hashes UI)
-- [ ] Review and merge PR #70 (State Transitions)
+- [x] Review and merge PR #69 (Blocked Hashes UI) — merged 2025-12-22
+- [x] Review and merge PR #70 (State Transitions) — merged 2025-12-22
 - [ ] Finalize metadata provenance branch (current worktree) and push to main
-- [ ] Manual testing of new features (blocked hashes, state transitions, metadata overrides/locks)
-- [x] Build BookDetail.tsx component (Task 6) — detail view now includes info/files/versions tabs,
-      soft-delete/restore/purge controls, version management entry, and Tags/Compare with provenance
+- [ ] Manual testing of new features (blocked hashes, state transitions,
+      metadata overrides/locks)
+- [x] Build BookDetail.tsx component (Task 6) — detail view now includes
+      info/files/versions tabs, soft-delete/restore/purge controls, version
+      management entry, and Tags/Compare with provenance
 - [ ] Expand E2E test coverage (Task 7)
 
 ---
@@ -1016,33 +1057,82 @@
 - [ ] Frontend component snapshot tests
 - [ ] End-to-end test harness (Playwright or Cypress) for critical flows
 - [ ] Playwright UI coverage (current: minimal smoke + import-path mock)
-  - Current specs: `web/tests/e2e/app.spec.ts` (smoke nav with mocked API/SSE), `web/tests/e2e/import-paths.spec.ts` (Settings add/remove import path via route mocks). Config: `web/tests/e2e/playwright.config.ts`, run with `cd web && npm run test:e2e`.
-  - Needed coverage: Library list interactions (search/sort/view toggle, pagination), navigation into Book Detail, Book Detail tabs/actions (soft delete/block, restore, purge, metadata fetch, AI parse, version manager button, hash copy toast), soft-deleted list restore/purge, version linking dialog happy-path, Settings retention toggles (purge settings), dashboard tiles render, import paths end-to-end (add/remove/update via UI, not just mocked route), file manager browse dialogs, operation status banners.
-  - Add stable API fixtures or route mocks per page; ensure wizard is bypassed, SSE mocked; use headless dev server via existing Playwright config; keep tests idempotent and non-networked.
+  - Current specs: `web/tests/e2e/app.spec.ts` (smoke nav with mocked API/SSE),
+    `web/tests/e2e/import-paths.spec.ts` (Settings add/remove import path via
+    route mocks). Config: `web/tests/e2e/playwright.config.ts`, run with
+    `cd web && npm run test:e2e`.
+  - Needed coverage: Library list interactions (search/sort/view toggle,
+    pagination), navigation into Book Detail, Book Detail tabs/actions (soft
+    delete/block, restore, purge, metadata fetch, AI parse, version manager
+    button, hash copy toast), soft-deleted list restore/purge, version linking
+    dialog happy-path, Settings retention toggles (purge settings), dashboard
+    tiles render, import paths end-to-end (add/remove/update via UI, not just
+    mocked route), file manager browse dialogs, operation status banners.
+  - Add stable API fixtures or route mocks per page; ensure wizard is bypassed,
+    SSE mocked; use headless dev server via existing Playwright config; keep
+    tests idempotent and non-networked.
 - [ ] Book Detail metadata richness
-  - Add Tags tab showing raw embedded/file tags and media info (bitrate/codec/sample rate/channels/publisher/narrator/year/album/series/title) from backend; read-only.
-  - Show provenance on fields (DB/edited, fetched, file tag) when API can supply per-field source flags; fall back gracefully if not available.
-  - Add Compare view (File tags vs Stored/Fetched vs Current overrides) when API returns multiple metadata sources.
-  - Expand Edit Metadata dialog to include full fields (author/series/year/genre/ISBN/description/publisher/language/etc.) and save via API.
-  - Ensure hashes and media details remain visible in Files tab; consider duration/size display if API provides.
+  - Add Tags tab showing raw embedded/file tags and media info
+    (bitrate/codec/sample
+    rate/channels/publisher/narrator/year/album/series/title) from backend;
+    read-only.
+  - Show provenance on fields (DB/edited, fetched, file tag) when API can supply
+    per-field source flags; fall back gracefully if not available.
+  - Add Compare view (File tags vs Stored/Fetched vs Current overrides) when API
+    returns multiple metadata sources.
+  - Expand Edit Metadata dialog to include full fields
+    (author/series/year/genre/ISBN/description/publisher/language/etc.) and save
+    via API.
+  - Ensure hashes and media details remain visible in Files tab; consider
+    duration/size display if API provides.
 - [ ] Backend support for Book Detail tags/provenance
-  - [x] Add API endpoint to return raw embedded tags + media info + source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with payload including file tags, stored values, fetched metadata, and “locked/override” flags.
-  - [ ] Extend `GET /api/v1/audiobooks/:id` response to optionally include provenance map (field -> {source: file/db/fetched/override, value, last_updated}).
-  - [x] Add override/lock semantics: when a user edits a field, mark it as “locked/override” so later fetches/AI/tag refresh won’t overwrite unless explicitly cleared; include a way to clear lock.
-  - [ ] Provide metadata history or last-applied source so UI can show conflicts (e.g., file vs fetched vs override).
-  - **Progress**: Metadata provenance now persists in the `metadata_states` table; tags endpoint returns effective value/source plus fetched/override/locked fields; update handler persists overrides/fetched metadata; Go handler tests added.
+  - [x] Add API endpoint to return raw embedded tags + media info +
+        source/provenance per field (e.g., `/api/v1/audiobooks/:id/tags`), with
+        payload including file tags, stored values, fetched metadata, and
+        “locked/override” flags.
+  - [ ] Extend `GET /api/v1/audiobooks/:id` response to optionally include
+        provenance map (field -> {source: file/db/fetched/override, value,
+        last_updated}).
+  - [x] Add override/lock semantics: when a user edits a field, mark it as
+        “locked/override” so later fetches/AI/tag refresh won’t overwrite unless
+        explicitly cleared; include a way to clear lock.
+  - [ ] Provide metadata history or last-applied source so UI can show conflicts
+        (e.g., file vs fetched vs override).
+  - **Progress**: Metadata provenance now persists in the `metadata_states`
+    table; tags endpoint returns effective value/source plus
+    fetched/override/locked fields; update handler persists overrides/fetched
+    metadata; Go handler tests added.
 - [x] Backend gaps discovered (Book Detail tags/compare)
-  - Prior behavior: `GET /audiobooks/:id/tags` returned only file/stored values; no fetched/override provenance, no lock persistence, and author/series names not resolved (only IDs exist in DB). Status: metadata state moved off user-preferences into durable table; tags handler now returns effective_source/value with resolved names.
-  - Update `UpdateBook`/DB to accept override payloads and persist override_locked flags.
-  - Add handler/unit tests for the tags endpoint covering file vs fetched vs override vs locked cases.
+  - Prior behavior: `GET /audiobooks/:id/tags` returned only file/stored values;
+    no fetched/override provenance, no lock persistence, and author/series names
+    not resolved (only IDs exist in DB). Status: metadata state moved off
+    user-preferences into durable table; tags handler now returns
+    effective_source/value with resolved names.
+  - Update `UpdateBook`/DB to accept override payloads and persist
+    override_locked flags.
+  - Add handler/unit tests for the tags endpoint covering file vs fetched vs
+    override vs locked cases.
 - [ ] Frontend Book Detail (Tags/Compare/Overrides)
-  - Tags tab: show raw tags from new endpoint; include media info and tag values (title/author/narrator/series/position/publisher/language/year/genre/ISBN/comments). Progress: Tags/Compare now display effective source/value chips and lock badges.
-  - Compare view: side-by-side (File tags vs Stored vs Fetched vs Override) with clear indication of locked fields; allow “use file value” / “use fetched value” actions per field when backend supports.
-  - Edit dialog: include all key fields and allow setting/clearing overrides; send override flag with updates.
+  - Tags tab: show raw tags from new endpoint; include media info and tag values
+    (title/author/narrator/series/position/publisher/language/year/genre/ISBN/comments).
+    Progress: Tags/Compare now display effective source/value chips and lock
+    badges.
+  - Compare view: side-by-side (File tags vs Stored vs Fetched vs Override) with
+    clear indication of locked fields; allow “use file value” / “use fetched
+    value” actions per field when backend supports.
+  - Edit dialog: include all key fields and allow setting/clearing overrides;
+    send override flag with updates.
 - [ ] Playwright coverage for Book Detail (with mocks)
-  - Add fixture/mocks for tags/provenance endpoint (normal case, conflict case with override vs file/fetched). Progress: Book-detail mocks now include effective source/value and recompute on overrides.
-  - Tests: render Tags tab with raw tags; render Compare view showing differing sources; override workflow (edit field, mark locked, verify UI shows override badge and Compare tab shows resolution); clear override resets to tag/fetched value; hash copy toast; delete dialog options (soft/hard, block hash); Manage Versions dialog opens.
-  - Keep tests fully mocked (no backend dependency), bypass wizard, mock SSE, run under Chromium + WebKit.
+  - Add fixture/mocks for tags/provenance endpoint (normal case, conflict case
+    with override vs file/fetched). Progress: Book-detail mocks now include
+    effective source/value and recompute on overrides.
+  - Tests: render Tags tab with raw tags; render Compare view showing differing
+    sources; override workflow (edit field, mark locked, verify UI shows
+    override badge and Compare tab shows resolution); clear override resets to
+    tag/fetched value; hash copy toast; delete dialog options (soft/hard, block
+    hash); Manage Versions dialog opens.
+  - Keep tests fully mocked (no backend dependency), bypass wizard, mock SSE,
+    run under Chromium + WebKit.
 - [ ] Chaos test for operation cancellation mid-scan
 
 ### DevOps / CI/CD
