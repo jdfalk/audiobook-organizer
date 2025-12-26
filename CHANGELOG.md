@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.1 -->
+<!-- version: 1.1.2 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### December 26, 2025 - CI and test stabilization
+
+- Fixed duplicate test function `TestGetAudiobookTagsReportsEffectiveSource` → `TestGetAudiobookTagsIncludesValues` in `internal/server/server_test.go`; all Go tests now passing (19 packages)
+- Broadened npm cache paths in `.github/repository-config.yml` to include `~/.cache/npm` alongside `~/.npm`
+- Coordinated with ghcommon@main to harden reusable CI workflow npm caching (paths, keys, Node version inclusion)
 
 #### December 25, 2025 - Documentation cleanup
 
