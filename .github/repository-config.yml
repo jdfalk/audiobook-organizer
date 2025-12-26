@@ -1,5 +1,5 @@
 # file: .github/repository-config.yml
-# version: 1.1.0
+# version: 1.1.1
 # guid: audiobook-organizer-repo-config-001
 
 # Repository Metadata
@@ -117,4 +117,4 @@ ci:
     enabled: true
     paths:
       go: ["~/.cache/go-build", "~/go/pkg/mod"]
-      npm: ["~/.npm"]
+      npm: ["~/.npm", "~/.cache/npm"]
