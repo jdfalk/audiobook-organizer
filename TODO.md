@@ -1,8 +1,56 @@
 <!-- file: TODO.md -->
-<!-- version: 1.17.3 -->
+<!-- version: 1.18.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
+
+## 🔄 CURRENT SESSION - December 25, 2025
+
+### Database Migration & Testing Infrastructure (In Progress)
+
+#### **SESSION-001**: Database Migration Testing & Validation ⚠️ IN PROGRESS
+
+- **Status**: ⚠️ IN PROGRESS - Tests need fixes
+- **Context**: Working on migration 10 (provenance) validation
+- **Current State**:
+  - ✅ Migration 10 analysis complete (schema, API, state machine impact reviewed)
+  - ✅ Dependencies identified (migrations 1-9, especially 3 & 9)
+  - ⚠️ Test errors discovered:
+    - `cmd/server/handlers/audiobooks_test.go:135` - Context deadline exceeded
+    - `internal/db/queries_test.go:152` - Failed to create DB connection
+  - ⚠️ Database initialization timing issues in test suite
+- **Next Actions**:
+  1. [ ] Fix test database initialization (connection/context issues)
+  2. [ ] Validate migration 10 changes against test suite
+  3. [ ] Review provenance history query performance
+  4. [ ] Test backward compatibility (rollback safety)
+  5. [ ] Verify state machine interactions with provenance
+- **Files Involved**:
+  - `internal/db/migrations/010_metadata_provenance_tracking.sql`
+  - `internal/db/queries_test.go` (failing tests)
+  - `cmd/server/handlers/audiobooks_test.go` (timeout issues)
+- **Priority**: HIGH - Blocking metadata provenance branch merge
+- **Notes**: Test infrastructure needs stabilization before migration validation
+
+#### **SESSION-002**: Test Infrastructure Stabilization 🔧 IDENTIFIED
+
+- **Status**: 🔧 NEEDS ATTENTION
+- **Issue**: Multiple test failures across different packages
+- **Root Causes**:
+  1. Database connection context timeouts
+  2. Possible test database initialization race conditions
+  3. Need for test isolation improvements
+- **Impact**: Blocking migration validation and PR merge
+- **Action Items**:
+  - [ ] Review test database setup/teardown patterns
+  - [ ] Add proper test timeouts and retry logic
+  - [ ] Ensure test isolation (separate test DBs per package?)
+  - [ ] Add test database connection pooling configuration
+  - [ ] Document test database requirements
+- **Priority**: CRITICAL - Foundational for all testing
+- **Related**: SESSION-001, CRITICAL-002 (if database-related)
+
+---
 
 ## ✅ RECENTLY COMPLETED - December 22, 2025
 
