@@ -81,7 +81,6 @@
 
 - **Blocked Hashes Management UI**: Complete Settings tab for hash management
   (PR #69)
-
   - BlockedHashesTab component with CRUD operations
   - Table view with hash truncation, reason, and creation date
   - Add dialog with SHA256 validation (64 hex characters)
@@ -91,7 +90,6 @@
   - API integration: getBlockedHashes, addBlockedHash, removeBlockedHash
 
 - **State Machine Transitions**: Book lifecycle implementation (PR #70)
-
   - Scanner sets initial state to 'imported' with quantity=1 for new books
   - Organizer transitions state to 'organized' after successful file
     organization
@@ -109,38 +107,32 @@
 
 - **All Tests Passing**: Fixed all failing Go tests across server and scanner
   packages
-
   - Fixed scanner panic with nil database check
   - Fixed test bug in TestIntegrationLargeScaleMixedFormats (string conversion)
   - 19 packages tested, all passing
 
 - **Dashboard Analytics API**: New `/api/v1/dashboard` endpoint
-
   - Size distribution with 4 buckets (0-100MB, 100-500MB, 500MB-1GB, 1GB+)
   - Format distribution tracking (m4b, mp3, m4a, flac, etc.)
   - Total size calculation
   - Recent operations summary
 
 - **Metadata Management API**: Comprehensive metadata field validation
-
   - `/api/v1/metadata/fields` - Lists all fields with validation rules
   - publishDate validation with YYYY-MM-DD format checking
   - Field types, required flags, patterns, and custom validators
 
 - **Work Queue API**: Edition and work grouping
-
   - `/api/v1/work` - List all work items with associated books
   - `/api/v1/work/stats` - Statistics (total works, books, editions)
 
 - **Blocked Hashes Management**: Hash blocklist for preventing reimports
-
   - `GET /api/v1/blocked-hashes` - List all blocked hashes with reasons
   - `POST /api/v1/blocked-hashes` - Add hash to blocklist
   - `DELETE /api/v1/blocked-hashes/:hash` - Remove from blocklist
   - SHA256 hash validation
 
 - **State Machine Implementation**: Book lifecycle tracking (Migration 9)
-
   - `library_state` field - Track book status (imported/organized/deleted)
   - `quantity` field - Reference counting
   - `marked_for_deletion` field - Soft delete flag
@@ -156,7 +148,6 @@
 
 - **Release Workflow Integration**: Full integration with pinned composite
   actions for cross-platform builds
-
   - Go builds: GoReleaser-managed releases and publishes
   - Python packages: Build-only mode with artifact staging
   - Rust crates: Optimized release builds with test suite

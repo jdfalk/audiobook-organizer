@@ -1257,28 +1257,45 @@ class UnifiedGitHubProjectManager:
                 if milestone_name in existing_milestones:
                     # Update existing milestone
                     existing_milestone = existing_milestones[milestone_name]
-                    needs_update = (
-                        existing_milestone.get("description", "") != milestone_data.get("description", "") or
-                        existing_milestone.get("state", "") != milestone_data.get("state", "")
+                    needs_update = existing_milestone.get(
+                        "description", ""
+                    ) != milestone_data.get(
+                        "description", ""
+                    ) or existing_milestone.get("state", "") != milestone_data.get(
+                        "state", ""
                     )
 
                     if needs_update:
-                        if self._update_milestone(repo_name, milestone_name, milestone_data):
+                        if self._update_milestone(
+                            repo_name, milestone_name, milestone_data
+                        ):
                             success_count += 1
-                            self.logger.info(f"Updated milestone '{milestone_name}' in {repo_name}")
+                            self.logger.info(
+                                f"Updated milestone '{milestone_name}' in {repo_name}"
+                            )
                         else:
-                            self.logger.error(f"Failed to update milestone '{milestone_name}' in {repo_name}")
+                            self.logger.error(
+                                f"Failed to update milestone '{milestone_name}' in {repo_name}"
+                            )
                     else:
                         if self.dry_run:
-                            self.logger.info(f"DRY-RUN: Milestone '{milestone_name}' already exists and is up-to-date in {repo_name}")
+                            self.logger.info(
+                                f"DRY-RUN: Milestone '{milestone_name}' already exists and is up-to-date in {repo_name}"
+                            )
                         success_count += 1  # Already up to date
                 else:
                     # Create new milestone
-                    if self._create_milestone(repo_name, milestone_name, milestone_data):
+                    if self._create_milestone(
+                        repo_name, milestone_name, milestone_data
+                    ):
                         success_count += 1
-                        self.logger.info(f"Created milestone '{milestone_name}' in {repo_name}")
+                        self.logger.info(
+                            f"Created milestone '{milestone_name}' in {repo_name}"
+                        )
                     else:
-                        self.logger.error(f"Failed to create milestone '{milestone_name}' in {repo_name}")
+                        self.logger.error(
+                            f"Failed to create milestone '{milestone_name}' in {repo_name}"
+                        )
 
         self.logger.info(
             f"Milestone sync completed: {success_count}/{total_count} operations successful"

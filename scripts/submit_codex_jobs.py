@@ -14,6 +14,7 @@ Each job object must include:
 The script maintains a local ledger of submitted UUIDs in
 ``.codex_submitted_jobs.json`` to prevent accidental duplicates.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -25,6 +26,7 @@ from typing import Any, Dict, List, Set
 
 LEDGER_PATH = Path(".codex_submitted_jobs.json")
 
+
 def load_ledger() -> Set[str]:
     """Load the set of previously submitted job UUIDs."""
     if LEDGER_PATH.exists():
@@ -32,10 +34,12 @@ def load_ledger() -> Set[str]:
             return set(json.load(handle))
     return set()
 
+
 def save_ledger(ledger: Set[str]) -> None:
     """Persist the ledger of submitted job UUIDs."""
     with LEDGER_PATH.open("w", encoding="utf-8") as handle:
         json.dump(sorted(ledger), handle, indent=2)
+
 
 def submit_job(job: Dict[str, Any]) -> None:
     """Submit a single job to the codex CLI."""
@@ -57,6 +61,7 @@ def submit_job(job: Dict[str, Any]) -> None:
     ]
     subprocess.run(cmd, check=True)
 
+
 def process_jobs(jobs: List[Dict[str, Any]], ledger: Set[str]) -> None:
     """Process and submit all jobs."""
     for job in jobs:
@@ -68,11 +73,10 @@ def process_jobs(jobs: List[Dict[str, Any]], ledger: Set[str]) -> None:
         submit_job(job)
         ledger.add(job_id)
 
+
 def main() -> int:
     """Program entry point."""
-    parser = argparse.ArgumentParser(
-        description="Submit codex jobs from a JSON file."
-    )
+    parser = argparse.ArgumentParser(description="Submit codex jobs from a JSON file.")
     parser.add_argument("path", type=Path, help="Path to JSON job file.")
     args = parser.parse_args()
 
@@ -83,6 +87,7 @@ def main() -> int:
     process_jobs(jobs, ledger)
     save_ledger(ledger)
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
