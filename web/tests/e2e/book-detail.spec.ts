@@ -125,7 +125,11 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
       bookId: injectedBookId,
       bookData,
       tagsData,
-    }: { bookId: string; bookData: BookState; tagsData: typeof tags }) => {
+    }: {
+      bookId: string;
+      bookData: BookState;
+      tagsData: typeof tags;
+    }) => {
       let book = { ...bookData };
       let purged = false;
       const tagState = { ...tagsData };
@@ -191,21 +195,22 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
             const body = init?.body ? JSON.parse(init.body as string) : {};
             book = { ...book, ...body };
             if (body.overrides) {
-              Object.entries(body.overrides as Record<string, { value?: unknown; clear?: boolean }>)
-                .forEach(([key, override]) => {
-                  if (!tagState.tags[key]) return;
-                  if (override.clear) {
-                    tagState.tags[key].override_value = null;
-                    tagState.tags[key].override_locked = false;
-                    recomputeEffective(key);
-                    return;
-                  }
-                  if (override.value !== undefined) {
-                    tagState.tags[key].override_value = override.value as never;
-                    tagState.tags[key].override_locked = true;
-                    recomputeEffective(key);
-                  }
-                });
+              Object.entries(
+                body.overrides as Record<string, { value?: unknown; clear?: boolean }>
+              ).forEach(([key, override]) => {
+                if (!tagState.tags[key]) return;
+                if (override.clear) {
+                  tagState.tags[key].override_value = null;
+                  tagState.tags[key].override_locked = false;
+                  recomputeEffective(key);
+                  return;
+                }
+                if (override.value !== undefined) {
+                  tagState.tags[key].override_value = override.value as never;
+                  tagState.tags[key].override_locked = true;
+                  recomputeEffective(key);
+                }
+              });
             }
             Object.keys(body).forEach((key) => {
               if (key === 'overrides') return;
@@ -308,9 +313,7 @@ test.describe('Book Detail page', () => {
 
     await page.getByRole('tab', { name: /Versions/ }).click();
     await expect(page.getByText(/Versions/).first()).toBeVisible();
-    await expect(
-      page.getByText(/Second Version|No additional versions linked yet/i)
-    ).toBeVisible();
+    await expect(page.getByText(/Second Version|No additional versions linked yet/i)).toBeVisible();
   });
 
   test('soft delete, restore, and purge flow', async ({ page }) => {
@@ -323,7 +326,10 @@ test.describe('Book Detail page', () => {
     await expect(page.getByText('Audiobook marked for deletion.')).toBeVisible();
     await expect(page.getByText('Soft Deleted')).toBeVisible();
 
-    await page.getByRole('button', { name: /^Restore$/ }).last().click();
+    await page
+      .getByRole('button', { name: /^Restore$/ })
+      .last()
+      .click();
     await expect(page.getByText('Audiobook restored.')).toBeVisible();
     await expect(page.getByText('Soft Deleted')).not.toBeVisible();
 

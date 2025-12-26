@@ -32,8 +32,13 @@ def upload_artifacts(release_id, artifacts_dir):
     for artifact in artifact_files:
         print(f"Uploading {artifact.name}...")
         cmd = [
-            "gh", "release", "upload", release_id, str(artifact),
-            "--repo", os.environ.get("GITHUB_REPOSITORY", "")
+            "gh",
+            "release",
+            "upload",
+            release_id,
+            str(artifact),
+            "--repo",
+            os.environ.get("GITHUB_REPOSITORY", ""),
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)

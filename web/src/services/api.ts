@@ -348,7 +348,9 @@ export async function deleteBook(
   if (options.blockHash) params.set('block_hash', 'true');
   const query = params.toString();
   const url =
-    query.length > 0 ? `${API_BASE}/audiobooks/${bookId}?${query}` : `${API_BASE}/audiobooks/${bookId}`;
+    query.length > 0
+      ? `${API_BASE}/audiobooks/${bookId}?${query}`
+      : `${API_BASE}/audiobooks/${bookId}`;
   const response = await fetch(url, {
     method: 'DELETE',
   });
@@ -364,7 +366,10 @@ type OverridePayload = {
 
 export async function updateBook(
   bookId: string,
-  updates: Partial<Book> & { overrides?: Record<string, OverridePayload>; unlock_overrides?: string[] }
+  updates: Partial<Book> & {
+    overrides?: Record<string, OverridePayload>;
+    unlock_overrides?: string[];
+  }
 ): Promise<Book> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}`, {
     method: 'PUT',

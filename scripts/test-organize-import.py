@@ -142,7 +142,10 @@ class SeriesPatternMatcher:
                         return parent_dir, 0, "directory:keyword"
 
                 # Check if parent dir name is in title (fuzzy match)
-                if parent_dir.lower() in title.lower() or title.lower() in parent_dir.lower():
+                if (
+                    parent_dir.lower() in title.lower()
+                    or title.lower() in parent_dir.lower()
+                ):
                     return parent_dir, 0, "directory:fuzzy"
 
         # Look for series patterns in title itself
@@ -190,7 +193,9 @@ class PathExtractor:
         # Find first meaningful directory that's not a skip dir
         meaningful_dirs = []
         for i, part in enumerate(path_parts):
-            if part.lower() not in skip_dirs and i < len(path_parts) - 1:  # Not the filename
+            if (
+                part.lower() not in skip_dirs and i < len(path_parts) - 1
+            ):  # Not the filename
                 meaningful_dirs.append(part)
 
         if not meaningful_dirs:
@@ -219,7 +224,9 @@ class PathExtractor:
                     return author
 
         # Default to first meaningful directory if it doesn't look like a series name
-        if not first_dir.lower().startswith(("book", "chapter", "part", "volume", "vol")):
+        if not first_dir.lower().startswith(
+            ("book", "chapter", "part", "volume", "vol")
+        ):
             return first_dir
 
         return ""
@@ -238,7 +245,9 @@ class PathExtractor:
         title = re.sub(r"^\d+[-_.\s]+", "", title)
 
         # Remove common suffixes
-        title = re.sub(r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE)
+        title = re.sub(
+            r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE
+        )
 
         return title.strip()
 
@@ -248,7 +257,9 @@ class AudiobookScanner:
 
     def __init__(self, supported_extensions: Optional[List[str]] = None):
         """Initialize the scanner with supported file extensions."""
-        self.supported_extensions = supported_extensions or PathExtractor.SUPPORTED_EXTENSIONS
+        self.supported_extensions = (
+            supported_extensions or PathExtractor.SUPPORTED_EXTENSIONS
+        )
         self.pattern_matcher = SeriesPatternMatcher()
         self.path_extractor = PathExtractor()
 
@@ -445,8 +456,12 @@ class TestReportGenerator:
         return {
             "by_extension": dict(extensions),
             "by_extraction_method": dict(extraction_methods),
-            "top_authors": dict(sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]),
-            "top_series": dict(sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]),
+            "top_authors": dict(
+                sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]
+            ),
+            "top_series": dict(
+                sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]
+            ),
         }
 
     def _generate_issues_summary(self, books: List[BookMetadata]) -> Dict:
@@ -598,7 +613,9 @@ def main():
             print(f"\nOriginal: {book.original_path}")
             print(f"  Title: {book.title}")
             print(f"  Author: {book.author}")
-            print(f"  Series: {book.series} (#{book.position if book.position else 'N/A'})")
+            print(
+                f"  Series: {book.series} (#{book.position if book.position else 'N/A'})"
+            )
             print(f"  Method: {book.extraction_method}")
             print(f"  Confidence: {book.confidence}")
             print(f"  Proposed: {book.proposed_path}")

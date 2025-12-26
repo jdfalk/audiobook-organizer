@@ -1200,7 +1200,11 @@ export const Library = () => {
                         variant="outlined"
                         sx={{ mr: 1 }}
                         onClick={() => handleRestoreOne(book)}
-                        disabled={restoringBookId === book.id || purgeInProgress || purgingBookId === book.id}
+                        disabled={
+                          restoringBookId === book.id ||
+                          purgeInProgress ||
+                          purgingBookId === book.id
+                        }
                       >
                         {restoringBookId === book.id ? 'Restoring...' : 'Restore'}
                       </Button>
@@ -1296,7 +1300,11 @@ export const Library = () => {
               variant="contained"
               disabled={deleteInProgress}
             >
-              {deleteInProgress ? 'Deleting...' : deleteOptions.softDelete ? 'Soft Delete' : 'Delete'}
+              {deleteInProgress
+                ? 'Deleting...'
+                : deleteOptions.softDelete
+                  ? 'Soft Delete'
+                  : 'Delete'}
             </Button>
           </DialogActions>
         </Dialog>

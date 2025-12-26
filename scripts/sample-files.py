@@ -26,7 +26,7 @@ def main():
 
     # Read all lines
     print(f"Reading file list from: {input_file}")
-    with open(input_file, 'r', encoding='utf-8', errors='ignore') as f:
+    with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
         all_files = [line.strip() for line in f if line.strip()]
 
     print(f"Total files: {len(all_files)}")
@@ -40,7 +40,7 @@ def main():
 
     # Write to output file
     print(f"Writing {len(sampled_files)} sampled files to: {output_file}")
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         for file_path in sampled_files:
             f.write(f"{file_path}\n")
 

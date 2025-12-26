@@ -19,6 +19,7 @@ from dataclasses import dataclass
 @dataclass
 class TestResult:
     """Result of an endpoint test."""
+
     endpoint: str
     method: str
     status_code: int
@@ -47,7 +48,7 @@ class APITester:
     ) -> TestResult:
         """Test a single endpoint."""
         url = f"{self.base_url}{path}"
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Testing: {method} {path}")
         if description:
             print(f"Description: {description}")
@@ -57,9 +58,13 @@ class APITester:
             if method == "GET":
                 response = self.session.get(url, params=params, timeout=10)
             elif method == "POST":
-                response = self.session.post(url, json=json_data, params=params, timeout=10)
+                response = self.session.post(
+                    url, json=json_data, params=params, timeout=10
+                )
             elif method == "PUT":
-                response = self.session.put(url, json=json_data, params=params, timeout=10)
+                response = self.session.put(
+                    url, json=json_data, params=params, timeout=10
+                )
             elif method == "DELETE":
                 response = self.session.delete(url, params=params, timeout=10)
             else:
@@ -80,12 +85,16 @@ class APITester:
                 status_code=response.status_code,
                 success=success,
                 response=response_json,
-                error=None if success else f"Expected {expected_status}, got {response.status_code}",
+                error=None
+                if success
+                else f"Expected {expected_status}, got {response.status_code}",
                 duration_ms=duration_ms,
             )
 
             status_icon = "✅" if success else "❌"
-            print(f"{status_icon} Status: {response.status_code} (expected {expected_status})")
+            print(
+                f"{status_icon} Status: {response.status_code} (expected {expected_status})"
+            )
             print(f"⏱️  Duration: {duration_ms:.2f}ms")
             print(f"Response: {json.dumps(response_json, indent=2)[:500]}")
 
@@ -107,18 +116,20 @@ class APITester:
 
     def run_all_tests(self):
         """Run all endpoint tests."""
-        print(f"\n{'#'*80}")
+        print(f"\n{'#' * 80}")
         print("# Starting Comprehensive API Endpoint Tests")
         print(f"# Base URL: {self.base_url}")
         print(f"# Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"{'#'*80}\n")
+        print(f"{'#' * 80}\n")
 
         # Health check
         self.test_endpoint("GET", "/api/health", description="Health check endpoint")
 
         # Real-time events (SSE) - just test connection
-        print("\n" + "="*80)
-        print("Note: /api/events (SSE) requires special handling - skipping in basic test")
+        print("\n" + "=" * 80)
+        print(
+            "Note: /api/events (SSE) requires special handling - skipping in basic test"
+        )
 
         # Audiobook endpoints
         self.test_endpoint(
@@ -172,16 +183,18 @@ class APITester:
         )
 
         # Library folder endpoints
-        self.test_endpoint("GET", "/api/v1/import-paths", description="List import paths")
+        self.test_endpoint(
+            "GET", "/api/v1/import-paths", description="List import paths"
+        )
 
         # Note: We won't actually add/remove folders in test mode
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping POST /api/v1/import-paths (would modify system)")
         print("Note: Skipping DELETE /api/v1/import-paths/:id (would modify system)")
 
         # Operation endpoints (read-only tests)
         # Note: We won't start actual scans in test mode
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping POST /api/v1/operations/scan (would start actual scan)")
         print("Note: Skipping POST /api/v1/operations/organize (would modify files)")
 
@@ -200,19 +213,21 @@ class APITester:
         )
 
         # System endpoints
-        self.test_endpoint("GET", "/api/v1/system/status", description="Get system status")
+        self.test_endpoint(
+            "GET", "/api/v1/system/status", description="Get system status"
+        )
         self.test_endpoint("GET", "/api/v1/system/logs", description="Get system logs")
         self.test_endpoint("GET", "/api/v1/config", description="Get configuration")
 
         # Note: We won't update config in test mode
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping PUT /api/v1/config (would modify configuration)")
 
         # Backup endpoints
         self.test_endpoint("GET", "/api/v1/backup/list", description="List backups")
 
         # Note: We won't create/restore/delete backups in test mode
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping POST /api/v1/backup/create (would create backup)")
         print("Note: Skipping POST /api/v1/backup/restore (would restore database)")
         print("Note: Skipping DELETE /api/v1/backup/:filename (would delete backup)")
@@ -232,14 +247,16 @@ class APITester:
             description="Validate metadata",
         )
 
-        self.test_endpoint("GET", "/api/v1/metadata/export", description="Export metadata")
+        self.test_endpoint(
+            "GET", "/api/v1/metadata/export", description="Export metadata"
+        )
 
         # Note: We won't import metadata in test mode
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping POST /api/v1/metadata/import (would modify database)")
 
         # Work endpoints - comprehensive CRUD testing
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Testing Work entity endpoints...")
 
         # List works (should be empty initially or have existing ones)
@@ -312,14 +329,14 @@ class APITester:
         )
 
         # Exclusion endpoints - test with safe dummy data
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("Note: Skipping filesystem exclusion tests (would modify filesystem)")
 
     def print_summary(self):
         """Print test summary."""
-        print(f"\n{'#'*80}")
+        print(f"\n{'#' * 80}")
         print("# Test Summary")
-        print(f"{'#'*80}\n")
+        print(f"{'#' * 80}\n")
 
         passed = sum(1 for r in self.results if r.success)
         failed = sum(1 for r in self.results if not r.success)
@@ -328,17 +345,21 @@ class APITester:
         print(f"Total Tests: {total}")
         print(f"✅ Passed: {passed}")
         print(f"❌ Failed: {failed}")
-        print(f"Success Rate: {(passed/total*100) if total > 0 else 0:.1f}%")
+        print(f"Success Rate: {(passed / total * 100) if total > 0 else 0:.1f}%")
 
         if failed > 0:
-            print(f"\n{'='*80}")
+            print(f"\n{'=' * 80}")
             print("Failed Tests:")
             for result in self.results:
                 if not result.success:
                     print(f"  ❌ {result.method} {result.endpoint}")
                     print(f"     Status: {result.status_code}, Error: {result.error}")
 
-        avg_duration = sum(r.duration_ms for r in self.results) / len(self.results) if self.results else 0
+        avg_duration = (
+            sum(r.duration_ms for r in self.results) / len(self.results)
+            if self.results
+            else 0
+        )
         print(f"\nAverage Response Time: {avg_duration:.2f}ms")
 
         # Performance analysis
@@ -351,7 +372,7 @@ class APITester:
     def save_results(self, filename: str = "test-results.json"):
         """Save test results to JSON file."""
         results_data = {
-            "timestamp": time.strftime('%Y-%m-%d %H:%M:%S'),
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "base_url": self.base_url,
             "total_tests": len(self.results),
             "passed": sum(1 for r in self.results if r.success),
@@ -370,7 +391,7 @@ class APITester:
             ],
         }
 
-        with open(filename, 'w') as f:
+        with open(filename, "w") as f:
             json.dump(results_data, f, indent=2)
 
         print(f"\n📄 Results saved to: {filename}")
@@ -401,6 +422,7 @@ Base URL: {base_url}
     except Exception as e:
         print(f"\n\n❌ Fatal error: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         tester.print_summary()

@@ -325,11 +325,7 @@ export const BookDetail = () => {
     const entry = getFieldSources(field);
     if (!entry) return;
     const value =
-      source === 'file'
-        ? entry.file
-        : source === 'fetched'
-          ? entry.fetched
-          : entry.override;
+      source === 'file' ? entry.file : source === 'fetched' ? entry.fetched : entry.override;
     if (value === undefined) return;
     setActionLoading(true);
     setActionLabel(`Applying ${source} value...`);
@@ -700,7 +696,11 @@ export const BookDetail = () => {
                       height: '100%',
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ textTransform: 'uppercase' }}
+                    >
                       {item.label}
                     </Typography>
                     <Typography variant="body1">{item.value as string}</Typography>
@@ -944,8 +944,7 @@ export const BookDetail = () => {
                     Quality: {tags?.media_info?.quality || book.quality || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Duration:{' '}
-                    {formatDuration(tags?.media_info?.duration || book.duration) || '—'}
+                    Duration: {formatDuration(tags?.media_info?.duration || book.duration) || '—'}
                   </Typography>
                 </Stack>
               </Box>
@@ -997,32 +996,36 @@ export const BookDetail = () => {
                         border: '1px dashed',
                         borderColor: 'divider',
                         bgcolor: 'background.default',
-                }}
-              >
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                  {key.replace(/_/g, ' ')}
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                  <Typography variant="body2">
-                    {values.effective_value ??
-                      values.override_value ??
-                      values.stored_value ??
-                      values.fetched_value ??
-                      values.file_value ??
-                      '—'}
-                  </Typography>
-                  {values.effective_source && (
-                    <Chip size="small" label={values.effective_source} variant="outlined" />
-                  )}
-                  {values.override_locked && (
-                    <Chip size="small" label="locked" color="warning" variant="outlined" />
-                  )}
-                </Stack>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ textTransform: 'uppercase' }}
+                      >
+                        {key.replace(/_/g, ' ')}
+                      </Typography>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Typography variant="body2">
+                          {values.effective_value ??
+                            values.override_value ??
+                            values.stored_value ??
+                            values.fetched_value ??
+                            values.file_value ??
+                            '—'}
+                        </Typography>
+                        {values.effective_source && (
+                          <Chip size="small" label={values.effective_source} variant="outlined" />
+                        )}
+                        {values.override_locked && (
+                          <Chip size="small" label="locked" color="warning" variant="outlined" />
+                        )}
+                      </Stack>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
             Showing current metadata and media info. File-tag provenance will populate here when
@@ -1057,73 +1060,75 @@ export const BookDetail = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {['title', 'author_name', 'narrator', 'series_name', 'publisher', 'language', 'audiobook_release_year'].map(
-                  (field) => {
-                    const entry = getFieldSources(field);
-                    return (
-                      <TableRow key={field}>
-                        <TableCell sx={{ textTransform: 'capitalize' }}>
-                          {field.replace(/_/g, ' ')}
-                        </TableCell>
-                        <TableCell>{entry?.file ?? '—'}</TableCell>
-                        <TableCell>{entry?.fetched ?? '—'}</TableCell>
-                        <TableCell>{entry?.stored ?? '—'}</TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                            <span>{entry?.override ?? '—'}</span>
-                            {entry?.locked && (
-                              <Chip
-                                label="locked"
-                                size="small"
-                                color="warning"
-                                sx={{ ml: 0.5 }}
-                              />
-                            )}
-                            {entry?.source && (
-                              <Chip label={entry.source} size="small" variant="outlined" />
-                            )}
-                          </Stack>
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={1}>
+                {[
+                  'title',
+                  'author_name',
+                  'narrator',
+                  'series_name',
+                  'publisher',
+                  'language',
+                  'audiobook_release_year',
+                ].map((field) => {
+                  const entry = getFieldSources(field);
+                  return (
+                    <TableRow key={field}>
+                      <TableCell sx={{ textTransform: 'capitalize' }}>
+                        {field.replace(/_/g, ' ')}
+                      </TableCell>
+                      <TableCell>{entry?.file ?? '—'}</TableCell>
+                      <TableCell>{entry?.fetched ?? '—'}</TableCell>
+                      <TableCell>{entry?.stored ?? '—'}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <span>{entry?.override ?? '—'}</span>
+                          {entry?.locked && (
+                            <Chip label="locked" size="small" color="warning" sx={{ ml: 0.5 }} />
+                          )}
+                          {entry?.source && (
+                            <Chip label={entry.source} size="small" variant="outlined" />
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => applySourceValue(field, 'file')}
+                            disabled={!entry?.file && entry?.file !== 0}
+                          >
+                            Use File
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => applySourceValue(field, 'fetched')}
+                            disabled={!entry?.fetched && entry?.fetched !== 0}
+                          >
+                            Use Fetched
+                          </Button>
+                          {entry?.override && (
                             <Button
                               size="small"
                               variant="outlined"
-                              onClick={() => applySourceValue(field, 'file')}
-                              disabled={!entry?.file && entry?.file !== 0}
+                              color="secondary"
+                              onClick={() => clearOverride(field)}
                             >
-                              Use File
+                              Clear
                             </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => applySourceValue(field, 'fetched')}
-                              disabled={!entry?.fetched && entry?.fetched !== 0}
-                            >
-                              Use Fetched
-                            </Button>
-                            {entry?.override && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="secondary"
-                                onClick={() => clearOverride(field)}
-                              >
-                                Clear
-                              </Button>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  }
-                )}
+                          )}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
-            Locked overrides prevent future fetch/tag updates from changing the field. Apply a source
-            to set/lock a field; unlock/clear will be supported when backend exposes override flags.
+            Locked overrides prevent future fetch/tag updates from changing the field. Apply a
+            source to set/lock a field; unlock/clear will be supported when backend exposes override
+            flags.
           </Alert>
         </Paper>
       )}
@@ -1159,8 +1164,8 @@ export const BookDetail = () => {
             label="Prevent reimporting this file (block hash)"
           />
           <Alert severity="warning" sx={{ mt: 2 }}>
-            Soft deleted books can be restored or purged later. Blocking the hash prevents
-            reimports of the same file.
+            Soft deleted books can be restored or purged later. Blocking the hash prevents reimports
+            of the same file.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -1183,18 +1188,13 @@ export const BookDetail = () => {
             This permanently removes the record and associated files. This cannot be undone.
           </Alert>
           <Typography>
-            Are you sure you want to purge{' '}
-            <strong>{book.title || 'this audiobook'}</strong> from the library?
+            Are you sure you want to purge <strong>{book.title || 'this audiobook'}</strong> from
+            the library?
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPurgeDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handlePurge}
-            color="error"
-            variant="contained"
-            disabled={actionLoading}
-          >
+          <Button onClick={handlePurge} color="error" variant="contained" disabled={actionLoading}>
             Purge Permanently
           </Button>
         </DialogActions>

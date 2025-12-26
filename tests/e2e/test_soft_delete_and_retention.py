@@ -10,7 +10,9 @@ from selenium.webdriver.support import expected_conditions as EC
 
 
 def wait_for_text(driver, text, timeout=10):
-    WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.XPATH, f"//*[contains(., '{text}')]")))
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_element_located((By.XPATH, f"//*[contains(., '{text}')]"))
+    )
 
 
 def click_first(driver, locator):
@@ -24,13 +26,17 @@ def test_settings_retention_controls(driver, base_url):
 
     # Auto purge days input
     days_input = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, "//label[contains(., 'Auto-Purge After')]/following::input[1]"))
+        EC.presence_of_element_located(
+            (By.XPATH, "//label[contains(., 'Auto-Purge After')]/following::input[1]")
+        )
     )
     days_input.clear()
     days_input.send_keys("15")
 
     # Delete files switch
-    delete_switch = driver.find_element(By.XPATH, "//label[contains(., 'Delete files from disk')]/span/input")
+    delete_switch = driver.find_element(
+        By.XPATH, "//label[contains(., 'Delete files from disk')]/span/input"
+    )
     delete_switch.click()
 
     # Save settings
@@ -39,7 +45,9 @@ def test_settings_retention_controls(driver, base_url):
 
     # Basic confirmation that values stick after a short wait
     time.sleep(0.5)
-    refreshed_days = driver.find_element(By.XPATH, "//label[contains(., 'Auto-Purge After')]/following::input[1]")
+    refreshed_days = driver.find_element(
+        By.XPATH, "//label[contains(., 'Auto-Purge After')]/following::input[1]"
+    )
     assert refreshed_days.get_attribute("value") == "15"
 
 
@@ -50,11 +58,15 @@ def test_library_soft_deleted_section(driver, base_url):
     wait_for_text(driver, "Soft-Deleted Books")
 
     # Expect either empty-state alert or a list with purge/restore buttons present
-    soft_deleted_heading = driver.find_element(By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]")
+    soft_deleted_heading = driver.find_element(
+        By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]"
+    )
     assert soft_deleted_heading.is_displayed()
 
     # If list exists, buttons should be present
-    buttons = driver.find_elements(By.XPATH, "//button[contains(., 'Purge now') or contains(., 'Restore')]")
+    buttons = driver.find_elements(
+        By.XPATH, "//button[contains(., 'Purge now') or contains(., 'Restore')]"
+    )
     if buttons:
         assert any(btn.is_displayed() for btn in buttons)
     else:
@@ -80,5 +92,7 @@ def test_book_detail_navigation(driver, base_url):
         clickable.click()
 
     wait_for_text(driver, "Back to Library")
-    action_buttons = driver.find_elements(By.XPATH, "//button[contains(., 'Soft Delete') or contains(., 'Restore')]")
+    action_buttons = driver.find_elements(
+        By.XPATH, "//button[contains(., 'Soft Delete') or contains(., 'Restore')]"
+    )
     assert action_buttons, "Expected soft delete/restore controls on book detail page"

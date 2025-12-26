@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.19.0 -->
+<!-- version: 1.19.1 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -86,7 +86,7 @@
 
 ## ✅ RECENTLY COMPLETED - December 22, 2025
 
-### MVP Implementation Sprint - Tasks 1-5 Complete!
+### MVP Implementation Sprint - Tasks 1-5 Complete
 
 **Pull Requests:**
 
@@ -259,21 +259,17 @@
 - [x] **TODO-001**: Fix @ts-ignore in web/src/test/setup.ts:77
   - **COMPLETED**: Replaced with @ts-expect-error with explanation
 - [x] **TODO-002**: Fix @ts-ignore in web/src/pages/FileManager.tsx:202
-
   - **COMPLETED**: Replaced with @ts-expect-error with explanation
 
 - [x] **TODO-003**: Remove unused variable in web/src/pages/FileManager.tsx:134
-
   - **COMPLETED**: Removed unused \_path parameter
 
 - [x] **TODO-004**: Remove unused variable in
       web/src/components/system/LogsTab.tsx:46
-
   - **COMPLETED**: Removed unused setLoading state setter
 
 - [x] **TODO-005**: Remove unused import in
       web/src/components/common/ServerFileBrowser.tsx:5
-
   - **COMPLETED**: useCallback is now used (wrapped fetchDirectory)
 
 - [x] **TODO-006**: Fix 'any' type in web/src/test/setup.ts:40
@@ -282,7 +278,6 @@
 #### TypeScript 'any' Type Errors (2 items)
 
 - [x] **TODO-007**: Fix 'any' type in web/src/pages/Settings.tsx:460
-
   - **COMPLETED**: Removed both 'as any' casts from credentials mapping
 
 - [x] **TODO-008**: Fix 'any' type in web/src/pages/Settings.tsx:457
@@ -292,13 +287,11 @@
 
 - [x] **TODO-009**: Fix React Hook dependency in
       web/src/components/system/LogsTab.tsx:81
-
   - **COMPLETED**: Removed sourceFilter from dependency array (not used in
     fetchLogs)
 
 - [x] **TODO-010**: Fix React Hook dependency in
       web/src/components/common/ServerFileBrowser.tsx:81
-
   - **COMPLETED**: Wrapped fetchDirectory in useCallback and added to
     dependencies
 
@@ -319,7 +312,6 @@
 ### Docker Build Issues (2 items)
 
 - [x] **TODO-014**: Create missing Dockerfile
-
   - **COMPLETED**: Created multi-stage Dockerfile with Go 1.25-alpine
 
 - [x] **TODO-015**: Update Dockerfile Go version to 1.25
@@ -328,7 +320,6 @@
 ### Node.js/NPM Build Issues (2 items)
 
 - [ ] **TODO-012**: Fix npm cache path resolution error
-
   - **File**: `.github/workflows/ci.yml` or reusable workflow
   - **Issue**: "Some specified paths were not resolved, unable to cache
     dependencies"
@@ -348,18 +339,18 @@
   - **Category**: Dependencies
   - **Status**: Non-critical, can be addressed later
 
-# <<<<<<< Updated upstream
+### CI Pipeline Tracking (Completed)
 
 - [ ] **TODO-018**: CI Pipeline failure tracking - Frontend blocking entire
       pipeline
-
   - **File**: CI/CD pipeline (dependent on TODO-001 through TODO-011)
   - **Issue**: "❌ CI Pipeline failed: Frontend CI - Error: Process completed
     with exit code 1"
   - **Root Cause**: Frontend TypeScript/ESLint errors (TODO-001 through
     TODO-011) causing build failure
   - **Context**: Pipeline shows:
-    ```
+
+    ```text
     JOB_WORKFLOW_LINT: skipped
     JOB_WORKFLOW_SCRIPTS: skipped
     JOB_GO: skipped
@@ -369,6 +360,7 @@
     JOB_DOCKER: skipped
     JOB_DOCS: skipped
     ```
+
   - **Fix**: All frontend linting errors (TODO-001 through TODO-011) are marked
     as completed - need to verify build passes
   - **Action Items**:
@@ -382,14 +374,13 @@
   - **Status**: COMPLETED - All frontend issues fixed, build and lint passing
 
 - [ ] **TODO-019**: ESLint configuration migration to v9.x
-
   - **File**: `web/.eslintrc.json` (needs to be migrated to `eslint.config.js`)
   - **Issue**: "ESLint couldn't find an eslint.config.(js|mjs|cjs) file"
   - **Root Cause**: ESLint v9.0.0+ requires new config file format
   - **Fix**: Migrate from `.eslintrc.json` to `eslint.config.js` using migration
     guide
   - **Migration Guide**:
-    https://eslint.org/docs/latest/use/configure/migration-guide
+    [ESLint migration guide](https://eslint.org/docs/latest/use/configure/migration-guide)
   - **Priority**: High (Blocking lint command)
   - **Category**: Build/Development
   - **Status**: COMPLETED - Migrated to eslint.config.mjs with ESLint 9
@@ -569,31 +560,26 @@
 ### ✅ Bug Fixes and UX Improvements
 
 1. **Library Page Path Display** (v1.13.0)
-
    - Enhanced "Path: Not configured" message with helpful text and warning color
    - Added "Please set library path in Settings" guidance
 
 2. **Folder Browser UX** (v1.2.0)
-
    - Removed two-step selection process (Select This Folder + bottom button)
    - Current browsed path now automatically selected for parent component
    - Simplified user experience for folder selection
 
 3. **Organize Operation** (v1.18.0)
-
    - Fixed "organizing 0/0" issue by filtering books before operation
    - Now only organizes books NOT already in root directory
    - Skips books whose files don't exist
    - Added log message showing count of books needing organization
 
 4. **Auto-Rescan After Organize** (v1.19.0)
-
    - Automatically triggers library rescan after successful organize
    - Rescan runs with low priority to avoid blocking other operations
    - Picks up newly organized books and extracts metadata
 
 5. **AI Metadata Parsing Integration** (v1.8.0)
-
    - Integrated OpenAI parser into scanner workflow
    - When tag extraction fails or is incomplete, AI parser attempts to extract:
      - Title, Author, Series, Narrator, Publisher from filename
@@ -601,14 +587,12 @@
    - Falls back to filepath extraction if AI parsing fails
 
 6. **Dashboard Import Folders Count** (v1.3.0)
-
    - Fixed "Import Folders: 0" display issue
    - Changed from folders.length to systemStatus.library.folder_count
    - Now uses consistent data source with backend metrics
 
 7. **Re-fetch Metadata UI** (v1.3.0 AudiobookCard, v1.3.0 AudiobookGrid, v1.14.0
    Library)
-
    - Added "Parse with AI" menu item to audiobook cards
    - Wired up handleParseWithAI handler
    - Uses existing backend endpoint: POST /api/v1/audiobooks/:id/parse-with-ai
@@ -619,7 +603,6 @@
    - Prevents accidental commit of encryption secrets
 
 - [x] ✅ **Backend**: Settings API safety restrictions
-
   - ✅ Safety restrictions on database_type and enable_sqlite (read-only at
     runtime)
 
@@ -636,7 +619,6 @@
   - ✅ Author auto-creation if not exists
   - ✅ Optional organize flag to trigger file organization
 - [x] ✅ **Backend**: Metadata source integration (Open Library)
-
   - ✅ Created OpenLibraryClient with SearchByTitle, SearchByTitleAndAuthor,
     GetBookByISBN methods
   - ✅ Returns title, author, description, publisher, publish_year, ISBN,
@@ -678,7 +660,6 @@
   - ✅ Date sorting (descending - newest first) for created_at and updated_at
     fields
 - [x] ✅ **Frontend**: Metadata editor with inline editing
-
   - ✅ MetadataEditDialog component with comprehensive edit form
   - ✅ InlineEditField component created for quick inline edits
   - ✅ "Fetch Metadata" button with CloudDownload icon in AudiobookCard menu
@@ -698,7 +679,6 @@
   - ✅ Uses setupTestDB pattern with temporary database and cleanup
   - ✅ Network tests use t.Skip for rate limits
 - [x] ✅ **Docs**: OpenAPI/Swagger documentation
-
   - ✅ Created docs/openapi.yaml with complete OpenAPI 3.0.3 specification
   - ✅ Documented 20+ endpoints across 9 tags (Audiobooks, Authors, Series,
     Library, Operations, Metadata, Versions, System, Backup)
@@ -771,7 +751,6 @@
 ### Library & Import Management
 
 - [ ] **Add Library Path Configuration**
-
   - [ ] Add central library path setting in Settings page (where organized
         audiobooks go)
   - [ ] Add UI in Settings to manage download/import folders with server
@@ -811,7 +790,6 @@
 ### Multi-User & Security
 
 - [ ] **Multi-User Interface**
-
   - [ ] User profiles and authentication system
   - [ ] Per-user playback tracking and statistics
   - [ ] User-specific library views and permissions
