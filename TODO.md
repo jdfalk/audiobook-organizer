@@ -22,27 +22,22 @@
   - TestGetAudiobookTagsWithProvenance: validates tags endpoint provenance payload
   - TestMetadataFieldStateRoundtrip: validates CRUD operations on metadata states
 - **Effective Source Priority**: override > stored > fetched > file
-- **Next**: Push to main and integrate action usage
+- **Status**: Merged to main, pushed to origin
 
-### Action Integration and Next Steps (STARTING)
+### Action Integration and Testing (IN PROGRESS)
 
 #### **SESSION-005**: Integration of get-frontend-config-action
 
-- **Status**: 🚀 STARTING
-- **Scope**: Integrate get-frontend-config-action into audiobook-organizer CI
-- **Tasks**:
-  1. [ ] Create test workflow in audiobook-organizer to verify action works
-  2. [ ] Verify outputs from action (dir, node-version, has-frontend)
-  3. [ ] Update .github/workflows/frontend-ci.yml to use action
-  4. [ ] Push and validate workflow runs successfully
-  5. [ ] Document action usage pattern for other repos
-  6. [ ] Integrate into target repos (ghcommon, others) where applicable
-- **Workflow Changes**:
-  - Add `get-frontend-config-action` step to read .github/repository-config.yml
-  - Pass outputs to subsequent build/lint/test steps
-  - Ensure dynamic frontend dir and node version setup
-- **Priority**: MEDIUM - Improves CI flexibility and config management
-- **Next**: After action integration, focus on frontend provenance UI integration
+- **Status**: 🚀 IN PROGRESS
+- **Completed**:
+  1. ✅ Created test workflow for get-frontend-config-action integration
+  2. ✅ Verified outputs from action (dir, node-version, has-frontend)
+  3. ✅ Workflow committed and pushed to main
+- **In Progress**:
+  4. [ ] Monitor test workflow execution on repository-config.yml changes
+  5. [ ] Evaluate optional: Update .github/workflows/frontend-ci.yml to use action
+- **Workflow Path**: `.github/workflows/test-action-integration.yml`
+- **Next**: Complete action integration validation, then focus on frontend provenance UI
 
 ### Cross-Repo Action Development (COMPLETED)
 
