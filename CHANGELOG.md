@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.3 -->
+<!-- version: 1.1.4 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,18 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### December 27, 2025 - Cross-repo action creation and metadata provenance planning
+
+- Created jdfalk/get-frontend-config-action (composite action to extract frontend
+  config from `.github/repository-config.yml`)
+  - Outputs: `dir`, `node-version`, `has-frontend`
+  - Workflows: test-action.yml, branch-cleanup.yml, auto-merge.yml
+  - Branch protection: rebase-only merges, 1 required review, linear history,
+    block force pushes
+  - All configured via GitHub API with proper enforcement on main
+- Starting metadata provenance backend: per-field override/lock handling,
+  provenance state persistence, and enhanced tags endpoint
 
 #### December 26, 2025 - CI and test stabilization
 

@@ -1,10 +1,49 @@
 <!-- file: TODO.md -->
-<!-- version: 1.19.2 -->
+<!-- version: 1.20.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
 
-## 🔄 CURRENT SESSION - December 25, 2025
+## 🔄 CURRENT SESSION - December 27, 2025
+
+### Metadata Provenance Backend Implementation (STARTING)
+
+#### **SESSION-003**: Per-Field Provenance, Overrides, and Locks
+
+- **Status**: 🚀 STARTING — Backend implementation for metadata field-level tracking
+- **Scope**: Migration 10 validation; tags endpoint enrichment; UpdateBook handler extension
+- **Context**: Metadata provenance branch (worktree) ready; needs:
+  1. Validate and finalize migration 10 schema (`metadata_states` table)
+  2. Store methods for GetMetadataFieldStates, SaveMetadataFieldState
+  3. Tags endpoint: return per-field effective_value/source/stored/fetched/override/locked
+  4. UpdateBook: accept `overrides` map with value+locked flags
+  5. Handler tests: extend for provenance shape, state persistence
+  6. E2E: Book Detail tags/compare mocks align with new shape
+- **Files**:
+  - `internal/db/migrations/010_metadata_provenance_tracking.sql` (schema)
+  - `internal/db/store.go` (Store interface additions)
+  - `internal/server/handlers.go` (tags endpoint, UpdateBook)
+  - `internal/server/server_test.go` (handler tests)
+  - `web/src/components/BookDetail.tsx` (Tags/Compare display)
+- **Priority**: HIGH — Unblocks metadata branch merge and E2E coverage
+- **Next**: Create feature branch, implement and test schema/store methods, enrich endpoints
+
+### Cross-Repo Action Development (COMPLETED)
+
+#### **SESSION-004**: jdfalk/get-frontend-config-action Composite Action
+
+- **Status**: ✅ COMPLETED
+- **Scope**: Composite action for extracting frontend config from .github/repository-config.yml
+- **Implementation**:
+  - Created jdfalk/get-frontend-config-action repository
+  - Composite action reads config, outputs: dir, node-version, has-frontend
+  - Workflows: test-action.yml, branch-cleanup.yml, auto-merge.yml
+  - Branch protection enforced via GitHub API: rebase-only, 1 required review, linear history
+  - All configurations applied to main branch for enforcement
+- **Result**: Reusable action ready for integration into audiobook-organizer and other repos
+- **Next**: Integrate action into audiobook-organizer CI workflows
+
+## Previous Sessions - December 25, 2025
 
 ### Database Migration & Testing Infrastructure (In Progress)
 
@@ -408,7 +447,12 @@
   - **Workflows**: Added `test-action.yml`, `branch-cleanup.yml` (delete head
     branch after merge), and `auto-merge.yml` (label-driven REBASE auto-merge)
   - **AI**: Added standard `.github/copilot-instructions.md`
-  - **Status**: COMPLETED and pushed to GitHub
+  - **Protections**: Applied via GitHub API
+    - Rebase-only merges (squash/merge disabled)
+    - Auto-merge enabled; delete branches on merge
+    - `main` branch: require `run-action` status check, 1 approving review, dismiss
+      stale, linear history, block force pushes and deletions, enforce on admins
+  - **Status**: COMPLETED and fully configured
 
 - [x] **TODO-020**: TypeScript compilation errors - Missing dependencies/types
   - **File**: `web/` directory - multiple TypeScript files
