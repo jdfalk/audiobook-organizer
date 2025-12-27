@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.4 -->
+<!-- version: 1.1.5 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,26 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### December 27, 2025 - Metadata provenance backend completion and action integration
+
+- **Metadata Provenance Backend (SESSION-003)**:
+  - Improved SQLite store methods with proper NullString handling
+  - Added ORDER BY field for consistent metadata state retrieval
+  - Enhanced error messages with format strings for debugging
+  - Comprehensive test coverage: TestGetAudiobookTagsWithProvenance, TestMetadataFieldStateRoundtrip
+  - Effective source priority: override > stored > fetched > file
+  - All handler methods and state persistence fully functional
+
+- **Action Integration Planning (SESSION-005)**:
+  - Created test workflow for get-frontend-config-action integration
+  - Workflow validates action correctly reads .github/repository-config.yml
+  - Outputs validated: dir='web', node-version='22', has-frontend='true'
+  - Test triggers on repository-config.yml or workflow changes
+
+- **Documentation**:
+  - Updated TODO with SESSION-003 completion status and SESSION-005 planning
+  - Added version numbers to modified files per documentation protocol
 
 #### December 27, 2025 - Cross-repo action creation and metadata provenance planning
 
