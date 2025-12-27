@@ -1,17 +1,32 @@
 <!-- file: TODO.md -->
-<!-- version: 1.21.0 -->
+<!-- version: 1.22.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
 
-## 🔄 CURRENT SESSION - December 27, 2025
+## 🔄 CURRENT SESSION - December 27, 2025 (Continued)
 
-### Metadata Provenance Backend Implementation (COMPLETED)
+### Frontend TypeScript Fixes (COMPLETED)
+
+#### **SESSION-006**: TypeScript Type Corrections for Metadata Overrides
+
+- **Status**: ✅ COMPLETED — Fixed frontend type safety issues
+- **Issues Fixed**:
+  1. ✅ Exported `OverridePayload` type from api.ts for component reuse
+  2. ✅ Fixed BookDetail.tsx to properly type override objects
+  3. ✅ Resolved TypeScript compilation error in frontend build
+  4. ✅ Enabled setting fetched_value when applying file source overrides
+- **Files Modified**:
+  - web/src/services/api.ts: Exported OverridePayload type
+  - web/src/pages/BookDetail.tsx: Fixed applySourceValue method types
+- **Commit**: `80c79cc - fix: correct TypeScript types for metadata override payload in BookDetail`
+- **Status**: Pushed to origin/main
+
+### Metadata Provenance Backend Implementation (MERGED)
 
 #### **SESSION-003**: Per-Field Provenance, Overrides, and Locks
 
-- **Status**: ✅ COMPLETED — Backend implementation for metadata field-level
-  tracking
+- **Status**: ✅ COMPLETED — Backend implementation merged to feature branch
 - **Implementation**:
   1. ✅ Validated migration 10 schema (`metadata_states` table) - fully
      functional
@@ -31,6 +46,7 @@
     states
 - **Effective Source Priority**: override > stored > fetched > file
 - **Status**: Merged to main, pushed to origin
+- **PR**: #79 - feat: merge metadata provenance branch with frontend enhancements
 
 ### Action Integration and Testing (IN PROGRESS)
 
