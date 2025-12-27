@@ -1312,18 +1312,28 @@ func (s *SQLiteStore) GetAllUserPreferences() ([]UserPreference, error) {
 
 func (s *SQLiteStore) GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error) {
 	rows, err := s.db.Query(`SELECT book_id, field, fetched_value, override_value, override_locked, updated_at
-		FROM metadata_states WHERE book_id = ?`, bookID)
+		FROM metadata_states WHERE book_id = ? ORDER BY field`, bookID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query metadata_states: %w", err)
 	}
 	defer rows.Close()
 
 	var states []MetadataFieldState
 	for rows.Next() {
 		var state MetadataFieldState
-		if err := rows.Scan(&state.BookID, &state.Field, &state.FetchedValue, &state.OverrideValue, &state.OverrideLocked, &state.UpdatedAt); err != nil {
-			return nil, err
+		var fetchedVal, overrideVal sql.NullString
+
+		if err := rows.Scan(&state.BookID, &state.Field, &fetchedVal, &overrideVal, &state.OverrideLocked, &state.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan metadata_state: %w", err)
 		}
+
+		if fetchedVal.Valid {
+			state.FetchedValue = &fetchedVal.String
+		}
+		if overrideVal.Valid {
+			state.OverrideValue = &overrideVal.String
+		}
+
 		states = append(states, state)
 	}
 	return states, rows.Err()
@@ -1333,21 +1343,25 @@ func (s *SQLiteStore) UpsertMetadataFieldState(state *MetadataFieldState) error 
 	if state == nil {
 		return fmt.Errorf("metadata state cannot be nil")
 	}
-	if state.UpdatedAt.IsZero() {
-		state.UpdatedAt = time.Now()
+	if state.BookID == "" || state.Field == "" {
+		return fmt.Errorf("book_id and field are required")
 	}
+
 	_, err := s.db.Exec(`INSERT INTO metadata_states (book_id, field, fetched_value, override_value, override_locked, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(book_id, field) DO UPDATE SET
 			fetched_value = excluded.fetched_value,
 			override_value = excluded.override_value,
 			override_locked = excluded.override_locked,
-			updated_at = excluded.updated_at`,
-		state.BookID, state.Field, state.FetchedValue, state.OverrideValue, state.OverrideLocked, state.UpdatedAt)
+			updated_at = CURRENT_TIMESTAMP`,
+		state.BookID, state.Field, state.FetchedValue, state.OverrideValue, state.OverrideLocked)
 	return err
 }
 
 func (s *SQLiteStore) DeleteMetadataFieldState(bookID, field string) error {
+	if bookID == "" || field == "" {
+		return fmt.Errorf("book_id and field are required")
+	}
 	_, err := s.db.Exec("DELETE FROM metadata_states WHERE book_id = ? AND field = ?", bookID, field)
 	return err
 }
