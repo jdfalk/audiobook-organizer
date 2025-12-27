@@ -10,23 +10,19 @@
 
 #### **SESSION-003**: Per-Field Provenance, Overrides, and Locks
 
-- **Status**: 🚀 STARTING — Backend implementation for metadata field-level tracking
-- **Scope**: Migration 10 validation; tags endpoint enrichment; UpdateBook handler extension
-- **Context**: Metadata provenance branch (worktree) ready; needs:
-  1. Validate and finalize migration 10 schema (`metadata_states` table)
-  2. Store methods for GetMetadataFieldStates, SaveMetadataFieldState
-  3. Tags endpoint: return per-field effective_value/source/stored/fetched/override/locked
-  4. UpdateBook: accept `overrides` map with value+locked flags
-  5. Handler tests: extend for provenance shape, state persistence
-  6. E2E: Book Detail tags/compare mocks align with new shape
-- **Files**:
-  - `internal/db/migrations/010_metadata_provenance_tracking.sql` (schema)
-  - `internal/db/store.go` (Store interface additions)
-  - `internal/server/handlers.go` (tags endpoint, UpdateBook)
-  - `internal/server/server_test.go` (handler tests)
-  - `web/src/components/BookDetail.tsx` (Tags/Compare display)
-- **Priority**: HIGH — Unblocks metadata branch merge and E2E coverage
-- **Next**: Create feature branch, implement and test schema/store methods, enrich endpoints
+- **Status**: ✅ COMPLETED — Backend implementation for metadata field-level tracking
+- **Implementation**:
+  1. ✅ Validated migration 10 schema (`metadata_states` table) - fully functional
+  2. ✅ Improved Store methods (NullString handling, ORDER BY, error messages)
+  3. ✅ Tags endpoint: returns per-field effective_value/source/stored/fetched/override/locked
+  4. ✅ UpdateBook: accepts `overrides` map with value+locked flags, persists via Store
+  5. ✅ Handler tests: added comprehensive provenance shape and state persistence tests
+  6. ✅ SQLite store methods: GetMetadataFieldStates, UpsertMetadataFieldState, DeleteMetadataFieldState
+- **Tests Added**:
+  - TestGetAudiobookTagsWithProvenance: validates tags endpoint provenance payload
+  - TestMetadataFieldStateRoundtrip: validates CRUD operations on metadata states
+- **Effective Source Priority**: override > stored > fetched > file
+- **Next**: Integrate into audiobook-organizer CI, merge to main
 
 ### Cross-Repo Action Development (COMPLETED)
 
