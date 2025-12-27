@@ -1321,10 +1321,10 @@ func TestGetAudiobookTagsWithProvenance(t *testing.T) {
 	require.NoError(t, err)
 
 	err = database.GlobalStore.UpsertMetadataFieldState(&database.MetadataFieldState{
-		BookID:        book.ID,
-		Field:         "publisher",
-		FetchedValue:  stringPtr(`"Fetched Publisher"`),
-		UpdatedAt:     time.Now(),
+		BookID:       book.ID,
+		Field:        "publisher",
+		FetchedValue: stringPtr(`"Fetched Publisher"`),
+		UpdatedAt:    time.Now(),
 	})
 	require.NoError(t, err)
 
@@ -1336,7 +1336,7 @@ func TestGetAudiobookTagsWithProvenance(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var response struct {
-		MediaInfo map[string]interface{}                  `json:"media_info"`
+		MediaInfo map[string]interface{}                      `json:"media_info"`
 		Tags      map[string]database.MetadataProvenanceEntry `json:"tags"`
 	}
 
@@ -1357,7 +1357,7 @@ func TestGetAudiobookTagsWithProvenance(t *testing.T) {
 	assert.Equal(t, "Original Publisher", publisherTag.EffectiveValue)
 	assert.Equal(t, "Fetched Publisher", publisherTag.FetchedValue)
 
-	// Verify title uses stored value  
+	// Verify title uses stored value
 	titleTag := response.Tags["title"]
 	assert.Equal(t, "stored", titleTag.EffectiveSource)
 	assert.Equal(t, "Test Book", titleTag.EffectiveValue)
