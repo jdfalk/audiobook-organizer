@@ -357,7 +357,7 @@ export async function deleteBook(
   if (!response.ok) throw new Error('Failed to delete audiobook');
 }
 
-type OverridePayload = {
+export type OverridePayload = {
   value?: unknown;
   locked?: boolean;
   fetched_value?: unknown;

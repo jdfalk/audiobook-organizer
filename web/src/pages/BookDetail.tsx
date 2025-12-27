@@ -45,7 +45,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import StorageIcon from '@mui/icons-material/Storage';
-import type { Book, BookTags } from '../services/api';
+import type { Book, BookTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
@@ -330,16 +330,17 @@ export const BookDetail = () => {
     setActionLoading(true);
     setActionLabel(`Applying ${source} value...`);
     try {
+      const override: OverridePayload = { value, locked: true };
+      if (source === 'file') {
+        override.fetched_value = entry.fetched;
+      }
       const payload: Partial<Book> & {
-        overrides: Record<string, { value: unknown; locked: boolean }>;
+        overrides: Record<string, OverridePayload>;
       } = {
         overrides: {
-          [field]: { value, locked: true },
+          [field]: override,
         },
-      } as never;
-      if (source === 'file') {
-        payload.overrides[field].fetched_value = entry.fetched;
-      }
+      };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
       // Update local tags state to reflect new stored/override value
