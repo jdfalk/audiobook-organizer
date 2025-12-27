@@ -1,12 +1,12 @@
 <!-- file: TODO.md -->
-<!-- version: 1.20.0 -->
+<!-- version: 1.21.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
 
 ## 🔄 CURRENT SESSION - December 27, 2025
 
-### Metadata Provenance Backend Implementation (STARTING)
+### Metadata Provenance Backend Implementation (COMPLETED)
 
 #### **SESSION-003**: Per-Field Provenance, Overrides, and Locks
 
@@ -22,7 +22,27 @@
   - TestGetAudiobookTagsWithProvenance: validates tags endpoint provenance payload
   - TestMetadataFieldStateRoundtrip: validates CRUD operations on metadata states
 - **Effective Source Priority**: override > stored > fetched > file
-- **Next**: Integrate into audiobook-organizer CI, merge to main
+- **Next**: Push to main and integrate action usage
+
+### Action Integration and Next Steps (STARTING)
+
+#### **SESSION-005**: Integration of get-frontend-config-action
+
+- **Status**: 🚀 STARTING
+- **Scope**: Integrate get-frontend-config-action into audiobook-organizer CI
+- **Tasks**:
+  1. [ ] Create test workflow in audiobook-organizer to verify action works
+  2. [ ] Verify outputs from action (dir, node-version, has-frontend)
+  3. [ ] Update .github/workflows/frontend-ci.yml to use action
+  4. [ ] Push and validate workflow runs successfully
+  5. [ ] Document action usage pattern for other repos
+  6. [ ] Integrate into target repos (ghcommon, others) where applicable
+- **Workflow Changes**:
+  - Add `get-frontend-config-action` step to read .github/repository-config.yml
+  - Pass outputs to subsequent build/lint/test steps
+  - Ensure dynamic frontend dir and node version setup
+- **Priority**: MEDIUM - Improves CI flexibility and config management
+- **Next**: After action integration, focus on frontend provenance UI integration
 
 ### Cross-Repo Action Development (COMPLETED)
 
