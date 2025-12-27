@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.19.1 -->
+<!-- version: 1.19.2 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -319,7 +319,7 @@
 
 ### Node.js/NPM Build Issues (2 items)
 
-- [ ] **TODO-012**: Fix npm cache path resolution error
+- [x] **TODO-012**: Fix npm cache path resolution error
   - **File**: `.github/workflows/ci.yml` or reusable workflow
   - **Issue**: "Some specified paths were not resolved, unable to cache
     dependencies"
@@ -328,7 +328,9 @@
     cache-dependency-path configuration
   - **Priority**: High
   - **Category**: CI/CD
-  - **Status**: Needs investigation of reusable workflow
+  - **Status**: COMPLETED — Hardened npm cache in ghcommon reusable CI (ensured
+    cache dirs exist; cache `~/.npm` and `~/.cache/npm`; added Node version to
+    keys). Broadened local repo-config paths accordingly.
 
 - [ ] **TODO-013**: Fix punycode deprecation warning
   - **File**: `web/package.json` or dependencies
@@ -386,6 +388,16 @@
   - **Status**: COMPLETED - Migrated to eslint.config.mjs with ESLint 9
   - **COMPLETED**: Created eslint.config.mjs, removed .eslintrc.json, all
     linting passing
+
+### Cross-Repo Actionization
+
+- [x] **TODO-ACT-001**: Create `get-frontend-config-action` repo and implement
+      composite action to read `.github/repository-config.yml`
+  - **Outputs**: `dir`, `node-version`, `has-frontend`
+  - **Workflows**: Added `test-action.yml`, `branch-cleanup.yml` (delete head
+    branch after merge), and `auto-merge.yml` (label-driven REBASE auto-merge)
+  - **AI**: Added standard `.github/copilot-instructions.md`
+  - **Status**: COMPLETED and pushed to GitHub
 
 - [x] **TODO-020**: TypeScript compilation errors - Missing dependencies/types
   - **File**: `web/` directory - multiple TypeScript files
