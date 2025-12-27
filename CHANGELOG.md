@@ -17,8 +17,8 @@
   `~/.cache/npm` alongside `~/.npm`
 - Coordinated with ghcommon@main to harden reusable CI workflow npm caching
   (paths, keys, Node version inclusion)
-  - Implemented cache directory creation and expanded npm cache paths
-    (`~/.npm`, `~/.cache/npm`), and added Node version in cache keys
+  - Implemented cache directory creation and expanded npm cache paths (`~/.npm`,
+    `~/.cache/npm`), and added Node version in cache keys
   - Created cross-repo action `get-frontend-config-action` to standardize
     frontend config discovery from `repository-config.yml`; added branch cleanup
     and label-driven auto-merge workflows
