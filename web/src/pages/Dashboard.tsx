@@ -82,18 +82,28 @@ export function Dashboard() {
       ]);
 
       console.log('[Dashboard] System status:', systemStatus);
-      console.log('[Dashboard] Import path_count:', systemStatus.library.folder_count);
+      console.log(
+        '[Dashboard] Import path_count:',
+        systemStatus.library.folder_count
+      );
       console.log('[Dashboard] Book count:', bookCount);
 
-      const libraryBooks = systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
+      const libraryBooks =
+        systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
       const importBooks =
-        systemStatus.import_book_count ?? systemStatus.import_paths?.book_count ?? 0;
-      const totalBooks = systemStatus.total_book_count ?? libraryBooks + importBooks;
+        systemStatus.import_book_count ??
+        systemStatus.import_paths?.book_count ??
+        0;
+      const totalBooks =
+        systemStatus.total_book_count ?? libraryBooks + importBooks;
       const librarySizeBytes =
         systemStatus.library_size_bytes ?? systemStatus.library.total_size ?? 0;
       const importSizeBytes =
-        systemStatus.import_size_bytes ?? systemStatus.import_paths?.total_size ?? 0;
-      const totalSizeBytes = systemStatus.total_size_bytes ?? librarySizeBytes + importSizeBytes;
+        systemStatus.import_size_bytes ??
+        systemStatus.import_paths?.total_size ??
+        0;
+      const totalSizeBytes =
+        systemStatus.total_size_bytes ?? librarySizeBytes + importSizeBytes;
 
       setStats({
         library_books: libraryBooks,
@@ -109,17 +119,19 @@ export function Dashboard() {
       });
 
       // Convert recent operations to dashboard format
-      const recentOps = systemStatus.operations.recent.slice(0, 5).map((op) => ({
-        id: op.id,
-        type: op.type,
-        status: (op.status === 'completed'
-          ? 'success'
-          : op.status === 'failed'
-            ? 'error'
-            : 'running') as 'success' | 'error' | 'running',
-        message: op.message || `${op.type} operation`,
-        timestamp: op.created_at,
-      }));
+      const recentOps = systemStatus.operations.recent
+        .slice(0, 5)
+        .map((op) => ({
+          id: op.id,
+          type: op.type,
+          status: (op.status === 'completed'
+            ? 'success'
+            : op.status === 'failed'
+              ? 'error'
+              : 'running') as 'success' | 'error' | 'running',
+          message: op.message || `${op.type} operation`,
+          timestamp: op.created_at,
+        }));
 
       setOperations(recentOps);
     } catch (error) {
@@ -144,7 +156,11 @@ export function Dashboard() {
     <Card>
       <CardActionArea onClick={onClick} disabled={!onClick}>
         <CardContent>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Box
+            display="flex"
+            alignItems="center"
+            justifyContent="space-between"
+          >
             <Box>
               <Typography color="text.secondary" gutterBottom>
                 {title}
@@ -285,7 +301,12 @@ export function Dashboard() {
                       <Chip
                         label={op.type}
                         size="small"
-                        color={getStatusColor(op.status) as 'success' | 'error' | 'default'}
+                        color={
+                          getStatusColor(op.status) as
+                            | 'success'
+                            | 'error'
+                            | 'default'
+                        }
                         variant="outlined"
                       />
                     </Box>

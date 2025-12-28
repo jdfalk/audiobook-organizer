@@ -62,7 +62,10 @@ export function Sidebar({ open, onClose, drawerWidth }: SidebarProps) {
   );
 
   return (
-    <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
+    <Box
+      component="nav"
+      sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+    >
       {/* Mobile drawer */}
       <Drawer
         variant="temporary"
