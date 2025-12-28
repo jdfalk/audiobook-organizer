@@ -32,7 +32,7 @@ func GetAudiobooks(req models.AudiobookListRequest) (models.AudiobookListRespons
 
 	// Build query
 	baseQuery := `
-		SELECT b.id, b.title, b.author_id, b.series_id, b.series_sequence, 
+		SELECT b.id, b.title, b.author_id, b.series_id, b.series_sequence,
 		       b.file_path, b.format, b.duration,
 		       a.id as author_id, a.name as author_name,
 		       s.id as series_id, s.name as series_name
@@ -158,7 +158,7 @@ func GetAudiobooks(req models.AudiobookListRequest) (models.AudiobookListRespons
 // GetAudiobookByID returns a specific audiobook by ID
 func GetAudiobookByID(id int) (*models.Audiobook, error) {
 	query := `
-		SELECT b.id, b.title, b.author_id, b.series_id, b.series_sequence, 
+		SELECT b.id, b.title, b.author_id, b.series_id, b.series_sequence,
 		       b.file_path, b.format, b.duration,
 		       a.id as author_id, a.name as author_name,
 		       s.id as series_id, s.name as series_name
