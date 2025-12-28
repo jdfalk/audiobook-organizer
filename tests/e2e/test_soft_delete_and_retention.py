@@ -3,10 +3,11 @@
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 import time
+
 import pytest
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 def wait_for_text(driver, text, timeout=10):
@@ -58,9 +59,7 @@ def test_library_soft_deleted_section(driver, base_url):
     wait_for_text(driver, "Soft-Deleted Books")
 
     # Expect either empty-state alert or a list with purge/restore buttons present
-    soft_deleted_heading = driver.find_element(
-        By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]"
-    )
+    soft_deleted_heading = driver.find_element(By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]")
     assert soft_deleted_heading.is_displayed()
 
     # If list exists, buttons should be present

@@ -3,6 +3,7 @@
 # guid: 3f2e1d4c-5b6a-7c8d-9e0f-1a2b3c4d5e6f
 
 import os
+
 import pytest
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
