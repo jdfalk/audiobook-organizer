@@ -58,14 +58,18 @@ export const BookDetail = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionLabel, setActionLabel] = useState<string | null>(null);
-  const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(
-    null
-  );
-  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'versions' | 'tags' | 'compare'>(
-    'info'
-  );
+  const [alert, setAlert] = useState<{
+    severity: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    'info' | 'files' | 'versions' | 'tags' | 'compare'
+  >('info');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteOptions, setDeleteOptions] = useState({ softDelete: true, blockHash: true });
+  const [deleteOptions, setDeleteOptions] = useState({
+    softDelete: true,
+    blockHash: true,
+  });
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -84,7 +88,10 @@ export const BookDetail = () => {
       setBook(data);
     } catch (error) {
       console.error('Failed to load book', error);
-      setAlert({ severity: 'error', message: 'Failed to load audiobook details.' });
+      setAlert({
+        severity: 'error',
+        message: 'Failed to load audiobook details.',
+      });
     } finally {
       setLoading(false);
     }
@@ -147,7 +154,9 @@ export const BookDetail = () => {
   const handleDelete = async () => {
     if (!book) return;
     setActionLoading(true);
-    setActionLabel(deleteOptions.softDelete ? 'Soft deleting...' : 'Deleting...');
+    setActionLabel(
+      deleteOptions.softDelete ? 'Soft deleting...' : 'Deleting...'
+    );
     try {
       await api.deleteBook(book.id, {
         softDelete: deleteOptions.softDelete,
@@ -193,7 +202,10 @@ export const BookDetail = () => {
     setActionLabel('Purging...');
     try {
       await api.deleteBook(book.id, { softDelete: false, blockHash: false });
-      setAlert({ severity: 'success', message: 'Audiobook permanently deleted.' });
+      setAlert({
+        severity: 'success',
+        message: 'Audiobook permanently deleted.',
+      });
       navigate('/library');
     } catch (error) {
       console.error('Failed to purge audiobook', error);
@@ -213,7 +225,9 @@ export const BookDetail = () => {
       setBook(result.book);
       setAlert({
         severity: 'success',
-        message: result.message || `Metadata refreshed from ${result.source || 'provider'}.`,
+        message:
+          result.message ||
+          `Metadata refreshed from ${result.source || 'provider'}.`,
       });
       setActiveTab('info');
     } catch (error) {
@@ -320,12 +334,19 @@ export const BookDetail = () => {
     };
   };
 
-  const applySourceValue = async (field: string, source: 'file' | 'fetched' | 'override') => {
+  const applySourceValue = async (
+    field: string,
+    source: 'file' | 'fetched' | 'override'
+  ) => {
     if (!book) return;
     const entry = getFieldSources(field);
     if (!entry) return;
     const value =
-      source === 'file' ? entry.file : source === 'fetched' ? entry.fetched : entry.override;
+      source === 'file'
+        ? entry.file
+        : source === 'fetched'
+          ? entry.fetched
+          : entry.override;
     if (value === undefined) return;
     setActionLoading(true);
     setActionLabel(`Applying ${source} value...`);
@@ -396,12 +417,17 @@ export const BookDetail = () => {
           (updated as { effective_value?: unknown }).effective_value ??
           null;
         const effectiveSource =
-          (updated.stored_value ?? updated.fetched_value ?? updated.file_value) !== undefined
-            ? updated.stored_value !== undefined && updated.stored_value !== null
+          (updated.stored_value ??
+            updated.fetched_value ??
+            updated.file_value) !== undefined
+            ? updated.stored_value !== undefined &&
+              updated.stored_value !== null
               ? 'stored'
-              : updated.fetched_value !== undefined && updated.fetched_value !== null
+              : updated.fetched_value !== undefined &&
+                  updated.fetched_value !== null
                 ? 'fetched'
-                : updated.file_value !== undefined && updated.file_value !== null
+                : updated.file_value !== undefined &&
+                    updated.file_value !== null
                   ? 'file'
                   : undefined
             : undefined;
@@ -438,7 +464,8 @@ export const BookDetail = () => {
         narrator: updated.narrator,
         series_position: updated.series_number,
         audiobook_release_year:
-          (updated as unknown as { audiobook_release_year?: number }).audiobook_release_year ||
+          (updated as unknown as { audiobook_release_year?: number })
+            .audiobook_release_year ||
           updated.year ||
           book.audiobook_release_year,
         print_year: updated.year || book.print_year,
@@ -464,7 +491,12 @@ export const BookDetail = () => {
 
   if (loading) {
     return (
-      <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+      <Box
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        height="100%"
+      >
         <CircularProgress />
       </Box>
     );
@@ -474,7 +506,11 @@ export const BookDetail = () => {
     return (
       <Box p={3}>
         <Alert severity="error">Audiobook not found.</Alert>
-        <Button startIcon={<ArrowBackIcon />} sx={{ mt: 2 }} onClick={() => navigate('/library')}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          sx={{ mt: 2 }}
+          onClick={() => navigate('/library')}
+        >
           Back to Library
         </Button>
       </Box>
@@ -500,14 +536,28 @@ export const BookDetail = () => {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         {alert ? (
-          <Alert severity={alert.severity} onClose={() => setAlert(null)} sx={{ width: '100%' }}>
+          <Alert
+            severity={alert.severity}
+            onClose={() => setAlert(null)}
+            sx={{ width: '100%' }}
+          >
             {alert.message}
           </Alert>
         ) : undefined}
       </Snackbar>
 
-      <Stack direction="row" alignItems="center" spacing={2} mb={3} flexWrap="wrap">
-        <Button startIcon={<ArrowBackIcon />} variant="text" onClick={() => navigate('/library')}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={2}
+        mb={3}
+        flexWrap="wrap"
+      >
+        <Button
+          startIcon={<ArrowBackIcon />}
+          variant="text"
+          onClick={() => navigate('/library')}
+        >
           Back to Library
         </Button>
         <Stack direction="row" spacing={2} alignItems="center">
@@ -526,14 +576,24 @@ export const BookDetail = () => {
               <Typography variant="h4" component="h1">
                 {book.title || 'Untitled'}
               </Typography>
-              {isSoftDeleted && <Chip label="Soft Deleted" color="warning" size="small" />}
-              {book.library_state && (
-                <Chip label={`State: ${book.library_state}`} color="info" size="small" />
+              {isSoftDeleted && (
+                <Chip label="Soft Deleted" color="warning" size="small" />
               )}
-              {book.is_primary_version && <Chip label="Primary Version" color="primary" />}
+              {book.library_state && (
+                <Chip
+                  label={`State: ${book.library_state}`}
+                  color="info"
+                  size="small"
+                />
+              )}
+              {book.is_primary_version && (
+                <Chip label="Primary Version" color="primary" />
+              )}
             </Box>
             <Typography variant="subtitle1" color="text.secondary">
-              {book.author_name || book.author_id ? `By ${book.author_name || book.author_id}` : ''}
+              {book.author_name || book.author_id
+                ? `By ${book.author_name || book.author_id}`
+                : ''}
             </Typography>
           </Stack>
         </Stack>
@@ -544,7 +604,12 @@ export const BookDetail = () => {
           severity="warning"
           action={
             <Stack direction="row" spacing={1}>
-              <Button color="inherit" size="small" onClick={handleRestore} disabled={actionLoading}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={handleRestore}
+                disabled={actionLoading}
+              >
                 Restore
               </Button>
               <Button
@@ -559,13 +624,17 @@ export const BookDetail = () => {
           }
           sx={{ mb: 2 }}
         >
-          Marked for deletion on {formatDateTime(book.marked_for_deletion_at)}. Restore to keep the
-          book or purge to remove it permanently.
+          Marked for deletion on {formatDateTime(book.marked_for_deletion_at)}.
+          Restore to keep the book or purge to remove it permanently.
         </Alert>
       )}
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between">
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          justifyContent="space-between"
+        >
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
               icon={<AccessTimeIcon />}
@@ -586,7 +655,12 @@ export const BookDetail = () => {
               />
             )}
           </Stack>
-          <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+          <Stack
+            direction="row"
+            spacing={1}
+            flexWrap="wrap"
+            justifyContent="flex-end"
+          >
             <Button
               variant="outlined"
               startIcon={<EditIcon />}
@@ -678,7 +752,10 @@ export const BookDetail = () => {
               { label: 'Publisher', value: book.publisher },
               { label: 'Language', value: book.language },
               { label: 'Edition', value: book.edition },
-              { label: 'Release Year', value: book.audiobook_release_year || book.print_year },
+              {
+                label: 'Release Year',
+                value: book.audiobook_release_year || book.print_year,
+              },
               { label: 'Work ID', value: book.work_id },
               { label: 'Library State', value: book.library_state },
               { label: 'Quantity', value: book.quantity },
@@ -704,7 +781,9 @@ export const BookDetail = () => {
                     >
                       {item.label}
                     </Typography>
-                    <Typography variant="body1">{item.value as string}</Typography>
+                    <Typography variant="body1">
+                      {item.value as string}
+                    </Typography>
                   </Box>
                 </Grid>
               ))}
@@ -735,10 +814,15 @@ export const BookDetail = () => {
                 { label: 'Original Filename', value: book.original_filename },
                 { label: 'Format', value: book.format?.toUpperCase() },
                 { label: 'Codec', value: book.codec },
-                { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
+                {
+                  label: 'Bitrate',
+                  value: book.bitrate ? `${book.bitrate} kbps` : undefined,
+                },
                 {
                   label: 'Sample Rate',
-                  value: book.sample_rate ? `${book.sample_rate} Hz` : undefined,
+                  value: book.sample_rate
+                    ? `${book.sample_rate} Hz`
+                    : undefined,
                 },
                 { label: 'Channels', value: book.channels },
                 { label: 'Bit Depth', value: book.bit_depth },
@@ -764,7 +848,10 @@ export const BookDetail = () => {
                       >
                         {item.label}
                       </Typography>
-                      <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                      <Typography
+                        variant="body1"
+                        sx={{ wordBreak: 'break-all' }}
+                      >
                         {item.value as string}
                       </Typography>
                     </Box>
@@ -791,13 +878,21 @@ export const BookDetail = () => {
                         height: '100%',
                       }}
                     >
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="subtitle2">{item.label}</Typography>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography variant="subtitle2">
+                          {item.label}
+                        </Typography>
                         <Tooltip title="Copy to clipboard">
                           <IconButton
                             size="small"
                             onClick={() => {
-                              navigator.clipboard.writeText(item.value as string);
+                              navigator.clipboard.writeText(
+                                item.value as string
+                              );
                               setAlert({
                                 severity: 'success',
                                 message: `${item.label} copied`,
@@ -808,7 +903,10 @@ export const BookDetail = () => {
                           </IconButton>
                         </Tooltip>
                       </Stack>
-                      <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ wordBreak: 'break-all' }}
+                      >
                         {item.value as string}
                       </Typography>
                     </Box>
@@ -846,25 +944,47 @@ export const BookDetail = () => {
                     p: 2,
                     borderRadius: 1,
                     border: '1px solid',
-                    borderColor: version.id === book.id ? 'primary.main' : 'divider',
-                    bgcolor: version.id === book.id ? 'primary.light' : 'background.paper',
+                    borderColor:
+                      version.id === book.id ? 'primary.main' : 'divider',
+                    bgcolor:
+                      version.id === book.id
+                        ? 'primary.light'
+                        : 'background.paper',
                   }}
                 >
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="center">
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1}
+                    alignItems="center"
+                  >
                     <Box flex={1}>
                       <Typography variant="subtitle1">
-                        {version.title} {version.id === book.id ? '(Current)' : ''}
+                        {version.title}{' '}
+                        {version.id === book.id ? '(Current)' : ''}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        display="block"
+                      >
                         {version.file_path}
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={1} flexWrap="wrap">
-                      {version.is_primary_version && <Chip label="Primary" color="primary" />}
-                      {version.quality && <Chip label={version.quality} color="success" />}
-                      {version.codec && <Chip label={version.codec} variant="outlined" />}
+                      {version.is_primary_version && (
+                        <Chip label="Primary" color="primary" />
+                      )}
+                      {version.quality && (
+                        <Chip label={version.quality} color="success" />
+                      )}
+                      {version.codec && (
+                        <Chip label={version.codec} variant="outlined" />
+                      )}
                       {version.format && (
-                        <Chip label={version.format.toUpperCase()} variant="outlined" />
+                        <Chip
+                          label={version.format.toUpperCase()}
+                          variant="outlined"
+                        />
                       )}
                     </Stack>
                   </Stack>
@@ -936,16 +1056,21 @@ export const BookDetail = () => {
                         : '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Channels: {tags?.media_info?.channels ?? book.channels ?? '—'}
+                    Channels:{' '}
+                    {tags?.media_info?.channels ?? book.channels ?? '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Bit Depth: {tags?.media_info?.bit_depth ?? book.bit_depth ?? '—'}
+                    Bit Depth:{' '}
+                    {tags?.media_info?.bit_depth ?? book.bit_depth ?? '—'}
                   </Typography>
                   <Typography variant="body2">
                     Quality: {tags?.media_info?.quality || book.quality || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Duration: {formatDuration(tags?.media_info?.duration || book.duration) || '—'}
+                    Duration:{' '}
+                    {formatDuration(
+                      tags?.media_info?.duration || book.duration
+                    ) || '—'}
                   </Typography>
                 </Stack>
               </Box>
@@ -965,19 +1090,34 @@ export const BookDetail = () => {
                   Metadata (Current)
                 </Typography>
                 <Stack spacing={1}>
-                  <Typography variant="body2">Title: {book.title || '—'}</Typography>
-                  <Typography variant="body2">Author: {book.author_name || '—'}</Typography>
-                  <Typography variant="body2">Narrator: {book.narrator || '—'}</Typography>
-                  <Typography variant="body2">Series: {book.series_name || '—'}</Typography>
+                  <Typography variant="body2">
+                    Title: {book.title || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Author: {book.author_name || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Narrator: {book.narrator || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Series: {book.series_name || '—'}
+                  </Typography>
                   <Typography variant="body2">
                     Series Position: {book.series_position ?? '—'}
                   </Typography>
-                  <Typography variant="body2">Publisher: {book.publisher || '—'}</Typography>
-                  <Typography variant="body2">Language: {book.language || '—'}</Typography>
                   <Typography variant="body2">
-                    Year: {book.audiobook_release_year || book.print_year || '—'}
+                    Publisher: {book.publisher || '—'}
                   </Typography>
-                  <Typography variant="body2">ISBN: {book.isbn || '—'}</Typography>
+                  <Typography variant="body2">
+                    Language: {book.language || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    Year:{' '}
+                    {book.audiobook_release_year || book.print_year || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    ISBN: {book.isbn || '—'}
+                  </Typography>
                 </Stack>
               </Box>
             </Grid>
@@ -1006,7 +1146,12 @@ export const BookDetail = () => {
                       >
                         {key.replace(/_/g, ' ')}
                       </Typography>
-                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        flexWrap="wrap"
+                      >
                         <Typography variant="body2">
                           {values.effective_value ??
                             values.override_value ??
@@ -1016,10 +1161,19 @@ export const BookDetail = () => {
                             '—'}
                         </Typography>
                         {values.effective_source && (
-                          <Chip size="small" label={values.effective_source} variant="outlined" />
+                          <Chip
+                            size="small"
+                            label={values.effective_source}
+                            variant="outlined"
+                          />
                         )}
                         {values.override_locked && (
-                          <Chip size="small" label="locked" color="warning" variant="outlined" />
+                          <Chip
+                            size="small"
+                            label="locked"
+                            color="warning"
+                            variant="outlined"
+                          />
                         )}
                       </Stack>
                     </Box>
@@ -1029,8 +1183,8 @@ export const BookDetail = () => {
             </Box>
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
-            Showing current metadata and media info. File-tag provenance will populate here when
-            available from the backend.
+            Showing current metadata and media info. File-tag provenance will
+            populate here when available from the backend.
           </Alert>
         </Paper>
       )}
@@ -1080,13 +1234,27 @@ export const BookDetail = () => {
                       <TableCell>{entry?.fetched ?? '—'}</TableCell>
                       <TableCell>{entry?.stored ?? '—'}</TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          flexWrap="wrap"
+                        >
                           <span>{entry?.override ?? '—'}</span>
                           {entry?.locked && (
-                            <Chip label="locked" size="small" color="warning" sx={{ ml: 0.5 }} />
+                            <Chip
+                              label="locked"
+                              size="small"
+                              color="warning"
+                              sx={{ ml: 0.5 }}
+                            />
                           )}
                           {entry?.source && (
-                            <Chip label={entry.source} size="small" variant="outlined" />
+                            <Chip
+                              label={entry.source}
+                              size="small"
+                              variant="outlined"
+                            />
                           )}
                         </Stack>
                       </TableCell>
@@ -1127,14 +1295,17 @@ export const BookDetail = () => {
             </Table>
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
-            Locked overrides prevent future fetch/tag updates from changing the field. Apply a
-            source to set/lock a field; unlock/clear will be supported when backend exposes override
-            flags.
+            Locked overrides prevent future fetch/tag updates from changing the
+            field. Apply a source to set/lock a field; unlock/clear will be
+            supported when backend exposes override flags.
           </Alert>
         </Paper>
       )}
 
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+      >
         <DialogTitle>Delete Audiobook</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body1" gutterBottom>
@@ -1147,7 +1318,10 @@ export const BookDetail = () => {
               <Checkbox
                 checked={deleteOptions.softDelete}
                 onChange={(e) =>
-                  setDeleteOptions((prev) => ({ ...prev, softDelete: e.target.checked }))
+                  setDeleteOptions((prev) => ({
+                    ...prev,
+                    softDelete: e.target.checked,
+                  }))
                 }
               />
             }
@@ -1158,15 +1332,18 @@ export const BookDetail = () => {
               <Checkbox
                 checked={deleteOptions.blockHash}
                 onChange={(e) =>
-                  setDeleteOptions((prev) => ({ ...prev, blockHash: e.target.checked }))
+                  setDeleteOptions((prev) => ({
+                    ...prev,
+                    blockHash: e.target.checked,
+                  }))
                 }
               />
             }
             label="Prevent reimporting this file (block hash)"
           />
           <Alert severity="warning" sx={{ mt: 2 }}>
-            Soft deleted books can be restored or purged later. Blocking the hash prevents reimports
-            of the same file.
+            Soft deleted books can be restored or purged later. Blocking the
+            hash prevents reimports of the same file.
           </Alert>
         </DialogContent>
         <DialogActions>
@@ -1186,16 +1363,22 @@ export const BookDetail = () => {
         <DialogTitle>Purge Audiobook</DialogTitle>
         <DialogContent dividers>
           <Alert severity="error" sx={{ mb: 2 }}>
-            This permanently removes the record and associated files. This cannot be undone.
+            This permanently removes the record and associated files. This
+            cannot be undone.
           </Alert>
           <Typography>
-            Are you sure you want to purge <strong>{book.title || 'this audiobook'}</strong> from
-            the library?
+            Are you sure you want to purge{' '}
+            <strong>{book.title || 'this audiobook'}</strong> from the library?
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPurgeDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handlePurge} color="error" variant="contained" disabled={actionLoading}>
+          <Button
+            onClick={handlePurge}
+            color="error"
+            variant="contained"
+            disabled={actionLoading}
+          >
             Purge Permanently
           </Button>
         </DialogActions>
