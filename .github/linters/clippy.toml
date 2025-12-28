@@ -8,7 +8,7 @@
 # Cognitive complexity threshold
 cognitive-complexity-threshold = 25
 
-# Cyclomatic complexity threshold  
+# Cyclomatic complexity threshold
 cyclomatic-complexity-threshold = 15
 
 # Documentation requirements
@@ -39,7 +39,7 @@ large-error-types-threshold = 128
 # Large futures threshold
 large-futures-threshold = 16384
 
-# Large stack arrays threshold  
+# Large stack arrays threshold
 large-stack-arrays-threshold = 512000
 
 # Large types passed by value threshold
