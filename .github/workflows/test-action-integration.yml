@@ -1,5 +1,5 @@
 # file: .github/workflows/test-action-integration.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: test-action-integration-001
 
 name: Test Frontend Config Action Integration
@@ -32,7 +32,7 @@ jobs:
 
       - name: Get frontend configuration
         id: frontend-config
-        uses: jdfalk/get-frontend-config-action@main
+        uses: jdfalk/get-frontend-config-action@v1
         with:
           repository-config: ''
           config-file: '.github/repository-config.yml'
