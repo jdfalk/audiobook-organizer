@@ -1,10 +1,16 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.0 -->
+<!-- version: 1.22.1 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
 
 ## 🔄 CURRENT SESSION - December 27, 2025 (Continued)
+
+### Documentation & Cleanup (P3)
+
+- CHANGELOG bumped to 1.1.6 (Dec 28, 2025)
+- TODO refreshed (statuses aligned for SESSION-003/005)
+- SESSION_SUMMARY update planned with outstanding items
 
 ### Frontend TypeScript Fixes (COMPLETED)
 

@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.5 -->
+<!-- version: 1.1.6 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,18 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### December 28, 2025 - NEXT_STEPS kickoff and documentation updates
+
+- **P0: PR #79 Merge Validation**: monitor CI and merge when green; verify main
+  stability after merge
+- **P1: Frontend E2E Tests (Provenance)**: plan coverage for lock/unlock
+  controls and effective source display
+- **P2: Action Integration Validation**: validate test-action-integration.yml
+  outputs (`dir`, `node-version`, `has-frontend`); consider integration into
+  frontend-ci.yml
+- **P3: Documentation & Cleanup**: bump CHANGELOG to 1.1.6; refresh TODO with
+  statuses; update SESSION_SUMMARY with outstanding items
 
 #### December 27, 2025 - Metadata provenance backend completion and action integration
 
