@@ -19,7 +19,8 @@
 - **Files Modified**:
   - web/src/services/api.ts: Exported OverridePayload type
   - web/src/pages/BookDetail.tsx: Fixed applySourceValue method types
-- **Commit**: `80c79cc - fix: correct TypeScript types for metadata override payload in BookDetail`
+- **Commit**:
+  `80c79cc - fix: correct TypeScript types for metadata override payload in BookDetail`
 - **Status**: Pushed to origin/main
 
 ### Metadata Provenance Backend Implementation (MERGED)
@@ -46,7 +47,8 @@
     states
 - **Effective Source Priority**: override > stored > fetched > file
 - **Status**: Merged to main, pushed to origin
-- **PR**: #79 - feat: merge metadata provenance branch with frontend enhancements
+- **PR**: #79 - feat: merge metadata provenance branch with frontend
+  enhancements
 
 ### Action Integration and Testing (IN PROGRESS)
 
