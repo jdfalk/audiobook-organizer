@@ -162,11 +162,13 @@ docker-matrix:
 
 1. **Multi-stage builds** for optimization
 2. **Platform arguments** for cross-compilation:
+
    ```dockerfile
    ARG TARGETOS
    ARG TARGETARCH
    ARG BUILDPLATFORM
    ```
+
 3. **Non-root user** for security
 4. **Health checks** for container orchestration
 
