@@ -28,7 +28,6 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 class RepositoryCleanup:
@@ -47,9 +46,7 @@ class RepositoryCleanup:
         self.dry_run = dry_run
         self.interactive = interactive
         self.log_file = (
-            Path.home()
-            / "logs"
-            / f"repo-cleanup-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+            Path.home() / "logs" / f"repo-cleanup-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         )
 
         # Ensure logs directory exists
@@ -92,9 +89,7 @@ class RepositoryCleanup:
         )
         self.logger = logging.getLogger(__name__)
 
-    def _run_command(
-        self, cmd: List[str], cwd: Optional[Path] = None
-    ) -> Tuple[bool, str, str]:
+    def _run_command(self, cmd: list[str], cwd: Path | None = None) -> tuple[bool, str, str]:
         """
         Run a shell command and return success status and output.
 
@@ -106,9 +101,7 @@ class RepositoryCleanup:
             Tuple of (success, stdout, stderr)
         """
         try:
-            result = subprocess.run(
-                cmd, cwd=cwd, capture_output=True, text=True, timeout=30
-            )
+            result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=30)
             return result.returncode == 0, result.stdout.strip(), result.stderr.strip()
         except subprocess.TimeoutExpired:
             return False, "", "Command timed out"
@@ -119,7 +112,7 @@ class RepositoryCleanup:
         """Check if a directory is a Git repository."""
         return (path / ".git").exists()
 
-    def _get_remote_url(self, repo_path: Path) -> Optional[str]:
+    def _get_remote_url(self, repo_path: Path) -> str | None:
         """Get the remote URL for a Git repository."""
         success, stdout, stderr = self._run_command(
             ["git", "remote", "get-url", "origin"], repo_path
@@ -128,7 +121,7 @@ class RepositoryCleanup:
             return stdout.strip()
         return None
 
-    def _parse_github_url(self, url: str) -> Optional[Tuple[str, str]]:
+    def _parse_github_url(self, url: str) -> tuple[str, str] | None:
         """
         Parse GitHub URL to extract owner and repository name.
 
@@ -155,7 +148,7 @@ class RepositoryCleanup:
             return parts[0], parts[1]
         return None
 
-    def _get_repository_info(self, owner: str, repo: str) -> Optional[Dict]:
+    def _get_repository_info(self, owner: str, repo: str) -> dict | None:
         """
         Get repository information from GitHub API using gh CLI.
 
@@ -186,9 +179,7 @@ class RepositoryCleanup:
             self.logger.warning(f"Failed to get info for {owner}/{repo}: {stderr}")
             return None
 
-    def _should_remove_repository(
-        self, repo_info: Dict, repo_path: Path
-    ) -> Tuple[bool, str]:
+    def _should_remove_repository(self, repo_info: dict, repo_path: Path) -> tuple[bool, str]:
         """
         Determine if a repository should be removed based on its status.
 
@@ -223,9 +214,7 @@ class RepositoryCleanup:
                             f"Private repository hasn't been updated in {days_since_update} days (appears abandoned)",
                         )
                 except Exception as e:
-                    self.logger.warning(
-                        f"Failed to parse update date {updated_at}: {e}"
-                    )
+                    self.logger.warning(f"Failed to parse update date {updated_at}: {e}")
 
         # Check if repository hasn't been updated in over 2 years
         updated_at = repo_info.get("updatedAt")
@@ -296,7 +285,7 @@ class RepositoryCleanup:
             else:
                 print("Please enter 'y' for yes, 'n' for no, or 'q' to quit")
 
-    def scan_repositories(self) -> List[Path]:
+    def scan_repositories(self) -> list[Path]:
         """
         Scan the base directory for Git repositories.
 
@@ -319,7 +308,7 @@ class RepositoryCleanup:
         self.logger.info(f"Found {len(repositories)} Git repositories")
         return repositories
 
-    def process_repositories(self, repositories: List[Path]) -> None:
+    def process_repositories(self, repositories: list[Path]) -> None:
         """
         Process each repository and determine cleanup actions.
 
@@ -363,17 +352,11 @@ class RepositoryCleanup:
                 # Display repository status
                 self.logger.info(f"Archived: {repo_info.get('archived', 'Unknown')}")
                 self.logger.info(f"Disabled: {repo_info.get('disabled', 'Unknown')}")
-                self.logger.info(
-                    f"Visibility: {repo_info.get('visibility', 'Unknown')}"
-                )
-                self.logger.info(
-                    f"Last updated: {repo_info.get('updatedAt', 'Unknown')}"
-                )
+                self.logger.info(f"Visibility: {repo_info.get('visibility', 'Unknown')}")
+                self.logger.info(f"Last updated: {repo_info.get('updatedAt', 'Unknown')}")
 
                 # Determine if repository should be removed
-                should_remove, reason = self._should_remove_repository(
-                    repo_info, repo_path
-                )
+                should_remove, reason = self._should_remove_repository(repo_info, repo_path)
 
                 if should_remove:
                     self.stats["archived_repos"] += 1
@@ -402,9 +385,7 @@ class RepositoryCleanup:
         self.logger.info("CLEANUP SUMMARY")
         self.logger.info(f"{'=' * 60}")
         self.logger.info(f"Total repositories scanned: {self.stats['total_repos']}")
-        self.logger.info(
-            f"Archived/outdated repositories found: {self.stats['archived_repos']}"
-        )
+        self.logger.info(f"Archived/outdated repositories found: {self.stats['archived_repos']}")
         self.logger.info(f"Repositories removed: {self.stats['removed_repos']}")
         self.logger.info(f"Repositories skipped: {self.stats['skipped']}")
         self.logger.info(f"Errors encountered: {self.stats['errors']}")
@@ -427,14 +408,10 @@ class RepositoryCleanup:
         # Check if gh CLI is available
         success, stdout, stderr = self._run_command(["gh", "--version"])
         if not success:
-            self.logger.error(
-                "GitHub CLI (gh) is not available. Please install it first."
-            )
+            self.logger.error("GitHub CLI (gh) is not available. Please install it first.")
             sys.exit(1)
 
-        self.logger.info(
-            f"GitHub CLI version: {stdout.split()[0] if stdout else 'Unknown'}"
-        )
+        self.logger.info(f"GitHub CLI version: {stdout.split()[0] if stdout else 'Unknown'}")
 
         # Scan for repositories
         repositories = self.scan_repositories()

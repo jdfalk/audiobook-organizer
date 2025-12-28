@@ -42,10 +42,10 @@ Usage:
 import argparse
 import json
 import os
-import sys
 import subprocess
+import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 try:
     import requests
@@ -55,7 +55,6 @@ except ImportError:
 
     try:
         subprocess.check_call(["pip", "install", "requests", "--quiet"])
-        import requests
 
         print("✓ Successfully installed and imported 'requests' module")
     except subprocess.CalledProcessError as e:
@@ -67,7 +66,7 @@ class GitTimestampExtractor:
     """Extracts timestamp information from Git history."""
 
     @staticmethod
-    def get_file_creation_time(file_path: str) -> Optional[str]:
+    def get_file_creation_time(file_path: str) -> str | None:
         """Get the original creation time of a file from Git history."""
         try:
             result = subprocess.run(
@@ -94,7 +93,7 @@ class GitTimestampExtractor:
         return None
 
     @staticmethod
-    def get_file_last_modified_time(file_path: str) -> Optional[str]:
+    def get_file_last_modified_time(file_path: str) -> str | None:
         """Get the last modification time from Git."""
         try:
             result = subprocess.run(
@@ -115,9 +114,7 @@ class GitTimestampExtractor:
 class EnhancedIssueProcessor:
     """Enhanced issue processor with comprehensive timestamp lifecycle tracking."""
 
-    def __init__(
-        self, github_api=None, dry_run: bool = False, force_update: bool = False
-    ):
+    def __init__(self, github_api=None, dry_run: bool = False, force_update: bool = False):
         self.api = github_api or GitHubAPI()
         self.dry_run = dry_run
         self.force_update = force_update
@@ -146,7 +143,7 @@ class EnhancedIssueProcessor:
             file_path = os.path.join(updates_directory, filename)
 
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with open(file_path, encoding="utf-8") as f:
                     data = json.load(f)
 
                 modified = False
@@ -157,17 +154,13 @@ class EnhancedIssueProcessor:
                         # Add timestamps if missing
                         if "created_at" not in update:
                             # Try git extraction first
-                            git_created = self.git_extractor.get_file_creation_time(
-                                file_path
-                            )
+                            git_created = self.git_extractor.get_file_creation_time(file_path)
                             if git_created:
                                 update["created_at"] = git_created
                                 update["git_added_at"] = git_created
                             else:
                                 # Try filename extraction
-                                timestamp = self._extract_timestamp_from_filename(
-                                    filename
-                                )
+                                timestamp = self._extract_timestamp_from_filename(filename)
                                 if not timestamp:
                                     timestamp = datetime.now(timezone.utc).isoformat()
                                 update["created_at"] = timestamp
@@ -225,7 +218,7 @@ class EnhancedIssueProcessor:
                 file_path = os.path.join(updates_directory, filename)
 
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         data = json.load(f)
 
                     # Handle both single objects and arrays
@@ -260,9 +253,7 @@ class EnhancedIssueProcessor:
                 print(f"  - {error}")
             return False
 
-        print(
-            f"✅ Validation passed - processing {len(resolved_updates)} updates chronologically"
-        )
+        print(f"✅ Validation passed - processing {len(resolved_updates)} updates chronologically")
 
         # Process updates in order
         success_count = 0
@@ -290,22 +281,16 @@ class EnhancedIssueProcessor:
                         success_count += 1
                     else:
                         # Mark as failed
-                        self._mark_update_as_failed(
-                            update, source_file, "Processing failed"
-                        )
+                        self._mark_update_as_failed(update, source_file, "Processing failed")
 
                 except Exception as e:
                     print(f"❌ Error processing update: {e}")
                     self._mark_update_as_failed(update, source_file, str(e))
 
-        print(
-            f"🎯 Successfully processed {success_count}/{len(resolved_updates)} updates"
-        )
+        print(f"🎯 Successfully processed {success_count}/{len(resolved_updates)} updates")
         return success_count == len(resolved_updates)
 
-    def _sort_updates_chronologically(
-        self, updates: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _sort_updates_chronologically(self, updates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Sort updates by created_at timestamp, then by sequence number."""
 
         def get_sort_key(update):
@@ -322,9 +307,7 @@ class EnhancedIssueProcessor:
 
         return sorted(updates, key=get_sort_key)
 
-    def _resolve_dependencies(
-        self, updates: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _resolve_dependencies(self, updates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Resolve parent/child dependencies using topological sort."""
         dependency_graph = {}
 
@@ -375,9 +358,7 @@ class EnhancedIssueProcessor:
 
         return resolved
 
-    def _validate_update_sequence(
-        self, updates: List[Dict[str, Any]]
-    ) -> Tuple[bool, List[str]]:
+    def _validate_update_sequence(self, updates: list[dict[str, Any]]) -> tuple[bool, list[str]]:
         """Validate that updates can be applied in the given sequence."""
         errors = []
         created_issues = set()
@@ -393,17 +374,13 @@ class EnhancedIssueProcessor:
                     created_issues.add(guid)
             elif action in ["comment", "update", "close"]:
                 if not number and not parent_guid:
-                    errors.append(
-                        f"Update {i}: {action} action missing issue reference"
-                    )
+                    errors.append(f"Update {i}: {action} action missing issue reference")
                 elif parent_guid and parent_guid not in created_issues:
-                    errors.append(
-                        f"Update {i}: parent issue {parent_guid} not created yet"
-                    )
+                    errors.append(f"Update {i}: parent issue {parent_guid} not created yet")
 
         return len(errors) == 0, errors
 
-    def _process_single_update(self, update: Dict[str, Any]) -> bool:
+    def _process_single_update(self, update: dict[str, Any]) -> bool:
         """Process a single issue update using the original logic."""
         # This would contain the actual GitHub API calls from the original issue_manager.py
         # For now, simulate success for demonstration
@@ -429,12 +406,10 @@ class EnhancedIssueProcessor:
             print(f"   ⚠️ Unknown action: {action}")
             return False
 
-    def _mark_update_as_processed(
-        self, update: Dict[str, Any], source_file: str
-    ) -> None:
+    def _mark_update_as_processed(self, update: dict[str, Any], source_file: str) -> None:
         """Mark an update as successfully processed."""
         try:
-            with open(source_file, "r", encoding="utf-8") as f:
+            with open(source_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Add processed timestamp
@@ -442,9 +417,7 @@ class EnhancedIssueProcessor:
                 data["processed_at"] = datetime.now(timezone.utc).isoformat()
             elif isinstance(data, list):
                 for item in data:
-                    if isinstance(item, dict) and item.get("guid") == update.get(
-                        "guid"
-                    ):
+                    if isinstance(item, dict) and item.get("guid") == update.get("guid"):
                         item["processed_at"] = datetime.now(timezone.utc).isoformat()
 
             with open(source_file, "w", encoding="utf-8") as f:
@@ -457,11 +430,11 @@ class EnhancedIssueProcessor:
             print(f"⚠️ Failed to mark update as processed: {e}")
 
     def _mark_update_as_failed(
-        self, update: Dict[str, Any], source_file: str, error_msg: str
+        self, update: dict[str, Any], source_file: str, error_msg: str
     ) -> None:
         """Mark an update as failed during processing."""
         try:
-            with open(source_file, "r", encoding="utf-8") as f:
+            with open(source_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             # Add failure timestamp and error
@@ -470,9 +443,7 @@ class EnhancedIssueProcessor:
                 data["last_error"] = error_msg
             elif isinstance(data, list):
                 for item in data:
-                    if isinstance(item, dict) and item.get("guid") == update.get(
-                        "guid"
-                    ):
+                    if isinstance(item, dict) and item.get("guid") == update.get("guid"):
                         item["failed_at"] = datetime.now(timezone.utc).isoformat()
                         item["last_error"] = error_msg
 
@@ -529,7 +500,7 @@ class EnhancedIssueProcessor:
         except Exception as e:
             print(f"⚠️ Failed to mark file as failed: {e}")
 
-    def _extract_timestamp_from_filename(self, filename: str) -> Optional[str]:
+    def _extract_timestamp_from_filename(self, filename: str) -> str | None:
         """Extract timestamp from filename if it follows the pattern YYYYMMDD_HHMMSS_guid.json"""
         try:
             if "_" in filename:
@@ -546,9 +517,7 @@ class EnhancedIssueProcessor:
                         minute = int(time_part[2:4])
                         second = int(time_part[4:6])
 
-                        dt = datetime(
-                            year, month, day, hour, minute, second, tzinfo=timezone.utc
-                        )
+                        dt = datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
                         return dt.isoformat()
         except (ValueError, IndexError):
             pass
@@ -564,15 +533,11 @@ class GitHubAPI:
         self.repo = os.environ.get("REPO")
 
         if not self.token:
-            print(
-                "❌ GitHub token not found. Set GH_TOKEN or GITHUB_TOKEN environment variable."
-            )
+            print("❌ GitHub token not found. Set GH_TOKEN or GITHUB_TOKEN environment variable.")
             sys.exit(1)
 
         if not self.repo:
-            print(
-                "❌ Repository not specified. Set REPO environment variable (owner/name format)."
-            )
+            print("❌ Repository not specified. Set REPO environment variable (owner/name format).")
             sys.exit(1)
 
         self.headers = {

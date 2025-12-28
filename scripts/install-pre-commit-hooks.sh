@@ -17,14 +17,14 @@ echo -e "${GREEN}Installing comprehensive pre-commit hooks for subtitle-manager.
 
 # Check if we're in a git repository
 if [ ! -d ".git" ]; then
-    echo -e "${RED}Error: This script must be run from the root of the git repository${NC}"
-    exit 1
+  echo -e "${RED}Error: This script must be run from the root of the git repository${NC}"
+  exit 1
 fi
 
 # Create the pre-commit hook
 HOOK_FILE=".git/hooks/pre-commit"
 
-cat > "$HOOK_FILE" << 'EOF'
+cat >"$HOOK_FILE" <<'EOF'
 #!/bin/bash
 # file: .git/hooks/pre-commit
 # Comprehensive pre-commit hook for code quality and consistency

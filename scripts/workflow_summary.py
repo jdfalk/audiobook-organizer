@@ -11,7 +11,6 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import List
 
 
 def write_summary(content: str) -> None:
@@ -24,7 +23,7 @@ def write_summary(content: str) -> None:
         print(content)
 
 
-def get_changed_files() -> List[str]:
+def get_changed_files() -> list[str]:
     """Get list of changed files in the repository"""
     try:
         result = subprocess.run(
@@ -92,9 +91,7 @@ def generate_workflow_summary() -> None:
     write_summary(f"**Repository:** [`{repository}`](https://github.com/{repository})")
     write_summary(f"**Triggered by:** {event_name}")
     write_summary(f"**Actor:** {triggered_by}")
-    write_summary(
-        f"**Timestamp:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-    )
+    write_summary(f"**Timestamp:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
     write_summary("")
 
     # Show overall workflow status

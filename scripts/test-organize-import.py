@@ -24,7 +24,6 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -36,7 +35,7 @@ class FileInfo:
     extension: str
     size_mb: float = 0.0
     is_chapter: bool = False
-    chapter_number: Optional[int] = None
+    chapter_number: int | None = None
 
 
 @dataclass
@@ -44,8 +43,8 @@ class BookVersion:
     """Represents a specific version of an audiobook (different format/quality/edition)."""
 
     version_id: str
-    files: List[FileInfo] = field(default_factory=list)
-    primary_file: Optional[str] = None  # The main file (if multi-file book)
+    files: list[FileInfo] = field(default_factory=list)
+    primary_file: str | None = None  # The main file (if multi-file book)
     format: str = ""  # m4b, mp3, etc.
     total_files: int = 0
     total_size_mb: float = 0.0
@@ -66,9 +65,9 @@ class BookMetadata:
     confidence: str = "low"  # low, medium, high
     extraction_method: str = ""
     proposed_path: str = ""
-    issues: List[str] = field(default_factory=list)
-    versions: List[BookVersion] = field(default_factory=list)
-    duplicate_group_id: Optional[str] = None  # Links duplicates together
+    issues: list[str] = field(default_factory=list)
+    versions: list[BookVersion] = field(default_factory=list)
+    duplicate_group_id: str | None = None  # Links duplicates together
 
 
 class SeriesPatternMatcher:
@@ -97,7 +96,7 @@ class SeriesPatternMatcher:
     SERIES_WORDS = ["trilogy", "series", "saga", "chronicles", "sequence", "collection"]
 
     @staticmethod
-    def identify_series(title: str, file_path: str) -> Tuple[str, int, str]:
+    def identify_series(title: str, file_path: str) -> tuple[str, int, str]:
         """
         Identify series name and position from title and file path.
 
@@ -142,10 +141,7 @@ class SeriesPatternMatcher:
                         return parent_dir, 0, "directory:keyword"
 
                 # Check if parent dir name is in title (fuzzy match)
-                if (
-                    parent_dir.lower() in title.lower()
-                    or title.lower() in parent_dir.lower()
-                ):
+                if parent_dir.lower() in title.lower() or title.lower() in parent_dir.lower():
                     return parent_dir, 0, "directory:fuzzy"
 
         # Look for series patterns in title itself
@@ -193,9 +189,7 @@ class PathExtractor:
         # Find first meaningful directory that's not a skip dir
         meaningful_dirs = []
         for i, part in enumerate(path_parts):
-            if (
-                part.lower() not in skip_dirs and i < len(path_parts) - 1
-            ):  # Not the filename
+            if part.lower() not in skip_dirs and i < len(path_parts) - 1:  # Not the filename
                 meaningful_dirs.append(part)
 
         if not meaningful_dirs:
@@ -224,9 +218,7 @@ class PathExtractor:
                     return author
 
         # Default to first meaningful directory if it doesn't look like a series name
-        if not first_dir.lower().startswith(
-            ("book", "chapter", "part", "volume", "vol")
-        ):
+        if not first_dir.lower().startswith(("book", "chapter", "part", "volume", "vol")):
             return first_dir
 
         return ""
@@ -245,9 +237,7 @@ class PathExtractor:
         title = re.sub(r"^\d+[-_.\s]+", "", title)
 
         # Remove common suffixes
-        title = re.sub(
-            r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE)
 
         return title.strip()
 
@@ -255,11 +245,9 @@ class PathExtractor:
 class AudiobookScanner:
     """Main scanner that processes files and extracts metadata."""
 
-    def __init__(self, supported_extensions: Optional[List[str]] = None):
+    def __init__(self, supported_extensions: list[str] | None = None):
         """Initialize the scanner with supported file extensions."""
-        self.supported_extensions = (
-            supported_extensions or PathExtractor.SUPPORTED_EXTENSIONS
-        )
+        self.supported_extensions = supported_extensions or PathExtractor.SUPPORTED_EXTENSIONS
         self.pattern_matcher = SeriesPatternMatcher()
         self.path_extractor = PathExtractor()
 
@@ -268,7 +256,7 @@ class AudiobookScanner:
         ext = Path(file_path).suffix.lower()
         return ext in self.supported_extensions
 
-    def scan_file(self, file_path: str) -> Optional[BookMetadata]:
+    def scan_file(self, file_path: str) -> BookMetadata | None:
         """
         Scan a single file and extract metadata.
 
@@ -299,9 +287,7 @@ class AudiobookScanner:
         metadata.author = self.path_extractor.extract_author_from_path(file_path)
 
         # Identify series
-        series, position, method = self.pattern_matcher.identify_series(
-            metadata.title, file_path
-        )
+        series, position, method = self.pattern_matcher.identify_series(metadata.title, file_path)
         metadata.series = series
         metadata.position = position
         metadata.extraction_method = method
@@ -400,9 +386,7 @@ class TestReportGenerator:
         """Initialize the report generator."""
         self.stats = defaultdict(int)
 
-    def generate_report(
-        self, books: List[BookMetadata], output_file: Optional[str] = None
-    ) -> Dict:
+    def generate_report(self, books: list[BookMetadata], output_file: str | None = None) -> dict:
         """
         Generate comprehensive report from scanned books.
 
@@ -426,7 +410,7 @@ class TestReportGenerator:
 
         return report
 
-    def _generate_summary(self, books: List[BookMetadata]) -> Dict:
+    def _generate_summary(self, books: list[BookMetadata]) -> dict:
         """Generate high-level summary statistics."""
         return {
             "total_files_processed": len(books),
@@ -438,7 +422,7 @@ class TestReportGenerator:
             "books_with_issues": sum(1 for b in books if b.issues),
         }
 
-    def _generate_statistics(self, books: List[BookMetadata]) -> Dict:
+    def _generate_statistics(self, books: list[BookMetadata]) -> dict:
         """Generate detailed statistics."""
         extensions = defaultdict(int)
         extraction_methods = defaultdict(int)
@@ -456,15 +440,11 @@ class TestReportGenerator:
         return {
             "by_extension": dict(extensions),
             "by_extraction_method": dict(extraction_methods),
-            "top_authors": dict(
-                sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]
-            ),
-            "top_series": dict(
-                sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]
-            ),
+            "top_authors": dict(sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]),
+            "top_series": dict(sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]),
         }
 
-    def _generate_issues_summary(self, books: List[BookMetadata]) -> Dict:
+    def _generate_issues_summary(self, books: list[BookMetadata]) -> dict:
         """Generate summary of common issues."""
         issue_counts = defaultdict(int)
 
@@ -475,7 +455,7 @@ class TestReportGenerator:
         return dict(sorted(issue_counts.items(), key=lambda x: x[1], reverse=True))
 
     @staticmethod
-    def _book_to_dict(book: BookMetadata) -> Dict:
+    def _book_to_dict(book: BookMetadata) -> dict:
         """Convert BookMetadata to dictionary for JSON serialization."""
         return {
             "original_path": book.original_path,
@@ -491,7 +471,7 @@ class TestReportGenerator:
             "issues": book.issues,
         }
 
-    def print_summary(self, report: Dict) -> None:
+    def print_summary(self, report: dict) -> None:
         """Print a human-readable summary of the report."""
         summary = report["summary"]
         stats = report["statistics"]
@@ -504,7 +484,7 @@ class TestReportGenerator:
         print(f"  Total files processed: {summary['total_files_processed']:,}")
         print(f"  Books with series identified: {summary['books_with_series']:,}")
         print(f"  Books with series position: {summary['books_with_position']:,}")
-        print(f"\nCONFIDENCE LEVELS:")
+        print("\nCONFIDENCE LEVELS:")
         print(f"  High confidence: {summary['high_confidence']:,}")
         print(f"  Medium confidence: {summary['medium_confidence']:,}")
         print(f"  Low confidence: {summary['low_confidence']:,}")
@@ -613,9 +593,7 @@ def main():
             print(f"\nOriginal: {book.original_path}")
             print(f"  Title: {book.title}")
             print(f"  Author: {book.author}")
-            print(
-                f"  Series: {book.series} (#{book.position if book.position else 'N/A'})"
-            )
+            print(f"  Series: {book.series} (#{book.position if book.position else 'N/A'})")
             print(f"  Method: {book.extraction_method}")
             print(f"  Confidence: {book.confidence}")
             print(f"  Proposed: {book.proposed_path}")

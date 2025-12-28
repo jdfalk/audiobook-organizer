@@ -16,7 +16,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class GitHubLabelsSync:
@@ -28,9 +28,7 @@ class GitHubLabelsSync:
         self.token = token
         self.api_base = f"https://api.github.com/repos/{owner}/{repo}"
 
-    def _make_request(
-        self, method: str, endpoint: str, data: Optional[Dict] = None
-    ) -> Dict[str, Any]:
+    def _make_request(self, method: str, endpoint: str, data: dict | None = None) -> dict[str, Any]:
         """Make authenticated GitHub API request."""
         url = f"{self.api_base}{endpoint}"
         headers = {
@@ -45,9 +43,7 @@ class GitHubLabelsSync:
         else:
             request_data = None
 
-        request = urllib.request.Request(
-            url, data=request_data, headers=headers, method=method
-        )
+        request = urllib.request.Request(url, data=request_data, headers=headers, method=method)
 
         try:
             with urllib.request.urlopen(request) as response:
@@ -64,7 +60,7 @@ class GitHubLabelsSync:
         except urllib.error.URLError as e:
             raise Exception(f"Network error: {e.reason}")
 
-    def get_existing_labels(self) -> List[Dict[str, Any]]:
+    def get_existing_labels(self) -> list[dict[str, Any]]:
         """Fetch all existing labels from the repository."""
         print("📋 Fetching existing labels...")
         labels = self._make_request("GET", "/labels")
@@ -97,7 +93,7 @@ class GitHubLabelsSync:
             return False
 
     def labels_are_identical(
-        self, existing_label: Dict[str, Any], new_color: str, new_description: str
+        self, existing_label: dict[str, Any], new_color: str, new_description: str
     ) -> bool:
         """Check if existing label is identical to the new one."""
         # Normalize colors (remove # prefix if present)
@@ -119,7 +115,7 @@ class GitHubLabelsSync:
 
         # Load labels from file
         try:
-            with open(labels_file, "r", encoding="utf-8") as f:
+            with open(labels_file, encoding="utf-8") as f:
                 labels_data = json.load(f)
         except FileNotFoundError:
             print(f"❌ Labels file not found: {labels_file}")
@@ -175,9 +171,7 @@ class GitHubLabelsSync:
         print()
         if skipped_count > 0:
             print(f"⏭️  Skipped {skipped_count} identical labels")
-        print(
-            f"✅ GitHub labels sync completed! ({success_count}/{len(labels_data)} successful)"
-        )
+        print(f"✅ GitHub labels sync completed! ({success_count}/{len(labels_data)} successful)")
         print(f"🔗 View labels: https://github.com/{self.owner}/{self.repo}/labels")
 
         return success_count == len(labels_data)

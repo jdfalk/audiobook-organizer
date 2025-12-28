@@ -16,7 +16,7 @@ export CREATE_PR="false"
 export UPDATES_DIR=".github/doc-updates"
 
 # Create test output
-cat << 'EOF'
+cat <<'EOF'
 # 📋 Documentation Update Summary
 
 ## 📊 Execution Statistics

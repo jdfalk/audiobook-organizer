@@ -9,7 +9,7 @@ import argparse
 import json
 import subprocess
 import sys
-from typing import Any, Dict, List
+from typing import Any
 
 try:
     import inquirer
@@ -81,9 +81,7 @@ class GitHubManager:
                 capture_output=True,
             )
         except (subprocess.SubprocessError, FileNotFoundError):
-            console.print(
-                "[red]GitHub CLI (gh) is not installed. Please install it first.[/red]"
-            )
+            console.print("[red]GitHub CLI (gh) is not installed. Please install it first.[/red]")
             console.print("Visit: https://cli.github.com/manual/installation")
             return False
 
@@ -102,7 +100,7 @@ class GitHubManager:
 
         return True
 
-    def get_repositories(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_repositories(self, limit: int = 100) -> list[dict[str, Any]]:
         """
         Fetch repositories from the specified GitHub organization or user.
 
@@ -168,7 +166,7 @@ class GitHubManager:
             return True
 
 
-def display_repositories(repos: List[Dict[str, Any]]) -> None:
+def display_repositories(repos: list[dict[str, Any]]) -> None:
     """
     Display repositories in a formatted table.
 
@@ -191,9 +189,7 @@ def display_repositories(repos: List[Dict[str, Any]]) -> None:
     console.print(table)
 
 
-def filter_repositories(
-    repos: List[Dict[str, Any]], filter_term: str = ""
-) -> List[Dict[str, Any]]:
+def filter_repositories(repos: list[dict[str, Any]], filter_term: str = "") -> list[dict[str, Any]]:
     """
     Filter repositories by name or description.
 
@@ -240,8 +236,8 @@ def _get_user_action() -> str:
 
 
 def _filter_repositories_interactively(
-    repos: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    repos: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Filter repositories based on user input."""
     filter_term = input("Enter filter term (name or description): ").strip()
     if not filter_term:
@@ -260,7 +256,7 @@ def _filter_repositories_interactively(
     return []
 
 
-def _select_repositories_from_choices(repos: List[Dict[str, Any]]) -> List[str]:
+def _select_repositories_from_choices(repos: list[dict[str, Any]]) -> list[str]:
     """Present repository choices and get user selection."""
     choices = [
         {
@@ -298,7 +294,7 @@ def _select_repositories_from_choices(repos: List[Dict[str, Any]]) -> List[str]:
     return repo_names
 
 
-def select_repositories(repos: List[Dict[str, Any]]) -> List[str]:
+def select_repositories(repos: list[dict[str, Any]]) -> list[str]:
     """
     Present an interactive selection interface to choose repositories.
 
@@ -359,7 +355,7 @@ def _setup_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _handle_dry_run(selected_repos: List[str], org: str) -> None:
+def _handle_dry_run(selected_repos: list[str], org: str) -> None:
     """Handle dry run mode."""
     console.print("\n[yellow]DRY RUN: No variables will be set.[/yellow]")
     console.print(
@@ -369,7 +365,7 @@ def _handle_dry_run(selected_repos: List[str], org: str) -> None:
         console.print(f"  • [cyan]{org}/{repo}[/cyan]")
 
 
-def _set_variables(selected_repos: List[str], gh_manager: GitHubManager) -> None:
+def _set_variables(selected_repos: list[str], gh_manager: GitHubManager) -> None:
     """Set variables for selected repositories."""
     console.print("\n[yellow]Setting variables...[/yellow]")
     success_count = 0
@@ -387,14 +383,10 @@ def _set_variables(selected_repos: List[str], gh_manager: GitHubManager) -> None
 
     # Summary
     console.print("\n[bold]Operation completed![/bold]")
-    console.print(
-        f"[green]✅ Successfully set variable for {success_count} repositories[/green]"
-    )
+    console.print(f"[green]✅ Successfully set variable for {success_count} repositories[/green]")
 
     if failed_repos:
-        console.print(
-            f"[red]❌ Failed to set variable for {len(failed_repos)} repositories:[/red]"
-        )
+        console.print(f"[red]❌ Failed to set variable for {len(failed_repos)} repositories:[/red]")
         for repo in failed_repos:
             console.print(f"  • {repo}")
 
@@ -445,9 +437,7 @@ def main() -> None:
         return
 
     # Confirm before proceeding
-    if not inquirer.confirm(
-        "Proceed with setting the variable for selected repositories?"
-    ):
+    if not inquirer.confirm("Proceed with setting the variable for selected repositories?"):
         console.print("[yellow]Operation cancelled.[/yellow]")
         return
 

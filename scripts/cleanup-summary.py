@@ -67,9 +67,7 @@ def main():
 
     print()
     print("✅ CLEANUP COMPLETE!")
-    print(
-        "All old scripts have been removed and consolidated into the unified project manager."
-    )
+    print("All old scripts have been removed and consolidated into the unified project manager.")
     print("Users should now use: ghcommon/scripts/unified_github_project_manager_v2.py")
     print("=" * 80)
 

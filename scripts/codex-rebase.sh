@@ -20,15 +20,15 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log() {
-    echo -e "${BLUE}[CODEX-REBASE]${NC} $1"
+  echo -e "${BLUE}[CODEX-REBASE]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}[ERROR]${NC} $1" >&2
+  echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
 success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 # Get target branch (default to main)
@@ -37,13 +37,13 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 # Set up remote if it doesn't exist (for CI environments)
 setup_remote() {
-    if ! git remote get-url origin >/dev/null 2>&1; then
-        log "No 'origin' remote found, configuring for jdfalk/subtitle-manager"
-        git remote add origin https://github.com/jdfalk/subtitle-manager.git
-        log "Added origin remote: https://github.com/jdfalk/subtitle-manager.git"
-    else
-        log "Origin remote already configured: $(git remote get-url origin)"
-    fi
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    log "No 'origin' remote found, configuring for jdfalk/subtitle-manager"
+    git remote add origin https://github.com/jdfalk/subtitle-manager.git
+    log "Added origin remote: https://github.com/jdfalk/subtitle-manager.git"
+  else
+    log "Origin remote already configured: $(git remote get-url origin)"
+  fi
 }
 
 log "Starting Codex rebase automation"
@@ -51,18 +51,17 @@ log "Current branch: $CURRENT_BRANCH"
 log "Target branch: $TARGET_BRANCH"
 
 # Setup remote if needed
-setup_remote()
-
-# Pre-flight checks
-if [[ "$CURRENT_BRANCH" == "$TARGET_BRANCH" ]]; then
-    error "Cannot rebase branch onto itself"
-    exit 1
+setup_remote() if # Pre-flight checks
+  [[ $CURRENT_BRANCH == "$TARGET_BRANCH" ]]
+then
+  error "Cannot rebase branch onto itself"
+  exit 1
 fi
 
 # Stash any uncommitted changes
 if ! git diff-index --quiet HEAD --; then
-    log "Stashing uncommitted changes"
-    git stash push -m "Codex auto-stash before rebase $(date)"
+  log "Stashing uncommitted changes"
+  git stash push -m "Codex auto-stash before rebase $(date)"
 fi
 
 # Create backup branch
@@ -73,44 +72,44 @@ log "Created backup branch: $BACKUP_BRANCH"
 # Fetch latest changes
 log "Fetching latest changes"
 if ! git fetch origin; then
-    error "Failed to fetch from origin. Check network connectivity and authentication."
-    error "Remote URL: $(git remote get-url origin 2>/dev/null || echo 'Not configured')"
-    exit 1
+  error "Failed to fetch from origin. Check network connectivity and authentication."
+  error "Remote URL: $(git remote get-url origin 2>/dev/null || echo 'Not configured')"
+  exit 1
 fi
 
 # Function to auto-resolve conflicts with Codex-friendly strategies
 auto_resolve_conflicts() {
-    local conflicted_files
-    conflicted_files=$(git diff --name-only --diff-filter=U)
+  local conflicted_files
+  conflicted_files=$(git diff --name-only --diff-filter=U)
 
-    if [[ -z "$conflicted_files" ]]; then
-        return 0
+  if [[ -z $conflicted_files ]]; then
+    return 0
+  fi
+
+  log "Auto-resolving conflicts in: $conflicted_files"
+
+  echo "$conflicted_files" | while read -r file; do
+    if [[ -n $file ]]; then
+      # Save incoming version with .main.incoming suffix
+      local base_name="${file%.*}"
+      local extension="${file##*.}"
+      local incoming_file="${base_name}.${extension}.main.incoming"
+
+      # Extract and save incoming version
+      git show :3:"$file" >"$incoming_file" 2>/dev/null || {
+        log "Warning: Could not extract incoming version of $file"
+      }
+
+      # Keep current version (our changes)
+      git checkout --ours "$file"
+      git add "$file"
+
+      log "Resolved $file: kept current, saved incoming as $incoming_file"
     fi
+  done
 
-    log "Auto-resolving conflicts in: $conflicted_files"
-
-    echo "$conflicted_files" | while read -r file; do
-        if [[ -n "$file" ]]; then
-            # Save incoming version with .main.incoming suffix
-            local base_name="${file%.*}"
-            local extension="${file##*.}"
-            local incoming_file="${base_name}.${extension}.main.incoming"
-
-            # Extract and save incoming version
-            git show :3:"$file" > "$incoming_file" 2>/dev/null || {
-                log "Warning: Could not extract incoming version of $file"
-            }
-
-            # Keep current version (our changes)
-            git checkout --ours "$file"
-            git add "$file"
-
-            log "Resolved $file: kept current, saved incoming as $incoming_file"
-        fi
-    done
-
-    # Continue the rebase
-    git rebase --continue
+  # Continue the rebase
+  git rebase --continue
 }
 
 # Perform the rebase with auto-conflict resolution
@@ -122,39 +121,39 @@ git config user.name "Codex Auto-Rebase" 2>/dev/null || true
 
 # Start rebase and handle conflicts automatically
 while true; do
-    if git rebase "$TARGET_BRANCH"; then
-        success "Rebase completed successfully"
-        break
+  if git rebase "$TARGET_BRANCH"; then
+    success "Rebase completed successfully"
+    break
+  else
+    # Check if we're in a rebase state with conflicts
+    if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
+      log "Conflicts detected, auto-resolving..."
+      auto_resolve_conflicts
     else
-        # Check if we're in a rebase state with conflicts
-        if git status --porcelain | grep -q "^UU\|^AA\|^DD"; then
-            log "Conflicts detected, auto-resolving..."
-            auto_resolve_conflicts
-        else
-            # Some other error occurred
-            error "Rebase failed for unknown reason"
-            git rebase --abort
-            exit 1
-        fi
+      # Some other error occurred
+      error "Rebase failed for unknown reason"
+      git rebase --abort
+      exit 1
     fi
+  fi
 done
 
 # Force push the rebased branch
 log "Force pushing rebased branch"
 if git push --force-with-lease origin "$CURRENT_BRANCH"; then
-    success "Force push completed"
+  success "Force push completed"
 else
-    error "Force push failed. This might be due to:"
-    error "1. Authentication issues (no push access)"
-    error "2. Network connectivity problems"
-    error "3. Branch protection rules"
-    error "Remote URL: $(git remote get-url origin 2>/dev/null || echo 'Not configured')"
-    exit 1
+  error "Force push failed. This might be due to:"
+  error "1. Authentication issues (no push access)"
+  error "2. Network connectivity problems"
+  error "3. Branch protection rules"
+  error "Remote URL: $(git remote get-url origin 2>/dev/null || echo 'Not configured')"
+  exit 1
 fi
 
 # Create a summary of what happened
 SUMMARY_FILE="rebase-summary-$(date +%Y%m%d-%H%M%S).md"
-cat > "$SUMMARY_FILE" << EOF
+cat >"$SUMMARY_FILE" <<EOF
 # Codex Rebase Summary
 
 **Date:** $(date)
@@ -169,12 +168,12 @@ cat > "$SUMMARY_FILE" << EOF
 
 ## Conflict Resolution
 $(if ls *.main.incoming 2>/dev/null; then
-    echo "The following files had conflicts and incoming versions were saved:"
-    ls *.main.incoming 2>/dev/null | while read f; do
-        echo "- $f"
-    done
+  echo "The following files had conflicts and incoming versions were saved:"
+  ls *.main.incoming 2>/dev/null | while read f; do
+    echo "- $f"
+  done
 else
-    echo "No conflicts detected during rebase."
+  echo "No conflicts detected during rebase."
 fi)
 
 ## Recovery Instructions
@@ -200,13 +199,13 @@ success "Codex rebase automation completed successfully!"
 log "Checking for redundant .main.incoming files..."
 shopt -s nullglob
 for incoming_file in *.main.incoming; do
-    if [[ -f "$incoming_file" ]]; then
-        original_file="${incoming_file%.main.incoming}"
-        if [[ -f "$original_file" ]] && cmp -s "$incoming_file" "$original_file"; then
-            log "Removing redundant $incoming_file (identical to $original_file)"
-            rm "$incoming_file"
-        fi
+  if [[ -f $incoming_file ]]; then
+    original_file="${incoming_file%.main.incoming}"
+    if [[ -f $original_file ]] && cmp -s "$incoming_file" "$original_file"; then
+      log "Removing redundant $incoming_file (identical to $original_file)"
+      rm "$incoming_file"
     fi
+  fi
 done
 shopt -u nullglob
 

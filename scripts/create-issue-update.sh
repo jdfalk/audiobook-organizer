@@ -22,7 +22,7 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/jdfalk/ghcommon/main/scripts/c
 TEMP_LIBRARY_PATH="/tmp/create-issue-update-library-$$.sh"
 
 # Source the library directly since we're in the ghcommon repository
-if [[ -f "$LIBRARY_PATH" ]]; then
+if [[ -f $LIBRARY_PATH ]]; then
   source "$LIBRARY_PATH"
 else
   echo "ERROR: Could not locate the create-issue-update-library.sh file at: $LIBRARY_PATH" >&2

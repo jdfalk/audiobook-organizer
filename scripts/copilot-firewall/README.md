@@ -21,7 +21,7 @@ multiple GitHub repositories.
 
 ### Prerequisites
 
-1. **GitHub CLI**: Install from https://cli.github.com/manual/installation
+1. **GitHub CLI**: Install from <https://cli.github.com/manual/installation>
 2. **Python 3.8+**: Required for the script
 3. **Authentication**: Run `gh auth login` to authenticate with GitHub
 
@@ -197,7 +197,7 @@ repository settings.
    GitHub CLI (gh) is not installed. Please install it first.
    ```
 
-   Solution: Install GitHub CLI from https://cli.github.com/
+   Solution: Install GitHub CLI from <https://cli.github.com/>
 
 2. **Not authenticated**
 
@@ -216,9 +216,11 @@ repository settings.
    Solution: Check the organization name and your access permissions
 
 4. **Permission denied**
+
    ```
    Error setting variable for repository-name: exit status 1
    ```
+
    Solution: Ensure you have admin or write access to the repository
 
 ### Getting Help

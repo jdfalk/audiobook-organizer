@@ -8,7 +8,6 @@ Determines which operations to run based on workflow inputs and context.
 import json
 import os
 import sys
-from typing import List
 
 
 def check_file_exists(file_path: str) -> bool:
@@ -40,9 +39,7 @@ def check_for_files(issue_updates_file: str, issue_updates_directory: str) -> di
     json_files_count = check_directory_has_json_files(issue_updates_directory)
     if json_files_count > 0:
         has_update_files = True
-        print(
-            f"📁 Found {json_files_count} issue update files in {issue_updates_directory}"
-        )
+        print(f"📁 Found {json_files_count} issue update files in {issue_updates_directory}")
 
     has_issue_updates = has_legacy_file or has_update_files
 
@@ -108,7 +105,7 @@ def validate_operation(operation: str) -> str:
 
 def determine_operations(
     operations_input: str, event_name: str, has_issue_updates: bool
-) -> List[str]:
+) -> list[str]:
     """Determine which operations to run"""
     operations = []
 
@@ -169,7 +166,7 @@ def determine_operations(
     return operations
 
 
-def create_operations_json(operations: List[str]) -> str:
+def create_operations_json(operations: list[str]) -> str:
     """Create JSON array for operations matrix"""
     if not operations:
         return "[]"
@@ -208,9 +205,7 @@ def main():
     operations_input = os.environ.get("OPERATIONS_INPUT", "auto")
     event_name = os.environ.get("EVENT_NAME", "workflow_dispatch")
     issue_updates_file = os.environ.get("ISSUE_UPDATES_FILE", "issue_updates.json")
-    issue_updates_directory = os.environ.get(
-        "ISSUE_UPDATES_DIRECTORY", ".github/issue-updates"
-    )
+    issue_updates_directory = os.environ.get("ISSUE_UPDATES_DIRECTORY", ".github/issue-updates")
 
     print(f"🔧 Determining operations for event: {event_name}")
     print(f"📋 Operations input: {operations_input}")
@@ -219,9 +214,7 @@ def main():
     file_check = check_for_files(issue_updates_file, issue_updates_directory)
 
     # Determine operations
-    operations = determine_operations(
-        operations_input, event_name, file_check["has_issue_updates"]
-    )
+    operations = determine_operations(operations_input, event_name, file_check["has_issue_updates"])
 
     # Create JSON output
     operations_json = create_operations_json(operations)

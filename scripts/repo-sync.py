@@ -25,7 +25,6 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -36,7 +35,7 @@ class SyncOperation:
     file_path: str
     operation_type: str  # 'copy', 'update', 'skip'
     source_version: str
-    target_version: Optional[str]
+    target_version: str | None
     reason: str
 
 
@@ -47,8 +46,8 @@ class SyncReport:
     timestamp: str
     source_repo: str
     total_repos: int
-    operations: List[SyncOperation]
-    summary: Dict[str, int]
+    operations: list[SyncOperation]
+    summary: dict[str, int]
 
 
 class RepoSynchronizer:
@@ -75,13 +74,11 @@ class RepoSynchronizer:
         ".github/test-generation.md",
     ]
 
-    def __init__(
-        self, base_path: Path, source_repo: str = "ghcommon", dry_run: bool = False
-    ):
+    def __init__(self, base_path: Path, source_repo: str = "ghcommon", dry_run: bool = False):
         self.base_path = Path(base_path)
         self.source_repo = source_repo
         self.dry_run = dry_run
-        self.operations: List[SyncOperation] = []
+        self.operations: list[SyncOperation] = []
 
         # Validate source repository
         self.source_path = self.base_path / source_repo
@@ -91,7 +88,7 @@ class RepoSynchronizer:
         # Load source files
         self.source_files = self._load_source_files()
 
-    def _load_source_files(self) -> Dict[str, Tuple[str, str, str]]:
+    def _load_source_files(self) -> dict[str, tuple[str, str, str]]:
         """Load source files with their versions and content"""
         source_files = {}
 
@@ -108,7 +105,7 @@ class RepoSynchronizer:
 
         return source_files
 
-    def _extract_version_and_guid(self, content: str) -> Tuple[str, str]:
+    def _extract_version_and_guid(self, content: str) -> tuple[str, str]:
         """Extract version and GUID from file content"""
         version_match = re.search(r"version:\s*([^\s]+)", content)
         guid_match = re.search(r"guid:\s*([^\s]+)", content)
@@ -118,7 +115,7 @@ class RepoSynchronizer:
 
         return version, guid
 
-    def _get_repositories(self) -> List[Path]:
+    def _get_repositories(self) -> list[Path]:
         """Get list of Git repositories to synchronize"""
         repositories = []
 
@@ -130,9 +127,7 @@ class RepoSynchronizer:
 
         return sorted(repositories)
 
-    def _analyze_target_file(
-        self, repo_path: Path, file_path: str
-    ) -> Tuple[str, str, str, bool]:
+    def _analyze_target_file(self, repo_path: Path, file_path: str) -> tuple[str, str, str, bool]:
         """Analyze target file status"""
         full_path = repo_path / file_path
 
@@ -156,7 +151,7 @@ class RepoSynchronizer:
 
     def _should_sync_file(
         self, file_path: str, target_status: str, target_version: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Determine if file should be synchronized"""
         if file_path not in self.source_files:
             return False, "File not available in source repository"
@@ -178,12 +173,8 @@ class RepoSynchronizer:
         if source_version != "no-version" and target_version != "no-version":
             try:
                 # Simple version comparison (assumes semantic versioning)
-                source_parts = [
-                    int(x) for x in source_version.replace("v", "").split(".")
-                ]
-                target_parts = [
-                    int(x) for x in target_version.replace("v", "").split(".")
-                ]
+                source_parts = [int(x) for x in source_version.replace("v", "").split(".")]
+                target_parts = [int(x) for x in target_version.replace("v", "").split(".")]
 
                 # Pad to same length
                 max_len = max(len(source_parts), len(target_parts))
@@ -227,19 +218,17 @@ class RepoSynchronizer:
             print(f"    ✗ Failed to copy {source_file} to {target_repo.name}: {e}")
             return False
 
-    def sync_repository(self, repo_path: Path) -> List[SyncOperation]:
+    def sync_repository(self, repo_path: Path) -> list[SyncOperation]:
         """Synchronize a single repository"""
         print(f"  Synchronizing {repo_path.name}...")
         repo_operations = []
 
         for file_path in self.TRACKED_FILES:
-            target_status, target_version, target_guid, is_current = (
-                self._analyze_target_file(repo_path, file_path)
+            target_status, target_version, target_guid, is_current = self._analyze_target_file(
+                repo_path, file_path
             )
 
-            should_sync, reason = self._should_sync_file(
-                file_path, target_status, target_version
-            )
+            should_sync, reason = self._should_sync_file(file_path, target_status, target_version)
 
             if should_sync:
                 operation_type = "copy" if target_status == "missing" else "update"
@@ -257,9 +246,7 @@ class RepoSynchronizer:
                     file_path=file_path,
                     operation_type=operation_type,
                     source_version=source_version,
-                    target_version=target_version
-                    if target_version != "no-version"
-                    else None,
+                    target_version=target_version if target_version != "no-version" else None,
                     reason=reason,
                 )
 
@@ -276,9 +263,7 @@ class RepoSynchronizer:
                     file_path=file_path,
                     operation_type="skip",
                     source_version=source_version,
-                    target_version=target_version
-                    if target_version != "no-version"
-                    else None,
+                    target_version=target_version if target_version != "no-version" else None,
                     reason=reason,
                 )
 
@@ -365,9 +350,7 @@ Examples:
         help="Source repository name (default: ghcommon)",
     )
 
-    parser.add_argument(
-        "--output-dir", type=Path, help="Directory to save synchronization reports"
-    )
+    parser.add_argument("--output-dir", type=Path, help="Directory to save synchronization reports")
 
     parser.add_argument(
         "--dry-run",
