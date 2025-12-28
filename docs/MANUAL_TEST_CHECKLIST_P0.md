@@ -6,12 +6,12 @@
 
 ## Overview
 
-This checklist contains **critical manual tests** that MUST pass before merging PR #79 (Metadata Provenance feature). These tests complement the 13 automated E2E tests and focus on user-facing scenarios that require human validation.
+This checklist contains **critical manual tests** that MUST pass before merging
+PR #79 (Metadata Provenance feature). These tests complement the 13 automated
+E2E tests and focus on user-facing scenarios that require human validation.
 
-**Status**: ⏳ PENDING EXECUTION
-**Target**: PR #79 merge approval
-**Estimated Time**: 2-3 hours
-**Tester**: [Assign QA engineer or developer]
+**Status**: ⏳ PENDING EXECUTION **Target**: PR #79 merge approval **Estimated
+Time**: 2-3 hours **Tester**: [Assign QA engineer or developer]
 
 ---
 
@@ -44,9 +44,8 @@ curl http://localhost:8888/api/v1/audiobooks | jq '.books | length'
 
 ### ✅ 1. Metadata Provenance Display (PR #79)
 
-**Priority**: P0 - CRITICAL
-**Related E2E**: `metadata-provenance.spec.ts` (tests 1-3)
-**Time**: 15 minutes
+**Priority**: P0 - CRITICAL **Related E2E**: `metadata-provenance.spec.ts`
+(tests 1-3) **Time**: 15 minutes
 
 #### Test Steps
 
@@ -66,11 +65,13 @@ curl http://localhost:8888/api/v1/audiobooks | jq '.books | length'
   - [ ] Stored value
   - [ ] Action buttons (Use File, Use Fetched, Clear)
 
-**Pass Criteria**: All fields render correctly, sources accurate, no console errors
+**Pass Criteria**: All fields render correctly, sources accurate, no console
+errors
 
 **Screenshot**: Capture Tags tab with multiple source types visible
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -79,14 +80,14 @@ curl http://localhost:8888/api/v1/audiobooks | jq '.books | length'
 
 ### ✅ 2. Apply Override from File Value (PR #79)
 
-**Priority**: P0 - CRITICAL
-**Related E2E**: `metadata-provenance.spec.ts` (test 4)
-**Time**: 10 minutes
+**Priority**: P0 - CRITICAL **Related E2E**: `metadata-provenance.spec.ts`
+(test 4) **Time**: 10 minutes
 
 #### Test Steps
 
 - [ ] **2.1** Open Book Detail → Compare tab
-- [ ] **2.2** Identify field with different file vs effective value (e.g., title)
+- [ ] **2.2** Identify field with different file vs effective value (e.g.,
+      title)
 - [ ] **2.3** Note current effective value in page heading
 - [ ] **2.4** Click "Use File" button for that field
 - [ ] **2.5** Verify immediate UI updates:
@@ -101,14 +102,17 @@ curl http://localhost:8888/api/v1/audiobooks | jq '.books | length'
 - [ ] **2.9** Verify override still present after reload
 
 **API Validation**:
+
 ```bash
 curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 # Should show override for field
 ```
 
-**Pass Criteria**: Override applies instantly, persists after refresh, API reflects change
+**Pass Criteria**: Override applies instantly, persists after refresh, API
+reflects change
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -117,9 +121,8 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 3. Clear Override and Source Fallback (PR #79)
 
-**Priority**: P0 - CRITICAL
-**Related E2E**: `metadata-provenance.spec.ts` (test 6)
-**Time**: 10 minutes
+**Priority**: P0 - CRITICAL **Related E2E**: `metadata-provenance.spec.ts`
+(test 6) **Time**: 10 minutes
 
 #### Test Steps
 
@@ -138,9 +141,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 **Expected Fallback Order**: stored > fetched > file
 
-**Pass Criteria**: Override clears, correct source takes precedence, change persists
+**Pass Criteria**: Override clears, correct source takes precedence, change
+persists
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -149,9 +154,8 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 4. Lock Toggle Persistence (PR #79)
 
-**Priority**: P0 - CRITICAL
-**Related E2E**: `metadata-provenance.spec.ts` (test 13)
-**Time**: 5 minutes
+**Priority**: P0 - CRITICAL **Related E2E**: `metadata-provenance.spec.ts`
+(test 13) **Time**: 5 minutes
 
 #### Test Steps
 
@@ -168,6 +172,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 **Pass Criteria**: Lock toggles correctly, state persists across navigation
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -176,8 +181,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 5. Blocked Hashes - Add with Validation (PR #69)
 
-**Priority**: P0 - CRITICAL
-**Time**: 10 minutes
+**Priority**: P0 - CRITICAL **Time**: 10 minutes
 
 #### Test Steps
 
@@ -201,11 +205,13 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 - [ ] **5.12** Refresh page
 - [ ] **5.13** Verify hash persists
 
-**Pass Criteria**: Validation catches invalid inputs, valid hash saves and persists
+**Pass Criteria**: Validation catches invalid inputs, valid hash saves and
+persists
 
 **Screenshot**: Capture blocked hashes table with new entry
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -214,8 +220,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 6. Blocked Hashes - Delete with Confirmation (PR #69)
 
-**Priority**: P0 - CRITICAL
-**Time**: 5 minutes
+**Priority**: P0 - CRITICAL **Time**: 5 minutes
 
 #### Test Steps
 
@@ -236,9 +241,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 - [ ] **6.10** Refresh page
 - [ ] **6.11** Verify deletion persists
 
-**Pass Criteria**: Confirmation prevents accidental deletion, delete succeeds and persists
+**Pass Criteria**: Confirmation prevents accidental deletion, delete succeeds
+and persists
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -247,8 +254,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 7. Soft Delete Without Hash Blocking (PR #70)
 
-**Priority**: P0 - CRITICAL
-**Time**: 10 minutes
+**Priority**: P0 - CRITICAL **Time**: 10 minutes
 
 #### Test Steps
 
@@ -276,9 +282,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
   - [ ] `marked_for_deletion_at`: recent timestamp
 - [ ] **7.10** Check file still exists on filesystem
 
-**Pass Criteria**: Book soft-deleted, state correct, file NOT deleted, hash NOT blocked
+**Pass Criteria**: Book soft-deleted, state correct, file NOT deleted, hash NOT
+blocked
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -287,8 +295,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 8. Soft Delete With Hash Blocking (PR #70)
 
-**Priority**: P0 - CRITICAL
-**Time**: 15 minutes
+**Priority**: P0 - CRITICAL **Time**: 15 minutes
 
 #### Test Steps
 
@@ -316,9 +323,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 - [ ] **8.14** Verify file was skipped due to blocked hash
 - [ ] **8.15** Verify book NOT reimported in Library
 
-**Pass Criteria**: Delete blocks hash, reimport prevented, hash persists in blocklist
+**Pass Criteria**: Delete blocks hash, reimport prevented, hash persists in
+blocklist
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -327,8 +336,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 9. Restore Soft-Deleted Book (PR #70)
 
-**Priority**: P0 - CRITICAL
-**Time**: 10 minutes
+**Priority**: P0 - CRITICAL **Time**: 10 minutes
 
 #### Test Steps
 
@@ -355,6 +363,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 **Pass Criteria**: Restore succeeds, state correct, book fully usable
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -363,8 +372,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 
 ### ✅ 10. State Transition: Import → Organized (PR #70)
 
-**Priority**: P0 - CRITICAL
-**Time**: 15 minutes
+**Priority**: P0 - CRITICAL **Time**: 15 minutes
 
 #### Test Steps
 
@@ -385,9 +393,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.overrides'
 - [ ] **10.12** Open Book Detail page
 - [ ] **10.13** Verify book fully accessible with all metadata
 
-**Pass Criteria**: State transitions correctly, file organized, book remains accessible
+**Pass Criteria**: State transitions correctly, file organized, book remains
+accessible
 
 **Observed Issues**:
+
 ```
 [Record any issues here]
 ```
@@ -428,35 +438,34 @@ After manual tests, verify automated E2E tests align:
 
 ## Test Summary
 
-**Completion Date**: _______________
-**Tester**: _______________
-**Build/Commit**: _______________
+**Completion Date**: ******\_\_\_****** **Tester**: ******\_\_\_******
+**Build/Commit**: ******\_\_\_******
 
 ### Results
 
-| Test # | Test Name                        | Status | Issues Found |
-|--------|----------------------------------|--------|--------------|
-| 1      | Provenance Display               | ☐      |              |
-| 2      | Apply Override (File)            | ☐      |              |
-| 3      | Clear Override                   | ☐      |              |
-| 4      | Lock Toggle                      | ☐      |              |
-| 5      | Add Blocked Hash                 | ☐      |              |
-| 6      | Delete Blocked Hash              | ☐      |              |
-| 7      | Soft Delete (No Block)           | ☐      |              |
-| 8      | Soft Delete (With Block)         | ☐      |              |
-| 9      | Restore Soft-Deleted             | ☐      |              |
-| 10     | State Transition                 | ☐      |              |
+| Test # | Test Name                | Status | Issues Found |
+| ------ | ------------------------ | ------ | ------------ |
+| 1      | Provenance Display       | ☐      |              |
+| 2      | Apply Override (File)    | ☐      |              |
+| 3      | Clear Override           | ☐      |              |
+| 4      | Lock Toggle              | ☐      |              |
+| 5      | Add Blocked Hash         | ☐      |              |
+| 6      | Delete Blocked Hash      | ☐      |              |
+| 7      | Soft Delete (No Block)   | ☐      |              |
+| 8      | Soft Delete (With Block) | ☐      |              |
+| 9      | Restore Soft-Deleted     | ☐      |              |
+| 10     | State Transition         | ☐      |              |
 
-**Pass Rate**: ___/10 (___%)
+**Pass Rate**: **_/10 (_**%)
 
 ### Critical Issues Found
 
 ```
 [List any P0 blocking issues that prevent PR #79 merge]
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 ```
 
 ### Recommendations
@@ -466,6 +475,7 @@ After manual tests, verify automated E2E tests align:
 - [ ] **BLOCK MERGE**: Critical issues found, must be fixed before merge
 
 **Justification**:
+
 ```
 [Explain recommendation]
 ```
@@ -474,41 +484,47 @@ After manual tests, verify automated E2E tests align:
 
 ## Sign-Off
 
-**Tester Signature**: _______________ **Date**: _______________
+**Tester Signature**: ******\_\_\_****** **Date**: ******\_\_\_******
 
-**Reviewer Signature**: _______________ **Date**: _______________
+**Reviewer Signature**: ******\_\_\_****** **Date**: ******\_\_\_******
 
 ---
 
 ## Appendix: Quick Reference Commands
 
 ### API Health Check
+
 ```bash
 curl http://localhost:8888/api/v1/system/status
 ```
 
 ### Get Book State
+
 ```bash
 curl http://localhost:8888/api/v1/audiobooks/<book-id> | \
   jq '{id, title, library_state, marked_for_deletion}'
 ```
 
 ### List Blocked Hashes
+
 ```bash
 curl http://localhost:8888/api/v1/blocked-hashes | jq '.items[]'
 ```
 
 ### List Soft-Deleted Books
+
 ```bash
 curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items[] | {id, title}'
 ```
 
 ### Trigger Scan
+
 ```bash
 curl -X POST http://localhost:8888/api/v1/operations/scan
 ```
 
 ### View Logs
+
 ```bash
 tail -f logs/audiobook-organizer.log
 ```
@@ -522,6 +538,7 @@ tail -f logs/audiobook-organizer.log
 ---
 
 **Related Documents**:
+
 - [Full Manual Test Plan](./MANUAL_TEST_PLAN.md)
 - [Test Data Setup Guide](./TEST_DATA_SETUP_GUIDE.md)
 - [E2E Test Coverage Summary](../web/tests/e2e/TEST_COVERAGE_SUMMARY.md)
