@@ -5,9 +5,9 @@
 
 """Run semantic-release with proper environment and configuration."""
 
+import os
 import subprocess
 import sys
-import os
 
 
 def main():

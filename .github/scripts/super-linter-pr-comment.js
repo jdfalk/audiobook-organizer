@@ -12,14 +12,17 @@
 module.exports = async function ({ github, context, core }) {
   // Example: Post a comment with linter results
   // You may want to customize this logic for your workflow
-  const prNumber = context.payload.pull_request ? context.payload.pull_request.number : null;
+  const prNumber = context.payload.pull_request
+    ? context.payload.pull_request.number
+    : null;
   if (!prNumber) {
     core.info('No pull request found in context. Skipping comment.');
     return;
   }
 
   // Example linter result (replace with actual linter output)
-  const linterOutput = process.env.LINTER_RESULTS || 'Super Linter completed. No results found.';
+  const linterOutput =
+    process.env.LINTER_RESULTS || 'Super Linter completed. No results found.';
 
   await github.rest.issues.createComment({
     owner: context.repo.owner,

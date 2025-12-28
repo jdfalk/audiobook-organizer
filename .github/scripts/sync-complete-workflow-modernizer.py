@@ -10,8 +10,8 @@ Converts ALL workflows to use Python scripts and removes inline bash.
 
 import os
 import re
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -29,18 +29,14 @@ class WorkflowModernizer:
     def extract_inline_scripts(self, content):
         """Extract inline scripts from workflow and convert to Python calls."""
         # Find all run: | blocks
-        run_blocks = re.findall(
-            r"(\s+)run: \|\s*\n((?:\1  .*\n?)*)", content, re.MULTILINE
-        )
+        run_blocks = re.findall(r"(\s+)run: \|\s*\n((?:\1  .*\n?)*)", content, re.MULTILINE)
 
         script_replacements = []
         for indent, script_content in run_blocks:
             # Clean up the script content
             lines = script_content.split("\n")
             cleaned_lines = [
-                line[len(indent) + 2 :]
-                if line.startswith(indent + "  ")
-                else line.strip()
+                line[len(indent) + 2 :] if line.startswith(indent + "  ") else line.strip()
                 for line in lines
                 if line.strip()
             ]
@@ -89,9 +85,7 @@ class WorkflowModernizer:
         ]
 
         for pattern, replacement in replacements:
-            modernized = re.sub(
-                pattern, replacement, modernized, flags=re.MULTILINE | re.DOTALL
-            )
+            modernized = re.sub(pattern, replacement, modernized, flags=re.MULTILINE | re.DOTALL)
 
         # Replace GitHub context variables with environment variables for security
         security_replacements = [
@@ -119,7 +113,7 @@ class WorkflowModernizer:
     def modernize_workflow(self, workflow_path):
         """Modernize a single workflow file."""
         try:
-            with open(workflow_path, "r") as f:
+            with open(workflow_path) as f:
                 content = f.read()
 
             # Skip if already modernized
@@ -289,9 +283,7 @@ def main():
 
     # Auto-commit if there were changes
     if modernizer.modernized_count > 0:
-        print(
-            f"\n🚀 Auto-committing {modernizer.modernized_count} modernized workflows..."
-        )
+        print(f"\n🚀 Auto-committing {modernizer.modernized_count} modernized workflows...")
 
         # Add files
         subprocess.run(["git", "add", "."], cwd=os.path.dirname(workflow_dir))

@@ -54,10 +54,7 @@ def get_changed_files_summary():
     for status, file_path in changes:
         if ".github/workflows/" in file_path:
             categories["workflows"].append(file_path)
-        elif (
-            ".github/instructions/" in file_path
-            or "copilot-instructions.md" in file_path
-        ):
+        elif ".github/instructions/" in file_path or "copilot-instructions.md" in file_path:
             categories["instructions"].append(file_path)
         elif ".github/scripts/" in file_path or "/scripts/" in file_path:
             categories["scripts"].append(file_path)

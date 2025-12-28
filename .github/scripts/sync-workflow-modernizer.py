@@ -20,10 +20,9 @@ all language-specific workflows while maintaining the security improvements.
 """
 
 import os
-import sys
 import re
+import sys
 from pathlib import Path
-from typing import List
 
 
 class WorkflowModernizer:
@@ -133,7 +132,7 @@ class WorkflowModernizer:
 
         return content
 
-    def modernize_all_workflows(self) -> List[str]:
+    def modernize_all_workflows(self) -> list[str]:
         """Modernize all detected workflow files."""
         print("🚀 Starting comprehensive workflow modernization...")
 
@@ -167,7 +166,7 @@ class WorkflowModernizer:
         print("✅ All required Python scripts are available")
         return True
 
-    def generate_modernization_report(self, updated_workflows: List[str]) -> str:
+    def generate_modernization_report(self, updated_workflows: list[str]) -> str:
         """Generate a report of the modernization results."""
         report = [
             "# Workflow Modernization Report",
@@ -185,9 +184,7 @@ class WorkflowModernizer:
             workflow_file = self.language_workflows[language]
             report.append(f"- ✅ {language}: {workflow_file}")
 
-        unchanged_workflows = set(self.language_workflows.keys()) - set(
-            updated_workflows
-        )
+        unchanged_workflows = set(self.language_workflows.keys()) - set(updated_workflows)
         if unchanged_workflows:
             report.append("")
             report.append("## Unchanged Workflows")

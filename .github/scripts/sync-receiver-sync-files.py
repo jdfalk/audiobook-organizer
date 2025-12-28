@@ -11,13 +11,13 @@ This script performs the actual file copying operations based on sync_type.
 Now reads workflow-config.yaml to determine what files to sync.
 """
 
-import os
 import shutil
 import stat
 import subprocess
 import sys
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def load_sync_config():
@@ -28,7 +28,7 @@ def load_sync_config():
         return {"sync": {"sync_paths": [], "exclude_files": []}}
 
     try:
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             config = yaml.safe_load(f)
             print(f"✅ Loaded sync configuration from {config_file}")
             return config
@@ -161,18 +161,14 @@ def sync_instructions():
         print(
             f"ℹ️  Copying main copilot-instructions.md: ghcommon-source/{copilot_instructions} -> {copilot_instructions}"
         )
-        if copy_file_safe(
-            f"ghcommon-source/{copilot_instructions}", copilot_instructions
-        ):
+        if copy_file_safe(f"ghcommon-source/{copilot_instructions}", copilot_instructions):
             print("✅ Successfully copied main copilot-instructions.md")
         else:
             print("❌ Failed to copy main copilot-instructions.md")
 
     # Copy instructions directory if configured
     instructions_dir = ".github/instructions/"
-    if instructions_dir in sync_paths and not is_file_excluded(
-        instructions_dir, exclude_files
-    ):
+    if instructions_dir in sync_paths and not is_file_excluded(instructions_dir, exclude_files):
         src_dir = Path("ghcommon-source/.github/instructions")
         if src_dir.exists():
             instruction_files = list(src_dir.glob("*"))
@@ -187,13 +183,9 @@ def sync_instructions():
                     ):
                         success_count += 1
                     else:
-                        print(
-                            f"❌ Failed to copy instruction file {instruction_file.name}"
-                        )
+                        print(f"❌ Failed to copy instruction file {instruction_file.name}")
 
-            print(
-                f"✅ Copied {success_count}/{len(instruction_files)} instruction files"
-            )
+            print(f"✅ Copied {success_count}/{len(instruction_files)} instruction files")
         else:
             print(f"⚠️  Source not found for instruction files: {src_dir}/*")
 
@@ -227,9 +219,7 @@ def sync_prompts():
                 print(
                     f"ℹ️  Copying prompt file {prompt_file.name}: {prompt_file} -> .github/prompts/"
                 )
-                if copy_file_safe(
-                    str(prompt_file), f".github/prompts/{prompt_file.name}"
-                ):
+                if copy_file_safe(str(prompt_file), f".github/prompts/{prompt_file.name}"):
                     print(f"✅ Successfully copied prompt file {prompt_file.name}")
                 else:
                     print(f"❌ Failed to copy prompt file {prompt_file.name}")
@@ -268,17 +258,13 @@ def sync_scripts():
     }
 
     # Copy GitHub scripts individually based on configuration
-    github_scripts_configured = any(
-        path.startswith(".github/scripts/") for path in sync_paths
-    )
+    github_scripts_configured = any(path.startswith(".github/scripts/") for path in sync_paths)
 
     if github_scripts_configured:
         src_dir = Path("ghcommon-source/.github/scripts")
         if src_dir.exists():
             script_files = [
-                f
-                for f in src_dir.glob("*")
-                if f.is_file() and f.name not in excluded_scripts
+                f for f in src_dir.glob("*") if f.is_file() and f.name not in excluded_scripts
             ]
             print(f"📋 Copying {len(script_files)} GitHub scripts...")
 
@@ -292,11 +278,7 @@ def sync_scripts():
                         print(f"❌ Failed to copy GitHub script {script_file.name}")
 
             excluded_count = len(
-                [
-                    f
-                    for f in src_dir.glob("*")
-                    if f.is_file() and f.name in excluded_scripts
-                ]
+                [f for f in src_dir.glob("*") if f.is_file() and f.name in excluded_scripts]
             )
             print(
                 f"✅ Copied {success_count}/{len(script_files)} GitHub scripts ({excluded_count} excluded)"
@@ -364,9 +346,7 @@ def sync_labels():
 
     # Copy GitHub labels sync script if configured
     labels_script = "scripts/sync-github-labels.py"
-    if labels_script in sync_paths and not is_file_excluded(
-        labels_script, exclude_files
-    ):
+    if labels_script in sync_paths and not is_file_excluded(labels_script, exclude_files):
         total_files += 1
         print(
             f"ℹ️  Copying GitHub labels sync script: ghcommon-source/{labels_script} -> {labels_script}"
@@ -406,9 +386,7 @@ def sync_other_files():
     other_files = [
         path
         for path in sync_paths
-        if not any(
-            path.startswith(pattern) or path == pattern for pattern in handled_patterns
-        )
+        if not any(path.startswith(pattern) or path == pattern for pattern in handled_patterns)
     ]
 
     if not other_files:

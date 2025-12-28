@@ -8,17 +8,17 @@ Determine version for release based on manual input or semantic-release analysis
 Usage: sync-release-determine-version.py <language> <manual_release_type> <github_token>
 """
 
-import sys
+import json
 import re
 import subprocess
-import json
+import sys
 from pathlib import Path
 
 
 def get_current_version_rust():
     """Get current version from Cargo.toml."""
     try:
-        with open("Cargo.toml", "r") as f:
+        with open("Cargo.toml") as f:
             content = f.read()
 
         match = re.search(r'^version = "([^"]+)"', content, re.MULTILINE)
@@ -84,7 +84,7 @@ def get_current_version_python():
 def get_current_version_js_ts():
     """Get current version from package.json."""
     try:
-        with open("package.json", "r") as f:
+        with open("package.json") as f:
             package_data = json.load(f)
         return package_data.get("version", "0.0.0")
     except FileNotFoundError:

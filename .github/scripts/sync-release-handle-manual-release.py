@@ -8,10 +8,10 @@ Handle manual release version calculation.
 Usage: sync-release-handle-manual-release.py <release_type> <language>
 """
 
-import sys
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -113,7 +113,7 @@ def increment_version(current_version, release_type):
         if len(parts) != 3:
             raise ValueError(f"Invalid version format: {current_version}")
 
-        major, minor, patch = [int(p) for p in parts]
+        major, minor, patch = (int(p) for p in parts)
 
         if release_type == "major":
             major += 1

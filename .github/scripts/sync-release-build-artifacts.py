@@ -10,11 +10,10 @@ Handles building release artifacts for different programming languages.
 Replaces embedded bash build scripts with reliable Python-based build logic.
 """
 
-import os
-import sys
 import json
+import os
 import subprocess
-import platform
+import sys
 from pathlib import Path
 
 
@@ -26,9 +25,7 @@ def log(message: str, level: str = "INFO") -> None:
 def run_command(cmd: list, cwd: str = None, env: dict = None) -> tuple:
     """Run a command and return (success, stdout, stderr)."""
     try:
-        result = subprocess.run(
-            cmd, cwd=cwd, env=env, capture_output=True, text=True, check=False
-        )
+        result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, check=False)
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
         return False, "", str(e)
@@ -51,7 +48,7 @@ def build_rust_artifacts() -> bool:
     # Get binary name from Cargo.toml
     binary_name = "unknown"
     try:
-        with open("Cargo.toml", "r") as f:
+        with open("Cargo.toml") as f:
             content = f.read()
             # Look for [[bin]] section first
             if "[[bin]]" in content:
@@ -152,7 +149,7 @@ def build_go_artifacts() -> bool:
     # Get module name
     module_name = "unknown"
     try:
-        with open("go.mod", "r") as f:
+        with open("go.mod") as f:
             first_line = f.readline().strip()
             if first_line.startswith("module"):
                 module_name = Path(first_line.split()[1]).name
@@ -189,9 +186,7 @@ def build_go_artifacts() -> bool:
             # Create archive
             if goos == "windows":
                 archive_name = f"{module_name}-{goos}-{goarch}.zip"
-                run_command(
-                    ["zip", f"releases/{archive_name}", f"releases/{binary_name}"]
-                )
+                run_command(["zip", f"releases/{archive_name}", f"releases/{binary_name}"])
             else:
                 archive_name = f"{module_name}-{goos}-{goarch}.tar.gz"
                 run_command(
@@ -248,7 +243,7 @@ def build_javascript_artifacts() -> bool:
 
     # Build if build script exists
     try:
-        with open("package.json", "r") as f:
+        with open("package.json") as f:
             package_data = json.load(f)
             scripts = package_data.get("scripts", {})
 
@@ -271,9 +266,7 @@ def build_javascript_artifacts() -> bool:
 
 def main():
     """Main execution function."""
-    language = (
-        sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LANGUAGE", "unknown")
-    )
+    language = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LANGUAGE", "unknown")
 
     log(f"Building artifacts for language: {language}")
 

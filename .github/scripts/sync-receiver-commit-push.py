@@ -17,9 +17,7 @@ def run_command(cmd, description):
     print(f"Running: {description}")
 
     try:
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=60
-        )
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
 
         if result.returncode == 0:
             print(f"✅ {description} successful")
@@ -41,9 +39,7 @@ def run_command(cmd, description):
 
 def check_for_changes():
     """Check if there are any changes to commit."""
-    result = subprocess.run(
-        "git status --porcelain", shell=True, capture_output=True, text=True
-    )
+    result = subprocess.run("git status --porcelain", shell=True, capture_output=True, text=True)
 
     return bool(result.stdout.strip())
 
