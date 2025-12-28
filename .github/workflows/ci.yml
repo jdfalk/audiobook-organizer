@@ -11,7 +11,7 @@ on:
   pull_request:
     branches: [main, master]
   schedule:
-    - cron: "0 0 * * 0" # Weekly on Sunday
+    - cron: '0 0 * * 0' # Weekly on Sunday
   workflow_dispatch:
 
 concurrency:
@@ -32,10 +32,10 @@ jobs:
     name: Run CI
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
-      go-version: "1.25"
-      node-version: "22"
-      python-version: "3.13"
-      rust-version: "1.76"
-      coverage-threshold: "80"
+      go-version: '1.25'
+      node-version: '22'
+      python-version: '3.13'
+      rust-version: '1.76'
+      coverage-threshold: '80'
       skip-protobuf: false
     secrets: inherit
