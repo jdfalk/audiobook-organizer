@@ -1,6 +1,5 @@
 ---
-description:
-  'Safely propagate shared configs/workflows to target repos with exclusions.'
+description: 'Safely propagate shared configs/workflows to target repos with exclusions.'
 tools:
   [
     'vscode',
