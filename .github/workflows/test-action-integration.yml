@@ -5,67 +5,67 @@
 name: Test Frontend Config Action Integration
 
 on:
-    push:
-        branches: [main, develop]
-        paths:
-            - ".github/repository-config.yml"
-            - ".github/workflows/test-action-integration.yml"
-    pull_request:
-        branches: [main, develop]
-        paths:
-            - ".github/repository-config.yml"
-            - ".github/workflows/test-action-integration.yml"
-    workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - ".github/repository-config.yml"
+      - ".github/workflows/test-action-integration.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - ".github/repository-config.yml"
+      - ".github/workflows/test-action-integration.yml"
+  workflow_dispatch:
 
 permissions:
-    contents: read
-    checks: write
+  contents: read
+  checks: write
 
 jobs:
-    test-action:
-        name: Test Frontend Configuration Action
-        runs-on: ubuntu-latest
+  test-action:
+    name: Test Frontend Configuration Action
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Get frontend configuration
-              id: frontend-config
-              uses: jdfalk/get-frontend-config-action@main
-              with:
-                  repository-config: ""
-                  config-file: ".github/repository-config.yml"
+      - name: Get frontend configuration
+        id: frontend-config
+        uses: jdfalk/get-frontend-config-action@main
+        with:
+          repository-config: ""
+          config-file: ".github/repository-config.yml"
 
-            - name: Verify action outputs
-              run: |
-                  echo "✅ Action executed successfully"
-                  echo "Frontend directory: ${{ steps.frontend-config.outputs.dir }}"
-                  echo "Node.js version: ${{ steps.frontend-config.outputs.node-version }}"
-                  echo "Has frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
+      - name: Verify action outputs
+        run: |
+          echo "✅ Action executed successfully"
+          echo "Frontend directory: ${{ steps.frontend-config.outputs.dir }}"
+          echo "Node.js version: ${{ steps.frontend-config.outputs.node-version }}"
+          echo "Has frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
 
-                  # Validate outputs
-                  if [ "${{ steps.frontend-config.outputs.dir }}" != "web" ]; then
-                    echo "❌ Expected dir='web', got '${{ steps.frontend-config.outputs.dir }}'"
-                    exit 1
-                  fi
+          # Validate outputs
+          if [ "${{ steps.frontend-config.outputs.dir }}" != "web" ]; then
+            echo "❌ Expected dir='web', got '${{ steps.frontend-config.outputs.dir }}'"
+            exit 1
+          fi
 
-                  if [ "${{ steps.frontend-config.outputs.node-version }}" != "22" ]; then
-                    echo "❌ Expected node-version='22', got '${{ steps.frontend-config.outputs.node-version }}'"
-                    exit 1
-                  fi
+          if [ "${{ steps.frontend-config.outputs.node-version }}" != "22" ]; then
+            echo "❌ Expected node-version='22', got '${{ steps.frontend-config.outputs.node-version }}'"
+            exit 1
+          fi
 
-                  if [ "${{ steps.frontend-config.outputs.has-frontend }}" != "true" ]; then
-                    echo "❌ Expected has-frontend='true', got '${{ steps.frontend-config.outputs.has-frontend }}'"
-                    exit 1
-                  fi
+          if [ "${{ steps.frontend-config.outputs.has-frontend }}" != "true" ]; then
+            echo "❌ Expected has-frontend='true', got '${{ steps.frontend-config.outputs.has-frontend }}'"
+            exit 1
+          fi
 
-                  echo "✅ All output validations passed"
+          echo "✅ All output validations passed"
 
-            - name: Report results
-              if: always()
-              run: |
-                  echo "Test Results:"
-                  echo "  Frontend Dir: ${{ steps.frontend-config.outputs.dir }}"
-                  echo "  Node Version: ${{ steps.frontend-config.outputs.node-version }}"
-                  echo "  Has Frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
+      - name: Report results
+        if: always()
+        run: |
+          echo "Test Results:"
+          echo "  Frontend Dir: ${{ steps.frontend-config.outputs.dir }}"
+          echo "  Node Version: ${{ steps.frontend-config.outputs.node-version }}"
+          echo "  Has Frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
