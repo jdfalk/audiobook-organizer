@@ -17,59 +17,59 @@ NC='\033[0m' # No Color
 
 # Functions
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+  echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+  echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+  echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # Check if we're in a git repository
 check_git_repo() {
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
-        log_error "Not in a git repository. Please run this script from the root of your git repository."
-        exit 1
-    fi
+  if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    log_error "Not in a git repository. Please run this script from the root of your git repository."
+    exit 1
+  fi
 }
 
 # Create .github/workflows directory if it doesn't exist
 create_workflows_dir() {
-    if [ ! -d ".github/workflows" ]; then
-        log_info "Creating .github/workflows directory..."
-        mkdir -p .github/workflows
-        log_success "Created .github/workflows directory"
-    fi
+  if [ ! -d ".github/workflows" ]; then
+    log_info "Creating .github/workflows directory..."
+    mkdir -p .github/workflows
+    log_success "Created .github/workflows directory"
+  fi
 }
 
 # Download workflow template
 download_template() {
-    local template_name="$1"
-    local output_file="$2"
-    local base_url="https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows"
+  local template_name="$1"
+  local output_file="$2"
+  local base_url="https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows"
 
-    log_info "Downloading $template_name template..."
+  log_info "Downloading $template_name template..."
 
-    if curl -fsSL "$base_url/$template_name" -o ".github/workflows/$output_file"; then
-        log_success "Downloaded $template_name to .github/workflows/$output_file"
-    else
-        log_error "Failed to download $template_name"
-        return 1
-    fi
+  if curl -fsSL "$base_url/$template_name" -o ".github/workflows/$output_file"; then
+    log_success "Downloaded $template_name to .github/workflows/$output_file"
+  else
+    log_error "Failed to download $template_name"
+    return 1
+  fi
 }
 
 # Create example Dockerfile
 create_dockerfile() {
-    if [ ! -f "Dockerfile" ]; then
-        log_info "Creating example Dockerfile..."
-        cat > Dockerfile << 'EOF'
+  if [ ! -f "Dockerfile" ]; then
+    log_info "Creating example Dockerfile..."
+    cat >Dockerfile <<'EOF'
 # Multi-stage build for optimal image size
 FROM node:20-alpine AS builder
 
@@ -107,30 +107,30 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Start application
 CMD ["npm", "start"]
 EOF
-        log_success "Created example Dockerfile"
-        log_warning "Please customize the Dockerfile for your specific application"
-    else
-        log_info "Dockerfile already exists, skipping creation"
-    fi
+    log_success "Created example Dockerfile"
+    log_warning "Please customize the Dockerfile for your specific application"
+  else
+    log_info "Dockerfile already exists, skipping creation"
+  fi
 }
 
 # Create version file
 create_version_file() {
-    if [ ! -f "version.txt" ] && [ ! -f "package.json" ]; then
-        log_info "Creating version.txt file..."
-        echo "1.0.0" > version.txt
-        log_success "Created version.txt with initial version 1.0.0"
-    fi
+  if [ ! -f "version.txt" ] && [ ! -f "package.json" ]; then
+    log_info "Creating version.txt file..."
+    echo "1.0.0" >version.txt
+    log_success "Created version.txt with initial version 1.0.0"
+  fi
 }
 
 # Create GitHub issue templates
 create_issue_templates() {
-    if [ ! -d ".github/ISSUE_TEMPLATE" ]; then
-        log_info "Creating GitHub issue templates..."
-        mkdir -p .github/ISSUE_TEMPLATE
+  if [ ! -d ".github/ISSUE_TEMPLATE" ]; then
+    log_info "Creating GitHub issue templates..."
+    mkdir -p .github/ISSUE_TEMPLATE
 
-        # Bug report template
-        cat > .github/ISSUE_TEMPLATE/bug_report.yml << 'EOF'
+    # Bug report template
+    cat >.github/ISSUE_TEMPLATE/bug_report.yml <<'EOF'
 name: Bug Report
 description: File a bug report
 title: "[Bug]: "
@@ -168,8 +168,8 @@ body:
       render: shell
 EOF
 
-        # Feature request template
-        cat > .github/ISSUE_TEMPLATE/feature_request.yml << 'EOF'
+    # Feature request template
+    cat >.github/ISSUE_TEMPLATE/feature_request.yml <<'EOF'
 name: Feature Request
 description: Suggest an idea for this project
 title: "[Feature]: "
@@ -204,15 +204,15 @@ body:
       description: Add any other context or screenshots about the feature request here.
 EOF
 
-        log_success "Created GitHub issue templates"
-    fi
+    log_success "Created GitHub issue templates"
+  fi
 }
 
 # Create pull request template
 create_pr_template() {
-    if [ ! -f ".github/pull_request_template.md" ]; then
-        log_info "Creating pull request template..."
-        cat > .github/pull_request_template.md << 'EOF'
+  if [ ! -f ".github/pull_request_template.md" ]; then
+    log_info "Creating pull request template..."
+    cat >.github/pull_request_template.md <<'EOF'
 ## Description
 
 Brief description of the changes made in this PR.
@@ -244,15 +244,15 @@ Brief description of the changes made in this PR.
 
 Any additional information or context about this PR.
 EOF
-        log_success "Created pull request template"
-    fi
+    log_success "Created pull request template"
+  fi
 }
 
 # Create .gitignore if it doesn't exist
 create_gitignore() {
-    if [ ! -f ".gitignore" ]; then
-        log_info "Creating .gitignore file..."
-        cat > .gitignore << 'EOF'
+  if [ ! -f ".gitignore" ]; then
+    log_info "Creating .gitignore file..."
+    cat >.gitignore <<'EOF'
 # Dependencies
 node_modules/
 *.log
@@ -296,71 +296,70 @@ Thumbs.db
 *.tmp
 *.temp
 EOF
-        log_success "Created .gitignore file"
-    fi
+    log_success "Created .gitignore file"
+  fi
 }
 
 # Show next steps
 show_next_steps() {
-    echo
-    log_success "Repository setup completed!"
-    echo
-    log_info "Next steps:"
-    echo "  1. Review and customize the workflow file in .github/workflows/"
-    echo "  2. Update the Dockerfile for your specific application"
-    echo "  3. Add any required secrets to your repository settings"
-    echo "  4. Configure branch protection rules"
-    echo "  5. Start using conventional commit messages"
-    echo
-    log_info "For detailed setup instructions, see:"
-    echo "  https://github.com/jdfalk/ghcommon/blob/main/copilot/repository-setup.md"
+  echo
+  log_success "Repository setup completed!"
+  echo
+  log_info "Next steps:"
+  echo "  1. Review and customize the workflow file in .github/workflows/"
+  echo "  2. Update the Dockerfile for your specific application"
+  echo "  3. Add any required secrets to your repository settings"
+  echo "  4. Configure branch protection rules"
+  echo "  5. Start using conventional commit messages"
+  echo
+  log_info "For detailed setup instructions, see:"
+  echo "  https://github.com/jdfalk/ghcommon/blob/main/copilot/repository-setup.md"
 }
 
 # Main function
 main() {
-    local workflow_type="${1:-complete}"
+  local workflow_type="${1:-complete}"
 
-    echo "🚀 Setting up repository for reusable workflows..."
-    echo
+  echo "🚀 Setting up repository for reusable workflows..."
+  echo
 
-    # Validate arguments
-    case "$workflow_type" in
-        complete|container|library)
-            ;;
-        *)
-            log_error "Invalid workflow type. Use: complete, container, or library"
-            echo "Usage: $0 [complete|container|library]"
-            exit 1
-            ;;
-    esac
+  # Validate arguments
+  case "$workflow_type" in
+  complete | container | library) ;;
+  *)
+    log_error "Invalid workflow type. Use: complete, container, or library"
+    echo "Usage: $0 [complete|container|library]"
+    exit 1
+    ;;
+  esac
 
-    # Run setup steps
-    check_git_repo
-    create_workflows_dir
+  # Run setup steps
+  check_git_repo
+  create_workflows_dir
 
-    # Download appropriate template
-    case "$workflow_type" in
-        complete)
-            download_template "complete-ci-cd.yml" "ci-cd.yml"
-            create_dockerfile
-            ;;
-        container)
-            download_template "container-only.yml" "container.yml"
-            create_dockerfile
-            ;;
-        library)
-            download_template "library-release.yml" "release.yml"
-            ;;
-    esac
+  # Download appropriate template
+  case "$workflow_type" in
+  complete)
+    download_template "complete-ci-cd.yml" "ci-cd.yml"
+    create_dockerfile
+    ;;
+  container)
+    download_template "container-only.yml" "container.yml"
+    create_dockerfile
+    ;;
+  library)
+    download_template "library-release.yml" "release.yml"
+    ;;
+  esac
 
-    # Create supporting files
-    create_version_file
-    create_issue_templates
-    create_pr_template
-    create_gitignore
+  # Create supporting files
+  create_version_file
+  create_issue_templates
+  create_pr_template
+  create_gitignore
 
-    # Show next steps
-    show_next_steps
+  # Show next steps
+  show_next_steps
 }
 
 # Run main function with all arguments

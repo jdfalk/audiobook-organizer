@@ -15,21 +15,21 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+  echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+  echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 # Check if we're in a git repository
-if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo "Error: Not in a git repository"
-    exit 1
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Error: Not in a git repository"
+  exit 1
 fi
 
 # Create .github directory if it doesn't exist
@@ -38,7 +38,7 @@ mkdir -p .github
 log_info "Updating repository Copilot instructions..."
 
 # Create or update copilot instructions
-cat > .github/copilot-instructions.md << 'EOF'
+cat >.github/copilot-instructions.md <<'EOF'
 # file: .github/copilot-instructions.md
 
 # Copilot Instructions for GitHub Common Workflows
@@ -120,45 +120,45 @@ log_success "Created .github/copilot-instructions.md"
 
 # Update existing copilot instructions if they exist
 if [ -f ".github/copilot-instructions.md" ]; then
-    log_success "Updated existing Copilot instructions"
+  log_success "Updated existing Copilot instructions"
 else
-    log_success "Created new Copilot instructions"
+  log_success "Created new Copilot instructions"
 fi
 
 # Create workflow starter if none exists
 if [ ! -d ".github/workflows" ] || [ -z "$(ls -A .github/workflows 2>/dev/null)" ]; then
-    log_info "No workflows detected. Creating starter workflow..."
+  log_info "No workflows detected. Creating starter workflow..."
 
-    mkdir -p .github/workflows
+  mkdir -p .github/workflows
 
-    # Determine project type based on files present
-    if [ -f "Dockerfile" ]; then
-        WORKFLOW_TYPE="container"
-    elif [ -f "package.json" ] || [ -f "setup.py" ] || [ -f "Cargo.toml" ]; then
-        WORKFLOW_TYPE="library"
-    else
-        WORKFLOW_TYPE="complete"
-    fi
+  # Determine project type based on files present
+  if [ -f "Dockerfile" ]; then
+    WORKFLOW_TYPE="container"
+  elif [ -f "package.json" ] || [ -f "setup.py" ] || [ -f "Cargo.toml" ]; then
+    WORKFLOW_TYPE="library"
+  else
+    WORKFLOW_TYPE="complete"
+  fi
 
-    log_info "Detected project type: $WORKFLOW_TYPE"
+  log_info "Detected project type: $WORKFLOW_TYPE"
 
-    # Download appropriate template
-    case "$WORKFLOW_TYPE" in
-        container)
-            curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/container-only.yml" \
-                -o ".github/workflows/ci-cd.yml"
-            ;;
-        library)
-            curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/library-release.yml" \
-                -o ".github/workflows/release.yml"
-            ;;
-        *)
-            curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/complete-ci-cd.yml" \
-                -o ".github/workflows/ci-cd.yml"
-            ;;
-    esac
+  # Download appropriate template
+  case "$WORKFLOW_TYPE" in
+  container)
+    curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/container-only.yml" \
+      -o ".github/workflows/ci-cd.yml"
+    ;;
+  library)
+    curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/library-release.yml" \
+      -o ".github/workflows/release.yml"
+    ;;
+  *)
+    curl -fsSL "https://raw.githubusercontent.com/jdfalk/ghcommon/main/templates/workflows/complete-ci-cd.yml" \
+      -o ".github/workflows/ci-cd.yml"
+    ;;
+  esac
 
-    log_success "Created starter workflow for $WORKFLOW_TYPE project"
+  log_success "Created starter workflow for $WORKFLOW_TYPE project"
 fi
 
 echo
