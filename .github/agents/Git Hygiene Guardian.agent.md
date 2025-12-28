@@ -1,6 +1,5 @@
 ---
-description:
-  'Enforce conventional commit headers, branch naming, and PR templates.'
+description: 'Enforce conventional commit headers, branch naming, and PR templates.'
 tools:
   [
     'vscode',

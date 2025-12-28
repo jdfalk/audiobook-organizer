@@ -1,6 +1,5 @@
 ---
-description:
-  'Generate/update docs, READMEs, changelogs, and API notes from
+description: 'Generate/update docs, READMEs, changelogs, and API notes from
   code/tests/workflows.'
 tools:
   [

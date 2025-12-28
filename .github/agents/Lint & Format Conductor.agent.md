@@ -1,6 +1,5 @@
 ---
-description:
-  'Run and coordinate linters/formatters per language, emit fix plans or diffs.'
+description: 'Run and coordinate linters/formatters per language, emit fix plans or diffs.'
 tools:
   [
     'vscode',
