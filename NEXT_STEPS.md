@@ -24,19 +24,16 @@ This session focused on:
 **Tasks**:
 
 1. [ ] Monitor PR #79 CI/CD pipeline execution
-
    - Verify all GitHub Actions pass
    - Check Go tests pass (50+ tests)
    - Verify frontend linting passes
    - Ensure Docker build succeeds
 
 2. [ ] Merge PR #79 when CI passes
-
    - Use "Squash and merge" to keep history clean
    - Verify main branch is updated
 
 3. [ ] Validate merged code on main
-
    - Pull latest main branch
    - Run `go test ./...` - ensure 100% pass rate
    - Run `npm run lint` in web/ - ensure clean output
@@ -59,19 +56,16 @@ This session focused on:
 **Tasks**:
 
 1. [ ] Review existing E2E test structure
-
    - Location: `web/tests/e2e/book-detail.spec.ts`
    - Current coverage: Basic book detail navigation
 
 2. [ ] Add provenance-specific E2E tests
-
    - Test metadata tags display with provenance indicators
    - Test override UI interaction flow
    - Test effective source display
    - Test lock/unlock controls
 
 3. [ ] Run E2E tests
-
    - Execute: `npm run test:e2e -- book-detail`
    - Verify all new tests pass
 
@@ -95,13 +89,11 @@ This session focused on:
 **Tasks**:
 
 1. [ ] Monitor test-action-integration.yml workflow
-
    - Trigger manually or wait for repository-config.yml change
    - Verify action executes successfully
    - Check outputs: dir, node-version, has-frontend
 
 2. [ ] Optional: Integrate action into frontend-ci.yml
-
    - Add get-frontend-config-action step
    - Pass outputs to reusable workflow
    - Test that frontend CI still works with dynamic config
@@ -127,14 +119,12 @@ This session focused on:
 **Tasks**:
 
 1. [ ] Update CHANGELOG.md
-
    - Add SESSION-003 completion
    - Add SESSION-006 TypeScript fixes
    - Add PR #79 merge summary
    - Increment version to 1.1.6
 
 2. [ ] Update SESSION_SUMMARY.md or create new session doc
-
    - Document all commits from this session
    - Summarize metrics and outcomes
    - List outstanding items
