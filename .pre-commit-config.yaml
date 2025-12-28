@@ -1,0 +1,304 @@
+# file: .pre-commit-config.yaml
+# version: 2.6.0
+# guid: f8e7d6c5-b4a3-9281-7069-5a4b3c2d1e0f
+
+# Pre-commit hooks configuration for comprehensive code quality checks
+# This configuration uses official pre-commit.com hooks and integrates with
+# our existing linter configurations in .github/linters/
+
+repos:
+  # Pre-commit built-in hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+        exclude: '\.(md|json|yml|yaml|toml|txt|gitignore|js)$'
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+        exclude: '^tests/|^\.github/(test-files|workflows/scripts)|test_.*\.py$|.*_test\.(py|sh)$'
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-vcs-permalinks
+      - id: check-xml
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: debug-statements
+      - id: destroyed-symlinks
+      - id: detect-private-key
+        exclude: '^tests/.*test.*\.py$'
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      # fix-encoding-pragma has been removed - use pyupgrade instead
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+  # Security scanning - DISABLED: GitHub already does this
+  # - repo: https://github.com/Yelp/detect-secrets
+  #   rev: v1.5.0
+  #   hooks:
+  #     - id: detect-secrets
+  #       args: ["--baseline", ".secrets.baseline"]
+  #       exclude: package.lock.json
+
+  # Go formatting and linting
+  # ==========================================================================
+  # Golang Pre-Commit Hooks | https://github.com/tekwizely/pre-commit-golang
+  #
+  # !! ALL Hooks enabled by default - Comment out hooks you are not using
+  #
+  # Visit the project home page to learn more about the available Hooks,
+  # including useful arguments you might want to pass into them.
+  #
+  # NOTE: When passing options to hooks, if your options contain a reference
+  #       to an existing file, then you will need to use a trailing '--'
+  #       argument to separate the hook options from the modified-file list
+  #       that Pre-Commit passes into the hook.
+  #       For repo-based hooks, '--' is not needed.
+  #
+  # NOTE: You can pass environment variables to hooks using args with the
+  #       following format:
+  #
+  #           --hook:env:NAME=VALUE
+  #
+  # Consider adding aliases to longer-named hooks for easier CLI usage.
+  # ==========================================================================
+  - repo: https://github.com/tekwizely/pre-commit-golang
+    # See 'pre-commit help autoupdate'
+    rev: v1.0.0-rc.2
+    hooks:
+      #
+      # Go Build
+      #
+      - id: go-build-mod
+      - id: go-build-pkg
+        exclude: '^\.github/test-files/'
+      # Repo-wide build hooks disabled: no Go packages at repo root
+      # - id: go-build-repo-mod
+      # - id: go-build-repo-pkg
+      #
+      # Go Mod Tidy
+      #
+      - id: go-mod-tidy
+      - id: go-mod-tidy-repo
+      #
+      # Go Test
+      #
+      - id: go-test-mod
+      - id: go-test-pkg
+        exclude: '^\.github/test-files/'
+      # Repo-wide test hooks disabled: no Go packages at repo root
+      # - id: go-test-repo-mod
+      # - id: go-test-repo-pkg
+      #
+      # Go Vet
+      #
+      - id: go-vet
+        exclude: '^(\.github/test-files/|testdata/)'
+      - id: go-vet-mod
+      - id: go-vet-pkg
+        exclude: '^\.github/test-files/'
+      # Repo-wide vet hooks disabled: no Go packages at repo root
+      # - id: go-vet-repo-mod
+      # - id: go-vet-repo-pkg
+      #
+      # Revive - DISABLED: tool not installed
+      #
+      # - id: go-revive
+      # - id: go-revive-mod
+      # - id: go-revive-repo-mod
+      #
+      # GoSec - DISABLED: tool not installed
+      #
+      # - id: go-sec-mod
+      # - id: go-sec-pkg
+      # - id: go-sec-repo-mod
+      # - id: go-sec-repo-pkg
+      #
+      # StaticCheck - DISABLED: tool not installed
+      #
+      # - id: go-staticcheck-mod
+      # - id: go-staticcheck-pkg
+      # - id: go-staticcheck-repo-mod
+      # - id: go-staticcheck-repo-pkg
+      #
+      # StructSlop - DISABLED: tool not installed
+      #
+      # - id: go-structslop-mod
+      # - id: go-structslop-pkg
+      # - id: go-structslop-repo-mod
+      # - id: go-structslop-repo-pkg
+      #
+      # Formatters
+      #
+      - id: go-fmt
+        exclude: '^\.github/test-files/'
+      - id: go-fmt-repo
+      # - id: go-fumpt # replaces go-fmt
+      # - id: go-fumpt-repo # replaces go-fmt-repo
+      # - id: go-imports # replaces go-fmt
+      # - id: go-imports-repo # replaces go-fmt-repo
+      # - id: go-returns # replaces go-imports & go-fmt
+      # - id: go-returns-repo # replaces go-imports-repo & go-fmt-repo
+      #
+      # Style Checkers - DISABLED: tools not installed
+      #
+      # - id: go-lint
+      # - id: go-critic
+      #
+      # GolangCI-Lint - DISABLED: tool not installed
+      # - Fast Multi-Linter
+      # - Can be configured to replace MOST other hooks
+      # - Supports repo config file for configuration
+      # - https://github.com/golangci/golangci-lint
+      #
+      # - id: golangci-lint
+      # - id: golangci-lint-mod
+      # - id: golangci-lint-pkg
+      # - id: golangci-lint-repo-mod
+      # - id: golangci-lint-repo-pkg
+      #
+      # Invoking Custom Go Tools
+      # - Configured *entirely* through the `args` attribute, ie:
+      #   args: [ go, test, ./... ]
+      # - Use arg `--hook:error-on-output` to indicate that any output from the tool
+      #   should be treated as an error.
+      # - Use the `name` attribute to provide better messaging when the hook runs
+      # - Use the `alias` attribute to be able to invoke your hook via `pre-commit run`
+      #
+      # - id: my-cmd
+      # - id: my-cmd-mod
+      # - id: my-cmd-pkg
+      # - id: my-cmd-repo
+      # - id: my-cmd-repo-mod
+      # - id: my-cmd-repo-pkg
+
+  # Python formatting and linting - using Ruff only (replaces black + isort)
+  # Ruff is faster and handles both formatting and import sorting
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.14.3
+    hooks:
+      - id: ruff-check
+        args: [--config=.github/linters/ruff.toml, --fix]
+      - id: ruff-format
+        args: [--config=.github/linters/ruff.toml]
+
+  # Pyupgrade for modernizing Python code (Dict->dict, List->list, etc.)
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.21.0
+    hooks:
+      - id: pyupgrade
+        args: [--py313-plus]
+
+  # - repo: https://github.com/pycqa/pylint
+  #   rev: v4.0.2
+  #   hooks:
+  #     - id: pylint
+  #       args: [--rcfile=.pylintrc]
+
+  # JavaScript/TypeScript formatting and linting
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.39.0
+    hooks:
+      - id: eslint
+        files: \.(js|ts|jsx|tsx)$
+        types: [file]
+        args: [--config=eslint.config.mjs, --fix]
+        additional_dependencies:
+          - eslint@^9.0.0
+          - "@typescript-eslint/eslint-plugin@^8.0.0"
+          - "@typescript-eslint/parser@^8.0.0"
+          - typescript-eslint@^8.0.0
+          - globals@^15.0.0
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        types_or: [javascript, jsx, ts, tsx, json, css, scss, yaml, markdown]
+        exclude_types: [python]
+        args: [--config=.github/linters/.prettierrc.json]
+
+  # Rust formatting and linting - DISABLED: no root Cargo.toml in this repo
+  # - repo: https://github.com/doublify/pre-commit-rust
+  #   rev: v1.0
+  #   hooks:
+  #     - id: fmt
+  #       args: [--manifest-path=Cargo.toml, --]
+  #     - id: clippy
+  #       args: [--manifest-path=Cargo.toml, --, -D, warnings]
+
+  # Shell script formatting and linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: [-e, SC2129, -e, SC2269, -e, SC2317, -e, SC2329, -e, SC2034]
+        exclude: '^(scripts/codex-rebase\.sh|scripts/multi-repo-rebase\.sh|test_.*\.sh|fix_instruction_frontmatter\.sh)$'
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.12.0-2
+    hooks:
+      - id: shfmt
+        args: [-w, -s, -i, "2"]
+        exclude: '^(fix_instruction_frontmatter\.sh)$'
+
+  # YAML formatting and linting
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: [--config-file=.yaml-lint.yml]
+
+  # Markdown formatting and linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.45.0
+    hooks:
+      - id: markdownlint
+        args: [--config=.markdownlint.json, --fix]
+        exclude: '^(\.github/instructions/.*\.instructions\.md|docs/cross-registry-todos/.*\.md|docs/refactors/.*)$'
+
+  # Docker linting - DISABLED: requires Docker daemon running
+  # - repo: https://github.com/hadolint/hadolint
+  #   rev: v2.14.0
+  #   hooks:
+  #     - id: hadolint-docker
+
+  # Protobuf linting and formatting - DISABLED: no buf.yaml in root
+  # - repo: https://github.com/bufbuild/buf
+  #   rev: v1.59.0
+  #   hooks:
+  #     - id: buf-lint
+  #     - id: buf-format
+  #       args: [--write]
+
+  # Additional checks for common file types
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: v1.10.0
+    hooks:
+      - id: python-check-blanket-noqa
+      - id: python-check-blanket-type-ignore
+      - id: python-no-log-warn
+      - id: python-use-type-annotations
+      - id: rst-backticks
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
+
+# CI skip patterns for different commit message keywords
+# These patterns allow skipping pre-commit checks when certain keywords are present
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
