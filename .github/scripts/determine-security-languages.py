@@ -14,7 +14,6 @@ actual file changes.
 import json
 import os
 import sys
-from typing import Dict
 
 
 def get_env_bool(key: str, default: bool = False) -> bool:
@@ -23,7 +22,7 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     return value in ("true", "1", "yes", "on")
 
 
-def determine_security_languages() -> Dict[str, any]:
+def determine_security_languages() -> dict[str, any]:
     """
     Determine which languages need security scanning based on file changes.
 

@@ -6,8 +6,8 @@
 """Upload release artifacts to GitHub release."""
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 

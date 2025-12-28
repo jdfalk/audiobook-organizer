@@ -106,9 +106,7 @@ def get_python_config():
         [
             [
                 "@semantic-release/exec",
-                {
-                    "prepareCmd": "python scripts/update_version.py ${nextRelease.version}"
-                },
+                {"prepareCmd": "python scripts/update_version.py ${nextRelease.version}"},
             ],
             ["@semantic-release/changelog", {"changelogFile": "CHANGELOG.md"}],
             [
@@ -207,7 +205,7 @@ def main():
 
         print(f"Semantic-release config created successfully for {language}")
 
-    except IOError as e:
+    except OSError as e:
         print(f"Error writing .releaserc.json: {e}", file=sys.stderr)
         sys.exit(1)
 

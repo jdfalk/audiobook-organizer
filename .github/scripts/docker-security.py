@@ -94,9 +94,7 @@ def test_image_functionality(image_ref):
         {
             "name": "Container Startup",
             "passed": success,
-            "message": "Container starts successfully"
-            if success
-            else f"Failed: {stderr}",
+            "message": "Container starts successfully" if success else f"Failed: {stderr}",
         }
     )
 
@@ -108,9 +106,7 @@ def test_image_functionality(image_ref):
         {
             "name": "Application Files",
             "passed": success,
-            "message": "Application files present"
-            if success
-            else "Application structure unknown",
+            "message": "Application files present" if success else "Application structure unknown",
         }
     )
 
@@ -118,9 +114,7 @@ def test_image_functionality(image_ref):
     print("Checking health configuration...")
     cmd = f'docker inspect {image_ref} --format="{{{{.Config.Healthcheck}}}}"'
     success, stdout, stderr = run_command(cmd, check=False)
-    has_healthcheck = (
-        success and stdout != "none" and stdout != "<nil>" and stdout.strip() != ""
-    )
+    has_healthcheck = success and stdout != "none" and stdout != "<nil>" and stdout.strip() != ""
     tests.append(
         {
             "name": "Health Check",

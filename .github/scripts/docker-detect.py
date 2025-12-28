@@ -17,9 +17,7 @@ import sys
 def run_command(cmd, capture_output=True):
     """Run a shell command and return the result."""
     try:
-        result = subprocess.run(
-            cmd, shell=True, capture_output=capture_output, text=True
-        )
+        result = subprocess.run(cmd, shell=True, capture_output=capture_output, text=True)
         return result.returncode == 0, result.stdout.strip()
     except Exception:
         return False, ""
@@ -59,11 +57,12 @@ def check_docker_compose():
 
 def should_build_docker(event_name, ref):
     """Determine if Docker image should be built and pushed."""
-    if event_name == "push" and ref == "refs/heads/main":
-        return True
-    elif event_name == "release":
-        return True
-    elif event_name == "workflow_dispatch":
+    if (
+        event_name == "push"
+        and ref == "refs/heads/main"
+        or event_name == "release"
+        or event_name == "workflow_dispatch"
+    ):
         return True
     return False
 
