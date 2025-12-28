@@ -8,13 +8,13 @@ on:
   push:
     branches: [main, develop]
     paths:
-      - '.github/repository-config.yml'
-      - '.github/workflows/test-action-integration.yml'
+      - ".github/repository-config.yml"
+      - ".github/workflows/test-action-integration.yml"
   pull_request:
     branches: [main, develop]
     paths:
-      - '.github/repository-config.yml'
-      - '.github/workflows/test-action-integration.yml'
+      - ".github/repository-config.yml"
+      - ".github/workflows/test-action-integration.yml"
   workflow_dispatch:
 
 permissions:
@@ -34,8 +34,8 @@ jobs:
         id: frontend-config
         uses: jdfalk/get-frontend-config-action@v1
         with:
-          repository-config: ''
-          config-file: '.github/repository-config.yml'
+          repository-config: ""
+          config-file: ".github/repository-config.yml"
 
       - name: Verify action outputs
         run: |
