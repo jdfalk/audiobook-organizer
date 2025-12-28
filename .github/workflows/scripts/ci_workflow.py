@@ -4,16 +4,16 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterable
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import textwrap
 import time
+from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 try:
@@ -101,9 +101,7 @@ def get_repository_config() -> dict[str, Any]:
     try:
         _CONFIG_CACHE = json.loads(raw)
     except json.JSONDecodeError:
-        print(
-            "::warning::Unable to parse REPOSITORY_CONFIG JSON; falling back to defaults"
-        )
+        print("::warning::Unable to parse REPOSITORY_CONFIG JSON; falling back to defaults")
         _CONFIG_CACHE = {}
     return _CONFIG_CACHE
 
@@ -136,9 +134,7 @@ def debug_filter(_: argparse.Namespace) -> None:
 
 def determine_execution(_: argparse.Namespace) -> None:
     commit_message = os.environ.get("GITHUB_HEAD_COMMIT_MESSAGE", "")
-    skip_ci = bool(
-        re.search(r"\[(skip ci|ci skip)\]", commit_message, flags=re.IGNORECASE)
-    )
+    skip_ci = bool(re.search(r"\[(skip ci|ci skip)\]", commit_message, flags=re.IGNORECASE))
     write_output("skip_ci", "true" if skip_ci else "false")
     if skip_ci:
         print("Skipping CI due to commit message")
@@ -173,13 +169,9 @@ def wait_for_pr_automation(_: argparse.Namespace) -> None:
 
     print("🔄 Waiting for PR automation to complete...")
     for attempt in range(max_attempts):
-        print(
-            f"Checking for PR automation completion (attempt {attempt + 1}/{max_attempts})..."
-        )
+        print(f"Checking for PR automation completion (attempt {attempt + 1}/{max_attempts})...")
         try:
-            response = _http_get(
-                url, headers=headers, params={"per_page": 100}, timeout=30
-            )
+            response = _http_get(url, headers=headers, params={"per_page": 100}, timeout=30)
         except Exception as exc:  # pragma: no cover - network issues during CI
             print(f"::warning::Unable to query workflow runs: {exc}")
             time.sleep(sleep_seconds)
@@ -394,9 +386,7 @@ def check_go_coverage(_: argparse.Namespace) -> None:
     print(f"✅ Coverage {coverage}% meets threshold {threshold}%")
 
 
-def _run_command(
-    command: Iterable[str], check: bool = True
-) -> subprocess.CompletedProcess[str]:
+def _run_command(command: Iterable[str], check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(list(command), check=check)
 
 
@@ -660,9 +650,7 @@ def run_benchmarks(_: argparse.Namespace) -> None:
     subprocess.run(["go", "test", "-bench=.", "-benchmem", "./..."], check=True)
 
 
-def _matrix_entries(
-    versions: list[str], oses: list[str], version_key: str
-) -> list[dict[str, Any]]:
+def _matrix_entries(versions: list[str], oses: list[str], version_key: str) -> list[dict[str, Any]]:
     matrix: list[dict[str, Any]] = []
     for os_index, runner in enumerate(oses):
         for ver_index, version in enumerate(versions):
@@ -711,9 +699,7 @@ def generate_matrices(_: argparse.Namespace) -> None:
         json.dumps({"include": frontend_matrix}, separators=(",", ":")),
     )
 
-    coverage_threshold = _config_path(
-        fallback_threshold, "testing", "coverage", "threshold"
-    )
+    coverage_threshold = _config_path(fallback_threshold, "testing", "coverage", "threshold")
     write_output("coverage-threshold", str(coverage_threshold))
 
 
@@ -776,9 +762,7 @@ def generate_ci_summary(_: argparse.Namespace) -> None:
             "## 📁 Changed Files",
         ]
     )
-    summary_lines.extend(
-        f"- {label}: {value}" for label, value in files_changed.items()
-    )
+    summary_lines.extend(f"- {label}: {value}" for label, value in files_changed.items())
     summary_lines.append("")
 
     append_summary("\n".join(summary_lines) + "\n")
@@ -796,9 +780,7 @@ def check_ci_status(_: argparse.Namespace) -> None:
         "Docs CI": os.environ.get("JOB_DOCS"),
     }
 
-    failures = [
-        job for job, status in job_envs.items() if status in {"failure", "cancelled"}
-    ]
+    failures = [job for job, status in job_envs.items() if status in {"failure", "cancelled"}]
     if failures:
         print(f"❌ CI Pipeline failed: {', '.join(failures)}")
         raise SystemExit(1)
