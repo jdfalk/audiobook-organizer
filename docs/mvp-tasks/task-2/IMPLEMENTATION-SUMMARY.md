@@ -180,7 +180,7 @@ $ go test -v ./internal/server -run TestTask2
 === RUN   TestTask2_NoDoubleCounting
 --- PASS: TestTask2_NoDoubleCounting (0.01s)
 PASS
-ok  	github.com/jdfalk/audiobook-organizer/internal/server	0.756s
+ok   github.com/jdfalk/audiobook-organizer/internal/server 0.756s
 ```
 
 ## Backward Compatibility

@@ -606,7 +606,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 
 ## Validation Checklist for Advanced Scenarios
 
-### After Scenario A (Large Library):
+### After Scenario A (Large Library)
 
 - [ ] Scan completed without hanging
 - [ ] Progress events showed incrementing counters throughout
@@ -615,7 +615,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 - [ ] Final count matches expected
 - [ ] Log file contains all events
 
-### After Scenario B (Concurrent Operations):
+### After Scenario B (Concurrent Operations)
 
 - [ ] All 3 operations got unique IDs
 - [ ] Operations executed sequentially (not in parallel)
@@ -623,7 +623,7 @@ curl -N "http://localhost:8888/api/events?operation_id=$OPERATION"
 - [ ] Database remained consistent
 - [ ] No conflicts or interference between operations
 
-### After Scenario C (Failure Recovery):
+### After Scenario C (Failure Recovery)
 
 - [ ] Scan continued despite unreadable file
 - [ ] Error was logged
