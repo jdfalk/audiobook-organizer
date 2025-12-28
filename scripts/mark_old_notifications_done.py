@@ -29,7 +29,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
 
 import requests
 from dotenv import load_dotenv
@@ -64,11 +63,9 @@ class GitHubNotificationCleaner:
         self.base_url = "https://api.github.com"
         self._rate_limit_lock = threading.Lock()
         self._last_request_time = 0
-        self._min_request_interval = (
-            0.1  # 100ms between requests to respect rate limits
-        )
+        self._min_request_interval = 0.1  # 100ms between requests to respect rate limits
 
-    def get_notifications(self, all_notifications: bool = False) -> List[Dict]:
+    def get_notifications(self, all_notifications: bool = False) -> list[dict]:
         """
         Fetch notifications from GitHub API.
 
@@ -124,7 +121,7 @@ class GitHubNotificationCleaner:
         # GitHub returns timestamps like "2023-12-25T10:30:00Z"
         return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
 
-    def is_notification_old(self, notification: Dict, hours_threshold: int) -> bool:
+    def is_notification_old(self, notification: dict, hours_threshold: int) -> bool:
         """
         Check if a notification is older than the specified threshold.
 
@@ -151,7 +148,7 @@ class GitHubNotificationCleaner:
                 time.sleep(self._min_request_interval - time_since_last)
             self._last_request_time = time.time()
 
-    def mark_notification_as_done(self, notification_id: str) -> Tuple[bool, str]:
+    def mark_notification_as_done(self, notification_id: str) -> tuple[bool, str]:
         """
         Mark a specific notification as done (completely dismiss it).
 
@@ -192,8 +189,8 @@ class GitHubNotificationCleaner:
             return False
 
     def _process_notification_batch(
-        self, notifications: List[Dict], dry_run: bool = False
-    ) -> Tuple[int, int, List[str]]:
+        self, notifications: list[dict], dry_run: bool = False
+    ) -> tuple[int, int, list[str]]:
         """
         Process a batch of notifications in parallel.
 
@@ -213,9 +210,7 @@ class GitHubNotificationCleaner:
                     else "Unknown"
                 )
                 updated_at = notification["updated_at"]
-                print(
-                    f"[DRY RUN] Would mark as done: {repo} - {subject} (updated: {updated_at})"
-                )
+                print(f"[DRY RUN] Would mark as done: {repo} - {subject} (updated: {updated_at})")
             return len(notifications), 0, []
 
         marked_count = 0
@@ -226,9 +221,7 @@ class GitHubNotificationCleaner:
             # Submit all tasks
             future_to_notification = {}
             for notification in notifications:
-                future = executor.submit(
-                    self.mark_notification_as_done, notification["id"]
-                )
+                future = executor.submit(self.mark_notification_as_done, notification["id"])
                 future_to_notification[future] = notification
 
             # Process completed tasks
@@ -245,9 +238,7 @@ class GitHubNotificationCleaner:
                 try:
                     success, error_msg = future.result()
                     if success:
-                        print(
-                            f"✓ Marked as done: {repo} - {subject} (updated: {updated_at})"
-                        )
+                        print(f"✓ Marked as done: {repo} - {subject} (updated: {updated_at})")
                         marked_count += 1
                     else:
                         print(f"✗ Failed: {repo} - {subject} (updated: {updated_at})")
@@ -263,7 +254,7 @@ class GitHubNotificationCleaner:
 
     def cleanup_old_notifications(
         self, hours_threshold: int = 24, dry_run: bool = False, batch_size: int = 100
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """
         Main method to clean up old notifications using parallel processing.
 
@@ -289,9 +280,7 @@ class GitHubNotificationCleaner:
             if self.is_notification_old(notification, hours_threshold):
                 old_notifications.append(notification)
 
-        print(
-            f"Found {len(old_notifications)} notifications older than {hours_threshold} hours"
-        )
+        print(f"Found {len(old_notifications)} notifications older than {hours_threshold} hours")
 
         if not old_notifications:
             print("No old notifications to process")
@@ -303,18 +292,14 @@ class GitHubNotificationCleaner:
 
         # Process notifications in batches
         total_batches = (len(old_notifications) + batch_size - 1) // batch_size
-        print(
-            f"Processing in {total_batches} batches of up to {batch_size} notifications each..."
-        )
+        print(f"Processing in {total_batches} batches of up to {batch_size} notifications each...")
         print(f"Using up to {self.max_workers} concurrent workers per batch")
 
         for i in range(0, len(old_notifications), batch_size):
             batch_num = (i // batch_size) + 1
             batch = old_notifications[i : i + batch_size]
 
-            print(
-                f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} notifications)..."
-            )
+            print(f"\nProcessing batch {batch_num}/{total_batches} ({len(batch)} notifications)...")
 
             batch_marked, batch_failed, batch_errors = self._process_notification_batch(
                 batch, dry_run
@@ -324,9 +309,7 @@ class GitHubNotificationCleaner:
             total_failed += batch_failed
             all_errors.extend(batch_errors)
 
-            print(
-                f"Batch {batch_num} complete: {batch_marked} marked, {batch_failed} failed"
-            )
+            print(f"Batch {batch_num} complete: {batch_marked} marked, {batch_failed} failed")
 
         result = {
             "processed": len(old_notifications),
@@ -348,7 +331,7 @@ class GitHubNotificationCleaner:
         return result
 
 
-def get_github_token() -> Optional[str]:
+def get_github_token() -> str | None:
     """
     Get GitHub token from environment or .env file.
 
@@ -359,9 +342,7 @@ def get_github_token() -> Optional[str]:
     load_dotenv()
 
     # Try different environment variable names
-    token = (
-        os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or os.getenv("JF_CI_GH_PAT")
-    )
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN") or os.getenv("JF_CI_GH_PAT")
 
     if not token:
         print(

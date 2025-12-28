@@ -11,9 +11,10 @@ Tests all endpoints defined in the MVP specification and server implementation.
 import json
 import sys
 import time
-from typing import Any, Dict, List, Optional
-import requests
 from dataclasses import dataclass
+from typing import Any
+
+import requests
 
 
 @dataclass
@@ -24,8 +25,8 @@ class TestResult:
     method: str
     status_code: int
     success: bool
-    response: Optional[Dict[str, Any]]
-    error: Optional[str]
+    response: dict[str, Any] | None
+    error: str | None
     duration_ms: float
 
 
@@ -34,7 +35,7 @@ class APITester:
 
     def __init__(self, base_url: str = "http://localhost:8080"):
         self.base_url = base_url
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
         self.session = requests.Session()
 
     def test_endpoint(
@@ -42,8 +43,8 @@ class APITester:
         method: str,
         path: str,
         expected_status: int = 200,
-        json_data: Optional[Dict] = None,
-        params: Optional[Dict] = None,
+        json_data: dict | None = None,
+        params: dict | None = None,
         description: str = "",
     ) -> TestResult:
         """Test a single endpoint."""
@@ -58,13 +59,9 @@ class APITester:
             if method == "GET":
                 response = self.session.get(url, params=params, timeout=10)
             elif method == "POST":
-                response = self.session.post(
-                    url, json=json_data, params=params, timeout=10
-                )
+                response = self.session.post(url, json=json_data, params=params, timeout=10)
             elif method == "PUT":
-                response = self.session.put(
-                    url, json=json_data, params=params, timeout=10
-                )
+                response = self.session.put(url, json=json_data, params=params, timeout=10)
             elif method == "DELETE":
                 response = self.session.delete(url, params=params, timeout=10)
             else:
@@ -92,9 +89,7 @@ class APITester:
             )
 
             status_icon = "✅" if success else "❌"
-            print(
-                f"{status_icon} Status: {response.status_code} (expected {expected_status})"
-            )
+            print(f"{status_icon} Status: {response.status_code} (expected {expected_status})")
             print(f"⏱️  Duration: {duration_ms:.2f}ms")
             print(f"Response: {json.dumps(response_json, indent=2)[:500]}")
 
@@ -127,9 +122,7 @@ class APITester:
 
         # Real-time events (SSE) - just test connection
         print("\n" + "=" * 80)
-        print(
-            "Note: /api/events (SSE) requires special handling - skipping in basic test"
-        )
+        print("Note: /api/events (SSE) requires special handling - skipping in basic test")
 
         # Audiobook endpoints
         self.test_endpoint(
@@ -183,9 +176,7 @@ class APITester:
         )
 
         # Library folder endpoints
-        self.test_endpoint(
-            "GET", "/api/v1/import-paths", description="List import paths"
-        )
+        self.test_endpoint("GET", "/api/v1/import-paths", description="List import paths")
 
         # Note: We won't actually add/remove folders in test mode
         print("\n" + "=" * 80)
@@ -213,9 +204,7 @@ class APITester:
         )
 
         # System endpoints
-        self.test_endpoint(
-            "GET", "/api/v1/system/status", description="Get system status"
-        )
+        self.test_endpoint("GET", "/api/v1/system/status", description="Get system status")
         self.test_endpoint("GET", "/api/v1/system/logs", description="Get system logs")
         self.test_endpoint("GET", "/api/v1/config", description="Get configuration")
 
@@ -247,9 +236,7 @@ class APITester:
             description="Validate metadata",
         )
 
-        self.test_endpoint(
-            "GET", "/api/v1/metadata/export", description="Export metadata"
-        )
+        self.test_endpoint("GET", "/api/v1/metadata/export", description="Export metadata")
 
         # Note: We won't import metadata in test mode
         print("\n" + "=" * 80)
@@ -294,7 +281,7 @@ class APITester:
                 "PUT",
                 f"/api/v1/works/{work_id}",
                 json_data={"title": "API Test Work (Updated)"},
-                description=f"Update work title",
+                description="Update work title",
             )
 
             # List books by work (should be empty)
@@ -356,16 +343,14 @@ class APITester:
                     print(f"     Status: {result.status_code}, Error: {result.error}")
 
         avg_duration = (
-            sum(r.duration_ms for r in self.results) / len(self.results)
-            if self.results
-            else 0
+            sum(r.duration_ms for r in self.results) / len(self.results) if self.results else 0
         )
         print(f"\nAverage Response Time: {avg_duration:.2f}ms")
 
         # Performance analysis
         slow_requests = [r for r in self.results if r.duration_ms > 1000]
         if slow_requests:
-            print(f"\n⚠️  Slow Requests (>1s):")
+            print("\n⚠️  Slow Requests (>1s):")
             for r in slow_requests:
                 print(f"  {r.method} {r.endpoint}: {r.duration_ms:.2f}ms")
 

@@ -28,9 +28,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from dataclasses import asdict, dataclass
 from datetime import datetime
 
 try:
@@ -51,13 +49,13 @@ except ImportError:
 class ParsedMetadata:
     """Structured metadata extracted from a filename."""
 
-    title: Optional[str] = None
-    author: Optional[str] = None
-    series: Optional[str] = None
-    series_number: Optional[int] = None
-    narrator: Optional[str] = None
-    publisher: Optional[str] = None
-    year: Optional[int] = None
+    title: str | None = None
+    author: str | None = None
+    series: str | None = None
+    series_number: int | None = None
+    narrator: str | None = None
+    publisher: str | None = None
+    year: int | None = None
     confidence: str = "low"
 
 
@@ -67,11 +65,11 @@ class TestResult:
 
     filename: str
     source_path: str
-    parsed_metadata: Optional[ParsedMetadata]
+    parsed_metadata: ParsedMetadata | None
     success: bool
-    error: Optional[str]
+    error: str | None
     response_time: float
-    tokens_used: Optional[int]
+    tokens_used: int | None
 
 
 @dataclass
@@ -84,9 +82,9 @@ class TestMetrics:
     total_time: float
     total_tokens: int
     avg_response_time: float
-    confidence_breakdown: Dict[str, int]
-    source_path_breakdown: Dict[str, int]
-    error_types: Dict[str, int]
+    confidence_breakdown: dict[str, int]
+    source_path_breakdown: dict[str, int]
+    error_types: dict[str, int]
 
 
 class OpenAIFilenameParser:
@@ -132,9 +130,7 @@ Set confidence based on:
 - medium: Some ambiguity but reasonable interpretation
 - low: Very unclear or minimal information"""
 
-    def parse_filename(
-        self, filename: str
-    ) -> Tuple[Optional[ParsedMetadata], float, Optional[int]]:
+    def parse_filename(self, filename: str) -> tuple[ParsedMetadata | None, float, int | None]:
         """
         Parse a filename using OpenAI.
 
@@ -192,8 +188,8 @@ Set confidence based on:
             return None, response_time, None
 
     def parse_batch(
-        self, filenames: List[str]
-    ) -> List[Tuple[str, Optional[ParsedMetadata], float, Optional[int]]]:
+        self, filenames: list[str]
+    ) -> list[tuple[str, ParsedMetadata | None, float, int | None]]:
         """
         Parse multiple filenames concurrently using thread pool.
 
@@ -208,8 +204,7 @@ Set confidence based on:
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # Submit all tasks
             future_to_filename = {
-                executor.submit(self.parse_filename, filename): filename
-                for filename in filenames
+                executor.submit(self.parse_filename, filename): filename for filename in filenames
             }
 
             # Collect results as they complete
@@ -225,7 +220,7 @@ Set confidence based on:
         return results
 
 
-def load_file_list(file_path: str) -> List[str]:
+def load_file_list(file_path: str) -> list[str]:
     """
     Load the file list from disk.
 
@@ -236,13 +231,13 @@ def load_file_list(file_path: str) -> List[str]:
         List of file paths
     """
     print(f"Loading file list from {file_path}...")
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         files = [line.strip() for line in f if line.strip()]
     print(f"Loaded {len(files):,} files")
     return files
 
 
-def categorize_by_source(files: List[str]) -> Dict[str, List[str]]:
+def categorize_by_source(files: list[str]) -> dict[str, list[str]]:
     """
     Categorize files by their source directory.
 
@@ -274,8 +269,8 @@ def categorize_by_source(files: List[str]) -> Dict[str, List[str]]:
 
 
 def select_balanced_sample(
-    categorized_files: Dict[str, List[str]], total_samples: int
-) -> List[str]:
+    categorized_files: dict[str, list[str]], total_samples: int
+) -> list[str]:
     """
     Select a balanced sample of files from all source directories.
 
@@ -289,7 +284,7 @@ def select_balanced_sample(
     print(f"\nSelecting {total_samples:,} balanced samples...")
 
     # Calculate how many samples per source
-    sources = [s for s in categorized_files.keys() if s != "other"]
+    sources = [s for s in categorized_files if s != "other"]
     samples_per_source = total_samples // len(sources)
     remainder = total_samples % len(sources)
 
@@ -316,10 +311,10 @@ def select_balanced_sample(
 
 def run_parsing_tests(
     parser: OpenAIFilenameParser,
-    files: List[str],
+    files: list[str],
     output_dir: str = "test_results",
     batch_size: int = 50,
-) -> Tuple[List[TestResult], TestMetrics]:
+) -> tuple[list[TestResult], TestMetrics]:
     """
     Run parsing tests on all selected files using batch processing.
 
@@ -333,9 +328,7 @@ def run_parsing_tests(
         Tuple of (test_results, metrics)
     """
     print(f"\nStarting parsing tests on {len(files):,} files...")
-    print(
-        f"Using batch size: {batch_size} with {parser.max_workers} concurrent workers"
-    )
+    print(f"Using batch size: {batch_size} with {parser.max_workers} concurrent workers")
     print(f"Results will be saved to: {output_dir}/")
 
     os.makedirs(output_dir, exist_ok=True)
@@ -443,7 +436,7 @@ def run_parsing_tests(
     return results, metrics
 
 
-def save_results(results: List[TestResult], metrics: TestMetrics, output_dir: str):
+def save_results(results: list[TestResult], metrics: TestMetrics, output_dir: str):
     """
     Save test results to disk.
 
@@ -489,11 +482,7 @@ def save_results(results: List[TestResult], metrics: TestMetrics, output_dir: st
         f.write("CONFIDENCE BREAKDOWN\n")
         f.write("-" * 80 + "\n")
         for confidence, count in sorted(metrics.confidence_breakdown.items()):
-            pct = (
-                count / metrics.successful_parses * 100
-                if metrics.successful_parses > 0
-                else 0
-            )
+            pct = count / metrics.successful_parses * 100 if metrics.successful_parses > 0 else 0
             f.write(f"  {confidence.capitalize()}: {count:,} ({pct:.1f}%)\n")
         f.write("\n")
 
@@ -512,9 +501,7 @@ def save_results(results: List[TestResult], metrics: TestMetrics, output_dir: st
             f.write(
                 f"Avg Tokens per Parse: {metrics.total_tokens / metrics.successful_parses:.1f}\n"
             )
-        f.write(
-            f"Processing Rate: {metrics.total_files / metrics.total_time:.2f} files/sec\n\n"
-        )
+        f.write(f"Processing Rate: {metrics.total_files / metrics.total_time:.2f} files/sec\n\n")
 
         if metrics.error_types:
             f.write("ERROR BREAKDOWN\n")
@@ -528,9 +515,7 @@ def save_results(results: List[TestResult], metrics: TestMetrics, output_dir: st
         f.write("SAMPLE SUCCESSFUL PARSES\n")
         f.write("-" * 80 + "\n")
         successful_results = [r for r in results if r.success and r.parsed_metadata]
-        for result in random.sample(
-            successful_results, min(20, len(successful_results))
-        ):
+        for result in random.sample(successful_results, min(20, len(successful_results))):
             f.write(f"\nFilename: {result.filename}\n")
             f.write(f"Source: {result.source_path}\n")
             if result.parsed_metadata:
@@ -566,22 +551,16 @@ def save_results(results: List[TestResult], metrics: TestMetrics, output_dir: st
     print(f"Total Time: {metrics.total_time:.2f}s")
     print(f"Avg Response: {metrics.avg_response_time:.3f}s")
     print(f"Total Tokens: {metrics.total_tokens:,}")
-    print(f"\nConfidence Breakdown:")
+    print("\nConfidence Breakdown:")
     for confidence, count in sorted(metrics.confidence_breakdown.items()):
-        pct = (
-            count / metrics.successful_parses * 100
-            if metrics.successful_parses > 0
-            else 0
-        )
+        pct = count / metrics.successful_parses * 100 if metrics.successful_parses > 0 else 0
         print(f"  {confidence.capitalize()}: {count:,} ({pct:.1f}%)")
     print("=" * 80)
 
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Test OpenAI parsing on audiobook filenames"
-    )
+    parser = argparse.ArgumentParser(description="Test OpenAI parsing on audiobook filenames")
     parser.add_argument(
         "--file-list",
         default="/Users/jdfalk/repos/scratch/file-list-books",
@@ -610,9 +589,7 @@ def main():
         default=10,
         help="Number of concurrent workers for parallel requests (default: 10)",
     )
-    parser.add_argument(
-        "--seed", type=int, help="Random seed for reproducible sampling"
-    )
+    parser.add_argument("--seed", type=int, help="Random seed for reproducible sampling")
 
     args = parser.parse_args()
 
@@ -634,7 +611,7 @@ def main():
     print("=" * 80)
     print("OPENAI AUDIOBOOK FILENAME PARSING TEST")
     print("=" * 80)
-    print(f"Configuration:")
+    print("Configuration:")
     print(f"  File List: {args.file_list}")
     print(f"  Sample Size: {args.num_samples:,}")
     print(f"  Batch Size: {args.batch_size}")
@@ -648,7 +625,7 @@ def main():
     # Categorize by source
     categorized = categorize_by_source(all_files)
 
-    print(f"\nSource Directory Breakdown:")
+    print("\nSource Directory Breakdown:")
     for source, files in sorted(categorized.items()):
         print(f"  {source}: {len(files):,} files")
 

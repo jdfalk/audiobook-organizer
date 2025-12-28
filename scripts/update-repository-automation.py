@@ -19,7 +19,6 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List
 
 import requests
 
@@ -131,7 +130,7 @@ class RepositoryAutomationUpdater:
             return response.json().get("default_branch", "main")
         return "main"
 
-    def _get_workflow_files(self, repo: str) -> List[Dict]:
+    def _get_workflow_files(self, repo: str) -> list[dict]:
         """Get all workflow files in the repository."""
         response = self.session.get(
             f"https://api.github.com/repos/{repo}/contents/.github/workflows"
@@ -143,7 +142,7 @@ class RepositoryAutomationUpdater:
         response.raise_for_status()
         return response.json()
 
-    def _has_new_unified_automation(self, repo: str, workflows: List[Dict]) -> bool:
+    def _has_new_unified_automation(self, repo: str, workflows: list[dict]) -> bool:
         """Check if repository has the new unified automation system."""
         # The new system should have a workflow that calls reusable workflows
         # and it should have a configuration file
@@ -179,7 +178,7 @@ class RepositoryAutomationUpdater:
         return has_reusable_workflow and has_config
 
     def _cleanup_old_automation_files(
-        self, repo: str, workflows: List[Dict], default_branch: str
+        self, repo: str, workflows: list[dict], default_branch: str
     ) -> bool:
         """Clean up old automation workflow files that are now redundant."""
         files_to_remove = []
@@ -190,9 +189,7 @@ class RepositoryAutomationUpdater:
 
             # Check if it matches any old automation patterns
             for pattern in self.old_automation_patterns:
-                if pattern in workflow_name and not workflow_name.startswith(
-                    "reusable-"
-                ):
+                if pattern in workflow_name and not workflow_name.startswith("reusable-"):
                     files_to_remove.append(workflow)
                     break
                     break
@@ -201,9 +198,7 @@ class RepositoryAutomationUpdater:
             print(f"✅ No old automation files to clean up in {repo}")
             return True
 
-        print(
-            f"🧹 Found {len(files_to_remove)} old automation files to remove in {repo}"
-        )
+        print(f"🧹 Found {len(files_to_remove)} old automation files to remove in {repo}")
 
         success_count = 0
         for workflow_file in files_to_remove:
@@ -229,7 +224,7 @@ class RepositoryAutomationUpdater:
         return success_count == len(files_to_remove)
 
     def _update_existing_configuration(
-        self, repo: str, workflows: List[Dict], default_branch: str
+        self, repo: str, workflows: list[dict], default_branch: str
     ) -> bool:
         """Update existing unified automation configuration."""
         # Check if configuration file exists
@@ -294,7 +289,7 @@ class RepositoryAutomationUpdater:
         )
 
     def _validate_existing_configuration(
-        self, repo: str, config_file: Dict, default_branch: str
+        self, repo: str, config_file: dict, default_branch: str
     ) -> bool:
         """Validate and potentially update existing configuration."""
         try:
@@ -314,16 +309,14 @@ class RepositoryAutomationUpdater:
                 return True
             else:
                 print(f"🔄 Configuration in {repo} needs updating")
-                return self._update_configuration(
-                    repo, config, config_file["sha"], default_branch
-                )
+                return self._update_configuration(repo, config, config_file["sha"], default_branch)
 
         except Exception as e:
             print(f"⚠️  Error validating configuration in {repo}: {e}")
             return False
 
     def _update_configuration(
-        self, repo: str, current_config: Dict, sha: str, default_branch: str
+        self, repo: str, current_config: dict, sha: str, default_branch: str
     ) -> bool:
         """Update existing configuration with new settings."""
         # Merge with default configuration
@@ -362,7 +355,7 @@ class RepositoryAutomationUpdater:
         local_template_path = "examples/workflows/unified-automation-complete.yml"
         if os.path.exists(local_template_path):
             try:
-                with open(local_template_path, "r") as f:
+                with open(local_template_path) as f:
                     return f.read()
             except Exception:
                 pass
@@ -449,9 +442,7 @@ jobs:
         import base64
 
         # Check if file already exists and delete it first
-        existing_response = self.session.get(
-            f"https://api.github.com/repos/{repo}/contents/{path}"
-        )
+        existing_response = self.session.get(f"https://api.github.com/repos/{repo}/contents/{path}")
 
         if existing_response.status_code == 200:
             # File exists, delete it first
@@ -465,9 +456,7 @@ jobs:
                 f"https://api.github.com/repos/{repo}/contents/{path}", json=delete_data
             )
             if delete_response.status_code != 200:
-                print(
-                    f"⚠️  Failed to delete existing {path} in {repo}: {delete_response.text}"
-                )
+                print(f"⚠️  Failed to delete existing {path} in {repo}: {delete_response.text}")
                 # Continue anyway, might still be able to create
 
         # Create the new file
@@ -539,12 +528,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Update repositories to use new unified automation"
     )
-    parser.add_argument(
-        "--repo", help="Single repository to update (format: owner/repo)"
-    )
-    parser.add_argument(
-        "--config", help="File containing list of repositories to update"
-    )
+    parser.add_argument("--repo", help="Single repository to update (format: owner/repo)")
+    parser.add_argument("--config", help="File containing list of repositories to update")
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -578,10 +563,8 @@ def main():
             print(f"❌ Config file not found: {args.config}")
             sys.exit(1)
 
-        with open(args.config, "r") as f:
-            repositories = [
-                line.strip() for line in f if line.strip() and not line.startswith("#")
-            ]
+        with open(args.config) as f:
+            repositories = [line.strip() for line in f if line.strip() and not line.startswith("#")]
     else:
         print("❌ Must specify either --repo or --config")
         sys.exit(1)
@@ -604,9 +587,7 @@ def main():
             success_count += 1
         print()  # Empty line between repositories
 
-    print(
-        f"📊 Summary: {success_count}/{len(repositories)} repositories updated successfully"
-    )
+    print(f"📊 Summary: {success_count}/{len(repositories)} repositories updated successfully")
 
 
 if __name__ == "__main__":

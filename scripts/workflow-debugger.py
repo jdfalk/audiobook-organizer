@@ -30,11 +30,10 @@ import re
 import subprocess
 import sys
 import uuid
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Tuple, Set, Any
-from dataclasses import dataclass, asdict
-
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -75,7 +74,7 @@ class WorkflowJob:
     runner_name: str
     started_at: str
     completed_at: str
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
 
 
 @dataclass
@@ -83,12 +82,12 @@ class FailureAnalysis:
     """Analysis of a workflow failure."""
 
     workflow_run: WorkflowRun
-    failed_jobs: List[WorkflowJob]
-    error_patterns: List[str]
+    failed_jobs: list[WorkflowJob]
+    error_patterns: list[str]
     failure_category: str
     root_cause: str
-    suggested_fixes: List[str]
-    log_snippets: List[str]
+    suggested_fixes: list[str]
+    log_snippets: list[str]
     severity: str  # critical, high, medium, low
     is_actionable: bool
     fix_complexity: str  # simple, moderate, complex
@@ -105,9 +104,9 @@ class FixTask:
     workflow_file: str
     failure_type: str
     priority: str
-    suggested_actions: List[str]
-    code_changes_needed: List[Dict[str, str]]
-    related_logs: List[str]
+    suggested_actions: list[str]
+    code_changes_needed: list[dict[str, str]]
+    related_logs: list[str]
     estimated_effort: str
     created_at: str
 
@@ -124,10 +123,10 @@ class WorkflowDebugger:
         (self.output_dir / "reports").mkdir(exist_ok=True)
         (self.output_dir / "fix-tasks").mkdir(exist_ok=True)
 
-        self.repositories: Set[str] = set()
-        self.workflow_runs: List[WorkflowRun] = []
-        self.failure_analyses: List[FailureAnalysis] = []
-        self.fix_tasks: List[FixTask] = []
+        self.repositories: set[str] = set()
+        self.workflow_runs: list[WorkflowRun] = []
+        self.failure_analyses: list[FailureAnalysis] = []
+        self.fix_tasks: list[FixTask] = []
 
         # Common error patterns and their fixes
         self.error_patterns = {
@@ -219,7 +218,7 @@ class WorkflowDebugger:
             },
         }
 
-    def run_gh_command(self, args: List[str]) -> str:
+    def run_gh_command(self, args: list[str]) -> str:
         """Run a GitHub CLI command and return output."""
         try:
             cmd = ["gh"] + args
@@ -235,7 +234,7 @@ class WorkflowDebugger:
             logger.error("GitHub CLI (gh) not found. Please install it first.")
             sys.exit(1)
 
-    def discover_repositories(self, org: str = "jdfalk") -> List[str]:
+    def discover_repositories(self, org: str = "jdfalk") -> list[str]:
         """Discover all repositories for the user/org."""
         logger.info(f"Discovering repositories for {org}...")
 
@@ -261,7 +260,7 @@ class WorkflowDebugger:
 
     def get_workflow_runs(
         self, repo: str, status: str = "failure", limit: int = 50
-    ) -> List[WorkflowRun]:
+    ) -> list[WorkflowRun]:
         """Get workflow runs for a repository."""
         logger.info(f"Getting workflow runs for {repo} with status {status}...")
 
@@ -307,11 +306,9 @@ class WorkflowDebugger:
 
         return runs
 
-    def get_workflow_jobs(self, repo: str, run_id: str) -> List[WorkflowJob]:
+    def get_workflow_jobs(self, repo: str, run_id: str) -> list[WorkflowJob]:
         """Get jobs for a specific workflow run."""
-        output = self.run_gh_command(
-            ["run", "view", run_id, "--repo", repo, "--json", "jobs"]
-        )
+        output = self.run_gh_command(["run", "view", run_id, "--repo", repo, "--json", "jobs"])
 
         if not output:
             return []
@@ -358,8 +355,8 @@ class WorkflowDebugger:
 
         # Try to download artifacts first
         try:
-            import tempfile
             import os
+            import tempfile
 
             logger.debug(f"Attempting to download artifacts for run {run_id}")
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -386,18 +383,12 @@ class WorkflowDebugger:
                         for file in files:
                             file_path = os.path.join(root, file)
                             try:
-                                with open(
-                                    file_path, "r", encoding="utf-8", errors="ignore"
-                                ) as f:
+                                with open(file_path, encoding="utf-8", errors="ignore") as f:
                                     content = f.read()
-                                    combined_logs.append(
-                                        f"\n--- ARTIFACT FILE: {file} ---\n"
-                                    )
+                                    combined_logs.append(f"\n--- ARTIFACT FILE: {file} ---\n")
                                     combined_logs.append(content)
                             except Exception as e:
-                                logger.debug(
-                                    f"Could not read artifact file {file}: {e}"
-                                )
+                                logger.debug(f"Could not read artifact file {file}: {e}")
                 else:
                     logger.debug(
                         f"No artifacts found or could not download: {artifact_result.stderr}"
@@ -436,17 +427,13 @@ class WorkflowDebugger:
                         logger.warning(
                             f"Could not get logs for job {job.name}: API returned {api_result.returncode}"
                         )
-                        combined_logs.append(
-                            f"\n=== JOB: {job.name} (FAILED TO GET LOGS) ===\n"
-                        )
+                        combined_logs.append(f"\n=== JOB: {job.name} (FAILED TO GET LOGS) ===\n")
 
                         # Add step failure information
                         self._add_job_failure_info(combined_logs, job)
 
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to get logs via API for job {job.name}: {e}"
-                    )
+                    logger.warning(f"Failed to get logs via API for job {job.name}: {e}")
                     combined_logs.append(f"\n=== JOB: {job.name} (API ERROR) ===\n")
                     self._add_job_failure_info(combined_logs, job)
 
@@ -467,7 +454,7 @@ class WorkflowDebugger:
             logger.error(f"Failed to save combined logs: {e}")
             return ""
 
-    def _add_job_failure_info(self, combined_logs: List[str], job: WorkflowJob):
+    def _add_job_failure_info(self, combined_logs: list[str], job: WorkflowJob):
         """Add failure information when logs are not available."""
         combined_logs.append(f"Job Status: {job.status}\n")
         combined_logs.append(f"Job Conclusion: {job.conclusion}\n")
@@ -480,22 +467,20 @@ class WorkflowDebugger:
                 step_conclusion = step.get("conclusion", "unknown")
                 step_name = step.get("name", "Unknown Step")
 
-                combined_logs.append(
-                    f"  - {step_name}: {step_status}/{step_conclusion}\n"
-                )
+                combined_logs.append(f"  - {step_name}: {step_status}/{step_conclusion}\n")
 
                 if step_conclusion == "failure":
                     combined_logs.append("    ^^^ FAILED STEP ^^^\n")
         else:
             combined_logs.append("No step information available\n")
 
-    def analyze_logs(self, log_file: str) -> Tuple[List[str], str, List[str]]:
+    def analyze_logs(self, log_file: str) -> tuple[list[str], str, list[str]]:
         """Analyze logs to identify error patterns and root causes."""
         if not log_file or not Path(log_file).exists():
             return [], "unknown", []
 
         try:
-            with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+            with open(log_file, encoding="utf-8", errors="ignore") as f:
                 content = f.read()
         except Exception as e:
             logger.error(f"Failed to read log file {log_file}: {e}")
@@ -511,10 +496,7 @@ class WorkflowDebugger:
         # Find error lines (lines containing error keywords)
         error_lines = []
         for i, line in enumerate(lines):
-            if any(
-                keyword in line.lower()
-                for keyword in ["error", "failed", "panic", "fatal"]
-            ):
+            if any(keyword in line.lower() for keyword in ["error", "failed", "panic", "fatal"]):
                 # Include context (2 lines before and after)
                 start = max(0, i - 2)
                 end = min(len(lines), i + 3)
@@ -540,12 +522,10 @@ class WorkflowDebugger:
         return found_patterns, primary_category, log_snippets
 
     def analyze_failure(
-        self, workflow_run: WorkflowRun, failed_jobs: List[WorkflowJob], log_file: str
+        self, workflow_run: WorkflowRun, failed_jobs: list[WorkflowJob], log_file: str
     ) -> FailureAnalysis:
         """Analyze a workflow failure comprehensively."""
-        logger.info(
-            f"Analyzing failure for workflow {workflow_run.name} (run {workflow_run.id})"
-        )
+        logger.info(f"Analyzing failure for workflow {workflow_run.name} (run {workflow_run.id})")
 
         error_patterns, failure_category, log_snippets = self.analyze_logs(log_file)
 
@@ -690,7 +670,7 @@ Workflow Failure Analysis
             created_at=datetime.now().isoformat(),
         )
 
-    def scan_repositories(self, repositories: List[str], days_back: int = 7) -> None:
+    def scan_repositories(self, repositories: list[str], days_back: int = 7) -> None:
         """Scan repositories for failing workflows."""
         logger.info(
             f"Scanning {len(repositories)} repositories for failures in the last {days_back} days..."
@@ -704,15 +684,11 @@ Workflow Failure Analysis
 
             # Filter by date if specified
             if days_back > 0:
-                cutoff_date = datetime.now().replace(tzinfo=None) - timedelta(
-                    days=days_back
-                )
+                cutoff_date = datetime.now().replace(tzinfo=None) - timedelta(days=days_back)
                 failed_runs = [
                     run
                     for run in failed_runs
-                    if datetime.fromisoformat(
-                        run.created_at.replace("Z", "").replace("+00:00", "")
-                    )
+                    if datetime.fromisoformat(run.created_at.replace("Z", "").replace("+00:00", ""))
                     > cutoff_date
                 ]
 
@@ -748,19 +724,13 @@ Workflow Failure Analysis
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Save failure analyses
-        analyses_file = (
-            self.output_dir / "reports" / f"failure_analyses_{timestamp}.json"
-        )
+        analyses_file = self.output_dir / "reports" / f"failure_analyses_{timestamp}.json"
         with open(analyses_file, "w") as f:
-            json.dump(
-                [asdict(analysis) for analysis in self.failure_analyses], f, indent=2
-            )
+            json.dump([asdict(analysis) for analysis in self.failure_analyses], f, indent=2)
         logger.info(f"Saved failure analyses to {analyses_file}")
 
         # Save fix tasks
-        tasks_file = (
-            self.output_dir / "fix-tasks" / f"copilot_fix_tasks_{timestamp}.json"
-        )
+        tasks_file = self.output_dir / "fix-tasks" / f"copilot_fix_tasks_{timestamp}.json"
         with open(tasks_file, "w") as f:
             json.dump([asdict(task) for task in self.fix_tasks], f, indent=2)
         logger.info(f"Saved fix tasks to {tasks_file}")
@@ -824,9 +794,7 @@ Workflow Failure Analysis
 
         # List top actionable issues
         actionable_analyses = [a for a in self.failure_analyses if a.is_actionable]
-        actionable_analyses.sort(
-            key=lambda x: (x.severity == "high", x.severity == "medium")
-        )
+        actionable_analyses.sort(key=lambda x: (x.severity == "high", x.severity == "medium"))
 
         for i, analysis in enumerate(actionable_analyses[:10], 1):
             run = analysis.workflow_run
@@ -876,9 +844,7 @@ Workflow Failure Analysis
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Ultimate GitHub Workflow Debugger and Fixer"
-    )
+    parser = argparse.ArgumentParser(description="Ultimate GitHub Workflow Debugger and Fixer")
 
     # Main modes
     parser.add_argument(
@@ -965,9 +931,7 @@ def main():
 
     # Filter results if requested
     if args.actionable_only:
-        debugger.failure_analyses = [
-            a for a in debugger.failure_analyses if a.is_actionable
-        ]
+        debugger.failure_analyses = [a for a in debugger.failure_analyses if a.is_actionable]
         debugger.fix_tasks = [
             t for t in debugger.fix_tasks if t.priority in ["urgent", "high", "medium"]
         ]

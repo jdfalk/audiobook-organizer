@@ -23,7 +23,6 @@ import subprocess
 import sys
 from datetime import datetime
 from enum import Enum
-from typing import List
 
 
 class RebaseMode(Enum):
@@ -155,7 +154,7 @@ class SmartRebase:
             print(f"\033[0;36m[VERBOSE]\033[0m {message}")
 
     def run_command(
-        self, cmd: List[str], capture_output: bool = True, check: bool = True
+        self, cmd: list[str], capture_output: bool = True, check: bool = True
     ) -> subprocess.CompletedProcess:
         """
         Run a shell command with optional output capture.
@@ -178,9 +177,7 @@ class SmartRebase:
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         try:
-            result = subprocess.run(
-                cmd, capture_output=capture_output, text=True, check=check
-            )
+            result = subprocess.run(cmd, capture_output=capture_output, text=True, check=check)
 
             if self.verbose and result.stdout:
                 self.log_verbose(f"stdout: {result.stdout.strip()}")
@@ -203,9 +200,7 @@ class SmartRebase:
     def branch_exists(self, branch_name: str) -> bool:
         """Check if a Git branch exists"""
         try:
-            self.run_command(
-                ["git", "show-ref", "--verify", f"refs/heads/{branch_name}"]
-            )
+            self.run_command(["git", "show-ref", "--verify", f"refs/heads/{branch_name}"])
             return True
         except GitRebaseError:
             return False
@@ -230,7 +225,7 @@ class SmartRebase:
         self.summary["backup_branch"] = backup_name
         return backup_name
 
-    def get_conflicted_files(self) -> List[str]:
+    def get_conflicted_files(self) -> list[str]:
         """Get list of files with merge conflicts"""
         try:
             result = self.run_command(["git", "diff", "--name-only", "--diff-filter=U"])
@@ -395,9 +390,7 @@ class SmartRebase:
                     success = self.resolve_conflict_smart_merge(file_path)
                 else:
                     # Manual review - prefer incoming as safe default
-                    self.log_warning(
-                        f"Manual review needed for {file_path}, using incoming"
-                    )
+                    self.log_warning(f"Manual review needed for {file_path}, using incoming")
                     success = self.resolve_conflict_prefer_incoming(file_path)
 
                 if success:
@@ -478,9 +471,7 @@ class SmartRebase:
         """
         try:
             self.log_info(f"Force pushing {branch_name} to remote")
-            self.run_command(
-                ["git", "push", "--force-with-lease", "origin", branch_name]
-            )
+            self.run_command(["git", "push", "--force-with-lease", "origin", branch_name])
             self.log_success("Force push completed successfully")
             return True
         except GitRebaseError as e:
@@ -498,9 +489,7 @@ class SmartRebase:
             Path to the generated summary file
         """
         self.summary["result"] = result.value
-        self.summary["execution_time"] = (
-            datetime.now() - self.start_time
-        ).total_seconds()
+        self.summary["execution_time"] = (datetime.now() - self.start_time).total_seconds()
 
         # Add recovery instructions based on result
         if result == RebaseResult.SUCCESS:
@@ -538,9 +527,7 @@ class SmartRebase:
                 f.write(f"- **Target Branch**: {self.summary['target_branch']}\n")
                 f.write(f"- **Source Branch**: {self.summary['source_branch']}\n")
                 f.write(f"- **Result**: {self.summary['result']}\n")
-                f.write(
-                    f"- **Execution Time**: {self.summary['execution_time']:.2f} seconds\n"
-                )
+                f.write(f"- **Execution Time**: {self.summary['execution_time']:.2f} seconds\n")
                 f.write(f"- **Backup Branch**: {self.summary['backup_branch']}\n\n")
 
                 if self.summary["conflicts_resolved"]:
@@ -674,9 +661,7 @@ automatic backup creation, and comprehensive logging.
         help="Show what would be done without executing",
     )
 
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Enable verbose output"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
 
     return parser
 

@@ -21,7 +21,6 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple
 
 
 @dataclass
@@ -29,8 +28,8 @@ class FileInfo:
     """Information about a file in a repository."""
 
     path: str
-    version: Optional[str] = None
-    guid: Optional[str] = None
+    version: str | None = None
+    guid: str | None = None
     exists: bool = False
     size: int = 0
 
@@ -41,7 +40,7 @@ class RepoInfo:
 
     name: str
     path: str
-    files: Dict[str, FileInfo]
+    files: dict[str, FileInfo]
     is_git_repo: bool = False
 
 
@@ -50,7 +49,7 @@ class RepoAuditor:
 
     def __init__(self, base_path: str):
         self.base_path = Path(base_path)
-        self.repos: Dict[str, RepoInfo] = {}
+        self.repos: dict[str, RepoInfo] = {}
         self.reference_repo = "ghcommon"  # Use ghcommon as the reference
 
         # Files to audit (relative to repo root)
@@ -74,15 +73,13 @@ class RepoAuditor:
             ".github/instructions/r.instructions.md",
         ]
 
-    def extract_version_and_guid(
-        self, file_path: Path
-    ) -> Tuple[Optional[str], Optional[str]]:
+    def extract_version_and_guid(self, file_path: Path) -> tuple[str | None, str | None]:
         """Extract version and GUID from file headers."""
         if not file_path.exists():
             return None, None
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read(1000)  # Read first 1KB to find headers
 
             # Look for version patterns
@@ -224,7 +221,7 @@ class RepoAuditor:
 
         return "\n".join(output)
 
-    def generate_detailed_report(self) -> Dict:
+    def generate_detailed_report(self) -> dict:
         """Generate a detailed JSON report of all repositories."""
         report = {
             "scan_time": str(Path().cwd()),
@@ -300,9 +297,7 @@ class RepoAuditor:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Audit repositories for file consistency"
-    )
+    parser = argparse.ArgumentParser(description="Audit repositories for file consistency")
     parser.add_argument(
         "--base-path",
         default=os.getenv("REPO_BASE_DIR", str(Path.home() / "repos")),
@@ -348,9 +343,7 @@ def main():
         print("=" * 80)
         print(f"Total repositories scanned: {report['summary']['total_repos']}")
         print(f"Total files tracked: {report['summary']['total_files_tracked']}")
-        print(
-            f"Repositories needing updates: {report['summary']['repos_needing_updates']}"
-        )
+        print(f"Repositories needing updates: {report['summary']['repos_needing_updates']}")
 
         print("\nRepositories needing updates:")
         for repo_name, repo_data in report["repositories"].items():

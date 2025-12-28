@@ -26,9 +26,8 @@ import os
 import re
 import sys
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -39,7 +38,7 @@ class FileInfo:
     filename: str
     extension: str
     is_chapter: bool = False
-    chapter_number: Optional[int] = None
+    chapter_number: int | None = None
 
 
 @dataclass
@@ -47,8 +46,8 @@ class BookVersion:
     """Represents a specific version of an audiobook (different format/quality/edition)."""
 
     version_id: str
-    files: List[FileInfo] = field(default_factory=list)
-    primary_file: Optional[str] = None  # The main/first file
+    files: list[FileInfo] = field(default_factory=list)
+    primary_file: str | None = None  # The main/first file
     format: str = ""  # Primary format (m4b, mp3, etc.)
     total_files: int = 0
     is_multi_file: bool = False
@@ -67,9 +66,9 @@ class BookMetadata:
     confidence: str = "low"  # low, medium, high
     extraction_method: str = ""
     proposed_path: str = ""
-    issues: List[str] = field(default_factory=list)
-    versions: List[BookVersion] = field(default_factory=list)
-    duplicate_group_id: Optional[str] = None  # Links duplicates together
+    issues: list[str] = field(default_factory=list)
+    versions: list[BookVersion] = field(default_factory=list)
+    duplicate_group_id: str | None = None  # Links duplicates together
     total_versions: int = 0
 
 
@@ -90,7 +89,7 @@ class SeriesPatternMatcher:
     SERIES_WORDS = ["trilogy", "series", "saga", "chronicles", "sequence", "collection"]
 
     @staticmethod
-    def identify_series(title: str, file_path: str) -> Tuple[str, int, str]:
+    def identify_series(title: str, file_path: str) -> tuple[str, int, str]:
         """Identify series name and position from title and file path."""
         if not title:
             title = Path(file_path).stem
@@ -125,10 +124,7 @@ class SeriesPatternMatcher:
                     if word.lower() in parent_dir.lower():
                         return parent_dir, 0, "directory:keyword"
 
-                if (
-                    parent_dir.lower() in title.lower()
-                    or title.lower() in parent_dir.lower()
-                ):
+                if parent_dir.lower() in title.lower() or title.lower() in parent_dir.lower():
                     return parent_dir, 0, "directory:fuzzy"
 
         if ": " in title:
@@ -189,9 +185,7 @@ class PathExtractor:
                 if not author.lower().startswith(("book", "chapter", "part")):
                     return author
 
-        if not first_dir.lower().startswith(
-            ("book", "chapter", "part", "volume", "vol")
-        ):
+        if not first_dir.lower().startswith(("book", "chapter", "part", "volume", "vol")):
             return first_dir
 
         return ""
@@ -205,14 +199,12 @@ class PathExtractor:
             return ""
 
         title = re.sub(r"^\d+[-_.\s]+", "", title)
-        title = re.sub(
-            r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE
-        )
+        title = re.sub(r"\s*\((?:Unabridged|Audiobook|Retail)\)$", "", title, flags=re.IGNORECASE)
 
         return title.strip()
 
     @staticmethod
-    def is_chapter_file(filename: str) -> Tuple[bool, Optional[int]]:
+    def is_chapter_file(filename: str) -> tuple[bool, int | None]:
         """Check if file is a chapter file and extract chapter number."""
         stem = Path(filename).stem
         match = re.match(r"(?i)^Chapter\s+(\d+)", stem)
@@ -232,11 +224,11 @@ class BookGrouper:
 
     def __init__(self):
         """Initialize the book grouper."""
-        self.books_by_directory: Dict[str, List[FileInfo]] = defaultdict(list)
+        self.books_by_directory: dict[str, list[FileInfo]] = defaultdict(list)
         self.pattern_matcher = SeriesPatternMatcher()
         self.path_extractor = PathExtractor()
 
-    def group_files(self, file_paths: List[str]) -> List[BookMetadata]:
+    def group_files(self, file_paths: list[str]) -> list[BookMetadata]:
         """
         Group files by book and identify versions/duplicates.
 
@@ -269,7 +261,7 @@ class BookGrouper:
 
         # Phase 2: Create book entries from grouped files
         books = []
-        processed_dirs: Set[str] = set()
+        processed_dirs: set[str] = set()
 
         for directory, files in self.books_by_directory.items():
             if directory in processed_dirs:
@@ -292,8 +284,8 @@ class BookGrouper:
         return ext in self.path_extractor.SUPPORTED_EXTENSIONS
 
     def _create_book_from_directory(
-        self, directory: str, files: List[FileInfo]
-    ) -> Optional[BookMetadata]:
+        self, directory: str, files: list[FileInfo]
+    ) -> BookMetadata | None:
         """Create a BookMetadata object from files in a directory."""
         if not files:
             return None
@@ -309,9 +301,7 @@ class BookGrouper:
 
         # Extract metadata
         title = self.path_extractor.extract_title_from_filename(primary_file.filename)
-        author = self.path_extractor.extract_author_from_path(
-            primary_file.original_path
-        )
+        author = self.path_extractor.extract_author_from_path(primary_file.original_path)
         series, position, method = self.pattern_matcher.identify_series(
             title, primary_file.original_path
         )
@@ -375,7 +365,7 @@ class BookGrouper:
         text = re.sub(r"\s+", "_", text.strip())
         return text
 
-    def _determine_primary_format(self, files: List[FileInfo]) -> str:
+    def _determine_primary_format(self, files: list[FileInfo]) -> str:
         """Determine the primary format from a list of files."""
         # Count extensions
         ext_counts = defaultdict(int)
@@ -387,9 +377,7 @@ class BookGrouper:
             return max(ext_counts, key=ext_counts.get)
         return ""
 
-    def _calculate_confidence(
-        self, title: str, author: str, series: str, position: int
-    ) -> str:
+    def _calculate_confidence(self, title: str, author: str, series: str, position: int) -> str:
         """Calculate confidence level for extracted metadata."""
         score = 0
         if title and title != "Unknown_Title":
@@ -457,10 +445,10 @@ class BookGrouper:
         if book.extraction_method == "none":
             book.issues.append("No series pattern detected")
 
-    def _identify_duplicates(self, books: List[BookMetadata]) -> None:
+    def _identify_duplicates(self, books: list[BookMetadata]) -> None:
         """Identify and link duplicate books (same content, different versions)."""
         # Group books by book_id
-        books_by_id: Dict[str, List[BookMetadata]] = defaultdict(list)
+        books_by_id: dict[str, list[BookMetadata]] = defaultdict(list)
 
         for book in books:
             books_by_id[book.book_id].append(book)
@@ -485,9 +473,7 @@ class TestReportGenerator:
         """Initialize the report generator."""
         self.stats = defaultdict(int)
 
-    def generate_report(
-        self, books: List[BookMetadata], output_file: Optional[str] = None
-    ) -> Dict:
+    def generate_report(self, books: list[BookMetadata], output_file: str | None = None) -> dict:
         """Generate comprehensive report from scanned books."""
         report = {
             "summary": self._generate_summary(books),
@@ -503,12 +489,10 @@ class TestReportGenerator:
 
         return report
 
-    def _generate_summary(self, books: List[BookMetadata]) -> Dict:
+    def _generate_summary(self, books: list[BookMetadata]) -> dict:
         """Generate high-level summary statistics."""
         total_files = sum(v.total_files for book in books for v in book.versions)
-        multi_file_books = sum(
-            1 for book in books for v in book.versions if v.is_multi_file
-        )
+        multi_file_books = sum(1 for book in books for v in book.versions if v.is_multi_file)
         books_with_duplicates = sum(1 for book in books if book.duplicate_group_id)
 
         return {
@@ -517,7 +501,7 @@ class TestReportGenerator:
             "multi_file_books": multi_file_books,
             "books_with_duplicates": books_with_duplicates,
             "unique_duplicate_groups": len(
-                set(b.duplicate_group_id for b in books if b.duplicate_group_id)
+                {b.duplicate_group_id for b in books if b.duplicate_group_id}
             ),
             "books_with_series": sum(1 for b in books if b.series),
             "books_with_position": sum(1 for b in books if b.position > 0),
@@ -527,7 +511,7 @@ class TestReportGenerator:
             "books_with_issues": sum(1 for b in books if b.issues),
         }
 
-    def _generate_statistics(self, books: List[BookMetadata]) -> Dict:
+    def _generate_statistics(self, books: list[BookMetadata]) -> dict:
         """Generate detailed statistics."""
         formats = defaultdict(int)
         extraction_methods = defaultdict(int)
@@ -546,18 +530,14 @@ class TestReportGenerator:
         return {
             "by_format": dict(formats),
             "by_extraction_method": dict(extraction_methods),
-            "top_authors": dict(
-                sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]
-            ),
-            "top_series": dict(
-                sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]
-            ),
+            "top_authors": dict(sorted(authors.items(), key=lambda x: x[1], reverse=True)[:20]),
+            "top_series": dict(sorted(series.items(), key=lambda x: x[1], reverse=True)[:20]),
         }
 
-    def _generate_duplicates_summary(self, books: List[BookMetadata]) -> List[Dict]:
+    def _generate_duplicates_summary(self, books: list[BookMetadata]) -> list[dict]:
         """Generate summary of duplicate groups."""
         # Group by duplicate_group_id
-        dup_groups: Dict[str, List[BookMetadata]] = defaultdict(list)
+        dup_groups: dict[str, list[BookMetadata]] = defaultdict(list)
 
         for book in books:
             if book.duplicate_group_id:
@@ -587,7 +567,7 @@ class TestReportGenerator:
 
         return duplicates
 
-    def _generate_issues_summary(self, books: List[BookMetadata]) -> Dict:
+    def _generate_issues_summary(self, books: list[BookMetadata]) -> dict:
         """Generate summary of common issues."""
         issue_counts = defaultdict(int)
 
@@ -597,7 +577,7 @@ class TestReportGenerator:
 
         return dict(sorted(issue_counts.items(), key=lambda x: x[1], reverse=True))
 
-    def _book_to_dict(self, book: BookMetadata) -> Dict:
+    def _book_to_dict(self, book: BookMetadata) -> dict:
         """Convert BookMetadata to dictionary for JSON serialization."""
         return {
             "book_id": book.book_id,
@@ -633,7 +613,7 @@ class TestReportGenerator:
             ],
         }
 
-    def print_summary(self, report: Dict) -> None:
+    def print_summary(self, report: dict) -> None:
         """Print a human-readable summary of the report."""
         summary = report["summary"]
         stats = report["statistics"]
@@ -651,7 +631,7 @@ class TestReportGenerator:
         print(f"  Books with series identified: {summary['books_with_series']:,}")
         print(f"  Books with series position: {summary['books_with_position']:,}")
 
-        print(f"\nCONFIDENCE LEVELS:")
+        print("\nCONFIDENCE LEVELS:")
         print(f"  High confidence: {summary['high_confidence']:,}")
         print(f"  Medium confidence: {summary['medium_confidence']:,}")
         print(f"  Low confidence: {summary['low_confidence']:,}")
@@ -676,9 +656,7 @@ class TestReportGenerator:
             print(f"  {series}: {count:,} books")
 
         if "duplicates" in report and report["duplicates"]:
-            print(
-                f"\nDUPLICATE GROUPS (showing first 10 of {len(report['duplicates'])}):"
-            )
+            print(f"\nDUPLICATE GROUPS (showing first 10 of {len(report['duplicates'])}):")
             for dup in report["duplicates"][:10]:
                 print(f"  {dup['group_id']}: {dup['author']} - {dup['title']}")
                 print(f"    Versions: {dup['version_count']}")
@@ -707,9 +685,7 @@ def main():
         help="Output JSON file for detailed report",
         default="organize-test-report-v2.json",
     )
-    parser.add_argument(
-        "--limit", "-l", type=int, help="Limit number of files to process"
-    )
+    parser.add_argument("--limit", "-l", type=int, help="Limit number of files to process")
     parser.add_argument(
         "--sample", "-s", type=int, help="Output sample of books to stdout", default=5
     )
@@ -750,9 +726,7 @@ def main():
         for book in books[: args.sample]:
             print(f"\n[{book.book_id}] {book.author} - {book.title}")
             if book.series:
-                print(
-                    f"  Series: {book.series} #{book.position if book.position else 'N/A'}"
-                )
+                print(f"  Series: {book.series} #{book.position if book.position else 'N/A'}")
             print(f"  Method: {book.extraction_method}, Confidence: {book.confidence}")
             print(f"  Proposed: {book.proposed_path}")
             if book.duplicate_group_id:
@@ -761,17 +735,13 @@ def main():
                 )
             print(f"  Versions: {len(book.versions)}")
             for i, version in enumerate(book.versions, 1):
-                print(
-                    f"    Version {i}: {version.format} - {version.total_files} file(s)"
-                )
+                print(f"    Version {i}: {version.format} - {version.total_files} file(s)")
                 print(f"      Directory: {version.base_directory}")
                 if version.is_multi_file:
-                    print(f"      Files:")
+                    print("      Files:")
                     for file in version.files[:3]:  # Show first 3 files
                         chapter_info = (
-                            f" (Chapter {file.chapter_number})"
-                            if file.is_chapter
-                            else ""
+                            f" (Chapter {file.chapter_number})" if file.is_chapter else ""
                         )
                         print(f"        - {file.filename}{chapter_info}")
                     if len(version.files) > 3:

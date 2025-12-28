@@ -11,7 +11,6 @@ This script tests the OpenAI API connection with a few sample filenames.
 
 import os
 import sys
-from pathlib import Path
 
 try:
     from openai import OpenAI
@@ -21,9 +20,11 @@ except ImportError:
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     print("WARNING: python-dotenv not found, using env vars only")
+
 
 def test_openai_connection():
     """Test OpenAI API connection with sample filenames."""
@@ -53,7 +54,7 @@ def test_openai_connection():
     test_filenames = [
         "The Hobbit - J.R.R. Tolkien - read by Andy Serkis.m4b",
         "Brandon Sanderson - Mistborn 01 - The Final Empire.mp3",
-        "Ready Player One by Ernest Cline.epub"
+        "Ready Player One by Ernest Cline.epub",
     ]
 
     print(f"\nTesting with {len(test_filenames)} sample filenames...")
@@ -69,16 +70,13 @@ def test_openai_connection():
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert at parsing audiobook filenames. Extract title and author from the filename. Return ONLY valid JSON with 'title' and 'author' fields."
+                        "content": "You are an expert at parsing audiobook filenames. Extract title and author from the filename. Return ONLY valid JSON with 'title' and 'author' fields.",
                     },
-                    {
-                        "role": "user",
-                        "content": f"Parse this audiobook filename: {filename}"
-                    }
+                    {"role": "user", "content": f"Parse this audiobook filename: {filename}"},
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.3,
-                max_tokens=200
+                max_tokens=200,
             )
 
             content = response.choices[0].message.content
@@ -95,6 +93,7 @@ def test_openai_connection():
     print("All tests passed! ✓")
     print("=" * 80)
     return True
+
 
 if __name__ == "__main__":
     success = test_openai_connection()

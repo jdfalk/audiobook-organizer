@@ -13,8 +13,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Tuple
-
 
 # Build configurations: (GOOS, GOARCH, output_suffix)
 PLATFORMS = [
@@ -26,9 +24,7 @@ PLATFORMS = [
 ]
 
 
-def run_command(
-    cmd: List[str], cwd: Path = None, env: dict = None
-) -> Tuple[int, str, str]:
+def run_command(cmd: list[str], cwd: Path = None, env: dict = None) -> tuple[int, str, str]:
     """Run a command and return exit code, stdout, stderr"""
     result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
@@ -91,9 +87,7 @@ def build_binary(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Build audiobook-organizer for all platforms"
-    )
+    parser = argparse.ArgumentParser(description="Build audiobook-organizer for all platforms")
     parser.add_argument(
         "--embed-frontend",
         action="store_true",
@@ -160,17 +154,13 @@ def main():
 
     for goos, goarch, output_suffix in platforms_to_build:
         if build_non_embedded:
-            if build_binary(
-                goos, goarch, output_suffix, repo_root, False, args.output_dir
-            ):
+            if build_binary(goos, goarch, output_suffix, repo_root, False, args.output_dir):
                 successful_builds.append(f"{output_suffix} (non-embedded)")
             else:
                 failed_builds.append(f"{output_suffix} (non-embedded)")
 
         if build_embedded:
-            if build_binary(
-                goos, goarch, output_suffix, repo_root, True, args.output_dir
-            ):
+            if build_binary(goos, goarch, output_suffix, repo_root, True, args.output_dir):
                 successful_builds.append(f"{output_suffix} (embedded)")
             else:
                 failed_builds.append(f"{output_suffix} (embedded)")

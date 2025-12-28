@@ -16,17 +16,14 @@ Used by the unified automation workflow to decide between:
 - Documentation update operations (process doc update files)
 """
 
-import os
-import sys
 import json
 import logging
+import os
+import sys
 from pathlib import Path
-from typing import List, Dict
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -37,12 +34,8 @@ class UnifiedOperationsDetector:
         self.operations_input = os.getenv("OPERATIONS_INPUT", "auto").strip()
         self.event_name = os.getenv("EVENT_NAME", "")
         self.issue_updates_file = os.getenv("ISSUE_UPDATES_FILE", "issue_updates.json")
-        self.issue_updates_directory = os.getenv(
-            "ISSUE_UPDATES_DIRECTORY", ".github/issue-updates"
-        )
-        self.doc_updates_directory = os.getenv(
-            "DOC_UPDATES_DIRECTORY", ".github/doc-updates"
-        )
+        self.issue_updates_directory = os.getenv("ISSUE_UPDATES_DIRECTORY", ".github/issue-updates")
+        self.doc_updates_directory = os.getenv("DOC_UPDATES_DIRECTORY", ".github/doc-updates")
 
         # Define all possible operations
         self.issue_operations = {
@@ -55,7 +48,7 @@ class UnifiedOperationsDetector:
 
         self.doc_operations = {"doc-updates"}
 
-    def detect_operations(self) -> Dict[str, any]:
+    def detect_operations(self) -> dict[str, any]:
         """
         Detect which operations to run based on input and available files.
 
@@ -93,7 +86,7 @@ class UnifiedOperationsDetector:
         logger.info(f"✅ Detected operations: {results}")
         return results
 
-    def _auto_detect_operations(self) -> tuple[List[str], List[str]]:
+    def _auto_detect_operations(self) -> tuple[list[str], list[str]]:
         """Auto-detect operations based on available files and event type."""
         issue_ops = []
         doc_ops = []
@@ -122,11 +115,9 @@ class UnifiedOperationsDetector:
 
         return issue_ops, doc_ops
 
-    def _parse_explicit_operations(self) -> tuple[List[str], List[str]]:
+    def _parse_explicit_operations(self) -> tuple[list[str], list[str]]:
         """Parse explicitly requested operations."""
-        operations = [
-            op.strip() for op in self.operations_input.split(",") if op.strip()
-        ]
+        operations = [op.strip() for op in self.operations_input.split(",") if op.strip()]
 
         issue_ops = [op for op in operations if op in self.issue_operations]
         doc_ops = [op for op in operations if op in self.doc_operations]
@@ -170,9 +161,7 @@ class UnifiedOperationsDetector:
         doc_dir = Path(self.doc_updates_directory)
 
         if not doc_dir.exists():
-            logger.info(
-                f"📝 Doc updates directory not found: {self.doc_updates_directory}"
-            )
+            logger.info(f"📝 Doc updates directory not found: {self.doc_updates_directory}")
             return False
 
         # Look for JSON files in the main directory (not subdirectories)
@@ -187,14 +176,12 @@ class UnifiedOperationsDetector:
         logger.info(f"📝 No doc update files found in {self.doc_updates_directory}")
         return False
 
-    def set_github_outputs(self, results: Dict[str, any]) -> None:
+    def set_github_outputs(self, results: dict[str, any]) -> None:
         """Set GitHub Actions outputs."""
         github_output = os.getenv("GITHUB_OUTPUT")
 
         if not github_output:
-            logger.warning(
-                "⚠️ GITHUB_OUTPUT not set - outputs will be printed to stdout"
-            )
+            logger.warning("⚠️ GITHUB_OUTPUT not set - outputs will be printed to stdout")
             github_output = "/dev/stdout"
 
         with open(github_output, "a") as f:

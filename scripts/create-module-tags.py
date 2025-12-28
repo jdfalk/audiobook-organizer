@@ -29,9 +29,7 @@ from pathlib import Path
 def run_command(cmd, check=True):
     """Run a command and return the result."""
     try:
-        result = subprocess.run(
-            cmd, shell=True, check=check, capture_output=True, text=True
-        )
+        result = subprocess.run(cmd, shell=True, check=check, capture_output=True, text=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"❌ Command failed: {cmd}")

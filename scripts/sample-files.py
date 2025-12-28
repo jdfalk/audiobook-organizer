@@ -10,7 +10,6 @@ Creates a representative sample of 1000 files.
 
 import os
 import random
-import sys
 from pathlib import Path
 
 
@@ -26,7 +25,7 @@ def main():
 
     # Read all lines
     print(f"Reading file list from: {input_file}")
-    with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
+    with open(input_file, encoding="utf-8", errors="ignore") as f:
         all_files = [line.strip() for line in f if line.strip()]
 
     print(f"Total files: {len(all_files)}")

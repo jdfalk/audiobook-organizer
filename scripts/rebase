@@ -22,100 +22,100 @@ SHELL_SCRIPT="$SCRIPT_DIR/rebase.sh"
 
 # Logging functions
 log_info() {
-    echo -e "${BLUE}[LAUNCHER]${NC} $1"
+  echo -e "${BLUE}[LAUNCHER]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[LAUNCHER]${NC} $1"
+  echo -e "${GREEN}[LAUNCHER]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[LAUNCHER]${NC} $1"
+  echo -e "${YELLOW}[LAUNCHER]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[LAUNCHER]${NC} $1"
+  echo -e "${RED}[LAUNCHER]${NC} $1"
 }
 
 # Check if Python 3 is available
 check_python() {
-    if command -v python3 >/dev/null 2>&1; then
-        local version
-        version=$(python3 --version 2>&1 | cut -d' ' -f2)
-        local major_version
-        major_version=$(echo "$version" | cut -d'.' -f1)
-        local minor_version
-        minor_version=$(echo "$version" | cut -d'.' -f2)
+  if command -v python3 >/dev/null 2>&1; then
+    local version
+    version=$(python3 --version 2>&1 | cut -d' ' -f2)
+    local major_version
+    major_version=$(echo "$version" | cut -d'.' -f1)
+    local minor_version
+    minor_version=$(echo "$version" | cut -d'.' -f2)
 
-        # Require Python 3.7+
-        if [[ "$major_version" -ge 3 && "$minor_version" -ge 7 ]]; then
-            log_info "Found Python $version"
-            return 0
-        else
-            log_warning "Python $version is too old (need 3.7+)"
-            return 1
-        fi
+    # Require Python 3.7+
+    if [[ $major_version -ge 3 && $minor_version -ge 7 ]]; then
+      log_info "Found Python $version"
+      return 0
     else
-        log_warning "Python 3 not found"
-        return 1
+      log_warning "Python $version is too old (need 3.7+)"
+      return 1
     fi
+  else
+    log_warning "Python 3 not found"
+    return 1
+  fi
 }
 
 # Try to install missing Python dependencies
 install_python_deps() {
-    local missing_deps=()
+  local missing_deps=()
 
-    # Check for required modules (none currently, but framework is here)
-    # We deliberately keep the Python script dependency-free for maximum compatibility
+  # Check for required modules (none currently, but framework is here)
+  # We deliberately keep the Python script dependency-free for maximum compatibility
 
-    if [[ ${#missing_deps[@]} -eq 0 ]]; then
-        log_info "All Python dependencies are satisfied"
-        return 0
-    fi
+  if [[ ${#missing_deps[@]} -eq 0 ]]; then
+    log_info "All Python dependencies are satisfied"
+    return 0
+  fi
 
-    log_info "Missing Python dependencies: ${missing_deps[*]}"
+  log_info "Missing Python dependencies: ${missing_deps[*]}"
 
-    # Try pip3 first
-    if command -v pip3 >/dev/null 2>&1; then
-        log_info "Attempting to install dependencies with pip3..."
-        for dep in "${missing_deps[@]}"; do
-            if pip3 install --user "$dep"; then
-                log_success "Installed $dep"
-            else
-                log_error "Failed to install $dep with pip3"
-                return 1
-            fi
-        done
-        return 0
-    fi
+  # Try pip3 first
+  if command -v pip3 >/dev/null 2>&1; then
+    log_info "Attempting to install dependencies with pip3..."
+    for dep in "${missing_deps[@]}"; do
+      if pip3 install --user "$dep"; then
+        log_success "Installed $dep"
+      else
+        log_error "Failed to install $dep with pip3"
+        return 1
+      fi
+    done
+    return 0
+  fi
 
-    # Try pip as fallback
-    if command -v pip >/dev/null 2>&1; then
-        log_info "Attempting to install dependencies with pip..."
-        for dep in "${missing_deps[@]}"; do
-            if pip install --user "$dep"; then
-                log_success "Installed $dep"
-            else
-                log_error "Failed to install $dep with pip"
-                return 1
-            fi
-        done
-        return 0
-    fi
+  # Try pip as fallback
+  if command -v pip >/dev/null 2>&1; then
+    log_info "Attempting to install dependencies with pip..."
+    for dep in "${missing_deps[@]}"; do
+      if pip install --user "$dep"; then
+        log_success "Installed $dep"
+      else
+        log_error "Failed to install $dep with pip"
+        return 1
+      fi
+    done
+    return 0
+  fi
 
-    log_error "No pip found, cannot install dependencies"
-    return 1
+  log_error "No pip found, cannot install dependencies"
+  return 1
 }
 
 # Check if Python script can run
 test_python_script() {
-    if [[ ! -f "$PYTHON_SCRIPT" ]]; then
-        log_error "Python script not found: $PYTHON_SCRIPT"
-        return 1
-    fi
+  if [[ ! -f $PYTHON_SCRIPT ]]; then
+    log_error "Python script not found: $PYTHON_SCRIPT"
+    return 1
+  fi
 
-    # Test if the script can import required modules
-    if python3 -c "
+  # Test if the script can import required modules
+  if python3 -c "
 import sys
 import argparse
 import json
@@ -128,194 +128,200 @@ from pathlib import Path
 from typing import Dict, List, Optional
 print('Python dependencies OK')
 " 2>/dev/null; then
-        log_success "Python script dependencies verified"
-        return 0
-    else
-        log_warning "Python script has missing dependencies"
-        return 1
-    fi
+    log_success "Python script dependencies verified"
+    return 0
+  else
+    log_warning "Python script has missing dependencies"
+    return 1
+  fi
 }
 
 # Check if shell script can run
 test_shell_script() {
-    if [[ ! -f "$SHELL_SCRIPT" ]]; then
-        log_error "Shell script not found: $SHELL_SCRIPT"
-        return 1
-    fi
+  if [[ ! -f $SHELL_SCRIPT ]]; then
+    log_error "Shell script not found: $SHELL_SCRIPT"
+    return 1
+  fi
 
-    if [[ ! -x "$SHELL_SCRIPT" ]]; then
-        log_info "Making shell script executable"
-        chmod +x "$SHELL_SCRIPT"
-    fi
+  if [[ ! -x $SHELL_SCRIPT ]]; then
+    log_info "Making shell script executable"
+    chmod +x "$SHELL_SCRIPT"
+  fi
 
-    log_success "Shell script verified"
-    return 0
+  log_success "Shell script verified"
+  return 0
 }
 
 # Detect runtime environment (codex, github, or local)
 detect_environment() {
-    if [[ -n "${CODEX_API_KEY:-${OPENAI_API_KEY:-}}" || -n "${CODEX_ENV:-}" ]]; then
-        echo "codex"
-    elif [[ -n "${GITHUB_ACTIONS:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
-        echo "github"
-    else
-        echo "local"
-    fi
+  if [[ -n ${CODEX_API_KEY:-${OPENAI_API_KEY:-}} || -n ${CODEX_ENV:-} ]]; then
+    echo "codex"
+  elif [[ -n ${GITHUB_ACTIONS:-} || -n ${GITHUB_TOKEN:-} ]]; then
+    echo "github"
+  else
+    echo "local"
+  fi
 }
 
 # Attempt to install Codex CLI if missing
 install_codex_cli() {
-    if command -v codex >/dev/null 2>&1; then
-        return 0
-    fi
+  if command -v codex >/dev/null 2>&1; then
+    return 0
+  fi
 
-    if command -v npm >/dev/null 2>&1; then
-        npm install -g @githubnext/codex >/dev/null 2>&1 && return 0
-    fi
+  if command -v npm >/dev/null 2>&1; then
+    npm install -g @githubnext/codex >/dev/null 2>&1 && return 0
+  fi
 
-    if command -v pip >/dev/null 2>&1; then
-        pip install --user codex-cli >/dev/null 2>&1 && return 0
-    fi
+  if command -v pip >/dev/null 2>&1; then
+    pip install --user codex-cli >/dev/null 2>&1 && return 0
+  fi
 
-    return 1
+  return 1
 }
 
 # Attempt to install gh CLI if missing
 install_gh_cli() {
-    if command -v gh >/dev/null 2>&1; then
-        gh extension install github/gh-copilot >/dev/null 2>&1 || true
-        return 0
-    fi
+  if command -v gh >/dev/null 2>&1; then
+    gh extension install github/gh-copilot >/dev/null 2>&1 || true
+    return 0
+  fi
 
-    if command -v apt-get >/dev/null 2>&1; then
-        apt-get update -y >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1 && \
-            gh extension install github/gh-copilot >/dev/null 2>&1 && return 0
-    fi
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y >/dev/null 2>&1 && apt-get install -y gh >/dev/null 2>&1 &&
+      gh extension install github/gh-copilot >/dev/null 2>&1 && return 0
+  fi
 
-    return 1
+  return 1
 }
 
 # Detect available AI CLI for resolving conflicts and install if needed
 detect_ai_cli() {
-    if command -v codex >/dev/null 2>&1; then
-        echo "codex"
-        return 0
-    fi
+  if command -v codex >/dev/null 2>&1; then
+    echo "codex"
+    return 0
+  fi
 
-    if command -v gh >/dev/null 2>&1 && gh help copilot >/dev/null 2>&1; then
-        echo "gh"
-        return 0
-    fi
+  if command -v gh >/dev/null 2>&1 && gh help copilot >/dev/null 2>&1; then
+    echo "gh"
+    return 0
+  fi
 
-    local env
-    env=$(detect_environment)
-    case "$env" in
-        codex)
-            install_codex_cli && { echo "codex"; return 0; } || true
-            ;;
-        github)
-            install_gh_cli && { echo "gh"; return 0; } || true
-            ;;
-    esac
+  local env
+  env=$(detect_environment)
+  case "$env" in
+  codex)
+    install_codex_cli && {
+      echo "codex"
+      return 0
+    } || true
+    ;;
+  github)
+    install_gh_cli && {
+      echo "gh"
+      return 0
+    } || true
+    ;;
+  esac
 
-    echo "none"
+  echo "none"
 }
 
 # Attempt to resolve conflicts using Codex CLI or gh Copilot plugin
 attempt_ai_resolution() {
-    local cli
-    cli=$(detect_ai_cli)
+  local cli
+  cli=$(detect_ai_cli)
 
-    case "$cli" in
-        codex)
-            log_info "Attempting conflict resolution with Codex CLI"
-            if [[ -z "${CODEX_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
-                log_warning "Codex CLI requires CODEX_API_KEY or OPENAI_API_KEY"
-                return 1
-            fi
-            codex ask "Resolve git rebase conflicts in $(pwd)" || true
-            ;;
-        gh)
-            log_info "Attempting conflict resolution with gh copilot"
-            if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-                log_warning "gh CLI requires GITHUB_TOKEN"
-                return 1
-            fi
-            gh copilot suggest --shell "git rebase --continue" || true
-            ;;
-        *)
-            log_warning "No AI CLI found for automatic conflict resolution"
-            return 1
-            ;;
-    esac
+  case "$cli" in
+  codex)
+    log_info "Attempting conflict resolution with Codex CLI"
+    if [[ -z ${CODEX_API_KEY:-${OPENAI_API_KEY:-}} ]]; then
+      log_warning "Codex CLI requires CODEX_API_KEY or OPENAI_API_KEY"
+      return 1
+    fi
+    codex ask "Resolve git rebase conflicts in $(pwd)" || true
+    ;;
+  gh)
+    log_info "Attempting conflict resolution with gh copilot"
+    if [[ -z ${GITHUB_TOKEN:-} ]]; then
+      log_warning "gh CLI requires GITHUB_TOKEN"
+      return 1
+    fi
+    gh copilot suggest --shell "git rebase --continue" || true
+    ;;
+  *)
+    log_warning "No AI CLI found for automatic conflict resolution"
+    return 1
+    ;;
+  esac
 }
 
 # Commit any remaining changes and force push
 finalize_repository() {
-    local branch
-    branch=$(git rev-parse --abbrev-ref HEAD)
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD)
 
-    if ! git diff-index --quiet HEAD -- || ! git diff --cached --quiet; then
-        log_info "Committing AI conflict resolutions"
-        git add -A
-        if ! git diff --cached --quiet; then
-            local files
-            files=$(git diff --name-only --cached)
-            local msg="chore(rebase): apply AI conflict resolutions\n\nFiles changed:"
-            for f in $files; do
-                msg+="\n- [$f]($f)"
-            done
-            git commit -m "$msg" || true
-        fi
-    else
-        log_info "No changes to commit"
+  if ! git diff-index --quiet HEAD -- || ! git diff --cached --quiet; then
+    log_info "Committing AI conflict resolutions"
+    git add -A
+    if ! git diff --cached --quiet; then
+      local files
+      files=$(git diff --name-only --cached)
+      local msg="chore(rebase): apply AI conflict resolutions\n\nFiles changed:"
+      for f in $files; do
+        msg+="\n- [$f]($f)"
+      done
+      git commit -m "$msg" || true
     fi
+  else
+    log_info "No changes to commit"
+  fi
 
-    log_info "Force pushing $branch"
-    git push --force-with-lease origin "$branch" >/dev/null 2>&1 && \
-        log_success "Force push completed" || \
-        log_warning "Force push failed"
+  log_info "Force pushing $branch"
+  git push --force-with-lease origin "$branch" >/dev/null 2>&1 &&
+    log_success "Force push completed" ||
+    log_warning "Force push failed"
 }
 
 # Determine which implementation to use
 select_implementation() {
-    local use_python=false
-    local use_shell=false
+  local use_python=false
+  local use_shell=false
 
-    # Check Python availability
-    if check_python >/dev/null 2>&1; then
-        if test_python_script >/dev/null 2>&1; then
-            use_python=true
-        elif install_python_deps >/dev/null 2>&1 && test_python_script >/dev/null 2>&1; then
-            use_python=true
-        else
-            log_warning "Python script cannot be used, falling back to shell" >&2
-        fi
-    fi
-
-    # Check shell fallback
-    if [[ "$use_python" == "false" ]]; then
-        if test_shell_script >/dev/null 2>&1; then
-            use_shell=true
-        else
-            log_error "Neither Python nor shell implementation is available" >&2
-            exit 1
-        fi
-    fi
-
-    # Return the selected implementation
-    if [[ "$use_python" == "true" ]]; then
-        echo "python"
-    elif [[ "$use_shell" == "true" ]]; then
-        echo "shell"
+  # Check Python availability
+  if check_python >/dev/null 2>&1; then
+    if test_python_script >/dev/null 2>&1; then
+      use_python=true
+    elif install_python_deps >/dev/null 2>&1 && test_python_script >/dev/null 2>&1; then
+      use_python=true
     else
-        echo "none"
+      log_warning "Python script cannot be used, falling back to shell" >&2
     fi
+  fi
+
+  # Check shell fallback
+  if [[ $use_python == "false" ]]; then
+    if test_shell_script >/dev/null 2>&1; then
+      use_shell=true
+    else
+      log_error "Neither Python nor shell implementation is available" >&2
+      exit 1
+    fi
+  fi
+
+  # Return the selected implementation
+  if [[ $use_python == "true" ]]; then
+    echo "python"
+  elif [[ $use_shell == "true" ]]; then
+    echo "shell"
+  else
+    echo "none"
+  fi
 }
 
 # Show help combining both implementations
 show_combined_help() {
-    cat << 'EOF'
+  cat <<'EOF'
 Smart Git Rebase Launcher
 
 This launcher automatically selects the best available rebase implementation:
@@ -360,103 +366,102 @@ EOF
 
 # Main function
 main() {
-    local implementation="auto"
-    local script_args=()
+  local implementation="auto"
+  local script_args=()
 
-    # Parse launcher-specific arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --implementation)
-                implementation="$2"
-                shift 2
-                ;;
-            -h|--help)
-                show_combined_help
-                exit 0
-                ;;
-            *)
-                # Pass through to the actual script
-                script_args+=("$1")
-                shift
-                ;;
-        esac
-    done
-
-    # Validate implementation choice
-    case "$implementation" in
-        auto|python|shell)
-            ;;
-        *)
-            log_error "Invalid implementation: $implementation"
-            echo "Valid options: auto, python, shell"
-            exit 1
-            ;;
+  # Parse launcher-specific arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+    --implementation)
+      implementation="$2"
+      shift 2
+      ;;
+    -h | --help)
+      show_combined_help
+      exit 0
+      ;;
+    *)
+      # Pass through to the actual script
+      script_args+=("$1")
+      shift
+      ;;
     esac
+  done
 
-    log_info "Smart Git Rebase Launcher"
+  # Validate implementation choice
+  case "$implementation" in
+  auto | python | shell) ;;
+  *)
+    log_error "Invalid implementation: $implementation"
+    echo "Valid options: auto, python, shell"
+    exit 1
+    ;;
+  esac
 
-    # Select implementation
-    local selected_impl=""
-    if [[ "$implementation" == "auto" ]]; then
-        selected_impl=$(select_implementation)
-    elif [[ "$implementation" == "python" ]]; then
-        if check_python && (test_python_script || (install_python_deps && test_python_script)); then
-            selected_impl="python"
-        else
-            log_error "Python implementation not available"
-            exit 1
-        fi
-    elif [[ "$implementation" == "shell" ]]; then
-        if test_shell_script; then
-            selected_impl="shell"
-        else
-            log_error "Shell implementation not available"
-            exit 1
-        fi
+  log_info "Smart Git Rebase Launcher"
+
+  # Select implementation
+  local selected_impl=""
+  if [[ $implementation == "auto" ]]; then
+    selected_impl=$(select_implementation)
+  elif [[ $implementation == "python" ]]; then
+    if check_python && (test_python_script || (install_python_deps && test_python_script)); then
+      selected_impl="python"
+    else
+      log_error "Python implementation not available"
+      exit 1
     fi
-
-    # Execute the selected implementation and capture exit code
-    local exit_code=0
-    case "$selected_impl" in
-        python)
-            log_success "Using Python implementation (full-featured)"
-            if [[ ! -x "$PYTHON_SCRIPT" ]]; then
-                chmod +x "$PYTHON_SCRIPT"
-            fi
-            python3 "$PYTHON_SCRIPT" "${script_args[@]}"
-            exit_code=$?
-            ;;
-        shell)
-            log_success "Using Shell implementation (fallback)"
-            "$SHELL_SCRIPT" "${script_args[@]}"
-            exit_code=$?
-            ;;
-        none)
-            log_error "No suitable implementation found"
-            exit 1
-            ;;
-        *)
-            log_error "Unknown implementation selected: $selected_impl"
-            exit 1
-            ;;
-    esac
-
-    if [[ $exit_code -ne 0 ]]; then
-        log_warning "Rebase failed with exit code $exit_code"
-        attempt_ai_resolution "${script_args[@]}" || true
+  elif [[ $implementation == "shell" ]]; then
+    if test_shell_script; then
+      selected_impl="shell"
+    else
+      log_error "Shell implementation not available"
+      exit 1
     fi
+  fi
 
-    finalize_repository
-    return $exit_code
+  # Execute the selected implementation and capture exit code
+  local exit_code=0
+  case "$selected_impl" in
+  python)
+    log_success "Using Python implementation (full-featured)"
+    if [[ ! -x $PYTHON_SCRIPT ]]; then
+      chmod +x "$PYTHON_SCRIPT"
+    fi
+    python3 "$PYTHON_SCRIPT" "${script_args[@]}"
+    exit_code=$?
+    ;;
+  shell)
+    log_success "Using Shell implementation (fallback)"
+    "$SHELL_SCRIPT" "${script_args[@]}"
+    exit_code=$?
+    ;;
+  none)
+    log_error "No suitable implementation found"
+    exit 1
+    ;;
+  *)
+    log_error "Unknown implementation selected: $selected_impl"
+    exit 1
+    ;;
+  esac
+
+  if [[ $exit_code -ne 0 ]]; then
+    log_warning "Rebase failed with exit code $exit_code"
+    attempt_ai_resolution "${script_args[@]}" || true
+  fi
+
+  finalize_repository
+  return $exit_code
 }
 
 # Make scripts executable if needed
-if [[ -f "$PYTHON_SCRIPT" && ! -x "$PYTHON_SCRIPT" ]]; then
-    chmod +x "$PYTHON_SCRIPT"
+if [[ -f $PYTHON_SCRIPT && ! -x $PYTHON_SCRIPT ]]; then
+  chmod +x "$PYTHON_SCRIPT"
 fi
 
-if [[ -f "$SHELL_SCRIPT" && ! -x "$SHELL_SCRIPT" ]]; then
-    chmod +x "$SHELL_SCRIPT"
+if [[ -f $SHELL_SCRIPT && ! -x $SHELL_SCRIPT ]]; then
+  chmod +x "$SHELL_SCRIPT"
 fi
 
 # Run main function

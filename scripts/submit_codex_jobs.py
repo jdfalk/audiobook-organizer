@@ -22,12 +22,12 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any
 
 LEDGER_PATH = Path(".codex_submitted_jobs.json")
 
 
-def load_ledger() -> Set[str]:
+def load_ledger() -> set[str]:
     """Load the set of previously submitted job UUIDs."""
     if LEDGER_PATH.exists():
         with LEDGER_PATH.open("r", encoding="utf-8") as handle:
@@ -35,13 +35,13 @@ def load_ledger() -> Set[str]:
     return set()
 
 
-def save_ledger(ledger: Set[str]) -> None:
+def save_ledger(ledger: set[str]) -> None:
     """Persist the ledger of submitted job UUIDs."""
     with LEDGER_PATH.open("w", encoding="utf-8") as handle:
         json.dump(sorted(ledger), handle, indent=2)
 
 
-def submit_job(job: Dict[str, Any]) -> None:
+def submit_job(job: dict[str, Any]) -> None:
     """Submit a single job to the codex CLI."""
     repo = job["repo"]
     instructions = job["instructions"]
@@ -62,7 +62,7 @@ def submit_job(job: Dict[str, Any]) -> None:
     subprocess.run(cmd, check=True)
 
 
-def process_jobs(jobs: List[Dict[str, Any]], ledger: Set[str]) -> None:
+def process_jobs(jobs: list[dict[str, Any]], ledger: set[str]) -> None:
     """Process and submit all jobs."""
     for job in jobs:
         job_id = job["uuid"]
@@ -81,7 +81,7 @@ def main() -> int:
     args = parser.parse_args()
 
     with args.path.open("r", encoding="utf-8") as handle:
-        jobs: List[Dict[str, Any]] = json.load(handle)
+        jobs: list[dict[str, Any]] = json.load(handle)
 
     ledger = load_ledger()
     process_jobs(jobs, ledger)
