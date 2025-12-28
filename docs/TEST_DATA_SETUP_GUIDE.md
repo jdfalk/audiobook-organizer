@@ -6,9 +6,11 @@
 
 ## Overview
 
-This guide provides instructions for creating and managing test audiobook files for manual and automated testing of the audiobook-organizer application.
+This guide provides instructions for creating and managing test audiobook files
+for manual and automated testing of the audiobook-organizer application.
 
-**Purpose**: Ensure consistent, reproducible test data across different testing environments
+**Purpose**: Ensure consistent, reproducible test data across different testing
+environments
 
 **Target Audience**: QA Engineers, Developers, CI/CD Engineers
 
@@ -40,15 +42,16 @@ cd /path/to/audiobook-organizer
 
 ### File Formats
 
-The application supports multiple audiobook formats. For comprehensive testing, prepare files in:
+The application supports multiple audiobook formats. For comprehensive testing,
+prepare files in:
 
-| Format | Extension | Priority | Notes                          |
-|--------|-----------|----------|--------------------------------|
-| M4B    | .m4b      | P0       | Primary format, best metadata  |
-| MP3    | .mp3      | P1       | Common format, basic metadata  |
-| M4A    | .m4a      | P2       | Apple format                   |
-| FLAC   | .flac     | P2       | Lossless audio                 |
-| OGG    | .ogg      | P3       | Open format                    |
+| Format | Extension | Priority | Notes                         |
+| ------ | --------- | -------- | ----------------------------- |
+| M4B    | .m4b      | P0       | Primary format, best metadata |
+| MP3    | .mp3      | P1       | Common format, basic metadata |
+| M4A    | .m4a      | P2       | Apple format                  |
+| FLAC   | .flac     | P2       | Lossless audio                |
+| OGG    | .ogg      | P3       | Open format                   |
 
 **Minimum for P0 Testing**: 3 M4B files with varying metadata
 
@@ -72,7 +75,9 @@ mv "Book 3.m4b" "test-book-003.m4b"
 ```
 
 **Metadata Requirements**:
-- At least one book with rich metadata (title, author, narrator, series, publisher)
+
+- At least one book with rich metadata (title, author, narrator, series,
+  publisher)
 - At least one book with minimal metadata (title only)
 - At least one book with special characters in title
 
@@ -156,8 +161,10 @@ ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
 **Best for**: Real content without copyright issues
 
 **Sources**:
+
 - [LibriVox](https://librivox.org/) - Public domain audiobooks
-- [Archive.org Audio Books](https://archive.org/details/audio_bookspoetry) - Public domain collection
+- [Archive.org Audio Books](https://archive.org/details/audio_bookspoetry) -
+  Public domain collection
 
 ```bash
 # Example: Download from LibriVox (requires curl/wget)
@@ -180,6 +187,7 @@ ffprobe librivox-sample.m4b 2>&1 | head -20
 **Required Files**: 3 books with metadata in different sources
 
 #### Book A: File Metadata Primary
+
 ```bash
 # Create book with rich file metadata
 ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
@@ -192,6 +200,7 @@ ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
 ```
 
 #### Book B: Stored Metadata (Manual Database Entry)
+
 ```bash
 # Create book with minimal file metadata
 ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
@@ -207,6 +216,7 @@ ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
 ```
 
 #### Book C: Override Testing
+
 ```bash
 # Create book with metadata that will be overridden
 ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
@@ -265,6 +275,7 @@ EOF
 **Required**: Multiple books in different states
 
 #### Import State Books
+
 ```bash
 # Create books for import testing
 for i in {1..3}; do
@@ -277,6 +288,7 @@ done
 ```
 
 #### Organized State Books
+
 ```bash
 # Import books, then organize them to create "organized" state
 # This requires running the application and using organize operation
@@ -284,6 +296,7 @@ done
 ```
 
 #### Soft-Deleted State Books
+
 ```bash
 # Create books specifically for delete testing
 ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 10 \
@@ -397,30 +410,30 @@ cd ~/test-audiobooks/import
 
 for file in *.m4b; do
   echo "Checking $file..."
-  
+
   # Check file exists and is readable
   if [ ! -r "$file" ]; then
     echo "  ❌ FAIL: File not readable"
     continue
   fi
-  
+
   # Check file size (should be > 0)
   size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
   if [ "$size" -eq 0 ]; then
     echo "  ❌ FAIL: File is empty"
     continue
   fi
-  
+
   # Check file format with ffprobe
   if ! ffprobe "$file" 2>&1 | grep -q "Audio"; then
     echo "  ❌ FAIL: Not a valid audio file"
     continue
   fi
-  
+
   # Extract and display metadata
   title=$(ffprobe "$file" 2>&1 | grep "title" | head -1 | cut -d: -f2- | xargs)
   author=$(ffprobe "$file" 2>&1 | grep "author\|artist" | head -1 | cut -d: -f2- | xargs)
-  
+
   echo "  ✅ PASS: $file"
   echo "     Title: $title"
   echo "     Author: $author"
@@ -490,15 +503,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Install ffmpeg
         run: sudo apt-get install -y ffmpeg
-      
+
       - name: Generate test audiobooks
         run: |
           mkdir -p test-data/import
           cd test-data/import
-          
+
           # Generate minimal test files
           for i in {1..3}; do
             ffmpeg -f lavfi -i anullsrc=r=44100:cl=mono -t 1 \
@@ -506,12 +519,12 @@ jobs:
               -c:a aac -b:a 32k \
               test-book-$i.m4b -loglevel quiet -y
           done
-      
+
       - name: Run application with test data
         run: |
           ./audiobook-organizer serve --port 8888 --dir test-data/import &
           sleep 5  # Wait for startup
-      
+
       - name: Run E2E tests
         run: |
           cd web
@@ -552,6 +565,7 @@ rm -rf ~/test-audiobooks
 ### Issue: ffmpeg not found
 
 **Solution**:
+
 ```bash
 # macOS
 brew install ffmpeg
@@ -566,6 +580,7 @@ sudo apt-get install ffmpeg
 ### Issue: File format not recognized
 
 **Solution**:
+
 ```bash
 # Verify file format
 file audiobook.m4b
@@ -578,6 +593,7 @@ ffmpeg -i audiobook.ogg -c:a aac audiobook.m4b
 ### Issue: Metadata not extracted correctly
 
 **Solution**:
+
 ```bash
 # Check metadata tags
 ffprobe audiobook.m4b 2>&1 | grep -E "title|author|artist"
@@ -655,6 +671,7 @@ echo "✅ Hashes saved to $TEST_DIR/test-hashes.txt"
 ```
 
 ### Make executable and run
+
 ```bash
 chmod +x generate-test-suite.sh
 ./generate-test-suite.sh
@@ -673,6 +690,7 @@ chmod +x generate-test-suite.sh
 ---
 
 **Related Documents**:
+
 - [Manual Test Plan](./MANUAL_TEST_PLAN.md)
 - [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
 - [E2E Test Coverage](../web/tests/e2e/TEST_COVERAGE_SUMMARY.md)

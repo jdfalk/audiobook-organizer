@@ -6,21 +6,26 @@
 
 ## Document Purpose
 
-This executive summary provides decision-makers with a high-level overview of manual testing requirements for the audiobook-organizer project before merging PR #79 (Metadata Provenance feature).
+This executive summary provides decision-makers with a high-level overview of
+manual testing requirements for the audiobook-organizer project before merging
+PR #79 (Metadata Provenance feature).
 
 **Target Audience**: Project Leads, Product Managers, Technical Decision-Makers
 
-**Date**: December 28, 2025
-**Status**: Documentation Complete, Testing Pending
+**Date**: December 28, 2025 **Status**: Documentation Complete, Testing Pending
 **PR Target**: #79 - Metadata Provenance Feature
 
 ---
 
 ## Executive Summary
 
-The audiobook-organizer project has reached a critical milestone with the completion of the metadata provenance backend (PR #79). Before merging this feature to main, comprehensive manual testing is required to validate user-facing functionality and ensure system stability.
+The audiobook-organizer project has reached a critical milestone with the
+completion of the metadata provenance backend (PR #79). Before merging this
+feature to main, comprehensive manual testing is required to validate
+user-facing functionality and ensure system stability.
 
 **Key Highlights**:
+
 - ✅ **Backend**: 100% test coverage, all Go tests passing
 - ✅ **Frontend**: Build successful, 13 new E2E tests created
 - ⏳ **Manual QA**: Comprehensive test plan created, awaiting execution
@@ -32,15 +37,21 @@ The audiobook-organizer project has reached a critical milestone with the comple
 
 ### Metadata Provenance Feature
 
-**User Benefit**: Users can now see where each metadata field comes from and manually override values with confidence.
+**User Benefit**: Users can now see where each metadata field comes from and
+manually override values with confidence.
 
 **Core Capabilities**:
-1. **Source Tracking**: Each metadata field displays its source (file/fetched/stored/override)
-2. **Manual Overrides**: Users can override any field with values from different sources
+
+1. **Source Tracking**: Each metadata field displays its source
+   (file/fetched/stored/override)
+2. **Manual Overrides**: Users can override any field with values from different
+   sources
 3. **Lock Protection**: Lock fields to prevent automatic updates
-4. **Source Priority**: Clear hierarchy ensures correct values display (override > stored > fetched > file)
+4. **Source Priority**: Clear hierarchy ensures correct values display
+   (override > stored > fetched > file)
 
 **Technical Implementation**:
+
 - Database migration 10: `metadata_states` table for per-field tracking
 - Enhanced API endpoints with provenance payload
 - React frontend with Tags and Compare tabs
@@ -53,6 +64,7 @@ The audiobook-organizer project has reached a critical milestone with the comple
 ### What's Already Tested (Automated)
 
 ✅ **E2E Tests (13 scenarios)**:
+
 - Provenance data display in Tags tab
 - Effective source verification across fields
 - Override application from file/fetched values
@@ -62,6 +74,7 @@ The audiobook-organizer project has reached a critical milestone with the comple
 - Edge cases (null values, numeric fields)
 
 ✅ **Backend Tests (50+ Go tests)**:
+
 - Database migrations (10/10 passing)
 - Store operations (CRUD, state management)
 - API endpoints (provenance, overrides, locks)
@@ -76,22 +89,21 @@ The audiobook-organizer project has reached a critical milestone with the comple
 ⏳ **10 Critical Scenarios (P0)** - Estimated 2-3 hours:
 
 **Metadata Provenance (PR #79)** - 4 scenarios:
+
 1. Provenance data display validation
 2. Apply override from file value
 3. Clear override and verify fallback
 4. Lock toggle and persistence
 
-**Blocked Hashes (PR #69)** - 2 scenarios:
-5. Add blocked hash with validation
-6. Delete blocked hash with confirmation
+**Blocked Hashes (PR #69)** - 2 scenarios: 5. Add blocked hash with
+validation 6. Delete blocked hash with confirmation
 
-**State Transitions (PR #70)** - 4 scenarios:
-7. Soft delete without hash blocking
-8. Soft delete with hash blocking
-9. Restore soft-deleted book
-10. State transition: import → organized
+**State Transitions (PR #70)** - 4 scenarios: 7. Soft delete without hash
+blocking 8. Soft delete with hash blocking 9. Restore soft-deleted book 10.
+State transition: import → organized
 
 **Why Manual Testing?**:
+
 - Validate visual design and UX flow
 - Verify error messages and user feedback
 - Test cross-browser compatibility
@@ -104,23 +116,24 @@ The audiobook-organizer project has reached a critical milestone with the comple
 
 ### Risks if PR #79 Merged Without Manual QA
 
-| Risk                        | Likelihood | Impact   | Mitigation                  |
-|-----------------------------|------------|----------|-----------------------------|
-| UI rendering issues         | Medium     | High     | Manual visual inspection    |
-| Poor UX (confusing workflow)| Medium     | High     | User scenario testing       |
-| Edge case failures          | Low        | Medium   | Comprehensive test scenarios|
-| Accessibility gaps          | Low        | High     | Keyboard/screen reader test |
-| Performance degradation     | Low        | Medium   | Performance testing         |
+| Risk                         | Likelihood | Impact | Mitigation                   |
+| ---------------------------- | ---------- | ------ | ---------------------------- |
+| UI rendering issues          | Medium     | High   | Manual visual inspection     |
+| Poor UX (confusing workflow) | Medium     | High   | User scenario testing        |
+| Edge case failures           | Low        | Medium | Comprehensive test scenarios |
+| Accessibility gaps           | Low        | High   | Keyboard/screen reader test  |
+| Performance degradation      | Low        | Medium | Performance testing          |
 
 ### Risks if Manual QA Delayed
 
-| Risk                        | Likelihood | Impact   | Mitigation                  |
-|-----------------------------|------------|----------|-----------------------------|
-| Feature deployment delay    | High       | Medium   | Prioritize P0 tests only    |
-| User dissatisfaction        | Medium     | High     | Cannot avoid without testing|
-| Rollback after deployment   | Low        | Critical | Execute tests now           |
+| Risk                      | Likelihood | Impact   | Mitigation                   |
+| ------------------------- | ---------- | -------- | ---------------------------- |
+| Feature deployment delay  | High       | Medium   | Prioritize P0 tests only     |
+| User dissatisfaction      | Medium     | High     | Cannot avoid without testing |
+| Rollback after deployment | Low        | Critical | Execute tests now            |
 
-**Recommendation**: Execute P0 manual tests (2-3 hours) before merge to minimize risk.
+**Recommendation**: Execute P0 manual tests (2-3 hours) before merge to minimize
+risk.
 
 ---
 
@@ -131,7 +144,9 @@ The audiobook-organizer project has reached a critical milestone with the comple
 Comprehensive testing documentation has been created across 4 documents:
 
 #### 1. [Manual Test Plan](./MANUAL_TEST_PLAN.md)
+
 **Content**: Comprehensive test scenarios for all features
+
 - 6 feature areas covered
 - 30+ test scenarios documented
 - Step-by-step instructions
@@ -141,7 +156,9 @@ Comprehensive testing documentation has been created across 4 documents:
 **Use Case**: Reference guide for thorough testing campaigns
 
 #### 2. [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
+
 **Content**: Critical tests required before PR #79 merge
+
 - 10 must-pass scenarios
 - Checkbox format for easy tracking
 - API validation commands
@@ -151,7 +168,9 @@ Comprehensive testing documentation has been created across 4 documents:
 **Use Case**: PR merge gate, quick validation
 
 #### 3. [Test Data Setup Guide](./TEST_DATA_SETUP_GUIDE.md)
+
 **Content**: Instructions for creating test audiobook files
+
 - FFmpeg-based file generation
 - Metadata tagging examples
 - Hash computation guide
@@ -161,7 +180,9 @@ Comprehensive testing documentation has been created across 4 documents:
 **Use Case**: Test environment preparation
 
 #### 4. [Test Validation Criteria](./TEST_VALIDATION_CRITERIA.md)
+
 **Content**: Pass/fail criteria and issue reporting
+
 - Detailed pass criteria for all scenarios
 - Severity thresholds (Critical/High/Medium/Low)
 - Issue reporting templates
@@ -178,11 +199,11 @@ Comprehensive testing documentation has been created across 4 documents:
 
 ### Phase 1: P0 Critical Tests (Required)
 
-**Time**: 2-3 hours
-**Executor**: QA Engineer or Senior Developer
-**Document**: [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
+**Time**: 2-3 hours **Executor**: QA Engineer or Senior Developer **Document**:
+[P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
 
 **Tests**:
+
 - 4 Metadata Provenance scenarios (PR #79)
 - 2 Blocked Hashes scenarios (PR #69)
 - 4 State Transition scenarios (PR #70)
@@ -195,11 +216,11 @@ Comprehensive testing documentation has been created across 4 documents:
 
 ### Phase 2: Extended Testing (Recommended)
 
-**Time**: 6-8 hours
-**Executor**: QA Team
-**Document**: [Manual Test Plan](./MANUAL_TEST_PLAN.md)
+**Time**: 6-8 hours **Executor**: QA Team **Document**:
+[Manual Test Plan](./MANUAL_TEST_PLAN.md)
 
 **Additional Coverage**:
+
 - Book detail page functionality
 - Import and scan operations
 - Settings and configuration
@@ -215,11 +236,11 @@ Comprehensive testing documentation has been created across 4 documents:
 
 ### Phase 3: Continuous Testing (Future)
 
-**Time**: Ongoing
-**Executor**: Dev Team + QA
-**Approach**: Integrate into development workflow
+**Time**: Ongoing **Executor**: Dev Team + QA **Approach**: Integrate into
+development workflow
 
 **Activities**:
+
 - Regression testing on each PR
 - Exploratory testing for new features
 - User acceptance testing before releases
@@ -232,7 +253,7 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Time Estimates
 
 | Activity                     | Time Required | Priority |
-|------------------------------|---------------|----------|
+| ---------------------------- | ------------- | -------- |
 | Test environment setup       | 15 minutes    | P0       |
 | Test data preparation        | 30 minutes    | P0       |
 | P0 manual tests execution    | 2-3 hours     | P0       |
@@ -245,12 +266,14 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Required Skills
 
 **For P0 Testing**:
+
 - Basic web application testing experience
 - Familiarity with browser developer tools
 - Ability to follow detailed test scripts
 - Command-line basics (curl, logs)
 
 **For Extended Testing**:
+
 - QA engineering experience
 - Test case design skills
 - Issue reporting expertise
@@ -263,6 +286,7 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Option 1: Proceed with Manual QA (Recommended ✅)
 
 **Pros**:
+
 - ✅ Validates user experience before production
 - ✅ Catches issues early (cheaper to fix)
 - ✅ Builds confidence in feature quality
@@ -270,6 +294,7 @@ Comprehensive testing documentation has been created across 4 documents:
 - ✅ Comprehensive documentation supports testing
 
 **Cons**:
+
 - ⏱️ Requires 2-3 hours before merge
 - 👤 Needs dedicated tester availability
 
@@ -282,10 +307,12 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Option 2: Merge Without Manual QA (Not Recommended ⚠️)
 
 **Pros**:
+
 - ⚡ Immediate merge, no delay
 - 🤖 Automated tests provide some coverage
 
 **Cons**:
+
 - ⚠️ UI/UX issues may reach production
 - ⚠️ Accessibility gaps unknown
 - ⚠️ User confusion possible
@@ -303,17 +330,20 @@ Comprehensive testing documentation has been created across 4 documents:
 **Approach**: Test only 3-4 most critical scenarios
 
 **Pros**:
+
 - ⏱️ Faster than full P0 testing (~1 hour)
 - ✅ Covers highest-risk areas
 
 **Cons**:
+
 - ⚠️ Incomplete validation
 - ⚠️ May miss edge cases
 - ⚠️ Still requires post-merge testing
 
 **Risk Level**: Medium (reduced coverage)
 
-**Recommendation**: Only if severe time constraints, with post-merge validation plan
+**Recommendation**: Only if severe time constraints, with post-merge validation
+plan
 
 ---
 
@@ -322,6 +352,7 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Definition of Success (PR #79 Merge)
 
 **Must Have** (P0):
+
 - ✅ All 10 P0 manual tests pass
 - ✅ No Critical (P0) severity issues open
 - ✅ All 13 E2E automated tests pass
@@ -329,12 +360,14 @@ Comprehensive testing documentation has been created across 4 documents:
 - ✅ Keyboard navigation functional
 
 **Should Have** (P1):
+
 - 🎯 ≥1 High-severity issue open (with fix plan)
 - 🎯 Cross-browser testing complete (Chrome, Firefox)
 - 🎯 Test evidence collected (screenshots, logs)
 - 🎯 Known issues documented in CHANGELOG
 
 **Nice to Have** (P2):
+
 - ⭐ Extended test plan executed
 - ⭐ User feedback collected (if beta available)
 - ⭐ Screen reader testing complete
@@ -346,16 +379,19 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Immediate Actions (Before PR #79 Merge)
 
 1. **Assign Tester** (Priority: Critical)
+
    - Allocate QA engineer or senior developer
    - Time commitment: 4 hours (setup + P0 tests + reporting)
    - Target completion: Within 48 hours
 
 2. **Execute P0 Test Checklist** (Priority: Critical)
+
    - Use: [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
    - Environment: Local development setup
    - Output: Completed checklist with pass/fail for all 10 tests
 
 3. **Review and Triage Issues** (Priority: Critical)
+
    - Use: [Test Validation Criteria](./TEST_VALIDATION_CRITERIA.md)
    - Assign severity to each issue found
    - Create GitHub issues for tracking
@@ -371,11 +407,13 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Short-Term Actions (Post-Merge)
 
 1. **Monitor Production** (Priority: High)
+
    - Watch for user-reported issues
    - Monitor error logs
    - Track performance metrics
 
 2. **Execute Extended Tests** (Priority: High)
+
    - Use: [Manual Test Plan](./MANUAL_TEST_PLAN.md)
    - Schedule: Within 1 week post-merge
    - Create backlog of enhancements
@@ -390,11 +428,13 @@ Comprehensive testing documentation has been created across 4 documents:
 ### Long-Term Actions (Continuous Improvement)
 
 1. **Integrate Manual Testing into Workflow**
+
    - Define manual test requirements for each PR
    - Create PR checklist template
    - Train team on test execution
 
 2. **Expand Automation**
+
    - Convert common manual scenarios to E2E tests
    - Implement visual regression testing
    - Automate test data generation
@@ -410,7 +450,8 @@ Comprehensive testing documentation has been created across 4 documents:
 
 ### Questions About Testing
 
-**Documentation**: See [Manual Test Plan](./MANUAL_TEST_PLAN.md) or [P0 Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
+**Documentation**: See [Manual Test Plan](./MANUAL_TEST_PLAN.md) or
+[P0 Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
 
 **Test Execution**: Consult QA lead or assigned tester
 
@@ -478,18 +519,22 @@ Day 2:
 ## Appendix B: Quick Links
 
 **Test Documentation**:
+
 - [Manual Test Plan](./MANUAL_TEST_PLAN.md) - Comprehensive scenarios
 - [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md) - Critical tests for merge
 - [Test Data Setup Guide](./TEST_DATA_SETUP_GUIDE.md) - Environment preparation
-- [Test Validation Criteria](./TEST_VALIDATION_CRITERIA.md) - Pass/fail standards
+- [Test Validation Criteria](./TEST_VALIDATION_CRITERIA.md) - Pass/fail
+  standards
 
 **Project Documentation**:
+
 - [CHANGELOG.md](../CHANGELOG.md) - Version history and changes
 - [TODO.md](../TODO.md) - Outstanding tasks and priorities
 - [NEXT_STEPS.md](../NEXT_STEPS.md) - Next session priorities
 - [SESSION_SUMMARY.md](../SESSION_SUMMARY.md) - Recent work summary
 
 **E2E Tests**:
+
 - [Test Coverage Summary](../web/tests/e2e/TEST_COVERAGE_SUMMARY.md)
 - [Metadata Provenance Tests](../web/tests/e2e/METADATA_PROVENANCE_TESTS.md)
 - [E2E Next Steps](../web/tests/e2e/NEXT_STEPS.md)
@@ -498,20 +543,25 @@ Day 2:
 
 ## Appendix C: FAQ
 
-**Q: Can we skip manual testing and rely on E2E tests?**
-A: E2E tests cover logic and basic UI interactions, but cannot validate visual design, UX flow, accessibility, or cross-browser compatibility. Manual testing is essential for production readiness.
+**Q: Can we skip manual testing and rely on E2E tests?** A: E2E tests cover
+logic and basic UI interactions, but cannot validate visual design, UX flow,
+accessibility, or cross-browser compatibility. Manual testing is essential for
+production readiness.
 
-**Q: How long will manual testing take?**
-A: P0 critical tests: 2-3 hours. Full manual test suite: 6-8 hours. See timeline appendix for details.
+**Q: How long will manual testing take?** A: P0 critical tests: 2-3 hours. Full
+manual test suite: 6-8 hours. See timeline appendix for details.
 
-**Q: What if we find critical issues?**
-A: Document with issue template, assign severity, and decide: block merge (fix now) or conditional merge (fix tracked, low risk). See decision matrix.
+**Q: What if we find critical issues?** A: Document with issue template, assign
+severity, and decide: block merge (fix now) or conditional merge (fix tracked,
+low risk). See decision matrix.
 
-**Q: Who should perform the manual tests?**
-A: Ideally a QA engineer. Alternatively, a senior developer familiar with the feature. Requires ~4 hours availability.
+**Q: Who should perform the manual tests?** A: Ideally a QA engineer.
+Alternatively, a senior developer familiar with the feature. Requires ~4 hours
+availability.
 
-**Q: Can we test in production?**
-A: Not recommended. Testing should occur in development/staging to prevent user-facing issues. Production monitoring is supplemental.
+**Q: Can we test in production?** A: Not recommended. Testing should occur in
+development/staging to prevent user-facing issues. Production monitoring is
+supplemental.
 
 ---
 
@@ -527,6 +577,7 @@ A: Not recommended. Testing should occur in development/staging to prevent user-
 
 **Status**: ⏳ Documentation Complete, Awaiting Test Execution
 
-**Next Action**: Assign tester and execute [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
+**Next Action**: Assign tester and execute
+[P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
 
 **Target**: PR #79 merge within 48 hours of testing completion

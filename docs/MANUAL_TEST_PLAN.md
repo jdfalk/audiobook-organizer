@@ -6,20 +6,27 @@
 
 ## Overview
 
-This document provides comprehensive manual test scenarios for the audiobook-organizer application. These tests complement automated E2E tests and focus on user-facing workflows that require human validation.
+This document provides comprehensive manual test scenarios for the
+audiobook-organizer application. These tests complement automated E2E tests and
+focus on user-facing workflows that require human validation.
 
 **Target Audience**: QA Engineers, Developers, Product Managers
 
 **Prerequisites**:
+
 - Application running locally or in test environment
 - Sample audiobook files available (see Test Data Setup Guide)
 - Basic understanding of application features
 - Browser developer tools for debugging (optional)
 
 **Related Documentation**:
-- [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md) - Critical scenarios for PR #79 merge
-- [Test Data Setup Guide](./TEST_DATA_SETUP_GUIDE.md) - How to create test audiobook files
-- [E2E Test Coverage](../web/tests/e2e/TEST_COVERAGE_SUMMARY.md) - Automated test scenarios
+
+- [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md) - Critical scenarios for PR
+  #79 merge
+- [Test Data Setup Guide](./TEST_DATA_SETUP_GUIDE.md) - How to create test
+  audiobook files
+- [E2E Test Coverage](../web/tests/e2e/TEST_COVERAGE_SUMMARY.md) - Automated
+  test scenarios
 
 ---
 
@@ -28,6 +35,7 @@ This document provides comprehensive manual test scenarios for the audiobook-org
 ### Prerequisites
 
 1. **Application Running**
+
    ```bash
    cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
    go build -o audiobook-organizer
@@ -35,6 +43,7 @@ This document provides comprehensive manual test scenarios for the audiobook-org
    ```
 
 2. **Browser Access**
+
    - Navigate to: http://localhost:8888
    - Recommended: Chrome or Firefox (latest versions)
    - Enable browser console for debugging
@@ -70,6 +79,7 @@ rm -f audiobooks.pebble
 **Objective**: Verify that metadata sources are correctly displayed in the UI
 
 **Prerequisites**:
+
 - At least one audiobook imported with file metadata
 - Book has been fetched from metadata API (or mock data available)
 
@@ -89,16 +99,19 @@ rm -f audiobooks.pebble
    - Lock icon appears only for locked override fields
 
 **Expected Results**:
+
 - All metadata fields display correct effective values
 - Source chips accurately reflect data source
 - Visual hierarchy is clear (value > source > lock status)
 - No console errors in browser developer tools
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: All fields display correct values and sources
 - ❌ FAIL: Missing values, incorrect sources, or console errors
 
-**Screenshot Guidance**: Capture full Tags tab with multiple fields showing different sources
+**Screenshot Guidance**: Capture full Tags tab with multiple fields showing
+different sources
 
 ---
 
@@ -107,6 +120,7 @@ rm -f audiobooks.pebble
 **Objective**: Apply file metadata as override and verify persistence
 
 **Prerequisites**:
+
 - Book with file metadata that differs from stored value
 - Example: File has title "Book Title (File)", DB has "Book Title (Stored)"
 
@@ -131,16 +145,19 @@ rm -f audiobooks.pebble
     - Values remain correct
 
 **Expected Results**:
+
 - Override applies instantly without page reload
 - Source chip updates to "override"
 - Data persists across page refresh
 - API request succeeds (check Network tab: `PATCH /api/v1/audiobooks/:id`)
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Override applies, persists, and displays correctly
 - ❌ FAIL: Override doesn't apply, values incorrect, or doesn't persist
 
 **Edge Cases to Test**:
+
 - Apply override to field with null file value (button should be disabled)
 - Apply override to already-overridden field (should update)
 - Apply multiple overrides in sequence
@@ -152,6 +169,7 @@ rm -f audiobooks.pebble
 **Objective**: Apply metadata API value as override
 
 **Prerequisites**:
+
 - Book with fetched metadata available
 - Field where fetched value differs from current effective value
 
@@ -170,11 +188,13 @@ rm -f audiobooks.pebble
 8. Refresh page and revalidate
 
 **Expected Results**:
+
 - Fetched value applies as override
 - Source priority: override > fetched (confirms override took precedence)
 - Persistence across navigation and refresh
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Fetched override applies and persists correctly
 - ❌ FAIL: Override fails, incorrect value, or doesn't persist
 
@@ -185,6 +205,7 @@ rm -f audiobooks.pebble
 **Objective**: Remove override and revert to next priority source
 
 **Prerequisites**:
+
 - Field with active override
 
 **Test Steps**:
@@ -201,12 +222,14 @@ rm -f audiobooks.pebble
 7. Verify override remains cleared
 
 **Expected Results**:
+
 - Override clears successfully
 - Value reverts to correct source based on priority (stored > fetched > file)
 - Clearing persists after refresh
 - API request succeeds: `PATCH /api/v1/audiobooks/:id` with overrides removed
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Override clears and correct source value displays
 - ❌ FAIL: Override doesn't clear, wrong value displays, or doesn't persist
 
@@ -217,6 +240,7 @@ rm -f audiobooks.pebble
 **Objective**: Lock override to prevent automatic updates
 
 **Prerequisites**:
+
 - Field with override applied
 
 **Test Steps**:
@@ -233,24 +257,29 @@ rm -f audiobooks.pebble
 8. Verify unlock state persists
 
 **Expected Results**:
+
 - Lock toggles on/off successfully
 - Locked state prevents field updates from metadata fetch (future test)
 - Lock status visible in both Tags and Compare tabs
 - Lock persists across sessions
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Lock toggles correctly and persists
 - ❌ FAIL: Lock doesn't toggle, incorrect state, or doesn't persist
 
-**Note**: Full lock functionality validation requires metadata fetch feature (future test)
+**Note**: Full lock functionality validation requires metadata fetch feature
+(future test)
 
 ---
 
 #### 1.6 Source Priority Validation
 
-**Objective**: Verify correct source priority: override > stored > fetched > file
+**Objective**: Verify correct source priority: override > stored > fetched >
+file
 
 **Prerequisites**:
+
 - Create test book with all four source types for a field:
   - file: "Title from File"
   - fetched: "Title from API"
@@ -273,11 +302,13 @@ rm -f audiobooks.pebble
 12. Verify effective value falls back to "Title from File" (file)
 
 **Expected Results**:
+
 - Priority order strictly enforced
 - Each source level correctly takes precedence
 - UI accurately reflects current source
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: All priority transitions work correctly
 - ❌ FAIL: Wrong priority order, incorrect fallback values
 
@@ -294,6 +325,7 @@ rm -f audiobooks.pebble
 **Objective**: Display blocked hashes in Settings tab
 
 **Prerequisites**:
+
 - Fresh application instance (or cleared blocked hashes)
 
 **Test Steps**:
@@ -314,12 +346,14 @@ rm -f audiobooks.pebble
    - Delete/unblock button
 
 **Expected Results**:
+
 - Empty state is clear and helpful
 - Table displays all hash details correctly
 - UI is responsive and accessible
 - Date formatting is locale-appropriate
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Empty state and table display correctly
 - ❌ FAIL: Missing elements, incorrect data, layout issues
 
@@ -332,7 +366,9 @@ rm -f audiobooks.pebble
 **Objective**: Add file hash to blocklist with validation
 
 **Prerequisites**:
-- Have a test SHA256 hash ready: `a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd`
+
+- Have a test SHA256 hash ready:
+  `a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd`
 
 **Test Steps**:
 
@@ -352,7 +388,8 @@ rm -f audiobooks.pebble
    - Click Save
    - Verify error: "Hash and reason are required"
 6. **Valid Entry**:
-   - Enter valid hash: `a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd`
+   - Enter valid hash:
+     `a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd`
    - Enter reason: "Test blocked hash for manual QA"
    - Click Save
 7. Verify:
@@ -362,16 +399,19 @@ rm -f audiobooks.pebble
    - API request succeeds: `POST /api/v1/blocked-hashes`
 
 **Expected Results**:
+
 - Validation catches all invalid inputs
 - Valid hash saves successfully
 - UI provides clear feedback
 - Data persists (visible after page refresh)
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Validation works, valid hash saves successfully
 - ❌ FAIL: Validation fails, can't save valid hash, no feedback
 
 **Edge Cases**:
+
 - Try adding duplicate hash (should update or show error)
 - Test with uppercase/lowercase hex (should accept both)
 - Very long reason text (test UI handling)
@@ -383,6 +423,7 @@ rm -f audiobooks.pebble
 **Objective**: Remove hash from blocklist
 
 **Prerequisites**:
+
 - At least one blocked hash in system
 
 **Test Steps**:
@@ -409,16 +450,19 @@ rm -f audiobooks.pebble
 10. Verify hash remains deleted
 
 **Expected Results**:
+
 - Confirmation dialog prevents accidental deletion
 - Hash deletes successfully
 - Deletion persists across refresh
 - UI updates immediately
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Confirmation works, deletion succeeds and persists
 - ❌ FAIL: No confirmation, deletion fails, or doesn't persist
 
-**Screenshot Guidance**: Capture delete confirmation dialog with full hash visible
+**Screenshot Guidance**: Capture delete confirmation dialog with full hash
+visible
 
 ---
 
@@ -427,6 +471,7 @@ rm -f audiobooks.pebble
 **Objective**: Verify blocked hash prevents file import during scan
 
 **Prerequisites**:
+
 - Audiobook file with known hash
 - Hash added to blocklist
 
@@ -436,7 +481,8 @@ rm -f audiobooks.pebble
    ```bash
    shasum -a 256 /path/to/test/audiobook.m4b
    ```
-2. Add hash to blocklist via Settings tab with reason: "Manual test - prevent reimport"
+2. Add hash to blocklist via Settings tab with reason: "Manual test - prevent
+   reimport"
 3. Place audiobook file in import directory
 4. Trigger import scan:
    ```bash
@@ -446,17 +492,20 @@ rm -f audiobooks.pebble
    ```bash
    tail -f logs/audiobook-organizer.log
    ```
-6. Verify log message: `Skipping file: hash blocked: <hash> (reason: Manual test - prevent reimport)`
+6. Verify log message:
+   `Skipping file: hash blocked: <hash> (reason: Manual test - prevent reimport)`
 7. Check Library page - verify file was NOT imported
 8. Check dashboard stats - verify count unchanged
 
 **Expected Results**:
+
 - Scanner detects blocked hash
 - File skipped with logged reason
 - File does not appear in library
 - No duplicate entries created
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: File skipped, logged correctly, not in library
 - ❌ FAIL: File imported despite blocked hash
 
@@ -473,6 +522,7 @@ rm -f audiobooks.pebble
 **Objective**: Verify book state transitions through lifecycle
 
 **Prerequisites**:
+
 - New audiobook file not yet imported
 
 **Test Steps**:
@@ -496,6 +546,7 @@ rm -f audiobooks.pebble
 11. Verify book still appears in Library
 
 **Expected Results**:
+
 - Initial state: `imported`
 - After organize: `organized`
 - State persists in database
@@ -503,10 +554,12 @@ rm -f audiobooks.pebble
 - Book remains visible in Library
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: State transitions correctly, file organized
 - ❌ FAIL: State doesn't change, file not moved, or errors occur
 
 **API Validation**:
+
 ```bash
 curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 ```
@@ -518,6 +571,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 **Objective**: Mark book for deletion without removing from database
 
 **Prerequisites**:
+
 - Book in `organized` state
 
 **Test Steps**:
@@ -549,6 +603,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 9. Verify file still exists on filesystem
 
 **Expected Results**:
+
 - Book marked as deleted in database
 - Book hidden from Library list
 - File NOT deleted from filesystem
@@ -556,6 +611,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 - Deletion reversible (see restore test)
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Soft delete completes, state correct, file intact
 - ❌ FAIL: Hard delete occurs, state wrong, or file removed
 
@@ -566,6 +622,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 **Objective**: Soft delete and add hash to blocklist
 
 **Prerequisites**:
+
 - Book in `organized` state with known hash
 
 **Test Steps**:
@@ -590,16 +647,19 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 10. Verify file is skipped due to blocked hash
 
 **Expected Results**:
+
 - Soft delete completes
 - Hash added to blocklist
 - Reason stored correctly
 - Reimport blocked by hash check
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Delete and hash blocking both succeed
 - ❌ FAIL: Hash not blocked, reimport not prevented
 
-**Edge Case**: Test with book that has both original_hash and library_hash (should block both or library_hash only based on implementation)
+**Edge Case**: Test with book that has both original_hash and library_hash
+(should block both or library_hash only based on implementation)
 
 ---
 
@@ -608,6 +668,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 **Objective**: Undelete book and return to library
 
 **Prerequisites**:
+
 - Book in soft-deleted state
 
 **Test Steps**:
@@ -634,16 +695,19 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
    - `marked_for_deletion`: `false`
 
 **Expected Results**:
+
 - Book restored to library
 - State correctly updated
 - Book fully functional after restore
 - Deletion metadata cleared
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Restore succeeds, state correct, book usable
 - ❌ FAIL: Restore fails, state wrong, book remains deleted
 
-**Note**: If hash was blocked during delete, it remains blocked after restore (expected behavior - test separately if unblocking is needed)
+**Note**: If hash was blocked during delete, it remains blocked after restore
+(expected behavior - test separately if unblocking is needed)
 
 ---
 
@@ -652,6 +716,7 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
 **Objective**: Permanently delete soft-deleted books
 
 **Prerequisites**:
+
 - Multiple books in soft-deleted state
 
 **Test Steps**:
@@ -686,18 +751,22 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
     - Success message indicates file deletion
 
 **Expected Results**:
+
 - Purge removes books from database permanently
 - File deletion option works as expected
 - UI correctly updates counts
 - No orphaned database entries remain
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Purge succeeds, files handled per option, UI updates
 - ❌ FAIL: Purge fails, files incorrectly deleted/retained, database errors
 
-**Safety Check**: Verify purge is irreversible (books cannot be restored after purge)
+**Safety Check**: Verify purge is irreversible (books cannot be restored after
+purge)
 
 **API Validation**:
+
 ```bash
 # Before purge
 curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
@@ -713,18 +782,21 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Objective**: Verify automatic purge of old soft-deleted books
 
 **Prerequisites**:
+
 - Application configured with purge retention period:
   ```bash
   # In config or environment
   PURGE_SOFT_DELETED_AFTER_DAYS=30
   ```
-- Books soft-deleted more than 30 days ago (requires database manipulation or time travel)
+- Books soft-deleted more than 30 days ago (requires database manipulation or
+  time travel)
 
 **Test Steps** (Advanced):
 
-1. **Setup**: Manually update `marked_for_deletion_at` in database to simulate old deletion:
+1. **Setup**: Manually update `marked_for_deletion_at` in database to simulate
+   old deletion:
    ```sql
-   UPDATE books 
+   UPDATE books
    SET marked_for_deletion_at = datetime('now', '-35 days')
    WHERE id = '<test-book-id>';
    ```
@@ -749,16 +821,19 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 6. Verify file handling based on config (`PURGE_SOFT_DELETED_DELETE_FILES`)
 
 **Expected Results**:
+
 - Auto-purge runs on schedule
 - Old soft-deleted books purged automatically
 - Logs show purge activity
 - File deletion follows configuration
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Auto-purge runs, old books removed, logs accurate
 - ❌ FAIL: Purge doesn't run, books remain, or errors occur
 
-**Note**: This test may require advanced setup (database manipulation, time mocking). Mark as "Optional - Advanced" if time-constrained.
+**Note**: This test may require advanced setup (database manipulation, time
+mocking). Mark as "Optional - Advanced" if time-constrained.
 
 ---
 
@@ -785,12 +860,14 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 7. Verify returns to Library page
 
 **Expected Results**:
+
 - Page loads within 2 seconds
 - All tabs accessible and functional
 - Navigation smooth without errors
 - Responsive design on different screen sizes
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: All elements render, tabs work, navigation functional
 - ❌ FAIL: Missing elements, tabs don't load, navigation broken
 
@@ -801,6 +878,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Objective**: Verify file metadata displays correctly
 
 **Prerequisites**:
+
 - Book with rich file metadata (duration, bitrate, codec, etc.)
 
 **Test Steps**:
@@ -822,12 +900,14 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 6. Verify values match
 
 **Expected Results**:
+
 - All media info fields populated
 - Values accurate compared to file
 - Formatting human-readable
 - No "unknown" or "N/A" for available data
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Media info accurate and well-formatted
 - ❌ FAIL: Missing info, incorrect values, poor formatting
 
@@ -842,6 +922,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Objective**: Import audiobooks via scan operation
 
 **Prerequisites**:
+
 - Clean import directory with 2-3 test audiobook files
 
 **Test Steps**:
@@ -864,16 +945,19 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
    - Verify state is `imported`
 
 **Expected Results**:
+
 - All files detected and imported
 - Metadata extracted accurately
 - No errors in logs
 - Books immediately visible in library
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: All files imported successfully with correct metadata
 - ❌ FAIL: Files missed, metadata wrong, or errors occur
 
 **Edge Cases**:
+
 - Import directory empty (should report 0 imported)
 - Import duplicate file (should detect and skip)
 - Import file with missing metadata tags
@@ -889,6 +973,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Objective**: Configure auto-purge retention period
 
 **Prerequisites**:
+
 - Access to Settings page
 
 **Test Steps**:
@@ -909,11 +994,13 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
    ```
 
 **Expected Results**:
+
 - Settings save successfully
 - Values persist across sessions
 - Configuration affects auto-purge behavior (validate in separate test)
 
 **Pass/Fail Criteria**:
+
 - ✅ PASS: Settings save and persist correctly
 - ❌ FAIL: Settings don't save, values revert, or no feedback
 
@@ -926,6 +1013,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 ### Keyboard Navigation
 
 **Test Steps**:
+
 1. Use Tab key to navigate through UI
 2. Verify focus indicators visible on all interactive elements
 3. Use Enter/Space to activate buttons
@@ -933,6 +1021,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 5. Test form inputs with keyboard only
 
 **Expected Results**:
+
 - All interactive elements keyboard-accessible
 - Focus order logical
 - No keyboard traps
@@ -943,6 +1032,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Prerequisites**: Screen reader software (VoiceOver, NVDA, JAWS)
 
 **Test Steps**:
+
 1. Enable screen reader
 2. Navigate through key pages
 3. Verify labels and descriptions read correctly
@@ -960,9 +1050,11 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Objective**: Verify performance with large number of books
 
 **Prerequisites**:
+
 - 100+ books in library (use database seeding script)
 
 **Test Steps**:
+
 1. Navigate to Library page
 2. Measure page load time (should be <3 seconds)
 3. Scroll through list
@@ -973,6 +1065,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 8. Measure detail page load (<2 seconds)
 
 **Expected Results**:
+
 - Acceptable load times even with large dataset
 - UI remains responsive
 - No browser freezing or lag
@@ -986,6 +1079,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 ### Network Error Scenarios
 
 **Test Steps**:
+
 1. Start application
 2. Open browser DevTools → Network tab
 3. Simulate offline mode
@@ -996,6 +1090,7 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 8. Verify application recovers
 
 **Expected Results**:
+
 - Clear error messages for network failures
 - No silent failures
 - Application recovers when network restored
@@ -1027,13 +1122,13 @@ rm -f audiobooks.pebble
 When reporting issues discovered during testing, use this template:
 
 ```markdown
-**Test Scenario**: [e.g., 1.2 Override from File Value]
-**Priority**: [P0/P1/P2]
+**Test Scenario**: [e.g., 1.2 Override from File Value] **Priority**: [P0/P1/P2]
 **Status**: FAIL
 
 **Description**: [Brief description of the issue]
 
 **Steps to Reproduce**:
+
 1. [Step 1]
 2. [Step 2]
 3. [Step 3]
@@ -1043,6 +1138,7 @@ When reporting issues discovered during testing, use this template:
 **Actual Result**: [What actually happened]
 
 **Environment**:
+
 - OS: [macOS/Linux/Windows]
 - Browser: [Chrome 120 / Firefox 121]
 - Application Version: [commit hash or version]
@@ -1057,12 +1153,11 @@ When reporting issues discovered during testing, use this template:
 ```markdown
 # Manual Test Session Report
 
-**Date**: YYYY-MM-DD
-**Tester**: [Name]
-**Build**: [commit hash]
-**Duration**: [hours]
+**Date**: YYYY-MM-DD **Tester**: [Name] **Build**: [commit hash] **Duration**:
+[hours]
 
 ## Summary
+
 - Total Tests: X
 - Passed: X
 - Failed: X
@@ -1070,16 +1165,20 @@ When reporting issues discovered during testing, use this template:
 - Pass Rate: X%
 
 ## Critical Issues (P0)
+
 1. [Issue #1 - Brief description]
 2. [Issue #2 - Brief description]
 
 ## High Priority Issues (P1)
+
 [List issues]
 
 ## Notes
+
 [Additional observations, blockers, recommendations]
 
 ## Recommendations
+
 - [ ] [Action item 1]
 - [ ] [Action item 2]
 ```
@@ -1094,11 +1193,13 @@ Useful commands for testing via browser console:
 // Get current book state
 fetch('/api/v1/audiobooks/<book-id>')
   .then(r => r.json())
-  .then(d => console.table({
-    state: d.library_state,
-    deleted: d.marked_for_deletion,
-    deleted_at: d.marked_for_deletion_at
-  }));
+  .then(d =>
+    console.table({
+      state: d.library_state,
+      deleted: d.marked_for_deletion,
+      deleted_at: d.marked_for_deletion_at,
+    })
+  );
 
 // List blocked hashes
 fetch('/api/v1/blocked-hashes')
@@ -1133,13 +1234,13 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ### Sample Override Scenarios
 
-| Field     | File Value                | Fetched Value            | Stored Value             | Override To Test |
-|-----------|---------------------------|--------------------------|--------------------------|------------------|
-| Title     | "Book Title (File)"       | "Book Title (API)"       | "Book Title (Stored)"    | File             |
-| Author    | "John Doe"                | "John R. Doe"            | "J. Doe"                 | Fetched          |
-| Narrator  | "Jane Smith"              | "Jane A. Smith"          | null                     | File             |
-| Publisher | null                      | "Penguin Books"          | "Unknown Publisher"      | Fetched          |
-| Year      | 2020                      | 2021                     | 2022                     | Stored (clear)   |
+| Field     | File Value          | Fetched Value      | Stored Value          | Override To Test |
+| --------- | ------------------- | ------------------ | --------------------- | ---------------- |
+| Title     | "Book Title (File)" | "Book Title (API)" | "Book Title (Stored)" | File             |
+| Author    | "John Doe"          | "John R. Doe"      | "J. Doe"              | Fetched          |
+| Narrator  | "Jane Smith"        | "Jane A. Smith"    | null                  | File             |
+| Publisher | null                | "Penguin Books"    | "Unknown Publisher"   | Fetched          |
+| Year      | 2020                | 2021               | 2022                  | Stored (clear)   |
 
 ---
 
@@ -1152,4 +1253,5 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-**Next Steps**: See [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md) for critical scenarios required before PR #79 merge.
+**Next Steps**: See [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md) for
+critical scenarios required before PR #79 merge.
