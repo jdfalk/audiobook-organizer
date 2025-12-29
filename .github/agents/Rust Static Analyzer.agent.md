@@ -1,5 +1,6 @@
 ---
-description: 'Clippy with safety hints; edition alignment; idioms (ownership/borrowing).'
+description:
+  'Clippy with safety hints; edition alignment; idioms (ownership/borrowing).'
 tools:
   [
     'vscode',

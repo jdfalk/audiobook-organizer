@@ -1,6 +1,6 @@
 ---
-description: 'Generate/update docs, READMEs, changelogs, and API notes from
-  code/tests/workflows.'
+description:
+  'Generate/update docs, READMEs, changelogs, and API notes from code/tests/workflows.'
 tools:
   [
     'vscode',

@@ -1,5 +1,6 @@
 ---
-description: 'Manage protobuf lifecycle: lint, generate, enforce Edition 2023 and 1-1-1.'
+description:
+  'Manage protobuf lifecycle: lint, generate, enforce Edition 2023 and 1-1-1.'
 tools:
   [
     'vscode',
