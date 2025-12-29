@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import requests  # type: ignore
+    import requests  # type: ignore[import-untyped]
 except ModuleNotFoundError:  # pragma: no cover - fallback when requests unavailable
     requests = None
     from urllib.parse import urlencode
