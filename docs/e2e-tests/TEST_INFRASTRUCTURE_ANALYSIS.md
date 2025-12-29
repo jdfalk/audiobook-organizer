@@ -15,7 +15,7 @@ to navigate to actual application URLs (`/library/${bookId}`).
 
 **Impact**: Tests cannot run in isolation without:
 
-1. Running backend server (Go application on http://localhost:8080)
+1. Running backend server (Go application on <http://localhost:8080>)
 2. Test database with seed data
 3. Mock API routes properly configured
 
@@ -342,19 +342,16 @@ npx playwright test metadata-provenance.spec.ts
 ### Immediate Actions (This Week)
 
 1. **Create Backend Start Script** (1 hour)
-
    - Script to start Go server with test configuration
    - Add signal handling for graceful shutdown
    - Configure test database path
 
 2. **Create Test Data Seed Script** (2 hours)
-
    - Seed audiobook with `bookId = "prov-test-book"`
    - Create metadata_state entries matching mock data
    - Add cleanup script for test data
 
 3. **Update Playwright Config** (30 minutes)
-
    - Add `baseURL: 'http://localhost:8080'`
    - Add `webServer` configuration
    - Configure test timeout and retries
@@ -367,13 +364,11 @@ npx playwright test metadata-provenance.spec.ts
 ### Medium-Term Actions (Next Sprint)
 
 5. **Integrate into CI/CD** (2-3 hours)
-
    - Add E2E test workflow
    - Configure database in CI
    - Add test artifacts upload
 
 6. **Expand Test Coverage** (4-6 hours)
-
    - Add error scenario tests
    - Add accessibility tests
    - Add visual regression tests

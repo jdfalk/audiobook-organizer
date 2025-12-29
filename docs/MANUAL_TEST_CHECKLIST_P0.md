@@ -272,10 +272,12 @@ and persists
   - [ ] Success message
   - [ ] Soft-delete count updates (if displayed)
 - [ ] **7.8** Check book state via API:
+
   ```bash
   curl http://localhost:8888/api/v1/audiobooks/<book-id> | \
     jq '{library_state, marked_for_deletion, marked_for_deletion_at}'
   ```
+
 - [ ] **7.9** Verify:
   - [ ] `library_state`: "deleted"
   - [ ] `marked_for_deletion`: true
@@ -317,9 +319,11 @@ blocked
 - [ ] **8.11** Copy the test audiobook file to import directory
 - [ ] **8.12** Trigger scan operation
 - [ ] **8.13** Check logs:
+
   ```bash
   tail -f logs/audiobook-organizer.log | grep "Skipping file"
   ```
+
 - [ ] **8.14** Verify file was skipped due to blocked hash
 - [ ] **8.15** Verify book NOT reimported in Library
 
@@ -352,10 +356,12 @@ blocklist
 - [ ] **9.6** Open Book Detail page for restored book
 - [ ] **9.7** Verify book fully functional
 - [ ] **9.8** Check state via API:
+
   ```bash
   curl http://localhost:8888/api/v1/audiobooks/<book-id> | \
     jq '{library_state, marked_for_deletion}'
   ```
+
 - [ ] **9.9** Verify:
   - [ ] `library_state`: "organized" or "imported"
   - [ ] `marked_for_deletion`: false
@@ -381,9 +387,11 @@ blocklist
 - [ ] **10.3** Wait for scan completion
 - [ ] **10.4** Find new book in Library
 - [ ] **10.5** Check state via API:
+
   ```bash
   curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
   ```
+
 - [ ] **10.6** Verify state is `imported`
 - [ ] **10.7** Trigger organize operation for the book
 - [ ] **10.8** Wait for organize completion
@@ -418,28 +426,32 @@ After manual tests, verify automated E2E tests align:
 ### Log Review
 
 - [ ] Check application logs for errors:
+
   ```bash
   grep -i error logs/audiobook-organizer.log
   ```
+
 - [ ] Verify no unexpected warnings or panics
 - [ ] Check API response times reasonable (<2s average)
 
 ### Database Integrity
 
 - [ ] Verify no orphaned records:
+
   ```bash
   curl http://localhost:8888/api/v1/audiobooks | jq '.books | length'
   curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
   curl http://localhost:8888/api/v1/blocked-hashes | jq '.items | length'
   ```
+
 - [ ] Totals match expected counts
 
 ---
 
 ## Test Summary
 
-**Completion Date**: ******\_\_\_****** **Tester**: ******\_\_\_******
-**Build/Commit**: ******\_\_\_******
+**Completion Date**: **\*\***\_\_\_**\*\*** **Tester**: **\*\***\_\_\_**\*\***
+**Build/Commit**: **\*\***\_\_\_**\*\***
 
 ### Results
 
@@ -484,9 +496,9 @@ After manual tests, verify automated E2E tests align:
 
 ## Sign-Off
 
-**Tester Signature**: ******\_\_\_****** **Date**: ******\_\_\_******
+**Tester Signature**: **\*\***\_\_\_**\*\*** **Date**: **\*\***\_\_\_**\*\***
 
-**Reviewer Signature**: ******\_\_\_****** **Date**: ******\_\_\_******
+**Reviewer Signature**: **\*\***\_\_\_**\*\*** **Date**: **\*\***\_\_\_**\*\***
 
 ---
 

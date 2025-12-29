@@ -379,19 +379,16 @@ plan
 ### Immediate Actions (Before PR #79 Merge)
 
 1. **Assign Tester** (Priority: Critical)
-
    - Allocate QA engineer or senior developer
    - Time commitment: 4 hours (setup + P0 tests + reporting)
    - Target completion: Within 48 hours
 
 2. **Execute P0 Test Checklist** (Priority: Critical)
-
    - Use: [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
    - Environment: Local development setup
    - Output: Completed checklist with pass/fail for all 10 tests
 
 3. **Review and Triage Issues** (Priority: Critical)
-
    - Use: [Test Validation Criteria](./TEST_VALIDATION_CRITERIA.md)
    - Assign severity to each issue found
    - Create GitHub issues for tracking
@@ -407,13 +404,11 @@ plan
 ### Short-Term Actions (Post-Merge)
 
 1. **Monitor Production** (Priority: High)
-
    - Watch for user-reported issues
    - Monitor error logs
    - Track performance metrics
 
 2. **Execute Extended Tests** (Priority: High)
-
    - Use: [Manual Test Plan](./MANUAL_TEST_PLAN.md)
    - Schedule: Within 1 week post-merge
    - Create backlog of enhancements
@@ -428,13 +423,11 @@ plan
 ### Long-Term Actions (Continuous Improvement)
 
 1. **Integrate Manual Testing into Workflow**
-
    - Define manual test requirements for each PR
    - Create PR checklist template
    - Train team on test execution
 
 2. **Expand Automation**
-
    - Convert common manual scenarios to E2E tests
    - Implement visual regression testing
    - Automate test data generation

@@ -202,7 +202,6 @@ Use cases:
 ### Phase 1: Preparation (45 minutes)
 
 1. **Environment Setup** (15 minutes)
-
    - Start application locally
    - Verify database clean state
    - Check browser developer tools ready
@@ -218,7 +217,6 @@ Use cases:
 ### Phase 2: Critical Testing (2-3 hours)
 
 1. **Execute P0 Checklist**
-
    - Follow [P0 Test Checklist](./MANUAL_TEST_CHECKLIST_P0.md)
    - Check off each scenario as completed
    - Document any issues found
@@ -234,7 +232,6 @@ Use cases:
 ### Phase 3: Review and Sign-Off (30 minutes)
 
 1. **Results Analysis**
-
    - Calculate pass rate (X/10 tests)
    - Review critical/high severity issues
    - Determine merge blocker status
