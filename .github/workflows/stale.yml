@@ -10,7 +10,7 @@ permissions:
 
 on:
   schedule:
-    - cron: '0 3 * * 1'
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 jobs:
@@ -33,6 +33,6 @@ jobs:
             Closing as stale. Feel free to reopen with additional context or updates.
           close-pr-message: >-
             Closing as stale. Please reopen if you plan to continue work here.
-          exempt-issue-labels: 'pinned,security,dependencies'
-          exempt-pr-labels: 'pinned,security,dependencies'
+          exempt-issue-labels: "pinned,security,dependencies"
+          exempt-pr-labels: "pinned,security,dependencies"
           operations-per-run: 200

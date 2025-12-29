@@ -4,27 +4,27 @@
 
 # Repository Metadata
 repository:
-  name: 'audiobook-organizer'
-  type: 'application'
-  primary_language: 'go'
-  description: 'Audiobook organization and management tool'
+  name: "audiobook-organizer"
+  type: "application"
+  primary_language: "go"
+  description: "Audiobook organization and management tool"
 
 # Language Detection and Support
 languages:
   detection:
     patterns:
       go:
-        - 'go.mod'
-        - 'go.sum'
-        - 'main.go'
-        - 'cmd/'
-        - 'internal/'
+        - "go.mod"
+        - "go.sum"
+        - "main.go"
+        - "cmd/"
+        - "internal/"
       javascript:
-        - 'web/package.json'
-        - 'web/*.js'
+        - "web/package.json"
+        - "web/*.js"
       docker:
-        - 'Dockerfile'
-        - 'docker-compose.yml'
+        - "Dockerfile"
+        - "docker-compose.yml"
 
     priority:
       - go
@@ -32,44 +32,44 @@ languages:
       - docker
 
   versions:
-    go: ['1.25']
-    node: ['22']
+    go: ["1.25"]
+    node: ["22"]
 
   # Working directories for language-specific builds
   working_directories:
-    node: 'web'
-    frontend: 'web'
+    node: "web"
+    frontend: "web"
 
 # Build Configuration
 build:
   platforms:
-    os: ['ubuntu-latest']
-    arch: ['amd64', 'arm64']
+    os: ["ubuntu-latest"]
+    arch: ["amd64", "arm64"]
 
   docker:
     enabled: true
-    platforms: ['linux/amd64,linux/arm64'] # buildx handles multi-platform
-    registries: ['ghcr.io']
+    platforms: ["linux/amd64,linux/arm64"] # buildx handles multi-platform
+    registries: ["ghcr.io"]
     use_qemu: false # Not needed with buildx
 
   cross_compile:
     enabled: true
     targets:
       go:
-        - 'linux/amd64'
-        - 'linux/arm64'
-        - 'darwin/amd64'
-        - 'darwin/arm64'
+        - "linux/amd64"
+        - "linux/arm64"
+        - "darwin/amd64"
+        - "darwin/arm64"
 
 # Release Configuration
 release:
   enabled: true
-  strategy: 'semantic'
-  prerelease_branch: 'main'
-  stable_branches: ['main']
+  strategy: "semantic"
+  prerelease_branch: "main"
+  stable_branches: ["main"]
 
   versioning:
-    scheme: 'semver'
+    scheme: "semver"
     auto_detect: true
 
   artifacts:
@@ -84,7 +84,7 @@ testing:
   coverage:
     enabled: true
     threshold: 80
-    reports: ['html', 'json']
+    reports: ["html", "json"]
 
   unit:
     enabled: true
@@ -97,11 +97,11 @@ testing:
 security:
   codeql:
     enabled: true
-    languages: ['go', 'javascript']
+    languages: ["go", "javascript"]
 
   dependency_review:
     enabled: true
-    fail_on_severity: 'high'
+    fail_on_severity: "high"
 
   secrets_scanning:
     enabled: true
@@ -110,11 +110,11 @@ security:
 ci:
   enabled: true
   on:
-    push: ['main']
-    pull_request: ['main']
+    push: ["main"]
+    pull_request: ["main"]
 
   caching:
     enabled: true
     paths:
-      go: ['~/.cache/go-build', '~/go/pkg/mod']
-      npm: ['~/.npm', '~/.cache/npm']
+      go: ["~/.cache/go-build", "~/go/pkg/mod"]
+      npm: ["~/.npm", "~/.cache/npm"]

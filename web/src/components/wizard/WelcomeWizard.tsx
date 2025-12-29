@@ -46,9 +46,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [openaiKey, setOpenaiKey] = useState('');
   const [testingKey, setTestingKey] = useState(false);
-  const [keyTestResult, setKeyTestResult] = useState<
-    'success' | 'error' | null
-  >(null);
+  const [keyTestResult, setKeyTestResult] = useState<'success' | 'error' | null>(null);
   const [importFolders, setImportFolders] = useState<string[]>([]);
   const [showImportBrowser, setShowImportBrowser] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -186,9 +184,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                 Set Your Library Path
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                This is where your organized audiobooks will be stored. The app
-                will create a structured folder hierarchy here based on your
-                naming patterns.
+                This is where your organized audiobooks will be stored. The app will create a
+                structured folder hierarchy here based on your naming patterns.
               </Typography>
 
               <TextField
@@ -214,8 +211,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               />
 
               <Alert severity="info">
-                Choose a location with plenty of storage space. This will be the
-                permanent home for your organized audiobook collection.
+                Choose a location with plenty of storage space. This will be the permanent home for
+                your organized audiobook collection.
               </Alert>
             </Box>
           )}
@@ -227,9 +224,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                 AI-Powered Metadata (Optional)
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                Enable AI-powered author name parsing and metadata enhancement
-                with OpenAI. This is optional and can be configured later in
-                Settings.
+                Enable AI-powered author name parsing and metadata enhancement with OpenAI. This is
+                optional and can be configured later in Settings.
               </Typography>
 
               <TextField
@@ -266,8 +262,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               )}
 
               <Alert severity="info">
-                You can skip this step and configure it later in Settings if
-                needed.
+                You can skip this step and configure it later in Settings if needed.
               </Alert>
             </Box>
           )}
@@ -279,9 +274,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                 Add Import Folders
               </Typography>
               <Typography variant="body2" color="text.secondary" paragraph>
-                Import folders are watched locations where the scanner looks for
-                new audiobooks. Files found here will be scanned and organized
-                into your library path.
+                Import folders are watched locations where the scanner looks for new audiobooks.
+                Files found here will be scanned and organized into your library path.
               </Typography>
 
               <Box sx={{ mb: 2 }}>
@@ -327,8 +321,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               </Box>
 
               <Alert severity="info">
-                You can add import folders later in the Library page if you
-                prefer to skip this step.
+                You can add import folders later in the Library page if you prefer to skip this
+                step.
               </Alert>
             </Box>
           )}
@@ -344,18 +338,12 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               variant="contained"
               onClick={handleComplete}
               disabled={saving}
-              startIcon={
-                saving ? <CircularProgress size={16} /> : <CheckCircleIcon />
-              }
+              startIcon={saving ? <CircularProgress size={16} /> : <CheckCircleIcon />}
             >
               {saving ? 'Saving...' : 'Complete Setup'}
             </Button>
           ) : (
-            <Button
-              variant="contained"
-              onClick={handleNext}
-              disabled={!canProceed()}
-            >
+            <Button variant="contained" onClick={handleNext} disabled={!canProceed()}>
               Next
             </Button>
           )}
@@ -371,10 +359,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       >
         <DialogTitle>Select Library Path</DialogTitle>
         <DialogContent>
-          <ServerFileBrowser
-            onSelect={handleLibraryPathSelect}
-            initialPath="/home"
-          />
+          <ServerFileBrowser onSelect={handleLibraryPathSelect} initialPath="/home" />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowLibraryBrowser(false)}>Cancel</Button>
@@ -390,10 +375,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       >
         <DialogTitle>Select Import Folder</DialogTitle>
         <DialogContent>
-          <ServerFileBrowser
-            onSelect={handleAddImportFolder}
-            initialPath="/home"
-          />
+          <ServerFileBrowser onSelect={handleAddImportFolder} initialPath="/home" />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowImportBrowser(false)}>Cancel</Button>

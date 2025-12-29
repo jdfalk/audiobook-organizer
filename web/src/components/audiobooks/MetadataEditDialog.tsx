@@ -116,9 +116,7 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
                 label="Series Number"
                 type="number"
                 value={formData.series_number || ''}
-                onChange={(e) =>
-                  handleChange('series_number', parseInt(e.target.value) || 0)
-                }
+                onChange={(e) => handleChange('series_number', parseInt(e.target.value) || 0)}
               />
             </Grid>
 
@@ -137,9 +135,7 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
                 label="Year"
                 type="number"
                 value={formData.year || ''}
-                onChange={(e) =>
-                  handleChange('year', parseInt(e.target.value) || 0)
-                }
+                onChange={(e) => handleChange('year', parseInt(e.target.value) || 0)}
               />
             </Grid>
 

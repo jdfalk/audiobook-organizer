@@ -4,13 +4,7 @@
 
 import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import {
-  Box,
-  Backdrop,
-  CircularProgress,
-  Typography,
-  Stack,
-} from '@mui/material';
+import { Box, Backdrop, CircularProgress, Typography, Stack } from '@mui/material';
 import { MainLayout } from './components/layout/MainLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Library } from './pages/Library';

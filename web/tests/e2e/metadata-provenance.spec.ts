@@ -163,10 +163,7 @@ const recomputeEffective = (entry: TagEntry) => {
   } else if (entry.stored_value !== null && entry.stored_value !== undefined) {
     entry.effective_value = entry.stored_value;
     entry.effective_source = 'stored';
-  } else if (
-    entry.fetched_value !== null &&
-    entry.fetched_value !== undefined
-  ) {
+  } else if (entry.fetched_value !== null && entry.fetched_value !== undefined) {
     entry.effective_value = entry.fetched_value;
     entry.effective_source = 'fetched';
   } else if (entry.file_value !== null && entry.file_value !== undefined) {
@@ -201,28 +198,16 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
       const recompute = (field: string) => {
         const entry = tags.tags[field];
         if (!entry) return;
-        if (
-          entry.override_value !== null &&
-          entry.override_value !== undefined
-        ) {
+        if (entry.override_value !== null && entry.override_value !== undefined) {
           entry.effective_value = entry.override_value;
           entry.effective_source = 'override';
-        } else if (
-          entry.stored_value !== null &&
-          entry.stored_value !== undefined
-        ) {
+        } else if (entry.stored_value !== null && entry.stored_value !== undefined) {
           entry.effective_value = entry.stored_value;
           entry.effective_source = 'stored';
-        } else if (
-          entry.fetched_value !== null &&
-          entry.fetched_value !== undefined
-        ) {
+        } else if (entry.fetched_value !== null && entry.fetched_value !== undefined) {
           entry.effective_value = entry.fetched_value;
           entry.effective_source = 'fetched';
-        } else if (
-          entry.file_value !== null &&
-          entry.file_value !== undefined
-        ) {
+        } else if (entry.file_value !== null && entry.file_value !== undefined) {
           entry.effective_value = entry.file_value;
           entry.effective_source = 'file';
         } else {
@@ -240,11 +225,7 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
       const originalFetch = window.fetch.bind(window);
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url =
-          typeof input === 'string'
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
+          typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
         const method = (init?.method || 'GET').toUpperCase();
 
         // Health/system
@@ -265,10 +246,7 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
         }
 
         // Book detail
-        if (
-          url.includes(`/api/v1/audiobooks/${injectedBookId}`) &&
-          !url.includes('/tags')
-        ) {
+        if (url.includes(`/api/v1/audiobooks/${injectedBookId}`) && !url.includes('/tags')) {
           if (method === 'GET') {
             return Promise.resolve(jsonResponse(book));
           }
@@ -296,8 +274,7 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
 
                 if (override.value !== undefined) {
                   entry.override_value = override.value as never;
-                  entry.override_locked =
-                    override.locked !== undefined ? override.locked : true;
+                  entry.override_locked = override.locked !== undefined ? override.locked : true;
                   recompute(key);
                 }
               });
@@ -323,9 +300,7 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
 
         // Book list
         if (url.endsWith('/api/v1/audiobooks')) {
-          return Promise.resolve(
-            jsonResponse({ items: [book], audiobooks: [book] })
-          );
+          return Promise.resolve(jsonResponse({ items: [book], audiobooks: [book] }));
         }
 
         // Fallback
@@ -365,9 +340,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(page.getByText('locked')).toBeVisible();
   });
 
-  test('shows correct effective source for different fields', async ({
-    page,
-  }) => {
+  test('shows correct effective source for different fields', async ({ page }) => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
@@ -380,9 +353,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(titleRow.locator('text=stored')).toBeVisible();
 
     // Assert - Narrator uses 'override' source and is locked
-    const narratorSection = page
-      .locator('text=User Override Narrator')
-      .locator('..');
+    const narratorSection = page.locator('text=User Override Narrator').locator('..');
     await expect(narratorSection.locator('text=override')).toBeVisible();
     await expect(narratorSection.locator('text=locked')).toBeVisible();
 
@@ -404,15 +375,11 @@ test.describe('Metadata Provenance E2E', () => {
     await titleRow.getByRole('button', { name: 'Use File' }).click();
 
     // Assert - Title should now show file value in heading
-    await expect(
-      page.getByRole('heading', { name: 'File: Provenance Test' })
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'File: Provenance Test' })).toBeVisible();
 
     // Assert - Navigate to Tags tab to verify source changed
     await page.getByRole('tab', { name: 'Tags' }).click();
-    const titleSection = page
-      .locator('text=File: Provenance Test')
-      .locator('..');
+    const titleSection = page.locator('text=File: Provenance Test').locator('..');
     await expect(titleSection.getByText('override')).toBeVisible();
   });
 
@@ -473,9 +440,7 @@ test.describe('Metadata Provenance E2E', () => {
 
     // Assert - Override should still be present after reload
     await expect(page.getByText('File Series')).toBeVisible();
-    const reloadedSeriesSection = page
-      .locator('text=File Series')
-      .locator('..');
+    const reloadedSeriesSection = page.locator('text=File Series').locator('..');
     await expect(reloadedSeriesSection.getByText('override')).toBeVisible();
   });
 
@@ -488,24 +453,12 @@ test.describe('Metadata Provenance E2E', () => {
     await page.getByRole('tab', { name: 'Compare' }).click();
 
     // Assert - Verify table headers
-    await expect(
-      page.getByRole('columnheader', { name: 'Field' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'File Tag' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Fetched' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Stored' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Override' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Actions' })
-    ).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Field' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'File Tag' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Fetched' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Stored' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Override' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
 
     // Assert - Verify narrator row shows all sources
     const narratorRow = page.locator('tr').filter({ hasText: /^narrator$/i });
@@ -540,9 +493,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(publisherRow.getByText('fetched')).toBeVisible();
   });
 
-  test('disables action buttons when source value is null', async ({
-    page,
-  }) => {
+  test('disables action buttons when source value is null', async ({ page }) => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
@@ -578,9 +529,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(page.getByText('44100')).toBeVisible();
   });
 
-  test('updates effective value when applying different source', async ({
-    page,
-  }) => {
+  test('updates effective value when applying different source', async ({ page }) => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
@@ -600,9 +549,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(page.getByText('Provenance Test Book')).not.toBeVisible();
   });
 
-  test('shows correct effective source chip colors and styling', async ({
-    page,
-  }) => {
+  test('shows correct effective source chip colors and styling', async ({ page }) => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
@@ -617,15 +564,11 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(sourceChips.first()).toBeVisible();
 
     // Assert - Check that locked chip has warning color
-    const lockedChip = page
-      .locator('span.MuiChip-label')
-      .filter({ hasText: 'locked' });
+    const lockedChip = page.locator('span.MuiChip-label').filter({ hasText: 'locked' });
     await expect(lockedChip).toBeVisible();
   });
 
-  test('applies override with numeric value (audiobook_release_year)', async ({
-    page,
-  }) => {
+  test('applies override with numeric value (audiobook_release_year)', async ({ page }) => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);

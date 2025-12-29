@@ -28,13 +28,7 @@ describe('ImportPathCard', () => {
   it('invokes callbacks for scan and remove', () => {
     const onScan = vi.fn();
     const onRemove = vi.fn();
-    render(
-      <ImportPathCard
-        importPath={buildPath()}
-        onScan={onScan}
-        onRemove={onRemove}
-      />
-    );
+    render(<ImportPathCard importPath={buildPath()} onScan={onScan} onRemove={onRemove} />);
 
     fireEvent.click(screen.getByLabelText('import path actions'));
     fireEvent.click(screen.getByText('Scan Now'));

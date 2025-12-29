@@ -3,12 +3,7 @@
 // guid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  getImportPaths,
-  addImportPath,
-  addImportPathDetailed,
-  removeImportPath,
-} from './api';
+import { getImportPaths, addImportPath, addImportPathDetailed, removeImportPath } from './api';
 
 const mockFetch = vi.fn();
 
@@ -80,10 +75,7 @@ describe('api import paths', () => {
 
     const created = await addImportPath('/new', 'New');
     expect(created.path).toBe('/new');
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/api/v1/import-paths',
-      expect.any(Object)
-    );
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/import-paths', expect.any(Object));
   });
 
   it('addImportPathDetailed returns detailed response', async () => {

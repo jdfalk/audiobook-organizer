@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release-type:
-        description: 'Release type'
+        description: "Release type"
         required: true
         type: choice
         options:
@@ -16,9 +16,9 @@ on:
           - major
           - minor
           - patch
-        default: 'auto'
+        default: "auto"
       create-draft:
-        description: 'Create as draft release'
+        description: "Create as draft release"
         required: false
         type: boolean
         default: false
