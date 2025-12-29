@@ -43,8 +43,7 @@ focus on user-facing workflows that require human validation.
    ```
 
 2. **Browser Access**
-
-   - Navigate to: http://localhost:8888
+   - Navigate to: <http://localhost:8888>
    - Recommended: Chrome or Firefox (latest versions)
    - Enable browser console for debugging
 
@@ -478,20 +477,26 @@ visible
 **Test Steps**:
 
 1. Get hash of test audiobook file:
+
    ```bash
    shasum -a 256 /path/to/test/audiobook.m4b
    ```
+
 2. Add hash to blocklist via Settings tab with reason: "Manual test - prevent
    reimport"
 3. Place audiobook file in import directory
 4. Trigger import scan:
+
    ```bash
    curl -X POST http://localhost:8888/api/v1/operations/scan
    ```
+
 5. Monitor scan logs:
+
    ```bash
    tail -f logs/audiobook-organizer.log
    ```
+
 6. Verify log message:
    `Skipping file: hash blocked: <hash> (reason: Manual test - prevent reimport)`
 7. Check Library page - verify file was NOT imported
@@ -532,12 +537,14 @@ visible
 3. After scan completes, find book in Library
 4. Open Book Detail page
 5. Check book state (via browser console or API):
+
    ```javascript
    // In browser console
    fetch('/api/v1/audiobooks/<book-id>')
      .then(r => r.json())
      .then(d => console.log('State:', d.library_state));
    ```
+
 6. Verify state is `imported`
 7. Trigger organize operation for the book
 8. After organize completes, check state again
@@ -593,9 +600,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
    - Soft-delete count updates (if displayed)
    - API request: `DELETE /api/v1/audiobooks/<book-id>` (soft delete)
 7. Check book state via API:
+
    ```bash
    curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '{library_state, marked_for_deletion, marked_for_deletion_at}'
    ```
+
 8. Verify:
    - `library_state`: `deleted`
    - `marked_for_deletion`: `true`
@@ -640,9 +649,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
    - Reason matches entered text
    - Blocked date is today
 8. Verify via API:
+
    ```bash
    curl http://localhost:8888/api/v1/blocked-hashes | jq '.items[] | select(.reason | contains("Low quality"))'
    ```
+
 9. Attempt to reimport same file (copy to import dir and scan)
 10. Verify file is skipped due to blocked hash
 
@@ -687,9 +698,11 @@ curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '.library_state'
    - Success message: "Book restored successfully"
 7. Open Book Detail page for restored book
 8. Verify state via API:
+
    ```bash
    curl http://localhost:8888/api/v1/audiobooks/<book-id> | jq '{library_state, marked_for_deletion}'
    ```
+
 9. Verify:
    - `library_state`: `organized` (or `imported`)
    - `marked_for_deletion`: `false`
@@ -784,10 +797,12 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 **Prerequisites**:
 
 - Application configured with purge retention period:
+
   ```bash
   # In config or environment
   PURGE_SOFT_DELETED_AFTER_DAYS=30
   ```
+
 - Books soft-deleted more than 30 days ago (requires database manipulation or
   time travel)
 
@@ -795,29 +810,39 @@ curl http://localhost:8888/api/v1/audiobooks/soft-deleted | jq '.items | length'
 
 1. **Setup**: Manually update `marked_for_deletion_at` in database to simulate
    old deletion:
+
    ```sql
    UPDATE books
    SET marked_for_deletion_at = datetime('now', '-35 days')
    WHERE id = '<test-book-id>';
    ```
+
 2. Restart application or trigger auto-purge job:
+
    ```bash
    # If auto-purge runs on startup or cron
    # Check application logs for purge execution
    ```
+
 3. Monitor logs:
+
    ```bash
    grep "Auto-purge" logs/audiobook-organizer.log
    ```
+
 4. Verify log message indicates purge:
+
    ```
    [INFO] Auto-purge soft-deleted books: attempted=1 purged=1 files_deleted=0 errors=0
    ```
+
 5. Check book no longer in database:
+
    ```bash
    curl http://localhost:8888/api/v1/audiobooks/<book-id>
    # Should return 404 Not Found
    ```
+
 6. Verify file handling based on config (`PURGE_SOFT_DELETED_DELETE_FILES`)
 
 **Expected Results**:
@@ -894,9 +919,11 @@ mocking). Mark as "Optional - Advanced" if time-constrained.
    - Sample rate (e.g., "44.1 kHz")
    - Channels (e.g., "Stereo", "Mono")
 5. Compare with actual file metadata:
+
    ```bash
    ffprobe /path/to/audiobook.m4b 2>&1 | grep -E "Duration|bitrate|codec|Hz"
    ```
+
 6. Verify values match
 
 **Expected Results**:
@@ -989,6 +1016,7 @@ mocking). Mark as "Optional - Advanced" if time-constrained.
    - Success message appears
    - Settings persist after page refresh
 7. Check configuration via API or database:
+
    ```bash
    curl http://localhost:8888/api/v1/settings | jq '.purge_soft_deleted_after_days'
    ```

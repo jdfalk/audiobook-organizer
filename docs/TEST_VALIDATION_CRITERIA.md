@@ -722,7 +722,7 @@ Before approving PR #79 merge, verify:
 
 **Approval**: ☐ APPROVED | ☐ APPROVED WITH CONDITIONS | ☐ REJECTED
 
-**Approver**: ******\_\_\_****** **Date**: ******\_\_\_******
+**Approver**: **\*\***\_\_\_**\*\*** **Date**: **\*\***\_\_\_**\*\***
 
 ---
 
