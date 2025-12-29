@@ -1,5 +1,6 @@
 ---
-description: 'Semantic versioning, tag creation, release notes from commits/labels.'
+description:
+  'Semantic versioning, tag creation, release notes from commits/labels.'
 tools:
   [
     'vscode',

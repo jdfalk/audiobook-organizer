@@ -1,5 +1,6 @@
 ---
-description: 'Detect/resolve import cycles; propose refactor steps and module boundaries.'
+description:
+  'Detect/resolve import cycles; propose refactor steps and module boundaries.'
 tools:
   [
     'vscode',

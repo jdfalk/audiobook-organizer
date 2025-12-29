@@ -1,5 +1,6 @@
 ---
-description: 'Plan and run tests (unit/integration), enforce AAA pattern, report coverage.'
+description:
+  'Plan and run tests (unit/integration), enforce AAA pattern, report coverage.'
 tools:
   [
     'vscode',
