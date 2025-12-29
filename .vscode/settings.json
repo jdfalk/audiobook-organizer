@@ -1,12 +1,9 @@
 {
-  // Keep VS Code formatting aligned with repo linters/pre-commit
   "editor.formatOnSave": true,
   "editor.formatOnPaste": false,
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
   "files.trimTrailingWhitespace": true,
-
-  // ---------- Python ----------
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
@@ -15,7 +12,6 @@
       "source.organizeImports": "explicit"
     }
   },
-
   "ruff.enable": true,
   "ruff.fixAll": true,
   "ruff.organizeImports": true,
@@ -23,8 +19,6 @@
   "ruff.lint.args": ["--config", ".github/linters/ruff.toml"],
   "ruff.format.args": ["--config", ".github/linters/ruff.toml"],
   "python.formatting.provider": "none",
-
-  // ---------- Go ----------
   "[go]": {
     "editor.defaultFormatter": "golang.go",
     "editor.formatOnSave": true,
@@ -32,14 +26,10 @@
       "source.organizeImports": "explicit"
     }
   },
-
-  // ---------- Rust ----------
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer",
     "editor.formatOnSave": true
   },
-
-  // ---------- Prettier formats ----------
   "prettier.requireConfig": true,
   "prettier.configPath": ".prettierrc",
   "[javascript]": {

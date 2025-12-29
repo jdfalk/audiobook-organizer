@@ -1099,7 +1099,7 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
 
 	response := struct {
-		MediaInfo map[string]interface{}                  `json:"media_info,omitempty"`
+		MediaInfo map[string]interface{}                      `json:"media_info,omitempty"`
 		Tags      map[string]database.MetadataProvenanceEntry `json:"tags,omitempty"`
 	}{
 		MediaInfo: map[string]interface{}{
