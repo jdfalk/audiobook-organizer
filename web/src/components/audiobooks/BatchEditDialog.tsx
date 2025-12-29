@@ -77,9 +77,7 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
       await onSave(changedFields);
       onClose();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to update audiobooks'
-      );
+      setError(err instanceof Error ? err.message : 'Failed to update audiobooks');
     } finally {
       setSaving(false);
     }
@@ -93,8 +91,8 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
       </DialogTitle>
       <DialogContent>
         <Alert severity="info" sx={{ mb: 2 }}>
-          Select the fields you want to update. Only checked fields will be
-          modified for all selected audiobooks.
+          Select the fields you want to update. Only checked fields will be modified for all
+          selected audiobooks.
         </Alert>
 
         {error && (
@@ -228,10 +226,7 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
             <Grid item xs={12} sm={6}>
               <FormControlLabel
                 control={
-                  <Checkbox
-                    checked={updates.year.enabled}
-                    onChange={() => handleToggle('year')}
-                  />
+                  <Checkbox checked={updates.year.enabled} onChange={() => handleToggle('year')} />
                 }
                 label="Year"
               />
@@ -240,9 +235,7 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
                 type="number"
                 placeholder="Year"
                 value={updates.year.value}
-                onChange={(e) =>
-                  handleChange('year', parseInt(e.target.value) || 0)
-                }
+                onChange={(e) => handleChange('year', parseInt(e.target.value) || 0)}
                 disabled={!updates.year.enabled}
                 sx={{ mt: 1 }}
               />

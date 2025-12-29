@@ -42,14 +42,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   onDelete,
   onClick,
 }) => {
-  const [anchorEls, setAnchorEls] = React.useState<
-    Record<string, HTMLElement | null>
-  >({});
+  const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
 
-  const handleMenuClick = (
-    event: React.MouseEvent<HTMLElement>,
-    id: string
-  ) => {
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, id: string) => {
     event.stopPropagation();
     setAnchorEls((prev) => ({ ...prev, [id]: event.currentTarget }));
   };
@@ -90,12 +85,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
 
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="400px"
-      >
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
       </Box>
     );
@@ -184,11 +174,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               </TableCell>
               <TableCell>
                 {audiobook.genre && (
-                  <Chip
-                    label={audiobook.genre}
-                    size="small"
-                    variant="outlined"
-                  />
+                  <Chip label={audiobook.genre} size="small" variant="outlined" />
                 )}
               </TableCell>
               <TableCell>
@@ -202,10 +188,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                 </Typography>
               </TableCell>
               <TableCell>
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleMenuClick(e, audiobook.id)}
-                >
+                <IconButton size="small" onClick={(e) => handleMenuClick(e, audiobook.id)}>
                   <MoreVertIcon />
                 </IconButton>
                 <Menu
