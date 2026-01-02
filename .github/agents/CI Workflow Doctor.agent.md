@@ -1,6 +1,5 @@
 ---
-description:
-  'Diagnose and fix GitHub Actions issues; enforce security, caching, and style.'
+description: 'Diagnose and fix GitHub Actions issues; enforce security, caching, and style.'
 tools:
   [
     'vscode',
