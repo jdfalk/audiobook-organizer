@@ -8,8 +8,8 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - "**.md"
-      - "docs/**"
+      - '**.md'
+      - 'docs/**'
 
 concurrency:
   group: prerelease-${{ github.ref }}
@@ -27,7 +27,7 @@ jobs:
     name: Create Prerelease Build
     uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@main
     with:
-      release-type: "auto"
+      release-type: 'auto'
       prerelease: true
       draft: false
       go-enabled: true
