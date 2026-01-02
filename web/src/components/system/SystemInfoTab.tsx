@@ -64,8 +64,10 @@ export function SystemInfoTab() {
     setError(null);
     try {
       const status = await api.getSystemStatus();
-      const librarySize = status.library_size_bytes ?? status.library.total_size;
-      const libraryBooks = status.library_book_count ?? status.library.book_count;
+      const librarySize =
+        status.library_size_bytes ?? status.library.total_size;
+      const libraryBooks =
+        status.library_book_count ?? status.library.book_count;
       const folderCount = status.import_paths?.folder_count ?? 0;
 
       // Map API SystemStatus to SystemInfo format
@@ -97,7 +99,9 @@ export function SystemInfoTab() {
       });
     } catch (err) {
       console.error('Failed to fetch system info:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch system info');
+      setError(
+        err instanceof Error ? err.message : 'Failed to fetch system info'
+      );
     } finally {
       setLoading(false);
     }
@@ -126,7 +130,12 @@ export function SystemInfoTab() {
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <CircularProgress />
       </Box>
     );
@@ -134,7 +143,12 @@ export function SystemInfoTab() {
 
   if (error) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
         <Typography color="error">{error}</Typography>
       </Box>
     );
@@ -146,7 +160,12 @@ export function SystemInfoTab() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h6">System Information</Typography>
         <Button
           variant="outlined"
@@ -202,28 +221,36 @@ export function SystemInfoTab() {
                   <Typography variant="body2" color="text.secondary">
                     App Memory System
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.total)}</Typography>
+                  <Typography variant="body1">
+                    {formatBytes(info.memory.total)}
+                  </Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Used by App
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.used)}</Typography>
+                  <Typography variant="body1">
+                    {formatBytes(info.memory.used)}
+                  </Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Heap Allocated
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.heapAlloc)}</Typography>
+                  <Typography variant="body1">
+                    {formatBytes(info.memory.heapAlloc)}
+                  </Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Heap System
                   </Typography>
-                  <Typography variant="body1">{formatBytes(info.memory.heapSys)}</Typography>
+                  <Typography variant="body1">
+                    {formatBytes(info.memory.heapSys)}
+                  </Typography>
                 </Box>
               </Stack>
             </CardContent>
@@ -263,14 +290,18 @@ export function SystemInfoTab() {
                   <Typography variant="body2" color="text.secondary">
                     Go Version
                   </Typography>
-                  <Typography variant="body1">{info.runtime.goVersion}</Typography>
+                  <Typography variant="body1">
+                    {info.runtime.goVersion}
+                  </Typography>
                 </Box>
                 <Divider />
                 <Box>
                   <Typography variant="body2" color="text.secondary">
                     Goroutines
                   </Typography>
-                  <Typography variant="body1">{info.runtime.numGoroutines}</Typography>
+                  <Typography variant="body1">
+                    {info.runtime.numGoroutines}
+                  </Typography>
                 </Box>
               </Stack>
             </CardContent>
@@ -291,7 +322,9 @@ export function SystemInfoTab() {
                     <Typography variant="body2" color="text.secondary">
                       Library Size
                     </Typography>
-                    <Typography variant="h6">{formatBytes(info.database.size)}</Typography>
+                    <Typography variant="h6">
+                      {formatBytes(info.database.size)}
+                    </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={6} md={4}>
@@ -299,7 +332,9 @@ export function SystemInfoTab() {
                     <Typography variant="body2" color="text.secondary">
                       Books
                     </Typography>
-                    <Typography variant="h6">{info.database.books.toLocaleString()}</Typography>
+                    <Typography variant="h6">
+                      {info.database.books.toLocaleString()}
+                    </Typography>
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={6} md={4}>
@@ -307,7 +342,9 @@ export function SystemInfoTab() {
                     <Typography variant="body2" color="text.secondary">
                       Import Paths
                     </Typography>
-                    <Typography variant="h6">{info.database.folderCount}</Typography>
+                    <Typography variant="h6">
+                      {info.database.folderCount}
+                    </Typography>
                   </Box>
                 </Grid>
               </Grid>
