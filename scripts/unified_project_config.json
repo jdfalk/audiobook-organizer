@@ -51,11 +51,23 @@
     "Testing & Quality Assurance": {
       "description": "Comprehensive testing strategies, quality assurance processes, and validation frameworks across all repositories.",
       "repositories": ["gcommon", "subtitle-manager", "ghcommon", "codex-cli"],
-      "labels": ["type:testing", "type:enhancement", "tech:go", "tech:python", "tech:shell"],
+      "labels": [
+        "type:testing",
+        "type:enhancement",
+        "tech:go",
+        "tech:python",
+        "tech:shell"
+      ],
       "workflows": {
         "auto_add_issues": true,
         "auto_close_completed": true,
-        "labels": ["type:testing", "type:enhancement", "tech:go", "tech:python", "tech:shell"]
+        "labels": [
+          "type:testing",
+          "type:enhancement",
+          "tech:go",
+          "tech:python",
+          "tech:shell"
+        ]
       },
       "github_number": "35",
       "github_id": "PVT_kwHOABP9ms4A9mCm",
@@ -115,11 +127,21 @@
     "Media Processing & Transcription": {
       "description": "Whisper integration, subtitle synchronization, quality scoring, and media processing features.",
       "repositories": ["subtitle-manager"],
-      "labels": ["project:media", "project:transcription", "project:whisper", "tech:go"],
+      "labels": [
+        "project:media",
+        "project:transcription",
+        "project:whisper",
+        "tech:go"
+      ],
       "workflows": {
         "auto_add_issues": true,
         "auto_close_completed": true,
-        "labels": ["project:media", "project:transcription", "project:whisper", "tech:go"]
+        "labels": [
+          "project:media",
+          "project:transcription",
+          "project:whisper",
+          "tech:go"
+        ]
       },
       "github_number": "38",
       "github_id": "PVT_kwHOABP9ms4A9mCq",
@@ -149,7 +171,12 @@
       "workflows": {
         "auto_add_issues": true,
         "auto_close_completed": true,
-        "labels": ["module:database", "performance", "tech:go", "module:backend"]
+        "labels": [
+          "module:database",
+          "performance",
+          "tech:go",
+          "module:backend"
+        ]
       },
       "github_number": "40",
       "github_id": "PVT_kwHOABP9ms4A9mCv",
@@ -317,7 +344,13 @@
     "gCommon Development": {
       "description": "Common Go libraries and Protocol Buffer definitions for distributed systems. Key features: gRPC services, common data structures, shared utilities.",
       "repositories": ["gcommon"],
-      "labels": ["type:feature", "type:bug", "tech:go", "tech:protobuf", "tech:grpc"],
+      "labels": [
+        "type:feature",
+        "type:bug",
+        "tech:go",
+        "tech:protobuf",
+        "tech:grpc"
+      ],
       "workflows": {
         "auto_add_issues": true,
         "labels": ["type:feature", "type:bug"]
@@ -332,7 +365,12 @@
     "GHCommon Infrastructure": {
       "description": "GitHub automation, project management, and workflow tooling. Includes issue management, documentation automation, and CI/CD workflows.",
       "repositories": ["ghcommon"],
-      "labels": ["workflow:automation", "github-actions", "issue-management", "type:feature"],
+      "labels": [
+        "workflow:automation",
+        "github-actions",
+        "issue-management",
+        "type:feature"
+      ],
       "workflows": {
         "auto_add_issues": true,
         "labels": ["workflow:automation", "github-actions"]
