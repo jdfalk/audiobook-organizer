@@ -219,8 +219,7 @@ jobs:
       - name: Build test image
         run: docker build -f tests/Dockerfile.test -t audiobook-organizer-test .
       - name: Run E2E tests
-        run:
-          docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+        run: docker-compose -f docker-compose.test.yml up --abort-on-container-exit
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v3
