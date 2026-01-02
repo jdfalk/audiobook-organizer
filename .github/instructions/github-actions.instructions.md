@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/github-actions.instructions.md -->
-<!-- version: 1.2.1 -->
+<!-- version: 1.2.2 -->
 <!-- guid: 9f8e7d6c-5b4a-3c2d-1e0f-9a8b7c6d5e4f -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -133,6 +133,9 @@ jobs:
 - Use `env:` section at the appropriate scope (workflow, job, or step)
 - Define shared variables at the highest appropriate scope
 - Prefer environment files for projects with many environment variables
+- Keep `.env`/GitHub environment files comment-free `KEY=VALUE` entries; store
+  metadata with `JF_FILE_PATH`, `JF_FILE_VERSION`, and `JF_FILE_GUID` keys to
+  avoid env parser errors
 - Never hardcode sensitive information
 
 ```yaml

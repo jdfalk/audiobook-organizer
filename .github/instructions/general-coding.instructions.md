@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/general-coding.instructions.md -->
-<!-- version: 2.2.0 -->
+<!-- version: 2.2.1 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
@@ -28,6 +28,9 @@ Copilot customization.
   framework.
 - Document all code, classes, functions, and tests extensively, using the
   appropriate style for the language.
+- For `.env`/GitHub environment files, keep only `KEY=VALUE` entries (no
+  headers or comments) and store metadata with `JF_FILE_PATH`,
+  `JF_FILE_VERSION`, and `JF_FILE_GUID` keys to avoid parser errors.
 - Use the Arrange-Act-Assert pattern for tests.
 - Do not duplicate rules; reference this file from more specific instructions.
 - For VS Code Copilot customization, this file is included via symlink in
