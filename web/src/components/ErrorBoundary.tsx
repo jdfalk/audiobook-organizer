@@ -54,7 +54,9 @@ export class ErrorBoundary extends Component<Props, State> {
               textAlign: 'center',
             }}
           >
-            <ErrorOutlineIcon sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+            <ErrorOutlineIcon
+              sx={{ fontSize: 64, color: 'error.main', mb: 2 }}
+            />
             <Typography variant="h5" gutterBottom>
               Something went wrong
             </Typography>

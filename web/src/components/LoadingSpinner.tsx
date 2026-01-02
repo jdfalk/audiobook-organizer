@@ -8,7 +8,9 @@ interface LoadingSpinnerProps {
   message?: string;
 }
 
-export function LoadingSpinner({ message = 'Loading...' }: LoadingSpinnerProps) {
+export function LoadingSpinner({
+  message = 'Loading...',
+}: LoadingSpinnerProps) {
   return (
     <Box
       sx={{
