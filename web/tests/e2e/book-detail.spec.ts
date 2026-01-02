@@ -138,15 +138,30 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         const entry = tagState.tags[field as keyof typeof tagState.tags];
         if (!entry) return;
         const effective =
-          entry.override_value ?? entry.stored_value ?? entry.fetched_value ?? entry.file_value;
+          entry.override_value ??
+          entry.stored_value ??
+          entry.fetched_value ??
+          entry.file_value;
         let source = '';
-        if (entry.override_value !== null && entry.override_value !== undefined) {
+        if (
+          entry.override_value !== null &&
+          entry.override_value !== undefined
+        ) {
           source = 'override';
-        } else if (entry.stored_value !== null && entry.stored_value !== undefined) {
+        } else if (
+          entry.stored_value !== null &&
+          entry.stored_value !== undefined
+        ) {
           source = 'stored';
-        } else if (entry.fetched_value !== null && entry.fetched_value !== undefined) {
+        } else if (
+          entry.fetched_value !== null &&
+          entry.fetched_value !== undefined
+        ) {
           source = 'fetched';
-        } else if (entry.file_value !== null && entry.file_value !== undefined) {
+        } else if (
+          entry.file_value !== null &&
+          entry.file_value !== undefined
+        ) {
           source = 'file';
         }
         entry.effective_value = effective as never;
@@ -196,7 +211,10 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
             book = { ...book, ...body };
             if (body.overrides) {
               Object.entries(
-                body.overrides as Record<string, { value?: unknown; clear?: boolean }>
+                body.overrides as Record<
+                  string,
+                  { value?: unknown; clear?: boolean }
+                >
               ).forEach(([key, override]) => {
                 if (!tagState.tags[key]) return;
                 if (override.clear) {
@@ -240,7 +258,9 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         }
 
         if (url.endsWith('/api/v1/audiobooks')) {
-          return Promise.resolve(jsonResponse({ items: [book], audiobooks: [book] }));
+          return Promise.resolve(
+            jsonResponse({ items: [book], audiobooks: [book] })
+          );
         }
 
         if (url.includes(`/api/v1/audiobooks/${injectedBookId}/tags`)) {
@@ -276,15 +296,23 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         }
 
         // Metadata refresh
-        if (url.includes(`/api/v1/audiobooks/${injectedBookId}/fetch-metadata`)) {
+        if (
+          url.includes(`/api/v1/audiobooks/${injectedBookId}/fetch-metadata`)
+        ) {
           book = { ...book, title: 'Refreshed Title' };
-          return Promise.resolve(jsonResponse({ message: 'refreshed', book, source: 'test' }));
+          return Promise.resolve(
+            jsonResponse({ message: 'refreshed', book, source: 'test' })
+          );
         }
 
         // AI parse
-        if (url.includes(`/api/v1/audiobooks/${injectedBookId}/parse-with-ai`)) {
+        if (
+          url.includes(`/api/v1/audiobooks/${injectedBookId}/parse-with-ai`)
+        ) {
           book = { ...book, description: 'AI parsed desc' };
-          return Promise.resolve(jsonResponse({ message: 'parsed', book, confidence: 'high' }));
+          return Promise.resolve(
+            jsonResponse({ message: 'parsed', book, confidence: 'high' })
+          );
         }
 
         // Fallback
@@ -312,13 +340,17 @@ test.describe('Book Detail page', () => {
     await setupRoutes(page);
     await page.goto(`/library/${bookId}`);
 
-    await expect(page.getByRole('heading', { name: 'The Test Book' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'The Test Book' })
+    ).toBeVisible();
     await page.getByRole('tab', { name: 'Files' }).click();
     await expect(page.getByText('File Hash')).toBeVisible();
 
     await page.getByRole('tab', { name: /Versions/ }).click();
     await expect(page.getByText(/Versions/).first()).toBeVisible();
-    await expect(page.getByText(/Second Version|No additional versions linked yet/i)).toBeVisible();
+    await expect(
+      page.getByText(/Second Version|No additional versions linked yet/i)
+    ).toBeVisible();
   });
 
   test('soft delete, restore, and purge flow', async ({ page }) => {
@@ -328,7 +360,9 @@ test.describe('Book Detail page', () => {
     await page.getByRole('button', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Soft Delete' }).click();
 
-    await expect(page.getByText('Audiobook marked for deletion.')).toBeVisible();
+    await expect(
+      page.getByText('Audiobook marked for deletion.')
+    ).toBeVisible();
     await expect(page.getByText('Soft Deleted')).toBeVisible();
 
     await page
@@ -342,7 +376,9 @@ test.describe('Book Detail page', () => {
     await page.getByRole('button', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Soft Delete' }).click();
     await page.getByRole('button', { name: 'Purge' }).click();
-    await expect(page.getByRole('dialog', { name: 'Purge Audiobook' })).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: 'Purge Audiobook' })
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Purge Permanently' }).click();
     await expect(page).toHaveURL(/\/library$/);
   });
@@ -352,7 +388,9 @@ test.describe('Book Detail page', () => {
     await page.goto(`/library/${bookId}`);
 
     await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await expect(page.getByRole('heading', { name: 'Refreshed Title' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Refreshed Title' })
+    ).toBeVisible();
 
     await page.getByRole('button', { name: 'Parse with AI' }).click();
     await expect(page.getByText('AI parsed desc')).toBeVisible();
@@ -375,6 +413,8 @@ test.describe('Book Detail page', () => {
     await page.getByRole('tab', { name: 'Compare' }).click();
     await expect(page.getByText('File Title')).toBeVisible();
     await page.getByRole('button', { name: 'Use File' }).first().click();
-    await expect(page.getByRole('heading', { name: 'File Title' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'File Title' })
+    ).toBeVisible();
   });
 });
