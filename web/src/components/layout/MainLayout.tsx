@@ -23,7 +23,11 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <Box sx={{ display: 'flex', width: '100%' }}>
       <TopBar onMenuClick={handleDrawerToggle} drawerWidth={DRAWER_WIDTH} />
-      <Sidebar open={mobileOpen} onClose={handleDrawerToggle} drawerWidth={DRAWER_WIDTH} />
+      <Sidebar
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        drawerWidth={DRAWER_WIDTH}
+      />
       <Box
         component="main"
         sx={{
