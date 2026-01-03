@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.4 -->
+<!-- version: 1.22.5 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -72,14 +72,19 @@
 
 #### Prerelease Pipeline Fixes
 
-- **Status**: ✅ FIXED (pending next run)
-- **Issue**: Prerelease workflow failed:
-  - GoReleaser built only `main.go`, missing WebFS symbol
-  - Docker build used Go 1.23 image (go.mod requires 1.25)
-- **Fixes**:
-  - Pointed GoReleaser `main` to the package root (`.`) so all files compile
+- **Status**: 🚧 FOLLOW-UP
+- **Issues**:
+  - ✅ GoReleaser built only `main.go`, missing WebFS symbol (fixed)
+  - ✅ Docker build used Go 1.23 image (go.mod requires 1.25) (fixed)
+  - ❌ GITHUB_TOKEN lacks `contents:write`, causing GoReleaser publish failure
+  - ❌ Frontend build in Docker job failed TypeScript globals (`global`)
+- **Fixes (latest)**:
+  - Pointed GoReleaser `main` to the package root (`.`) and disabled release
+    publish (build-only) to avoid 403 until token is upgraded
   - Bumped Dockerfile builder to `golang:1.25-alpine`
-- **Next**: Monitor next prerelease run to confirm green
+  - Added Vitest globals typing to `web/tsconfig.json` to unblock `npm run build`
+- **Next**: Re-run prerelease; re-enable GoReleaser publish once token has
+  `contents:write` or PAT is provided
 - **Workflow Path**: `.github/workflows/test-action-integration.yml`
 - **Next**: Complete action integration validation, then focus on frontend
   provenance UI
