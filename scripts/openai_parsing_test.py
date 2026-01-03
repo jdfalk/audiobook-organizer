@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: scripts/openai_parsing_test.py
-# version: 1.1.2
+# version: 1.1.3
 # guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
 
 """
@@ -53,7 +53,10 @@ try:
 except ImportError:
     print("WARNING: python-dotenv not found. Install with: pip install python-dotenv")
     print("Continuing without .env file support...")
-    load_dotenv = lambda: None
+
+    def load_dotenv() -> None:
+        """Placeholder loader when python-dotenv is unavailable."""
+        return None
 
 
 @dataclass
