@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 # file: scripts/copilot-firewall/test_fix.py
-# version: 1.0.0
+# version: 1.0.1
 # guid: c61b82da-7f71-4c41-a3f6-2b4a5a5fd5a1
-
-import pytest
-
-pytest.skip(
-    "Copilot firewall CLI validation is not part of automated CI runs",
-    allow_module_level=True,
-)
-
-# Quick test script to verify the bug fix
 
 import logging
 
-from copilot_firewall.main import GitHubManager
+import pytest
+
+try:
+    from copilot_firewall.main import GitHubManager
+except Exception:
+    pytest.skip(
+        "Copilot firewall CLI validation is not part of automated CI runs",
+        allow_module_level=True,
+    )
+
+# Quick test script to verify the bug fix
 
 # Test that we can properly extract repo names
 test_repos = [
