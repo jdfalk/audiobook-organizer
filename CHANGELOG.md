@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.10 -->
+<!-- version: 1.1.11 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -17,6 +17,10 @@
   contents:write/PAT; frontend build now includes Vitest globals typing
 - Added local changelog generator stub and set GHCOMMON_SCRIPTS_DIR for
   prerelease workflow to avoid missing script errors in release step
+- Moved GHCOMMON_SCRIPTS_DIR to workflow-level env to satisfy actionlint for
+  reusable workflow calls
+- Marked OpenAI parsing CLI script as skipped under pytest to avoid CI failures
+  when OpenAI packages/keys are unavailable
 
 #### December 28, 2025 - NEXT_STEPS kickoff and documentation updates
 
