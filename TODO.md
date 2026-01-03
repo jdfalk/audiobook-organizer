@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.3 -->
+<!-- version: 1.22.4 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -69,6 +69,17 @@
   repository-config.yml changes
 - **Completed (New)**: 5. ✅ Updated `.github/workflows/frontend-ci.yml` to use
   get-frontend-config-action outputs for node-version gating
+
+#### Prerelease Pipeline Fixes
+
+- **Status**: ✅ FIXED (pending next run)
+- **Issue**: Prerelease workflow failed:
+  - GoReleaser built only `main.go`, missing WebFS symbol
+  - Docker build used Go 1.23 image (go.mod requires 1.25)
+- **Fixes**:
+  - Pointed GoReleaser `main` to the package root (`.`) so all files compile
+  - Bumped Dockerfile builder to `golang:1.25-alpine`
+- **Next**: Monitor next prerelease run to confirm green
 - **Workflow Path**: `.github/workflows/test-action-integration.yml`
 - **Next**: Complete action integration validation, then focus on frontend
   provenance UI
