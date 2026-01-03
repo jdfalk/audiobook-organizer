@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.6 -->
+<!-- version: 1.1.7 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -19,6 +19,9 @@
   frontend-ci.yml
 - **P3: Documentation & Cleanup**: bump CHANGELOG to 1.1.6; refresh TODO with
   statuses; update SESSION_SUMMARY with outstanding items
+- **Action Integration**: Frontend CI now reads node-version via
+  `get-frontend-config-action` to keep workflow inputs aligned with
+  `.github/repository-config.yml` values
 
 #### December 27, 2025 - Metadata provenance backend completion and action integration
 
