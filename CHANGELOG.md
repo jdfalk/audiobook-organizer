@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.7 -->
+<!-- version: 1.1.8 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 3, 2026 - Release pipeline fixes
+
+- Adjusted GoReleaser build target to package root so WebFS is compiled in
+- Updated Dockerfile builder base to Go 1.25-alpine to match go.mod
+- Added TODO entry to track prerelease regression and verification
 
 #### December 28, 2025 - NEXT_STEPS kickoff and documentation updates
 

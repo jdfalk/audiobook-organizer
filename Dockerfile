@@ -1,12 +1,12 @@
 # file: Dockerfile
-# version: 1.2.1
+# version: 1.2.2
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
 # Builds both Go backend and React frontend, serving both from a single container
 
 # Stage 1: Build Go application
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-builder
 
 ARG TARGETOS
 ARG TARGETARCH
