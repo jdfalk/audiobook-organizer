@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.9 -->
+<!-- version: 1.1.10 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -15,6 +15,8 @@
 - Added TODO entry to track prerelease regression and verification
 - Disabled GoReleaser publish in prerelease workflow pending GITHUB_TOKEN
   contents:write/PAT; frontend build now includes Vitest globals typing
+- Added local changelog generator stub and set GHCOMMON_SCRIPTS_DIR for
+  prerelease workflow to avoid missing script errors in release step
 
 #### December 28, 2025 - NEXT_STEPS kickoff and documentation updates
 
