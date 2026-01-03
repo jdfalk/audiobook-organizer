@@ -1,5 +1,5 @@
 # file: .goreleaser.yml
-# version: 1.0.2
+# version: 1.0.3
 # guid: 123e4567-e89b-12d3-a456-426614174000
 
 version: 2
@@ -66,9 +66,4 @@ changelog:
       - Merge branch
 
 release:
-  github:
-    owner: jdfalk
-    name: audiobook-organizer
-  draft: false
-  prerelease: auto
-  name_template: "{{.ProjectName}} {{.Version}}"
+  disable: true
