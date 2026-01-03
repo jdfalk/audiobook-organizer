@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.6.2
+# version: 2.6.3
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -26,9 +26,30 @@ permissions:
   attestations: write
 
 jobs:
+  frontend-config:
+    name: Determine Frontend Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      dir: ${{ steps.frontend-config.outputs.dir }}
+      node-version: ${{ steps.frontend-config.outputs.node-version }}
+      has-frontend: ${{ steps.frontend-config.outputs.has-frontend }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Load frontend configuration
+        id: frontend-config
+        uses: jdfalk/get-frontend-config-action@v1
+        with:
+          repository-config: ''
+          config-file: '.github/repository-config.yml'
+
   frontend:
     name: Frontend Build and Test
+    needs: frontend-config
+    if: needs.frontend-config.outputs.has-frontend == 'true'
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
     with:
-      node-version: '22'
+      node-version: ${{ needs.frontend-config.outputs.node-version }}
     secrets: inherit

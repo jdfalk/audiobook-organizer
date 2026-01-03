@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.2 -->
+<!-- version: 1.22.3 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -66,8 +66,9 @@
   2. ✅ Verified outputs from action (dir, node-version, has-frontend)
   3. ✅ Workflow committed and pushed to main
 - **In Progress**: 4. [ ] Monitor test workflow execution on
-  repository-config.yml changes 5. [ ] Evaluate optional: Update
-  .github/workflows/frontend-ci.yml to use action
+  repository-config.yml changes
+- **Completed (New)**: 5. ✅ Updated `.github/workflows/frontend-ci.yml` to use
+  get-frontend-config-action outputs for node-version gating
 - **Workflow Path**: `.github/workflows/test-action-integration.yml`
 - **Next**: Complete action integration validation, then focus on frontend
   provenance UI
