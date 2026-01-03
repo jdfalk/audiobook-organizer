@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# file: scripts/test_openai_parsing.py
-# version: 1.1.0
+# file: scripts/openai_parsing_test.py
+# version: 1.1.1
 # guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
 
 """
@@ -31,11 +31,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    try:
+        import pytest
+
+        pytest.skip(
+            "CLI utility for manual OpenAI parsing; skipped in automated test runs",
+            allow_module_level=True,
+        )
+    except Exception:
+        # Continue without pytest available; script remains importable
+        pass
+
 try:
     from openai import OpenAI
 except ImportError:
-    print("ERROR: openai package not found. Install with: pip install openai")
-    sys.exit(1)
+    OpenAI = None
 
 try:
     from dotenv import load_dotenv
@@ -601,12 +612,16 @@ def main():
     # Load environment variables
     load_dotenv()
 
+    if OpenAI is None:
+        print("ERROR: openai package not found. Install with: pip install openai")
+        return 1
+
     # Get API key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         print("ERROR: OPENAI_API_KEY not found in environment")
         print("Please set it in .env file or as environment variable")
-        sys.exit(1)
+        return 1
 
     print("=" * 80)
     print("OPENAI AUDIOBOOK FILENAME PARSING TEST")
@@ -647,7 +662,8 @@ def main():
     save_results(results, metrics, args.output_dir)
 
     print("\nTest complete!")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
