@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.11 -->
+<!-- version: 1.1.12 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -21,6 +21,8 @@
   reusable workflow calls
 - Marked OpenAI parsing CLI script as skipped under pytest to avoid CI failures
   when OpenAI packages/keys are unavailable
+- Skipped optional Copilot firewall utility test and selenium E2E fixtures in CI
+  to avoid failures when optional dependencies are not installed
 
 #### December 28, 2025 - NEXT_STEPS kickoff and documentation updates
 
