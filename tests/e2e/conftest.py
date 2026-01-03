@@ -1,20 +1,21 @@
 # file: tests/e2e/conftest.py
-# version: 1.0.1
+# version: 1.0.2
 # guid: 3f2e1d4c-5b6a-7c8d-9e0f-1a2b3c4d5e6f
 
 import os
 
 import pytest
 
-pytest.skip(
-    "E2E browser tests require selenium/webdriver setup; skipping in CI",
-    allow_module_level=True,
-)
-
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+except ImportError:
+    pytest.skip(
+        "E2E browser tests require selenium/webdriver setup; skipping in CI",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture(scope="session")
