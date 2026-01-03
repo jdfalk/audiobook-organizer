@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.22.5 -->
+<!-- version: 1.22.6 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -82,7 +82,9 @@
   - Pointed GoReleaser `main` to the package root (`.`) and disabled release
     publish (build-only) to avoid 403 until token is upgraded
   - Bumped Dockerfile builder to `golang:1.25-alpine`
-  - Added Vitest globals typing to `web/tsconfig.json` to unblock `npm run build`
+  - Added Vitest globals typing and `@types/node` to `web` to unblock `npm run build`
+  - Added local `release_workflow.py` stub and set `GHCOMMON_SCRIPTS_DIR` so
+    prerelease changelog generation no longer fails
 - **Next**: Re-run prerelease; re-enable GoReleaser publish once token has
   `contents:write` or PAT is provided
 - **Workflow Path**: `.github/workflows/test-action-integration.yml`
