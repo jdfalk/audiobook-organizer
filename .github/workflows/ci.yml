@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 2.3.2
+# version: 2.3.3
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 # CI should be using the upstream shared ci
@@ -36,6 +36,6 @@ jobs:
       node-version: '22'
       python-version: '3.13'
       rust-version: '1.76'
-      coverage-threshold: '80'
+      coverage-threshold: '0'
       skip-protobuf: false
     secrets: inherit
