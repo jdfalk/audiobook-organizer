@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.11.0
+// version: 1.11.2
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -140,7 +139,24 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	bar := progressbar.Default(int64(len(books)))
 	total := len(books)
-	var processed atomic.Int32
+
+	// progressCh serializes progress updates so callbacks and progress output
+	// are handled in a single goroutine.
+	progressCh := make(chan string, len(books))
+	var progressWG sync.WaitGroup
+	progressWG.Add(1)
+
+	go func() {
+		defer progressWG.Done()
+		processed := 0
+		for path := range progressCh {
+			processed++
+			_ = bar.Add(1)
+			if progressFn != nil {
+				progressFn(processed, total, path)
+			}
+		}
+	}()
 
 	var aiParser *ai.OpenAIParser
 	aiEnabled := false
@@ -162,13 +178,13 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, workers)
 	errChan := make(chan error, len(books))
+	var ctxErr error
 
 	for i := range books {
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		// Check context cancellation before starting new work
+		if ctx.Err() != nil {
+			ctxErr = ctx.Err()
+			break
 		}
 
 		wg.Add(1)
@@ -177,11 +193,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			semaphore <- struct{}{} // Acquire
 			defer func() {
 				<-semaphore // Release
-				bar.Add(1)
-				if progressFn != nil {
-					current := processed.Add(1)
-					progressFn(int(current), total, books[idx].FilePath)
-				}
+				progressCh <- books[idx].FilePath
 			}()
 
 			// Extract metadata from the file
@@ -280,6 +292,8 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 	}
 
 	wg.Wait()
+	close(progressCh)
+	progressWG.Wait()
 	close(errChan)
 
 	// Collect any errors
@@ -290,6 +304,10 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	if len(errs) > 0 {
 		fmt.Printf("Warning: %d books failed to save\n", len(errs))
+	}
+
+	if ctxErr != nil {
+		return ctxErr
 	}
 
 	// After processing all books, try to match series using external APIs for uncertain cases
