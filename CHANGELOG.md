@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.14 -->
+<!-- version: 1.1.15 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Bulk metadata fetch UI
+
+- Added Library UI controls to bulk fetch metadata with missing-only toggle and confirmation dialog
+- Added frontend API and UI tests covering bulk metadata fetch flow
 
 #### January 4, 2026 - Bulk metadata fetch automation
 

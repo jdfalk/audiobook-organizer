@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.24.0 -->
+<!-- version: 1.25.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -16,7 +16,7 @@
 ### Metadata Fetching (P0)
 
 - ✅ Added bulk metadata fetch API (`/api/v1/metadata/bulk-fetch`) that fills missing fields while respecting overrides/locks, with server tests and Open Library mock support
-- ⚠️ Wire bulk fetch controls into the UI (Library/Book Detail) with selection + progress feedback
+- ✅ Wired bulk fetch controls into the Library UI with confirmation, missing-only toggle, and feedback alerts
 
 ### Action Integration (P1)
 

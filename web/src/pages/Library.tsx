@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.22.0
+// version: 1.23.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -37,6 +37,7 @@ import {
   Delete as DeleteIcon,
   DeleteSweep as DeleteSweepIcon,
   ExpandMore as ExpandMoreIcon,
+  CloudDownload as CloudDownloadIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
@@ -129,6 +130,10 @@ export const Library = () => {
     severity: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+
+  const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
+  const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
+  const [bulkFetchOnlyMissing, setBulkFetchOnlyMissing] = useState(true);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -614,6 +619,38 @@ export const Library = () => {
     }
   };
 
+  const handleBulkFetchMetadata = async () => {
+    if (audiobooks.length === 0) {
+      setAlert({
+        severity: 'info',
+        message: 'No audiobooks loaded to fetch metadata for.',
+      });
+      return;
+    }
+
+    setBulkFetchInProgress(true);
+    try {
+      const result = await api.bulkFetchMetadata(
+        audiobooks.map((book) => book.id),
+        bulkFetchOnlyMissing
+      );
+      setAlert({
+        severity: 'success',
+        message: `Bulk fetch complete: ${result.updated_count} updated out of ${result.total_count}.`,
+      });
+      loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to bulk fetch metadata:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to bulk fetch metadata.',
+      });
+    } finally {
+      setBulkFetchInProgress(false);
+      setBulkFetchDialogOpen(false);
+    }
+  };
+
   const handleParseWithAI = async (audiobook: Audiobook) => {
     try {
       const result = await api.parseAudiobookWithAI(audiobook.id);
@@ -873,6 +910,14 @@ export const Library = () => {
                 sx={{ ml: 1 }}
               />
             )}
+          </Button>
+          <Button
+            startIcon={<CloudDownloadIcon />}
+            onClick={() => setBulkFetchDialogOpen(true)}
+            variant="outlined"
+            disabled={audiobooks.length === 0}
+          >
+            Bulk Fetch Metadata
           </Button>
           <Button
             startIcon={<DeleteSweepIcon />}
@@ -1364,6 +1409,44 @@ export const Library = () => {
           onClose={() => setBatchEditOpen(false)}
           onSave={handleBatchSave}
         />
+
+        <Dialog
+          open={bulkFetchDialogOpen}
+          onClose={() => setBulkFetchDialogOpen(false)}
+        >
+          <DialogTitle>Bulk Fetch Metadata</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Fetch metadata for the {audiobooks.length} currently loaded books.
+              Missing fields will be filled while manual overrides and locks are
+              preserved.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={bulkFetchOnlyMissing}
+                  onChange={(e) => setBulkFetchOnlyMissing(e.target.checked)}
+                />
+              }
+              label="Only fill missing fields"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setBulkFetchDialogOpen(false)}
+              disabled={bulkFetchInProgress}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleBulkFetchMetadata}
+              disabled={bulkFetchInProgress || audiobooks.length === 0}
+            >
+              {bulkFetchInProgress ? 'Fetching…' : 'Fetch Metadata'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <VersionManagement
           audiobookId={versionManagingAudiobook?.id || ''}
