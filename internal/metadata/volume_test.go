@@ -1,5 +1,5 @@
 // file: internal/metadata/volume_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5c4d3e2f-1a0b-9c8d-7e6f-5a4b3c2d1e0f
 
 package metadata
@@ -56,6 +56,29 @@ func TestExtractSeriesFromVolumeString(t *testing.T) {
 			}
 			if idx != tc.expPosition {
 				t.Fatalf("expected index %d, got %d", tc.expPosition, idx)
+			}
+		})
+	}
+}
+
+func TestDetectVolumeNumberArabic(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  int
+	}{
+		{"VolWithLeadingZero", "Vol. 01", 1},
+		{"VolumeNoDot", "Volume 2", 2},
+		{"BookPrefix", "Book 3", 3},
+		{"BkPrefix", "Bk. 4", 4},
+		{"PartPrefix", "Part 5", 5},
+		{"HashPrefix", "Series #6", 6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DetectVolumeNumber(tt.input); got != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, got)
 			}
 		})
 	}
