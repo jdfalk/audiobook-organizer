@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.24 -->
+<!-- version: 1.1.25 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - SSE EventSource manager
+
+- Added shared EventSource manager with exponential backoff reconnects
+- Wired App + Library to use the shared SSE connection
+- Added manager tests for event delivery and reconnect timing
 
 #### January 4, 2026 - Organizer placeholder validation
 

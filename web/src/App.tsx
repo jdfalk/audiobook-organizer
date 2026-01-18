@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.5.0
+// version: 1.5.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 import { useState, useEffect } from 'react';
@@ -19,6 +19,7 @@ import { Works } from './pages/Works';
 import { System } from './pages/System';
 import { Settings } from './pages/Settings';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
+import { eventSourceManager } from './services/eventSourceManager';
 
 function App() {
   const [showWizard, setShowWizard] = useState(false);
@@ -37,28 +38,15 @@ function App() {
 
   // Listen for server shutdown events and handle reconnection
   useEffect(() => {
-    const es = new EventSource('/api/events');
-
-    es.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'system.shutdown') {
-          setServerShutdown(true);
-          es.close();
-        }
-      } catch (e) {
-        // Ignore parse errors
+    const unsubscribe = eventSourceManager.subscribe((event) => {
+      if (event.type === 'system.shutdown') {
+        setServerShutdown(true);
+        eventSourceManager.close();
       }
     });
 
-    es.onerror = () => {
-      if (serverShutdown) {
-        es.close();
-      }
-    };
-
-    return () => es.close();
-  }, [serverShutdown]);
+    return () => unsubscribe();
+  }, []);
 
   // Reconnect attempts when server is down
   useEffect(() => {
