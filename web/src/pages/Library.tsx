@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.23.0
+// version: 1.24.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -47,6 +47,7 @@ import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
+import { buildMetadataUpdatePayload } from './Library.metadata';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField } from '../types';

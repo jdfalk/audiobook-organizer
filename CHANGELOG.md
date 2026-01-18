@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.15 -->
+<!-- version: 1.1.16 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Metadata edit persistence
+
+- Wired Library metadata edit dialog to persist updates via API mapping helpers
+- Added mapping tests to normalize metadata payload fields
 
 #### January 4, 2026 - Bulk metadata fetch UI
 
