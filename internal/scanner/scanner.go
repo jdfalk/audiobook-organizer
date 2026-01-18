@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.11.2
+// version: 1.12.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -198,9 +198,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 			// Extract metadata from the file
 			meta, err := metadata.ExtractMetadata(books[idx].FilePath)
+			fallbackUsed := false
 			if err != nil {
 				fmt.Printf("Warning: Could not extract metadata from %s: %v\n", books[idx].FilePath, err)
 			} else {
+				fallbackUsed = meta.UsedFilenameFallback
 				if meta.Title != "" {
 					books[idx].Title = meta.Title
 				}
@@ -235,8 +237,9 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				log.Printf("[DEBUG] scanner: mediainfo extract failed for %s: %v", books[idx].FilePath, miErr)
 			}
 
-			// If metadata is incomplete, try AI parsing first (if enabled), then filepath extraction
-			if aiEnabled && (books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
+			// If metadata is incomplete or filename fallback was used, try AI parsing first (if enabled)
+			if aiEnabled && (fallbackUsed || books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
+				log.Printf("[DEBUG] scanner: AI fallback triggered for %s (fallback=%v title=%t author=%t series=%t)", books[idx].FilePath, fallbackUsed, books[idx].Title == "", books[idx].Author == "", books[idx].Series == "")
 				filename := filepath.Base(books[idx].FilePath)
 				log.Printf("[DEBUG] scanner: attempting AI metadata fallback for %s", books[idx].FilePath)
 				aiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
