@@ -1,10 +1,14 @@
 // file: internal/metadata/metadata_internal_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/dhowden/tag"
+)
 
 func TestGetRawStringCaseInsensitive(t *testing.T) {
 	raw := map[string]interface{}{
@@ -25,5 +29,16 @@ func TestGetRawStringSkipsReleaseGroupTag(t *testing.T) {
 	got := getRawString(raw, "aART")
 	if got != "Greg Chun" {
 		t.Fatalf("expected Greg Chun, got %q", got)
+	}
+}
+
+func TestGetRawStringFromTXXXComm(t *testing.T) {
+	raw := map[string]interface{}{
+		"TXXX": &tag.Comm{Description: "NARRATOR", Text: "Jane Doe"},
+	}
+
+	got := getRawString(raw, "narrator")
+	if got != "Jane Doe" {
+		t.Fatalf("expected Jane Doe, got %q", got)
 	}
 }

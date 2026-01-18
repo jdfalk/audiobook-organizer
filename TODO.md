@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.29.2 -->
+<!-- version: 1.29.3 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -941,12 +941,12 @@
 
 ### AI Parsing Not Working
 
-- [ ] **URGENT**: Fix OpenAI integration in scanner workflow
-  - [ ] Add logging when AI parser is created and called
-  - [ ] Verify config.AppConfig.OpenAIAPIKey is loaded (not empty)
-  - [ ] Check if AI parsing is being called when metadata incomplete
-  - [ ] Review error handling - might be failing silently
-  - [ ] Confirm timeout/context handling doesn't break parsing
+- [x] **URGENT**: Fix OpenAI integration in scanner workflow
+  - [x] Track when filename fallback was used and allow AI to re-parse
+        fallback metadata
+  - [x] Add AI fallback logs that explain why parsing was invoked
+  - [x] Add tests for fallback flag and TXXX narrator/performer extraction
+  - [ ] Validate with a real OpenAI key in Settings + scanner run
 
 ### Volume Number Extraction Missing
 
