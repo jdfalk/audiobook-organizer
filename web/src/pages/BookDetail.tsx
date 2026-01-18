@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -445,6 +445,42 @@ export const BookDetail = () => {
     } catch (error) {
       console.error('Failed to clear override', error);
       setAlert({ severity: 'error', message: 'Failed to clear override.' });
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const unlockOverride = async (field: string) => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Unlocking override...');
+    try {
+      const payload: Partial<Book> & {
+        overrides: Record<string, { locked: boolean }>;
+      } = {
+        overrides: {
+          [field]: { locked: false },
+        },
+      } as never;
+      const saved = await api.updateBook(book.id, payload);
+      setBook(saved);
+      setTags((prev) => {
+        if (!prev?.tags) return prev;
+        const updated = { ...prev.tags[field] };
+        updated.override_locked = false;
+        return {
+          ...prev,
+          tags: {
+            ...prev.tags,
+            [field]: updated,
+          },
+        };
+      });
+      setAlert({ severity: 'success', message: 'Override unlocked.' });
+    } catch (error) {
+      console.error('Failed to unlock override', error);
+      setAlert({ severity: 'error', message: 'Failed to unlock override.' });
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -1286,6 +1322,15 @@ export const BookDetail = () => {
                               Clear
                             </Button>
                           )}
+                          {entry?.locked && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => unlockOverride(field)}
+                            >
+                              Unlock
+                            </Button>
+                          )}
                         </Stack>
                       </TableCell>
                     </TableRow>
@@ -1296,8 +1341,8 @@ export const BookDetail = () => {
           )}
           <Alert severity="info" sx={{ mt: 2 }}>
             Locked overrides prevent future fetch/tag updates from changing the
-            field. Apply a source to set/lock a field; unlock/clear will be
-            supported when backend exposes override flags.
+            field. Apply a source to set/lock a field; use Unlock to allow edits
+            without clearing the override value.
           </Alert>
         </Paper>
       )}
