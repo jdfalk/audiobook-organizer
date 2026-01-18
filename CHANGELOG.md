@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.22 -->
+<!-- version: 1.1.23 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - SSE write-timeout fix
+
+- Disabled server write timeout to keep SSE connections alive for event streaming
+- Added coverage for the default server config write-timeout behavior
 
 #### January 4, 2026 - AI parsing fallback improvements
 
