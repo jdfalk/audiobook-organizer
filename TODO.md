@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.26.0 -->
+<!-- version: 1.27.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -22,6 +22,11 @@
 ### Metadata Editing (P0)
 
 - ✅ Library metadata edit dialog now persists changes via the API with normalized field mapping
+
+
+### Import Workflow (P0)
+
+- ✅ Added Library import dialog for server-side file selection with organize toggle
 
 ### Action Integration (P1)
 
