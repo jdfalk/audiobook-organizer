@@ -1,5 +1,5 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.4.0
+// version: 1.6.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { expect, test } from '@playwright/test';
@@ -132,6 +132,7 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
     }) => {
       let book = { ...bookData };
       let purged = false;
+      (window as unknown as { __lastDeleteUrl?: string }).__lastDeleteUrl = '';
       const tagState = { ...tagsData };
 
       const recomputeEffective = (field: string) => {
@@ -263,6 +264,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
             return Promise.resolve(jsonResponse(book));
           }
           if (method === 'DELETE') {
+            (window as unknown as { __lastDeleteUrl?: string }).__lastDeleteUrl =
+              url;
             const softDelete = url.includes('soft_delete=true');
             if (softDelete) {
               book = {
@@ -380,6 +383,14 @@ test.describe('Book Detail page', () => {
 
     await page.getByRole('button', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Soft Delete' }).click();
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __lastDeleteUrl?: string }).__lastDeleteUrl?.includes(
+          'block_hash=true'
+        ),
+      null,
+      { timeout: 5000 }
+    );
 
     await expect(
       page.getByText('Audiobook marked for deletion.')
@@ -437,5 +448,18 @@ test.describe('Book Detail page', () => {
     await expect(
       page.getByRole('heading', { name: 'File Title' })
     ).toBeVisible();
+  });
+
+  test('compare tab unlocks override without clearing value', async ({
+    page,
+  }) => {
+    await setupRoutes(page);
+    await page.goto(`/library/${bookId}`);
+
+    await page.getByRole('tab', { name: 'Compare' }).click();
+    const narratorRow = page.getByRole('row', { name: /narrator/i });
+    await expect(narratorRow.getByText('Override Narrator')).toBeVisible();
+    await narratorRow.getByRole('button', { name: 'Unlock' }).click();
+    await expect(narratorRow.getByText('locked')).not.toBeVisible();
   });
 });

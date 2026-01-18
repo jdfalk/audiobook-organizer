@@ -8,6 +8,11 @@
 
 ### Added / Changed
 
+#### January 4, 2026 - Book Detail delete block hash E2E
+
+- Added Playwright coverage to confirm block_hash flag is sent during soft delete
+- Added Playwright coverage for unlocking overrides in compare view
+
 #### January 4, 2026 - Book Detail compare unlock E2E
 
 - Added Playwright coverage for unlocking overrides in the Book Detail compare view
