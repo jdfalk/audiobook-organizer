@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.23 -->
+<!-- version: 1.1.24 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Organizer placeholder validation
+
+- Normalized placeholder casing and added validation to prevent literal template tokens
+- Added default narrator fallback when pattern includes narrator placeholder
+- Added organizer tests for placeholder normalization and unknown placeholder errors
 
 #### January 4, 2026 - SSE write-timeout fix
 

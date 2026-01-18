@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package organizer
@@ -57,14 +57,20 @@ func TestExpandPattern(t *testing.T) {
 		Narrator: stringPtr("Rob Inglis"),
 	}
 
-	result := org.expandPattern("{title}", book)
+	result, err := org.expandPattern("{title}", book)
+	if err != nil {
+		t.Fatalf("expand pattern: %v", err)
+	}
 	expected := "The Hobbit"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
 
 	// Test with narrator
-	result = org.expandPattern("{title} - {narrator}", book)
+	result, err = org.expandPattern("{title} - {narrator}", book)
+	if err != nil {
+		t.Fatalf("expand pattern: %v", err)
+	}
 	expected = "The Hobbit - Rob Inglis"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)

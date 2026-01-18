@@ -1,5 +1,5 @@
 // file: internal/organizer/pattern_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package organizer
@@ -204,7 +204,7 @@ func TestPatternExpansionWithRealData(t *testing.T) {
 			folderPattern:  "{author}/{series}",
 			filePattern:    "{title} - {narrator}",
 			expectedFolder: "Unknown Author",
-			expectedFile:   "Unknown Title.m4b",
+			expectedFile:   "Unknown Title - narrator.m4b",
 		},
 	}
 
@@ -218,13 +218,19 @@ func TestPatternExpansionWithRealData(t *testing.T) {
 			}
 
 			// Test folder pattern
-			folderResult := org.expandPattern(tt.folderPattern, tt.book)
+			folderResult, err := org.expandPattern(tt.folderPattern, tt.book)
+			if err != nil {
+				t.Fatalf("expand folder pattern: %v", err)
+			}
 			if folderResult != tt.expectedFolder {
 				t.Errorf("folder pattern:\n  expected: %q\n  got:      %q", tt.expectedFolder, folderResult)
 			}
 
 			// Test file pattern (without extension)
-			fileResult := org.expandPattern(tt.filePattern, tt.book)
+			fileResult, err := org.expandPattern(tt.filePattern, tt.book)
+			if err != nil {
+				t.Fatalf("expand file pattern: %v", err)
+			}
 			expectedFileNoExt := tt.expectedFile[:len(tt.expectedFile)-len(filepath.Ext(tt.expectedFile))]
 			if fileResult != expectedFileNoExt {
 				t.Errorf("file pattern:\n  expected: %q\n  got:      %q", expectedFileNoExt, fileResult)
@@ -257,7 +263,7 @@ func TestEmptyFieldRemoval(t *testing.T) {
 				Author: &database.Author{Name: "Jane Doe"},
 			},
 			pattern:  "{title} - {narrator}",
-			expected: "Book Title",
+			expected: "Book Title - narrator",
 		},
 		{
 			name: "keep filled narrator",
@@ -298,7 +304,10 @@ func TestEmptyFieldRemoval(t *testing.T) {
 				config: &config.Config{},
 			}
 
-			result := org.expandPattern(tt.pattern, tt.book)
+			result, err := org.expandPattern(tt.pattern, tt.book)
+			if err != nil {
+				t.Fatalf("expand pattern: %v", err)
+			}
 			if result != tt.expected {
 				t.Errorf("expected: %q\ngot:      %q", tt.expected, result)
 			}
@@ -451,4 +460,38 @@ func TestSanitizationWithRealWorldData(t *testing.T) {
 // Helper function for int pointer
 func intPtr(i int) *int {
 	return &i
+}
+
+func TestPatternPlaceholderNormalization(t *testing.T) {
+	org := &Organizer{
+		config: &config.Config{},
+	}
+	book := &database.Book{
+		Title:  "The Hobbit",
+		Author: &database.Author{Name: "J.R.R. Tolkien"},
+	}
+
+	result, err := org.expandPattern("{Author}/{Title}", book)
+	if err != nil {
+		t.Fatalf("expand pattern: %v", err)
+	}
+	expected := "J.R.R. Tolkien/The Hobbit"
+	if result != expected {
+		t.Fatalf("expected %q, got %q", expected, result)
+	}
+}
+
+func TestPatternRejectsUnknownPlaceholder(t *testing.T) {
+	org := &Organizer{
+		config: &config.Config{},
+	}
+	book := &database.Book{
+		Title:  "The Hobbit",
+		Author: &database.Author{Name: "J.R.R. Tolkien"},
+	}
+
+	_, err := org.expandPattern("{title}/{unsupported}", book)
+	if err == nil {
+		t.Fatalf("expected error for unresolved placeholder")
+	}
 }
