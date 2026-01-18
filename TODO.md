@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.29.6 -->
+<!-- version: 1.29.7 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -950,12 +950,10 @@
 
 ### Volume Number Extraction Missing
 
-- [ ] **HIGH**: Add volume/book number detection
-  - [ ] Create regex patterns for: Vol. 01, Vol 01, Volume 1, Book 1, Bk. 1, Bk
-        1
-  - [ ] Extract to `series_position` field in database
-  - [ ] Apply to both filename parsing AND album tag parsing
-  - [ ] Handle both "Vol. 01" and "Volume 1" style formats
+- [x] **HIGH**: Add volume/book number detection
+  - [x] Added regex patterns for Vol/Volume/Book/Bk/Part/# detection
+  - [x] Added tests for Arabic numeral volume patterns
+  - [x] Apply to filename parsing and album tag parsing (already in metadata)
 
 ### Event Transport Regression (Nov 21, 2025)
 

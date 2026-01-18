@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.25 -->
+<!-- version: 1.1.26 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Volume detection tests
+
+- Added Arabic numeral volume detection test coverage for common patterns
 
 #### January 4, 2026 - SSE EventSource manager
 
