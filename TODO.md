@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.28.0 -->
+<!-- version: 1.29.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -44,7 +44,7 @@
 
 ### Docs & Status Refresh (P2)
 
-- ⚠️ Update README to reflect current feature completeness and release pipeline status; keep TODO/CHANGELOG aligned
+- ✅ README updated to reflect current feature completeness and release pipeline status
 
 ### Archived Session Notes
 

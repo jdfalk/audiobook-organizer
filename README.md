@@ -29,8 +29,10 @@ configured separately as `root_dir`.
 
 ## 🎯 MVP Development in Progress
 
-**Current Status**: Backend foundation complete (~45% of MVP), React frontend
-scaffolded
+**Current Status**: Prototype-ready backend + web UI with core workflows
+implemented (scan/import/organize, metadata edit, metadata fetch, library
+management). Remaining work focuses on E2E coverage, prerelease publishing
+permissions, and coverage improvements.
 
 See our detailed planning documents:
 
@@ -76,18 +78,20 @@ See our detailed planning documents:
 - **Enhanced Metadata API**: Batch updates with validation, export/import,
   comprehensive validation rules
 
-### 🚧 In Progress (Phase 3: React Frontend Foundation)
+### ✅ Web UI (Phase 3: React Frontend)
 
 - **Project Structure**: ✅ Vite + TypeScript + React 18
 - **Material-UI v5**: ✅ Theme configuration and component library
 - **Layout & Navigation**: ✅ Responsive sidebar, top bar, routing
 - **State Management**: ✅ Zustand for global app state
 - **API Client**: ✅ Fetch wrapper with error handling
-- **Error Handling**: ✅ ErrorBoundary and loading states
+- **Library Management**: ✅ Scan/import/organize controls with live progress
+- **Metadata Tools**: ✅ Edit metadata, fetch from Open Library, bulk fetch
+- **Overrides & Provenance**: ✅ Tags/compare view with override/lock controls
 - **Testing**: ✅ Vitest + React Testing Library setup
 - **CI/CD**: ✅ GitHub Actions for frontend build/test
 
-### 📋 Planned (Phases 4-7)
+### 📋 Planned / Remaining (Phases 4-7)
 
 - **Library Browser (Phase 4)**:
   - Audiobook grid/list views with virtual scrolling
