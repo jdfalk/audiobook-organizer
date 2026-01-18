@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.25.0
+// version: 1.26.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -107,8 +107,6 @@ export const Library = () => {
     >
   >({});
   const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectAttempts = useRef(0);
   const [softDeletedCount, setSoftDeletedCount] = useState(0);
   const [softDeletedBooks, setSoftDeletedBooks] = useState<Audiobook[]>([]);
   const [softDeletedLoading, setSoftDeletedLoading] = useState(false);
@@ -181,91 +179,65 @@ export const Library = () => {
       }
     })();
 
-    const setupEventSource = () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+    const unsubscribe = eventSourceManager.subscribe(
+      (evt) => {
+        if (!evt || !evt.type) return;
+        if (evt.type === 'heartbeat') return; // Ignore heartbeat messages
 
-      const es = new EventSource('/api/events');
-      eventSourceRef.current = es;
-
-      es.onmessage = (ev) => {
-        try {
-          const evt = JSON.parse(ev.data);
-          if (!evt || !evt.type) return;
-          if (evt.type === 'heartbeat') return; // Ignore heartbeat messages
-
-          if (evt.type === 'operation.log') {
-            const opId = evt.data.operation_id;
-            setOperationLogs((prev) => {
-              const existing = prev[opId] || [];
-              const next = [
-                ...existing,
-                {
-                  level: evt.data.level,
-                  message: evt.data.message,
-                  details: evt.data.details,
-                  timestamp: Date.now(),
-                },
-              ];
-              return { ...prev, [opId]: next.slice(-200) };
-            });
-          } else if (evt.type === 'operation.progress') {
-            const opId = evt.data.operation_id;
-            const update = (op: api.Operation | null): api.Operation | null => {
-              if (!op || op.id !== opId) return op;
-              return {
-                ...op,
-                progress: evt.data.current,
-                total: evt.data.total,
-                message: evt.data.message,
-              };
+        if (evt.type === 'operation.log' && evt.data?.operation_id) {
+          const opId = String(evt.data.operation_id);
+          setOperationLogs((prev) => {
+            const existing = prev[opId] || [];
+            const next = [
+              ...existing,
+              {
+                level: String(evt.data?.level ?? 'info'),
+                message: String(evt.data?.message ?? ''),
+                details: evt.data?.details as string | undefined,
+                timestamp: Date.now(),
+              },
+            ];
+            return { ...prev, [opId]: next.slice(-200) };
+          });
+        } else if (evt.type === 'operation.progress' && evt.data?.operation_id) {
+          const opId = String(evt.data.operation_id);
+          const update = (op: api.Operation | null): api.Operation | null => {
+            if (!op || op.id !== opId) return op;
+            return {
+              ...op,
+              progress: Number(evt.data?.current ?? 0),
+              total: Number(evt.data?.total ?? 0),
+              message: String(evt.data?.message ?? ''),
             };
-            setActiveScanOp((prev) => update(prev));
-            setActiveOrganizeOp((prev) => update(prev));
-          } else if (evt.type === 'operation.status') {
-            const opId = evt.data.operation_id;
-            const status = evt.data.status;
-            const finalize = (
-              op: api.Operation | null
-            ): api.Operation | null => {
-              if (!op || op.id !== opId) return op;
-              return { ...op, status };
-            };
-            setActiveScanOp((prev) => finalize(prev));
-            setActiveOrganizeOp((prev) => finalize(prev));
-          }
-        } catch {
-          // ignore parse errors
+          };
+          setActiveScanOp((prev) => update(prev));
+          setActiveOrganizeOp((prev) => update(prev));
+        } else if (evt.type === 'operation.status' && evt.data?.operation_id) {
+          const opId = String(evt.data.operation_id);
+          const status = String(evt.data?.status ?? '');
+          const finalize = (
+            op: api.Operation | null
+          ): api.Operation | null => {
+            if (!op || op.id !== opId) return op;
+            return { ...op, status };
+          };
+          setActiveScanOp((prev) => finalize(prev));
+          setActiveOrganizeOp((prev) => finalize(prev));
         }
-      };
-
-      es.onerror = () => {
-        es.close();
-        reconnectAttempts.current++;
-        // Exponential backoff: 3s, 6s, 12s, 24s, capped at 30s
-        const delay = Math.min(
-          3000 * Math.pow(2, reconnectAttempts.current - 1),
-          30000
-        );
-        console.warn(
-          `EventSource connection lost (attempt ${reconnectAttempts.current}), reconnecting in ${delay / 1000}s...`
-        );
-        setTimeout(setupEventSource, delay);
-      };
-
-      es.onopen = () => {
-        console.log('EventSource connection established');
-        reconnectAttempts.current = 0; // Reset on successful connection
-      };
-    };
-
-    setupEventSource();
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
+      },
+      (status) => {
+        if (status.state === 'reconnecting' && status.delayMs) {
+          console.warn(
+            `EventSource connection lost (attempt ${status.attempt}), reconnecting in ${Math.round(status.delayMs / 1000)}s...`
+          );
+        } else if (status.state === 'open') {
+          console.log('EventSource connection established');
+        }
       }
+    );
+
+    return () => {
+      unsubscribe();
     };
   }, []);
 
