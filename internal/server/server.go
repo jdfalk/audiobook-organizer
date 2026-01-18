@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.36.0
+// version: 1.36.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -4238,7 +4238,7 @@ func GetDefaultServerConfig() ServerConfig {
 		Port:         "8080",
 		Host:         "localhost",
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 0, // Disable write timeout so SSE streams stay open.
 		IdleTimeout:  60 * time.Second,
 	}
 }
