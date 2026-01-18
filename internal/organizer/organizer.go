@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -22,10 +22,14 @@ type Organizer struct {
 }
 
 const (
-	defaultTitle = "Unknown Title"
+	defaultTitle    = "Unknown Title"
+	defaultNarrator = "narrator"
 )
 
-var leftoverPlaceholderRegex = regexp.MustCompile(`\{[a-z_]+\}`)
+var (
+	leftoverPlaceholderRegex  = regexp.MustCompile(`\{[^}]+\}`)
+	placeholderNormalizeRegex = regexp.MustCompile(`\{[A-Za-z_]+\}`)
+)
 
 // NewOrganizer creates a new organizer instance
 func NewOrganizer(cfg *config.Config) *Organizer {
@@ -105,11 +109,17 @@ func (o *Organizer) generateTargetPath(book *database.Book) (string, error) {
 	ext := filepath.Ext(book.FilePath)
 
 	// Generate folder path
-	folderPath := o.expandPattern(o.config.FolderNamingPattern, book)
+	folderPath, err := o.expandPattern(o.config.FolderNamingPattern, book)
+	if err != nil {
+		return "", fmt.Errorf("folder pattern: %w", err)
+	}
 	folderPath = sanitizePath(folderPath)
 
 	// Generate file name
-	fileName := o.expandPattern(o.config.FileNamingPattern, book)
+	fileName, err := o.expandPattern(o.config.FileNamingPattern, book)
+	if err != nil {
+		return "", fmt.Errorf("file pattern: %w", err)
+	}
 	fileName = sanitizeFilename(fileName) + ext
 
 	// Combine with root directory
@@ -119,8 +129,8 @@ func (o *Organizer) generateTargetPath(book *database.Book) (string, error) {
 }
 
 // expandPattern expands a pattern with book metadata
-func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
-	result := pattern
+func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, error) {
+	result := placeholderNormalizeRegex.ReplaceAllStringFunc(pattern, strings.ToLower)
 
 	// Get author name from embedded Author object or default
 	authorName := "Unknown Author"
@@ -155,6 +165,9 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 	}
 
 	narrator := strings.TrimSpace(stringOrEmpty(book.Narrator))
+	if narrator == "" {
+		narrator = defaultNarrator
+	}
 
 	// Replacements map
 	replacements := map[string]string{
@@ -185,9 +198,11 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) string {
 		}
 	}
 
-	result = leftoverPlaceholderRegex.ReplaceAllString(result, "")
 	result = cleanupPattern(result)
-	return result
+	if leftoverPlaceholderRegex.MatchString(result) {
+		return "", fmt.Errorf("unresolved placeholders in pattern result: %s", result)
+	}
+	return result, nil
 }
 
 // removeEmptySegment removes segments containing empty placeholders
@@ -199,7 +214,7 @@ func removeEmptySegment(pattern, placeholder string) string {
 		fmt.Sprintf(`\([^(]*%s\)`, regexp.QuoteMeta(placeholder)),
 	}
 
-	result := pattern
+	result := placeholderNormalizeRegex.ReplaceAllStringFunc(pattern, strings.ToLower)
 	for _, p := range patterns {
 		re := regexp.MustCompile(p)
 		result = re.ReplaceAllString(result, "")
