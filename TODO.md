@@ -28,6 +28,8 @@
 
 - ✅ Added Library import dialog for server-side file selection with organize toggle
 
+- ✅ Replaced Open Library integration tests with mock server coverage to avoid external network calls
+
 ### Action Integration (P1)
 
 - ✅ `frontend-ci.yml` now reads node version via `get-frontend-config-action`

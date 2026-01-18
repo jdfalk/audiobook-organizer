@@ -8,6 +8,10 @@
 
 ### Added / Changed
 
+#### January 4, 2026 - Open Library tests mocked
+
+- Replaced Open Library integration tests with mock server coverage to avoid external network dependencies
+
 #### January 4, 2026 - Book Detail delete block hash E2E
 
 - Added Playwright coverage to confirm block_hash flag is sent during soft delete

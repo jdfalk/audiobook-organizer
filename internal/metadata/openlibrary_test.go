@@ -1,14 +1,17 @@
 // file: internal/metadata/openlibrary_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
 
 package metadata
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
 func TestNewOpenLibraryClient(t *testing.T) {
+	t.Setenv("OPENLIBRARY_BASE_URL", "")
 	client := NewOpenLibraryClient()
 	if client == nil {
 		t.Fatal("Expected non-nil client")
@@ -21,10 +24,32 @@ func TestNewOpenLibraryClient(t *testing.T) {
 	}
 }
 
-func TestSearchByTitle(t *testing.T) {
-	client := NewOpenLibraryClient()
+func TestNewOpenLibraryClientUsesEnvBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
 
-	// Test with a well-known book
+	t.Setenv("OPENLIBRARY_BASE_URL", server.URL)
+
+	client := NewOpenLibraryClient()
+	if client.baseURL != server.URL {
+		t.Errorf("Expected baseURL to use env %s, got %s", server.URL, client.baseURL)
+	}
+}
+
+func TestSearchByTitle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search.json" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"numFound":1,"start":0,"docs":[{"title":"The Hobbit","author_name":["J.R.R. Tolkien"],"first_publish_year":1937}]}`))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
 	results, err := client.SearchByTitle("The Hobbit")
 	if err != nil {
 		t.Fatalf("SearchByTitle failed: %v", err)
@@ -34,7 +59,6 @@ func TestSearchByTitle(t *testing.T) {
 		t.Error("Expected at least one result for 'The Hobbit'")
 	}
 
-	// Verify first result has expected fields
 	if len(results) > 0 {
 		firstResult := results[0]
 		if firstResult.Title == "" {
@@ -44,9 +68,17 @@ func TestSearchByTitle(t *testing.T) {
 }
 
 func TestSearchByTitleAndAuthor(t *testing.T) {
-	client := NewOpenLibraryClient()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search.json" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"numFound":1,"start":0,"docs":[{"title":"The Hobbit","author_name":["J.R.R. Tolkien"],"first_publish_year":1937,"publisher":["Allen & Unwin"]}]}`))
+	}))
+	defer server.Close()
 
-	// Test with specific book and author
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
 	results, err := client.SearchByTitleAndAuthor("The Hobbit", "Tolkien")
 	if err != nil {
 		t.Fatalf("SearchByTitleAndAuthor failed: %v", err)
@@ -56,7 +88,6 @@ func TestSearchByTitleAndAuthor(t *testing.T) {
 		t.Error("Expected at least one result for 'The Hobbit' by Tolkien")
 	}
 
-	// Verify results contain author information
 	if len(results) > 0 {
 		found := false
 		for _, result := range results {
@@ -72,28 +103,42 @@ func TestSearchByTitleAndAuthor(t *testing.T) {
 }
 
 func TestSearchByTitleNoResults(t *testing.T) {
-	client := NewOpenLibraryClient()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search.json" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"numFound":0,"start":0,"docs":[]}`))
+	}))
+	defer server.Close()
 
-	// Test with unlikely title that should return no results
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
 	results, err := client.SearchByTitle("xyzabc123456789nonexistent")
 	if err != nil {
 		t.Fatalf("SearchByTitle failed: %v", err)
 	}
 
-	// Empty results is valid for non-existent books
-	if len(results) > 0 {
-		t.Logf("Unexpectedly found %d results for nonsense title", len(results))
+	if len(results) != 0 {
+		t.Errorf("Expected no results, got %d", len(results))
 	}
 }
 
 func TestGetBookByISBN(t *testing.T) {
-	client := NewOpenLibraryClient()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/isbn/9780547928227.json" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(`{"title":"The Hobbit","publish_date":"1937","publishers":["Allen & Unwin"],"covers":[123]}`))
+	}))
+	defer server.Close()
 
-	// Test with a valid ISBN (The Hobbit)
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
 	result, err := client.GetBookByISBN("9780547928227")
 	if err != nil {
-		t.Skipf("ISBN lookup failed (may be rate limited or API issue): %v", err)
-		return
+		t.Fatalf("GetBookByISBN failed: %v", err)
 	}
 
 	if result == nil {
@@ -103,12 +148,28 @@ func TestGetBookByISBN(t *testing.T) {
 	if result.ISBN != "9780547928227" {
 		t.Errorf("Expected ISBN 9780547928227, got %s", result.ISBN)
 	}
+	if result.Title != "The Hobbit" {
+		t.Errorf("Expected title The Hobbit, got %s", result.Title)
+	}
+	if result.Publisher != "Allen & Unwin" {
+		t.Errorf("Expected publisher Allen & Unwin, got %s", result.Publisher)
+	}
+	if result.PublishYear != 1937 {
+		t.Errorf("Expected publish year 1937, got %d", result.PublishYear)
+	}
+	if result.CoverURL == "" {
+		t.Error("Expected cover URL to be set")
+	}
 }
 
 func TestGetBookByISBNInvalid(t *testing.T) {
-	client := NewOpenLibraryClient()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
 
-	// Test with invalid ISBN
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
 	_, err := client.GetBookByISBN("0000000000")
 	if err == nil {
 		t.Error("Expected error for invalid ISBN")
