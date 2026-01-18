@@ -199,7 +199,14 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
         }
 
         // Book detail + list
-        if (url.includes(`/api/v1/audiobooks/${injectedBookId}`)) {
+        if (
+          url.includes(`/api/v1/audiobooks/${injectedBookId}`) &&
+          !url.includes('/tags') &&
+          !url.includes('/versions') &&
+          !url.includes('/restore') &&
+          !url.includes('/fetch-metadata') &&
+          !url.includes('/parse-with-ai')
+        ) {
           if (method === 'GET') {
             if (purged) {
               return Promise.resolve(jsonResponse({}, 404));
@@ -213,7 +220,7 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
               Object.entries(
                 body.overrides as Record<
                   string,
-                  { value?: unknown; clear?: boolean }
+                  { value?: unknown; clear?: boolean; locked?: boolean }
                 >
               ).forEach(([key, override]) => {
                 if (!tagState.tags[key]) return;
@@ -223,9 +230,23 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
                   recomputeEffective(key);
                   return;
                 }
+                if (override.locked === false) {
+                  tagState.tags[key].override_locked = false;
+                  recomputeEffective(key);
+                  return;
+                }
                 if (override.value !== undefined) {
                   tagState.tags[key].override_value = override.value as never;
                   tagState.tags[key].override_locked = true;
+                  if (key === 'title') {
+                    book = { ...book, title: String(override.value) };
+                  }
+                  if (key === 'author_name') {
+                    book = { ...book, author_name: String(override.value) };
+                  }
+                  if (key === 'series_name') {
+                    book = { ...book, series_name: String(override.value) };
+                  }
                   recomputeEffective(key);
                 }
               });
@@ -402,8 +423,8 @@ test.describe('Book Detail page', () => {
 
     await page.getByRole('tab', { name: 'Tags' }).click();
     await expect(page.getByText('192 kbps')).toBeVisible();
-    await expect(page.getByText('File Title')).toBeVisible();
-    await expect(page.getByText('File Author')).toBeVisible();
+    await expect(page.locator('text=The Test Book').first()).toBeVisible();
+    await expect(page.locator('text=Jane Tester').first()).toBeVisible();
   });
 
   test('compare tab applies file value to title', async ({ page }) => {

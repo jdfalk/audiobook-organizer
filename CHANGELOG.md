@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.19 -->
+<!-- version: 1.1.20 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Book Detail compare unlock E2E
+
+- Added Playwright coverage for unlocking overrides in the Book Detail compare view
 
 #### January 4, 2026 - README status refresh
 
