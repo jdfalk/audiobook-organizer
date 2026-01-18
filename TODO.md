@@ -35,7 +35,7 @@
 
 ### Frontend Provenance & E2E (P1)
 
-- ✅ Book Detail compare view now supports unlocking overrides without clearing values; tags/compare E2E coverage includes unlock action
+- ✅ Book Detail compare view now supports unlocking overrides without clearing values; tags/compare E2E coverage includes unlock + block-hash delete verification
 - ⚠️ Revisit Book Detail delete/purge flows for soft-delete + block-hash verification
 
 ### Manual Verification (P1)
