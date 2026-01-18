@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.29.5 -->
+<!-- version: 1.29.6 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -962,7 +962,7 @@
 - [x] Fix SSE lifetime in `internal/server.handleEvents` so `/api/events`
       streams remain open (remove premature context timeouts, keep heartbeats
       flowing)
-- [ ] Add client-side EventSource manager with exponential backoff (3s → 6s →
+- [x] Add client-side EventSource manager with exponential backoff (3s → 6s →
       12s, cap at 60s) and shared connection for Dashboard + Library
 - [ ] Replace `/api/v1/health` polling with existing `/api/health` endpoint or
       add a v1 alias so reconnect overlay stops 404 spam
