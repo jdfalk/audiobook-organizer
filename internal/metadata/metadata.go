@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.7.0
+// version: 1.7.2
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -75,7 +75,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	fieldSources := map[string]string{}
 	seriesIndexSource := ""
 	fallbackUsed := false
-	authorFromComposer := false
+	authorFromArtist := false
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -129,18 +129,27 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		fieldCandidate{value: m.Composer(), source: "tag.Composer"},
 		fieldCandidate{value: getRawString(raw, "TCOM", "\xa9wrt", "composer"), source: "raw.composer"},
 	)
+	albumArtistValue, albumArtistSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.AlbumArtist(), source: "tag.AlbumArtist"},
+		fieldCandidate{value: getRawString(raw, "TPE2", "ALBUMARTIST", "AlbumArtist", "album_artist", "aART"), source: "raw.album_artist"},
+	)
+	artistValue, artistSource := pickFirstNonEmpty(
+		fieldCandidate{value: m.Artist(), source: "tag.Artist"},
+		fieldCandidate{value: getRawString(raw, "TPE1", "artist", "\xa9ART", "©ART"), source: "raw.artist"},
+	)
 	if composerValue != "" {
 		metadata.Artist = composerValue
 		setFieldSource(fieldSources, "author", composerSource+" (composer)")
-		authorFromComposer = true
+	} else if albumArtistValue != "" {
+		metadata.Artist = cleanTagValue(albumArtistValue)
+		if metadata.Artist != "" {
+			setFieldSource(fieldSources, "author", albumArtistSource+" (album_artist)")
+		}
 	} else {
-		artistValue, artistSource := pickFirstNonEmpty(
-			fieldCandidate{value: m.Artist(), source: "tag.Artist"},
-			fieldCandidate{value: getRawString(raw, "TPE1", "artist", "\xa9ART", "©ART", "aART"), source: "raw.artist"},
-		)
 		metadata.Artist = cleanTagValue(artistValue)
 		if metadata.Artist != "" {
 			setFieldSource(fieldSources, "author", artistSource)
+			authorFromArtist = true
 		}
 	}
 
@@ -156,16 +165,15 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	narratorValue, narratorSource := pickFirstNonEmpty(
 		fieldCandidate{value: getRawString(raw, "PERFORMER", "Performer", "TXXX:NARRATOR", "TXXX:Narrator", "NARRATOR", "Narrator", "©nrt", "\xa9nrt"), source: "raw.narrator"},
 		fieldCandidate{value: getRawString(raw, "TXXX:Reader", "READER"), source: "raw.reader"},
-		fieldCandidate{value: getRawString(raw, "\xa9ART", "©ART"), source: "raw.artist"},
-		fieldCandidate{value: getRawString(raw, "aART", "ALBUMARTIST", "AlbumArtist", "Album Artist"), source: "raw.album_artist"},
 	)
 	metadata.Narrator = cleanTagValue(narratorValue)
 	if metadata.Narrator != "" {
 		setFieldSource(fieldSources, "narrator", narratorSource)
-	} else if authorFromComposer {
-		if artistFallback := cleanTagValue(m.Artist()); artistFallback != "" && artistFallback != metadata.Artist {
+	} else if !authorFromArtist {
+		artistFallback := cleanTagValue(artistValue)
+		if artistFallback != "" && artistFallback != metadata.Artist {
 			metadata.Narrator = artistFallback
-			setFieldSource(fieldSources, "narrator", "tag.Artist")
+			setFieldSource(fieldSources, "narrator", artistSource)
 		}
 	}
 
@@ -379,6 +387,20 @@ func getRawString(raw map[string]interface{}, keys ...string) string {
 					return normalized
 				}
 			}
+			if comm, ok := actualValue.(*tag.Comm); ok {
+				if strings.EqualFold(comm.Description, key) {
+					if normalized := strings.TrimSpace(comm.Text); normalized != "" {
+						return normalized
+					}
+				}
+			}
+			if comm, ok := actualValue.(tag.Comm); ok {
+				if strings.EqualFold(comm.Description, key) {
+					if normalized := strings.TrimSpace(comm.Text); normalized != "" {
+						return normalized
+					}
+				}
+			}
 		}
 	}
 	return ""
@@ -401,6 +423,16 @@ func normalizeRawTagValue(value interface{}) string {
 		}
 	case []byte:
 		if s := strings.TrimSpace(string(typed)); s != "" {
+			return s
+		}
+	case *tag.Comm:
+		if typed != nil {
+			if s := strings.TrimSpace(typed.Text); s != "" {
+				return s
+			}
+		}
+	case tag.Comm:
+		if s := strings.TrimSpace(typed.Text); s != "" {
 			return s
 		}
 	default:
