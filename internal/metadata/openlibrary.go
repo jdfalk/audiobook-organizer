@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -21,11 +22,20 @@ type OpenLibraryClient struct {
 
 // NewOpenLibraryClient creates a new Open Library API client
 func NewOpenLibraryClient() *OpenLibraryClient {
+	baseURL := os.Getenv("OPENLIBRARY_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://openlibrary.org"
+	}
+	return NewOpenLibraryClientWithBaseURL(baseURL)
+}
+
+// NewOpenLibraryClientWithBaseURL creates a client with a custom base URL.
+func NewOpenLibraryClientWithBaseURL(baseURL string) *OpenLibraryClient {
 	return &OpenLibraryClient{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		baseURL: "https://openlibrary.org",
+		baseURL: strings.TrimRight(baseURL, "/"),
 	}
 }
 

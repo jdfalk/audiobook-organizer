@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.35.0
+// version: 1.36.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -661,6 +661,7 @@ func (s *Server) setupRoutes() {
 		api.POST("/metadata/import", s.importMetadata)
 		api.GET("/metadata/search", s.searchMetadata)
 		api.GET("/metadata/fields", s.getMetadataFields)
+		api.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
 		api.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
 
 		// AI-powered parsing routes
@@ -3384,6 +3385,255 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		"message": "metadata fetched and applied",
 		"book":    updatedBook,
 		"source":  "Open Library",
+	})
+}
+
+type bulkFetchMetadataRequest struct {
+	BookIDs     []string `json:"book_ids" binding:"required"`
+	OnlyMissing *bool    `json:"only_missing,omitempty"`
+}
+
+type bulkFetchMetadataResult struct {
+	BookID        string   `json:"book_id"`
+	Status        string   `json:"status"`
+	Message       string   `json:"message,omitempty"`
+	AppliedFields []string `json:"applied_fields,omitempty"`
+	FetchedFields []string `json:"fetched_fields,omitempty"`
+}
+
+// bulkFetchMetadata fetches external metadata for multiple audiobooks and applies
+// fields only when they are missing and not manually overridden or locked.
+func (s *Server) bulkFetchMetadata(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req bulkFetchMetadataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.BookIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids is required"})
+		return
+	}
+
+	onlyMissing := true
+	if req.OnlyMissing != nil {
+		onlyMissing = *req.OnlyMissing
+	}
+
+	client := metadata.NewOpenLibraryClient()
+	results := make([]bulkFetchMetadataResult, 0, len(req.BookIDs))
+	updatedCount := 0
+
+	for _, bookID := range req.BookIDs {
+		result := bulkFetchMetadataResult{
+			BookID: bookID,
+			Status: "skipped",
+		}
+
+		book, err := database.GlobalStore.GetBookByID(bookID)
+		if err != nil || book == nil {
+			result.Status = "not_found"
+			result.Message = "audiobook not found"
+			results = append(results, result)
+			continue
+		}
+
+		if strings.TrimSpace(book.Title) == "" {
+			result.Message = "missing title"
+			results = append(results, result)
+			continue
+		}
+
+		state, err := loadMetadataState(bookID)
+		if err != nil {
+			result.Status = "error"
+			result.Message = "failed to load metadata state"
+			results = append(results, result)
+			continue
+		}
+		if state == nil {
+			state = map[string]metadataFieldState{}
+		}
+
+		authorName := ""
+		if book.Author != nil {
+			authorName = book.Author.Name
+		} else if book.AuthorID != nil {
+			if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				authorName = author.Name
+			}
+		}
+
+		var metaResults []metadata.BookMetadata
+		if authorName != "" {
+			metaResults, err = client.SearchByTitleAndAuthor(book.Title, authorName)
+		} else {
+			metaResults, err = client.SearchByTitle(book.Title)
+		}
+		if err != nil || len(metaResults) == 0 {
+			result.Status = "not_found"
+			result.Message = "no metadata found"
+			results = append(results, result)
+			continue
+		}
+
+		meta := metaResults[0]
+		fetchedValues := map[string]interface{}{}
+		appliedFields := []string{}
+		fetchedFields := []string{}
+
+		addFetched := func(field string, value interface{}) {
+			fetchedValues[field] = value
+			fetchedFields = append(fetchedFields, field)
+		}
+
+		shouldApply := func(field string, hasValue bool) bool {
+			entry := state[field]
+			if entry.OverrideLocked || entry.OverrideValue != nil {
+				return false
+			}
+			if onlyMissing && hasValue {
+				return false
+			}
+			return true
+		}
+
+		hasBookValue := func(field string) bool {
+			switch field {
+			case "title":
+				return strings.TrimSpace(book.Title) != ""
+			case "author_name":
+				return book.AuthorID != nil || book.Author != nil
+			case "publisher":
+				return book.Publisher != nil && strings.TrimSpace(*book.Publisher) != ""
+			case "language":
+				return book.Language != nil && strings.TrimSpace(*book.Language) != ""
+			case "audiobook_release_year":
+				return book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear != 0
+			case "isbn10":
+				return book.ISBN10 != nil && strings.TrimSpace(*book.ISBN10) != ""
+			case "isbn13":
+				return book.ISBN13 != nil && strings.TrimSpace(*book.ISBN13) != ""
+			default:
+				return false
+			}
+		}
+
+		didUpdate := false
+
+		if meta.Title != "" {
+			addFetched("title", meta.Title)
+			if shouldApply("title", hasBookValue("title")) {
+				book.Title = meta.Title
+				appliedFields = append(appliedFields, "title")
+				didUpdate = true
+			}
+		}
+
+		if meta.Author != "" {
+			addFetched("author_name", meta.Author)
+			if shouldApply("author_name", hasBookValue("author_name")) {
+				author, err := database.GlobalStore.GetAuthorByName(meta.Author)
+				if err != nil {
+					result.Status = "error"
+					result.Message = "failed to resolve author"
+					results = append(results, result)
+					continue
+				}
+				if author == nil {
+					author, err = database.GlobalStore.CreateAuthor(meta.Author)
+					if err != nil {
+						result.Status = "error"
+						result.Message = "failed to create author"
+						results = append(results, result)
+						continue
+					}
+				}
+				book.AuthorID = &author.ID
+				appliedFields = append(appliedFields, "author_name")
+				didUpdate = true
+			}
+		}
+
+		if meta.Publisher != "" {
+			addFetched("publisher", meta.Publisher)
+			if shouldApply("publisher", hasBookValue("publisher")) {
+				book.Publisher = stringPtr(meta.Publisher)
+				appliedFields = append(appliedFields, "publisher")
+				didUpdate = true
+			}
+		}
+
+		if meta.Language != "" {
+			addFetched("language", meta.Language)
+			if shouldApply("language", hasBookValue("language")) {
+				book.Language = stringPtr(meta.Language)
+				appliedFields = append(appliedFields, "language")
+				didUpdate = true
+			}
+		}
+
+		if meta.PublishYear != 0 {
+			addFetched("audiobook_release_year", meta.PublishYear)
+			if shouldApply("audiobook_release_year", hasBookValue("audiobook_release_year")) {
+				year := meta.PublishYear
+				book.AudiobookReleaseYear = &year
+				appliedFields = append(appliedFields, "audiobook_release_year")
+				didUpdate = true
+			}
+		}
+
+		if meta.ISBN != "" {
+			if len(meta.ISBN) == 10 {
+				addFetched("isbn10", meta.ISBN)
+				if shouldApply("isbn10", hasBookValue("isbn10")) {
+					book.ISBN10 = stringPtr(meta.ISBN)
+					appliedFields = append(appliedFields, "isbn10")
+					didUpdate = true
+				}
+			} else {
+				addFetched("isbn13", meta.ISBN)
+				if shouldApply("isbn13", hasBookValue("isbn13")) {
+					book.ISBN13 = stringPtr(meta.ISBN)
+					appliedFields = append(appliedFields, "isbn13")
+					didUpdate = true
+				}
+			}
+		}
+
+		if len(fetchedValues) > 0 {
+			if err := updateFetchedMetadataState(bookID, fetchedValues); err != nil {
+				log.Printf("[WARN] bulkFetchMetadata: failed to persist fetched metadata state for %s: %v", bookID, err)
+			}
+		}
+
+		if didUpdate {
+			if _, err := database.GlobalStore.UpdateBook(bookID, book); err != nil {
+				result.Status = "error"
+				result.Message = fmt.Sprintf("failed to update book: %v", err)
+				results = append(results, result)
+				continue
+			}
+			updatedCount++
+			result.Status = "updated"
+		} else if len(fetchedValues) > 0 {
+			result.Status = "fetched"
+		}
+
+		result.AppliedFields = appliedFields
+		result.FetchedFields = fetchedFields
+		results = append(results, result)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"updated_count": updatedCount,
+		"total_count":   len(req.BookIDs),
+		"results":       results,
+		"source":        "Open Library",
 	})
 }
 

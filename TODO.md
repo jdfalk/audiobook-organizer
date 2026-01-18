@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.23.0 -->
+<!-- version: 1.24.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -12,6 +12,11 @@
 - ✅ Scanner progress race fix merged to main
 - ⚠️ Add Go unit tests (server/scanner first) so we can raise the coverage threshold again
 - ⚠️ Re-run prerelease with a token that has `contents:write` (or PAT), confirm GoReleaser publish + Docker frontend build work with the Vitest globals/node types fix, then replace the local changelog stub with the real generator once GHCOMMON is available
+
+### Metadata Fetching (P0)
+
+- ✅ Added bulk metadata fetch API (`/api/v1/metadata/bulk-fetch`) that fills missing fields while respecting overrides/locks, with server tests and Open Library mock support
+- ⚠️ Wire bulk fetch controls into the UI (Library/Book Detail) with selection + progress feedback
 
 ### Action Integration (P1)
 
