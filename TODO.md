@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.29.4 -->
+<!-- version: 1.29.5 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -972,11 +972,10 @@
 
 ### Template Variables in Organized Paths
 
-- [ ] **HIGH**: Fix organizer writing literal `{series}` and `{narrator}`
-  - [ ] Validate all template variables have values before organizing
-  - [ ] Use defaults for missing fields: "Unknown" for author, "narrator" for
-        narrator
-  - [ ] Add pre-organize validation to prevent template literals in filesystem
+- [x] **HIGH**: Fix organizer writing literal `{series}` and `{narrator}`
+  - [x] Normalize placeholder casing before expansion so `{Series}` resolves
+  - [x] Apply defaults for missing narrator values to avoid empty placeholders
+  - [x] Validate expanded patterns to prevent unresolved placeholders
   - [ ] Fix existing corrupted paths: `library/Unknown Author/{series}/...`
 
 ### Duplicate Detection Needs Testing
