@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.27.0 -->
+<!-- version: 1.28.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -35,7 +35,7 @@
 
 ### Frontend Provenance & E2E (P1)
 
-- ⚠️ Wire Book Detail provenance display/locks, update Playwright mocks/fixtures, and add tags/compare coverage
+- ✅ Book Detail compare view now supports unlocking overrides without clearing values; tags/compare E2E coverage still pending
 - ⚠️ Revisit Book Detail delete/purge flows for soft-delete + block-hash verification
 
 ### Manual Verification (P1)

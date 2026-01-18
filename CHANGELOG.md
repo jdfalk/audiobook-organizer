@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.17 -->
+<!-- version: 1.1.18 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Book Detail override unlock
+
+- Added Book Detail compare action to unlock overrides without clearing values
+- Added frontend tests for unlock override payload
 
 #### January 4, 2026 - Import dialog
 
