@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.13 -->
+<!-- version: 1.1.14 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Bulk metadata fetch automation
+
+- Added `/api/v1/metadata/bulk-fetch` to pull Open Library metadata in bulk and fill missing fields without overwriting manual overrides or locks
+- Added server tests with Open Library base URL override for deterministic metadata fetch coverage
 
 #### January 3, 2026 - Release pipeline fixes
 
