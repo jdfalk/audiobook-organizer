@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.7.2
+// version: 1.8.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -35,6 +35,8 @@ type Metadata struct {
 	Publisher string
 	ISBN10    string
 	ISBN13    string
+	// UsedFilenameFallback indicates filename parsing filled metadata gaps.
+	UsedFilenameFallback bool
 }
 
 type fieldCandidate struct {
@@ -87,6 +89,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	if err != nil {
 		log.Printf("[WARN] metadata: failed to read tags for %s: %v; falling back to filename parsing", filePath, err)
 		metadata = extractFromFilename(filePath)
+		metadata.UsedFilenameFallback = true
 		if metadata.SeriesIndex == 0 {
 			metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
 		}
@@ -340,6 +343,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	if fallbackUsed {
 		log.Printf("[TRACE] metadata: filename fallback filled gaps for %s", filePath)
 	}
+	metadata.UsedFilenameFallback = fallbackUsed
 	log.Printf(
 		"[TRACE] metadata: sources for %s | title=%s | author=%s | series=%s | series_index=%s | narrator=%s | album=%s | publisher=%s | language=%s",
 		filePath,

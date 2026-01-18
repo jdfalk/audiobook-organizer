@@ -1,5 +1,5 @@
 // file: internal/metadata/extract_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3e2f1a6b-7c8d-4e5f-9a0b-1c2d3e4f5a6b
 
 package metadata
@@ -74,13 +74,16 @@ func TestExtractMetadata_UsesAlbumArtistForAuthor(t *testing.T) {
 	if meta.Narrator != "Narrator Example" {
 		t.Fatalf("expected narrator %q, got %q", "Narrator Example", meta.Narrator)
 	}
+	if meta.UsedFilenameFallback {
+		t.Fatalf("expected UsedFilenameFallback=false, got true")
+	}
 }
 
 func TestExtractMetadata_ComposerOverridesAlbumArtist(t *testing.T) {
 	// Arrange
 	testFile := copyFixture(t, "test_sample.mp3")
 	tags := map[string][]string{
-		"TITLE":           {"Composer Title"},
+		"TITLE":            {"Composer Title"},
 		taglib.Composer:    {"Composer Author"},
 		taglib.AlbumArtist: {"Album Artist Author"},
 		taglib.Artist:      {"Narrator Example"},
@@ -103,5 +106,34 @@ func TestExtractMetadata_ComposerOverridesAlbumArtist(t *testing.T) {
 	}
 	if meta.Narrator != "Performer Narrator" {
 		t.Fatalf("expected narrator %q, got %q", "Performer Narrator", meta.Narrator)
+	}
+	if meta.UsedFilenameFallback {
+		t.Fatalf("expected UsedFilenameFallback=false, got true")
+	}
+}
+
+func TestExtractMetadata_FallbackFlagOnReadError(t *testing.T) {
+	// Arrange
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "Author Name - Book Title.mp3")
+	if err := os.WriteFile(filePath, []byte("not audio"), 0644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	// Act
+	meta, err := ExtractMetadata(filePath)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("extract metadata: %v", err)
+	}
+	if !meta.UsedFilenameFallback {
+		t.Fatalf("expected UsedFilenameFallback=true, got false")
+	}
+	if meta.Title != "Book Title" {
+		t.Fatalf("expected title %q, got %q", "Book Title", meta.Title)
+	}
+	if meta.Artist != "Author Name" {
+		t.Fatalf("expected author %q, got %q", "Author Name", meta.Artist)
 	}
 }

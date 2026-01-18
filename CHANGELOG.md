@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.21 -->
+<!-- version: 1.1.22 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - AI parsing fallback improvements
+
+- Added filename fallback tracking so AI parsing runs when tags are missing
+- Added extraction tests for filename fallback flags and TXXX narrator tags
+- Added AI fallback logging for scanner parsing
 
 #### January 4, 2026 - Metadata extraction precedence fix
 
