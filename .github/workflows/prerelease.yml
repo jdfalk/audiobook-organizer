@@ -20,7 +20,6 @@ permissions:
   packages: write
   id-token: write
   attestations: write
-  security-events: write
 
 env:
   GHCOMMON_SCRIPTS_DIR: ${{ github.workspace }}/.github/workflows/scripts

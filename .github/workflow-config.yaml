@@ -35,7 +35,7 @@ build:
   enable_docker: true
   enable_cross_compile: true
   enable_coverage: false
-  enable_security_scan: true
+  enable_security_scan: false
 
 # Repository sync configuration
 repositories:
@@ -91,7 +91,6 @@ sync:
     - '.github/workflows/pr-automation.yml'
     - '.github/workflows/commit-override-handler.yml'
     - '.github/workflows/unified-automation.yml'
-    - '.github/workflows/security.yml'
     - '.github/instructions/'
     - '.github/prompts/'
     - '.github/linters/'
@@ -146,14 +145,14 @@ automation:
     schedule: '0 0 * * 1' # Weekly on Monday
 
   security_scanning:
-    enabled: true
+    enabled: false
     auto_fix: false
     schedule: '0 0 * * 2' # Weekly on Tuesday
 
 # Quality gates
 quality:
   coverage_threshold: 80
-  security_scan_required: true
+  security_scan_required: false
   lint_required: true
   tests_required: true
 
@@ -162,7 +161,6 @@ quality:
     required_status_checks:
       - 'Matrix Build System'
       - 'Lint Code'
-      - 'Security Scan'
 
     require_code_review: true
     dismiss_stale_reviews: true

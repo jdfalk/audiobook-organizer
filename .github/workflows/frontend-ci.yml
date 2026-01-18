@@ -21,7 +21,6 @@ permissions:
   actions: write
   checks: write
   packages: write
-  security-events: write
   id-token: write
   attestations: write
 
