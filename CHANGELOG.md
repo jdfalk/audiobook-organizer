@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.20 -->
+<!-- version: 1.1.21 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Metadata extraction precedence fix
+
+- Fixed metadata extraction to prefer composer/album-artist for authors and performer tags for narrators
+- Added fixture-based tests to validate author/narrator precedence and performer tag handling
 
 #### January 4, 2026 - Open Library tests mocked
 
