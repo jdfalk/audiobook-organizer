@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 1.29.1 -->
+<!-- version: 1.29.2 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 
 # Project TODO
@@ -931,15 +931,13 @@
 
 ### Metadata Extraction Completely Broken
 
-- [ ] **URGENT**: Debug why metadata extraction returns empty/Unknown values
-  - [ ] Add extensive logging to `internal/metadata/extract.go`
-  - [ ] Verify mediainfo library is working (test with actual file)
-  - [ ] Check field mappings: Album → Title, Performer → Narrator, Composer →
-        Author
-  - [ ] Test file:
+- [x] **URGENT**: Fix metadata extraction empty/Unknown values
+  - [x] Honor AlbumArtist/Composer/Artist precedence so author and narrator map
+        correctly
+  - [x] Add fixture-based tests for author/narrator precedence and performer
+        tags
+  - [ ] Validate against real-world M4B sample:
         `/Users/jdfalk/Downloads/test_books/[PZG] My Quiet Blacksmith Life.../... [PZG].m4b`
-  - Has perfect metadata: Album="My Quiet Blacksmith Life in Another World, Vol.
-    01", Performer="Greg Chun", Composer="Tamamaru", Publisher="Podium Audio"
 
 ### AI Parsing Not Working
 
