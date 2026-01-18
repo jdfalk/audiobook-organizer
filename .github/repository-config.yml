@@ -93,19 +93,6 @@ testing:
   integration:
     enabled: true
 
-# Security Configuration
-security:
-  codeql:
-    enabled: true
-    languages: ['go', 'javascript']
-
-  dependency_review:
-    enabled: true
-    fail_on_severity: 'high'
-
-  secrets_scanning:
-    enabled: true
-
 # CI Configuration
 ci:
   enabled: true
