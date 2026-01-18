@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.8.0
+// version: 1.9.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -684,6 +684,36 @@ export async function fetchBookMetadata(
     }
   );
   if (!response.ok) throw new Error('Failed to fetch metadata');
+  return response.json();
+}
+
+
+// Bulk Metadata Fetching
+export interface BulkFetchMetadataResult {
+  book_id: string;
+  status: string;
+  message?: string;
+  applied_fields?: string[];
+  fetched_fields?: string[];
+}
+
+export interface BulkFetchMetadataResponse {
+  updated_count: number;
+  total_count: number;
+  results: BulkFetchMetadataResult[];
+  source: string;
+}
+
+export async function bulkFetchMetadata(
+  bookIds: string[],
+  onlyMissing = true
+): Promise<BulkFetchMetadataResponse> {
+  const response = await fetch(`${API_BASE}/metadata/bulk-fetch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds, only_missing: onlyMissing }),
+  });
+  if (!response.ok) throw new Error('Failed to bulk fetch metadata');
   return response.json();
 }
 

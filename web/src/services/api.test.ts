@@ -1,5 +1,5 @@
 // file: src/services/api.test.ts
-// version: 1.0.1
+// version: 1.1.0
 // guid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -8,6 +8,7 @@ import {
   addImportPath,
   addImportPathDetailed,
   removeImportPath,
+  bulkFetchMetadata,
 } from './api';
 
 const mockFetch = vi.fn();
@@ -120,4 +121,38 @@ describe('api import paths', () => {
       method: 'DELETE',
     });
   });
-});
+
+  it('bulkFetchMetadata posts book ids and returns response', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          updated_count: 1,
+          total_count: 2,
+          results: [
+            {
+              book_id: 'id-1',
+              status: 'updated',
+              applied_fields: ['publisher'],
+              fetched_fields: ['publisher'],
+            },
+          ],
+          source: 'Open Library',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
+
+    const response = await bulkFetchMetadata(['id-1', 'id-2'], false);
+    expect(response.updated_count).toBe(1);
+    expect(response.total_count).toBe(2);
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/metadata/bulk-fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_ids: ['id-1', 'id-2'], only_missing: false }),
+    });
+  });
+}
+);
