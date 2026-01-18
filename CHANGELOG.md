@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.1.16 -->
+<!-- version: 1.1.17 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 
 # Changelog
@@ -7,6 +7,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 4, 2026 - Import dialog
+
+- Added Library import dialog for selecting server-side audiobook files and triggering import/organize flow
+- Added frontend test coverage for import dialog behavior
 
 #### January 4, 2026 - Metadata edit persistence
 
