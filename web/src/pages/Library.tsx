@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.24.0
+// version: 1.25.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -80,7 +80,6 @@ export const Library = () => {
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] =
     useState<Audiobook | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Import path management
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
@@ -131,6 +130,11 @@ export const Library = () => {
     severity: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+
+  const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
+  const [importFilePath, setImportFilePath] = useState('');
+  const [importFileOrganize, setImportFileOrganize] = useState(true);
+  const [importFileInProgress, setImportFileInProgress] = useState(false);
 
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
   const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
@@ -387,26 +391,40 @@ export const Library = () => {
   }, [debouncedSearch, page, sortBy]);
 
   const handleManualImport = () => {
-    fileInputRef.current?.click();
+    setImportFilePath('');
+    setImportFileOrganize(true);
+    setImportFileDialogOpen(true);
   };
 
-  const handleFileSelect = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const handleImportFile = async () => {
+    const target = importFilePath.trim();
+    if (!target) {
+      setAlert({
+        severity: 'info',
+        message: 'Select a file to import from the server.',
+      });
+      return;
+    }
 
-    // TODO: Implement file upload logic
-    console.log('Selected files:', files);
-    // const formData = new FormData();
-    // for (let i = 0; i < files.length; i++) {
-    //   formData.append('files', files[i]);
-    // }
-    // await fetch('/api/v1/audiobooks/import', {
-    //   method: 'POST',
-    //   body: formData
-    // });
-    // loadAudiobooks();
+    setImportFileInProgress(true);
+    try {
+      await api.importFile(target, importFileOrganize);
+      setAlert({
+        severity: 'success',
+        message: 'Import started successfully.',
+      });
+      setImportFileDialogOpen(false);
+      setImportFilePath('');
+      await loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to import file:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to import file.',
+      });
+    } finally {
+      setImportFileInProgress(false);
+    }
   };
 
   // Load audiobooks when filters change
@@ -1151,16 +1169,6 @@ export const Library = () => {
         </Paper>
       )}
 
-      {/* Hidden file input for manual import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept="audio/*,.m4b,.mp3,.m4a,.flac,.opus,.ogg"
-        style={{ display: 'none' }}
-        onChange={handleFileSelect}
-      />
-
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {audiobooks.length === 0 && !loading ? (
           <Paper
@@ -1410,6 +1418,64 @@ export const Library = () => {
           onClose={() => setBatchEditOpen(false)}
           onSave={handleBatchSave}
         />
+
+        <Dialog
+          open={importFileDialogOpen}
+          onClose={() => setImportFileDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Import Audiobook File</DialogTitle>
+          <DialogContent>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Select a file on the server to import into the library. Use the
+              organize toggle to immediately move it into the library layout.
+            </Alert>
+            <TextField
+              fullWidth
+              label="Import file path"
+              value={importFilePath}
+              onChange={(e) => setImportFilePath(e.target.value)}
+              placeholder="/path/to/audiobook.m4b"
+              sx={{ mb: 2 }}
+            />
+            <ServerFileBrowser
+              initialPath="/"
+              showFiles
+              allowDirSelect={false}
+              allowFileSelect
+              onSelect={(path, isDir) => {
+                if (!isDir) {
+                  setImportFilePath(path);
+                }
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={importFileOrganize}
+                  onChange={(e) => setImportFileOrganize(e.target.checked)}
+                />
+              }
+              label="Organize into library after import"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setImportFileDialogOpen(false)}
+              disabled={importFileInProgress}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleImportFile}
+              disabled={importFileInProgress}
+            >
+              {importFileInProgress ? 'Importing…' : 'Import'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog
           open={bulkFetchDialogOpen}
