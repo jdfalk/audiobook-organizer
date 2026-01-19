@@ -9,6 +9,35 @@
 
 ### Added / Changed
 
+#### January 19, 2026 - Test Coverage Enhancement Sprint (v1.3.0 - In Progress)
+
+Systematic test coverage enhancement across all backend packages with goal of 80% minimum coverage per package.
+
+**Completed Packages (≥80% coverage):**
+- `internal/metrics`: 100% coverage - Full Prometheus metrics testing
+- `internal/matcher`: 91.2% coverage - Series identification and pattern matching
+
+**Enhanced Packages (In Progress):**
+- `internal/mediainfo`: 4.5% → 57.7% (+53.2%)
+  - Added comprehensive Extract() tests with real and empty files
+  - Format-specific inference tests (MP3, M4A, FLAC, OGG)
+  - Quality string and tier calculation tests with edge cases
+  - Fallback behavior validation
+- `internal/sysinfo`: Enhanced to 78.3%
+  - Memory statistics edge case tests
+  - Field relationship validation
+  - Percent calculation accuracy tests
+
+**Test Infrastructure:**
+- Created minimal test audio files for format-specific testing
+- Added Python helper scripts for coverage analysis
+- Established systematic package-by-package enhancement workflow
+
+**Remaining Work:**
+- 15 packages below 80% threshold requiring enhancement
+- Priority order: sysinfo (78.3%), backup (72.9%), fileops (69.7%), realtime (62.6%)
+- Estimated completion: Ongoing systematic enhancement
+
 #### January 18, 2026 - Comprehensive Test Coverage Documentation (v1.2.0)
 
 This release documents the comprehensive test coverage added across backend, frontend, and E2E tests. The project now has robust testing infrastructure covering unit tests, integration tests, and end-to-end scenarios.

@@ -41,15 +41,28 @@
   - **Priority**: P0 - Blocking releases
   - **Blocker**: GHCOMMON availability for changelog generator
 
-### Test Coverage Expansion (Est: 8-12 hours)
+### Test Coverage Expansion (Est: 8-12 hours) - IN PROGRESS
 
-- [ ] **Raise Go coverage from 25% to 60% minimum**
-  - [ ] Add server handler tests (organize, scan, metadata operations)
-  - [ ] Add scanner package tests (progress tracking, metadata extraction, duplicate detection)
-  - [ ] Add database query tests (soft delete filters, state transitions, provenance tracking)
-  - [ ] Add migration 10 validation tests (provenance schema, backward compatibility)
+- [ ] **Raise Go coverage to 80% minimum per package** - Currently targeting 80% on all 17 packages
+  - [x] metrics: 100% coverage (complete)
+  - [x] matcher: 91.2% coverage (complete)
+  - [ ] sysinfo: 78.3% coverage (need +1.7%)
+  - [ ] backup: 72.9% coverage (need +7.1%)
+  - [ ] fileops: 69.7% coverage (need +10.3%, in progress)
+  - [ ] realtime: 62.6% coverage (need +17.4%)
+  - [ ] organizer: 58.0% coverage (need +22%)
+  - [ ] mediainfo: 57.7% coverage (need +22.3%, enhanced from 4.5%)
+  - [ ] metadata: 49.9% coverage (need +30.1%)
+  - [ ] scanner: 46.2% coverage (need +33.8%)
+  - [ ] tagger: 37.5% coverage (need +42.5%)
+  - [ ] database: 29.4% coverage (need +50.6%)
+  - [ ] server: 27.7% coverage (need +52.3%)
+  - [ ] config: 26.6% coverage (need +53.4%)
+  - [ ] operations: 8.0% coverage (need +72%)
+  - [ ] ai: 0.0% coverage (need +80%)
+  - [ ] playlist: 0.0% coverage (need +80%)
   - **Priority**: P0 - Quality gate for MVP
-  - **Blocker**: None - can start immediately
+  - **Status**: Active development, systematic package-by-package enhancement
 
 ### E2E Backend Integration (Est: 4-6 hours)
 
