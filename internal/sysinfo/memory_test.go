@@ -10,12 +10,12 @@ import (
 
 func TestGetTotalMemory(t *testing.T) {
 	total := GetTotalMemory()
-	
+
 	// Memory should be either 0 (not implemented) or > 0 (implemented)
 	if total < 0 {
 		t.Error("Total memory should not be negative")
 	}
-	
+
 	// On most systems, if implemented, should return > 0
 	t.Logf("Total memory: %d bytes (%.2f MB)", total, float64(total)/(1024*1024))
 }
@@ -25,16 +25,16 @@ func TestGetMemoryStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMemoryStats failed: %v", err)
 	}
-	
+
 	if stats == nil {
 		t.Fatal("GetMemoryStats returned nil stats")
 	}
-	
+
 	// Basic sanity checks
 	if stats.UsedPercent < 0 || stats.UsedPercent > 100 {
 		t.Errorf("Used percent should be between 0 and 100, got %.2f", stats.UsedPercent)
 	}
-	
+
 	// If total is > 0, we should have valid stats
 	if stats.TotalBytes > 0 {
 		if stats.UsedBytes > stats.TotalBytes {
@@ -43,7 +43,7 @@ func TestGetMemoryStats(t *testing.T) {
 		if stats.AvailableBytes > stats.TotalBytes {
 			t.Error("Available bytes should not exceed total bytes")
 		}
-		
+
 		// Basic accounting check
 		if stats.UsedBytes+stats.AvailableBytes != stats.TotalBytes {
 			// Some implementations might not have exact accounting
@@ -52,7 +52,7 @@ func TestGetMemoryStats(t *testing.T) {
 				stats.UsedBytes, stats.AvailableBytes, stats.TotalBytes)
 		}
 	}
-	
+
 	t.Logf("Memory Stats:")
 	t.Logf("  Total: %d bytes (%.2f GB)", stats.TotalBytes, float64(stats.TotalBytes)/(1024*1024*1024))
 	t.Logf("  Used: %d bytes (%.2f GB)", stats.UsedBytes, float64(stats.UsedBytes)/(1024*1024*1024))
@@ -68,7 +68,7 @@ func TestMemoryStats_Structure(t *testing.T) {
 		UsedBytes:      4 * 1024 * 1024 * 1024, // 4GB
 		UsedPercent:    50.0,
 	}
-	
+
 	if stats.TotalBytes == 0 {
 		t.Error("Failed to set TotalBytes")
 	}
@@ -81,7 +81,7 @@ func TestMemoryStats_Structure(t *testing.T) {
 	if stats.UsedPercent == 0 {
 		t.Error("Failed to set UsedPercent")
 	}
-	
+
 	// Test JSON tags implicitly
 	expectedTotal := uint64(8 * 1024 * 1024 * 1024)
 	if stats.TotalBytes != expectedTotal {
@@ -99,7 +99,7 @@ func TestGetMemoryStats_Consistency(t *testing.T) {
 		if stats == nil {
 			t.Fatalf("Call %d returned nil stats", i+1)
 		}
-		
+
 		// Values should be reasonable
 		if stats.UsedPercent < 0 || stats.UsedPercent > 100 {
 			t.Errorf("Call %d: Invalid UsedPercent: %.2f", i+1, stats.UsedPercent)

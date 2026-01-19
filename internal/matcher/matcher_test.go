@@ -72,11 +72,11 @@ func TestIdentifySeries_PatternMatching(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			series, position := IdentifySeries(tt.title, tt.filePath)
-			
+
 			if series != tt.expectedSeries {
 				t.Errorf("Expected series %q, got %q", tt.expectedSeries, series)
 			}
-			
+
 			if position != tt.expectedPosition {
 				t.Errorf("Expected position %d, got %d", tt.expectedPosition, position)
 			}
@@ -86,10 +86,10 @@ func TestIdentifySeries_PatternMatching(t *testing.T) {
 
 func TestIdentifySeries_DirectoryStructure(t *testing.T) {
 	tests := []struct {
-		name           string
-		title          string
-		filePath       string
-		expectSeries   bool
+		name         string
+		title        string
+		filePath     string
+		expectSeries bool
 	}{
 		{
 			name:         "Trilogy in path",
@@ -114,11 +114,11 @@ func TestIdentifySeries_DirectoryStructure(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			series, _ := IdentifySeries(tt.title, tt.filePath)
-			
+
 			if tt.expectSeries && series == "" {
 				t.Error("Expected to find series from directory structure")
 			}
-			
+
 			if !tt.expectSeries && series != "" {
 				t.Errorf("Did not expect to find series, but got: %s", series)
 			}
@@ -150,11 +150,11 @@ func TestIdentifySeries_ColonAndDashFormats(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			series, position := IdentifySeries(tt.title, "/books/file.m4b")
-			
+
 			if series != tt.expectedSeries {
 				t.Errorf("Expected series %q, got %q", tt.expectedSeries, series)
 			}
-			
+
 			if position != tt.expectedPosition {
 				t.Errorf("Expected position %d, got %d", tt.expectedPosition, position)
 			}
@@ -188,7 +188,7 @@ func TestIdentifySeries_EmptyTitle(t *testing.T) {
 	// When title is empty, should try to extract from filename
 	filePath := filepath.Join("/books", "Series 1 - Book Title.m4b")
 	series, _ := IdentifySeries("", filePath)
-	
+
 	if series == "" {
 		t.Error("Expected series to be extracted from filename when title is empty")
 	}
@@ -216,12 +216,12 @@ func TestIdentifySeries_ComplexPaths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Should not panic or error
 			series, position := IdentifySeries(tt.title, tt.filePath)
-			
+
 			// Basic validation
 			if position < 0 {
 				t.Error("Position should not be negative")
 			}
-			
+
 			// Series can be empty or non-empty, both are valid
 			_ = series
 		})
