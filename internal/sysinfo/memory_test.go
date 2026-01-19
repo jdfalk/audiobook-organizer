@@ -129,3 +129,66 @@ func TestMemoryStats_EdgeCases(t *testing.T) {
 		t.Errorf("UsedPercent calculation mismatch: got %.2f, expected ~%.2f", stats.UsedPercent, expectedPercent)
 	}
 }
+
+func TestGetMemoryStatsRepeated(t *testing.T) {
+	// Call GetMemoryStats multiple times to verify consistency
+	for i := 0; i < 3; i++ {
+		stats, err := GetMemoryStats()
+		if err != nil {
+			t.Errorf("GetMemoryStats() iteration %d failed: %v", i, err)
+		}
+		if stats == nil {
+			t.Errorf("GetMemoryStats() iteration %d returned nil", i)
+		}
+		if stats != nil && stats.TotalBytes == 0 {
+			t.Errorf("GetMemoryStats() iteration %d returned zero total memory", i)
+		}
+	}
+}
+
+func TestGetMemoryStatsConsistency(t *testing.T) {
+	// Get memory stats twice and verify they are reasonable
+	stats1, err1 := GetMemoryStats()
+	if err1 != nil {
+		t.Fatalf("First GetMemoryStats() failed: %v", err1)
+	}
+
+	stats2, err2 := GetMemoryStats()
+	if err2 != nil {
+		t.Fatalf("Second GetMemoryStats() failed: %v", err2)
+	}
+
+	// Total memory should be the same
+	if stats1.TotalBytes != stats2.TotalBytes {
+		t.Errorf("Total memory changed between calls: %d vs %d", stats1.TotalBytes, stats2.TotalBytes)
+	}
+
+	// Available memory should be within reasonable range
+	if stats1.AvailableBytes > stats1.TotalBytes {
+		t.Error("Available memory exceeds total memory in first call")
+	}
+	if stats2.AvailableBytes > stats2.TotalBytes {
+		t.Error("Available memory exceeds total memory in second call")
+	}
+}
+
+func TestMemoryStatsValues(t *testing.T) {
+	stats, err := GetMemoryStats()
+	if err != nil {
+		t.Fatalf("GetMemoryStats() failed: %v", err)
+	}
+
+	// Verify all fields are populated
+	if stats.TotalBytes == 0 {
+		t.Error("Total memory is zero")
+	}
+	if stats.AvailableBytes > stats.TotalBytes {
+		t.Errorf("Available (%d) exceeds Total (%d)", stats.AvailableBytes, stats.TotalBytes)
+	}
+	if stats.UsedBytes > stats.TotalBytes {
+		t.Errorf("Used (%d) exceeds Total (%d)", stats.UsedBytes, stats.TotalBytes)
+	}
+	if stats.UsedPercent < 0 || stats.UsedPercent > 100 {
+		t.Errorf("UsedPercent out of range: %f", stats.UsedPercent)
+	}
+}

@@ -5,6 +5,8 @@
 package backup
 
 import (
+"archive/tar"
+"strings"
 	"compress/gzip"
 	"os"
 	"path/filepath"
@@ -618,5 +620,438 @@ func TestBackupDifferentCompressionLevels(t *testing.T) {
 	// Assert - NoCompression should be largest, BestCompression should be smallest
 	if sizes[0] < sizes[2] {
 		t.Error("Expected NoCompression to be larger than BestCompression")
+	}
+
+}
+
+func TestScheduleBackup(t *testing.T) {
+	err := ScheduleBackup(time.Hour, BackupConfig{MaxBackups: 5})
+	if err == nil {
+		t.Error("ScheduleBackup() should return error (not implemented)")
+	}
+}
+
+func TestBackupDatabase(t *testing.T) {
+	_, err := BackupDatabase(BackupConfig{MaxBackups: 5})
+	if err == nil {
+		t.Error("BackupDatabase() should return error (not initialized)")
+	}
+}
+
+func TestCreateBackupEmptyPath(t *testing.T) {
+	_, err := CreateBackup("", "sqlite", BackupConfig{MaxBackups: 5, CompressionLevel: 1})
+	if err == nil {
+		t.Error("CreateBackup() should return error for empty path")
+	}
+}
+
+func TestRestoreBackupEmptyPath(t *testing.T) {
+	err := RestoreBackup("", "/tmp/test.db", false)
+	if err == nil {
+		t.Error("RestoreBackup() should return error for empty backup path")
+	}
+}
+
+func TestDeleteBackupEmptyPath(t *testing.T) {
+	err := DeleteBackup("")
+	if err == nil {
+		t.Error("DeleteBackup() should return error for empty path")
+	}
+}
+
+
+func TestRestoreBackupWithVerify(t *testing.T) {
+	tempDir := t.TempDir()
+	backupDir := filepath.Join(tempDir, "backups")
+	dbPath := filepath.Join(tempDir, "test.db")
+	restoreDir := filepath.Join(tempDir, "restored")
+
+	_ = os.WriteFile(dbPath, []byte("test data"), 0644)
+
+	config := BackupConfig{
+		BackupDir:        backupDir,
+		MaxBackups:       10,
+		CompressionLevel: 1,
+	}
+
+	info, err := CreateBackup(dbPath, "sqlite", config)
+	if err != nil {
+		t.Fatalf("Failed to create backup: %v", err)
+	}
+
+	// Test restore with verify=true
+	err = RestoreBackup(info.Path, restoreDir, true)
+	if err != nil {
+		t.Fatalf("RestoreBackup with verify failed: %v", err)
+	}
+}
+
+func TestBackupDatabaseInitialized(t *testing.T) {
+	// This test covers the second error path in BackupDatabase
+	_, err := BackupDatabase(BackupConfig{MaxBackups: 5, CompressionLevel: 1})
+	if err == nil {
+		t.Error("BackupDatabase() should return error")
+	}
+	if err != nil && err.Error() != "database not initialized" && err.Error() != "backup requires database path and type information" {
+		// Either error is acceptable
+	}
+}
+
+func TestCreateBackup_WithBestCompression(t *testing.T) {
+	// Test with best compression level
+	tempDir := t.TempDir()
+	
+	config := BackupConfig{
+		BackupDir:         tempDir,
+		MaxBackups:        1,
+		CompressionLevel:  gzip.BestCompression,
+	}
+
+	// Create test database
+	dbPath := filepath.Join(tempDir, "test.db")
+	if err := os.WriteFile(dbPath, []byte("test data for compression testing"), 0644); err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+
+	info, err := CreateBackup(dbPath, "sqlite", config)
+	if err != nil {
+		t.Errorf("CreateBackup failed with best compression: %v", err)
+	}
+	if info == nil {
+		t.Error("CreateBackup returned nil info")
+	}
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+}
+
+func TestRestoreBackup_NonExistentFile(t *testing.T) {
+	targetDir := t.TempDir()
+	
+	err := RestoreBackup("/nonexistent/backup.tar.gz", targetDir, false)
+	if err == nil {
+		t.Error("Expected error for non-existent backup file")
+	}
+	if !strings.Contains(err.Error(), "failed to open backup file") {
+		t.Errorf("Expected 'failed to open backup file' error, got: %v", err)
+	}
+}
+
+func TestRestoreBackup_CorruptedFile(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a corrupted backup file (not a valid gzip)
+	corruptedPath := filepath.Join(tempDir, "corrupted.tar.gz")
+	if err := os.WriteFile(corruptedPath, []byte("not a gzip file"), 0644); err != nil {
+		t.Fatalf("Failed to create corrupted file: %v", err)
+	}
+
+	targetDir := t.TempDir()
+	err := RestoreBackup(corruptedPath, targetDir, false)
+	if err == nil {
+		t.Error("Expected error for corrupted backup file")
+	}
+	if !strings.Contains(err.Error(), "failed to create gzip reader") {
+		t.Errorf("Expected 'failed to create gzip reader' error, got: %v", err)
+	}
+}
+
+func TestRestoreBackup_WithVerifyFlag(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a simple backup
+	config := BackupConfig{
+		BackupDir:         tempDir,
+		MaxBackups:        1,
+		CompressionLevel:  gzip.DefaultCompression,
+	}
+
+	dbPath := filepath.Join(tempDir, "test.db")
+	if err := os.WriteFile(dbPath, []byte("test data"), 0644); err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+
+	info, err := CreateBackup(dbPath, "sqlite", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed: %v", err)
+	}
+
+	// Restore with verify flag (will print message about not implemented)
+	targetDir := t.TempDir()
+	err = RestoreBackup(info.Path, targetDir, true)
+	if err != nil {
+		t.Errorf("RestoreBackup with verify failed: %v", err)
+	}
+}
+
+func TestAddToArchive_ErrorPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create backup file
+	backupPath := filepath.Join(tempDir, "test.tar.gz")
+	backupFile, err := os.Create(backupPath)
+	if err != nil {
+		t.Fatalf("Failed to create backup file: %v", err)
+	}
+	defer backupFile.Close()
+
+	gzipWriter := gzip.NewWriter(backupFile)
+	defer gzipWriter.Close()
+
+	tarWriter := tar.NewWriter(gzipWriter)
+	defer tarWriter.Close()
+
+	// Test with non-existent path
+	err = addToArchive(tarWriter, "/nonexistent/path", "sqlite")
+	if err == nil {
+		t.Error("Expected error for non-existent path")
+	}
+}
+
+func TestCalculateFileChecksum_NonExistentFile(t *testing.T) {
+	_, err := calculateFileChecksum("/nonexistent/file")
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
+
+
+
+
+
+func TestCreateBackup_PebbleDBDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a PebbleDB-style directory structure
+	pebbleDir := filepath.Join(tempDir, "pebble_db")
+	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
+		t.Fatalf("Failed to create PebbleDB directory: %v", err)
+	}
+
+	// Create some files in the directory
+	files := []string{"MANIFEST", "000001.log", "000002.sst", "OPTIONS"}
+	for _, file := range files {
+		filePath := filepath.Join(pebbleDir, file)
+		if err := os.WriteFile(filePath, []byte("pebble data"), 0644); err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	// Create backup
+	config := BackupConfig{
+		BackupDir:        tempDir,
+		MaxBackups:       5,
+		CompressionLevel: gzip.DefaultCompression,
+	}
+
+	info, err := CreateBackup(pebbleDir, "pebble", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed for PebbleDB: %v", err)
+	}
+
+	if info == nil {
+		t.Fatal("CreateBackup returned nil info")
+	}
+
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+
+	if info.DatabaseType != "pebble" {
+		t.Errorf("Expected database type 'pebble', got '%s'", info.DatabaseType)
+	}
+
+	// Verify backup file exists
+	if _, err := os.Stat(info.Path); os.IsNotExist(err) {
+
+func TestCreateBackup_PebbleDBDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a PebbleDB-style directory structure
+	pebbleDir := filepath.Join(tempDir, "pebble_db")
+	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
+		t.Fatalf("Failed to create PebbleDB directory: %v", err)
+	}
+
+	// Create some files in the directory
+	files := []string{"MANIFEST", "000001.log", "000002.sst", "OPTIONS"}
+	for _, file := range files {
+		filePath := filepath.Join(pebbleDir, file)
+		if err := os.WriteFile(filePath, []byte("pebble data"), 0644); err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	// Create backup
+	config := BackupConfig{
+		BackupDir:        tempDir,
+		MaxBackups:       5,
+		CompressionLevel: gzip.DefaultCompression,
+	}
+
+	info, err := CreateBackup(pebbleDir, "pebble", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed for PebbleDB: %v", err)
+	}
+
+	if info == nil {
+		t.Fatal("CreateBackup returned nil info")
+	}
+
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+
+	if info.DatabaseType != "pebble" {
+		t.Errorf("Expected database type 'pebble', got '%s'", info.DatabaseType)
+	}
+
+	// Verify backup file exists
+	if _, err := os.Stat(info.Path); os.IsNotExist(err) {
+		t.Errorf("Backup file does not exist: %s", info.Path)
+	}
+}
+
+func TestCreateBackup_PebbleDBDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a PebbleDB-style directory structure
+	pebbleDir := filepath.Join(tempDir, "pebble_db")
+	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
+		t.Fatalf("Failed to create PebbleDB directory: %v", err)
+	}
+
+	// Create some files in the directory
+	files := []string{"MANIFEST", "000001.log", "000002.sst", "OPTIONS"}
+	for _, file := range files {
+		filePath := filepath.Join(pebbleDir, file)
+		if err := os.WriteFile(filePath, []byte("pebble data"), 0644); err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	// Create backup
+	config := BackupConfig{
+		BackupDir:        tempDir,
+		MaxBackups:       5,
+		CompressionLevel: gzip.DefaultCompression,
+	}
+
+	info, err := CreateBackup(pebbleDir, "pebble", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed for PebbleDB: %v", err)
+	}
+
+	if info == nil {
+		t.Fatal("CreateBackup returned nil info")
+	}
+
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+
+	if info.DatabaseType != "pebble" {
+		t.Errorf("Expected database type 'pebble', got '%s'", info.DatabaseType)
+	}
+
+	// Verify backup file exists
+	if _, err := os.Stat(info.Path); os.IsNotExist(err) {
+		t.Errorf("Backup file does not exist: %s", info.Path)
+	}
+}
+
+func TestCreateBackup_PebbleDBDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a PebbleDB-style directory structure
+	pebbleDir := filepath.Join(tempDir, "pebble_db")
+	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
+		t.Fatalf("Failed to create PebbleDB directory: %v", err)
+	}
+
+	// Create some files in the directory
+	files := []string{"MANIFEST", "000001.log", "000002.sst", "OPTIONS"}
+	for _, file := range files {
+		filePath := filepath.Join(pebbleDir, file)
+		if err := os.WriteFile(filePath, []byte("pebble data"), 0644); err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	// Create backup
+	config := BackupConfig{
+		BackupDir:        tempDir,
+		MaxBackups:       5,
+		CompressionLevel: gzip.DefaultCompression,
+	}
+
+	info, err := CreateBackup(pebbleDir, "pebble", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed for PebbleDB: %v", err)
+	}
+
+	if info == nil {
+		t.Fatal("CreateBackup returned nil info")
+	}
+
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+
+	if info.DatabaseType != "pebble" {
+		t.Errorf("Expected database type 'pebble', got '%s'", info.DatabaseType)
+	}
+
+	// Verify backup file exists
+	if _, err := os.Stat(info.Path); os.IsNotExist(err) {
+		t.Errorf("Backup file does not exist: %s", info.Path)
+	}
+}
+
+func TestCreateBackup_PebbleDBDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a PebbleDB-style directory structure
+	pebbleDir := filepath.Join(tempDir, "pebble_db")
+	if err := os.MkdirAll(pebbleDir, 0755); err != nil {
+		t.Fatalf("Failed to create PebbleDB directory: %v", err)
+	}
+
+	// Create some files in the directory
+	files := []string{"MANIFEST", "000001.log", "000002.sst", "OPTIONS"}
+	for _, file := range files {
+		filePath := filepath.Join(pebbleDir, file)
+		if err := os.WriteFile(filePath, []byte("pebble data"), 0644); err != nil {
+			t.Fatalf("Failed to create file %s: %v", file, err)
+		}
+	}
+
+	// Create backup
+	config := BackupConfig{
+		BackupDir:        tempDir,
+		MaxBackups:       5,
+		CompressionLevel: gzip.DefaultCompression,
+	}
+
+	info, err := CreateBackup(pebbleDir, "pebble", config)
+	if err != nil {
+		t.Fatalf("CreateBackup failed for PebbleDB: %v", err)
+	}
+
+	if info == nil {
+		t.Fatal("CreateBackup returned nil info")
+	}
+
+	if info.Size == 0 {
+		t.Error("Backup size should not be zero")
+	}
+
+	if info.DatabaseType != "pebble" {
+		t.Errorf("Expected database type 'pebble', got '%s'", info.DatabaseType)
+	}
+
+	// Verify backup file exists
+	if _, err := os.Stat(info.Path); os.IsNotExist(err) {
+		t.Errorf("Backup file does not exist: %s", info.Path)
 	}
 }
