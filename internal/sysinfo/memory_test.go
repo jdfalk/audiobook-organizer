@@ -106,3 +106,26 @@ func TestGetMemoryStats_Consistency(t *testing.T) {
 		}
 	}
 }
+func TestMemoryStats_EdgeCases(t *testing.T) {
+	stats, err := GetMemoryStats()
+	if err != nil {
+		t.Skipf("GetMemoryStats failed: %v", err)
+	}
+
+	// Test all fields have been populated
+	if stats.TotalBytes == 0 {
+		t.Error("TotalBytes should not be zero")
+	}
+	if stats.AvailableBytes > stats.TotalBytes {
+		t.Error("AvailableBytes cannot exceed TotalBytes")
+	}
+	if stats.UsedBytes > stats.TotalBytes {
+		t.Error("UsedBytes cannot exceed TotalBytes")
+	}
+
+	// Test percent calculations
+	expectedPercent := (float64(stats.UsedBytes) / float64(stats.TotalBytes)) * 100
+	if stats.UsedPercent < expectedPercent-1 || stats.UsedPercent > expectedPercent+1 {
+		t.Errorf("UsedPercent calculation mismatch: got %.2f, expected ~%.2f", stats.UsedPercent, expectedPercent)
+	}
+}

@@ -151,19 +151,19 @@ func TestInferFromFormat(t *testing.T) {
 			info := &MediaInfo{}
 			info.Format = tt.expectedFormat
 			result, err := inferFromFormat(tt.filename, info)
-			
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			if result.Codec != tt.expectedCodec {
 				t.Errorf("expected codec %s, got %s", tt.expectedCodec, result.Codec)
 			}
-			
+
 			if result.Bitrate == 0 && tt.expectedCodec != "FLAC" {
 				t.Error("expected non-zero bitrate for lossy codec")
 			}
-			
+
 			if result.SampleRate == 0 {
 				t.Error("expected non-zero sample rate")
 			}
@@ -174,7 +174,7 @@ func TestInferFromFormat(t *testing.T) {
 func TestInferFromFormat_UnsupportedExtension(t *testing.T) {
 	info := &MediaInfo{}
 	_, err := inferFromFormat("test.wav", info)
-	
+
 	if err == nil {
 		t.Error("expected error for unsupported extension")
 	}
@@ -182,7 +182,7 @@ func TestInferFromFormat_UnsupportedExtension(t *testing.T) {
 
 func TestExtract_NonExistentFile(t *testing.T) {
 	_, err := Extract("/nonexistent/file.mp3")
-	
+
 	if err == nil {
 		t.Error("expected error for non-existent file")
 	}
@@ -192,19 +192,19 @@ func TestExtract_EmptyFile(t *testing.T) {
 	// Create empty temp file
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "empty.mp3")
-	
+
 	f, err := os.Create(tmpFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.Close()
-	
+
 	// Should fall back to format inference
 	info, err := Extract(tmpFile)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if info.Codec != "MP3" {
 		t.Errorf("expected MP3 codec from inference, got %s", info.Codec)
 	}
@@ -221,7 +221,7 @@ func TestMediaInfo_Struct(t *testing.T) {
 		Format:     "mp3",
 		Duration:   300,
 	}
-	
+
 	if info.Bitrate != 320 {
 		t.Error("Bitrate mismatch")
 	}
@@ -243,14 +243,14 @@ func TestExtractMP3Info(t *testing.T) {
 	// This tests the internal extractMP3Info function indirectly
 	// by testing default values
 	info := &MediaInfo{}
-	
+
 	// Simulate tag metadata (nil metadata means defaults)
 	// extractMP3Info would set these defaults
 	info.Codec = "MP3"
-	info.Bitrate = 192 // default
+	info.Bitrate = 192      // default
 	info.SampleRate = 44100 // default
-	info.Channels = 2 // default
-	
+	info.Channels = 2       // default
+
 	if info.Bitrate != 192 {
 		t.Error("Expected default MP3 bitrate 192")
 	}
@@ -269,7 +269,7 @@ func TestExtractM4AInfo(t *testing.T) {
 	info.Bitrate = 160 // M4A default
 	info.SampleRate = 44100
 	info.Channels = 2
-	
+
 	if info.Bitrate != 160 {
 		t.Error("Expected default M4A bitrate 160")
 	}
@@ -282,7 +282,7 @@ func TestExtractFLACInfo(t *testing.T) {
 	info.SampleRate = 44100
 	info.BitDepth = 16
 	info.Channels = 2
-	
+
 	if info.BitDepth != 16 {
 		t.Error("Expected FLAC bit depth 16")
 	}
@@ -298,7 +298,7 @@ func TestExtractOGGInfo(t *testing.T) {
 	info.Bitrate = 160
 	info.SampleRate = 44100
 	info.Channels = 2
-	
+
 	if info.Bitrate != 160 {
 		t.Error("Expected default Vorbis bitrate 160")
 	}
@@ -314,14 +314,14 @@ func TestExtract_RealFiles(t *testing.T) {
 		"/tmp/audiobook_test_files/test.flac": "FLAC",
 		"/tmp/audiobook_test_files/test.ogg":  "Vorbis",
 	}
-	
+
 	for path, expectedCodec := range testFiles {
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				t.Skipf("Test file %s not found", path)
 				return
 			}
-			
+
 			info, err := Extract(path)
 			if err != nil {
 				t.Logf("Extract failed (falling back to inference): %v", err)
@@ -330,11 +330,11 @@ func TestExtract_RealFiles(t *testing.T) {
 					t.Fatal("Expected info even on fallback")
 				}
 			}
-			
+
 			if info.Codec != expectedCodec {
 				t.Errorf("Expected codec %s, got %s", expectedCodec, info.Codec)
 			}
-			
+
 			if info.SampleRate == 0 {
 				t.Error("Expected non-zero sample rate")
 			}
@@ -345,7 +345,7 @@ func TestExtract_RealFiles(t *testing.T) {
 func TestExtract_FallbackBehavior(t *testing.T) {
 	// Test that Extract falls back to inferFromFormat on tag read errors
 	tmpDir := t.TempDir()
-	
+
 	// Create empty files that will trigger fallback
 	testCases := []struct {
 		filename string
@@ -356,7 +356,7 @@ func TestExtract_FallbackBehavior(t *testing.T) {
 		{"test.flac", "FLAC"},
 		{"test.ogg", "Vorbis"},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.filename, func(t *testing.T) {
 			path := filepath.Join(tmpDir, tc.filename)
@@ -365,12 +365,12 @@ func TestExtract_FallbackBehavior(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.Close()
-			
+
 			info, err := Extract(path)
 			if err != nil {
 				t.Fatalf("Extract failed: %v", err)
 			}
-			
+
 			if info.Codec != tc.codec {
 				t.Errorf("Expected fallback codec %s, got %s", tc.codec, info.Codec)
 			}
@@ -400,7 +400,7 @@ func TestGenerateQualityString_EdgeCases(t *testing.T) {
 			expected: "FLAC Lossless (24-bit/192.0kHz)",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := generateQualityString(tt.info)
@@ -424,7 +424,7 @@ func TestGetQualityTier_Boundaries(t *testing.T) {
 		{"64kbps low", &MediaInfo{Bitrate: 64}, 30},
 		{"0kbps minimum", &MediaInfo{Bitrate: 0}, 30},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tier := GetQualityTier(tt.info)
