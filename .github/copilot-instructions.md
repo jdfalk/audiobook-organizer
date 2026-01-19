@@ -1,40 +1,38 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 2.4.0 -->
+<!-- version: 2.5.0 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
+<!-- last-edited: 2026-01-18 -->
 
-# GitHub Common Workflows Repository - AI Agent Instructions
+# Audiobook Organizer - AI Agent Instructions
 
-This repository serves as the **central infrastructure hub** for reusable GitHub Actions workflows, scripts, and configurations across multiple repositories. It implements a sophisticated modular instruction system and provides automation tools for multi-repository management.
+This repository is a **full-stack web application** for managing and organizing audiobook collections. It combines a Go backend with a React frontend to provide a comprehensive audiobook management solution.
+
+## 🎯 Communication Protocol
+
+**Error Response Policy**: When errors occur or corrections are needed, skip apologies and respond with "Aye Aye Captain" followed immediately by the corrected solution. Time efficiency is critical—acknowledge, correct, and move forward without unnecessary preamble.
 
 ## 🏗️ Repository Architecture
 
-**This is a workflow infrastructure repository**, not a typical application codebase. Key architectural components:
+**This is an audiobook management application** built with:
 
-- **Reusable Workflows**: `.github/workflows/reusable-*.yml` - Called by other repositories
-- **Script Library**: `scripts/` - Python automation tools for cross-repo operations
-- **Instruction System**: `.github/instructions/` - Modular AI agent rules with language targeting
-- **Workflow Debugging**: `scripts/workflow-debugger.py` - Analyzes failures and generates fix tasks
-- **Multi-Repo Sync**: `scripts/intelligent_sync_to_repos.py` - Propagates changes to target repos
+- **Backend (Go 1.25)**: REST API, file operations, metadata extraction, database management
+- **Frontend (React + TypeScript)**: Material-UI web interface with real-time updates
+- **Database**: SQLite for metadata, PebbleDB for key-value storage
+- **Integration**: Open Library API, OpenAI parsing, SSE for real-time updates
+
+### Key Directories
+
+- `cmd/` - CLI and server entry points
+- `internal/` - Go backend packages (server, scanner, database, metadata)
+- `web/` - React frontend application
+- `docs/` - Documentation and testing guides
+- `.github/` - CI/CD workflows and configuration
 
 ## 🔧 Critical AI Agent Workflows
 
 Use VS Code tasks for non-git operations (build, lint, generate). For git operations, prefer:
 
 1) MCP GitHub tools (preferred), 2) safe-ai-util (fallback), 3) native git (last resort).
-
-Use specialized subagents when possible: CI Workflow Doctor, Dependency Auditor, Documentation Curator, Git Hygiene Guardian, Lint & Format Conductor, Protobuf Builder, Protobuf Cycle Resolver, and others in `.github/prompts/` for targeted expertise.
-
-### Protobuf Operations (Core Focus)
-
-```bash
-# Use tasks, not manual buf commands
-"Buf Generate with Output" - Generates protobuf code with logging
-"Buf Lint with Output" - Lints protobuf files with comprehensive output
-```
-
-- This repo heavily focuses on protobuf tooling and cross-repo protobuf management
-- Use `tools/protobuf-cycle-fixer.py` for import cycle resolution
-- Protobuf changes trigger the `protobuf-generation.yml` workflow
 
 ### Git Operations (Policy)
 
@@ -80,49 +78,19 @@ chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
 
 **If you exceed these limits, you WILL break the terminal execution.**
 
-## 🎯 Multi-Repository Management Patterns
-
-**This repository manages configurations for multiple target repositories:**
-
-### Sync Operations
-
-```bash
-# Primary sync script for propagating changes
-python scripts/intelligent_sync_to_repos.py --target-repos "repo1,repo2" --dry-run
-```
-
-- Syncs `.github/instructions/`, `.github/prompts/`, and workflows to target repos
-- Creates VS Code Copilot symlinks: `.vscode/copilot/` → `.github/instructions/`
-- Handles repository-specific file exclusions and maintains file headers
-
-### Workflow Debugging & Auto-Fix
-
-```bash
-python scripts/workflow-debugger.py --org jdfalk --scan-all --fix-tasks
-```
-
-- Analyzes workflow failures across repositories
-- Generates JSON fix tasks for Copilot agents at `workflow-debug-output/fix-tasks/`
-- Categorizes failures: permissions, dependencies, syntax, infrastructure
-- Outputs actionable remediation steps with code examples
+**If you exceed these limits, you WILL break the terminal execution.**
 
 ## 📁 File Organization Conventions
 
-**Modular Instruction System** (referenced by general instructions):
+**Repository Structure**:
 
-- `general-coding.instructions.md` - Base rules for all languages
-- `{language}.instructions.md` - Language-specific extensions with `applyTo: "**/*.{ext}"` frontmatter
-- Instructions are synced to target repos and symlinked for VS Code Copilot integration
-
-**Repository-Specific Patterns**:
-
-- All files require versioned headers: `<!-- file: path -->`, `<!-- version: x.y.z -->`, `<!-- guid: uuid -->`
+- All files require versioned headers: `<!-- file: path -->`, `<!-- version: x.y.z -->`, `<!-- guid: uuid -->`, `<!-- last-edited: YYYY-MM-DD -->`
 - Always increment version numbers on file changes (patch/minor/major semantic versioning)
-- Use `copilot-util-args` file for storing command arguments between task executions
+- Update `last-edited` date whenever making changes
 
 ## 🔍 Project-Specific Context
 
-**This is an infrastructure repository** - focus on:
+**This is an audiobook management application** - focus on:
 
 1. **Workflow reliability** - Use workflow debugger to identify and fix cross-repo workflow issues
 2. **Protobuf tooling** - Buf integration, cycle detection, and cross-repo protobuf synchronization
@@ -136,3 +104,4 @@ python scripts/workflow-debugger.py --org jdfalk --scan-all --fix-tasks
 - Fix protobuf cycles: `tools/protobuf-cycle-fixer.py`Always check `logs/` directory after running VS Code tasks for execution details and debugging information.
 
 For detailed coding rules, see `.github/instructions/general-coding.instructions.md` and language-specific instruction files.
+

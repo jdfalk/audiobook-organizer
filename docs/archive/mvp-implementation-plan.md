@@ -1,3 +1,7 @@
+<!-- ARCHIVED: Original MVP implementation plan from December 2025 -->
+<!-- Current status: See TODO.md and CHANGELOG.md -->
+<!-- Project is now ~75-85% complete vs. original 35-40% estimate -->
+
 <!-- file: docs/mvp-implementation-plan.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e -->
