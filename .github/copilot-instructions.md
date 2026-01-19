@@ -1,7 +1,7 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 2.5.0 -->
+<!-- version: 2.5.1 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
-<!-- last-edited: 2026-01-18 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Audiobook Organizer - AI Agent Instructions
 
@@ -76,6 +76,9 @@ chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
 - Can handle unlimited command complexity
 - Python scripts preferred for anything beyond simple bash
 
+**Python Command Usage:**
+- Always use `python` (not `python3`) - it automatically redirects to the correct version
+
 **If you exceed these limits, you WILL break the terminal execution.**
 
 **If you exceed these limits, you WILL break the terminal execution.**
@@ -104,4 +107,3 @@ chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
 - Fix protobuf cycles: `tools/protobuf-cycle-fixer.py`Always check `logs/` directory after running VS Code tasks for execution details and debugging information.
 
 For detailed coding rules, see `.github/instructions/general-coding.instructions.md` and language-specific instruction files.
-
