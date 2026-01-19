@@ -1,5 +1,5 @@
 <!-- file: .github/copilot-instructions.md -->
-<!-- version: 2.3.2 -->
+<!-- version: 2.4.0 -->
 <!-- guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a -->
 
 # GitHub Common Workflows Repository - AI Agent Instructions
@@ -42,6 +42,43 @@ Use specialized subagents when possible: CI Workflow Doctor, Dependency Auditor,
 - Avoid VS Code git tasks; keep git automation out of editor tasks.
 - All commits MUST use conventional commit format: `type(scope): description`.
 - See `.github/instructions/commit-messages.instructions.md` for detailed commit message rules.
+
+### Terminal Command Length Limits (CRITICAL)
+
+**MANDATORY RULE: Long terminal commands WILL fail and die.**
+
+Terminal commands with excessive length (either many arguments or very long single lines) will fail with exit code 130 or similar errors. Follow these rules:
+
+**Maximum Safe Limits:**
+- **For loops with paths**: No more than 5 paths/arguments
+- **Single-line commands**: No more than ~200-300 characters
+- **Multi-argument commands**: No more than 5-6 distinct arguments
+
+**Example of TOO LONG (will fail):**
+```bash
+for pr_dir in /path/one /path/two /path/three /path/four /path/five /path/six /path/seven /path/eight /path/nine /path/ten; do ...
+```
+
+**Solution: Use a script in temp_crap repo:**
+```bash
+# Instead, create a script
+cat > /Users/jdfalk/repos/temp_crap/my_script.sh << 'EOF'
+#!/bin/bash
+for pr_dir in /path/one /path/two /path/three ... /path/twenty; do
+    # Command logic here
+done
+EOF
+chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
+/Users/jdfalk/repos/temp_crap/my_script.sh
+```
+
+**Why temp_crap:**
+- Always available in the workspace
+- No approval needed for file creation
+- Can handle unlimited command complexity
+- Python scripts preferred for anything beyond simple bash
+
+**If you exceed these limits, you WILL break the terminal execution.**
 
 ## 🎯 Multi-Repository Management Patterns
 
