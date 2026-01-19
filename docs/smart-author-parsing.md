@@ -1,6 +1,7 @@
 <!-- file: docs/smart-author-parsing.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d -->
+<!-- last-edited: 2026-01-19 -->
 
 # Smart Author Parsing Implementation
 

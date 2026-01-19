@@ -1,6 +1,7 @@
 <!-- file: docs/database-migration-summary.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b -->
+<!-- last-edited: 2026-01-19 -->
 
 # Database Migration: SQLite3 → PebbleDB
 

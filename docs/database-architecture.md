@@ -1,6 +1,7 @@
 <!-- file: docs/database-architecture.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a -->
+<!-- last-edited: 2026-01-19 -->
 
 # Database Architecture
 

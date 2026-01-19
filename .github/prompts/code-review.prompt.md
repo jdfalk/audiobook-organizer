@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/code-review.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7a1cf164-c2cd-4801-9621-d8fd7fe4afd0 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/code-review.prompt.md -->
 

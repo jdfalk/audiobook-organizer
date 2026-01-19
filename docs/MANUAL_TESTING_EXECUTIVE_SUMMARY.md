@@ -1,6 +1,7 @@
 <!-- file: docs/MANUAL_TESTING_EXECUTIVE_SUMMARY.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: e5f6a7b8-c9d0-1234-ef12-345678901234 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Manual Testing Executive Summary
 

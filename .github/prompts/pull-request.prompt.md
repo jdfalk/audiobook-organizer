@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/pull-request.prompt.md -->
 <!-- version: 1.1.0 -->
 <!-- guid: 031b01c4-5985-4caa-89a6-0a91c211703a -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/pull-request.prompt.md -->
 

@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-6-TROUBLESHOOTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 1a5e9d2c-8f4b-4c5d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 6: Troubleshooting - Book Detail Page & Delete Flow
 

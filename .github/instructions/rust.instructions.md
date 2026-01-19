@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/rust.instructions.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: b2c3d4e5-f6a7-8901-2345-678901bcdef0 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->

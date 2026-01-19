@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/merge-conflict-resolution.agent.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7f1f1d5b-2f7a-4b9f-9c26-5a2d2f9c3c1a -->
+<!-- last-edited: 2026-01-19 -->
 
 ---
 

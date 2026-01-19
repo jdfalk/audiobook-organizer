@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-5-TROUBLESHOOTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 6f1d8c2e-9a4b-4c5d-8f7e-1a9b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 5: Troubleshooting - Hash Tracking & State Lifecycle
 

@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-6-CORE-TESTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 8e3f9d2c-7a4b-4c5d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 6: Core Book Detail & Delete Flow Testing
 

@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-release-notes.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: dab2fd75-1afd-497d-b53f-9e598fe6bbed -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/ai-release-notes.prompt.md -->
 

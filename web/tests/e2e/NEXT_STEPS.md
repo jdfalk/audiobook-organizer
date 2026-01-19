@@ -1,6 +1,7 @@
 <!-- file: web/tests/e2e/NEXT_STEPS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Metadata Provenance E2E Tests - Next Steps
 

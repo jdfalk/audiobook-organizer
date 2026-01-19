@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/pull-request-descriptions.instructions.md -->
 <!-- version: 1.3.1 -->
 <!-- guid: pr2d3567-e89b-12d3-a456-426614174000 -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

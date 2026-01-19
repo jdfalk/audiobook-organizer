@@ -1,6 +1,7 @@
 <!-- file: docs/mvp-tasks/task-4/4-CORE-TESTING.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: 2b5e8c1f-9d4a-4e6b-8f7c-1a9b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 4: Core Duplicate Detection Testing
 

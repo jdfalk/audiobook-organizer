@@ -1,6 +1,7 @@
 <!-- file: docs/mvp-tasks/task-4/4-ADVANCED-SCENARIOS.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: 9f3c2d1e-8b4a-4d5c-9e7f-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 4: Advanced Scenarios & Code Deep Dive (Duplicate Detection)
 

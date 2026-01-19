@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-6-ADVANCED-SCENARIOS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 9f4e2d3c-8b5a-4c6d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 6: Advanced Scenarios & Code Deep Dive (Book Detail & Delete)
 

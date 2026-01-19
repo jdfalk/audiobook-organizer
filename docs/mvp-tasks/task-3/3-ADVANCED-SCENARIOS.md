@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-3-ADVANCED-SCENARIOS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 6f0b4de0-6e2d-4a90-bbd3-5e2e410a8b59 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 3: Advanced Scenarios & Code Deep Dive (Size Reporting)
 

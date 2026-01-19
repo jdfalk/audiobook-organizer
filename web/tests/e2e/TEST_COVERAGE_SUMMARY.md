@@ -1,6 +1,7 @@
 <!-- file: web/tests/e2e/TEST_COVERAGE_SUMMARY.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7d6c5b4a-3e2f-1d0c-9b8a-7f6e5d4c3b2a -->
+<!-- last-edited: 2026-01-19 -->
 
 # E2E Test Coverage Summary
 

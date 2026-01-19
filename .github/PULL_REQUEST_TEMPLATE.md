@@ -1,6 +1,7 @@
 <!-- file: .github/PULL_REQUEST_TEMPLATE.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 6b7c8d9e-0f12-3456-789a-bcdef0123456 -->
+<!-- last-edited: 2026-01-19 -->
 
 ## Summary
 

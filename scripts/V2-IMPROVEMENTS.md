@@ -1,6 +1,7 @@
 <!-- file: scripts/V2-IMPROVEMENTS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: d3e4f5a6-b7c8-9d0e-1f2a-3b4c5d6e7f8a -->
+<!-- last-edited: 2026-01-19 -->
 
 # Version 2 Script Improvements
 

@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/commit-message.prompt.md -->
 <!-- version: 1.1.0 -->
 <!-- guid: 3453d792-9817-4406-8261-f53fc7fb8bea -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/commit-message.prompt.md -->
 

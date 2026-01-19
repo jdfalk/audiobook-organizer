@@ -1,6 +1,7 @@
 <!-- file: .github/security-guidelines.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
+<!-- last-edited: 2026-01-19 -->
 
 # Security Guidelines for Reusable Workflows
 

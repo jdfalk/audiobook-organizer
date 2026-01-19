@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/test-generation.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 19ae3536-4f87-44cf-bccd-86e47732e005 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/test-generation.prompt.md -->
 

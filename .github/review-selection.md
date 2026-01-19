@@ -1,6 +1,7 @@
 <!-- file: .github/review-selection.md -->
 <!-- version: 2.0.0 -->
 <!-- guid: 7e2f1b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c -->
+<!-- last-edited: 2026-01-19 -->
 
 # Code Review Guidelines (Pointer)
 

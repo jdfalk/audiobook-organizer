@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-changelog.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 253c622c-7e27-41ad-99f9-d81791d6b251 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/ai-changelog.prompt.md -->
 

@@ -1,6 +1,7 @@
 <!-- file: tests/e2e/README.md -->
 <!-- version: 1.2.0 -->
 <!-- guid: 5d6e7f89-0123-4567-89ab-cdef01234567 -->
+<!-- last-edited: 2026-01-19 -->
 
 # End-to-End Tests for Audiobook Organizer
 

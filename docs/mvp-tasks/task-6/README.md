@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-6-README.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7d2e9f1c-8a4b-4c5d-9f6e-1a7b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 6: Book Detail Page & Enhanced Delete Flow - Complete Documentation
 

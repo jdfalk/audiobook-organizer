@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-5-CORE-TESTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 4d8c9e2f-7b3a-4c5d-8f6e-1a9b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 5: Core Hash Tracking & State Testing
 

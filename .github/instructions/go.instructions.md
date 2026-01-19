@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/go.instructions.md -->
 <!-- version: 1.11.0 -->
 <!-- guid: 4a5b6c7d-8e9f-1a2b-3c4d-5e6f7a8b9c0d -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

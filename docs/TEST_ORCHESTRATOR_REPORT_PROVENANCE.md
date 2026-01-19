@@ -1,6 +1,7 @@
 <!-- file: docs/TEST_ORCHESTRATOR_REPORT_PROVENANCE.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 8f7e6d5c-4b3a-2918-0f1e-2d3c4b5a6789 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Test Orchestrator Report: Metadata Provenance E2E Test Expansion
 

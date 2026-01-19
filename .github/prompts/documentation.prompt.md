@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/documentation.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: eb95dfc9-0121-4363-b46d-bfe799adabc0 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/documentation.prompt.md -->
 

@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/general-coding.instructions.md -->
 <!-- version: 2.2.1 -->
 <!-- guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
@@ -183,6 +184,7 @@ containing:
   <!-- file: path/to/file.md -->
   <!-- version: 1.1.0 -->
   <!-- guid: 123e4567-e89b-12d3-a456-426614174000 -->
+<!-- last-edited: 2026-01-19 -->
   ```
 
 - **Python:**

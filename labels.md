@@ -1,6 +1,7 @@
 <!-- file: labels.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: ghcommon-labels-69304 -->
+<!-- last-edited: 2026-01-19 -->
 
 # ghcommon Repository Labels
 
