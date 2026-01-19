@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-issue-triage.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 95d3bd04-d3aa-4da7-b3a6-ea74abadc21a -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/ai-issue-triage.prompt.md -->
 

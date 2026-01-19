@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-3-TROUBLESHOOTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: e6b4c8d7-b8f7-4f94-9cb1-1a7fb1530e07 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 3: Troubleshooting - Import Size Reporting
 

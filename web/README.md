@@ -1,6 +1,7 @@
 <!-- file: web/README.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 0b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e -->
+<!-- last-edited: 2026-01-19 -->
 
 # Audiobook Organizer - Web Frontend
 

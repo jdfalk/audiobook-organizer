@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/bug-report.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: a8938e5c-bd77-4a17-8cdc-275bcb010af3 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/bug-report.prompt.md -->
 

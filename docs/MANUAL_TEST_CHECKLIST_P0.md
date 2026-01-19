@@ -1,6 +1,7 @@
 <!-- file: docs/MANUAL_TEST_CHECKLIST_P0.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: b2c3d4e5-f6a7-8901-bcde-f12345678901 -->
+<!-- last-edited: 2026-01-19 -->
 
 # P0 Manual Test Checklist - PR #79 Merge Gate
 

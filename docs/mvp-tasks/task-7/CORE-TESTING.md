@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-7-CORE-TESTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 3d7e9f2c-8a4b-4c5d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 7: Core E2E Test Suite Validation
 

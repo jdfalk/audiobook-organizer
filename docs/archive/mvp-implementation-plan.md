@@ -5,6 +5,7 @@
 <!-- file: docs/mvp-implementation-plan.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e -->
+<!-- last-edited: 2026-01-19 -->
 
 # Audiobook Organizer - MVP Implementation Plan
 

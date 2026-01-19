@@ -1,6 +1,7 @@
 <!-- file: docs/MVP-TASKS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d -->
+<!-- last-edited: 2026-01-19 -->
 
 # MVP Tasks Documentation
 

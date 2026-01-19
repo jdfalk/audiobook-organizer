@@ -1,6 +1,7 @@
 <!-- file: docs/database-pebble-schema.md -->
 <!-- version: 1.1.0 -->
 <!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
+<!-- last-edited: 2026-01-19 -->
 
 # PebbleDB Keyspace Schema and Data Model
 
@@ -311,6 +312,7 @@ On startup:
   <!-- file: docs/database-pebble-schema.md -->
   <!-- version: 1.1.0 -->
   <!-- guid: 8f6e2c1b-7d4a-4f86-9f2a-5a6b7c8d9e0f -->
+<!-- last-edited: 2026-01-19 -->
 
 # PebbleDB Keyspace Schema and Data Model
 

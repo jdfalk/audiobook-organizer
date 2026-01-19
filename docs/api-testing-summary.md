@@ -1,6 +1,7 @@
 <!-- file: docs/api-testing-summary.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: c3d4e5f6-a7b8-9012-cdef-345678901bcd -->
+<!-- last-edited: 2026-01-19 -->
 
 # API Endpoint Testing Summary
 

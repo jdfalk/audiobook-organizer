@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-roadmap.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: e6a1c73e-5f47-4458-a8b1-d08f11a55fa8 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/ai-roadmap.prompt.md -->
 

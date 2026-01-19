@@ -1,6 +1,7 @@
 <!-- file: docs/mvp-tasks/task-4/INDEX.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 7f4e3b2a-9c8d-4e5f-8a7b-1c2d3e4f5a6b -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 4: Duplicate Detection - Document Index
 

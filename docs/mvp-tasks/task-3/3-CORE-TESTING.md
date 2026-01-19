@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-3-CORE-TESTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: d5c9f6c4-5d0f-4f4c-8f61-30a9b99cfcd0 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 3: Core Size Validation & Fix Flow
 

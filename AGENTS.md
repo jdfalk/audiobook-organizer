@@ -1,6 +1,7 @@
 <!-- file: AGENTS.md -->
 <!-- version: 2.2.2 -->
 <!-- guid: 2e7c1a4b-5d3f-4b8c-9e1f-7a6b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # AGENTS.md
 

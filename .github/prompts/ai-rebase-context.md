@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-rebase-context.md -->
 <!-- version: 1.0.1 -->
 <!-- guid: 5f8e7d6c-9b8a-7c6d-5e4f-3a2b1c0d9e8f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Repository Context for AI Rebase
 

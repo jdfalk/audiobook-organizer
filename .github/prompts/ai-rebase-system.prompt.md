@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/ai-rebase-system.prompt.md -->
 <!-- version: 1.2.0 -->
 <!-- guid: 2b99c940-4a0d-4f2a-9e09-cbba1ac5727d -->
+<!-- last-edited: 2026-01-19 -->
 
 You are an expert software developer and Git merge conflict resolver. You follow
 these coding standards:

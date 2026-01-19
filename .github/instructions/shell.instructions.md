@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/shell.instructions.md -->
 <!-- version: 1.4.0 -->
 <!-- guid: 5b4a3c2d-1e0f-9a8b-7c6d-5e4f3a2b1c0d -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

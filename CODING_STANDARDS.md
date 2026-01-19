@@ -1,6 +1,7 @@
 <!-- file: CODING_STANDARDS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Coding Standards for Refactoring Task
 
@@ -20,6 +21,7 @@ used in this project.
 <!-- file: .github/instructions/go.instructions.md -->
 <!-- version: 1.6.1 -->
 <!-- guid: 4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
@@ -603,6 +605,7 @@ design, concurrency, comments, and testing best practices.
 <!-- file: .github/instructions/typescript.instructions.md -->
 <!-- version: 1.2.1 -->
 <!-- guid: ts123456-e89b-12d3-a456-426614174000 -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 
@@ -1871,6 +1874,7 @@ TypeScript:
 <!-- file: .github/instructions/typescript.instructions.md -->
 <!-- version: 1.2.1 -->
 <!-- guid: ts123456-e89b-12d3-a456-426614174000 -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

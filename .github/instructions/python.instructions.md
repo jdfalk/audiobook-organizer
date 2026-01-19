@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/python.instructions.md -->
 <!-- version: 1.5.1 -->
 <!-- guid: 2a5b7c8d-9e1f-4a2b-8c3d-6e9f1a5b7c8d -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

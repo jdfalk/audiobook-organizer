@@ -1,6 +1,7 @@
 <!-- file: .github/workflow-usage.md -->
 <!-- version: 2.0.0 -->
 <!-- guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e -->
+<!-- last-edited: 2026-01-19 -->
 
 # GitHub Actions Workflow Usage Instructions (Pointer)
 

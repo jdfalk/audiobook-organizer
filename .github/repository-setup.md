@@ -1,6 +1,7 @@
 <!-- file: .github/repository-setup.md -->
 <!-- version: 2.0.0 -->
 <!-- guid: 4e1f7b2c-8d5e-9f4e-1f7b-2c8d4e1f7b2c -->
+<!-- last-edited: 2026-01-19 -->
 
 # Repository Setup Guide (Pointer)
 

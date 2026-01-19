@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/github-actions.instructions.md -->
 <!-- version: 1.2.2 -->
 <!-- guid: 9f8e7d6c-5b4a-3c2d-1e0f-9a8b7c6d5e4f -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

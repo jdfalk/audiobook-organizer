@@ -3,6 +3,7 @@
 <!-- file: scripts/README.md -->
 <!-- version: 1.1.0 -->
 <!-- guid: a6ce4820-bcf8-482e-b2ca-234024d5d77f -->
+<!-- last-edited: 2026-01-19 -->
 
 This directory contains reusable scripts for GitHub automation and issue
 management.

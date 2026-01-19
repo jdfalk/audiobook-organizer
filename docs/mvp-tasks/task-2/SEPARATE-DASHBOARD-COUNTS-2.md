@@ -1,6 +1,7 @@
 <!-- file: docs/mvp-tasks/task-2/SEPARATE-DASHBOARD-COUNTS.md -->
 <!-- version: 2.0.1 -->
 <!-- guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 2: Separate Dashboard Counts (Library vs Import)
 

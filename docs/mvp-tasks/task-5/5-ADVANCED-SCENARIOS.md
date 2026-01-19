@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-5-ADVANCED-SCENARIOS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 5e9c1f2d-8a4b-4c5d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 5: Advanced Scenarios & Code Deep Dive (Hash Tracking)
 

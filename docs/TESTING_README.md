@@ -1,6 +1,7 @@
 <!-- file: docs/TESTING_README.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: f6a7b8c9-d0e1-2345-f123-456789012345 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Testing Documentation Index
 

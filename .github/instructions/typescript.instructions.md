@@ -1,6 +1,7 @@
 <!-- file: .github/instructions/typescript.instructions.md -->
 <!-- version: 1.2.1 -->
 <!-- guid: ts123456-e89b-12d3-a456-426614174000 -->
+<!-- last-edited: 2026-01-19 -->
 <!-- DO NOT EDIT: This file is managed centrally in ghcommon repository -->
 <!-- To update: Create an issue/PR in jdfalk/ghcommon -->
 

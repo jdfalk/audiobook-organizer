@@ -1,6 +1,7 @@
 <!-- file: scripts/TEST-README.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: d4e5f6a7-b8c9-0123-def0-456789012cde -->
+<!-- last-edited: 2026-01-19 -->
 
 # API Testing Scripts
 

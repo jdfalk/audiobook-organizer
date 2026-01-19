@@ -1,6 +1,7 @@
 <!-- file: GHCOMMON_VERSIONING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 9f8e7d6c-5b4a-3210-fedc-ba9876543210 -->
+<!-- last-edited: 2026-01-19 -->
 
 # ghcommon Workflow Versioning and Standards
 

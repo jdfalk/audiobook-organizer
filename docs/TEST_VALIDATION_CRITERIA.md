@@ -1,6 +1,7 @@
 <!-- file: docs/TEST_VALIDATION_CRITERIA.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: d4e5f6a7-b8c9-0123-def1-234567890123 -->
+<!-- last-edited: 2026-01-19 -->
 
 # Test Validation Criteria & Issue Reporting
 

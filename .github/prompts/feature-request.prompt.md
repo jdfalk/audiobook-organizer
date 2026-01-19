@@ -1,6 +1,7 @@
 <!-- file: .github/prompts/feature-request.prompt.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 73923d3f-5e4f-46b3-9694-796532639b22 -->
+<!-- last-edited: 2026-01-19 -->
 
 <!-- file: .github/prompts/feature-request.prompt.md -->
 

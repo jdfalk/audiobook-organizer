@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-7-TROUBLESHOOTING.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 5f9e2d4c-8b6a-4c7d-9f8e-1a9b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 7: Troubleshooting - E2E Test Suite
 

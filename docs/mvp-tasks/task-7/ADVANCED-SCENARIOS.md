@@ -1,6 +1,7 @@
 <!-- file: docs/TASK-7-ADVANCED-SCENARIOS.md -->
 <!-- version: 1.0.0 -->
 <!-- guid: 4e8f9d3c-7a5b-4c6d-9f7e-1a8b2c3d4e5f -->
+<!-- last-edited: 2026-01-19 -->
 
 # Task 7: Advanced Scenarios & Code Deep Dive (E2E Tests)
 
