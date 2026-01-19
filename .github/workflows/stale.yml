@@ -1,5 +1,5 @@
 # file: .github/workflows/stale.yml
-# version: 1.1.0
+# version: 1.1.2
 # guid: 336b7a2d-c53a-4ef2-927e-3bdfd733c528
 
 name: Handle Stale Issues
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Mark and close stale issues and PRs
-        uses: actions/stale@v10
+        uses: actions/stale@997185467fa4f803885201cee163a9f38240193d # v10.1.1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           days-before-stale: 90
