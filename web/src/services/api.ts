@@ -25,6 +25,8 @@ export interface Book {
   description?: string;
   cover_image?: string;
   isbn?: string;
+  isbn10?: string;
+  isbn13?: string;
   work_id?: string;
   edition?: string;
   print_year?: number;

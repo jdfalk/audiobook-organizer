@@ -47,11 +47,15 @@ import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
-import { buildMetadataUpdatePayload } from './Library.metadata';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField } from '../types';
 import * as api from '../services/api';
+import {
+  eventSourceManager,
+  type EventSourceEvent,
+  type EventSourceStatus,
+} from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
 
 interface ImportPath {
@@ -180,7 +184,7 @@ export const Library = () => {
     })();
 
     const unsubscribe = eventSourceManager.subscribe(
-      (evt) => {
+      (evt: EventSourceEvent) => {
         if (!evt || !evt.type) return;
         if (evt.type === 'heartbeat') return; // Ignore heartbeat messages
 
@@ -225,7 +229,7 @@ export const Library = () => {
           setActiveOrganizeOp((prev) => finalize(prev));
         }
       },
-      (status) => {
+      (status: EventSourceStatus) => {
         if (status.state === 'reconnecting' && status.delayMs) {
           console.warn(
             `EventSource connection lost (attempt ${status.attempt}), reconnecting in ${Math.round(status.delayMs / 1000)}s...`
