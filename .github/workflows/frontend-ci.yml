@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.6.3
+# version: 2.6.6
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -35,11 +35,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Load frontend configuration
         id: frontend-config
-        uses: jdfalk/get-frontend-config-action@v1
+        uses: jdfalk/get-frontend-config-action@c48769f8cfde4b3c83f797d585bf87a11f606a6a # v1.1.2
         with:
           repository-config: ''
           config-file: '.github/repository-config.yml'
@@ -48,7 +48,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@bc6380dd1cfb1a3b8eb24c27d6cfe4a887562b5b # main
     with:
       node-version: ${{ needs.frontend-config.outputs.node-version }}
     secrets: inherit

@@ -1,5 +1,5 @@
 # file: .github/workflows/test-action-integration.yml
-# version: 1.1.0
+# version: 1.1.2
 # guid: test-action-integration-001
 
 name: Test Frontend Config Action Integration
@@ -28,11 +28,11 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Get frontend configuration
         id: frontend-config
-        uses: jdfalk/get-frontend-config-action@v1
+        uses: jdfalk/get-frontend-config-action@c48769f8cfde4b3c83f797d585bf87a11f606a6a # v1.1.2
         with:
           repository-config: ''
           config-file: '.github/repository-config.yml'
