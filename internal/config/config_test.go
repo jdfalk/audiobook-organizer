@@ -657,14 +657,14 @@ func TestSaveConfigToDatabase_NilStore(t *testing.T) {
 }
 
 func TestSyncConfigFromEnv(t *testing.T) {
-	// Set environment variables
+	// Set environment variables for the fields that SyncConfigFromEnv actually handles
 	os.Setenv("AUDIOBOOK_ROOT_DIR", "/env/root")
-	os.Setenv("AUDIOBOOK_CONCURRENT_SCANS", "16")
-	os.Setenv("AUDIOBOOK_AUTO_ORGANIZE", "false")
+	os.Setenv("AUDIOBOOK_OPENAI_API_KEY", "test-key-12345")
+	os.Setenv("AUDIOBOOK_ENABLE_AI_PARSING", "true")
 	defer func() {
 		os.Unsetenv("AUDIOBOOK_ROOT_DIR")
-		os.Unsetenv("AUDIOBOOK_CONCURRENT_SCANS")
-		os.Unsetenv("AUDIOBOOK_AUTO_ORGANIZE")
+		os.Unsetenv("AUDIOBOOK_OPENAI_API_KEY")
+		os.Unsetenv("AUDIOBOOK_ENABLE_AI_PARSING")
 	}()
 
 	InitConfig()
@@ -673,11 +673,81 @@ func TestSyncConfigFromEnv(t *testing.T) {
 	if AppConfig.RootDir != "/env/root" {
 		t.Errorf("Expected root_dir from env /env/root, got %s", AppConfig.RootDir)
 	}
-	if AppConfig.ConcurrentScans != 16 {
-		t.Errorf("Expected concurrent_scans from env 16, got %d", AppConfig.ConcurrentScans)
+	if AppConfig.OpenAIAPIKey != "test-key-12345" {
+		t.Errorf("Expected openai_api_key from env, got %s", AppConfig.OpenAIAPIKey)
 	}
-	if AppConfig.AutoOrganize {
-		t.Error("Expected auto_organize from env to be false")
+	if !AppConfig.EnableAIParsing {
+		t.Error("Expected enable_ai_parsing from env to be true")
+	}
+}
+
+// TestApplySettingAllTypes tests applySetting with various data types
+func TestApplySettingAllTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		typ      string
+		testFunc func() bool
+	}{
+		{
+			name:  "root_dir string",
+			key:   "root_dir",
+			value: "/test/path",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.RootDir == "/test/path"
+			},
+		},
+		{
+			name:  "concurrent_scans int",
+			key:   "concurrent_scans",
+			value: "8",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.ConcurrentScans == 8
+			},
+		},
+		{
+			name:  "auto_organize bool true",
+			key:   "auto_organize",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.AutoOrganize == true
+			},
+		},
+		{
+			name:  "auto_organize bool false",
+			key:   "auto_organize",
+			value: "false",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.AutoOrganize == false
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			InitConfig()
+			err := applySetting(tt.key, tt.value, tt.typ)
+			if err != nil {
+				t.Fatalf("applySetting returned error: %v", err)
+			}
+			if !tt.testFunc() {
+				t.Errorf("applySetting(%s, %s, %s) did not apply correctly", tt.key, tt.value, tt.typ)
+			}
+		})
+	}
+}
+
+// TestLoadConfigFromDatabaseErrors tests error handling in LoadConfigFromDatabase
+func TestLoadConfigFromDatabaseErrors(t *testing.T) {
+	// Test with nil store
+	err := LoadConfigFromDatabase(nil)
+	if err == nil {
+		t.Error("Expected error for nil store")
 	}
 }
 

@@ -620,3 +620,43 @@ func TestBackupDifferentCompressionLevels(t *testing.T) {
 		t.Error("Expected NoCompression to be larger than BestCompression")
 	}
 }
+
+// TestScheduleBackupNotImplemented tests that ScheduleBackup returns error
+func TestScheduleBackupNotImplemented(t *testing.T) {
+	// Arrange
+	config := DefaultBackupConfig()
+	interval := 1 * time.Hour
+
+	// Act
+	err := ScheduleBackup(interval, config)
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for unimplemented ScheduleBackup")
+	}
+	expectedMsg := "scheduled backups not yet implemented"
+	if err.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
+
+// TestBackupDatabaseNilStore tests BackupDatabase with nil database
+func TestBackupDatabaseNilStore(t *testing.T) {
+	// Arrange
+	config := DefaultBackupConfig()
+
+	// Act
+	info, err := BackupDatabase(config)
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for nil database")
+	}
+	if info != nil {
+		t.Error("Expected nil BackupInfo on error")
+	}
+	expectedMsg := "database not initialized"
+	if err.Error() != expectedMsg {
+		t.Errorf("Expected error message '%s', got '%s'", expectedMsg, err.Error())
+	}
+}
