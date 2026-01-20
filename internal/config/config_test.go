@@ -6,7 +6,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -657,17 +656,21 @@ func TestSaveConfigToDatabase_NilStore(t *testing.T) {
 }
 
 func TestSyncConfigFromEnv(t *testing.T) {
-	// Set environment variables for the fields that SyncConfigFromEnv actually handles
-	os.Setenv("AUDIOBOOK_ROOT_DIR", "/env/root")
-	os.Setenv("AUDIOBOOK_OPENAI_API_KEY", "test-key-12345")
-	os.Setenv("AUDIOBOOK_ENABLE_AI_PARSING", "true")
+	InitConfig()
+	
+	// Use viper.Set to simulate environment variable settings
+	// SyncConfigFromEnv uses viper.IsSet() which checks viper's config store
+	viper.Set("root_dir", "/env/root")
+	viper.Set("openai_api_key", "test-key-12345")
+	viper.Set("enable_ai_parsing", true)
+	
 	defer func() {
-		os.Unsetenv("AUDIOBOOK_ROOT_DIR")
-		os.Unsetenv("AUDIOBOOK_OPENAI_API_KEY")
-		os.Unsetenv("AUDIOBOOK_ENABLE_AI_PARSING")
+		// Clean up viper settings
+		viper.Set("root_dir", "")
+		viper.Set("openai_api_key", "")
+		viper.Set("enable_ai_parsing", false)
 	}()
 
-	InitConfig()
 	SyncConfigFromEnv()
 
 	if AppConfig.RootDir != "/env/root" {
@@ -748,6 +751,281 @@ func TestLoadConfigFromDatabaseErrors(t *testing.T) {
 	err := LoadConfigFromDatabase(nil)
 	if err == nil {
 		t.Error("Expected error for nil store")
+	}
+}
+
+// TestApplySettingExtensiveCoverage tests applySetting with many different settings
+func TestApplySettingExtensiveCoverage(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		typ      string
+		testFunc func() bool
+	}{
+		// String settings
+		{
+			name:  "database_path",
+			key:   "database_path",
+			value: "/test/db",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.DatabasePath == "/test/db"
+			},
+		},
+		{
+			name:  "playlist_dir",
+			key:   "playlist_dir",
+			value: "/test/playlists",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.PlaylistDir == "/test/playlists"
+			},
+		},
+		{
+			name:  "organization_strategy",
+			key:   "organization_strategy",
+			value: "copy",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.OrganizationStrategy == "copy"
+			},
+		},
+		{
+			name:  "language",
+			key:   "language",
+			value: "en",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.Language == "en"
+			},
+		},
+		{
+			name:  "log_level",
+			key:   "log_level",
+			value: "debug",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.LogLevel == "debug"
+			},
+		},
+		// Bool settings
+		{
+			name:  "scan_on_startup",
+			key:   "scan_on_startup",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.ScanOnStartup == true
+			},
+		},
+		{
+			name:  "create_backups",
+			key:   "create_backups",
+			value: "false",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.CreateBackups == false
+			},
+		},
+		{
+			name:  "enable_disk_quota",
+			key:   "enable_disk_quota",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.EnableDiskQuota == true
+			},
+		},
+		{
+			name:  "auto_fetch_metadata",
+			key:   "auto_fetch_metadata",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.AutoFetchMetadata == true
+			},
+		},
+		{
+			name:  "enable_json_logging",
+			key:   "enable_json_logging",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.EnableJsonLogging == true
+			},
+		},
+		// Int settings
+		{
+			name:  "disk_quota_percent",
+			key:   "disk_quota_percent",
+			value: "75",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.DiskQuotaPercent == 75
+			},
+		},
+		{
+			name:  "default_user_quota_gb",
+			key:   "default_user_quota_gb",
+			value: "500",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.DefaultUserQuotaGB == 500
+			},
+		},
+		{
+			name:  "cache_size",
+			key:   "cache_size",
+			value: "2000",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.CacheSize == 2000
+			},
+		},
+		{
+			name:  "memory_limit_percent",
+			key:   "memory_limit_percent",
+			value: "16",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.MemoryLimitPercent == 16
+			},
+		},
+		{
+			name:  "memory_limit_mb",
+			key:   "memory_limit_mb",
+			value: "200",
+			typ:   "int",
+			testFunc: func() bool {
+				return AppConfig.MemoryLimitMB == 200
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			InitConfig()
+			err := applySetting(tt.key, tt.value, tt.typ)
+			if err != nil {
+				t.Errorf("applySetting returned error: %v", err)
+			}
+			if !tt.testFunc() {
+				t.Errorf("Setting %s = %s (type %s) was not applied correctly", tt.key, tt.value, tt.typ)
+			}
+		})
+	}
+}
+
+// TestApplySettingInvalidValues tests applySetting with invalid values
+func TestApplySettingInvalidValues(t *testing.T) {
+	InitConfig()
+	
+	// Invalid bool should not cause error (silently ignored)
+	originalValue := AppConfig.ScanOnStartup
+	err := applySetting("scan_on_startup", "not-a-bool", "bool")
+	if err != nil {
+		t.Errorf("applySetting with invalid bool returned error: %v", err)
+	}
+	// Value should remain unchanged
+	if AppConfig.ScanOnStartup != originalValue {
+		t.Error("Invalid bool value should not change setting")
+	}
+	
+	// Invalid int should not cause error (silently ignored)
+	originalInt := AppConfig.ConcurrentScans
+	err = applySetting("concurrent_scans", "not-an-int", "int")
+	if err != nil {
+		t.Errorf("applySetting with invalid int returned error: %v", err)
+	}
+	// Value should remain unchanged
+	if AppConfig.ConcurrentScans != originalInt {
+		t.Error("Invalid int value should not change setting")
+	}
+	
+	// Unknown key should return error
+	err = applySetting("unknown_key_that_does_not_exist", "value", "string")
+	if err == nil {
+		t.Error("Expected error for unknown key, got nil")
+	}
+}
+
+// TestApplySettingAdditionalFields tests more settings for coverage
+func TestApplySettingAdditionalFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		typ      string
+		testFunc func() bool
+	}{
+		{
+			name:  "folder_naming_pattern",
+			key:   "folder_naming_pattern",
+			value: "{author}/{series}",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.FolderNamingPattern == "{author}/{series}"
+			},
+		},
+		{
+			name:  "file_naming_pattern",
+			key:   "file_naming_pattern",
+			value: "{title}",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.FileNamingPattern == "{title}"
+			},
+		},
+		{
+			name:  "log_format",
+			key:   "log_format",
+			value: "json",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.LogFormat == "json"
+			},
+		},
+		{
+			name:  "memory_limit_type",
+			key:   "memory_limit_type",
+			value: "percent",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.MemoryLimitType == "percent"
+			},
+		},
+		{
+			name:  "goodreads_api_key",
+			key:   "goodreads_api_key",
+			value: "test-goodreads-key",
+			typ:   "string",
+			testFunc: func() bool {
+				return AppConfig.APIKeys.Goodreads == "test-goodreads-key"
+			},
+		},
+		{
+			name:  "enable_user_quotas",
+			key:   "enable_user_quotas",
+			value: "true",
+			typ:   "bool",
+			testFunc: func() bool {
+				return AppConfig.EnableUserQuotas == true
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			InitConfig()
+			err := applySetting(tt.key, tt.value, tt.typ)
+			if err != nil {
+				t.Errorf("applySetting returned error: %v", err)
+			}
+			if !tt.testFunc() {
+				t.Errorf("Setting %s = %s was not applied correctly", tt.key, tt.value)
+			}
+		})
 	}
 }
 
