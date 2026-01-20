@@ -46,8 +46,9 @@
 - [ ] **Raise Go coverage to 80% minimum per package** - Currently targeting 80% on all 17 packages
   - [x] metrics: 100% coverage (complete)
   - [x] matcher: 91.2% coverage (complete)
+  - [x] config: 86.3% coverage (complete - enhanced from 26.6%)
+  - [x] backup: 80.6% coverage (complete - enhanced from 72.9%)
   - [ ] sysinfo: 78.3% coverage (need +1.7%)
-  - [ ] backup: 72.9% coverage (need +7.1%)
   - [ ] fileops: 69.7% coverage (need +10.3%, in progress)
   - [ ] realtime: 62.6% coverage (need +17.4%)
   - [ ] organizer: 58.0% coverage (need +22%)
@@ -57,12 +58,13 @@
   - [ ] tagger: 37.5% coverage (need +42.5%)
   - [ ] database: 29.4% coverage (need +50.6%)
   - [ ] server: 27.7% coverage (need +52.3%)
-  - [ ] config: 26.6% coverage (need +53.4%)
+  - [ ] playlist: 17.8% coverage (need +62.2% - requires complex database mocking)
+  - [ ] cmd: 9.2% coverage (need +70.8% - requires command execution testing)
   - [ ] operations: 8.0% coverage (need +72%)
   - [ ] ai: 0.0% coverage (need +80%)
-  - [ ] playlist: 0.0% coverage (need +80%)
   - **Priority**: P0 - Quality gate for MVP
   - **Status**: Active development, systematic package-by-package enhancement
+  - **Progress**: 4 of 17 packages now ≥80% (metrics, matcher, config, backup)
 
 ### E2E Backend Integration (Est: 4-6 hours)
 

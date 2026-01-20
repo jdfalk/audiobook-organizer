@@ -16,6 +16,36 @@ Systematic test coverage enhancement across all backend packages with goal of 80
 **Completed Packages (≥80% coverage):**
 - `internal/metrics`: 100% coverage - Full Prometheus metrics testing
 - `internal/matcher`: 91.2% coverage - Series identification and pattern matching
+- `internal/config`: 86.3% coverage - Configuration loading, persistence, env sync (enhanced from 26.6%)
+- `internal/backup`: 80.6% coverage - Backup/restore operations with error paths (enhanced from 72.9%)
+
+**Recent Achievements (January 19, 2026):**
+- **backup**: 72.9% → 80.6% (+7.7%) - 7 new error path tests added:
+  - TestRestoreBackupDirectory: Full directory structure restoration validation
+  - TestRestoreBackupIOCopyError: I/O error handling during restore
+  - TestAddToArchiveStatError: Invalid path handling in archive creation
+  - TestAddToArchiveWalkError: Unreadable file handling with permission tests
+  - TestCalculateFileChecksumError: Checksum calculation error paths
+  - TestRestoreBackupCreateFileError: File creation failure in read-only directories
+  - TestCreateBackupMkdirAllError: Backup directory creation failure
+  - Added root user detection (`os.Getuid() == 0`) to skip permission tests when necessary
+- **config**: Maintained at 86.3% (completed in previous session)
+
+**Coverage Analysis Completed:**
+- `cmd/`: 9.2% coverage identified - Functions at 0%: Execute, initConfig, ensureDiagnosticsStore, runCleanupInvalidBooks, runDiagnosticsQuery, runRawPebbleQuery, setupFileLogging
+- `internal/playlist`: 17.8% coverage identified - Function breakdown:
+  - GeneratePlaylistsForSeries: 0.0% (main orchestration function)
+  - getBooksInSeries: 0.0% (database query function)
+  - savePlaylistToDatabase: 0.0% (insert/update function)
+  - createiTunesPlaylist: 84.2% (well-tested M3U file creation)
+
+**Technical Blockers Identified:**
+- **playlist package**: Database testing blocked by `database.DB` global variable
+  - Attempted to add unit tests for GeneratePlaylistsForSeries, getBooksInSeries, savePlaylistToDatabase
+  - Tests failed with "no such table" errors and hung during execution
+  - Root cause: Global database.DB conflicts with test database isolation
+  - Alternative approaches needed: integration tests, dependency injection refactoring, or mock interfaces
+- **cmd package**: Command execution testing requires specialized setup (9.2% → 80% = 70.8% gap)
 
 **Enhanced Packages (In Progress):**
 - `internal/mediainfo`: 4.5% → 57.7% (+53.2%)
@@ -32,10 +62,12 @@ Systematic test coverage enhancement across all backend packages with goal of 80
 - Created minimal test audio files for format-specific testing
 - Added Python helper scripts for coverage analysis
 - Established systematic package-by-package enhancement workflow
+- Developed permission-based error testing patterns with root user detection
 
 **Remaining Work:**
-- 15 packages below 80% threshold requiring enhancement
-- Priority order: sysinfo (78.3%), backup (72.9%), fileops (69.7%), realtime (62.6%)
+- 13 packages below 80% threshold requiring enhancement
+- Priority order: sysinfo (78.3% need +1.7%), fileops (69.7%), realtime (62.6%), organizer (58.0%)
+- Blocked: playlist (17.8%, database architecture issue), cmd (9.2%, extensive work needed)
 - Estimated completion: Ongoing systematic enhancement
 
 #### January 18, 2026 - Comprehensive Test Coverage Documentation (v1.2.0)
