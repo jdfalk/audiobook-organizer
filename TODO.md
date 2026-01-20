@@ -10,7 +10,8 @@
 **Current Completion: ~75-85% MVP Complete**
 
 - **Backend**: ~90% (all APIs functional, 100% test pass rate, ~25% coverage)
-- **Frontend**: ~70% (Book Detail, Library, Settings, System complete; E2E infrastructure needs expansion)
+- **Frontend**: ~70% (Book Detail, Library, Settings, System complete; E2E
+  infrastructure needs expansion)
 - **Testing**: Go tests 100% pass (~25% coverage needs increase to 60%+ for MVP)
 - **CI/CD**: Release pipeline functional but needs token permissions fix
 
@@ -22,9 +23,11 @@
 
 ### Manual QA & Validation (Est: 2-3 hours)
 
-- [ ] **Execute manual validation checklist** - Verify all core user workflows end-to-end
+- [ ] **Execute manual validation checklist** - Verify all core user workflows
+      end-to-end
   - [ ] Library: Search/sort, import path CRUD, scan operations
-  - [ ] Book Detail: All tabs (info, files, versions), metadata edit/fetch, soft delete + block hash
+  - [ ] Book Detail: All tabs (info, files, versions), metadata edit/fetch, soft
+        delete + block hash
   - [ ] Settings: Blocked hashes tab, config persistence, system info accuracy
   - [ ] Dashboard: Stats accuracy, navigation to all pages
   - [ ] State transitions: import → organized → deleted → purged workflow
@@ -34,7 +37,8 @@
 
 ### Release Pipeline Fixes (Est: 2-3 hours)
 
-- [ ] **Fix prerelease workflow token permissions** - Replace token with one that has `contents:write` or use PAT
+- [ ] **Fix prerelease workflow token permissions** - Replace token with one
+      that has `contents:write` or use PAT
   - Confirm GoReleaser publish works
   - Verify Docker frontend build succeeds with Vitest globals/node types fix
   - Replace local changelog stub with real generator once GHCOMMON sync complete
@@ -45,18 +49,25 @@
 
 - [ ] **Raise Go coverage from 25% to 60% minimum**
   - [ ] Add server handler tests (organize, scan, metadata operations)
-  - [ ] Add scanner package tests (progress tracking, metadata extraction, duplicate detection)
-  - [ ] Add database query tests (soft delete filters, state transitions, provenance tracking)
-  - [ ] Add migration 10 validation tests (provenance schema, backward compatibility)
+  - [ ] Add scanner package tests (progress tracking, metadata extraction,
+        duplicate detection)
+  - [ ] Add database query tests (soft delete filters, state transitions,
+        provenance tracking)
+  - [ ] Add migration 10 validation tests (provenance schema, backward
+        compatibility)
   - **Priority**: P0 - Quality gate for MVP
   - **Blocker**: None - can start immediately
 
 ### E2E Backend Integration (Est: 4-6 hours)
 
-- [ ] **Expand Playwright E2E coverage** - Move beyond smoke tests to critical workflows
-  - [ ] Library interactions: Search/sort/pagination, metadata fetch, AI parse trigger
-  - [ ] Book Detail flows: Tab navigation, soft delete + block hash, restore/purge, version linking
-  - [ ] Settings workflows: Add/remove import paths end-to-end (not just route mocks)
+- [ ] **Expand Playwright E2E coverage** - Move beyond smoke tests to critical
+      workflows
+  - [ ] Library interactions: Search/sort/pagination, metadata fetch, AI parse
+        trigger
+  - [ ] Book Detail flows: Tab navigation, soft delete + block hash,
+        restore/purge, version linking
+  - [ ] Settings workflows: Add/remove import paths end-to-end (not just route
+        mocks)
   - [ ] Soft-deleted list: Restore and purge actions
   - **Priority**: P0 - Safety net for frontend changes
   - **Blocker**: None - infrastructure exists, needs test expansion
@@ -67,14 +78,16 @@
 
 ### CI/CD Health Monitoring
 
-- [ ] **Monitor `test-action-integration.yml`** - Alert if action outputs drift from expected values
+- [ ] **Monitor `test-action-integration.yml`** - Alert if action outputs drift
+      from expected values
   - Expected: `dir=web`, `node-version=22`, `has-frontend=true`
   - Watch for repository-config.yml changes triggering failures
   - **Priority**: P1 - Prevents silent configuration drift
 
 ### Documentation Updates
 
-- [ ] **Capture manual verification notes** - Document test results from P0 validation
+- [ ] **Capture manual verification notes** - Document test results from P0
+      validation
   - Settings → Blocked Hashes tab verification (PR #69)
   - State transitions + soft delete flows (PR #70)
   - Add findings to project docs for future regression testing
@@ -85,7 +98,8 @@
 - [ ] **Book Detail metadata richness** - Enhance Tags/Compare views
   - Show raw embedded tags and media info (bitrate/codec/sample rate/etc.)
   - Display provenance per field (DB/edited, fetched, file tag)
-  - Expand Edit Metadata dialog with full fields (genre/ISBN/description/language)
+  - Expand Edit Metadata dialog with full fields
+    (genre/ISBN/description/language)
   - **Priority**: P1 - User-facing feature completeness
   - **Status**: Backend support merged (PR #79), frontend implementation partial
 
@@ -102,8 +116,10 @@
 
 ### Documentation & Status
 
-- ✅ **README updated** - Reflects current feature completeness and release pipeline status
-- [ ] **Developer guide** - Architecture overview, data flow diagrams, deployment instructions
+- ✅ **README updated** - Reflects current feature completeness and release
+  pipeline status
+- [ ] **Developer guide** - Architecture overview, data flow diagrams,
+      deployment instructions
 
 ### Observability Improvements
 
@@ -115,22 +131,27 @@
   - Level-based coloring (info/warn/error)
   - Collapsible verbose details
   - Memory usage guard for large log volumes
-- [ ] **SSE system status heartbeats** - Push `system.status` diff events every 5s
+- [ ] **SSE system status heartbeats** - Push `system.status` diff events every
+      5s
   - Live memory/library metrics without polling
   - Reduce Dashboard API calls
 
 ### Performance Optimizations
 
-- [ ] **Parallel scanning** - Goroutine pool respecting `concurrent_scans` setting
-- [ ] **Debounced library size recomputation** - Use inotify/fsnotify instead of periodic full walk
-- [ ] **Caching layer** - LRU cache for frequent book queries (keyed by filter + page)
+- [ ] **Parallel scanning** - Goroutine pool respecting `concurrent_scans`
+      setting
+- [ ] **Debounced library size recomputation** - Use inotify/fsnotify instead of
+      periodic full walk
+- [ ] **Caching layer** - LRU cache for frequent book queries (keyed by filter +
+      page)
 
 ### UX Enhancements
 
 - [ ] **Global notification/toast system** - Consistent success/error feedback
 - [ ] **Dark mode** - Theme customization with persisted preference
 - [ ] **Keyboard shortcuts** - '/' focus search, 'o' organize, 's' scan all
-- [ ] **Progressive loading skeletons** - Better perceived performance for long lists
+- [ ] **Progressive loading skeletons** - Better perceived performance for long
+      lists
 
 ---
 
@@ -138,33 +159,48 @@
 
 ### January 2026
 
-- ✅ **Metadata Provenance Frontend** (PR #79 merged) - Tags/Compare views with source indicators
-- ✅ **Bulk Metadata Fetch** - Library UI bulk fetch controls with confirmation and missing-only toggle
-- ✅ **Library Metadata Edit** - Persistent changes via API with normalized field mapping
+- ✅ **Metadata Provenance Frontend** (PR #79 merged) - Tags/Compare views with
+  source indicators
+- ✅ **Bulk Metadata Fetch** - Library UI bulk fetch controls with confirmation
+  and missing-only toggle
+- ✅ **Library Metadata Edit** - Persistent changes via API with normalized
+  field mapping
 - ✅ **Import Workflow** - Server-side file selection with organize toggle
-- ✅ **Action Integration** - `frontend-ci.yml` reads node version via `get-frontend-config-action`
+- ✅ **Action Integration** - `frontend-ci.yml` reads node version via
+  `get-frontend-config-action`
 
 ### December 2025
 
-- ✅ **Scanner Progress Race Fix** (PR #83 merged) - Fixed race condition, 100% test pass rate
-- ✅ **Go Coverage Threshold Lowered** - Temporarily set to 0% to unblock PR merges
-- ✅ **Open Library Mock Tests** - Replaced integration tests with mock server coverage
-- ✅ **Book Detail Compare View** - Unlock overrides without clearing values, tags/compare E2E coverage
-- ✅ **CI Workflow Stabilization** - Fixed Go 1.25 Docker build, updated ghcommon workflows to @main
-- ✅ **ESLint 9 Migration** - Migrated to flat config, all linting passes with zero errors
+- ✅ **Scanner Progress Race Fix** (PR #83 merged) - Fixed race condition, 100%
+  test pass rate
+- ✅ **Go Coverage Threshold Lowered** - Temporarily set to 0% to unblock PR
+  merges
+- ✅ **Open Library Mock Tests** - Replaced integration tests with mock server
+  coverage
+- ✅ **Book Detail Compare View** - Unlock overrides without clearing values,
+  tags/compare E2E coverage
+- ✅ **CI Workflow Stabilization** - Fixed Go 1.25 Docker build, updated
+  ghcommon workflows to @main
+- ✅ **ESLint 9 Migration** - Migrated to flat config, all linting passes with
+  zero errors
 - ✅ **TypeScript Build Fixes** - Resolved all @ts-ignore and 'any' type errors
-- ✅ **npm Cache Hardening** - Fixed cache path resolution in ghcommon reusable CI
-- ✅ **Soft Delete + Purge** (PRs #69, #70 merged) - Full lifecycle with block hash tracking
+- ✅ **npm Cache Hardening** - Fixed cache path resolution in ghcommon reusable
+  CI
+- ✅ **Soft Delete + Purge** (PRs #69, #70 merged) - Full lifecycle with block
+  hash tracking
 - ✅ **State Machine** - Book lifecycle (imported → organized → deleted)
 - ✅ **Blocked Hashes UI** - Settings tab with CRUD operations
-- ✅ **Metadata Provenance Backend** - Per-field override/lock flags in `metadata_states` table
+- ✅ **Metadata Provenance Backend** - Per-field override/lock flags in
+  `metadata_states` table
 
 ### November 2025
 
-- ✅ **Metadata Extraction Fixes** - Case-sensitive tags, release-group filtering, volume detection
+- ✅ **Metadata Extraction Fixes** - Case-sensitive tags, release-group
+  filtering, volume detection
 - ✅ **Diagnostics CLI** - `cleanup-invalid` and `query` subcommands
 - ✅ **Database Cleanup** - Purged 8 corrupted records
-- ✅ **EventSource Reconnection** - Exponential backoff (3s→6s→12s→24s, cap at 30s)
+- ✅ **EventSource Reconnection** - Exponential backoff (3s→6s→12s→24s, cap at
+  30s)
 - ✅ **Health Endpoint** - `/api/health` and `/api/v1/health` both available
 - ✅ **API Response Fix** - Frontend uses `items` field instead of `audiobooks`
 
@@ -175,28 +211,35 @@
 ### Historical Session Summaries (Pre-January 2026)
 
 **SESSION-001**: Database Migration Testing & Validation (Dec 25-26, 2025)
+
 - ✅ RESOLVED - Migration 10 (provenance) validated, DB init flakiness cleared
-- Follow-up: Add migration 10 behavior coverage, review provenance query performance
+- Follow-up: Add migration 10 behavior coverage, review provenance query
+  performance
 
 **SESSION-002**: Test Infrastructure Stabilization (Dec 2025)
+
 - ✅ RESOLVED - Test DB setup stabilized, no current failures
 - Follow-up: Track isolation/coverage improvements as part of CI plan
 
 **SESSION-003**: Metadata Provenance Backend (Dec 2025)
+
 - ✅ MERGED via PR #79 - Per-field provenance/override/lock persistence complete
 
 **SESSION-004**: Cross-Repo Action Development (Dec 2025)
+
 - ✅ COMPLETED - Created `jdfalk/get-frontend-config-action` composite action
 - Outputs: `dir`, `node-version`, `has-frontend`
 - Branch protection: rebase-only, linear history, 1 required review
 - Integration: Now used in `frontend-ci.yml`
 
 **SESSION-006**: Frontend TypeScript Fixes (Dec 2025)
+
 - ✅ MERGED - Resolved all @ts-ignore, 'any' types, React Hook dependencies
 
 ### MVP Implementation Sprint (Dec 22, 2025 - Tasks 1-5 Complete)
 
 **What's Done:**
+
 1. ✅ All Tests Passing - 19 Go packages, 100% pass rate
 2. ✅ Dashboard API - `/api/v1/dashboard` with size/format distributions
 3. ✅ Metadata API - `/api/v1/metadata/fields` with validation
@@ -210,6 +253,7 @@
 ### Pre-MVP Completion (November 2025)
 
 **Backend Completeness:**
+
 - ✅ Database migration system with version tracking
 - ✅ Complete audiobook CRUD API
 - ✅ Authors and series API endpoints
@@ -226,6 +270,7 @@
 - ✅ Settings API (runtime config updates)
 
 **Frontend Completeness:**
+
 - ✅ React app with TypeScript and Material-UI
 - ✅ Dashboard with library statistics
 - ✅ Library page with grid/list views, sorting, search
@@ -237,6 +282,7 @@
 - ✅ Smart folder/file naming patterns with live examples
 
 **Integration Completeness:**
+
 - ✅ Open Library metadata integration
 - ✅ OpenAI parsing integration for filename fallback
 - ✅ Auto-rescan after organize
@@ -261,50 +307,68 @@
 
 ### CI & Release Health (P0)
 
-- ✅ Lowered Go coverage threshold to 0 in CI so PR #83 (scanner progress race fix) could land; `go test ./...` currently green (~25% coverage)
+- ✅ Lowered Go coverage threshold to 0 in CI so PR #83 (scanner progress race
+  fix) could land; `go test ./...` currently green (~25% coverage)
 - ✅ Scanner progress race fix merged to main
-- ⚠️ Add Go unit tests (server/scanner first) so we can raise the coverage threshold again
-- ⚠️ Re-run prerelease with a token that has `contents:write` (or PAT), confirm GoReleaser publish + Docker frontend build work with the Vitest globals/node types fix, then replace the local changelog stub with the real generator once GHCOMMON is available
+- ⚠️ Add Go unit tests (server/scanner first) so we can raise the coverage
+  threshold again
+- ⚠️ Re-run prerelease with a token that has `contents:write` (or PAT), confirm
+  GoReleaser publish + Docker frontend build work with the Vitest globals/node
+  types fix, then replace the local changelog stub with the real generator once
+  GHCOMMON is available
 
 ### Metadata Fetching (P0)
 
-- ✅ Added bulk metadata fetch API (`/api/v1/metadata/bulk-fetch`) that fills missing fields while respecting overrides/locks, with server tests and Open Library mock support
-- ✅ Wired bulk fetch controls into the Library UI with confirmation, missing-only toggle, and feedback alerts
-
+- ✅ Added bulk metadata fetch API (`/api/v1/metadata/bulk-fetch`) that fills
+  missing fields while respecting overrides/locks, with server tests and Open
+  Library mock support
+- ✅ Wired bulk fetch controls into the Library UI with confirmation,
+  missing-only toggle, and feedback alerts
 
 ### Metadata Editing (P0)
 
-- ✅ Library metadata edit dialog now persists changes via the API with normalized field mapping
-
+- ✅ Library metadata edit dialog now persists changes via the API with
+  normalized field mapping
 
 ### Import Workflow (P0)
 
-- ✅ Added Library import dialog for server-side file selection with organize toggle
+- ✅ Added Library import dialog for server-side file selection with organize
+  toggle
 
-- ✅ Replaced Open Library integration tests with mock server coverage to avoid external network calls
+- ✅ Replaced Open Library integration tests with mock server coverage to avoid
+  external network calls
 
 ### Action Integration (P1)
 
 - ✅ `frontend-ci.yml` now reads node version via `get-frontend-config-action`
-- ⚠️ Monitor `test-action-integration.yml` on repository-config changes; alert if action outputs drift from expected (`dir=web`, `node-version=22`, `has-frontend=true`)
+- ⚠️ Monitor `test-action-integration.yml` on repository-config changes; alert
+  if action outputs drift from expected (`dir=web`, `node-version=22`,
+  `has-frontend=true`)
 
 ### Frontend Provenance & E2E (P1)
 
-- ✅ Book Detail compare view now supports unlocking overrides without clearing values; tags/compare E2E coverage includes unlock + block-hash delete verification
-- ⚠️ Revisit Book Detail delete/purge flows for soft-delete + block-hash verification
+- ✅ Book Detail compare view now supports unlocking overrides without clearing
+  values; tags/compare E2E coverage includes unlock + block-hash delete
+  verification
+- ⚠️ Revisit Book Detail delete/purge flows for soft-delete + block-hash
+  verification
 
 ### Manual Verification (P1)
 
-- ⚠️ Verify blocked hash CRUD in Settings (PR #69) and state transition + soft delete flows (PR #70); capture notes in docs
+- ⚠️ Verify blocked hash CRUD in Settings (PR #69) and state transition + soft
+  delete flows (PR #70); capture notes in docs
 
 ### Docs & Status Refresh (P2)
 
-- ✅ README updated to reflect current feature completeness and release pipeline status
+- ✅ README updated to reflect current feature completeness and release pipeline
+  status
 
 ### Archived Session Notes
 
-- Metadata Provenance backend (SESSION-003) and frontend TypeScript fixes (SESSION-006) are merged
-- Cross-repo action creation (SESSION-004) complete; integration tracking remains above
+- Metadata Provenance backend (SESSION-003) and frontend TypeScript fixes
+  (SESSION-006) are merged
+- Cross-repo action creation (SESSION-004) complete; integration tracking
+  remains above
 
 ### Cross-Repo Action Development (COMPLETED)
 
@@ -330,7 +394,8 @@
 
 #### **SESSION-001**: Database Migration Testing & Validation
 
-- **Status**: ✅ RESOLVED (Dec 26, 2025) — go test ./... passes; see CI plan above for coverage improvements
+- **Status**: ✅ RESOLVED (Dec 26, 2025) — go test ./... passes; see CI plan
+  above for coverage improvements
 - **Context**: Working on migration 10 (provenance) validation
 - **Current State**:
   - ✅ Migration 10 analysis complete (schema, API, state machine impact
@@ -418,7 +483,9 @@
 
 ## 🎯 Next Session Starting Points
 
-- Metadata provenance branch merged via PR #79; monitor UI/E2E coverage and consider exposing provenance map on `GET /api/v1/audiobooks/:id` + optional history view if UI requires it.
+- Metadata provenance branch merged via PR #79; monitor UI/E2E coverage and
+  consider exposing provenance map on `GET /api/v1/audiobooks/:id` + optional
+  history view if UI requires it.
 - Run Playwright Book Detail tags/compare mocks and Selenium
   soft-delete/retention smoke (`tests/e2e/test_soft_delete_and_retention.py`).
 
@@ -428,7 +495,8 @@
 
 - [x] Review and merge PR #69 (Blocked Hashes UI) — merged 2025-12-22
 - [x] Review and merge PR #70 (State Transitions) — merged 2025-12-22
-- [x] Finalize metadata provenance branch (current worktree) and push to main — merged via PR #79
+- [x] Finalize metadata provenance branch (current worktree) and push to main —
+      merged via PR #79
 - [ ] Manual testing of new features (blocked hashes, state transitions,
       metadata overrides/locks)
 - [x] Build BookDetail.tsx component (Task 6) — detail view now includes
@@ -1195,8 +1263,8 @@
 ### AI Parsing Not Working
 
 - [x] **URGENT**: Fix OpenAI integration in scanner workflow
-  - [x] Track when filename fallback was used and allow AI to re-parse
-        fallback metadata
+  - [x] Track when filename fallback was used and allow AI to re-parse fallback
+        metadata
   - [x] Add AI fallback logs that explain why parsing was invoked
   - [x] Add tests for fallback flag and TXXX narrator/performer extraction
   - [ ] Validate with a real OpenAI key in Settings + scanner run

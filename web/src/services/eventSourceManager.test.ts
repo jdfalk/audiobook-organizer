@@ -70,7 +70,11 @@ describe('eventSourceManager', () => {
 
   it('reconnects with exponential backoff', () => {
     const manager = createEventSourceManager('/api/events');
-    const statuses: Array<{ state: string; attempt: number; delayMs?: number }> = [];
+    const statuses: Array<{
+      state: string;
+      attempt: number;
+      delayMs?: number;
+    }> = [];
 
     manager.subscribe(
       () => {},
@@ -86,7 +90,9 @@ describe('eventSourceManager', () => {
     expect(TestEventSource.instances).toHaveLength(1);
     TestEventSource.instances[0].emitError();
 
-    const reconnectStatus = statuses.find((status) => status.state === 'reconnecting');
+    const reconnectStatus = statuses.find(
+      (status) => status.state === 'reconnecting'
+    );
     expect(reconnectStatus?.attempt).toBe(1);
     expect(reconnectStatus?.delayMs).toBe(3000);
 

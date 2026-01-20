@@ -203,7 +203,10 @@ export const Library = () => {
             ];
             return { ...prev, [opId]: next.slice(-200) };
           });
-        } else if (evt.type === 'operation.progress' && evt.data?.operation_id) {
+        } else if (
+          evt.type === 'operation.progress' &&
+          evt.data?.operation_id
+        ) {
           const opId = String(evt.data.operation_id);
           const update = (op: api.Operation | null): api.Operation | null => {
             if (!op || op.id !== opId) return op;
@@ -219,9 +222,7 @@ export const Library = () => {
         } else if (evt.type === 'operation.status' && evt.data?.operation_id) {
           const opId = String(evt.data.operation_id);
           const status = String(evt.data?.status ?? '');
-          const finalize = (
-            op: api.Operation | null
-          ): api.Operation | null => {
+          const finalize = (op: api.Operation | null): api.Operation | null => {
             if (!op || op.id !== opId) return op;
             return { ...op, status };
           };

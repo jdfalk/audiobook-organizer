@@ -264,8 +264,9 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
             return Promise.resolve(jsonResponse(book));
           }
           if (method === 'DELETE') {
-            (window as unknown as { __lastDeleteUrl?: string }).__lastDeleteUrl =
-              url;
+            (
+              window as unknown as { __lastDeleteUrl?: string }
+            ).__lastDeleteUrl = url;
             const softDelete = url.includes('soft_delete=true');
             if (softDelete) {
               book = {
@@ -385,9 +386,9 @@ test.describe('Book Detail page', () => {
     await page.getByRole('button', { name: 'Soft Delete' }).click();
     await page.waitForFunction(
       () =>
-        (window as unknown as { __lastDeleteUrl?: string }).__lastDeleteUrl?.includes(
-          'block_hash=true'
-        ),
+        (
+          window as unknown as { __lastDeleteUrl?: string }
+        ).__lastDeleteUrl?.includes('block_hash=true'),
       null,
       { timeout: 5000 }
     );

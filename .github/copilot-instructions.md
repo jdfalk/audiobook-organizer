@@ -48,16 +48,19 @@ Use VS Code tasks for non-git operations (build, lint, generate). For git operat
 Terminal commands with excessive length (either many arguments or very long single lines) will fail with exit code 130 or similar errors. Follow these rules:
 
 **Maximum Safe Limits:**
+
 - **For loops with paths**: No more than 5 paths/arguments
 - **Single-line commands**: No more than ~200-300 characters
 - **Multi-argument commands**: No more than 5-6 distinct arguments
 
 **Example of TOO LONG (will fail):**
+
 ```bash
 for pr_dir in /path/one /path/two /path/three /path/four /path/five /path/six /path/seven /path/eight /path/nine /path/ten; do ...
 ```
 
 **Solution: Use a script in temp_crap repo:**
+
 ```bash
 # Instead, create a script
 cat > /Users/jdfalk/repos/temp_crap/my_script.sh << 'EOF'
@@ -71,6 +74,7 @@ chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
 ```
 
 **Why temp_crap:**
+
 - Always available in the workspace
 - No approval needed for file creation
 - Can handle unlimited command complexity
@@ -104,4 +108,3 @@ chmod +x /Users/jdfalk/repos/temp_crap/my_script.sh
 - Fix protobuf cycles: `tools/protobuf-cycle-fixer.py`Always check `logs/` directory after running VS Code tasks for execution details and debugging information.
 
 For detailed coding rules, see `.github/instructions/general-coding.instructions.md` and language-specific instruction files.
-
