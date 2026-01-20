@@ -86,7 +86,9 @@ func NewFileOperation(originalPath, targetPath string, config OperationConfig) (
 // Execute performs the file operation with copy-first logic
 func (op *FileOperation) Execute() error {
 	// Step 1: If target exists, back it up
+	targetExists := false
 	if _, err := os.Stat(op.targetPath); err == nil {
+		targetExists = true
 		if err := copyFile(op.targetPath, op.backupPath); err != nil {
 			return fmt.Errorf("failed to backup existing file: %w", err)
 		}
@@ -99,6 +101,13 @@ func (op *FileOperation) Execute() error {
 			_ = copyFile(op.backupPath, op.targetPath)
 		}
 		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	// Step 2.5: Create a backup of the source if PreserveOriginal is true and target didn't exist
+	if op.config.PreserveOriginal && !targetExists {
+		if err := copyFile(op.originalPath, op.backupPath); err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
 	}
 
 	// Step 3: Verify checksums if enabled
