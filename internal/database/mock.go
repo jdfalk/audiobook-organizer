@@ -63,9 +63,9 @@ type MockCall struct {
 
 // MockResult implements sql.Result for testing
 type MockResult struct {
-	LastID          int64
-	AffectedRows    int64
-	Err             error
+	LastID       int64
+	AffectedRows int64
+	Err          error
 }
 
 // LastInsertId returns the last insert ID

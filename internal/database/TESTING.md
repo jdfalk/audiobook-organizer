@@ -27,20 +27,20 @@ import (
 func TestYourFunction(t *testing.T) {
     // Create mock database
     mockDB := database.NewMockDB()
-    
+
     // Configure mock behavior
     mockDB.ExecFunc = func(query string, args ...interface{}) (sql.Result, error) {
         return &database.MockResult{LastID: 1, AffectedRows: 1}, nil
     }
-    
+
     mockDB.QueryFunc = func(query string, args ...interface{}) (*sql.Rows, error) {
         // Return test rows
         return nil, nil
     }
-    
+
     // Use mock in your code
     result, err := mockDB.Exec("INSERT INTO test VALUES (?)", "value")
-    
+
     // Verify calls
     if mockDB.GetExecCallCount() != 1 {
         t.Error("Expected 1 exec call")
@@ -143,16 +143,16 @@ Clear all recorded calls between tests:
 ```go
 func TestMultipleScenarios(t *testing.T) {
     mockDB := database.NewMockDB()
-    
+
     // Test scenario 1
     mockDB.Exec("INSERT INTO test VALUES (1)")
     if mockDB.GetExecCallCount() != 1 {
         t.Error("Expected 1 exec call")
     }
-    
+
     // Reset for scenario 2
     mockDB.Reset()
-    
+
     // Now counts are back to zero
     if mockDB.GetExecCallCount() != 0 {
         t.Error("Expected 0 exec calls after reset")
@@ -167,7 +167,7 @@ Example of testing playlist generation with mock database:
 ```go
 func TestGeneratePlaylistsForSeries(t *testing.T) {
     mockDB := database.NewMockDB()
-    
+
     // Mock series query
     mockDB.QueryFunc = func(query string, args ...interface{}) (*sql.Rows, error) {
         if strings.Contains(query, "SELECT id, name FROM series") {
@@ -180,23 +180,23 @@ func TestGeneratePlaylistsForSeries(t *testing.T) {
         }
         return nil, errors.New("unexpected query")
     }
-    
+
     // Mock playlist insert
     mockDB.ExecFunc = func(query string, args ...interface{}) (sql.Result, error) {
         return &database.MockResult{LastID: 1, AffectedRows: 1}, nil
     }
-    
+
     // Test the function
     err := GeneratePlaylistsForSeriesWithDB(mockDB)
     if err != nil {
         t.Errorf("Expected no error, got %v", err)
     }
-    
+
     // Verify correct calls were made
     if mockDB.GetQueryCallCount() < 1 {
         t.Error("Expected at least 1 query")
     }
-    
+
     err = mockDB.VerifyExec("INSERT INTO playlists")
     if err != nil {
         t.Error("Expected playlist insert")
@@ -211,28 +211,28 @@ Example of testing book insertion with mock database:
 ```go
 func TestSaveBookToDatabase(t *testing.T) {
     mockDB := database.NewMockDB()
-    
+
     // Mock author lookup
     mockDB.QueryRowFunc = func(query string, args ...interface{}) *sql.Row {
         // Return row with author ID
         return getTestAuthorRow()
     }
-    
+
     // Mock insert
     mockDB.ExecFunc = func(query string, args ...interface{}) (sql.Result, error) {
         return &database.MockResult{LastID: 123, AffectedRows: 1}, nil
     }
-    
+
     book := &Book{
         Title: "Test Book",
         Author: "Test Author",
     }
-    
+
     err := SaveBookToDatabaseWithDB(mockDB, book)
     if err != nil {
         t.Errorf("Expected no error, got %v", err)
     }
-    
+
     // Verify book insert
     query, args, _ := mockDB.GetLastExec()
     if !strings.Contains(query, "INSERT INTO books") {
@@ -251,7 +251,7 @@ func TestConcurrentDatabaseAccess(t *testing.T) {
     mockDB.QueryFunc = func(query string, args ...interface{}) (*sql.Rows, error) {
         return nil, nil
     }
-    
+
     var wg sync.WaitGroup
     for i := 0; i < 100; i++ {
         wg.Add(1)
@@ -262,7 +262,7 @@ func TestConcurrentDatabaseAccess(t *testing.T) {
         }(i)
     }
     wg.Wait()
-    
+
     // All calls recorded correctly
     if mockDB.GetQueryCallCount() != 100 {
         t.Error("Expected 100 query calls")
@@ -310,7 +310,7 @@ This allows testing with MockDB while maintaining backward compatibility with ex
 func TestCompletePlaylistGeneration(t *testing.T) {
     // Arrange
     mockDB := database.NewMockDB()
-    
+
     // Setup series query response
     mockDB.QueryFunc = func(query string, args ...interface{}) (*sql.Rows, error) {
         switch {
@@ -322,39 +322,39 @@ func TestCompletePlaylistGeneration(t *testing.T) {
             return nil, fmt.Errorf("unexpected query: %s", query)
         }
     }
-    
+
     // Setup QueryRow for playlist check
     mockDB.QueryRowFunc = func(query string, args ...interface{}) *sql.Row {
         return getNoPlaylistRow()
     }
-    
+
     // Setup Exec for inserts
     mockDB.ExecFunc = func(query string, args ...interface{}) (sql.Result, error) {
         return &database.MockResult{LastID: 1, AffectedRows: 1}, nil
     }
-    
+
     // Act
     err := GeneratePlaylistsWithDB(mockDB, "/output")
-    
+
     // Assert
     if err != nil {
         t.Fatalf("Expected no error, got %v", err)
     }
-    
+
     // Verify database interactions
     if mockDB.GetQueryCallCount() < 2 {
         t.Error("Expected at least 2 queries (series + books)")
     }
-    
+
     if mockDB.GetExecCallCount() < 1 {
         t.Error("Expected at least 1 exec (playlist insert)")
     }
-    
+
     // Verify specific operations
     if err := mockDB.VerifyQuery("SELECT id, name FROM series"); err != nil {
         t.Error("Series query not found")
     }
-    
+
     if err := mockDB.VerifyExec("INSERT INTO playlists"); err != nil {
         t.Error("Playlist insert not found")
     }
