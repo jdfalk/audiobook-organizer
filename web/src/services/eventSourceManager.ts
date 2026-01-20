@@ -40,8 +40,7 @@ export const createEventSourceManager = (url = '/api/events') => {
     statusListeners.forEach((listener) => listener(status));
   };
 
-  const hasSubscribers = () =>
-    listeners.size > 0 || statusListeners.size > 0;
+  const hasSubscribers = () => listeners.size > 0 || statusListeners.size > 0;
 
   const close = () => {
     if (reconnectTimer) {

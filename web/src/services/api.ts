@@ -689,7 +689,6 @@ export async function fetchBookMetadata(
   return response.json();
 }
 
-
 // Bulk Metadata Fetching
 export interface BulkFetchMetadataResult {
   book_id: string;

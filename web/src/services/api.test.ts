@@ -154,5 +154,4 @@ describe('api import paths', () => {
       body: JSON.stringify({ book_ids: ['id-1', 'id-2'], only_missing: false }),
     });
   });
-}
-);
+});
