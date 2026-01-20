@@ -657,13 +657,13 @@ func TestSaveConfigToDatabase_NilStore(t *testing.T) {
 
 func TestSyncConfigFromEnv(t *testing.T) {
 	InitConfig()
-	
+
 	// Use viper.Set to simulate environment variable settings
 	// SyncConfigFromEnv uses viper.IsSet() which checks viper's config store
 	viper.Set("root_dir", "/env/root")
 	viper.Set("openai_api_key", "test-key-12345")
 	viper.Set("enable_ai_parsing", true)
-	
+
 	defer func() {
 		// Clean up viper settings
 		viper.Set("root_dir", "")
@@ -920,7 +920,7 @@ func TestApplySettingExtensiveCoverage(t *testing.T) {
 // TestApplySettingInvalidValues tests applySetting with invalid values
 func TestApplySettingInvalidValues(t *testing.T) {
 	InitConfig()
-	
+
 	// Invalid bool should not cause error (silently ignored)
 	originalValue := AppConfig.ScanOnStartup
 	err := applySetting("scan_on_startup", "not-a-bool", "bool")
@@ -931,7 +931,7 @@ func TestApplySettingInvalidValues(t *testing.T) {
 	if AppConfig.ScanOnStartup != originalValue {
 		t.Error("Invalid bool value should not change setting")
 	}
-	
+
 	// Invalid int should not cause error (silently ignored)
 	originalInt := AppConfig.ConcurrentScans
 	err = applySetting("concurrent_scans", "not-an-int", "int")
@@ -942,7 +942,7 @@ func TestApplySettingInvalidValues(t *testing.T) {
 	if AppConfig.ConcurrentScans != originalInt {
 		t.Error("Invalid int value should not change setting")
 	}
-	
+
 	// Unknown key should return error
 	err = applySetting("unknown_key_that_does_not_exist", "value", "string")
 	if err == nil {

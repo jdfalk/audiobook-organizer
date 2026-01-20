@@ -730,7 +730,7 @@ func TestCreateBackupPebbleWithSubdirs(t *testing.T) {
 	if err := os.MkdirAll(dbPath, 0755); err != nil {
 		t.Fatalf("Failed to create pebble directory: %v", err)
 	}
-	
+
 	// Create subdirectory
 	subdir := filepath.Join(dbPath, "subdir")
 	if err := os.MkdirAll(subdir, 0755); err != nil {
@@ -1135,7 +1135,7 @@ func TestCleanupOldBackupsExactlyAtLimit(t *testing.T) {
 	if len(backups) == 0 {
 		t.Error("Expected at least some backups to remain")
 	}
-	
+
 	if len(backups) > 3 {
 		t.Errorf("Expected at most 3 backups with maxBackups=3, got %d", len(backups))
 	}
@@ -1247,7 +1247,7 @@ func TestBackupDatabaseMissingInfo(t *testing.T) {
 	// This test verifies that BackupDatabase returns an error about missing
 	// database path and type information. Whether GlobalStore is nil or not,
 	// one of the two error paths should be hit.
-	
+
 	config := BackupConfig{
 		BackupDir:        t.TempDir(),
 		MaxBackups:       10,
@@ -1271,7 +1271,7 @@ func TestBackupDatabaseMissingInfo(t *testing.T) {
 		"database not initialized",
 		"backup requires database path and type information",
 	}
-	
+
 	foundValid := false
 	for _, validErr := range validErrors {
 		if strings.Contains(err.Error(), validErr) {
@@ -1279,7 +1279,7 @@ func TestBackupDatabaseMissingInfo(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !foundValid {
 		t.Errorf("Expected one of %v in error, got: %v", validErrors, err)
 	}
@@ -1350,7 +1350,7 @@ func TestRestoreBackupIOCopyError(t *testing.T) {
 	// This test creates a valid backup but tests error handling during restore
 	// We'll create a backup of a file, then try to restore to a path where
 	// we can't write (though this is difficult to test portably)
-	
+
 	tempDir := t.TempDir()
 	sourceFile := filepath.Join(tempDir, "source.db")
 	backupDir := filepath.Join(tempDir, "backups")
@@ -1401,7 +1401,7 @@ func TestAddToArchiveStatError(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	archivePath := filepath.Join(tempDir, "test.tar.gz")
-	
+
 	archiveFile, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive file: %v", err)
@@ -1434,12 +1434,12 @@ func TestAddToArchiveWalkError(t *testing.T) {
 	tempDir := t.TempDir()
 	sourceDir := filepath.Join(tempDir, "source")
 	archivePath := filepath.Join(tempDir, "test.tar.gz")
-	
+
 	// Create source directory with a file, then make it unreadable
 	if err := os.MkdirAll(sourceDir, 0755); err != nil {
 		t.Fatalf("Failed to create source directory: %v", err)
 	}
-	
+
 	problemFile := filepath.Join(sourceDir, "problem.txt")
 	if err := os.WriteFile(problemFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("Failed to create problem file: %v", err)
@@ -1501,7 +1501,7 @@ func TestRestoreBackupCreateFileError(t *testing.T) {
 	tempDir := t.TempDir()
 	sourceFile := filepath.Join(tempDir, "source.db")
 	backupDir := filepath.Join(tempDir, "backups")
-	
+
 	if err := os.WriteFile(sourceFile, []byte("test data for restore"), 0644); err != nil {
 		t.Fatalf("Failed to create source file: %v", err)
 	}
@@ -1546,7 +1546,7 @@ func TestCreateBackupMkdirAllError(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	sourceFile := filepath.Join(tempDir, "source.db")
-	
+
 	// Create source file
 	if err := os.WriteFile(sourceFile, []byte("test"), 0644); err != nil {
 		t.Fatalf("Failed to create source file: %v", err)
@@ -1583,4 +1583,3 @@ func TestCreateBackupMkdirAllError(t *testing.T) {
 		t.Errorf("Expected 'failed to create backup directory' in error, got: %v", err)
 	}
 }
-

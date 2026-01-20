@@ -306,4 +306,3 @@ func TestGeneratePlaylistsForSeriesNilDB(t *testing.T) {
 	// This function depends on database.DB which needs proper initialization
 	// and would panic with nil pointer if called directly
 }
-
