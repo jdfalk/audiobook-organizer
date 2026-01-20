@@ -99,7 +99,7 @@ func TestIdentifySeries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			series, book := IdentifySeries(tt.title, tt.filePath)
-			
+
 			if series != tt.wantSeries {
 				t.Errorf("IdentifySeries() series = %v, want %v", series, tt.wantSeries)
 			}
@@ -158,7 +158,7 @@ func TestIdentifySeries_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			series, book := IdentifySeries(tt.title, tt.filePath)
-			
+
 			if series != tt.wantSeries {
 				t.Errorf("IdentifySeries() series = %v, want %v", series, tt.wantSeries)
 			}
