@@ -11,67 +11,82 @@
 
 #### January 18, 2026 - Comprehensive Test Coverage Documentation (v1.2.0)
 
-This release documents the comprehensive test coverage added across backend, frontend, and E2E tests. The project now has robust testing infrastructure covering unit tests, integration tests, and end-to-end scenarios.
+This release documents the comprehensive test coverage added across backend,
+frontend, and E2E tests. The project now has robust testing infrastructure
+covering unit tests, integration tests, and end-to-end scenarios.
 
 ##### Backend Unit Test Coverage
 
 **Media Info Tests** (`internal/scanner/media_info_test.go`):
+
 - Quality string generation and tier calculation
 - Format-specific quality level validation
 - Media info struct construction and field validation
 
 **Backup System Tests** (`internal/scanner/backup_test.go`):
+
 - Configuration validation for backup retention
 - Backup directory creation and verification
 - Error handling for invalid backup configurations
 
 **Metadata Write Tests** (`internal/scanner/metadata_write_test.go`):
+
 - Tool dependency checks (ffmpeg, mid3v2, metaflac)
 - Format-specific metadata writing integration
 - Error handling for missing dependencies
 
 **Scanner Core Tests** (`internal/scanner/scanner_test.go`):
+
 - Extension filtering and file type validation
 - Parallel processing and concurrency handling
 - Person name detection from file paths
-- Multi-format scanner tests covering 7+ formats (M4B, MP3, M4A, FLAC, OGG, OPUS, AAC)
+- Multi-format scanner tests covering 7+ formats (M4B, MP3, M4A, FLAC, OGG,
+  OPUS, AAC)
 - Real-world directory structure integration tests
 
 **Scanner Integration Tests** (`internal/scanner/scanner_integration_test.go`):
+
 - Real-world directory structure processing
 - Complex file path parsing scenarios
 - Large-scale mixed format processing (1000+ files)
 - Person name extraction from various path patterns
 
 **Organizer Pattern Tests** (`internal/scanner/organizer_test.go`):
+
 - Series notation and numbering schemes
 - Narrator and edition placeholder handling
 - Path template validation and error cases
 - Unknown placeholder detection
 
-**Organizer Real-World Tests** (`internal/scanner/organizer_real_world_test.go`):
+**Organizer Real-World Tests**
+(`internal/scanner/organizer_real_world_test.go`):
+
 - Comprehensive file path parsing (1000+ test cases)
 - Author/narrator extraction from complex paths
 - Series and volume detection patterns
 - Publisher identification
 
 **Operations Queue Tests** (`internal/operations/operations_test.go`):
+
 - Progress notification system
 - Queue state management
 - Concurrent operation handling
 
 **Model Serialization Tests** (`internal/models/models_test.go`):
+
 - Author JSON round-trip serialization
 - Series JSON round-trip serialization
 - Field validation and edge cases
 
 **PebbleDB Store Tests** (`internal/store/pebbledb_store_test.go`):
+
 - ULID-based ID generation
 - CRUD operations (Create, Read, Update, Delete)
 - Query filtering and pagination
 - Transaction handling
 
 **Metadata Internal Tests** (`internal/scanner/metadata_internal_test.go`):
+
 - Case-insensitive tag lookups
 - TXXX frame extraction and parsing
 - Raw tag handling and normalization
@@ -80,18 +95,22 @@ This release documents the comprehensive test coverage added across backend, fro
 ##### Frontend Unit Test Coverage
 
 **API Service Tests** (`web/src/services/api.test.ts`):
+
 - Import paths CRUD operations
 - Bulk metadata fetch with missing-only toggle
 - Error handling and response validation
 - API endpoint integration
 
-**Library Metadata Tests** (`web/src/components/Library/libraryMetadata.test.ts`):
+**Library Metadata Tests**
+(`web/src/components/Library/libraryMetadata.test.ts`):
+
 - Field mapping between API and UI representations
 - Empty value handling and normalization
 - Validation rules and constraints
 - Default value handling
 
 **Library Helpers Tests** (`web/src/components/Library/libraryHelpers.test.ts`):
+
 - API-to-UI transformation functions
 - Data structure conversions
 - Null/undefined handling
@@ -100,25 +119,30 @@ This release documents the comprehensive test coverage added across backend, fro
 ##### E2E Test Coverage
 
 **App Smoke Tests** (`web/e2e/app.spec.ts` - Playwright):
+
 - Dashboard navigation and rendering
 - Library page accessibility
 - Settings page functionality
 - Basic UI interaction flows
 
 **Import Paths E2E Tests** (`web/e2e/import-paths.spec.ts` - Playwright):
+
 - Import path CRUD operations via Settings UI
 - Path validation and error handling
 - UI state updates and feedback
 - Form submission and cancellation
 
 **Metadata Provenance E2E Tests** (`web/e2e/provenance.spec.ts` - Playwright):
+
 - Comprehensive SESSION-003 coverage
 - Lock/unlock controls validation
 - Effective source display verification
 - Override persistence and state management
 - Provenance chip rendering and interactions
 
-**Soft Delete and Retention E2E Tests** (`tests/test_soft_delete.py` - Python/Selenium):
+**Soft Delete and Retention E2E Tests** (`tests/test_soft_delete.py` -
+Python/Selenium):
+
 - Soft delete workflow validation
 - Retention policy enforcement
 - Purge operations and confirmations
@@ -127,12 +151,14 @@ This release documents the comprehensive test coverage added across backend, fro
 ##### Historical Session Notes (December 2025)
 
 **SESSION-001** (December 20-21, 2025):
+
 - Initial MVP planning and architecture
 - Database schema design (migrations 1-7)
 - Core API endpoint implementation
 - Scanner and organizer foundation
 
 **SESSION-002** (December 22, 2025):
+
 - State machine implementation (migration 9)
 - Blocked hashes management UI (PR #69)
 - Enhanced delete with soft delete support (PR #70)
@@ -140,6 +166,7 @@ This release documents the comprehensive test coverage added across backend, fro
 - Work queue and metadata validation APIs
 
 **SESSION-003** (December 27, 2025):
+
 - Metadata provenance backend completion
 - Per-field override/lock handling
 - Provenance state persistence (migration 10)
@@ -147,12 +174,14 @@ This release documents the comprehensive test coverage added across backend, fro
 - Comprehensive test coverage for metadata state round-trip
 
 **SESSION-004** (December 27-28, 2025):
+
 - Cross-repo action creation (get-frontend-config-action)
 - CI stabilization and npm caching improvements
 - Documentation cleanup and archival
 - Action integration planning
 
 **SESSION-005** (January 3-4, 2026):
+
 - Release pipeline fixes and GoReleaser adjustments
 - OpenAI parsing CLI test skipping
 - CI coverage threshold adjustments
@@ -174,13 +203,16 @@ This release documents the comprehensive test coverage added across backend, fro
 
 #### January 4, 2026 - Organizer placeholder validation
 
-- Normalized placeholder casing and added validation to prevent literal template tokens
+- Normalized placeholder casing and added validation to prevent literal template
+  tokens
 - Added default narrator fallback when pattern includes narrator placeholder
-- Added organizer tests for placeholder normalization and unknown placeholder errors
+- Added organizer tests for placeholder normalization and unknown placeholder
+  errors
 
 #### January 4, 2026 - SSE write-timeout fix
 
-- Disabled server write timeout to keep SSE connections alive for event streaming
+- Disabled server write timeout to keep SSE connections alive for event
+  streaming
 - Added coverage for the default server config write-timeout behavior
 
 #### January 4, 2026 - AI parsing fallback improvements
@@ -191,21 +223,26 @@ This release documents the comprehensive test coverage added across backend, fro
 
 #### January 4, 2026 - Metadata extraction precedence fix
 
-- Fixed metadata extraction to prefer composer/album-artist for authors and performer tags for narrators
-- Added fixture-based tests to validate author/narrator precedence and performer tag handling
+- Fixed metadata extraction to prefer composer/album-artist for authors and
+  performer tags for narrators
+- Added fixture-based tests to validate author/narrator precedence and performer
+  tag handling
 
 #### January 4, 2026 - Open Library tests mocked
 
-- Replaced Open Library integration tests with mock server coverage to avoid external network dependencies
+- Replaced Open Library integration tests with mock server coverage to avoid
+  external network dependencies
 
 #### January 4, 2026 - Book Detail delete block hash E2E
 
-- Added Playwright coverage to confirm block_hash flag is sent during soft delete
+- Added Playwright coverage to confirm block_hash flag is sent during soft
+  delete
 - Added Playwright coverage for unlocking overrides in compare view
 
 #### January 4, 2026 - Book Detail compare unlock E2E
 
-- Added Playwright coverage for unlocking overrides in the Book Detail compare view
+- Added Playwright coverage for unlocking overrides in the Book Detail compare
+  view
 
 #### January 4, 2026 - README status refresh
 
@@ -218,7 +255,8 @@ This release documents the comprehensive test coverage added across backend, fro
 
 #### January 4, 2026 - Import dialog
 
-- Added Library import dialog for selecting server-side audiobook files and triggering import/organize flow
+- Added Library import dialog for selecting server-side audiobook files and
+  triggering import/organize flow
 - Added frontend test coverage for import dialog behavior
 
 #### January 4, 2026 - Metadata edit persistence
@@ -228,13 +266,16 @@ This release documents the comprehensive test coverage added across backend, fro
 
 #### January 4, 2026 - Bulk metadata fetch UI
 
-- Added Library UI controls to bulk fetch metadata with missing-only toggle and confirmation dialog
+- Added Library UI controls to bulk fetch metadata with missing-only toggle and
+  confirmation dialog
 - Added frontend API and UI tests covering bulk metadata fetch flow
 
 #### January 4, 2026 - Bulk metadata fetch automation
 
-- Added `/api/v1/metadata/bulk-fetch` to pull Open Library metadata in bulk and fill missing fields without overwriting manual overrides or locks
-- Added server tests with Open Library base URL override for deterministic metadata fetch coverage
+- Added `/api/v1/metadata/bulk-fetch` to pull Open Library metadata in bulk and
+  fill missing fields without overwriting manual overrides or locks
+- Added server tests with Open Library base URL override for deterministic
+  metadata fetch coverage
 
 #### January 3, 2026 - Release pipeline fixes
 

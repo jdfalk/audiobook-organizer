@@ -211,7 +211,7 @@ func TestParsedMetadata_JSONOmitEmpty(t *testing.T) {
 func TestTestConnection_Timeout(t *testing.T) {
 	// This test verifies the timeout logic exists
 	parser := NewOpenAIParser("test-key", true)
-	
+
 	// Create a context that's already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -227,7 +227,7 @@ func TestTestConnection_Timeout(t *testing.T) {
 func TestParseBatch_BatchSizeLimit(t *testing.T) {
 	// Test that batch size is limited to maxBatchSize (20)
 	_ = NewOpenAIParser("test-key", true)
-	
+
 	// Create 25 filenames
 	filenames := make([]string, 25)
 	for i := 0; i < 25; i++ {
@@ -243,12 +243,12 @@ func TestParseBatch_BatchSizeLimit(t *testing.T) {
 
 func TestOpenAIParser_ModelConfiguration(t *testing.T) {
 	parser := NewOpenAIParser("test-key", true)
-	
+
 	// Verify default model is set
 	if parser.model == "" {
 		t.Error("Expected model to be set")
 	}
-	
+
 	// Verify it's the expected model
 	expectedModel := "gpt-4o-mini"
 	if parser.model != expectedModel {
@@ -258,7 +258,7 @@ func TestOpenAIParser_ModelConfiguration(t *testing.T) {
 
 func TestOpenAIParser_RetryConfiguration(t *testing.T) {
 	parser := NewOpenAIParser("test-key", true)
-	
+
 	// Verify default maxRetries is set
 	expectedRetries := 2
 	if parser.maxRetries != expectedRetries {
@@ -268,7 +268,7 @@ func TestOpenAIParser_RetryConfiguration(t *testing.T) {
 
 // Helper function
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && 
+	return len(s) > 0 && len(substr) > 0 &&
 		(s == substr || (len(s) >= len(substr) && hasSubstring(s, substr)))
 }
 

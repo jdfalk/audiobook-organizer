@@ -5,11 +5,13 @@
 
 # Database Testing Guide
 
-This guide explains how to use the mock database interface for comprehensive testing of database-dependent code.
+This guide explains how to use the mock database interface for comprehensive
+testing of database-dependent code.
 
 ## Overview
 
 The `database` package provides:
+
 - **DBInterface**: Interface abstraction for database operations
 - **MockDB**: Full-featured mock implementation for testing
 - **sqlDBWrapper**: Wrapper to convert `*sql.DB` to `DBInterface`
@@ -272,8 +274,10 @@ func TestConcurrentDatabaseAccess(t *testing.T) {
 
 ## Best Practices
 
-1. **Always set required Func fields**: Set `ExecFunc`, `QueryFunc`, etc. for operations your code uses
-2. **Verify calls in tests**: Use `VerifyQuery`, `VerifyExec` to ensure correct SQL was executed
+1. **Always set required Func fields**: Set `ExecFunc`, `QueryFunc`, etc. for
+   operations your code uses
+2. **Verify calls in tests**: Use `VerifyQuery`, `VerifyExec` to ensure correct
+   SQL was executed
 3. **Use Reset() between test cases**: Clear state when reusing mocks
 4. **Check call counts**: Verify expected number of database operations
 5. **Test error paths**: Use `ErrorMode` to test error handling
@@ -302,7 +306,8 @@ func SaveBook(book *Book) error {
 }
 ```
 
-This allows testing with MockDB while maintaining backward compatibility with existing code.
+This allows testing with MockDB while maintaining backward compatibility with
+existing code.
 
 ## Complete Example
 
@@ -363,10 +368,13 @@ func TestCompletePlaylistGeneration(t *testing.T) {
 
 ## Coverage Impact
 
-Using MockDB enables testing of database-dependent code that was previously untestable:
+Using MockDB enables testing of database-dependent code that was previously
+untestable:
+
 - **playlist package**: 17.8% → 80%+ (with proper test implementation)
 - **scanner package**: 46.2% → 70%+ (testing database save operations)
 - **tagger package**: 37.5% → 60%+ (testing tag database operations)
 - **database package**: 29.4% → 80%+ (with interface and mock tests)
 
-The mock enables comprehensive testing of error paths, edge cases, and business logic without requiring a real database or complex test fixtures.
+The mock enables comprehensive testing of error paths, edge cases, and business
+logic without requiring a real database or complex test fixtures.
