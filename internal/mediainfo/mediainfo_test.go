@@ -1,14 +1,18 @@
 // file: internal/mediainfo/mediainfo_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a2b3c4d5-e6f7-8a9b-0c1d-2e3f4a5b6c7d
-// last-edited: 2026-01-19
+// last-edited: 2026-01-21
 
 package mediainfo
 
 import (
+	"bytes"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/dhowden/tag"
 )
 
 func TestGenerateQualityString(t *testing.T) {
@@ -430,6 +434,800 @@ func TestGetQualityTier_Boundaries(t *testing.T) {
 			tier := GetQualityTier(tt.info)
 			if tier != tt.tier {
 				t.Errorf("expected %d, got %d", tt.tier, tier)
+			}
+		})
+	}
+}
+
+// createMinimalMP3 creates a minimal valid MP3 file with ID3v2 header
+func createMinimalMP3(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "test.mp3")
+
+	var buf bytes.Buffer
+
+	// ID3v2.3 header
+	buf.Write([]byte("ID3"))       // ID3 identifier
+	buf.Write([]byte{0x03, 0x00})  // Version 2.3.0
+	buf.Write([]byte{0x00})        // Flags
+	buf.Write([]byte{0x00, 0x00, 0x00, 0x7F}) // Size (synchsafe integer)
+
+	// Minimal ID3v2 frame (TIT2 - Title)
+	buf.Write([]byte("TIT2"))      // Frame ID
+	buf.Write([]byte{0x00, 0x00, 0x00, 0x0D}) // Size
+	buf.Write([]byte{0x00, 0x00})  // Flags
+	buf.Write([]byte{0x00})        // Encoding (ISO-8859-1)
+	buf.Write([]byte("Test Title\x00"))
+
+	// MP3 frame header - 11 bits sync word (all set), MPEG-1, Layer III, no CRC
+	// Version 1 (2 bits: 11), Layer 3 (2 bits: 01), Protection (1 bit: 1)
+	// Bitrate index (4 bits), Sample rate (2 bits), Padding (1 bit), Private (1 bit)
+	// 0xFF 0xFB = 11111111 11111011
+	buf.Write([]byte{0xFF, 0xFB})
+	// Bitrate 192kbps (index 1001), 44.1kHz (00), no padding, private=0
+	// Channel mode (stereo), mode extension, copyright, original, emphasis
+	buf.Write([]byte{0x90, 0x00})
+
+	// Add some dummy audio data
+	for i := 0; i < 256; i++ {
+		buf.WriteByte(0x00)
+	}
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("Failed to create test MP3: %v", err)
+	}
+
+	return path
+}
+
+// createMinimalM4A creates a minimal valid M4A file with iTunes metadata
+func createMinimalM4A(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "test.m4a")
+
+	var buf bytes.Buffer
+
+	// ftyp atom (file type)
+	ftypSize := uint32(32)
+	binary.Write(&buf, binary.BigEndian, ftypSize)
+	buf.Write([]byte("ftyp"))
+	buf.Write([]byte("M4A ")) // Major brand
+	binary.Write(&buf, binary.BigEndian, uint32(0)) // Minor version
+	buf.Write([]byte("M4A "))
+	buf.Write([]byte("mp42"))
+	buf.Write([]byte("isom"))
+	buf.Write([]byte("\x00\x00\x00\x00"))
+
+	// moov atom (movie)
+	moovSize := uint32(200)
+	binary.Write(&buf, binary.BigEndian, moovSize)
+	buf.Write([]byte("moov"))
+
+	// mvhd atom (movie header)
+	mvhdSize := uint32(108)
+	binary.Write(&buf, binary.BigEndian, mvhdSize)
+	buf.Write([]byte("mvhd"))
+	buf.Write(make([]byte, 100)) // Dummy header data
+
+	// udta atom (user data) with meta
+	udtaSize := uint32(84)
+	binary.Write(&buf, binary.BigEndian, udtaSize)
+	buf.Write([]byte("udta"))
+
+	metaSize := uint32(76)
+	binary.Write(&buf, binary.BigEndian, metaSize)
+	buf.Write([]byte("meta"))
+	buf.Write([]byte{0x00, 0x00, 0x00, 0x00}) // Version/flags
+
+	// ilst atom (item list)
+	ilstSize := uint32(64)
+	binary.Write(&buf, binary.BigEndian, ilstSize)
+	buf.Write([]byte("ilst"))
+	buf.Write(make([]byte, 56)) // Dummy metadata
+
+	// mdat atom (media data)
+	mdatSize := uint32(512)
+	binary.Write(&buf, binary.BigEndian, mdatSize)
+	buf.Write([]byte("mdat"))
+	buf.Write(make([]byte, 504)) // Dummy audio data
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("Failed to create test M4A: %v", err)
+	}
+
+	return path
+}
+
+// createMinimalFLAC creates a minimal valid FLAC file
+func createMinimalFLAC(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "test.flac")
+
+	var buf bytes.Buffer
+
+	// FLAC signature
+	buf.Write([]byte("fLaC"))
+
+	// STREAMINFO metadata block (type 0, last metadata block)
+	buf.WriteByte(0x80) // Last-metadata-block flag set (1), type 0 (STREAMINFO)
+
+	// Block length (34 bytes)
+	buf.Write([]byte{0x00, 0x00, 0x22})
+
+	// Min/max block size (16-bit each)
+	binary.Write(&buf, binary.BigEndian, uint16(4096)) // min
+	binary.Write(&buf, binary.BigEndian, uint16(4096)) // max
+
+	// Min/max frame size (24-bit each)
+	buf.Write([]byte{0x00, 0x00, 0x00}) // min
+	buf.Write([]byte{0x00, 0x00, 0x00}) // max
+
+	// Sample rate (20 bits) = 44100 Hz, channels (3 bits) = 2, bits per sample (5 bits) = 16
+	// 44100 = 0xAC44 in 20 bits
+	// Sample rate: 0000 0000 0000 1010 1100 (20 bits)
+	// Channels-1: 001 (3 bits, 2 channels)
+	// BPS-1: 01111 (5 bits, 16 bits per sample)
+	buf.WriteByte(0x0A) // Upper 8 bits of sample rate
+	buf.WriteByte(0xC4) // Lower 12 bits of sample rate (0xC44 >> 4)
+	buf.WriteByte(0x42) // Last 4 bits of rate + channels + upper 1 bit of BPS
+	buf.WriteByte(0xF0) // Lower 4 bits of BPS + upper 4 bits of total samples
+
+	// Total samples (36 bits)
+	buf.Write([]byte{0x00, 0x00, 0x00, 0x00})
+
+	// MD5 signature (16 bytes)
+	buf.Write(make([]byte, 16))
+
+	// Add minimal frame
+	buf.Write(make([]byte, 100))
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("Failed to create test FLAC: %v", err)
+	}
+
+	return path
+}
+
+// createMinimalOGG creates a minimal valid OGG Vorbis file
+func createMinimalOGG(t *testing.T, dir string) string {
+	t.Helper()
+	path := filepath.Join(dir, "test.ogg")
+
+	var buf bytes.Buffer
+
+	// OGG page header
+	buf.Write([]byte("OggS"))     // Capture pattern
+	buf.WriteByte(0x00)           // Version
+	buf.WriteByte(0x02)           // Header type (beginning of stream)
+	buf.Write(make([]byte, 8))    // Granule position
+	binary.Write(&buf, binary.LittleEndian, uint32(1)) // Serial number
+	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Page sequence
+	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Checksum (dummy)
+	buf.WriteByte(0x01)           // Number of segments
+	buf.WriteByte(0x1E)           // Segment size (30 bytes)
+
+	// Vorbis identification header
+	buf.WriteByte(0x01)           // Packet type (identification)
+	buf.Write([]byte("vorbis"))  // Vorbis string
+	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Vorbis version
+	buf.WriteByte(0x02)           // Channels (2)
+	binary.Write(&buf, binary.LittleEndian, uint32(44100)) // Sample rate
+	binary.Write(&buf, binary.LittleEndian, uint32(192000)) // Bitrate max
+	binary.Write(&buf, binary.LittleEndian, uint32(160000)) // Bitrate nominal
+	binary.Write(&buf, binary.LittleEndian, uint32(128000)) // Bitrate min
+
+	// Add more dummy data
+	buf.Write(make([]byte, 100))
+
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("Failed to create test OGG: %v", err)
+	}
+
+	return path
+}
+
+func TestExtract_MP3WithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := createMinimalMP3(t, tmpDir)
+
+	info, err := Extract(path)
+	if err != nil {
+		// If tag reading fails, it should fall back to inference
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "MP3" {
+		t.Errorf("Expected MP3 codec, got %s", info.Codec)
+	}
+
+	if info.Format != "mp3" {
+		t.Errorf("Expected mp3 format, got %s", info.Format)
+	}
+
+	// Check that defaults are applied
+	if info.Bitrate == 0 {
+		t.Error("Expected non-zero bitrate")
+	}
+
+	if info.SampleRate == 0 {
+		t.Error("Expected non-zero sample rate")
+	}
+
+	if info.Channels == 0 {
+		t.Error("Expected non-zero channels")
+	}
+
+	if info.Quality == "" {
+		t.Error("Expected quality string to be set")
+	}
+}
+
+func TestExtract_M4AWithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := createMinimalM4A(t, tmpDir)
+
+	info, err := Extract(path)
+	if err != nil {
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "AAC" {
+		t.Errorf("Expected AAC codec, got %s", info.Codec)
+	}
+
+	if info.Format != "m4a" {
+		t.Errorf("Expected m4a format, got %s", info.Format)
+	}
+
+	if info.Bitrate == 0 {
+		t.Error("Expected non-zero bitrate")
+	}
+
+	if info.Quality == "" {
+		t.Error("Expected quality string to be set")
+	}
+}
+
+func TestExtract_FLACWithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := createMinimalFLAC(t, tmpDir)
+
+	info, err := Extract(path)
+	if err != nil {
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "FLAC" {
+		t.Errorf("Expected FLAC codec, got %s", info.Codec)
+	}
+
+	if info.Format != "flac" {
+		t.Errorf("Expected flac format, got %s", info.Format)
+	}
+
+	// FLAC should have bit depth
+	if info.BitDepth == 0 {
+		t.Error("Expected non-zero bit depth for FLAC")
+	}
+
+	if info.Quality == "" {
+		t.Error("Expected quality string to be set")
+	}
+}
+
+func TestExtract_OGGWithTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := createMinimalOGG(t, tmpDir)
+
+	info, err := Extract(path)
+	if err != nil {
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "Vorbis" {
+		t.Errorf("Expected Vorbis codec, got %s", info.Codec)
+	}
+
+	if info.Format != "ogg" {
+		t.Errorf("Expected ogg format, got %s", info.Format)
+	}
+
+	if info.Bitrate == 0 {
+		t.Error("Expected non-zero bitrate")
+	}
+}
+
+func TestExtract_M4BFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create an M4A file but rename it to M4B
+	path := createMinimalM4A(t, tmpDir)
+	m4bPath := filepath.Join(tmpDir, "test.m4b")
+
+	if err := os.Rename(path, m4bPath); err != nil {
+		t.Fatalf("Failed to rename file: %v", err)
+	}
+
+	info, err := Extract(m4bPath)
+	if err != nil {
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "AAC" {
+		t.Errorf("Expected AAC codec for M4B, got %s", info.Codec)
+	}
+
+	if info.Format != "m4b" {
+		t.Errorf("Expected m4b format, got %s", info.Format)
+	}
+}
+
+func TestExtract_OGAFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create an OGG file but rename it to OGA
+	path := createMinimalOGG(t, tmpDir)
+	ogaPath := filepath.Join(tmpDir, "test.oga")
+
+	if err := os.Rename(path, ogaPath); err != nil {
+		t.Fatalf("Failed to rename file: %v", err)
+	}
+
+	info, err := Extract(ogaPath)
+	if err != nil {
+		t.Logf("Tag reading failed (acceptable): %v", err)
+		if info == nil {
+			t.Fatal("Expected fallback info")
+		}
+	}
+
+	if info.Codec != "Vorbis" {
+		t.Errorf("Expected Vorbis codec for OGA, got %s", info.Codec)
+	}
+
+	if info.Format != "oga" {
+		t.Errorf("Expected oga format, got %s", info.Format)
+	}
+}
+
+func TestInferFromFormat_CaseInsensitivity(t *testing.T) {
+	tests := []struct {
+		filename string
+		codec    string
+	}{
+		{"test.MP3", "MP3"},
+		{"test.Mp3", "MP3"},
+		{"test.FLAC", "FLAC"},
+		{"test.M4A", "AAC"},
+		{"test.OGG", "Vorbis"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			info := &MediaInfo{}
+			result, err := inferFromFormat(tt.filename, info)
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result.Codec != tt.codec {
+				t.Errorf("expected codec %s, got %s", tt.codec, result.Codec)
+			}
+		})
+	}
+}
+
+func TestExtract_FormatExtraction(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create empty files with various extensions
+	extensions := []string{".mp3", ".m4a", ".m4b", ".flac", ".ogg", ".oga"}
+
+	for _, ext := range extensions {
+		t.Run(ext, func(t *testing.T) {
+			path := filepath.Join(tmpDir, "test"+ext)
+			if err := os.WriteFile(path, []byte{}, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			info, err := Extract(path)
+			if err != nil {
+				t.Fatalf("Extract failed: %v", err)
+			}
+
+			expectedFormat := ext[1:] // Remove leading dot
+			if info.Format != expectedFormat {
+				t.Errorf("Expected format %s, got %s", expectedFormat, info.Format)
+			}
+		})
+	}
+}
+
+func TestGetQualityTier_AboveBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		info *MediaInfo
+		tier int
+	}{
+		{"400kbps (above 320)", &MediaInfo{Bitrate: 400}, 80},
+		{"350kbps (above 320)", &MediaInfo{Bitrate: 350}, 80},
+		{"260kbps (above 256)", &MediaInfo{Bitrate: 260}, 70},
+		{"200kbps (above 192)", &MediaInfo{Bitrate: 200}, 60},
+		{"150kbps (above 128)", &MediaInfo{Bitrate: 150}, 50},
+		{"FLAC 32-bit", &MediaInfo{Codec: "FLAC", BitDepth: 32}, 100},
+		{"FLAC 24-bit", &MediaInfo{Codec: "FLAC", BitDepth: 24}, 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tier := GetQualityTier(tt.info)
+			if tier != tt.tier {
+				t.Errorf("expected %d, got %d", tt.tier, tier)
+			}
+		})
+	}
+}
+
+func TestExtract_RealMP3File(t *testing.T) {
+	// Use actual test file from testdata
+	testFile := "/Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/testdata/audio/librivox/odyssey_butler_librivox/odyssey_01_homer_butler_64kb.mp3"
+
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		t.Skip("Test file not found")
+	}
+
+	info, err := Extract(testFile)
+	if err != nil {
+		t.Fatalf("Failed to extract from real MP3: %v", err)
+	}
+
+	if info.Codec != "MP3" {
+		t.Errorf("Expected MP3 codec, got %s", info.Codec)
+	}
+
+	if info.Format != "mp3" {
+		t.Errorf("Expected mp3 format, got %s", info.Format)
+	}
+
+	// Real file should have metadata
+	if info.Bitrate == 0 {
+		t.Error("Expected non-zero bitrate")
+	}
+
+	if info.SampleRate == 0 {
+		t.Error("Expected non-zero sample rate")
+	}
+
+	if info.Quality == "" {
+		t.Error("Expected quality string")
+	}
+
+	t.Logf("Extracted info: Codec=%s, Bitrate=%d, SampleRate=%d, Quality=%s",
+		info.Codec, info.Bitrate, info.SampleRate, info.Quality)
+}
+
+// mockMetadata implements tag.Metadata interface for testing
+type mockMetadata struct {
+	fileType tag.FileType
+	raw      map[string]interface{}
+}
+
+func (m *mockMetadata) Format() tag.Format                 { return tag.ID3v2_4 }
+func (m *mockMetadata) FileType() tag.FileType             { return m.fileType }
+func (m *mockMetadata) Title() string                       { return "Test Title" }
+func (m *mockMetadata) Album() string                       { return "Test Album" }
+func (m *mockMetadata) Artist() string                      { return "Test Artist" }
+func (m *mockMetadata) AlbumArtist() string                 { return "Test Album Artist" }
+func (m *mockMetadata) Composer() string                    { return "Test Composer" }
+func (m *mockMetadata) Genre() string                       { return "Test Genre" }
+func (m *mockMetadata) Year() int                           { return 2024 }
+func (m *mockMetadata) Track() (int, int)                   { return 1, 10 }
+func (m *mockMetadata) Disc() (int, int)                    { return 1, 1 }
+func (m *mockMetadata) Picture() *tag.Picture               { return nil }
+func (m *mockMetadata) Lyrics() string                      { return "" }
+func (m *mockMetadata) Comment() string                     { return "" }
+func (m *mockMetadata) Raw() map[string]interface{}         { return m.raw }
+
+func TestExtractMP3Info_WithMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		raw              map[string]interface{}
+		expectedBitrate  int
+		expectedSampleRate int
+	}{
+		{
+			name: "With bitrate and sample rate",
+			raw: map[string]interface{}{
+				"bitrate":     320000,
+				"sample_rate": 48000,
+			},
+			expectedBitrate:    320,
+			expectedSampleRate: 48000,
+		},
+		{
+			name: "With only bitrate",
+			raw: map[string]interface{}{
+				"bitrate": 256000,
+			},
+			expectedBitrate:    256,
+			expectedSampleRate: 44100, // default
+		},
+		{
+			name:               "No metadata (defaults)",
+			raw:                map[string]interface{}{},
+			expectedBitrate:    192, // default
+			expectedSampleRate: 44100, // default
+		},
+		{
+			name: "Wrong type in metadata",
+			raw: map[string]interface{}{
+				"bitrate":     "invalid",
+				"sample_rate": "invalid",
+			},
+			expectedBitrate:    192, // default
+			expectedSampleRate: 44100, // default
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockMetadata{
+				fileType: tag.MP3,
+				raw:      tt.raw,
+			}
+
+			info := &MediaInfo{}
+			extractMP3Info(mock, info)
+
+			if info.Codec != "MP3" {
+				t.Errorf("Expected MP3 codec, got %s", info.Codec)
+			}
+
+			if info.Bitrate != tt.expectedBitrate {
+				t.Errorf("Expected bitrate %d, got %d", tt.expectedBitrate, info.Bitrate)
+			}
+
+			if info.SampleRate != tt.expectedSampleRate {
+				t.Errorf("Expected sample rate %d, got %d", tt.expectedSampleRate, info.SampleRate)
+			}
+
+			if info.Channels != 2 {
+				t.Errorf("Expected 2 channels, got %d", info.Channels)
+			}
+		})
+	}
+}
+
+func TestExtractM4AInfo_WithMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		raw              map[string]interface{}
+		expectedBitrate  int
+		expectedSampleRate int
+	}{
+		{
+			name: "With bitrate and sample rate",
+			raw: map[string]interface{}{
+				"bitrate":     256000,
+				"sample_rate": 48000,
+			},
+			expectedBitrate:    256,
+			expectedSampleRate: 48000,
+		},
+		{
+			name: "With only sample rate",
+			raw: map[string]interface{}{
+				"sample_rate": 44100,
+			},
+			expectedBitrate:    128, // default
+			expectedSampleRate: 44100,
+		},
+		{
+			name:               "No metadata (defaults)",
+			raw:                map[string]interface{}{},
+			expectedBitrate:    128, // default
+			expectedSampleRate: 44100, // default
+		},
+		{
+			name: "Wrong type in metadata",
+			raw: map[string]interface{}{
+				"bitrate":     3.14,
+				"sample_rate": "not a number",
+			},
+			expectedBitrate:    128, // default
+			expectedSampleRate: 44100, // default
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockMetadata{
+				fileType: tag.M4A,
+				raw:      tt.raw,
+			}
+
+			info := &MediaInfo{}
+			extractM4AInfo(mock, info)
+
+			if info.Codec != "AAC" {
+				t.Errorf("Expected AAC codec, got %s", info.Codec)
+			}
+
+			if info.Bitrate != tt.expectedBitrate {
+				t.Errorf("Expected bitrate %d, got %d", tt.expectedBitrate, info.Bitrate)
+			}
+
+			if info.SampleRate != tt.expectedSampleRate {
+				t.Errorf("Expected sample rate %d, got %d", tt.expectedSampleRate, info.SampleRate)
+			}
+
+			if info.Channels != 2 {
+				t.Errorf("Expected 2 channels, got %d", info.Channels)
+			}
+		})
+	}
+}
+
+func TestExtractFLACInfo_WithMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		raw              map[string]interface{}
+		expectedSampleRate int
+		expectedBitDepth int
+		expectedBitrate  int
+	}{
+		{
+			name: "With sample rate and bit depth",
+			raw: map[string]interface{}{
+				"sample_rate":     96000,
+				"bits_per_sample": 24,
+			},
+			expectedSampleRate: 96000,
+			expectedBitDepth:   24,
+			expectedBitrate:    4608, // (96000 * 24 * 2) / 1000
+		},
+		{
+			name: "With only sample rate",
+			raw: map[string]interface{}{
+				"sample_rate": 48000,
+			},
+			expectedSampleRate: 48000,
+			expectedBitDepth:   16, // default
+			expectedBitrate:    1536, // (48000 * 16 * 2) / 1000
+		},
+		{
+			name:               "No metadata (defaults)",
+			raw:                map[string]interface{}{},
+			expectedSampleRate: 44100, // default
+			expectedBitDepth:   16,    // default
+			expectedBitrate:    1411,  // (44100 * 16 * 2) / 1000
+		},
+		{
+			name: "Wrong types",
+			raw: map[string]interface{}{
+				"sample_rate":     "invalid",
+				"bits_per_sample": false,
+			},
+			expectedSampleRate: 44100, // default
+			expectedBitDepth:   16,    // default
+			expectedBitrate:    1411,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockMetadata{
+				fileType: tag.FLAC,
+				raw:      tt.raw,
+			}
+
+			info := &MediaInfo{}
+			extractFLACInfo(mock, info)
+
+			if info.Codec != "FLAC" {
+				t.Errorf("Expected FLAC codec, got %s", info.Codec)
+			}
+
+			if info.SampleRate != tt.expectedSampleRate {
+				t.Errorf("Expected sample rate %d, got %d", tt.expectedSampleRate, info.SampleRate)
+			}
+
+			if info.BitDepth != tt.expectedBitDepth {
+				t.Errorf("Expected bit depth %d, got %d", tt.expectedBitDepth, info.BitDepth)
+			}
+
+			if info.Bitrate != tt.expectedBitrate {
+				t.Errorf("Expected bitrate %d, got %d", tt.expectedBitrate, info.Bitrate)
+			}
+
+			if info.Channels != 2 {
+				t.Errorf("Expected 2 channels, got %d", info.Channels)
+			}
+		})
+	}
+}
+
+func TestExtractOGGInfo_WithMetadata(t *testing.T) {
+	tests := []struct {
+		name             string
+		raw              map[string]interface{}
+		expectedBitrate  int
+		expectedSampleRate int
+	}{
+		{
+			name: "With bitrate and sample rate",
+			raw: map[string]interface{}{
+				"bitrate":     192000,
+				"sample_rate": 48000,
+			},
+			expectedBitrate:    192,
+			expectedSampleRate: 48000,
+		},
+		{
+			name: "With only bitrate",
+			raw: map[string]interface{}{
+				"bitrate": 128000,
+			},
+			expectedBitrate:    128,
+			expectedSampleRate: 44100, // default
+		},
+		{
+			name:               "No metadata (defaults)",
+			raw:                map[string]interface{}{},
+			expectedBitrate:    160, // default
+			expectedSampleRate: 44100, // default
+		},
+		{
+			name: "Wrong types",
+			raw: map[string]interface{}{
+				"bitrate":     []byte{1, 2, 3},
+				"sample_rate": map[string]int{},
+			},
+			expectedBitrate:    160, // default
+			expectedSampleRate: 44100, // default
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &mockMetadata{
+				fileType: tag.OGG,
+				raw:      tt.raw,
+			}
+
+			info := &MediaInfo{}
+			extractOGGInfo(mock, info)
+
+			if info.Codec != "Vorbis" {
+				t.Errorf("Expected Vorbis codec, got %s", info.Codec)
+			}
+
+			if info.Bitrate != tt.expectedBitrate {
+				t.Errorf("Expected bitrate %d, got %d", tt.expectedBitrate, info.Bitrate)
+			}
+
+			if info.SampleRate != tt.expectedSampleRate {
+				t.Errorf("Expected sample rate %d, got %d", tt.expectedSampleRate, info.SampleRate)
+			}
+
+			if info.Channels != 2 {
+				t.Errorf("Expected 2 channels, got %d", info.Channels)
 			}
 		})
 	}
