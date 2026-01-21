@@ -116,13 +116,8 @@ Set confidence based on clarity of the filename structure.`
 	}
 
 	// Parse the JSON response
-	var metadata ParsedMetadata
 	content := completion.Choices[0].Message.Content
-	if err := json.Unmarshal([]byte(content), &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
-	}
-
-	return &metadata, nil
+	return parseMetadataFromJSON(content)
 }
 
 // ParseBatch parses multiple filenames in a single request (more efficient)
@@ -198,13 +193,8 @@ Set confidence based on clarity of the filename structure.`
 	}
 
 	// Parse the JSON response
-	var results []*ParsedMetadata
 	content := completion.Choices[0].Message.Content
-	if err := json.Unmarshal([]byte(content), &results); err != nil {
-		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
-	}
-
-	return results, nil
+	return parseBatchMetadataFromJSON(content)
 }
 
 // TestConnection tests the OpenAI API connection
@@ -220,4 +210,22 @@ func (p *OpenAIParser) TestConnection(ctx context.Context) error {
 	// Simple test parse
 	_, err := p.ParseFilename(ctx, "The Hobbit - J.R.R. Tolkien")
 	return err
+}
+
+// parseMetadataFromJSON parses a single metadata object from JSON string
+func parseMetadataFromJSON(content string) (*ParsedMetadata, error) {
+	var metadata ParsedMetadata
+	if err := json.Unmarshal([]byte(content), &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
+	}
+	return &metadata, nil
+}
+
+// parseBatchMetadataFromJSON parses an array of metadata objects from JSON string
+func parseBatchMetadataFromJSON(content string) ([]*ParsedMetadata, error) {
+	var results []*ParsedMetadata
+	if err := json.Unmarshal([]byte(content), &results); err != nil {
+		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
+	}
+	return results, nil
 }
