@@ -1,5 +1,5 @@
 // file: internal/metadata/write_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a8b7c6d-5e4f-3a2b-1c0d-9a8b7c6d5e4f
 
 package metadata
@@ -13,6 +13,16 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 )
+
+// createFakeTool writes a no-op executable to simulate external tag tools.
+func createFakeTool(t *testing.T, dir, name string) {
+	t.Helper()
+
+	toolPath := filepath.Join(dir, name)
+	if err := os.WriteFile(toolPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("failed to create fake tool %s: %v", name, err)
+	}
+}
 
 // TestWriteMetadataToFile_UnsupportedFormat verifies error handling for unsupported file formats
 func TestWriteMetadataToFile_UnsupportedFormat(t *testing.T) {
@@ -107,6 +117,64 @@ func TestWriteFLACMetadata_ToolNotFound(t *testing.T) {
 	// Assert
 	if err == nil {
 		t.Error("Expected error when metaflac not found, got nil")
+	}
+}
+
+func TestWriteMP3Metadata_FakeToolSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	binDir := filepath.Join(tempDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("failed to create bin dir: %v", err)
+	}
+	createFakeTool(t, binDir, "eyeD3")
+	t.Setenv("PATH", binDir)
+
+	filePath := filepath.Join(tempDir, "test.mp3")
+	if err := os.WriteFile(filePath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("failed to write mp3 file: %v", err)
+	}
+
+	config := fileops.DefaultConfig()
+	metadata := map[string]interface{}{
+		"title":    "Test Book",
+		"artist":   "Test Author",
+		"album":    "Test Album",
+		"narrator": "Test Narrator",
+		"genre":    "Audiobook",
+		"year":     2024,
+	}
+
+	if err := writeMP3Metadata(filePath, metadata, config); err != nil {
+		t.Fatalf("writeMP3Metadata failed: %v", err)
+	}
+}
+
+func TestWriteFLACMetadata_FakeToolSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	binDir := filepath.Join(tempDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("failed to create bin dir: %v", err)
+	}
+	createFakeTool(t, binDir, "metaflac")
+	t.Setenv("PATH", binDir)
+
+	filePath := filepath.Join(tempDir, "test.flac")
+	if err := os.WriteFile(filePath, []byte("test"), 0o644); err != nil {
+		t.Fatalf("failed to write flac file: %v", err)
+	}
+
+	config := fileops.DefaultConfig()
+	metadata := map[string]interface{}{
+		"title":    "Test Book",
+		"artist":   "Test Author",
+		"album":    "Test Album",
+		"narrator": "Test Narrator",
+		"genre":    "Audiobook",
+		"year":     2024,
+	}
+
+	if err := writeFLACMetadata(filePath, metadata, config); err != nil {
+		t.Fatalf("writeFLACMetadata failed: %v", err)
 	}
 }
 

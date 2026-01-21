@@ -1,5 +1,5 @@
 // file: internal/sysinfo/memory_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package sysinfo
@@ -18,6 +18,19 @@ func TestGetTotalMemory(t *testing.T) {
 
 	// On most systems, if implemented, should return > 0
 	t.Logf("Total memory: %d bytes (%.2f MB)", total, float64(total)/(1024*1024))
+}
+
+func TestGetTotalMemoryOverride(t *testing.T) {
+	original := totalMemoryProvider
+	t.Cleanup(func() {
+		totalMemoryProvider = original
+	})
+
+	totalMemoryProvider = func() uint64 { return 123 }
+
+	if got := GetTotalMemory(); got != 123 {
+		t.Errorf("expected overridden total memory 123, got %d", got)
+	}
 }
 
 func TestGetMemoryStats(t *testing.T) {
@@ -58,6 +71,32 @@ func TestGetMemoryStats(t *testing.T) {
 	t.Logf("  Used: %d bytes (%.2f GB)", stats.UsedBytes, float64(stats.UsedBytes)/(1024*1024*1024))
 	t.Logf("  Available: %d bytes (%.2f GB)", stats.AvailableBytes, float64(stats.AvailableBytes)/(1024*1024*1024))
 	t.Logf("  Used Percent: %.2f%%", stats.UsedPercent)
+}
+
+func TestGetMemoryStatsFallback(t *testing.T) {
+	originalTotal := totalMemoryProvider
+	originalAvailable := availableMemoryProvider
+	t.Cleanup(func() {
+		totalMemoryProvider = originalTotal
+		availableMemoryProvider = originalAvailable
+	})
+
+	totalMemoryProvider = func() uint64 { return 0 }
+	availableMemoryProvider = func() uint64 { return 0 }
+
+	stats, err := GetMemoryStats()
+	if err != nil {
+		t.Fatalf("GetMemoryStats fallback failed: %v", err)
+	}
+	if stats.TotalBytes != 0 {
+		t.Errorf("expected TotalBytes 0 in fallback, got %d", stats.TotalBytes)
+	}
+	if stats.AvailableBytes != 0 {
+		t.Errorf("expected AvailableBytes 0 in fallback, got %d", stats.AvailableBytes)
+	}
+	if stats.UsedPercent != 0 {
+		t.Errorf("expected UsedPercent 0 in fallback, got %.2f", stats.UsedPercent)
+	}
 }
 
 func TestMemoryStats_Structure(t *testing.T) {
