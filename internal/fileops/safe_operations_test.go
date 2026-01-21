@@ -420,3 +420,458 @@ func TestCalculateChecksum(t *testing.T) {
 		t.Errorf("Expected SHA256 hex string length 64, got %d", len(hash))
 	}
 }
+
+// Test Rollback when operation not completed
+func TestFileOperation_Rollback_NotCompleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	// Try to rollback without executing
+	err = op.Rollback()
+	if err == nil {
+		t.Error("Expected error when rolling back non-completed operation")
+	}
+}
+
+// Test Commit when operation not completed
+func TestFileOperation_Commit_NotCompleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	// Try to commit without executing
+	err = op.Commit()
+	if err == nil {
+		t.Error("Expected error when committing non-completed operation")
+	}
+}
+
+// Test Execute with checksum verification and move (PreserveOriginal=false)
+func TestFileOperation_Execute_MoveWithoutPreserve(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content for move")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.PreserveOriginal = false
+	config.VerifyChecksums = true
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Source should be removed (PreserveOriginal=false)
+	if _, err := os.Stat(srcFile); !os.IsNotExist(err) {
+		t.Error("Source file should be removed when PreserveOriginal=false")
+	}
+
+	// Destination should exist
+	if _, err := os.Stat(dstFile); os.IsNotExist(err) {
+		t.Error("Destination file should exist after Execute")
+	}
+}
+
+// Test cleanupOldBackups with MaxBackups=0 (no limit)
+func TestCleanupOldBackups_NoLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.MaxBackups = 0 // No limit
+	config.PreserveOriginal = true
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Should succeed with no cleanup
+	if !op.completed {
+		t.Error("Expected operation to be completed")
+	}
+}
+
+// Test cleanupOldBackups with multiple backups exceeding limit
+func TestCleanupOldBackups_ExceedsLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	backupDir := filepath.Join(tmpDir, "backups")
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatalf("Failed to create backup dir: %v", err)
+	}
+
+	baseName := "test.txt"
+
+	// Create 10 backup files
+	for i := range 10 {
+		backupName := filepath.Join(backupDir, filepath.Base(baseName)+".20240101_15040"+string(rune('0'+i))+".backup")
+		if err := os.WriteFile(backupName, []byte("backup"), 0644); err != nil {
+			t.Fatalf("Failed to create backup file: %v", err)
+		}
+	}
+
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, baseName)
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = backupDir
+	config.MaxBackups = 3
+	config.PreserveOriginal = true
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Count remaining backups
+	pattern := filepath.Join(backupDir, baseName+".*.backup")
+	matches, _ := filepath.Glob(pattern)
+
+	// Should have MaxBackups (3) backups remaining (old ones removed)
+	if len(matches) > config.MaxBackups+1 {
+		t.Errorf("Expected at most %d backups, found %d", config.MaxBackups+1, len(matches))
+	}
+}
+
+// Test SafeMove with error from NewFileOperation
+func TestSafeMove_NewFileOperationError(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentSrc := filepath.Join(tmpDir, "nonexistent.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	// Should fail because source doesn't exist
+	err := SafeMove(nonExistentSrc, dstFile, config)
+	if err == nil {
+		t.Error("Expected error when source file doesn't exist")
+	}
+}
+
+// Test SafeCopy with error from NewFileOperation
+func TestSafeCopy_NewFileOperationError(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentSrc := filepath.Join(tmpDir, "nonexistent.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	// Should fail because source doesn't exist
+	err := SafeCopy(nonExistentSrc, dstFile, config)
+	if err == nil {
+		t.Error("Expected error when source file doesn't exist")
+	}
+}
+
+// Test copyFile with non-existent source
+func TestCopyFile_NonExistentSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentSrc := filepath.Join(tmpDir, "nonexistent.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	err := copyFile(nonExistentSrc, dstFile)
+	if err == nil {
+		t.Error("Expected error when copying non-existent file")
+	}
+}
+
+// Test calculateChecksum with non-existent file
+func TestCalculateChecksum_NonExistentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistent := filepath.Join(tmpDir, "nonexistent.txt")
+
+	_, err := calculateChecksum(nonExistent)
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
+
+// Test NewFileOperation with non-existent source (should fail on checksum)
+func TestNewFileOperation_NonExistentSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentSrc := filepath.Join(tmpDir, "nonexistent.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.VerifyChecksums = true
+
+	_, err := NewFileOperation(nonExistentSrc, dstFile, config)
+	if err == nil {
+		t.Error("Expected error when source file doesn't exist")
+	}
+}
+
+// Test Execute with same source and target paths (no checksum verification)
+func TestFileOperation_Execute_SameSourceAndTarget(t *testing.T) {
+	tmpDir := t.TempDir()
+	sameFile := filepath.Join(tmpDir, "same.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(sameFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.PreserveOriginal = false
+	config.VerifyChecksums = false // Disable checksums for same-file operations
+
+	op, err := NewFileOperation(sameFile, sameFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// File should still exist (not removed because src == dst)
+	if _, err := os.Stat(sameFile); os.IsNotExist(err) {
+		t.Error("File should not be removed when source equals target")
+	}
+}
+
+// Test Execute with target directory that can't be created
+func TestFileOperation_Execute_CreateDestDirError(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	// Create a file where we want a directory
+	invalidPath := filepath.Join(tmpDir, "file_not_dir")
+	if err := os.WriteFile(invalidPath, []byte("block"), 0644); err != nil {
+		t.Fatalf("Failed to create blocking file: %v", err)
+	}
+
+	// Try to create a file in a path that requires this file to be a directory
+	dstFile := filepath.Join(invalidPath, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	// Execute should fail because destination directory can't be created
+	err = op.Execute()
+	if err == nil {
+		t.Error("Expected error when destination directory can't be created")
+	}
+}
+
+// Test Rollback with missing backup file
+func TestFileOperation_Rollback_MissingBackup(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.PreserveOriginal = true
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Remove the backup file
+	if err := os.Remove(op.backupPath); err != nil {
+		t.Fatalf("Failed to remove backup: %v", err)
+	}
+
+	// Rollback should succeed (it checks if backup exists before restoring)
+	if err := op.Rollback(); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+}
+
+// Test Commit with missing backup file
+func TestFileOperation_Commit_MissingBackup(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+	config.PreserveOriginal = true
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	if err := op.Execute(); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	// Remove the backup file
+	if err := os.Remove(op.backupPath); err != nil {
+		t.Fatalf("Failed to remove backup: %v", err)
+	}
+
+	// Commit should succeed (it checks if backup exists before removing)
+	if err := op.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+}
+
+// Test SafeMove with Execute error
+func TestSafeMove_ExecuteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	// Create a file where we want a directory
+	invalidPath := filepath.Join(tmpDir, "file_not_dir")
+	if err := os.WriteFile(invalidPath, []byte("block"), 0644); err != nil {
+		t.Fatalf("Failed to create blocking file: %v", err)
+	}
+
+	dstFile := filepath.Join(invalidPath, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	err := SafeMove(srcFile, dstFile, config)
+	if err == nil {
+		t.Error("Expected error from SafeMove when Execute fails")
+	}
+}
+
+// Test SafeCopy with Execute error
+func TestSafeCopy_ExecuteError(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	// Create a file where we want a directory
+	invalidPath := filepath.Join(tmpDir, "file_not_dir")
+	if err := os.WriteFile(invalidPath, []byte("block"), 0644); err != nil {
+		t.Fatalf("Failed to create blocking file: %v", err)
+	}
+
+	dstFile := filepath.Join(invalidPath, "dest.txt")
+
+	config := DefaultConfig()
+	config.BackupDir = filepath.Join(tmpDir, "backups")
+
+	err := SafeCopy(srcFile, dstFile, config)
+	if err == nil {
+		t.Error("Expected error from SafeCopy when Execute fails")
+	}
+}
+
+// Test NewFileOperation with relative backup directory
+func TestNewFileOperation_RelativeBackupDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcFile := filepath.Join(tmpDir, "source.txt")
+	dstFile := filepath.Join(tmpDir, "subdir", "dest.txt")
+
+	content := []byte("Test content")
+	if err := os.WriteFile(srcFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	config := DefaultConfig()
+	config.BackupDir = "backups" // Relative path
+
+	op, err := NewFileOperation(srcFile, dstFile, config)
+	if err != nil {
+		t.Fatalf("NewFileOperation failed: %v", err)
+	}
+
+	// Backup path should be made absolute relative to target directory
+	expectedBackupDir := filepath.Join(filepath.Dir(dstFile), "backups")
+	actualBackupDir := filepath.Dir(op.backupPath)
+	if actualBackupDir != expectedBackupDir {
+		t.Errorf("Expected backup dir %s, got %s", expectedBackupDir, actualBackupDir)
+	}
+}
