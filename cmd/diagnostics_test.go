@@ -102,6 +102,65 @@ func TestRunDiagnosticsQuerySuccess(t *testing.T) {
 	}
 }
 
+func TestRunDiagnosticsQueryNoBooks(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "diag-empty.db")
+	store, err := database.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create sqlite store: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = dbPath
+	config.AppConfig.EnableSQLite = true
+
+	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
+		t.Fatalf("runDiagnosticsQuery failed: %v", err)
+	}
+}
+
+func TestRunDiagnosticsQueryPrintsHashes(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "diag-hashes.db")
+	store, err := database.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create sqlite store: %v", err)
+	}
+	hash := "hash"
+	origHash := "orig"
+	orgHash := "organized"
+	_, err = store.CreateBook(&database.Book{
+		Title:             "Diag Book",
+		FilePath:          "/tmp/diag.mp3",
+		FileHash:          &hash,
+		OriginalFileHash:  &origHash,
+		OrganizedFileHash: &orgHash,
+	})
+	if err != nil {
+		t.Fatalf("failed to create book: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = dbPath
+	config.AppConfig.EnableSQLite = true
+
+	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
+		t.Fatalf("runDiagnosticsQuery failed: %v", err)
+	}
+}
+
 func TestRunCleanupInvalidBooksDryRun(t *testing.T) {
 	origConfig := config.AppConfig
 	defer func() {
@@ -128,6 +187,92 @@ func TestRunCleanupInvalidBooksDryRun(t *testing.T) {
 	config.AppConfig.EnableSQLite = true
 
 	if err := runCleanupInvalidBooks(false, true); err != nil {
+		t.Fatalf("runCleanupInvalidBooks failed: %v", err)
+	}
+}
+
+func TestRunCleanupInvalidBooksPromptAbort(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "cleanup-abort.db")
+	store, err := database.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create sqlite store: %v", err)
+	}
+	_, err = store.CreateBook(&database.Book{
+		Title:    "Bad Book",
+		FilePath: "/tmp/{author}/bad.mp3",
+	})
+	if err != nil {
+		t.Fatalf("failed to create book: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = dbPath
+	config.AppConfig.EnableSQLite = true
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	_, _ = w.Write([]byte("no\n"))
+	_ = w.Close()
+
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = origStdin
+	}()
+
+	if err := runCleanupInvalidBooks(false, false); err != nil {
+		t.Fatalf("runCleanupInvalidBooks failed: %v", err)
+	}
+}
+
+func TestRunCleanupInvalidBooksDelete(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "cleanup-delete.db")
+	store, err := database.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create sqlite store: %v", err)
+	}
+	_, err = store.CreateBook(&database.Book{
+		Title:    "Bad Book",
+		FilePath: "/tmp/{author}/bad.mp3",
+	})
+	if err != nil {
+		t.Fatalf("failed to create book: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = dbPath
+	config.AppConfig.EnableSQLite = true
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	_, _ = w.Write([]byte("yes\n"))
+	_ = w.Close()
+
+	origStdin := os.Stdin
+	os.Stdin = r
+	defer func() {
+		os.Stdin = origStdin
+	}()
+
+	if err := runCleanupInvalidBooks(false, false); err != nil {
 		t.Fatalf("runCleanupInvalidBooks failed: %v", err)
 	}
 }

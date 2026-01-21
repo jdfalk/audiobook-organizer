@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -128,5 +129,64 @@ func TestCommandsRunWithStubs(t *testing.T) {
 	}
 	if err := serveCmd.RunE(serveCmd, nil); err != nil {
 		t.Fatalf("serveCmd failed: %v", err)
+	}
+}
+
+func TestScanCommandErrorPaths(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.RootDir = tempDir
+	config.AppConfig.EnableSQLite = true
+
+	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+		return nil, fmt.Errorf("scan failed")
+	}
+	if err := scanCmd.RunE(scanCmd, nil); err == nil {
+		t.Fatal("expected scan command error")
+	}
+
+	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+		return []scanner.Book{{FilePath: filepath.Join(tempDir, "book.m4b")}}, nil
+	}
+	processBooks = func(books []scanner.Book) error {
+		return fmt.Errorf("process failed")
+	}
+	if err := scanCmd.RunE(scanCmd, nil); err == nil {
+		t.Fatal("expected processBooks error")
+	}
+}
+
+func TestServeCommandErrorPaths(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.EnableSQLite = true
+
+	initEncryption = func(dir string) error { return fmt.Errorf("encrypt fail") }
+	if err := serveCmd.RunE(serveCmd, nil); err == nil {
+		t.Fatal("expected serve command to fail on encryption error")
+	}
+
+	initEncryption = func(dir string) error { return nil }
+	startServer = func(srv *server.Server, cfg server.ServerConfig) error {
+		return fmt.Errorf("start failed")
+	}
+	if err := serveCmd.RunE(serveCmd, nil); err == nil {
+		t.Fatal("expected serve command to fail on start error")
 	}
 }

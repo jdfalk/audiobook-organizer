@@ -5,22 +5,18 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
-func TestMainHelp(t *testing.T) {
-	tempDir := t.TempDir()
-	dbPath := filepath.Join(tempDir, "db", "test.db")
-	playlistsPath := filepath.Join(tempDir, "playlists")
-
-	origArgs := os.Args
+func TestRunSuccess(t *testing.T) {
+	origExecute := executeCmd
+	executeCmd = func() error { return nil }
 	defer func() {
-		os.Args = origArgs
+		executeCmd = origExecute
 	}()
 
 	origQueue := operations.GlobalQueue
@@ -30,14 +26,26 @@ func TestMainHelp(t *testing.T) {
 		operations.GlobalQueue = origQueue
 	}()
 
-	os.Args = []string{
-		"audiobook-organizer",
-		"--db",
-		dbPath,
-		"--playlists",
-		playlistsPath,
-		"--help",
+	if code := run(); code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
 	}
+}
 
-	main()
+func TestRunError(t *testing.T) {
+	origExecute := executeCmd
+	executeCmd = func() error { return fmt.Errorf("boom") }
+	defer func() {
+		executeCmd = origExecute
+	}()
+
+	origQueue := operations.GlobalQueue
+	operations.GlobalQueue = nil
+	defer func() {
+		_ = operations.ShutdownQueue(100 * time.Millisecond)
+		operations.GlobalQueue = origQueue
+	}()
+
+	if code := run(); code == 0 {
+		t.Fatal("expected non-zero exit code")
+	}
 }
