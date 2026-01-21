@@ -1,5 +1,5 @@
 // file: internal/metadata/helpers_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 1f2e3d4c-5b6a-7c8d-9e0f-1a2b3c4d5e6f
 
 package metadata
@@ -443,6 +443,26 @@ func TestLooksLikePersonName(t *testing.T) {
 			got := looksLikePersonName(tt.input)
 			if got != tt.expected {
 				t.Errorf("For %q, expected %v, got %v", tt.input, tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestIsTitleCaseCandidate(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{name: "TitleCase", input: "Title", expected: true},
+		{name: "Lowercase", input: "title", expected: false},
+		{name: "Whitespace", input: "  ", expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isTitleCaseCandidate(tt.input); got != tt.expected {
+				t.Errorf("Expected %v for %q, got %v", tt.expected, tt.input, got)
 			}
 		})
 	}

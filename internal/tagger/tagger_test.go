@@ -1,12 +1,33 @@
 // file: internal/tagger/tagger_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8c9d0e1f-2a3b-4c5d-6e7f-8a9b0c1d2e3f
 
 package tagger
 
 import (
+	"path/filepath"
 	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// setupTaggerDB prepares a temporary SQLite database for tagger tests.
+func setupTaggerDB(t *testing.T) func() {
+	t.Helper()
+
+	prevDB := database.DB
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "tagger.db")
+
+	if err := database.Initialize(dbPath); err != nil {
+		t.Fatalf("initialize database: %v", err)
+	}
+
+	return func() {
+		_ = database.Close()
+		database.DB = prevDB
+	}
+}
 
 func TestUpdateM4BTags(t *testing.T) {
 	// Test the placeholder implementation
@@ -139,10 +160,34 @@ func TestUpdateFileTags_CaseInsensitive(t *testing.T) {
 	}
 }
 
-// Note: UpdateSeriesTags requires a database connection and is not tested here
-// It would need integration tests with a test database setup
-func TestUpdateSeriesTags_NoDatabaseTest(t *testing.T) {
-	// We can't test UpdateSeriesTags without database setup
-	// This is a placeholder to document that this function exists
-	t.Skip("UpdateSeriesTags requires database connection - needs integration test")
+// TestUpdateSeriesTags exercises the series tag update flow with mixed inputs.
+func TestUpdateSeriesTags(t *testing.T) {
+	cleanup := setupTaggerDB(t)
+	defer cleanup()
+
+	result, err := database.DB.Exec("INSERT INTO authors (name) VALUES ('Test Author')")
+	if err != nil {
+		t.Fatalf("insert author: %v", err)
+	}
+	authorID, _ := result.LastInsertId()
+
+	result, err = database.DB.Exec("INSERT INTO series (name, author_id) VALUES ('Test Series', ?)", authorID)
+	if err != nil {
+		t.Fatalf("insert series: %v", err)
+	}
+	seriesID, _ := result.LastInsertId()
+
+	_, err = database.DB.Exec(`
+		INSERT INTO books (title, author_id, series_id, series_sequence, file_path)
+		VALUES
+			('Book One', ?, ?, 1, '/tmp/book-one.m4b'),
+			('Book Two', ?, ?, NULL, '/tmp/book-two.wav')
+	`, authorID, seriesID, authorID, seriesID)
+	if err != nil {
+		t.Fatalf("insert books: %v", err)
+	}
+
+	if err := UpdateSeriesTags(); err != nil {
+		t.Fatalf("UpdateSeriesTags failed: %v", err)
+	}
 }
