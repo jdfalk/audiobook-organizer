@@ -13,7 +13,13 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 )
 
+var executeCmd = cmd.Execute
+
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// Set embedded filesystem for server (if built with embed_frontend tag)
 	server.SetEmbeddedFS(WebFS)
 
@@ -23,8 +29,9 @@ func main() {
 		operations.InitializeQueue(nil, 2) // store will be attached later once initialized
 	}
 
-	if err := cmd.Execute(); err != nil {
+	if err := executeCmd(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
