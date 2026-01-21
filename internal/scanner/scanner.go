@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.12.0
+// version: 1.12.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -348,14 +348,29 @@ func extractInfoFromPath(book *Book) {
 		if len(parts) == 2 {
 			left := strings.TrimSpace(parts[0])
 			right := strings.TrimSpace(parts[1])
-			if looksLikePersonName(right) && !looksLikePersonName(left) && book.Author == "" {
+			leftIsName := looksLikePersonName(left)
+			rightIsName := looksLikePersonName(right)
+			if rightIsName && !leftIsName && book.Author == "" {
 				book.Author = right
 				book.Title = left
 				return
-			} else if looksLikePersonName(left) && !looksLikePersonName(right) && book.Author == "" {
+			} else if leftIsName && !rightIsName && book.Author == "" {
 				book.Author = left
 				book.Title = right
 				return
+			} else if leftIsName && rightIsName && book.Author == "" {
+				leftIsTitle := looksLikeTitleCandidate(left)
+				rightIsTitle := looksLikeTitleCandidate(right)
+				if leftIsTitle && !rightIsTitle {
+					book.Author = right
+					book.Title = left
+					return
+				}
+				if rightIsTitle && !leftIsTitle {
+					book.Author = left
+					book.Title = right
+					return
+				}
 			}
 		}
 	}
@@ -506,15 +521,20 @@ func looksLikePersonName(s string) bool {
 
 	// Check for initials like "J. K. Rowling" or "J.K. Rowling"
 	if strings.Contains(s, ".") {
-		// Count uppercase letters and periods
-		uppers := 0
-		for _, r := range s {
-			if r >= 'A' && r <= 'Z' {
-				uppers++
+		words := strings.Fields(s)
+		if len(words) > 1 {
+			initials := 0
+			nonInitials := 0
+			for _, word := range words {
+				if isInitialToken(word) {
+					initials++
+					continue
+				}
+				nonInitials++
 			}
-		}
-		if uppers >= 2 {
-			return true
+			if nonInitials > 0 || initials >= 2 {
+				return true
+			}
 		}
 	}
 
@@ -546,7 +566,20 @@ func looksLikePersonName(s string) bool {
 	}
 
 	return false
-} // saveBookToDatabase saves the book information to the database
+}
+
+// looksLikeTitleCandidate flags titles that commonly begin with articles.
+func looksLikeTitleCandidate(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	return strings.HasPrefix(lower, "the ") || strings.HasPrefix(lower, "a ") || strings.HasPrefix(lower, "an ")
+}
+
+// isInitialToken reports whether a word is a single-letter initial with a period.
+func isInitialToken(word string) bool {
+	return len(word) == 2 && word[1] == '.' && word[0] >= 'A' && word[0] <= 'Z'
+}
+
+// saveBookToDatabase saves the book information to the database
 func saveBookToDatabase(book *Book) error {
 	// Prefer using the unified Store API when available
 	if database.GlobalStore != nil {

@@ -1,5 +1,5 @@
 // file: internal/playlist/playlist_test.go
-// version: 1.0.0
+// version: 1.0.2
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 package playlist
@@ -273,6 +273,23 @@ func TestCreateiTunesPlaylistSpecialChars(t *testing.T) {
 	}
 }
 
+func TestCreateiTunesPlaylistCreateError(t *testing.T) {
+	tempDir := t.TempDir()
+	blocker := filepath.Join(tempDir, "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("failed to create blocker file: %v", err)
+	}
+
+	config.AppConfig.PlaylistDir = blocker
+
+	_, err := createiTunesPlaylist("Blocked Playlist", []PlaylistItem{
+		{BookID: 1, Title: "Book", Author: "Author", FilePath: "/path/to/book.m4b", Position: 1},
+	})
+	if err == nil {
+		t.Fatal("expected error when playlist directory is not a folder")
+	}
+}
+
 func TestCreateiTunesPlaylistEmpty(t *testing.T) {
 	tempDir := t.TempDir()
 	config.AppConfig.PlaylistDir = tempDir
@@ -433,6 +450,20 @@ func TestSavePlaylistToDatabaseUpdate(t *testing.T) {
 	}
 }
 
+func TestSavePlaylistToDatabaseQueryError(t *testing.T) {
+	setupTestDB(t)
+	defer cleanupTestDB(t)
+
+	if err := database.DB.Close(); err != nil {
+		t.Fatalf("failed to close database: %v", err)
+	}
+
+	err := savePlaylistToDatabase(1, "Test Playlist", "/path/to/playlist.m3u")
+	if err == nil {
+		t.Error("expected error when database is closed")
+	}
+}
+
 func TestGeneratePlaylistsForSeries(t *testing.T) {
 	setupTestDB(t)
 	defer cleanupTestDB(t)
@@ -496,6 +527,19 @@ func TestGeneratePlaylistsForSeries(t *testing.T) {
 
 	if itemCount != 2 {
 		t.Errorf("expected 2 playlist items, got %d", itemCount)
+	}
+}
+
+func TestGeneratePlaylistsForSeriesQueryError(t *testing.T) {
+	setupTestDB(t)
+	defer cleanupTestDB(t)
+
+	if err := database.DB.Close(); err != nil {
+		t.Fatalf("failed to close database: %v", err)
+	}
+
+	if err := GeneratePlaylistsForSeries(); err == nil {
+		t.Error("expected error when database is closed")
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.8.0
+// version: 1.8.1
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -585,14 +585,14 @@ func extractAuthorFromDirectory(filePath string) string {
 		parts := strings.SplitN(dirName, " - ", 2)
 		if len(parts) > 0 {
 			author := strings.TrimSpace(parts[0])
-			if isValidAuthor(author) {
+			if looksLikePersonName(author) {
 				return author
 			}
 		}
 	}
 
 	// Use directory name if it's valid
-	if isValidAuthor(dirName) {
+	if looksLikePersonName(dirName) {
 		return dirName
 	}
 
@@ -647,8 +647,19 @@ func parseFilenameForAuthor(filename string) (string, string) {
 	} else if leftIsName && !rightIsName {
 		// Pattern: "Author - Title"
 		return right, left
-	} else if rightIsName {
+	} else if leftIsName && rightIsName {
+		leftHasInitials := strings.Contains(left, ".")
+		rightHasInitials := strings.Contains(right, ".")
+		if leftHasInitials && !rightHasInitials {
+			return right, left
+		}
+		if rightHasInitials && !leftHasInitials {
+			return left, right
+		}
 		// Both could be names, prefer "Title - Author" pattern
+		return left, right
+	} else if isTitleCaseCandidate(left) && isTitleCaseCandidate(right) {
+		// Both are capitalized words; assume "Title - Author"
 		return left, right
 	}
 
@@ -679,30 +690,22 @@ func looksLikePersonName(s string) bool {
 
 	// Check for multi-word names with proper capitalization
 	words := strings.Fields(s)
-	if len(words) >= 2 && len(words) <= 4 {
-		// Check if all words start with uppercase
-		allProperCase := true
-		for _, word := range words {
-			if len(word) == 0 || (word[0] < 'A' || word[0] > 'Z') {
-				allProperCase = false
-				break
-			}
-		}
-		if allProperCase {
-			return true
+	if len(words) < 2 || len(words) > 4 {
+		return false
+	}
+	for _, word := range words {
+		if len(word) == 0 || (word[0] < 'A' || word[0] > 'Z') {
+			return false
 		}
 	}
+	return true
+}
 
-	// Check for "FirstName LastName" pattern (at least one space, proper case)
-	if len(words) >= 2 {
-		// First word starts with capital
-		if len(words[0]) > 0 && words[0][0] >= 'A' && words[0][0] <= 'Z' {
-			// Second word starts with capital
-			if len(words[1]) > 0 && words[1][0] >= 'A' && words[1][0] <= 'Z' {
-				return true
-			}
-		}
+// isTitleCaseCandidate reports whether a string starts with an uppercase letter.
+func isTitleCaseCandidate(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false
 	}
-
-	return false
+	return trimmed[0] >= 'A' && trimmed[0] <= 'Z'
 }

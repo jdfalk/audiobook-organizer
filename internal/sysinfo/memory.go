@@ -1,5 +1,5 @@
 // file: internal/sysinfo/memory.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package sysinfo
@@ -8,10 +8,16 @@ import (
 	"runtime"
 )
 
+// totalMemoryProvider allows tests to override platform memory queries.
+var totalMemoryProvider = getTotalMemoryPlatform
+
+// availableMemoryProvider allows tests to override platform memory queries.
+var availableMemoryProvider = getAvailableMemoryPlatform
+
 // GetTotalMemory returns the total system memory in bytes.
 // Returns 0 if unable to determine (will be implemented per-platform).
 func GetTotalMemory() uint64 {
-	return getTotalMemoryPlatform()
+	return totalMemoryProvider()
 }
 
 // MemoryStats represents comprehensive memory statistics
@@ -24,7 +30,7 @@ type MemoryStats struct {
 
 // GetMemoryStats returns current system memory statistics
 func GetMemoryStats() (*MemoryStats, error) {
-	total := getTotalMemoryPlatform()
+	total := totalMemoryProvider()
 	if total == 0 {
 		// Fallback to runtime stats only
 		var m runtime.MemStats
@@ -37,7 +43,7 @@ func GetMemoryStats() (*MemoryStats, error) {
 		}, nil
 	}
 
-	available := getAvailableMemoryPlatform()
+	available := availableMemoryProvider()
 	used := total - available
 	usedPercent := 0.0
 	if total > 0 {
