@@ -48,7 +48,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@bc6380dd1cfb1a3b8eb24c27d6cfe4a887562b5b # main
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@b904a08523f11927f2fa22c83d349bf471d73ef6 # main
     with:
       node-version: ${{ needs.frontend-config.outputs.node-version }}
     secrets: inherit
