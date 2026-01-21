@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.7.1
+// version: 1.8.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -35,6 +35,25 @@ var enableSQLite bool
 var playlistDir string
 var metadataInspectFile string
 
+var (
+	initializeStore       = database.InitializeStore
+	closeStore            = database.CloseStore
+	scanDirectory         = scanner.ScanDirectory
+	processBooks          = scanner.ProcessBooks
+	generatePlaylists     = playlist.GeneratePlaylistsForSeries
+	updateSeriesTags      = tagger.UpdateSeriesTags
+	initEncryption        = database.InitEncryption
+	loadConfigFromDB      = config.LoadConfigFromDatabase
+	syncConfigFromEnv     = config.SyncConfigFromEnv
+	initializeQueue       = operations.InitializeQueue
+	shutdownQueue         = operations.ShutdownQueue
+	newServer             = server.NewServer
+	getDefaultServerConfig = server.GetDefaultServerConfig
+	startServer           = func(srv *server.Server, cfg server.ServerConfig) error {
+		return srv.Start(cfg)
+	}
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "audiobook-organizer",
@@ -64,16 +83,16 @@ var scanCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.CloseStore()
+		defer closeStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
 
 		// Start scanning
-		books, err := scanner.ScanDirectory(config.AppConfig.RootDir)
+		books, err := scanDirectory(config.AppConfig.RootDir)
 		if err != nil {
 			return fmt.Errorf("scan error: %w", err)
 		}
@@ -81,7 +100,7 @@ var scanCmd = &cobra.Command{
 		fmt.Printf("Found %d audiobooks\n", len(books))
 
 		// Process books and identify series
-		if err := scanner.ProcessBooks(books); err != nil {
+		if err := processBooks(books); err != nil {
 			return fmt.Errorf("processing error: %w", err)
 		}
 
@@ -96,16 +115,16 @@ var playlistCmd = &cobra.Command{
 	Long:  `Generate iTunes-compatible playlists for each audiobook series.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.CloseStore()
+		defer closeStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Println("Generating playlists for audiobook series...")
 
 		// Generate playlists
-		if err := playlist.GeneratePlaylistsForSeries(); err != nil {
+		if err := generatePlaylists(); err != nil {
 			return fmt.Errorf("failed to generate playlists: %w", err)
 		}
 
@@ -121,16 +140,16 @@ var tagCmd = &cobra.Command{
 	Long:  `Update the metadata tags of audio files to include series information.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.CloseStore()
+		defer closeStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Println("Updating audio file tags with series information...")
 
 		// Update tags
-		if err := tagger.UpdateSeriesTags(); err != nil {
+		if err := updateSeriesTags(); err != nil {
 			return fmt.Errorf("failed to update tags: %w", err)
 		}
 
@@ -157,15 +176,15 @@ var organizeCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.CloseStore()
+		defer closeStore()
 
 		// Step 1: Scan files
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
-		books, err := scanner.ScanDirectory(config.AppConfig.RootDir)
+		books, err := scanDirectory(config.AppConfig.RootDir)
 		if err != nil {
 			return fmt.Errorf("scan error: %w", err)
 		}
@@ -173,19 +192,19 @@ var organizeCmd = &cobra.Command{
 
 		// Step 2: Process books and identify series
 		fmt.Println("Processing audiobooks and identifying series...")
-		if err := scanner.ProcessBooks(books); err != nil {
+		if err := processBooks(books); err != nil {
 			return fmt.Errorf("processing error: %w", err)
 		}
 
 		// Step 3: Generate playlists
 		fmt.Println("Generating playlists...")
-		if err := playlist.GeneratePlaylistsForSeries(); err != nil {
+		if err := generatePlaylists(); err != nil {
 			return fmt.Errorf("playlist generation error: %w", err)
 		}
 
 		// Step 4: Update tags
 		fmt.Println("Updating audio file tags...")
-		if err := tagger.UpdateSeriesTags(); err != nil {
+		if err := updateSeriesTags(); err != nil {
 			return fmt.Errorf("tag update error: %w", err)
 		}
 
@@ -213,22 +232,22 @@ var serveCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := database.InitializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
-		defer database.CloseStore()
+		defer closeStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 
 		// Initialize encryption for settings (generates key if needed)
 		dbDir := filepath.Dir(config.AppConfig.DatabasePath)
-		if err := database.InitEncryption(dbDir); err != nil {
+		if err := initEncryption(dbDir); err != nil {
 			return fmt.Errorf("failed to initialize encryption: %w", err)
 		}
 		fmt.Println("Settings encryption initialized")
 
 		// Load configuration from database (overrides defaults with persisted values)
-		if err := config.LoadConfigFromDatabase(database.GlobalStore); err != nil {
+		if err := loadConfigFromDB(database.GlobalStore); err != nil {
 			fmt.Printf("Warning: Could not load config from database: %v\n", err)
 		} else {
 			fmt.Println("Configuration loaded from database")
@@ -242,7 +261,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		// Apply env var overrides (command line takes precedence over DB)
-		config.SyncConfigFromEnv()
+		syncConfigFromEnv()
 
 		// Log import path count
 		if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
@@ -263,18 +282,18 @@ var serveCmd = &cobra.Command{
 		if w := cmd.Flag("workers").Value.String(); w != "" {
 			fmt.Sscanf(w, "%d", &workers)
 		}
-		operations.InitializeQueue(database.GlobalStore, workers)
+		initializeQueue(database.GlobalStore, workers)
 		defer func() {
 			fmt.Println("Shutting down operation queue...")
-			if err := operations.ShutdownQueue(30 * time.Second); err != nil {
+			if err := shutdownQueue(30 * time.Second); err != nil {
 				fmt.Printf("Warning: operation queue shutdown error: %v\n", err)
 			}
 		}()
 		fmt.Printf("Operation queue initialized with %d workers\n", workers)
 
 		// Create and start server
-		srv := server.NewServer()
-		cfg := server.GetDefaultServerConfig()
+		srv := newServer()
+		cfg := getDefaultServerConfig()
 
 		// Override with command line flags if provided
 		if port := cmd.Flag("port").Value.String(); port != "" {
@@ -299,7 +318,7 @@ var serveCmd = &cobra.Command{
 			}
 		}
 
-		return srv.Start(cfg)
+		return startServer(srv, cfg)
 	},
 }
 
