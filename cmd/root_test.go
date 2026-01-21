@@ -5,12 +5,14 @@
 package cmd
 
 import (
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/spf13/viper"
 )
 
 func TestFormatMetadataValue(t *testing.T) {
@@ -80,6 +82,57 @@ func TestInitConfigCreatesDirectories(t *testing.T) {
 	}
 	if _, err := os.Stat(playlistsPath); err != nil {
 		t.Fatalf("expected playlist directory to exist: %v", err)
+	}
+}
+
+func TestInitConfigUsesHomeConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, ".audiobook-organizer.yaml")
+	if err := os.WriteFile(configPath, []byte("root_dir: /tmp\n"), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	origCfgFile := cfgFile
+	origDBPath := databasePath
+	origPlaylistDir := playlistDir
+	origConfig := config.AppConfig
+	defer func() {
+		cfgFile = origCfgFile
+		databasePath = origDBPath
+		playlistDir = origPlaylistDir
+		config.AppConfig = origConfig
+	}()
+
+	t.Setenv("HOME", tempDir)
+	cfgFile = ""
+	databasePath = ""
+	playlistDir = ""
+
+	viper.Reset()
+	initConfig()
+}
+
+func TestPrintMetadataField(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	origStdout := os.Stdout
+	os.Stdout = w
+	defer func() {
+		os.Stdout = origStdout
+	}()
+
+	printMetadataField("Title", "")
+	_ = w.Close()
+
+	output, err := io.ReadAll(r)
+	_ = r.Close()
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	if got := string(output); got == "" {
+		t.Fatal("expected output to be written")
 	}
 }
 

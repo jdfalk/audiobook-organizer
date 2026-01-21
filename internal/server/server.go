@@ -76,6 +76,16 @@ type metadataFieldState struct {
 	UpdatedAt      time.Time   `json:"updated_at,omitempty"`
 }
 
+type aiParser interface {
+	IsEnabled() bool
+	ParseFilename(ctx context.Context, filename string) (*ai.ParsedMetadata, error)
+	TestConnection(ctx context.Context) error
+}
+
+var newAIParser = func(apiKey string, enabled bool) aiParser {
+	return ai.NewOpenAIParser(apiKey, enabled)
+}
+
 func metadataStateKey(bookID string) string {
 	return fmt.Sprintf("metadata_state_%s", bookID)
 }
