@@ -6,7 +6,13 @@
       "Bash(go tool cover:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(sort:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(test:*)",
+      "Bash(go clean:*)",
+      "Bash(go build:*)"
     ]
   }
 }
