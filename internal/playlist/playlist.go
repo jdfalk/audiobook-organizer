@@ -25,6 +25,13 @@ type PlaylistItem struct {
 	Position int
 }
 
+// seriesInfo holds information about a series for playlist generation
+type seriesInfo struct {
+	ID         int
+	Name       string
+	AuthorName string
+}
+
 // GeneratePlaylistsForSeries generates playlists for all identified series
 func GeneratePlaylistsForSeries() error {
 	// First, get all series from the database
@@ -36,20 +43,25 @@ func GeneratePlaylistsForSeries() error {
 	if err != nil {
 		return fmt.Errorf("failed to query series: %w", err)
 	}
-	defer rows.Close()
 
+	// Collect all series data first to avoid locking issues
+	var allSeries []seriesInfo
 	for rows.Next() {
-		var seriesID int
-		var seriesName, authorName string
-
-		if err := rows.Scan(&seriesID, &seriesName, &authorName); err != nil {
+		var s seriesInfo
+		if err := rows.Scan(&s.ID, &s.Name, &s.AuthorName); err != nil {
+			rows.Close()
 			return fmt.Errorf("failed to scan series row: %w", err)
 		}
+		allSeries = append(allSeries, s)
+	}
+	rows.Close()
 
+	// Now process each series
+	for _, series := range allSeries {
 		// Get all books in this series
-		items, err := getBooksInSeries(seriesID)
+		items, err := getBooksInSeries(series.ID)
 		if err != nil {
-			return fmt.Errorf("failed to get books for series %s: %w", seriesName, err)
+			return fmt.Errorf("failed to get books for series %s: %w", series.Name, err)
 		}
 
 		// Skip if no books found
@@ -66,7 +78,7 @@ func GeneratePlaylistsForSeries() error {
 		})
 
 		// Generate playlist name
-		playlistName := fmt.Sprintf("%s - %s", seriesName, authorName)
+		playlistName := fmt.Sprintf("%s - %s", series.Name, series.AuthorName)
 
 		// Create iTunes XML playlist
 		playlistPath, err := createiTunesPlaylist(playlistName, items)
@@ -75,7 +87,7 @@ func GeneratePlaylistsForSeries() error {
 		}
 
 		// Save playlist info to database
-		if err := savePlaylistToDatabase(seriesID, playlistName, playlistPath); err != nil {
+		if err := savePlaylistToDatabase(series.ID, playlistName, playlistPath); err != nil {
 			return fmt.Errorf("failed to save playlist to database: %w", err)
 		}
 
@@ -143,7 +155,7 @@ func createiTunesPlaylist(playlistName string, items []PlaylistItem) (string, er
 	// Add each book to the playlist
 	for _, item := range items {
 		// Write extended info
-		_, err = f.WriteString(fmt.Sprintf("#EXTINF:-1,%s - %s\n", item.Author, item.Title))
+		_, err = fmt.Fprintf(f, "#EXTINF:-1,%s - %s\n", item.Author, item.Title)
 		if err != nil {
 			return "", err
 		}
@@ -202,17 +214,25 @@ func savePlaylistToDatabase(seriesID int, playlistName, playlistPath string) err
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
 
-	position := 1
+	// Collect all book IDs first before closing rows
+	var bookIDs []int
 	for rows.Next() {
 		var bookID int
 		var sequence sql.NullInt64
 
 		if err := rows.Scan(&bookID, &sequence); err != nil {
+			rows.Close()
 			return err
 		}
 
+		bookIDs = append(bookIDs, bookID)
+	}
+	rows.Close()
+
+	// Now insert playlist items
+	position := 1
+	for _, bookID := range bookIDs {
 		_, err = database.DB.Exec(`
             INSERT INTO playlist_items (playlist_id, book_id, position)
             VALUES (?, ?, ?)
