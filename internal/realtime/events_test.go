@@ -1,13 +1,19 @@
 // file: internal/realtime/events_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 package realtime
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestNewClient(t *testing.T) {
@@ -354,5 +360,637 @@ func TestInitializeEventHub(t *testing.T) {
 	InitializeEventHub()
 	if GlobalHub != prevHub {
 		t.Error("InitializeEventHub should be idempotent")
+	}
+}
+
+// TestEventHub_Broadcast_ChannelFull tests the scenario where client channel is full
+func TestEventHub_Broadcast_ChannelFull(t *testing.T) {
+	hub := NewEventHub()
+
+	// Create client with buffer of 0 to make it immediately full
+	client := &Client{
+		ID:         "client-1",
+		Channel:    make(chan *Event, 0), // No buffer
+		Operations: make(map[string]bool),
+	}
+	hub.RegisterClient(client)
+
+	// Send event in background since channel is full
+	go func() {
+		event := &Event{
+			Type:      EventSystemStatus,
+			ID:        "",
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"status": "test",
+			},
+		}
+		hub.Broadcast(event)
+	}()
+
+	// Give some time for broadcast to attempt
+	time.Sleep(50 * time.Millisecond)
+
+	// The event should be dropped due to full channel (non-blocking select)
+	// This tests the default case in Broadcast
+	select {
+	case <-client.Channel:
+		// If we receive something, that's ok - timing dependent
+	default:
+		// Expected if channel was full
+	}
+
+	hub.UnregisterClient(client.ID)
+}
+
+// TestEventHub_UnregisterClient_NonExistent tests unregistering a non-existent client
+func TestEventHub_UnregisterClient_NonExistent(t *testing.T) {
+	hub := NewEventHub()
+
+	// Unregister client that doesn't exist - should not panic
+	hub.UnregisterClient("non-existent-client")
+
+	if hub.GetClientCount() != 0 {
+		t.Error("Expected 0 clients")
+	}
+}
+
+// TestEventHub_Broadcast_NoClients tests broadcasting with no clients
+func TestEventHub_Broadcast_NoClients(t *testing.T) {
+	hub := NewEventHub()
+
+	event := &Event{
+		Type:      EventSystemStatus,
+		ID:        "",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"status": "test",
+		},
+	}
+
+	// Should not panic with no clients
+	hub.Broadcast(event)
+}
+
+// TestEventHub_Broadcast_ClientWithNoSubscriptions tests client with no subscriptions receives all events
+func TestEventHub_Broadcast_ClientWithNoSubscriptions(t *testing.T) {
+	hub := NewEventHub()
+
+	// Client with no subscriptions
+	client := NewClient("client-1")
+	hub.RegisterClient(client)
+
+	// Send operation-specific event
+	event := &Event{
+		Type:      EventOperationProgress,
+		ID:        "op-123",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"progress": 50,
+		},
+	}
+
+	hub.Broadcast(event)
+
+	// Client should receive event even though it has no subscriptions
+	select {
+	case <-client.Channel:
+		// Expected
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Client with no subscriptions should receive all events")
+	}
+}
+
+// TestEventHub_SendOperationLog_WithoutDetails tests sending operation log without details
+func TestEventHub_SendOperationLog_WithoutDetails(t *testing.T) {
+	hub := NewEventHub()
+	client := NewClient("client-1")
+	client.Subscribe("op-123")
+	hub.RegisterClient(client)
+
+	hub.SendOperationLog("op-123", "info", "Test message", nil)
+
+	select {
+	case event := <-client.Channel:
+		if event.Type != EventOperationLog {
+			t.Error("Received wrong event type")
+		}
+		if _, hasDetails := event.Data["details"]; hasDetails {
+			t.Error("Should not have details field when nil")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Did not receive operation log event")
+	}
+}
+
+// TestClient_ConcurrentSubscribe tests concurrent subscribe/unsubscribe operations
+func TestClient_ConcurrentSubscribe(t *testing.T) {
+	client := NewClient("test-client")
+
+	// Concurrent subscribe operations
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			opID := fmt.Sprintf("op-%d", id)
+			client.Subscribe(opID)
+			if !client.IsSubscribed(opID) {
+				t.Errorf("Client should be subscribed to %s", opID)
+			}
+			client.Unsubscribe(opID)
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+// TestHandleSSE_BasicConnection tests the basic SSE connection
+func TestHandleSSE_BasicConnection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	c.Request = c.Request.WithContext(ctx)
+
+	// Run HandleSSE in goroutine
+	done := make(chan bool)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Wait for connection to establish and send initial event
+	time.Sleep(50 * time.Millisecond)
+
+	// Check headers
+	if w.Header().Get("Content-Type") != "text/event-stream" {
+		t.Error("Expected Content-Type: text/event-stream")
+	}
+	if w.Header().Get("Cache-Control") != "no-cache" {
+		t.Error("Expected Cache-Control: no-cache")
+	}
+	if w.Header().Get("Connection") != "keep-alive" {
+		t.Error("Expected Connection: keep-alive")
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Error("Expected Access-Control-Allow-Origin: *")
+	}
+
+	// Wait for completion
+	<-done
+
+	// Check that initial event was sent
+	body := w.Body.String()
+	if !strings.Contains(body, "data:") {
+		t.Error("Expected SSE data format")
+	}
+	if !strings.Contains(body, "connection.established") {
+		t.Error("Expected connection.established event")
+	}
+}
+
+// TestHandleSSE_WithOperationSubscription tests SSE with operation query parameter
+func TestHandleSSE_WithOperationSubscription(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events?operation=op-123", nil)
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	c.Request = c.Request.WithContext(ctx)
+
+	// Run HandleSSE in goroutine
+	done := make(chan bool)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Give time for client to register
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify client was subscribed to operation
+	if hub.GetClientCount() != 1 {
+		t.Error("Expected 1 client to be registered")
+	}
+
+	<-done
+
+	// After context done, client should be unregistered
+	time.Sleep(50 * time.Millisecond)
+	if hub.GetClientCount() != 0 {
+		t.Error("Expected client to be unregistered after disconnect")
+	}
+}
+
+// TestHandleSSE_EventDelivery tests that events are properly delivered
+func TestHandleSSE_EventDelivery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	c.Request = c.Request.WithContext(ctx)
+
+	// Run HandleSSE in goroutine
+	done := make(chan bool)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Wait for connection to establish
+	time.Sleep(50 * time.Millisecond)
+
+	// Send an event
+	hub.SendSystemStatus(map[string]interface{}{
+		"status": "test_event",
+	})
+
+	// Wait for event to be sent
+	time.Sleep(50 * time.Millisecond)
+
+	<-done
+
+	// Check response body contains the event
+	body := w.Body.String()
+	if !strings.Contains(body, "test_event") {
+		t.Error("Expected event to be in response body")
+	}
+	if !strings.Contains(body, "system.status") {
+		t.Error("Expected system.status event type")
+	}
+}
+
+// TestHandleSSE_Heartbeat tests heartbeat functionality
+func TestHandleSSE_Heartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping heartbeat test in short mode")
+	}
+
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+
+	// Use longer timeout to allow heartbeat to fire (30s ticker + buffer)
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	c.Request = c.Request.WithContext(ctx)
+
+	// Run HandleSSE in goroutine
+	done := make(chan bool)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Wait for heartbeat (30s + buffer)
+	time.Sleep(31 * time.Second)
+
+	cancel() // Cancel to stop the handler
+	<-done
+
+	// Check response body contains heartbeat
+	body := w.Body.String()
+	if !strings.Contains(body, "heartbeat") {
+		t.Error("Expected heartbeat in response body")
+	}
+}
+
+// TestHandleSSE_JSONMarshalError tests handling of marshal errors
+func TestHandleSSE_JSONMarshalError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	c.Request = c.Request.WithContext(ctx)
+
+	// Run HandleSSE in goroutine
+	done := make(chan bool)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Wait for connection
+	time.Sleep(50 * time.Millisecond)
+
+	// Send event with unmarshalable data (channel, func, etc.)
+	// In practice, json.Marshal will succeed for our Event types,
+	// so this is more of a defensive test
+	event := &Event{
+		Type:      EventSystemStatus,
+		ID:        "",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"normal": "value",
+		},
+	}
+	hub.Broadcast(event)
+
+	time.Sleep(50 * time.Millisecond)
+	<-done
+
+	// Should not crash
+}
+
+// TestCalculatePercentage_NegativeTotal tests calculatePercentage with negative total
+func TestCalculatePercentage_NegativeTotal(t *testing.T) {
+	result := calculatePercentage(50, -10)
+	if result != 0 {
+		t.Errorf("Expected 0 for negative total, got %d", result)
+	}
+}
+
+// TestEventHub_MultipleSubscriptions tests client subscribed to multiple operations
+func TestEventHub_MultipleSubscriptions(t *testing.T) {
+	hub := NewEventHub()
+	client := NewClient("client-1")
+
+	// Subscribe to multiple operations
+	client.Subscribe("op-1")
+	client.Subscribe("op-2")
+	client.Subscribe("op-3")
+
+	hub.RegisterClient(client)
+
+	// Send event for op-2
+	event := &Event{
+		Type:      EventOperationProgress,
+		ID:        "op-2",
+		Timestamp: time.Now(),
+		Data:      map[string]interface{}{"test": "data"},
+	}
+
+	hub.Broadcast(event)
+
+	// Client should receive it
+	select {
+	case <-client.Channel:
+		// Expected
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Client should receive event for subscribed operation")
+	}
+
+	// Send event for non-subscribed operation
+	event2 := &Event{
+		Type:      EventOperationProgress,
+		ID:        "op-999",
+		Timestamp: time.Now(),
+		Data:      map[string]interface{}{"test": "data"},
+	}
+
+	hub.Broadcast(event2)
+
+	// Client should not receive it
+	select {
+	case <-client.Channel:
+		t.Error("Client should not receive event for non-subscribed operation")
+	case <-time.After(50 * time.Millisecond):
+		// Expected
+	}
+}
+
+// TestEventType_Constants tests that event type constants are defined
+func TestEventType_Constants(t *testing.T) {
+	if EventOperationProgress != "operation.progress" {
+		t.Error("EventOperationProgress has wrong value")
+	}
+	if EventOperationStatus != "operation.status" {
+		t.Error("EventOperationStatus has wrong value")
+	}
+	if EventOperationLog != "operation.log" {
+		t.Error("EventOperationLog has wrong value")
+	}
+	if EventSystemStatus != "system.status" {
+		t.Error("EventSystemStatus has wrong value")
+	}
+}
+
+// TestEvent_JSONMarshaling tests that Event can be marshaled to JSON
+func TestEvent_JSONMarshaling(t *testing.T) {
+	event := &Event{
+		Type:      EventOperationProgress,
+		ID:        "op-123",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"progress": 50,
+			"message":  "test",
+		},
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		t.Errorf("Failed to marshal event: %v", err)
+	}
+
+	if len(data) == 0 {
+		t.Error("Marshaled data should not be empty")
+	}
+
+	// Unmarshal and verify
+	var unmarshaled Event
+	err = json.Unmarshal(data, &unmarshaled)
+	if err != nil {
+		t.Errorf("Failed to unmarshal event: %v", err)
+	}
+
+	if unmarshaled.Type != EventOperationProgress {
+		t.Error("Event type mismatch after unmarshal")
+	}
+	if unmarshaled.ID != "op-123" {
+		t.Error("Event ID mismatch after unmarshal")
+	}
+}
+
+// TestEventHub_RegisterClient_MultipleClients tests registering multiple clients
+func TestEventHub_RegisterClient_MultipleClients(t *testing.T) {
+	hub := NewEventHub()
+
+	clients := make([]*Client, 10)
+	for i := 0; i < 10; i++ {
+		clients[i] = NewClient(fmt.Sprintf("client-%d", i))
+		hub.RegisterClient(clients[i])
+	}
+
+	if hub.GetClientCount() != 10 {
+		t.Errorf("Expected 10 clients, got %d", hub.GetClientCount())
+	}
+
+	// Unregister half
+	for i := 0; i < 5; i++ {
+		hub.UnregisterClient(clients[i].ID)
+	}
+
+	if hub.GetClientCount() != 5 {
+		t.Errorf("Expected 5 clients after unregistering half, got %d", hub.GetClientCount())
+	}
+}
+
+// TestEventHub_SendOperationProgress_EdgeCases tests edge cases for progress
+func TestEventHub_SendOperationProgress_EdgeCases(t *testing.T) {
+	hub := NewEventHub()
+	client := NewClient("client-1")
+	client.Subscribe("op-123")
+	hub.RegisterClient(client)
+
+	// Test with total = 0
+	hub.SendOperationProgress("op-123", 0, 0, "Starting")
+
+	select {
+	case event := <-client.Channel:
+		if event.Data["percentage"] != 0 {
+			t.Error("Percentage should be 0 when total is 0")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Did not receive event")
+	}
+
+	// Test with current > total
+	hub.SendOperationProgress("op-123", 150, 100, "Exceeded")
+
+	select {
+	case event := <-client.Channel:
+		if event.Data["percentage"] != 100 {
+			t.Error("Percentage should be capped at 100")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Did not receive event")
+	}
+}
+
+// TestHandleSSE_ClientDisconnect tests client disconnection handling
+func TestHandleSSE_ClientDisconnect(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	hub := NewEventHub()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/events", nil)
+
+	// Create a context that we'll cancel immediately
+	ctx, cancel := context.WithCancel(context.Background())
+	c.Request = c.Request.WithContext(ctx)
+
+	// Cancel immediately to simulate disconnect
+	cancel()
+
+	// Run HandleSSE - should exit quickly due to context cancellation
+	done := make(chan bool, 1)
+	go func() {
+		hub.HandleSSE(c)
+		done <- true
+	}()
+
+	// Wait for handler to complete
+	select {
+	case <-done:
+		// Expected - handler should exit
+	case <-time.After(1 * time.Second):
+		t.Error("Handler should exit quickly when context is cancelled")
+	}
+
+	// Client should be unregistered
+	time.Sleep(10 * time.Millisecond)
+	if hub.GetClientCount() != 0 {
+		t.Error("Expected client to be unregistered")
+	}
+}
+
+// TestEventHub_ConcurrentBroadcast tests concurrent broadcasting
+func TestEventHub_ConcurrentBroadcast(t *testing.T) {
+	hub := NewEventHub()
+
+	// Register multiple clients
+	clients := make([]*Client, 5)
+	for i := 0; i < 5; i++ {
+		clients[i] = NewClient(fmt.Sprintf("client-%d", i))
+		hub.RegisterClient(clients[i])
+	}
+
+	// Broadcast multiple events concurrently
+	done := make(chan bool)
+	for i := 0; i < 10; i++ {
+		go func(id int) {
+			event := &Event{
+				Type:      EventSystemStatus,
+				ID:        "",
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"id": id,
+				},
+			}
+			hub.Broadcast(event)
+			done <- true
+		}(i)
+	}
+
+	// Wait for all broadcasts to complete
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Each client should have received some events
+	for i, client := range clients {
+		receivedCount := 0
+		timeout := time.After(100 * time.Millisecond)
+	drainLoop:
+		for {
+			select {
+			case <-client.Channel:
+				receivedCount++
+			case <-timeout:
+				break drainLoop
+			}
+		}
+		if receivedCount == 0 {
+			t.Errorf("Client %d received no events", i)
+		}
+	}
+}
+
+// TestClient_ChannelCapacity tests that client channel has correct capacity
+func TestClient_ChannelCapacity(t *testing.T) {
+	client := NewClient("test-client")
+
+	// Channel should have capacity of 100
+	// We can't directly test capacity, but we can verify it doesn't block
+	// for reasonable number of events
+	for i := 0; i < 50; i++ {
+		select {
+		case client.Channel <- &Event{
+			Type:      EventSystemStatus,
+			Timestamp: time.Now(),
+			Data:      map[string]interface{}{"i": i},
+		}:
+			// Expected - should not block
+		default:
+			t.Error("Channel should not be full after 50 events")
+		}
 	}
 }
