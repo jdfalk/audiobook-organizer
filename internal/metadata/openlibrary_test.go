@@ -175,3 +175,248 @@ func TestGetBookByISBNInvalid(t *testing.T) {
 		t.Error("Expected error for invalid ISBN")
 	}
 }
+
+func TestSearchByTitle_NetworkError(t *testing.T) {
+	// Use invalid URL to trigger network error
+	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
+
+	_, err := client.SearchByTitle("Test")
+	if err == nil {
+		t.Error("Expected network error")
+	}
+}
+
+func TestSearchByTitle_NonOKStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.SearchByTitle("Test")
+	if err == nil {
+		t.Error("Expected error for non-OK status")
+	}
+}
+
+func TestSearchByTitle_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("invalid json"))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.SearchByTitle("Test")
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+func TestSearchByTitle_CompleteMetadata(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"numFound":1,
+			"start":0,
+			"docs":[{
+				"title":"Complete Book",
+				"author_name":["Author Name"],
+				"first_publish_year":2020,
+				"publisher":["Publisher Name"],
+				"isbn":["1234567890"],
+				"language":["eng"],
+				"cover_i":12345
+			}]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	results, err := client.SearchByTitle("Complete Book")
+	if err != nil {
+		t.Fatalf("SearchByTitle failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	result := results[0]
+	if result.Title != "Complete Book" {
+		t.Errorf("Expected title 'Complete Book', got %q", result.Title)
+	}
+	if result.Author != "Author Name" {
+		t.Errorf("Expected author 'Author Name', got %q", result.Author)
+	}
+	if result.PublishYear != 2020 {
+		t.Errorf("Expected year 2020, got %d", result.PublishYear)
+	}
+	if result.Publisher != "Publisher Name" {
+		t.Errorf("Expected publisher 'Publisher Name', got %q", result.Publisher)
+	}
+	if result.ISBN != "1234567890" {
+		t.Errorf("Expected ISBN '1234567890', got %q", result.ISBN)
+	}
+	if result.Language != "eng" {
+		t.Errorf("Expected language 'eng', got %q", result.Language)
+	}
+	if result.CoverURL == "" {
+		t.Error("Expected cover URL to be set")
+	}
+}
+
+func TestSearchByTitleAndAuthor_NetworkError(t *testing.T) {
+	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
+
+	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	if err == nil {
+		t.Error("Expected network error")
+	}
+}
+
+func TestSearchByTitleAndAuthor_NonOKStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	if err == nil {
+		t.Error("Expected error for non-OK status")
+	}
+}
+
+func TestSearchByTitleAndAuthor_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("{invalid json"))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+func TestSearchByTitleAndAuthor_MultipleAuthors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"numFound":1,
+			"start":0,
+			"docs":[{
+				"title":"Multi-Author Book",
+				"author_name":["First Author", "Second Author"],
+				"first_publish_year":2021
+			}]
+		}`))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	results, err := client.SearchByTitleAndAuthor("Multi-Author Book", "First Author")
+	if err != nil {
+		t.Fatalf("SearchByTitleAndAuthor failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	// Should join multiple authors
+	if results[0].Author != "First Author, Second Author" {
+		t.Errorf("Expected joined authors, got %q", results[0].Author)
+	}
+}
+
+func TestGetBookByISBN_NetworkError(t *testing.T) {
+	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
+
+	_, err := client.GetBookByISBN("1234567890")
+	if err == nil {
+		t.Error("Expected network error")
+	}
+}
+
+func TestGetBookByISBN_NonOKNonNotFound(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.GetBookByISBN("1234567890")
+	if err == nil {
+		t.Error("Expected error for internal server error")
+	}
+}
+
+func TestGetBookByISBN_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("{not valid json}"))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	_, err := client.GetBookByISBN("1234567890")
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+func TestGetBookByISBN_EmptyResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	result, err := client.GetBookByISBN("1234567890")
+	if err != nil {
+		t.Fatalf("GetBookByISBN failed: %v", err)
+	}
+
+	// Should handle empty fields gracefully
+	if result.ISBN != "1234567890" {
+		t.Errorf("Expected ISBN to be set, got %q", result.ISBN)
+	}
+	if result.Title != "" {
+		t.Errorf("Expected empty title, got %q", result.Title)
+	}
+}
+
+func TestGetBookByISBN_ShortPublishDate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"title":"Test","publish_date":"20"}`))
+	}))
+	defer server.Close()
+
+	client := NewOpenLibraryClientWithBaseURL(server.URL)
+
+	result, err := client.GetBookByISBN("1234567890")
+	if err != nil {
+		t.Fatalf("GetBookByISBN failed: %v", err)
+	}
+
+	// Should handle short date strings
+	if result.PublishYear != 0 {
+		t.Errorf("Expected year 0 for short date, got %d", result.PublishYear)
+	}
+}
+
+func TestNewOpenLibraryClientWithBaseURL_TrailingSlash(t *testing.T) {
+	client := NewOpenLibraryClientWithBaseURL("https://example.com/")
+
+	if client.baseURL != "https://example.com" {
+		t.Errorf("Expected trailing slash to be trimmed, got %q", client.baseURL)
+	}
+}
