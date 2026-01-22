@@ -1,5 +1,7 @@
+//go:build mocks
+
 // file: internal/config/persistence_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package config
