@@ -1,5 +1,5 @@
 // file: internal/operations/queue_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package operations
@@ -12,10 +12,32 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	testifyMock "github.com/stretchr/testify/mock"
 )
 
+func newMockStore(t *testing.T) *mocks.MockStore {
+	t.Helper()
+	store := mocks.NewMockStore(t)
+	store.EXPECT().UpdateOperationStatus(
+		testifyMock.Anything,
+		testifyMock.Anything,
+		testifyMock.Anything,
+		testifyMock.Anything,
+		testifyMock.Anything,
+	).Return(nil).Maybe()
+	store.EXPECT().UpdateOperationError(testifyMock.Anything, testifyMock.Anything).Return(nil).Maybe()
+	store.EXPECT().AddOperationLog(
+		testifyMock.Anything,
+		testifyMock.Anything,
+		testifyMock.Anything,
+		testifyMock.Anything,
+	).Return(nil).Maybe()
+	return store
+}
+
 func TestNewOperationQueue(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 
 	t.Run("creates queue with specified workers", func(t *testing.T) {
 		q := NewOperationQueue(store, 4)
@@ -49,7 +71,7 @@ func TestNewOperationQueue(t *testing.T) {
 }
 
 func TestOperationQueue_Enqueue(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 1)
 	defer q.Shutdown(time.Second)
 
@@ -97,7 +119,7 @@ func TestOperationQueue_Enqueue(t *testing.T) {
 }
 
 func TestOperationQueue_Cancel(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 1)
 	defer q.Shutdown(time.Second)
 
@@ -145,7 +167,7 @@ func TestOperationQueue_Cancel(t *testing.T) {
 }
 
 func TestOperationQueue_GetStatus(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 1)
 	defer q.Shutdown(time.Second)
 
@@ -158,10 +180,10 @@ func TestOperationQueue_GetStatus(t *testing.T) {
 	})
 
 	t.Run("returns operation status from store", func(t *testing.T) {
-		store.Operations["status-op"] = &database.Operation{
+		store.EXPECT().GetOperationByID("status-op").Return(&database.Operation{
 			ID:     "status-op",
 			Status: "running",
-		}
+		}, nil).Once()
 
 		op, err := q.GetStatus("status-op")
 		if err != nil {
@@ -174,7 +196,7 @@ func TestOperationQueue_GetStatus(t *testing.T) {
 }
 
 func TestOperationQueue_Listeners(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 1)
 	defer q.Shutdown(time.Second)
 
@@ -226,7 +248,7 @@ func TestOperationQueue_Listeners(t *testing.T) {
 }
 
 func TestOperationQueue_Shutdown(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 
 	t.Run("graceful shutdown", func(t *testing.T) {
 		q := NewOperationQueue(store, 2)
@@ -264,7 +286,7 @@ func TestOperationQueue_Shutdown(t *testing.T) {
 }
 
 func TestOperationQueue_WorkerExecution(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 2)
 	defer q.Shutdown(time.Second)
 
@@ -308,12 +330,7 @@ func TestOperationQueue_WorkerExecution(t *testing.T) {
 		select {
 		case <-done:
 			time.Sleep(50 * time.Millisecond)
-			// Verify error was recorded
-			if op, err := store.GetOperationByID("error-op"); err == nil {
-				if op.Status != "failed" {
-					t.Errorf("expected status 'failed', got '%s'", op.Status)
-				}
-			}
+			store.AssertCalled(t, "UpdateOperationError", "error-op", expectedErr.Error())
 		case <-time.After(2 * time.Second):
 			t.Fatal("operation did not complete")
 		}
@@ -341,7 +358,7 @@ func TestOperationQueue_WorkerExecution(t *testing.T) {
 }
 
 func TestOperationQueue_ConcurrentOperations(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 4)
 	defer q.Shutdown(2 * time.Second)
 
@@ -379,7 +396,7 @@ func TestOperationQueue_ConcurrentOperations(t *testing.T) {
 }
 
 func TestOperationProgressReporter(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := &OperationQueue{
 		listeners: make(map[string][]ProgressListener),
 		store:     store,
@@ -417,17 +434,19 @@ func TestOperationProgressReporter(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Log failed: %v", err)
 		}
-
-		logs, _ := store.GetOperationLogs("log-op")
-		if len(logs) != 1 {
-			t.Fatalf("expected 1 log, got %d", len(logs))
-		}
-		if logs[0].Message != "test message" {
-			t.Errorf("unexpected log message: %s", logs[0].Message)
-		}
+		store.AssertCalled(t, "AddOperationLog", "log-op", "info", "test message", &details)
 	})
 
 	t.Run("IsCanceled returns false by default", func(t *testing.T) {
+		// Set up mock expectation for GetOperationByID
+		store.EXPECT().
+			GetOperationByID(testifyMock.Anything).
+			Return(&database.Operation{
+				ID:     "not-canceled-op",
+				Status: "running",
+			}, nil).
+			Maybe()
+
 		reporter := &operationProgressReporter{
 			operationID: "not-canceled-op",
 			store:       store,
@@ -453,14 +472,16 @@ func TestOperationProgressReporter(t *testing.T) {
 	})
 
 	t.Run("IsCanceled checks database status", func(t *testing.T) {
-		store.Operations["db-canceled-op"] = &database.Operation{
+		// Create a fresh mock for this test
+		freshStore := newMockStore(t)
+		freshStore.EXPECT().GetOperationByID("db-canceled-op").Return(&database.Operation{
 			ID:     "db-canceled-op",
 			Status: "canceled",
-		}
+		}, nil)
 
 		reporter := &operationProgressReporter{
 			operationID: "db-canceled-op",
-			store:       store,
+			store:       freshStore,
 			queue:       q,
 		}
 
@@ -474,7 +495,7 @@ func TestOperationProgressReporter(t *testing.T) {
 }
 
 func TestActiveOperations(t *testing.T) {
-	store := database.NewMockStore()
+	store := newMockStore(t)
 	q := NewOperationQueue(store, 1)
 	defer q.Shutdown(time.Second)
 
@@ -525,7 +546,7 @@ func TestActiveOperations(t *testing.T) {
 func TestSetStore(t *testing.T) {
 	t.Run("sets store when not already set", func(t *testing.T) {
 		q := &OperationQueue{}
-		store := database.NewMockStore()
+		store := newMockStore(t)
 
 		q.SetStore(store)
 		if q.store != store {
@@ -534,8 +555,8 @@ func TestSetStore(t *testing.T) {
 	})
 
 	t.Run("does not overwrite existing store", func(t *testing.T) {
-		existingStore := database.NewMockStore()
-		newStore := database.NewMockStore()
+		existingStore := newMockStore(t)
+		newStore := newMockStore(t)
 
 		q := &OperationQueue{store: existingStore}
 		q.SetStore(newStore)
@@ -547,7 +568,7 @@ func TestSetStore(t *testing.T) {
 
 	t.Run("handles nil queue", func(t *testing.T) {
 		var q *OperationQueue
-		store := database.NewMockStore()
+		store := newMockStore(t)
 		// Should not panic
 		q.SetStore(store)
 	})
@@ -566,7 +587,7 @@ func TestGlobalQueueFunctions(t *testing.T) {
 
 	t.Run("InitializeQueue creates global queue", func(t *testing.T) {
 		GlobalQueue = nil
-		store := database.NewMockStore()
+		store := newMockStore(t)
 
 		InitializeQueue(store, 2)
 		if GlobalQueue == nil {
@@ -580,7 +601,7 @@ func TestGlobalQueueFunctions(t *testing.T) {
 	})
 
 	t.Run("InitializeQueue warns on double init", func(t *testing.T) {
-		store := database.NewMockStore()
+		store := newMockStore(t)
 		GlobalQueue = NewOperationQueue(store, 1)
 		defer GlobalQueue.Shutdown(time.Second)
 
@@ -600,7 +621,7 @@ func TestGlobalQueueFunctions(t *testing.T) {
 	})
 
 	t.Run("ShutdownQueue shuts down global queue", func(t *testing.T) {
-		store := database.NewMockStore()
+		store := newMockStore(t)
 		GlobalQueue = NewOperationQueue(store, 1)
 
 		err := ShutdownQueue(time.Second)

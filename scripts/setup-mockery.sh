@@ -1,11 +1,11 @@
 #!/bin/bash
 # file: scripts/setup-mockery.sh
-# version: 1.1.0
+# version: 1.2.0
 # guid: c3d4e5f6-a7b8-9012-cdef-345678901abc
 
 # Setup script for integrating mockery v3 into the project
 
-set -e
+set -euo pipefail
 
 echo "🔧 Setting up mockery for improved test coverage..."
 
@@ -16,17 +16,11 @@ if ! command -v mockery &> /dev/null; then
 fi
 
 echo "✅ Mockery is installed"
-mockery version
+mockery --version
 
-# Create mocks directory
-echo "📁 Creating mocks directory..."
-mkdir -p internal/database/mocks
-
-# Generate mocks using direct command (v3 style)
+# Generate mocks using configuration
 echo "🔨 Generating mocks for Store interface..."
-cd internal/database
-mockery --name=Store --output=./mocks --outpkg=mocks
-cd ../..
+mockery --config .mockery.yaml
 
 echo ""
 echo "✨ Setup complete!"

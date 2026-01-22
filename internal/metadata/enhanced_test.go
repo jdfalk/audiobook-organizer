@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced_test.go
-// version: 1.0.5
+// version: 1.0.6
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
 
 package metadata
@@ -12,12 +12,15 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/stretchr/testify/mock"
 )
 
 // newMockStore provides a shared mock store for metadata tests.
-func newMockStore() *database.MockStore {
-	return database.NewMockStore()
+func newMockStore(t *testing.T) *mocks.MockStore {
+	t.Helper()
+	return mocks.NewMockStore(t)
 }
 
 func TestDefaultValidationRules(t *testing.T) {
@@ -238,7 +241,7 @@ func TestValidateMetadata_CustomValidator(t *testing.T) {
 }
 
 func TestBatchUpdateMetadata_Success(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	// Create test books
 	authorID := 1
@@ -254,8 +257,14 @@ func TestBatchUpdateMetadata_Success(t *testing.T) {
 		Format:   "m4b",
 		AuthorID: &authorID,
 	}
-	store.Books["book1"] = book1
-	store.Books["book2"] = book2
+	store.EXPECT().GetBookByID("book1").Return(book1, nil).Once()
+	store.EXPECT().GetBookByID("book2").Return(book2, nil).Once()
+	store.EXPECT().UpdateBook("book1", mock.MatchedBy(func(book *database.Book) bool {
+		return book != nil && book.Title == "New Title 1" && book.Format == "m4b"
+	})).Return(book1, nil).Once()
+	store.EXPECT().UpdateBook("book2", mock.MatchedBy(func(book *database.Book) bool {
+		return book != nil && book.Title == "New Title 2"
+	})).Return(book2, nil).Once()
 
 	// Create batch updates
 	updates := []MetadataUpdate{
@@ -284,21 +293,10 @@ func TestBatchUpdateMetadata_Success(t *testing.T) {
 	if successCount != 2 {
 		t.Errorf("Expected 2 successful updates, got %d", successCount)
 	}
-
-	// Verify books were updated
-	if store.Books["book1"].Title != "New Title 1" {
-		t.Errorf("Expected book1 title to be updated")
-	}
-	if store.Books["book1"].Format != "m4b" {
-		t.Errorf("Expected book1 format to be updated")
-	}
-	if store.Books["book2"].Title != "New Title 2" {
-		t.Errorf("Expected book2 title to be updated")
-	}
 }
 
 func TestBatchUpdateMetadata_ValidationFailure(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	updates := []MetadataUpdate{
 		{
@@ -321,7 +319,8 @@ func TestBatchUpdateMetadata_ValidationFailure(t *testing.T) {
 }
 
 func TestBatchUpdateMetadata_BookNotFound(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
+	store.EXPECT().GetBookByID("nonexistent").Return(nil, errors.New("book not found")).Once()
 
 	updates := []MetadataUpdate{
 		{
@@ -343,8 +342,7 @@ func TestBatchUpdateMetadata_BookNotFound(t *testing.T) {
 }
 
 func TestBatchUpdateMetadata_UpdateError(t *testing.T) {
-	store := newMockStore()
-	store.ErrorOnNext["UpdateBook"] = errors.New("database error")
+	store := newMockStore(t)
 
 	authorID := 1
 	book1 := &database.Book{
@@ -352,7 +350,8 @@ func TestBatchUpdateMetadata_UpdateError(t *testing.T) {
 		Title:    "Old Title",
 		AuthorID: &authorID,
 	}
-	store.Books["book1"] = book1
+	store.EXPECT().GetBookByID("book1").Return(book1, nil).Once()
+	store.EXPECT().UpdateBook("book1", mock.Anything).Return(nil, errors.New("database error")).Once()
 
 	updates := []MetadataUpdate{
 		{
@@ -400,7 +399,7 @@ func TestRecordMetadataChange(t *testing.T) {
 }
 
 func TestGetMetadataHistory(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	history, err := GetMetadataHistory("book123", store)
 
@@ -481,7 +480,13 @@ func TestExportMetadata(t *testing.T) {
 }
 
 func TestImportMetadata_Success(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
+	store.EXPECT().CreateBook(mock.MatchedBy(func(book *database.Book) bool {
+		return book != nil && book.Title == "Imported Book 1" && book.Format == "m4b" && book.Duration != nil && *book.Duration == 3600
+	})).Return(&database.Book{ID: "book1"}, nil).Once()
+	store.EXPECT().CreateBook(mock.MatchedBy(func(book *database.Book) bool {
+		return book != nil && book.Title == "Imported Book 2" && book.Format == "mp3"
+	})).Return(&database.Book{ID: "book2"}, nil).Once()
 
 	data := map[string]interface{}{
 		"books": []interface{}{
@@ -505,16 +510,10 @@ func TestImportMetadata_Success(t *testing.T) {
 	if count != 2 {
 		t.Errorf("Expected 2 imported books, got %d", count)
 	}
-
-	// Verify books were created
-	books, _ := store.GetAllBooks(0, 0)
-	if len(books) != 2 {
-		t.Errorf("Expected 2 books in store, got %d", len(books))
-	}
 }
 
 func TestImportMetadata_InvalidFormat(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	// Missing books field
 	data := map[string]interface{}{}
@@ -544,7 +543,7 @@ func TestImportMetadata_InvalidFormat(t *testing.T) {
 }
 
 func TestImportMetadata_InvalidBookData(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	data := map[string]interface{}{
 		"books": []interface{}{
@@ -563,7 +562,7 @@ func TestImportMetadata_InvalidBookData(t *testing.T) {
 }
 
 func TestImportMetadata_ValidationFailure(t *testing.T) {
-	store := newMockStore()
+	store := newMockStore(t)
 
 	data := map[string]interface{}{
 		"books": []interface{}{
@@ -584,8 +583,8 @@ func TestImportMetadata_ValidationFailure(t *testing.T) {
 }
 
 func TestImportMetadata_CreateError(t *testing.T) {
-	store := newMockStore()
-	store.ErrorOnNext["CreateBook"] = errors.New("database error")
+	store := newMockStore(t)
+	store.EXPECT().CreateBook(mock.Anything).Return(nil, errors.New("database error")).Once()
 
 	data := map[string]interface{}{
 		"books": []interface{}{
