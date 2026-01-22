@@ -41,12 +41,14 @@ This roadmap provides a comprehensive analysis of the audiobook-organizer projec
 **Severity**: Critical
 
 #### Root Causes
+
 1. **Duplicate Mock Declarations**
    - `MockStore` declared in both `mock_store.go` and `mocks_test.go`
    - `NewMockStore` declared in both files
    - Compiler cannot resolve which implementation to use
 
 2. **Missing Dependencies**
+
    ```
    Error: github.com/stretchr/objx is not in your go.mod file
    Error: missing go.sum entry for module providing package github.com/stretchr/objx
@@ -57,6 +59,7 @@ This roadmap provides a comprehensive analysis of the audiobook-organizer projec
    - Methods like `mock.Mock`, `mock.AssertExpectations`, `_mock.Called` are undefined
 
 #### Affected Files
+
 ```
 internal/database/mock_store.go:14:6     - MockStore redeclared
 internal/database/mock_store.go:54:6     - NewMockStore redeclared
@@ -70,6 +73,7 @@ go.mod:17:2                              - missing go.sum entry
 #### Solution (Estimated Time: 1 hour)
 
 **Step 1: Fix Dependencies (5 minutes)**
+
 ```bash
 # Add missing dependency
 go get github.com/stretchr/testify/mock@v1.11.1
@@ -84,6 +88,7 @@ go test ./internal/database -v
 **Step 2: Choose Mocking Strategy (See [Mockery Implementation Plan](#mockery-implementation-plan))**
 
 **Option A: Keep Manual MockStore (Recommended for immediate fix)**
+
 ```bash
 # Remove mockery-generated file
 rm internal/database/mocks_test.go
@@ -93,6 +98,7 @@ go test ./internal/database -v
 ```
 
 **Option B: Adopt Mockery (Recommended for long-term)**
+
 ```bash
 # Remove manual mock
 rm internal/database/mock_store.go
@@ -105,6 +111,7 @@ mockery --all
 ```
 
 **Step 3: Verify (5 minutes)**
+
 ```bash
 # Run all tests
 go test ./... -v -cover
@@ -122,6 +129,7 @@ go test ./internal/database -v -cover
 **Severity**: High
 
 #### Coverage Gaps (from MOCKERY_SUMMARY.md)
+
 1. **Error Paths** (~30% missing)
    - Database connection failures
    - Validation errors
@@ -145,6 +153,7 @@ go test ./internal/database -v -cover
 **See [Test Coverage Strategy](#test-coverage-strategy) for detailed plan**
 
 Quick wins to reach 80%:
+
 1. Add error injection tests using mocks (30 min)
 2. Add edge case coverage (empty lists, nulls) (30 min)
 3. Add validation error tests (30 min)
@@ -161,6 +170,7 @@ Quick wins to reach 80%:
 **Severity**: Medium
 
 #### Missing Coverage
+
 - Error handling in commands
 - Flag validation
 - Help text generation paths
@@ -191,6 +201,7 @@ func TestDiagnosticsCommandErrors(t *testing.T) {
 ### Current State Analysis
 
 #### Coverage Breakdown
+
 ```
 Tier                    Coverage Range    Packages    Avg Coverage
 ------------------------------------------------------------------------
@@ -207,22 +218,26 @@ TOTAL                   77.9% overall     17 packages
 ### Path to 80% Overall Coverage
 
 #### Priority 1: Fix Database Tests (CRITICAL)
+
 **Current**: FAIL → **Target**: 85%
 **Effort**: 1-2 hours
 **Impact**: +7% to overall coverage
 
 **Actions**:
+
 1. ✅ Fix dependencies (`go mod tidy`)
 2. ✅ Resolve mock duplicates
 3. ✅ Run existing tests to get baseline
 4. ✅ Add tests for uncovered Store methods
 
 #### Priority 2: Boost Server Coverage
+
 **Current**: 66.0% → **Target**: 85%
 **Effort**: 2-3 hours
 **Impact**: +3-4% to overall coverage
 
 **Actions**:
+
 1. ✅ Integrate mockery for database mocking
 2. ✅ Add error injection tests (database errors, network errors)
 3. ✅ Add edge case tests (empty results, missing data)
@@ -230,6 +245,7 @@ TOTAL                   77.9% overall     17 packages
 5. ✅ Add validation error tests
 
 **Test Categories to Add**:
+
 ```go
 // 1. Error Injection Tests (30 min)
 func TestListAudiobooksDBError(t *testing.T)
@@ -252,11 +268,13 @@ func TestSoftDeleteRestoreFlow(t *testing.T)
 ```
 
 #### Priority 3: Boost CMD Coverage
+
 **Current**: 78.6% → **Target**: 82%
 **Effort**: 30-60 min
 **Impact**: +0.5% to overall coverage
 
 **Actions**:
+
 1. ✅ Add command error tests
 2. ✅ Add flag validation tests
 3. ✅ Add help text tests
@@ -266,6 +284,7 @@ func TestSoftDeleteRestoreFlow(t *testing.T)
 #### Recommended Testing Tools
 
 **1. Mockery (already in progress)**
+
 ```yaml
 # .mockery.yaml
 packages:
@@ -276,12 +295,14 @@ packages:
 ```
 
 **Benefits**:
+
 - Automatic mock generation
 - Type-safe mocks
 - Call verification
 - Argument matchers
 
 **2. testify/suite**
+
 ```go
 // Use test suites for setup/teardown
 type ServerTestSuite struct {
@@ -297,6 +318,7 @@ func (s *ServerTestSuite) SetupTest() {
 ```
 
 **3. Table-Driven Tests**
+
 ```go
 // Efficient coverage of multiple scenarios
 tests := []struct {
@@ -318,6 +340,7 @@ tests := []struct {
 ### Current Situation
 
 **Problem**: Three competing mock implementations
+
 1. `mock_store.go` (1,110 lines) - Manual implementation
 2. `mocks_test.go` (56,398 lines!) - Mockery-generated
 3. `mock.go` + `mock_test.go` - Additional mock code
@@ -329,6 +352,7 @@ tests := []struct {
 #### Why Mockery?
 
 **Advantages** ✅:
+
 - ✅ Auto-generated (zero maintenance)
 - ✅ Type-safe (compiler catches errors)
 - ✅ Call verification built-in
@@ -337,6 +361,7 @@ tests := []struct {
 - ✅ Works with testify
 
 **Disadvantages** ❌:
+
 - ⚠️ Requires tool installation
 - ⚠️ Extra build step
 - ⚠️ Large generated files
@@ -444,14 +469,14 @@ func TestListAudiobooks(t *testing.T) {
 cat >> Makefile <<EOF
 .PHONY: mocks
 mocks:
-	@echo "Generating mocks..."
-	@mockery --all
-	@echo "Mocks generated successfully"
+ @echo "Generating mocks..."
+ @mockery --all
+ @echo "Mocks generated successfully"
 
 .PHONY: test
 test: mocks
-	@echo "Running tests..."
-	@go test ./... -v -cover
+ @echo "Running tests..."
+ @go test ./... -v -cover
 EOF
 
 # 2. Update GitHub Actions
@@ -480,17 +505,20 @@ go tool cover -html=coverage.out
 ### Alternative: Keep Manual Mocks
 
 **When to choose this**:
+
 - Need to ship MVP ASAP (minimal changes)
 - Team unfamiliar with mockery
 - Don't want tool dependency
 
 **Steps**:
+
 1. ✅ Remove `mocks_test.go` (mockery-generated)
 2. ✅ Keep `mock_store.go` (manual)
 3. ✅ Fix `go.mod` dependencies
 4. ✅ Verify tests pass
 
 **Trade-offs**:
+
 - ✅ Faster to implement (30 min vs 3-4 hours)
 - ❌ Manual maintenance burden
 - ❌ No automatic verification
@@ -503,11 +531,13 @@ go tool cover -html=coverage.out
 ### Issue #1: Database Package Bloat
 
 **Current State**:
+
 - **29 files** in `internal/database/`
 - **Unclear separation** of concerns
 - **Large generated file** (mocks_test.go: 56,398 lines)
 
 **Impact**:
+
 - Hard to navigate
 - Difficult to onboard new developers
 - Build times affected
@@ -538,11 +568,13 @@ internal/database/
 ```
 
 **Benefits**:
+
 - Clear separation of mocks from production code
 - Generated files don't pollute main package
 - Easy to gitignore generated mocks
 
 **Implementation**:
+
 ```bash
 # 1. Create mocks directory
 mkdir -p internal/database/mocks
@@ -590,12 +622,14 @@ internal/
 ```
 
 **Benefits**:
+
 - Clear package boundaries
 - Easier to understand responsibilities
 - Better testability (smaller units)
 - Supports future growth (e.g., PostgreSQL store)
 
 **Trade-offs**:
+
 - More upfront refactoring work (4-6 hours)
 - Import path changes throughout codebase
 - Potential merge conflicts if active development
@@ -605,6 +639,7 @@ internal/
 ### Issue #2: Server Package Test Gap
 
 **Current State**:
+
 - **12 files** in `internal/server/`
 - **66.0% coverage** (need 80%+)
 - Missing error path coverage
@@ -637,12 +672,14 @@ internal/server/
 ```
 
 **Benefits**:
+
 - Smaller, focused files
 - Easier to test individual features
 - Clear handler organization
 - Supports middleware expansion
 
 **Implementation Path**:
+
 1. Extract handlers to `handlers/` package (2-3 hours)
 2. Update imports
 3. Move tests alongside handlers
@@ -657,9 +694,11 @@ internal/server/
 **Identified Duplications**:
 
 #### A. Store Interface Implementations
+
 **Problem**: SQLiteStore and PebbleStore have duplicate logic
 
 **Solution**: Extract common operations
+
 ```go
 // internal/store/common.go
 type BaseStore struct {}
@@ -682,9 +721,11 @@ type SQLiteStore struct {
 ```
 
 #### B. Test Setup Code
+
 **Problem**: Repeated setup in test files
 
 **Solution**: Use test helpers
+
 ```go
 // internal/database/testhelpers/helpers.go
 func NewTestStore(t *testing.T) *SQLiteStore {
@@ -709,6 +750,7 @@ func TestGetBook(t *testing.T) {
 ### 2. Improve Error Handling
 
 **Current Issues**:
+
 - Generic error messages
 - No error wrapping for context
 - Hard to debug production issues
@@ -743,6 +785,7 @@ func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 ```
 
 **Benefits**:
+
 - Better error messages
 - Easier debugging
 - Error type checking with errors.Is/As
@@ -818,6 +861,7 @@ func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {
 ```
 
 **Tools for Documentation**:
+
 ```bash
 # Generate HTML docs
 godoc -http=:6060
@@ -857,6 +901,7 @@ gocover -func=coverage.out
 ### Phase 1: Critical Fixes (4-5 hours)
 
 #### 1.1 Fix Database Tests (1-2 hours)
+
 - [ ] Run `go mod tidy` to fix dependencies (5 min)
 - [ ] Remove duplicate mock declarations (15 min)
 - [ ] Choose and implement mocking strategy (30-60 min)
@@ -866,6 +911,7 @@ gocover -func=coverage.out
 **Deliverable**: Database tests passing, coverage measured
 
 #### 1.2 Boost Server Coverage (2-3 hours)
+
 - [ ] Setup mockery (if chosen) (30 min)
 - [ ] Add error injection tests (30 min)
 - [ ] Add edge case tests (30 min)
@@ -875,6 +921,7 @@ gocover -func=coverage.out
 **Deliverable**: Server coverage ≥ 80%
 
 #### 1.3 Boost CMD Coverage (30-60 min)
+
 - [ ] Add command error tests (20 min)
 - [ ] Add flag validation tests (20 min)
 - [ ] Add help text tests (20 min)
@@ -947,24 +994,28 @@ gocover -func=coverage.out
 ### Quarter 1: Stability & Performance (6-8 weeks)
 
 #### Week 1-2: Architecture Refinement
+
 - [ ] Decompose database package (Option B from Module Design)
 - [ ] Extract server handlers to `handlers/` package
 - [ ] Implement middleware layer
 - [ ] Add request/response logging
 
 #### Week 3-4: Performance Optimization
+
 - [ ] Implement parallel scanning (goroutine pool)
 - [ ] Add caching layer (LRU for book queries)
 - [ ] Implement debounced library size computation
 - [ ] Add batch metadata fetch pipeline
 
 #### Week 5-6: Observability
+
 - [ ] Add Prometheus metrics endpoint
 - [ ] Implement structured logging
 - [ ] Add operation timing summaries
 - [ ] Create Grafana dashboards
 
 #### Week 7-8: Testing & Quality
+
 - [ ] Achieve 85%+ coverage across all packages
 - [ ] Add load tests (1000+ file scan)
 - [ ] Add fuzz tests for filename parser
@@ -973,24 +1024,28 @@ gocover -func=coverage.out
 ### Quarter 2: Features & Integration (6-8 weeks)
 
 #### Week 1-2: Metadata Enhancement
+
 - [ ] Add multiple metadata source support
 - [ ] Implement metadata confidence scoring
 - [ ] Add batch AI parse queue
 - [ ] Create metadata merge policy editor
 
 #### Week 3-4: External Integrations
+
 - [ ] Calibre metadata export
 - [ ] OPDS feed generation
 - [ ] Plex/Jellyfin library sync
 - [ ] iTunes library integration
 
 #### Week 5-6: Advanced Features
+
 - [ ] Audio transcoding (MP3 → M4B)
 - [ ] Chapter detection and metadata
 - [ ] Cover art enhancement
 - [ ] Duplicate detection improvements
 
 #### Week 7-8: UX Improvements
+
 - [ ] Dark mode
 - [ ] Keyboard shortcuts
 - [ ] Progressive loading
@@ -999,24 +1054,28 @@ gocover -func=coverage.out
 ### Quarter 3: Multi-User & Security (6-8 weeks)
 
 #### Week 1-2: Authentication
+
 - [ ] User registration/login
 - [ ] JWT token management
 - [ ] Role-based access control
 - [ ] Session management
 
 #### Week 3-4: Per-User Features
+
 - [ ] User-specific libraries
 - [ ] Playback progress tracking
 - [ ] Personal notes and annotations
 - [ ] Favorites and ratings
 
 #### Week 5-6: Security Hardening
+
 - [ ] TLS/HTTPS support
 - [ ] Let's Encrypt integration
 - [ ] API key authentication
 - [ ] Audit logging
 
 #### Week 7-8: Performance & Scale
+
 - [ ] Database optimization for multi-user
 - [ ] Connection pooling
 - [ ] Caching improvements
@@ -1025,24 +1084,28 @@ gocover -func=coverage.out
 ### Quarter 4: Enterprise Features (6-8 weeks)
 
 #### Week 1-2: Advanced Deployment
+
 - [ ] Docker multi-arch builds
 - [ ] Kubernetes Helm chart
 - [ ] Database migration tools
 - [ ] Backup/restore automation
 
 #### Week 3-4: Monitoring & Alerting
+
 - [ ] Health check improvements
 - [ ] Error aggregation dashboard
 - [ ] Slow operation detector
 - [ ] Alert configuration
 
 #### Week 5-6: Integration & Automation
+
 - [ ] Webhook system
 - [ ] BitTorrent client integration
 - [ ] Automated file organization
 - [ ] Scheduled tasks
 
 #### Week 7-8: Documentation & Support
+
 - [ ] Architecture diagrams
 - [ ] API documentation (Swagger UI)
 - [ ] Operations handbook
@@ -1055,6 +1118,7 @@ gocover -func=coverage.out
 ### 1. Database Query Optimization
 
 **Current Issues**:
+
 - No query caching
 - Full table scans for some queries
 - N+1 query problems
@@ -1104,6 +1168,7 @@ LIMIT ? OFFSET ?
 ### 2. Scanner Performance
 
 **Current Issues**:
+
 - Single-threaded scanning
 - No progress checkpointing
 - Full re-scan on interruption
@@ -1152,6 +1217,7 @@ func (s *ParallelScanner) SaveCheckpoint(cp *ScanCheckpoint) error {
 ### 3. Memory Optimization
 
 **Current Issues**:
+
 - No memory limits
 - Large result sets loaded entirely
 - No streaming for big operations
@@ -1209,6 +1275,7 @@ func (s *SQLiteStore) StreamBooks(ctx context.Context) (<-chan *Book, error) {
 ### 4. Frontend Performance
 
 **Current Issues**:
+
 - No virtualization for long lists
 - Full re-renders on updates
 - No code splitting
@@ -1289,6 +1356,7 @@ internal/
 ```
 
 **Benefits**:
+
 - Clear boundaries
 - Easy to test (mock ports)
 - Swappable implementations
@@ -1416,6 +1484,7 @@ func (h *BookQueryHandler) Handle(q BookListQuery) ([]BookListView, error) {
 **Risk**: Coverage drops after hitting 80%
 
 **Mitigation**:
+
 - [ ] Add coverage gate in CI (minimum 80%)
 - [ ] Set up coverage tracking (coveralls.io or codecov)
 - [ ] Add pre-commit hook for coverage check
@@ -1438,6 +1507,7 @@ func (h *BookQueryHandler) Handle(q BookListQuery) ([]BookListView, error) {
 **Risk**: Schema changes break production
 
 **Mitigation**:
+
 - [ ] Add migration tests
 - [ ] Implement rollback capability
 - [ ] Version migrations clearly
@@ -1471,6 +1541,7 @@ func TestMigration011(t *testing.T) {
 **Risk**: Mocks diverge from actual behavior
 
 **Mitigation**:
+
 - [ ] Add integration tests with real database
 - [ ] Use contract testing
 - [ ] Regenerate mocks frequently
@@ -1480,11 +1551,11 @@ func TestMigration011(t *testing.T) {
 # Makefile
 .PHONY: verify-mocks
 verify-mocks:
-	@echo "Regenerating mocks..."
-	@mockery --all
-	@echo "Checking for differences..."
-	@git diff --exit-code internal/database/mocks/ || \
-		(echo "Mocks are out of date! Run 'make mocks' and commit." && exit 1)
+ @echo "Regenerating mocks..."
+ @mockery --all
+ @echo "Checking for differences..."
+ @git diff --exit-code internal/database/mocks/ || \
+  (echo "Mocks are out of date! Run 'make mocks' and commit." && exit 1)
 ```
 
 ### 4. Performance Regressions
@@ -1492,6 +1563,7 @@ verify-mocks:
 **Risk**: New features slow down the app
 
 **Mitigation**:
+
 - [ ] Add benchmark tests
 - [ ] Run benchmarks in CI
 - [ ] Track performance metrics over time
@@ -1521,6 +1593,7 @@ func BenchmarkScanDirectory(b *testing.B) {
 **Risk**: Security vulnerabilities in dependencies
 
 **Mitigation**:
+
 - [ ] Enable Dependabot
 - [ ] Add gosec to CI
 - [ ] Regular dependency updates
@@ -1548,24 +1621,28 @@ updates:
 ### Summary of Recommendations
 
 **Immediate (This Week)**:
+
 1. ✅ Fix database test failures (1 hour)
 2. ✅ Adopt mockery for testing (3-4 hours)
 3. ✅ Boost server coverage to 80%+ (2-3 hours)
 4. ✅ Achieve 80% overall coverage (4-5 hours total)
 
 **Short-term (Next 2 Weeks)**:
+
 1. ✅ Complete MVP P0 items (16-26 hours)
 2. ✅ Reorganize database package (2-3 hours)
 3. ✅ Add static analysis to CI (1 hour)
 4. ✅ Implement code quality tools (2-3 hours)
 
 **Medium-term (Next Month)**:
+
 1. ✅ Decompose monolithic packages
 2. ✅ Implement performance optimizations
 3. ✅ Add comprehensive observability
 4. ✅ Expand E2E test coverage
 
 **Long-term (Next Quarter)**:
+
 1. ✅ Adopt hexagonal architecture
 2. ✅ Implement multi-user features
 3. ✅ Add external integrations
@@ -1574,24 +1651,28 @@ updates:
 ### Expected Outcomes
 
 **After Critical Fixes** (Week 1):
+
 - ✅ All tests passing
 - ✅ 80%+ test coverage
 - ✅ Stable build pipeline
 - ✅ Clear mocking strategy
 
 **After MVP Completion** (Weeks 2-4):
+
 - ✅ Production-ready v1.0
 - ✅ Automated release pipeline
 - ✅ Comprehensive E2E tests
 - ✅ Complete documentation
 
 **After Q1 Improvements** (Months 2-3):
+
 - ✅ 85%+ test coverage
 - ✅ Optimized performance
 - ✅ Full observability
 - ✅ Clean architecture
 
 **After Q2-Q3 Features** (Months 4-9):
+
 - ✅ Multi-user support
 - ✅ External integrations
 - ✅ Advanced features
@@ -1600,18 +1681,21 @@ updates:
 ### Success Metrics
 
 **Quality**:
+
 - Test coverage: 80%+ (current: 77.9%)
 - Code duplication: <5% (measure with gocyclo)
 - Bug count: <10 open critical/high bugs
 - Documentation coverage: 100% of public APIs
 
 **Performance**:
+
 - Scan time: <1s per 100 files
 - API response time: <100ms p95
 - Memory usage: <500MB for 10k books
 - UI load time: <2s initial load
 
 **Maintainability**:
+
 - Cyclomatic complexity: <15 per function
 - Package size: <2000 LOC per package
 - Test-to-code ratio: >1:1
@@ -1668,31 +1752,31 @@ all: mocks lint test
 
 .PHONY: mocks
 mocks:
-	@mockery --all
+ @mockery --all
 
 .PHONY: lint
 lint:
-	@golangci-lint run ./...
-	@gosec ./...
+ @golangci-lint run ./...
+ @gosec ./...
 
 .PHONY: test
 test:
-	@go test ./... -v -cover -race
+ @go test ./... -v -cover -race
 
 .PHONY: coverage
 coverage:
-	@go test ./... -coverprofile=coverage.out
-	@go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report: coverage.html"
+ @go test ./... -coverprofile=coverage.out
+ @go tool cover -html=coverage.out -o coverage.html
+ @echo "Coverage report: coverage.html"
 
 .PHONY: bench
 bench:
-	@go test -bench=. -benchmem ./...
+ @go test -bench=. -benchmem ./...
 
 .PHONY: clean
 clean:
-	@rm -f coverage.out coverage.html
-	@rm -rf internal/database/mocks/
+ @rm -f coverage.out coverage.html
+ @rm -rf internal/database/mocks/
 
 .PHONY: ci
 ci: mocks lint test coverage
@@ -1701,12 +1785,14 @@ ci: mocks lint test coverage
 ### C. CI/CD Checklist
 
 **Pre-commit**:
+
 - [ ] Run `gofmt`
 - [ ] Run `goimports`
 - [ ] Run tests
 - [ ] Check coverage
 
 **Pull Request**:
+
 - [ ] All tests pass
 - [ ] Coverage ≥ 80%
 - [ ] Linting passes
@@ -1714,6 +1800,7 @@ ci: mocks lint test coverage
 - [ ] Documentation updated
 
 **Release**:
+
 - [ ] All PR checks pass
 - [ ] E2E tests pass
 - [ ] Manual QA completed
@@ -1723,16 +1810,19 @@ ci: mocks lint test coverage
 ### D. Contact & Resources
 
 **Documentation**:
+
 - Main README: `/README.md`
 - Technical Design: `/docs/technical_design.md`
 - MVP Specification: `/docs/mvp-specification.md`
 
 **Key Files**:
+
 - TODO List: `/TODO.md`
 - Changelog: `/CHANGELOG.md`
 - Mockery Config: `/.mockery.yaml`
 
 **Issue Tracking**:
+
 - GitHub Issues: `https://github.com/jdfalk/audiobook-organizer/issues`
 
 ---
