@@ -17,6 +17,165 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 )
 
+// stubStore is a minimal stub implementation of database.Store for command tests
+// It provides no-op implementations for all methods to avoid nil pointer panics
+type stubStore struct{}
+
+// Implement all required Store interface methods as no-ops
+func (s *stubStore) Close() error { return nil }
+func (s *stubStore) GetMetadataFieldStates(bookID string) ([]database.MetadataFieldState, error) {
+	return []database.MetadataFieldState{}, nil
+}
+func (s *stubStore) UpsertMetadataFieldState(state *database.MetadataFieldState) error { return nil }
+func (s *stubStore) DeleteMetadataFieldState(bookID, field string) error               { return nil }
+func (s *stubStore) GetAllAuthors() ([]database.Author, error)                         { return []database.Author{}, nil }
+func (s *stubStore) GetAuthorByID(id int) (*database.Author, error)                    { return nil, nil }
+func (s *stubStore) GetAuthorByName(name string) (*database.Author, error)             { return nil, nil }
+func (s *stubStore) CreateAuthor(name string) (*database.Author, error) {
+	return &database.Author{ID: 1, Name: name}, nil
+}
+func (s *stubStore) GetAllSeries() ([]database.Series, error)       { return []database.Series{}, nil }
+func (s *stubStore) GetSeriesByID(id int) (*database.Series, error) { return nil, nil }
+func (s *stubStore) GetSeriesByName(name string, authorID *int) (*database.Series, error) {
+	return nil, nil
+}
+func (s *stubStore) CreateSeries(name string, authorID *int) (*database.Series, error) {
+	return &database.Series{ID: 1, Name: name}, nil
+}
+func (s *stubStore) GetAllWorks() ([]database.Work, error)                  { return []database.Work{}, nil }
+func (s *stubStore) GetWorkByID(id string) (*database.Work, error)          { return nil, nil }
+func (s *stubStore) CreateWork(work *database.Work) (*database.Work, error) { return work, nil }
+func (s *stubStore) UpdateWork(id string, work *database.Work) (*database.Work, error) {
+	return work, nil
+}
+func (s *stubStore) DeleteWork(id string) error { return nil }
+func (s *stubStore) GetBooksByWorkID(workID string) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) GetAllBooks(limit, offset int) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) GetBookByID(id string) (*database.Book, error)              { return nil, nil }
+func (s *stubStore) GetBookByFilePath(path string) (*database.Book, error)      { return nil, nil }
+func (s *stubStore) GetBookByFileHash(hash string) (*database.Book, error)      { return nil, nil }
+func (s *stubStore) GetBookByOriginalHash(hash string) (*database.Book, error)  { return nil, nil }
+func (s *stubStore) GetBookByOrganizedHash(hash string) (*database.Book, error) { return nil, nil }
+func (s *stubStore) GetDuplicateBooks() ([][]database.Book, error)              { return [][]database.Book{}, nil }
+func (s *stubStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) GetBooksByAuthorID(authorID int) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) CreateBook(book *database.Book) (*database.Book, error) { return book, nil }
+func (s *stubStore) UpdateBook(id string, book *database.Book) (*database.Book, error) {
+	return book, nil
+}
+func (s *stubStore) DeleteBook(id string) error { return nil }
+func (s *stubStore) SearchBooks(query string, limit, offset int) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) CountBooks() (int, error) { return 0, nil }
+func (s *stubStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) GetBooksByVersionGroup(groupID string) ([]database.Book, error) {
+	return []database.Book{}, nil
+}
+func (s *stubStore) GetAllImportPaths() ([]database.ImportPath, error) {
+	return []database.ImportPath{}, nil
+}
+func (s *stubStore) GetImportPathByID(id int) (*database.ImportPath, error)        { return nil, nil }
+func (s *stubStore) GetImportPathByPath(path string) (*database.ImportPath, error) { return nil, nil }
+func (s *stubStore) CreateImportPath(path, name string) (*database.ImportPath, error) {
+	return &database.ImportPath{}, nil
+}
+func (s *stubStore) UpdateImportPath(id int, importPath *database.ImportPath) error { return nil }
+func (s *stubStore) DeleteImportPath(id int) error                                  { return nil }
+func (s *stubStore) CreateOperation(id, opType string, folderPath *string) (*database.Operation, error) {
+	return &database.Operation{}, nil
+}
+func (s *stubStore) GetOperationByID(id string) (*database.Operation, error) { return nil, nil }
+func (s *stubStore) GetRecentOperations(limit int) ([]database.Operation, error) {
+	return []database.Operation{}, nil
+}
+func (s *stubStore) UpdateOperationStatus(id, status string, progress, total int, message string) error {
+	return nil
+}
+func (s *stubStore) UpdateOperationError(id, errorMessage string) error             { return nil }
+func (s *stubStore) AddOperationLog(opID, level, msg string, details *string) error { return nil }
+func (s *stubStore) GetOperationLogs(opID string) ([]database.OperationLog, error) {
+	return []database.OperationLog{}, nil
+}
+func (s *stubStore) GetUserPreference(key string) (*database.UserPreference, error) { return nil, nil }
+func (s *stubStore) SetUserPreference(key, value string) error                      { return nil }
+func (s *stubStore) GetAllUserPreferences() ([]database.UserPreference, error) {
+	return []database.UserPreference{}, nil
+}
+func (s *stubStore) GetSetting(key string) (*database.Setting, error)       { return nil, nil }
+func (s *stubStore) SetSetting(key, value, typ string, isSecret bool) error { return nil }
+func (s *stubStore) GetAllSettings() ([]database.Setting, error)            { return []database.Setting{}, nil }
+func (s *stubStore) DeleteSetting(key string) error                         { return nil }
+func (s *stubStore) CreatePlaylist(name string, seriesID *int, filePath string) (*database.Playlist, error) {
+	return &database.Playlist{}, nil
+}
+func (s *stubStore) GetPlaylistByID(id int) (*database.Playlist, error)             { return nil, nil }
+func (s *stubStore) GetPlaylistBySeriesID(seriesID int) (*database.Playlist, error) { return nil, nil }
+func (s *stubStore) AddPlaylistItem(playlistID, bookID, position int) error         { return nil }
+func (s *stubStore) GetPlaylistItems(playlistID int) ([]database.PlaylistItem, error) {
+	return []database.PlaylistItem{}, nil
+}
+func (s *stubStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*database.User, error) {
+	return &database.User{}, nil
+}
+func (s *stubStore) GetUserByID(id string) (*database.User, error)             { return nil, nil }
+func (s *stubStore) GetUserByUsername(username string) (*database.User, error) { return nil, nil }
+func (s *stubStore) GetUserByEmail(email string) (*database.User, error)       { return nil, nil }
+func (s *stubStore) UpdateUser(user *database.User) error                      { return nil }
+func (s *stubStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*database.Session, error) {
+	return &database.Session{}, nil
+}
+func (s *stubStore) GetSession(id string) (*database.Session, error) { return nil, nil }
+func (s *stubStore) RevokeSession(id string) error                   { return nil }
+func (s *stubStore) ListUserSessions(userID string) ([]database.Session, error) {
+	return []database.Session{}, nil
+}
+func (s *stubStore) SetUserPreferenceForUser(userID, key, value string) error { return nil }
+func (s *stubStore) GetUserPreferenceForUser(userID, key string) (*database.UserPreferenceKV, error) {
+	return nil, nil
+}
+func (s *stubStore) GetAllPreferencesForUser(userID string) ([]database.UserPreferenceKV, error) {
+	return []database.UserPreferenceKV{}, nil
+}
+func (s *stubStore) CreateBookSegment(bookNumericID int, segment *database.BookSegment) (*database.BookSegment, error) {
+	return segment, nil
+}
+func (s *stubStore) ListBookSegments(bookNumericID int) ([]database.BookSegment, error) {
+	return []database.BookSegment{}, nil
+}
+func (s *stubStore) MergeBookSegments(bookNumericID int, newSegment *database.BookSegment, supersedeIDs []string) error {
+	return nil
+}
+func (s *stubStore) AddPlaybackEvent(event *database.PlaybackEvent) error { return nil }
+func (s *stubStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error) {
+	return []database.PlaybackEvent{}, nil
+}
+func (s *stubStore) UpdatePlaybackProgress(progress *database.PlaybackProgress) error { return nil }
+func (s *stubStore) GetPlaybackProgress(userID string, bookNumericID int) (*database.PlaybackProgress, error) {
+	return nil, nil
+}
+func (s *stubStore) IncrementBookPlayStats(bookNumericID int, seconds int) error { return nil }
+func (s *stubStore) GetBookStats(bookNumericID int) (*database.BookStats, error) { return nil, nil }
+func (s *stubStore) IncrementUserListenStats(userID string, seconds int) error   { return nil }
+func (s *stubStore) GetUserStats(userID string) (*database.UserStats, error)     { return nil, nil }
+func (s *stubStore) IsHashBlocked(hash string) (bool, error)                     { return false, nil }
+func (s *stubStore) AddBlockedHash(hash, reason string) error                    { return nil }
+func (s *stubStore) RemoveBlockedHash(hash string) error                         { return nil }
+func (s *stubStore) GetAllBlockedHashes() ([]database.DoNotImport, error) {
+	return []database.DoNotImport{}, nil
+}
+func (s *stubStore) GetBlockedHashByHash(hash string) (*database.DoNotImport, error) { return nil, nil }
+
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
 
@@ -36,7 +195,9 @@ func stubCommandDeps(t *testing.T) {
 	origStart := startServer
 
 	initializeStore = func(dbType, path string, enableSQLite bool) error {
-		database.GlobalStore = database.NewMockStore()
+		// For command tests, we just need GlobalStore to be non-nil
+		// Using a minimal mock implementation
+		database.GlobalStore = &stubStore{}
 		return nil
 	}
 	closeStore = func() error {

@@ -1,5 +1,5 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
 
 package scanner
@@ -22,6 +22,11 @@ func setupSQLiteStore(t *testing.T) (*database.SQLiteStore, func()) {
 	store, err := database.NewSQLiteStore(dbPath)
 	if err != nil {
 		t.Fatalf("create sqlite store: %v", err)
+	}
+
+	// Run migrations to ensure schema is up-to-date
+	if err := database.RunMigrations(store); err != nil {
+		t.Fatalf("run migrations: %v", err)
 	}
 
 	return store, func() {
@@ -94,7 +99,8 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 }
 
 func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
-	store := database.NewMockStore()
+	store, cleanup := setupSQLiteStore(t)
+	defer cleanup()
 	prevStore := database.GlobalStore
 	database.GlobalStore = store
 	t.Cleanup(func() {
