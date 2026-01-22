@@ -1,0 +1,53 @@
+# file: Makefile.mockery.example
+# version: 1.0.0
+# guid: d4e5f6a7-b8c9-0123-def0-456789012bcd
+
+# Example Makefile targets for mockery integration
+# Add these to your existing Makefile
+
+.PHONY: mocks
+mocks:
+	@echo "Generating mocks..."
+	@mockery --all --keeptree
+	@echo "✅ Mocks generated"
+
+.PHONY: mocks-clean
+mocks-clean:
+	@echo "Cleaning generated mocks..."
+	@find . -type d -name "mocks" -exec rm -rf {} + 2>/dev/null || true
+	@echo "✅ Mocks cleaned"
+
+.PHONY: mocks-verify
+mocks-verify:
+	@echo "Verifying mocks are up to date..."
+	@mockery --all --keeptree --dry-run
+	@echo "✅ Mocks are up to date"
+
+.PHONY: test-with-mocks
+test-with-mocks: mocks
+	@echo "Running tests with fresh mocks..."
+	@go test ./... -v -coverprofile=coverage.out
+	@go tool cover -func=coverage.out | tail -1
+	@echo ""
+	@echo "Detailed coverage:"
+	@go tool cover -func=coverage.out | grep -E "internal/(server|database)"
+
+.PHONY: coverage-report
+coverage-report: test-with-mocks
+	@echo "Generating HTML coverage report..."
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ Report saved to coverage.html"
+
+.PHONY: ci-test
+ci-test: mocks-verify test-with-mocks
+	@echo "✅ CI tests passed"
+
+# Add to your pre-commit hook or CI pipeline
+.PHONY: pre-commit
+pre-commit: mocks-verify
+	@echo "Running pre-commit checks..."
+	@go fmt ./...
+	@go vet ./...
+	@golangci-lint run
+	@go test ./... -short
+	@echo "✅ Pre-commit checks passed"
