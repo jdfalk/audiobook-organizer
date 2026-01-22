@@ -1,13 +1,13 @@
 # file: .mockery.yaml
-# version: 1.2.1
+# version: 1.9.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
+# NOTE: with-expecter is enabled by default in v3
 all: false
 dir: internal/database/mocks
 filename: mock_store.go
 pkgname: mocks
-template: testify
 
 packages:
   github.com/jdfalk/audiobook-organizer/internal/database:
