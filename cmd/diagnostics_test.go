@@ -353,3 +353,96 @@ func TestTruncateStringWithBuffer(t *testing.T) {
 		t.Fatalf("expected truncated buffer, got %q", got)
 	}
 }
+
+func TestEnsureDiagnosticsStoreError(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	// Set invalid database type
+	config.AppConfig.DatabaseType = "invalid"
+
+	_, err := ensureDiagnosticsStore()
+	if err == nil {
+		t.Fatal("expected error for invalid database type")
+	}
+}
+
+func TestEnsureDiagnosticsStorePebble(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
+
+	cleanup, err := ensureDiagnosticsStore()
+	if err != nil {
+		t.Fatalf("expected pebble store creation to succeed: %v", err)
+	}
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+func TestRunCleanupInvalidBooksForceMode(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "cleanup-force.db")
+	store, err := database.NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create sqlite store: %v", err)
+	}
+	_, err = store.CreateBook(&database.Book{
+		Title:    "Bad Book",
+		FilePath: "/tmp/{author}/bad.mp3",
+	})
+	if err != nil {
+		t.Fatalf("failed to create book: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = dbPath
+	config.AppConfig.EnableSQLite = true
+
+	// Test force mode (no prompt)
+	if err := runCleanupInvalidBooks(true, true); err != nil {
+		t.Fatalf("runCleanupInvalidBooks with force failed: %v", err)
+	}
+}
+
+func TestRunDiagnosticsQueryPebble(t *testing.T) {
+	origConfig := config.AppConfig
+	defer func() {
+		config.AppConfig = origConfig
+	}()
+
+	tempDir := t.TempDir()
+	store, err := database.NewPebbleStore(tempDir)
+	if err != nil {
+		t.Fatalf("failed to create pebble store: %v", err)
+	}
+	_, err = store.CreateBook(&database.Book{
+		Title:    "Pebble Test",
+		FilePath: "/tmp/test.mp3",
+	})
+	if err != nil {
+		t.Fatalf("failed to create book: %v", err)
+	}
+	_ = store.Close()
+
+	config.AppConfig.DatabaseType = "pebble"
+	config.AppConfig.DatabasePath = tempDir
+
+	if err := runDiagnosticsQuery(5, "book:", false); err != nil {
+		t.Fatalf("runDiagnosticsQuery with pebble failed: %v", err)
+	}
+}

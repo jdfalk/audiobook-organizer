@@ -190,3 +190,89 @@ func TestServeCommandErrorPaths(t *testing.T) {
 		t.Fatal("expected serve command to fail on start error")
 	}
 }
+
+func TestPlaylistCommandError(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.EnableSQLite = true
+	config.AppConfig.PlaylistDir = filepath.Join(tempDir, "playlists")
+
+	generatePlaylists = func() error {
+		return fmt.Errorf("playlist generation failed")
+	}
+	if err := playlistCmd.RunE(playlistCmd, nil); err == nil {
+		t.Fatal("expected playlist command error")
+	}
+}
+
+func TestTagCommandError(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.EnableSQLite = true
+
+	updateSeriesTags = func() error {
+		return fmt.Errorf("tag update failed")
+	}
+	if err := tagCmd.RunE(tagCmd, nil); err == nil {
+		t.Fatal("expected tag command error")
+	}
+}
+
+func TestOrganizeCommandError(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.EnableSQLite = true
+
+	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+		return nil, fmt.Errorf("scan failed in organize")
+	}
+	if err := organizeCmd.RunE(organizeCmd, nil); err == nil {
+		t.Fatal("expected organize command error")
+	}
+}
+
+func TestStoreInitializationError(t *testing.T) {
+	stubCommandDeps(t)
+
+	tempDir := t.TempDir()
+	origConfig := config.AppConfig
+	t.Cleanup(func() {
+		config.AppConfig = origConfig
+	})
+
+	config.AppConfig.DatabaseType = "sqlite"
+	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
+	config.AppConfig.EnableSQLite = true
+
+	initializeStore = func(dbType, path string, enableSQLite bool) error {
+		return fmt.Errorf("store init failed")
+	}
+
+	if err := scanCmd.RunE(scanCmd, nil); err == nil {
+		t.Fatal("expected scan command to fail on store init error")
+	}
+}
