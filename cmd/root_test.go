@@ -55,6 +55,99 @@ func TestSetupFileLogging(t *testing.T) {
 	}
 }
 
+func TestSetupFileLoggingErrorHandling(t *testing.T) {
+	tempDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(origDir)
+	}()
+
+	// Create logs dir as a file to force mkdir error
+	if err := os.WriteFile("logs", []byte("not a dir"), 0o644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	prevWriter := log.Writer()
+	prevFlags := log.Flags()
+	defer func() {
+		log.SetOutput(prevWriter)
+		log.SetFlags(prevFlags)
+	}()
+
+	_, err = setupFileLogging()
+	// Should handle error gracefully
+	if err == nil {
+		t.Fatal("expected error when logs dir is a file")
+	}
+}
+
+func TestInitConfigWithViper(t *testing.T) {
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "config.yaml")
+
+	// Create a config file with some settings
+	configContent := `root_dir: /tmp/audiobooks
+database_path: /tmp/test.db
+enable_sqlite: true
+`
+	if err := os.WriteFile(configFile, []byte(configContent), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	origCfgFile := cfgFile
+	origConfig := config.AppConfig
+	defer func() {
+		cfgFile = origCfgFile
+		config.AppConfig = origConfig
+		viper.Reset()
+	}()
+
+	cfgFile = configFile
+
+	initConfig()
+
+	// Verify config was loaded
+	if config.AppConfig.RootDir != "/tmp/audiobooks" {
+		t.Fatalf("expected root_dir to be set from config file")
+	}
+}
+
+func TestInitConfigDefaults(t *testing.T) {
+	tempDir := t.TempDir()
+
+	origCfgFile := cfgFile
+	origDBPath := databasePath
+	origPlaylistDir := playlistDir
+	origConfig := config.AppConfig
+	defer func() {
+		cfgFile = origCfgFile
+		databasePath = origDBPath
+		playlistDir = origPlaylistDir
+		config.AppConfig = origConfig
+		viper.Reset()
+	}()
+
+	cfgFile = ""
+	databasePath = filepath.Join(tempDir, "test.db")
+	playlistDir = filepath.Join(tempDir, "playlists")
+
+	initConfig()
+
+	// Verify directories were created
+	if _, err := os.Stat(filepath.Dir(databasePath)); err != nil {
+		t.Fatal("database directory should be created")
+	}
+	if _, err := os.Stat(playlistDir); err != nil {
+		t.Fatal("playlist directory should be created")
+	}
+}
+
 func TestInitConfigCreatesDirectories(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "db", "test.db")
