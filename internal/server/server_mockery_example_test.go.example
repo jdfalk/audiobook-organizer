@@ -1,0 +1,251 @@
+// file: internal/server/server_mockery_example_test.go.example
+// version: 1.0.0
+// guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
+
+// This is an EXAMPLE of how tests would look with mockery-generated mocks
+// Rename to .go to use (after setting up mockery)
+
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+)
+
+// Example 1: Testing successful list audiobooks with mockery
+func TestListAudiobooksWithMockery(t *testing.T) {
+	// This would use mockery-generated mock
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// // Set up expectations
+	// mockStore.EXPECT().
+	// 	GetAllBooks().
+	// 	Return([]*database.Book{
+	// 		{
+	// 			ID:       "01HXZ123456789ABCDEFGHJ",
+	// 			Title:    "Test Book",
+	// 			FilePath: "/test/book.m4b",
+	// 			Format:   "m4b",
+	// 		},
+	// 	}, nil).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks", nil)
+	// w := httptest.NewRecorder()
+	//
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusOK, w.Code)
+	//
+	// var response map[string]interface{}
+	// err := json.Unmarshal(w.Body.Bytes(), &response)
+	// require.NoError(t, err)
+	// items := response["items"].([]interface{})
+	// assert.Len(t, items, 1)
+	//
+	// // Mockery automatically verifies all expectations were met
+}
+
+// Example 2: Testing database error handling with mockery
+func TestListAudiobooksDatabaseError(t *testing.T) {
+	// With mockery, testing error paths becomes trivial
+	//
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// // Inject database error
+	// mockStore.EXPECT().
+	// 	GetAllBooks().
+	// 	Return(nil, errors.New("connection lost")).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks", nil)
+	// w := httptest.NewRecorder()
+	//
+	// server.router.ServeHTTP(w, req)
+	//
+	// // Verify error handling
+	// assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// Example 3: Testing update with argument verification
+func TestUpdateAudiobookWithVerification(t *testing.T) {
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// bookID := "01HXZ123456789ABCDEFGHJ"
+	//
+	// // First, mock GetBookByID
+	// mockStore.EXPECT().
+	// 	GetBookByID(bookID).
+	// 	Return(&database.Book{
+	// 		ID:       bookID,
+	// 		Title:    "Original Title",
+	// 		FilePath: "/test/book.m4b",
+	// 	}, nil).
+	// 	Once()
+	//
+	// // Then, verify UpdateBook is called with correct data
+	// mockStore.EXPECT().
+	// 	UpdateBook(mock.MatchedBy(func(book *database.Book) bool {
+	// 		// Verify specific fields were updated
+	// 		return book.ID == bookID &&
+	// 			book.Title == "Updated Title" &&
+	// 			book.FilePath == "/test/book.m4b"
+	// 	})).
+	// 	Return(nil).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// updateData := map[string]interface{}{
+	// 	"title": "Updated Title",
+	// }
+	// body, _ := json.Marshal(updateData)
+	//
+	// req := httptest.NewRequest(http.MethodPut, "/api/v1/audiobooks/"+bookID, bytes.NewBuffer(body))
+	// req.Header.Set("Content-Type", "application/json")
+	// w := httptest.NewRecorder()
+	//
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusOK, w.Code)
+	//
+	// // All expectations automatically verified
+}
+
+// Example 4: Testing count endpoint with search
+func TestCountAudiobooksWithSearch(t *testing.T) {
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// // Mock CountBooks with specific search query
+	// mockStore.EXPECT().
+	// 	CountBooks().
+	// 	Return(5, nil).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/count?search=test", nil)
+	// w := httptest.NewRecorder()
+	//
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusOK, w.Code)
+	//
+	// var response map[string]interface{}
+	// err := json.Unmarshal(w.Body.Bytes(), &response)
+	// require.NoError(t, err)
+	// assert.Equal(t, float64(5), response["count"])
+}
+
+// Example 5: Testing blocked hashes endpoint
+func TestAddBlockedHashWithMockery(t *testing.T) {
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// testHash := "abc123def456"
+	//
+	// // Mock AddBlockedHash method
+	// mockStore.EXPECT().
+	// 	AddBlockedHash(testHash, "Test reason").
+	// 	Return(nil).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// hashData := map[string]interface{}{
+	// 	"hash":   testHash,
+	// 	"reason": "Test reason",
+	// }
+	// body, _ := json.Marshal(hashData)
+	//
+	// req := httptest.NewRequest(http.MethodPost, "/api/v1/blocked-hashes", bytes.NewBuffer(body))
+	// req.Header.Set("Content-Type", "application/json")
+	// w := httptest.NewRecorder()
+	//
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// Example 6: Testing with multiple sequential calls
+func TestWorkEndpointSequentialCalls(t *testing.T) {
+	// mockStore := mocks.NewMockStore(t)
+	//
+	// workID := "01HXZ999888777ABCDEFGHJ"
+	//
+	// // Mock CreateWork
+	// mockStore.EXPECT().
+	// 	CreateWork(mock.AnythingOfType("*database.Work")).
+	// 	Return(&database.Work{
+	// 		ID:    workID,
+	// 		Title: "New Work",
+	// 	}, nil).
+	// 	Once()
+	//
+	// // Mock GetWorkByID
+	// mockStore.EXPECT().
+	// 	GetWorkByID(workID).
+	// 	Return(&database.Work{
+	// 		ID:    workID,
+	// 		Title: "New Work",
+	// 	}, nil).
+	// 	Once()
+	//
+	// database.GlobalStore = mockStore
+	// defer func() { database.GlobalStore = nil }()
+	//
+	// server := NewServer()
+	//
+	// // Create work
+	// workData := map[string]interface{}{"title": "New Work"}
+	// body, _ := json.Marshal(workData)
+	//
+	// req := httptest.NewRequest(http.MethodPost, "/api/v1/works", bytes.NewBuffer(body))
+	// req.Header.Set("Content-Type", "application/json")
+	// w := httptest.NewRecorder()
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusCreated, w.Code)
+	//
+	// // Get work
+	// req = httptest.NewRequest(http.MethodGet, "/api/v1/works/"+workID, nil)
+	// w = httptest.NewRecorder()
+	// server.router.ServeHTTP(w, req)
+	//
+	// assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// Benefits of this approach:
+// 1. No manual mock implementation needed
+// 2. Type-safe method calls
+// 3. Automatic verification of expectations
+// 4. Easy to test error paths
+// 5. Clear, readable test code
+// 6. Automatically stays in sync with interface changes
