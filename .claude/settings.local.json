@@ -12,7 +12,12 @@
       "Bash(ls:*)",
       "Bash(test:*)",
       "Bash(go clean:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(git checkout:*)",
+      "Bash(cut:*)",
+      "Bash(mockery:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/setup-mockery.sh:*)"
     ]
   }
 }
