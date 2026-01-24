@@ -1,5 +1,5 @@
 # file: .mockery.yaml
-# version: 1.10.0
+# version: 1.11.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
@@ -19,3 +19,15 @@ packages:
       filename: mock_queue.go
     interfaces:
       Queue:
+  github.com/jdfalk/audiobook-organizer/internal/scanner:
+    config:
+      dir: internal/scanner/mocks
+      filename: mock_scanner.go
+    interfaces:
+      Scanner:
+  github.com/jdfalk/audiobook-organizer/internal/metadata:
+    config:
+      dir: internal/metadata/mocks
+      filename: mock_metadata_extractor.go
+    interfaces:
+      MetadataExtractor:
