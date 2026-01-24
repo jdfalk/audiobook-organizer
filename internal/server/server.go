@@ -2535,11 +2535,6 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 }
 
 func (s *Server) importFile(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
 	var req struct {
 		FilePath string `json:"file_path" binding:"required"`
 		Organize bool   `json:"organize"`
@@ -2577,6 +2572,11 @@ func (s *Server) importFile(c *gin.Context) {
 			"error":                fmt.Sprintf("unsupported file type: %s", ext),
 			"supported_extensions": config.AppConfig.SupportedExtensions,
 		})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 

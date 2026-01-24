@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -42,7 +43,12 @@ func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
 		return &OpenAIParser{enabled: false}
 	}
 
-	client := openai.NewClient(option.WithAPIKey(apiKey))
+	clientOptions := []option.RequestOption{option.WithAPIKey(apiKey)}
+	if baseURL := os.Getenv("OPENAI_BASE_URL"); baseURL != "" {
+		clientOptions = append(clientOptions, option.WithBaseURL(baseURL))
+	}
+
+	client := openai.NewClient(clientOptions...)
 
 	return &OpenAIParser{
 		client:     &client,
