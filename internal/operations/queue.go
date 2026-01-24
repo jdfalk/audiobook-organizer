@@ -43,6 +43,14 @@ type QueuedOperation struct {
 	Cancel   context.CancelFunc
 }
 
+// Queue defines the interface for operation queue management
+type Queue interface {
+	Enqueue(id, opType string, priority int, fn OperationFunc) error
+	Cancel(id string) error
+	ActiveOperations() []ActiveOperation
+	Shutdown(timeout time.Duration) error
+}
+
 // OperationQueue manages async operations with priority handling
 type OperationQueue struct {
 	mu         sync.RWMutex
@@ -372,7 +380,7 @@ func (r *operationProgressReporter) IsCanceled() bool {
 }
 
 // Global queue instance
-var GlobalQueue *OperationQueue
+var GlobalQueue Queue
 
 // InitializeQueue initializes the global operation queue
 func InitializeQueue(store database.Store, workers int) {

@@ -1,5 +1,5 @@
 # file: .mockery.yaml
-# version: 1.9.0
+# version: 1.10.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
@@ -13,3 +13,9 @@ packages:
   github.com/jdfalk/audiobook-organizer/internal/database:
     interfaces:
       Store:
+  github.com/jdfalk/audiobook-organizer/internal/operations:
+    config:
+      dir: internal/operations/mocks
+      filename: mock_queue.go
+    interfaces:
+      Queue:
