@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.12.1
+// version: 1.12.2
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -31,6 +31,20 @@ import (
 
 var saveBook = saveBookToDatabase
 
+// Scanner defines the interface for scanning and processing audiobook files.
+// This enables tests to swap in a mock implementation by setting GlobalScanner.
+type Scanner interface {
+	ScanDirectory(rootDir string) ([]Book, error)
+	ScanDirectoryParallel(rootDir string, workers int) ([]Book, error)
+	ProcessBooks(books []Book) error
+	ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string)) error
+	ComputeFileHash(filePath string) (string, error)
+}
+
+// GlobalScanner, when set, is used by the package-level functions below.
+// If nil, the concrete implementations in this file are used.
+var GlobalScanner Scanner
+
 // Book represents an audiobook file
 type Book struct {
 	FilePath  string
@@ -47,11 +61,17 @@ type Book struct {
 
 // ScanDirectory scans the given directory for audiobook files
 func ScanDirectory(rootDir string) ([]Book, error) {
+	if GlobalScanner != nil {
+		return GlobalScanner.ScanDirectory(rootDir)
+	}
 	return ScanDirectoryParallel(rootDir, 1)
 }
 
 // ScanDirectoryParallel scans directory with parallel workers for improved performance
 func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
+	if GlobalScanner != nil {
+		return GlobalScanner.ScanDirectoryParallel(rootDir, workers)
+	}
 	if workers < 1 {
 		workers = 1
 	}
@@ -126,11 +146,17 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 
 // ProcessBooks processes the discovered books to extract metadata and identify series
 func ProcessBooks(books []Book) error {
+	if GlobalScanner != nil {
+		return GlobalScanner.ProcessBooks(books)
+	}
 	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans, nil)
 }
 
 // ProcessBooksParallel processes books with parallel workers for improved performance
 func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string)) error {
+	if GlobalScanner != nil {
+		return GlobalScanner.ProcessBooksParallel(ctx, books, workers, progressFn)
+	}
 	if workers < 1 {
 		workers = 1
 	}
@@ -794,6 +820,9 @@ func saveBookToDatabase(book *Book) error {
 // ComputeFileHash computes a SHA256 hash of the file, using a chunked strategy
 // for large audiobook files to balance accuracy and performance.
 func ComputeFileHash(filePath string) (string, error) {
+	if GlobalScanner != nil {
+		return GlobalScanner.ComputeFileHash(filePath)
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
