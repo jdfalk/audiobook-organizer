@@ -595,8 +595,12 @@ func TestGlobalQueueFunctions(t *testing.T) {
 		if GlobalQueue == nil {
 			t.Fatal("GlobalQueue not initialized")
 		}
-		if GlobalQueue.workers != 2 {
-			t.Errorf("expected 2 workers, got %d", GlobalQueue.workers)
+		oq, ok := GlobalQueue.(*OperationQueue)
+		if !ok {
+			t.Fatal("GlobalQueue is not OperationQueue")
+		}
+		if oq.workers != 2 {
+			t.Errorf("expected 2 workers, got %d", oq.workers)
 		}
 
 		GlobalQueue.Shutdown(time.Second)
@@ -609,7 +613,11 @@ func TestGlobalQueueFunctions(t *testing.T) {
 
 		// Should not panic, just log warning
 		InitializeQueue(store, 4)
-		if GlobalQueue.workers != 1 {
+		oq, ok := GlobalQueue.(*OperationQueue)
+		if !ok {
+			t.Fatal("GlobalQueue is not OperationQueue")
+		}
+		if oq.workers != 1 {
 			t.Error("GlobalQueue was incorrectly replaced")
 		}
 	})
