@@ -1,4 +1,27 @@
 {
   "version": "2.0.0",
-  "tasks": []
+  "tasks": [
+    {
+      "label": "Go Test",
+      "type": "shell",
+      "command": "go",
+      "args": ["test", "./...", "-count=1"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "isBackground": false
+    },
+    {
+      "label": "Go Test (Coverage)",
+      "type": "shell",
+      "command": "go",
+      "args": ["test", "./...", "-count=1", "-coverprofile=/tmp/aobook_cover.out"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "isBackground": false
+    }
+  ]
 }
