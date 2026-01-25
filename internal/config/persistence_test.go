@@ -1,24 +1,42 @@
-//go:build mocks
-
 // file: internal/config/persistence_test.go
-// version: 1.1.0
+// version: 1.3.1
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package config
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/mock"
 )
 
+func resetConfigTestState() {
+	viper.Reset()
+	AppConfig = Config{}
+}
+
 func TestLoadConfigFromDatabase(t *testing.T) {
+	resetConfigTestState()
+	t.Cleanup(resetConfigTestState)
+
 	t.Run("returns error for nil store", func(t *testing.T) {
 		err := LoadConfigFromDatabase(nil)
 		if err == nil {
 			t.Error("expected error for nil store")
+		}
+	})
+
+	t.Run("returns nil when store GetAllSettings errors", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		store.EXPECT().GetAllSettings().Return(nil, fmt.Errorf("boom")).Once()
+
+		err := LoadConfigFromDatabase(store)
+		if err != nil {
+			t.Fatalf("expected nil error when GetAllSettings fails, got %v", err)
 		}
 	})
 
@@ -130,6 +148,28 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 		}
 	})
 
+	t.Run("skips secret setting when decrypt fails", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		store.EXPECT().GetAllSettings().Return([]database.Setting{
+			{
+				Key:      "openai_api_key",
+				Value:    "not-base64",
+				Type:     "string",
+				IsSecret: true,
+			},
+		}, nil).Once()
+
+		AppConfig = Config{OpenAIAPIKey: "keep-me"}
+
+		err := LoadConfigFromDatabase(store)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if AppConfig.OpenAIAPIKey != "keep-me" {
+			t.Fatalf("expected OpenAIAPIKey to remain unchanged, got %q", AppConfig.OpenAIAPIKey)
+		}
+	})
+
 	t.Run("handles invalid boolean gracefully", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
@@ -178,6 +218,9 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 }
 
 func TestApplySetting(t *testing.T) {
+	resetConfigTestState()
+	t.Cleanup(resetConfigTestState)
+
 	tests := []struct {
 		name    string
 		key     string
@@ -422,6 +465,9 @@ func TestApplySetting(t *testing.T) {
 }
 
 func TestSaveConfigToDatabase(t *testing.T) {
+	resetConfigTestState()
+	t.Cleanup(resetConfigTestState)
+
 	t.Run("returns error for nil store", func(t *testing.T) {
 		err := SaveConfigToDatabase(nil)
 		if err == nil {
@@ -431,11 +477,12 @@ func TestSaveConfigToDatabase(t *testing.T) {
 
 	t.Run("saves all config values", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
-
-		// Set up expectations for SetSetting calls
-		// We expect multiple SetSetting calls, so use mock.Anything for flexibility
+		seen := map[string]struct{}{}
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil).Maybe()
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+			}).
+			Return(nil)
 
 		AppConfig = Config{
 			RootDir:              "/test/audiobooks",
@@ -471,16 +518,26 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Verify that SetSetting was called (mock will verify expectations)
+		for _, key := range []string{"root_dir", "database_path", "organization_strategy", "concurrent_scans"} {
+			if _, ok := seen[key]; !ok {
+				t.Fatalf("expected %q to be saved", key)
+			}
+		}
+		for _, secretKey := range []string{"openai_api_key", "goodreads_api_key"} {
+			if _, ok := seen[secretKey]; !ok {
+				t.Fatalf("expected secret %q to be saved when non-empty", secretKey)
+			}
+		}
 	})
 
 	t.Run("skips empty secrets", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
-
-		// Expect SetSetting to be called for non-empty values only
-		// Empty secrets should be skipped
+		seen := map[string]struct{}{}
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(nil).Maybe()
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+			}).
+			Return(nil)
 
 		AppConfig = Config{
 			OpenAIAPIKey: "",
@@ -492,27 +549,69 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Mock automatically verifies expectations
+		if _, ok := seen["openai_api_key"]; ok {
+			t.Fatalf("did not expect openai_api_key to be saved when empty")
+		}
+		if _, ok := seen["goodreads_api_key"]; ok {
+			t.Fatalf("did not expect goodreads_api_key to be saved when empty")
+		}
+		if _, ok := seen["root_dir"]; !ok {
+			t.Fatalf("expected root_dir to be saved")
+		}
 	})
 }
 
 func TestSyncConfigFromEnv(t *testing.T) {
-	// This function uses viper, which is already tested in config_test.go
-	// Here we just verify it doesn't panic
-	t.Run("does not panic", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("SyncConfigFromEnv panicked: %v", r)
-			}
-		}()
+	t.Run("overrides only set values", func(t *testing.T) {
+		resetConfigTestState()
+		t.Cleanup(resetConfigTestState)
+
+		AppConfig = Config{
+			RootDir:         "/existing/root",
+			OpenAIAPIKey:    "existing-key",
+			EnableAIParsing: false,
+		}
+
+		viper.Set("root_dir", "/env/root")
+		viper.Set("openai_api_key", "env-key")
+		viper.Set("enable_ai_parsing", true)
+
 		SyncConfigFromEnv()
+
+		if AppConfig.RootDir != "/env/root" {
+			t.Errorf("expected RootDir to be overridden, got %q", AppConfig.RootDir)
+		}
+		if AppConfig.OpenAIAPIKey != "env-key" {
+			t.Errorf("expected OpenAIAPIKey to be overridden, got %q", AppConfig.OpenAIAPIKey)
+		}
+		if !AppConfig.EnableAIParsing {
+			t.Errorf("expected EnableAIParsing to be overridden to true")
+		}
+	})
+
+	t.Run("does not change unset values", func(t *testing.T) {
+		resetConfigTestState()
+		t.Cleanup(resetConfigTestState)
+
+		AppConfig = Config{RootDir: "/keep"}
+
+		SyncConfigFromEnv()
+
+		if AppConfig.RootDir != "/keep" {
+			t.Errorf("expected RootDir to remain unchanged, got %q", AppConfig.RootDir)
+		}
 	})
 }
 
 func TestLifecycleRetentionSettings(t *testing.T) {
 	t.Run("lifecycle settings not yet implemented in applySetting", func(t *testing.T) {
-		// These settings are not currently handled in applySetting
-		// They are saved but cannot be loaded back
+		resetConfigTestState()
+		t.Cleanup(resetConfigTestState)
+
+		InitConfig()
+
+		// These settings are currently saved but not applied in applySetting.
+		// Verify that loading them does not override defaults.
 		store := mocks.NewMockStore(t)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
@@ -525,17 +624,20 @@ func TestLifecycleRetentionSettings(t *testing.T) {
 				Value: "true",
 				Type:  "bool",
 			},
-		}, nil)
+		}, nil).Once()
 
-		AppConfig = Config{}
-		// This will log warnings about unknown settings
+		defaultDays := AppConfig.PurgeSoftDeletedAfterDays
+		defaultDeleteFiles := AppConfig.PurgeSoftDeletedDeleteFiles
+
 		err := LoadConfigFromDatabase(store)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		// Values should remain at defaults since applySetting doesn't handle them
-		if AppConfig.PurgeSoftDeletedAfterDays != 0 {
-			t.Error("expected PurgeSoftDeletedAfterDays to remain at default")
+		if AppConfig.PurgeSoftDeletedAfterDays != defaultDays {
+			t.Errorf("expected PurgeSoftDeletedAfterDays to remain %d, got %d", defaultDays, AppConfig.PurgeSoftDeletedAfterDays)
+		}
+		if AppConfig.PurgeSoftDeletedDeleteFiles != defaultDeleteFiles {
+			t.Errorf("expected PurgeSoftDeletedDeleteFiles to remain %v, got %v", defaultDeleteFiles, AppConfig.PurgeSoftDeletedDeleteFiles)
 		}
 	})
 }
