@@ -13,13 +13,13 @@ import {
   ListItemText,
   Toolbar,
 } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import MonitorIcon from '@mui/icons-material/Monitor';
-import SettingsIcon from '@mui/icons-material/Settings';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import ListAltIcon from '@mui/icons-material/ListAlt';
+import DashboardIcon from '@mui/icons-material/Dashboard.js';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks.js';
+import MenuBookIcon from '@mui/icons-material/MenuBook.js';
+import MonitorIcon from '@mui/icons-material/Monitor.js';
+import SettingsIcon from '@mui/icons-material/Settings.js';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
+import ListAltIcon from '@mui/icons-material/ListAlt.js';
 
 interface SidebarProps {
   open: boolean;
