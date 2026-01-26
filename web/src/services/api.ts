@@ -176,6 +176,9 @@ export interface SystemStatus {
   library_size_bytes?: number;
   import_size_bytes?: number;
   total_size_bytes?: number;
+  disk_total_bytes?: number;
+  disk_used_bytes?: number;
+  disk_free_bytes?: number;
   root_directory?: string;
   library: {
     book_count: number;
@@ -706,6 +709,20 @@ export async function linkBookVersion(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to link book version');
+  }
+}
+
+export async function unlinkBookVersion(
+  bookId: string,
+  otherBookId: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/versions`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ other_id: otherBookId }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to unlink book version');
   }
 }
 

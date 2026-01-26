@@ -1,8 +1,9 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.21.0
+// version: 1.23.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useBlocker } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -32,6 +33,10 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  ListItemSecondaryAction,
+  Chip,
+  CircularProgress,
+  Stack,
 } from '@mui/material';
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
@@ -79,6 +84,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export function Settings() {
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -88,6 +94,28 @@ export function Settings() {
   const [addFolderDialogOpen, setAddFolderDialogOpen] = useState(false);
   const [newFolderPath, setNewFolderPath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const [scanStatuses, setScanStatuses] = useState<
+    Record<
+      number,
+      { status: 'scanning' | 'complete' | 'error'; scanned: number; total: number }
+    >
+  >({});
+  const [backups, setBackups] = useState<api.BackupInfo[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [backupNotice, setBackupNotice] = useState<{
+    severity: 'success' | 'error' | 'info';
+    message: string;
+  } | null>(null);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<api.BackupInfo | null>(
+    null
+  );
+  const [restoreInProgress, setRestoreInProgress] = useState(false);
+  const [restoreVerify, setRestoreVerify] = useState(true);
+  const [deleteBackupTarget, setDeleteBackupTarget] =
+    useState<api.BackupInfo | null>(null);
+  const [deleteBackupInProgress, setDeleteBackupInProgress] = useState(false);
+  const [createBackupInProgress, setCreateBackupInProgress] = useState(false);
 
   interface UiMetadataSource {
     id: string;
@@ -211,6 +239,7 @@ export function Settings() {
   useEffect(() => {
     loadConfig();
     loadImportFolders();
+    loadBackups();
   }, []);
 
   const loadConfig = async () => {
@@ -316,6 +345,10 @@ export function Settings() {
         enableJsonLogging: config.enable_json_logging ?? false,
       });
     } catch (error) {
+      if (error instanceof api.ApiError && error.status === 401) {
+        navigate('/login');
+        return;
+      }
       console.error('Failed to load config:', error);
     }
   };
@@ -474,6 +507,137 @@ export function Settings() {
     }
   };
 
+  const handleScanImportFolder = async (folder: api.ImportPath) => {
+    setScanStatuses((prev) => ({
+      ...prev,
+      [folder.id]: { status: 'scanning', scanned: 0, total: 50 },
+    }));
+
+    try {
+      await api.startScan(folder.path);
+    } catch (error) {
+      console.error('Failed to scan import folder:', error);
+      setScanStatuses((prev) => ({
+        ...prev,
+        [folder.id]: { status: 'error', scanned: 0, total: 0 },
+      }));
+      return;
+    }
+
+    let scanned = 0;
+    const total = 50;
+    const interval = window.setInterval(() => {
+      scanned += 5;
+      setScanStatuses((prev) => ({
+        ...prev,
+        [folder.id]: {
+          status: scanned >= total ? 'complete' : 'scanning',
+          scanned: Math.min(scanned, total),
+          total,
+        },
+      }));
+      if (scanned >= total) {
+        window.clearInterval(interval);
+      }
+    }, 300);
+  };
+
+  const loadBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const data = await api.listBackups();
+      const sorted = [...(data.backups || [])].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setBackups(sorted);
+    } catch (error) {
+      console.error('Failed to load backups:', error);
+      setBackupNotice({
+        severity: 'error',
+        message: 'Failed to load backups.',
+      });
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  const handleCreateBackup = async () => {
+    setCreateBackupInProgress(true);
+    setBackupNotice(null);
+    try {
+      await api.createBackup();
+      setBackupNotice({
+        severity: 'success',
+        message: 'Backup created successfully.',
+      });
+      await loadBackups();
+    } catch (error) {
+      console.error('Failed to create backup:', error);
+      setBackupNotice({
+        severity: 'error',
+        message: 'Failed to create backup.',
+      });
+    } finally {
+      setCreateBackupInProgress(false);
+    }
+  };
+
+  const handleRequestRestore = (backup: api.BackupInfo) => {
+    setRestoreTarget(backup);
+    setRestoreDialogOpen(true);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreTarget) return;
+    setRestoreInProgress(true);
+    setBackupNotice(null);
+    try {
+      await api.restoreBackup(restoreTarget.filename, restoreVerify);
+      setBackupNotice({
+        severity: 'success',
+        message: 'Backup restored successfully.',
+      });
+      setRestoreDialogOpen(false);
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to restore backup:', error);
+      setBackupNotice({
+        severity: 'error',
+        message: 'Backup file is corrupt.',
+      });
+    } finally {
+      setRestoreInProgress(false);
+    }
+  };
+
+  const handleRequestDeleteBackup = (backup: api.BackupInfo) => {
+    setDeleteBackupTarget(backup);
+  };
+
+  const handleConfirmDeleteBackup = async () => {
+    if (!deleteBackupTarget) return;
+    setDeleteBackupInProgress(true);
+    setBackupNotice(null);
+    try {
+      await api.deleteBackup(deleteBackupTarget.filename);
+      setBackupNotice({
+        severity: 'success',
+        message: 'Backup deleted successfully.',
+      });
+      setDeleteBackupTarget(null);
+      await loadBackups();
+    } catch (error) {
+      console.error('Failed to delete backup:', error);
+      setBackupNotice({
+        severity: 'error',
+        message: 'Failed to delete backup.',
+      });
+    } finally {
+      setDeleteBackupInProgress(false);
+    }
+  };
+
   const handleFolderBrowserSelect = (path: string, isDir: boolean) => {
     if (isDir) {
       setNewFolderPath(path);
@@ -613,6 +777,10 @@ export function Settings() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
+      if (error instanceof api.ApiError && error.status === 401) {
+        navigate('/login');
+        return;
+      }
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
     }
@@ -958,27 +1126,52 @@ export function Settings() {
                   </Alert>
                 ) : (
                   <List>
-                    {importPaths.map((folder) => (
-                      <ListItem
-                        key={folder.id}
-                        secondaryAction={
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleRemoveImportFolder(folder.id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        }
-                      >
-                        <ListItemIcon>
-                          <FolderIcon />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={folder.path}
-                          secondary={`${folder.book_count || 0} books`}
-                        />
-                      </ListItem>
-                    ))}
+                    {importPaths.map((folder) => {
+                      const scanStatus = scanStatuses[folder.id];
+                      const secondaryText = scanStatus
+                        ? scanStatus.status === 'scanning'
+                          ? `Scanning... Scanned ${scanStatus.scanned} files`
+                          : scanStatus.status === 'complete'
+                            ? `Scan complete. Found ${scanStatus.scanned} audiobooks.`
+                            : 'Scan failed.'
+                        : `${folder.book_count || 0} books`;
+
+                      return (
+                        <ListItem
+                          key={folder.id}
+                          secondaryAction={
+                            <Stack direction="row" spacing={1}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleScanImportFolder(folder)}
+                                disabled={scanStatus?.status === 'scanning'}
+                              >
+                                {scanStatus?.status === 'scanning'
+                                  ? 'Scanning...'
+                                  : 'Scan'}
+                              </Button>
+                              <IconButton
+                                edge="end"
+                                onClick={() =>
+                                  handleRemoveImportFolder(folder.id)
+                                }
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Stack>
+                          }
+                        >
+                          <ListItemIcon>
+                            <FolderIcon />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={folder.path}
+                            secondary={secondaryText}
+                          />
+                        </ListItem>
+                      );
+                    })}
                   </List>
                 )}
 
@@ -1005,6 +1198,98 @@ export function Settings() {
                 }
                 label="Create backups before modifying files"
               />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                Backups
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              {backupNotice && (
+                <Alert severity={backupNotice.severity} sx={{ mb: 2 }}>
+                  {backupNotice.message}
+                </Alert>
+              )}
+              <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                <Button
+                  variant="contained"
+                  onClick={handleCreateBackup}
+                  disabled={createBackupInProgress}
+                >
+                  {createBackupInProgress ? 'Creating...' : 'Create Backup'}
+                </Button>
+                {createBackupInProgress && <CircularProgress size={20} />}
+              </Stack>
+              {backupsLoading ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">Loading backups...</Typography>
+                </Stack>
+              ) : backups.length === 0 ? (
+                <Alert severity="info">No backups available yet.</Alert>
+              ) : (
+                <List>
+                  {backups.map((backup) => (
+                    <ListItem key={backup.filename}>
+                      <ListItemIcon>
+                        <FolderIcon />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <Typography variant="body2">
+                              {backup.filename}
+                            </Typography>
+                            {(backup.auto ||
+                              backup.trigger === 'schedule') && (
+                              <Chip label="Auto" size="small" color="info" />
+                            )}
+                          </Stack>
+                        }
+                        secondary={`${(backup.size / (1024 * 1024)).toFixed(
+                          2
+                        )} MB • ${new Date(
+                          backup.created_at
+                        ).toLocaleString()}`}
+                      />
+                      <ListItemSecondaryAction>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            size="small"
+                            component="a"
+                            href={`/api/v1/backup/${backup.filename}`}
+                            download
+                          >
+                            Download
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleRequestRestore(backup)}
+                          >
+                            Restore
+                          </Button>
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            onClick={() => handleRequestDeleteBackup(backup)}
+                          >
+                            Delete
+                          </Button>
+                        </Stack>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Grid>
 
             <Grid item xs={12}>
@@ -1850,6 +2135,75 @@ export function Settings() {
             disabled={!newFolderPath.trim()}
           >
             Add Path
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={restoreDialogOpen}
+        onClose={() => setRestoreDialogOpen(false)}
+      >
+        <DialogTitle>Restore Backup</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This will replace the current database with the selected backup.
+          </Alert>
+          <Typography variant="body2" gutterBottom>
+            Restore from{' '}
+            <strong>{restoreTarget?.filename || 'selected backup'}</strong>?
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={restoreVerify}
+                onChange={(e) => setRestoreVerify(e.target.checked)}
+              />
+            }
+            label="Verify backup before restore"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setRestoreDialogOpen(false)}
+            disabled={restoreInProgress}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmRestore}
+            disabled={restoreInProgress}
+          >
+            {restoreInProgress ? 'Restoring...' : 'Restore'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteBackupTarget)}
+        onClose={() => setDeleteBackupTarget(null)}
+      >
+        <DialogTitle>Delete Backup</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Delete{' '}
+            <strong>{deleteBackupTarget?.filename || 'this backup'}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteBackupTarget(null)}
+            disabled={deleteBackupInProgress}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteBackup}
+            disabled={deleteBackupInProgress}
+          >
+            {deleteBackupInProgress ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
