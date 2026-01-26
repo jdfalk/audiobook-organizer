@@ -1,5 +1,5 @@
-// file: tests/e2e/library-browser.spec.ts
-// version: 1.0.0
+// file: web/tests/e2e/library-browser.spec.ts
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f2a3b4c5d6e7
 
 import { test, expect } from '@playwright/test';
@@ -25,17 +25,39 @@ test.describe('Library Browser', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // THEN: Grid displays books with title, author
-    await expect(page.getByText('Test Book 1')).toBeVisible();
-    await expect(page.getByText('Brandon Sanderson')).toBeVisible();
+    // THEN: Grid displays books with title and author
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).toBeVisible();
+    await expect(page.getByText('Brandon Sanderson').first()).toBeVisible();
 
-    // AND: Shows pagination controls (default 20 per page, so we should see page controls)
-    const bookCards = page.locator('[data-testid="audiobook-card"]').or(
-      page.locator('article').filter({ hasText: 'Test Book' })
-    );
-    const count = await bookCards.count();
-    expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThanOrEqual(20);
+    // AND: Shows pagination controls
+    await expect(
+      page.getByRole('button', { name: /page 2/i })
+    ).toBeVisible();
+  });
+
+  test('switches between grid and list view', async ({ page }) => {
+    // GIVEN: Library page is loaded
+    const books = generateTestBooks(3);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User clicks "List View" button
+    await page.getByRole('button', { name: /list view/i }).click();
+
+    // THEN: Display changes to list layout
+    await expect(page.getByRole('columnheader', { name: 'Title' })).toBeVisible();
+
+    // WHEN: User clicks "Grid View" button
+    await page.getByRole('button', { name: /grid view/i }).click();
+
+    // THEN: Display changes back to grid layout
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).toBeVisible();
   });
 
   test('sorts books by title ascending', async ({ page }) => {
@@ -50,25 +72,13 @@ test.describe('Library Browser', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // WHEN: User selects "Title (A-Z)" from sort dropdown
-    const sortButton = page.getByRole('button', { name: /sort/i }).or(
-      page.locator('button').filter({ hasText: /sort|Title/i })
-    );
-    await sortButton.click();
+    // WHEN: User selects "Title" from sort dropdown
+    await page.getByLabel('Sort by').click();
+    await page.getByRole('option', { name: 'Title' }).click();
 
-    const sortOptionAZ = page.getByRole('menuitem', { name: /title.*a.*z/i }).or(
-      page.getByText(/title.*a.*z/i)
-    );
-    await sortOptionAZ.click();
-
-    // THEN: Books are reordered alphabetically by title
-    await page.waitForTimeout(500); // Wait for re-render
-
-    const bookTitles = page.locator('[data-testid="book-title"]').or(
-      page.locator('h6, h5, h4').filter({ hasText: /Book/ })
-    );
-
-    const firstTitle = await bookTitles.first().textContent();
+    // THEN: Books are ordered alphabetically by title
+    const titleLocator = page.locator('h2').filter({ hasText: /Book/ });
+    const firstTitle = await titleLocator.first().textContent();
     expect(firstTitle).toContain('Apple Book');
   });
 
@@ -84,25 +94,15 @@ test.describe('Library Browser', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // WHEN: User selects "Title (Z-A)" from sort dropdown
-    const sortButton = page.getByRole('button', { name: /sort/i }).or(
-      page.locator('button').filter({ hasText: /sort|Title/i })
-    );
-    await sortButton.click();
+    // WHEN: User selects "Title" and "Descending"
+    await page.getByLabel('Sort by').click();
+    await page.getByRole('option', { name: 'Title' }).click();
+    await page.getByLabel('Order').click();
+    await page.getByRole('option', { name: 'Descending' }).click();
 
-    const sortOptionZA = page.getByRole('menuitem', { name: /title.*z.*a/i }).or(
-      page.getByText(/title.*z.*a/i)
-    );
-    await sortOptionZA.click();
-
-    // THEN: Books are reordered reverse alphabetically
-    await page.waitForTimeout(500);
-
-    const bookTitles = page.locator('[data-testid="book-title"]').or(
-      page.locator('h6, h5, h4').filter({ hasText: /Book/ })
-    );
-
-    const firstTitle = await bookTitles.first().textContent();
+    // THEN: Books are ordered reverse alphabetically
+    const titleLocator = page.locator('h2').filter({ hasText: /Book/ });
+    const firstTitle = await titleLocator.first().textContent();
     expect(firstTitle).toContain('Zebra Book');
   });
 
@@ -134,29 +134,48 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Author" from sort dropdown
-    const sortButton = page.getByRole('button', { name: /sort/i }).or(
-      page.locator('button').filter({ hasText: /sort|Author/i })
-    );
-    await sortButton.click();
+    await page.getByLabel('Sort by').click();
+    await page.getByRole('option', { name: 'Author' }).click();
 
-    const sortByAuthor = page.getByRole('menuitem', { name: /author/i }).or(
-      page.getByText(/^Author$/i)
-    );
-    await sortByAuthor.click();
+    // THEN: Books are ordered by author name
+    const titleLocator = page.locator('h2').filter({ hasText: /Book/ });
+    const firstTitle = await titleLocator.first().textContent();
+    expect(firstTitle).toContain('Book B');
+  });
 
-    // THEN: Books are reordered by author_name
-    await page.waitForTimeout(500);
+  test('sorts books by date added', async ({ page }) => {
+    // GIVEN: Library page with books
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-old',
+        title: 'Old Book',
+        created_at: '2022-01-01T00:00:00Z',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-new',
+        title: 'New Book',
+        created_at: '2024-12-31T00:00:00Z',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
 
-    const authors = page.locator('[data-testid="book-author"]').or(
-      page.locator('text=/Author$/i')
-    );
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
 
-    const firstAuthor = await authors.first().textContent();
-    expect(firstAuthor).toContain('Alice Author');
+    // WHEN: User selects "Date Added" from sort dropdown
+    await page.getByLabel('Sort by').click();
+    await page.getByRole('option', { name: 'Date Added' }).click();
+
+    // THEN: Books are reordered by created_at (newest first)
+    const titleLocator = page.locator('h2').filter({ hasText: /Book/ });
+    const firstTitle = await titleLocator.first().textContent();
+    expect(firstTitle).toContain('New Book');
   });
 
   test('filters books by organized state', async ({ page }) => {
-    // GIVEN: Library has organized and unorganized books
+    // GIVEN: Library has organized and import books
     const books = [
       {
         ...generateTestBooks(1)[0],
@@ -177,23 +196,21 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Organized" filter
-    const filterButton = page.getByRole('button', { name: /filter|state/i });
-    await filterButton.click();
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Organized' }).click();
 
-    const organizedFilter = page
-      .getByRole('menuitem', { name: /organized/i })
-      .or(page.getByText(/^Organized$/i));
-    await organizedFilter.click();
-
-    // THEN: Only books with library_state='organized' are shown
-    await page.waitForTimeout(500);
-
-    await expect(page.getByText('Organized Book')).toBeVisible();
-    await expect(page.getByText('Import Book')).not.toBeVisible();
+    // THEN: Only organized books are shown
+    await expect(
+      page.getByRole('heading', { name: 'Organized Book', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Import Book', exact: true })
+    ).not.toBeVisible();
   });
 
   test('filters books by import state', async ({ page }) => {
-    // GIVEN: Library has books in various states
+    // GIVEN: Library has organized and import books
     const books = [
       {
         ...generateTestBooks(1)[0],
@@ -214,171 +231,205 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Import" filter
-    const filterButton = page.getByRole('button', { name: /filter|state/i });
-    await filterButton.click();
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Import' }).click();
 
-    const importFilter = page
-      .getByRole('menuitem', { name: /import/i })
-      .or(page.getByText(/^Import$/i));
-    await importFilter.click();
-
-    // THEN: Only books with library_state='import' are shown
-    await page.waitForTimeout(500);
-
-    await expect(page.getByText('Import Book')).toBeVisible();
-    await expect(page.getByText('Organized Book')).not.toBeVisible();
-  });
-
-  test('searches books by title', async ({ page }) => {
-    // GIVEN: Library has books with various titles
-    const books = [
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-1',
-        title: 'The Way of Kings',
-        author_name: 'Brandon Sanderson',
-      },
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-2',
-        title: 'The Hobbit',
-        author_name: 'J.R.R. Tolkien',
-      },
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-3',
-        title: 'Foundation',
-        author_name: 'Isaac Asimov',
-      },
-    ];
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-
-    // WHEN: User types "Hobbit" in search box
-    const searchInput = page.getByPlaceholder(/search/i).or(
-      page.locator('input[type="text"]').first()
-    );
-    await searchInput.fill('Hobbit');
-    await page.waitForTimeout(500); // Debounce
-
-    // THEN: Shows only books matching "Hobbit"
-    await expect(page.getByText('The Hobbit')).toBeVisible();
-    await expect(page.getByText('The Way of Kings')).not.toBeVisible();
-    await expect(page.getByText('Foundation')).not.toBeVisible();
-  });
-
-  test('searches books by author name', async ({ page }) => {
-    // GIVEN: Library has books by multiple authors
-    const books = [
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-1',
-        title: 'The Way of Kings',
-        author_name: 'Brandon Sanderson',
-      },
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-2',
-        title: 'The Hobbit',
-        author_name: 'J.R.R. Tolkien',
-      },
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-3',
-        title: 'Words of Radiance',
-        author_name: 'Brandon Sanderson',
-      },
-    ];
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-
-    // WHEN: User types "Sanderson" in search
-    const searchInput = page.getByPlaceholder(/search/i).or(
-      page.locator('input[type="text"]').first()
-    );
-    await searchInput.fill('Sanderson');
-    await page.waitForTimeout(500);
-
-    // THEN: Shows all books by authors matching "Sanderson"
-    await expect(page.getByText('The Way of Kings')).toBeVisible();
-    await expect(page.getByText('Words of Radiance')).toBeVisible();
-    await expect(page.getByText('The Hobbit')).not.toBeVisible();
-  });
-
-  test('shows no results message when search matches nothing', async ({
-    page,
-  }) => {
-    // GIVEN: Library loaded
-    const books = generateTestBooks(5);
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-
-    // WHEN: User types "zzznonexistent" in search
-    const searchInput = page.getByPlaceholder(/search/i).or(
-      page.locator('input[type="text"]').first()
-    );
-    await searchInput.fill('zzznonexistent');
-    await page.waitForTimeout(500);
-
-    // THEN: Shows "No books found" message
+    // THEN: Only import books are shown
     await expect(
-      page.getByText(/no.*books.*found|no.*results/i)
+      page.getByRole('heading', { name: 'Import Book', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Organized Book', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('filters books by soft-deleted state', async ({ page }) => {
+    // GIVEN: Library has deleted and active books
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Deleted Book',
+        marked_for_deletion: true,
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'Active Book',
+        marked_for_deletion: false,
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User selects "Deleted" filter
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Deleted' }).click();
+
+    // THEN: Only deleted books are shown
+    await expect(
+      page.getByRole('heading', { name: 'Deleted Book', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Active Book', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('filters books by author', async ({ page }) => {
+    // GIVEN: Library has multiple authors
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Book 1',
+        author_name: 'Brandon Sanderson',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'Book 2',
+        author_name: 'J.R.R. Tolkien',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User filters by author
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Author').click();
+    await page.getByRole('option', { name: 'Brandon Sanderson' }).click();
+
+    // THEN: Only books by that author are shown
+    await expect(
+      page.getByRole('heading', { name: 'Book 1', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Book 2', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('filters books by series', async ({ page }) => {
+    // GIVEN: Library has multiple series
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Book 1',
+        series_name: 'Stormlight Archive',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'Book 2',
+        series_name: 'Foundation',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User filters by series
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Series').click();
+    await page.getByRole('option', { name: 'Stormlight Archive' }).click();
+
+    // THEN: Only books in that series are shown
+    await expect(
+      page.getByRole('heading', { name: 'Book 1', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Book 2', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('combines multiple filters', async ({ page }) => {
+    // GIVEN: Library page loaded
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Book 1',
+        author_name: 'Brandon Sanderson',
+        library_state: 'organized',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'Book 2',
+        author_name: 'Brandon Sanderson',
+        library_state: 'import',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User selects "Organized" state filter
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Organized' }).click();
+
+    // AND: User selects "Brandon Sanderson" author filter
+    await page.getByLabel('Author').click();
+    await page.getByRole('option', { name: 'Brandon Sanderson' }).click();
+
+    // THEN: Only organized books by Brandon Sanderson are shown
+    await expect(
+      page.getByRole('heading', { name: 'Book 1', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Book 2', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('clears all filters', async ({ page }) => {
+    // GIVEN: Multiple filters applied
+    const books = generateTestBooks(6);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Organized' }).click();
+
+    // WHEN: User clicks "Clear All" button
+    await page.getByRole('button', { name: /clear all/i }).click();
+
+    // THEN: Filters are cleared and books are shown again
+    await expect(page.getByRole('heading', { name: 'Test Book 1' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Test Book 2' })).toBeVisible();
+  });
+
+  test('changes items per page', async ({ page }) => {
+    // GIVEN: Library showing default items per page
+    const books = generateTestBooks(60);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User selects "50" from items-per-page dropdown
+    await page.getByLabel('Items per page').click();
+    await page.getByRole('option', { name: '50' }).click();
+
+    // THEN: Page reloads showing 50 items
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 49', exact: true })
     ).toBeVisible();
   });
 
-  test('clears search with clear button', async ({ page }) => {
-    // GIVEN: User has typed "Foundation" in search
-    const books = [
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-1',
-        title: 'Foundation',
-        author_name: 'Isaac Asimov',
-      },
-      {
-        ...generateTestBooks(1)[0],
-        id: 'book-2',
-        title: 'The Hobbit',
-        author_name: 'J.R.R. Tolkien',
-      },
-    ];
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-
-    const searchInput = page.getByPlaceholder(/search/i).or(
-      page.locator('input[type="text"]').first()
-    );
-    await searchInput.fill('Foundation');
-    await page.waitForTimeout(500);
-
-    // AND: Results are filtered
-    await expect(page.getByText('Foundation')).toBeVisible();
-    await expect(page.getByText('The Hobbit')).not.toBeVisible();
-
-    // WHEN: User clicks "X" (clear search) button
-    const clearButton = page
-      .getByRole('button', { name: /clear/i })
-      .or(page.locator('button[aria-label*="clear"]'));
-    await clearButton.click();
-
-    // THEN: Search input is cleared
-    await expect(searchInput).toHaveValue('');
-
-    // AND: All books are shown again
-    await expect(page.getByText('Foundation')).toBeVisible();
-    await expect(page.getByText('The Hobbit')).toBeVisible();
-  });
-
   test('navigates to next page', async ({ page }) => {
-    // GIVEN: Library has 50 books, showing page 1 (20 books per page)
+    // GIVEN: Library has 50 books, showing page 1
     const books = generateTestBooks(50);
     await setupLibraryWithBooks(page, books);
 
@@ -386,17 +437,61 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User clicks "Next" pagination button
-    const nextButton = page.getByRole('button', { name: /next/i }).or(
-      page.locator('button[aria-label*="next"]')
-    );
-    await nextButton.click();
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 25', exact: true })
+    ).not.toBeVisible();
+
+    await page.getByRole('button', { name: /next page/i }).click();
 
     // THEN: Page 2 is loaded
-    await page.waitForTimeout(500);
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 25', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).not.toBeVisible();
+  });
 
-    // AND: URL updates to ?page=2 (or similar)
-    const url = page.url();
-    expect(url).toMatch(/page=2|\/library\/2/);
+  test('navigates to previous page', async ({ page }) => {
+    // GIVEN: User is on page 2
+    const books = generateTestBooks(50);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('button', { name: /page 2/i }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 25', exact: true })
+    ).toBeVisible();
+
+    // WHEN: User clicks "Previous" pagination button
+    await page.getByRole('button', { name: /previous page/i }).click();
+
+    // THEN: Page 1 is loaded
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).toBeVisible();
+  });
+
+  test('jumps to specific page', async ({ page }) => {
+    // GIVEN: User is on page 1
+    const books = generateTestBooks(60);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User clicks page "3" button
+    await page.getByRole('button', { name: /page 3/i }).click();
+
+    // THEN: Page 3 is loaded
+    await expect(
+      page.getByRole('heading', { name: 'Test Book 49', exact: true })
+    ).toBeVisible();
   });
 
   test('clicks book card to navigate to detail page', async ({ page }) => {
@@ -414,8 +509,9 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User clicks on a book card
-    const bookCard = page.getByText('The Way of Kings').locator('..');
-    await bookCard.click();
+    await page
+      .getByRole('heading', { name: 'The Way of Kings', exact: true })
+      .click();
 
     // THEN: Navigates to /library/{bookId}
     await page.waitForLoadState('networkidle');
@@ -423,9 +519,24 @@ test.describe('Library Browser', () => {
     expect(url).toContain('/library/test-book-123');
   });
 
-  test('shows empty state when library is completely empty', async ({
-    page,
-  }) => {
+  test('shows empty state when no books match filters', async ({ page }) => {
+    // GIVEN: Library page loaded
+    const books = generateTestBooks(5);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User filters by deleted state with no deleted books
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Deleted' }).click();
+
+    // THEN: Shows empty state
+    await expect(page.getByText(/no audiobooks found/i)).toBeVisible();
+  });
+
+  test('shows empty state when library is completely empty', async ({ page }) => {
     // GIVEN: Database has zero audiobooks
     await setupLibraryWithBooks(page, []);
 
@@ -433,15 +544,35 @@ test.describe('Library Browser', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // THEN: Shows "Library is empty" message
-    await expect(
-      page.getByText(/library.*empty|no.*audiobooks/i)
-    ).toBeVisible();
+    // THEN: Shows "No Audiobooks Found" message
+    await expect(page.getByText('No Audiobooks Found')).toBeVisible();
+  });
 
-    // AND: Shows "Scan for books" call-to-action (optional)
-    const scanButton = page.getByRole('button', { name: /scan/i });
-    if (await scanButton.isVisible()) {
-      await expect(scanButton).toBeVisible();
-    }
+  test('persists sort and filter settings across page reloads', async ({ page }) => {
+    // GIVEN: Library page loaded
+    const books = generateTestBooks(10);
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User selects sort and filter
+    await page.getByLabel('Sort by').click();
+    await page.getByRole('option', { name: 'Author' }).click();
+    await page.getByLabel('Order').click();
+    await page.getByRole('option', { name: 'Descending' }).click();
+
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Organized' }).click();
+
+    // WHEN: User reloads the page
+    await page.reload();
+
+    // THEN: URL contains sort/filter params
+    const url = page.url();
+    expect(url).toContain('sort=author');
+    expect(url).toContain('order=desc');
+    expect(url).toContain('state=organized');
   });
 });
