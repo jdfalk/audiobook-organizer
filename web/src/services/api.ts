@@ -1,11 +1,35 @@
 // file: web/src/services/api.ts
-// version: 1.9.0
+// version: 1.10.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
 
 const API_BASE = '/api/v1';
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly data?: unknown;
+
+  constructor(message: string, status: number, data?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
+const buildApiError = async (
+  response: Response,
+  fallbackMessage: string
+) => {
+  const data = await response.json().catch(() => ({}));
+  const message =
+    typeof (data as { error?: string }).error === 'string'
+      ? (data as { error: string }).error
+      : fallbackMessage;
+  return new ApiError(message, response.status, data);
+};
 
 // Response types
 export interface Book {
@@ -271,14 +295,18 @@ export async function getBooks(limit = 100, offset = 0): Promise<Book[]> {
   const response = await fetch(
     `${API_BASE}/audiobooks?limit=${limit}&offset=${offset}`
   );
-  if (!response.ok) throw new Error('Failed to fetch books');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch books');
+  }
   const data = await response.json();
   return data.items || [];
 }
 
 export async function getBook(id: string): Promise<Book> {
   const response = await fetch(`${API_BASE}/audiobooks/${id}`);
-  if (!response.ok) throw new Error('Failed to fetch book');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book');
+  }
   return response.json();
 }
 
@@ -286,14 +314,18 @@ export async function searchBooks(query: string, limit = 50): Promise<Book[]> {
   const response = await fetch(
     `${API_BASE}/audiobooks/search?q=${encodeURIComponent(query)}&limit=${limit}`
   );
-  if (!response.ok) throw new Error('Failed to search books');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to search books');
+  }
   const data = await response.json();
   return data.items || [];
 }
 
 export async function countBooks(): Promise<number> {
   const response = await fetch(`${API_BASE}/audiobooks/count`);
-  if (!response.ok) throw new Error('Failed to count books');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to count books');
+  }
   const data = await response.json();
   return data.count || 0;
 }
@@ -313,7 +345,9 @@ export async function getSoftDeletedBooks(
   const response = await fetch(
     `${API_BASE}/audiobooks/soft-deleted?${params.toString()}`
   );
-  if (!response.ok) throw new Error('Failed to fetch soft-deleted books');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch soft-deleted books');
+  }
   const data = await response.json();
   return {
     items: data.items || [],
@@ -342,7 +376,9 @@ export async function purgeSoftDeletedBooks(
       method: 'DELETE',
     }
   );
-  if (!response.ok) throw new Error('Failed to purge soft-deleted books');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to purge soft-deleted books');
+  }
   return response.json();
 }
 
@@ -350,7 +386,9 @@ export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/restore`, {
     method: 'POST',
   });
-  if (!response.ok) throw new Error('Failed to restore audiobook');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to restore audiobook');
+  }
 }
 
 export async function deleteBook(
@@ -368,7 +406,9 @@ export async function deleteBook(
   const response = await fetch(url, {
     method: 'DELETE',
   });
-  if (!response.ok) throw new Error('Failed to delete audiobook');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete audiobook');
+  }
 }
 
 export type OverridePayload = {
@@ -391,22 +431,25 @@ export async function updateBook(
     body: JSON.stringify(updates),
   });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Failed to update audiobook');
+    throw await buildApiError(response, 'Failed to update audiobook');
   }
   return response.json();
 }
 
 export async function getBookTags(bookId: string): Promise<BookTags> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags`);
-  if (!response.ok) throw new Error('Failed to fetch book tags');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book tags');
+  }
   return response.json();
 }
 
 // Authors
 export async function getAuthors(): Promise<Author[]> {
   const response = await fetch(`${API_BASE}/authors`);
-  if (!response.ok) throw new Error('Failed to fetch authors');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch authors');
+  }
   const data = await response.json();
   return data.authors || [];
 }
@@ -414,7 +457,9 @@ export async function getAuthors(): Promise<Author[]> {
 // Series
 export async function getSeries(): Promise<Series[]> {
   const response = await fetch(`${API_BASE}/series`);
-  if (!response.ok) throw new Error('Failed to fetch series');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch series');
+  }
   const data = await response.json();
   return data.series || [];
 }
@@ -422,7 +467,9 @@ export async function getSeries(): Promise<Series[]> {
 // Works
 export async function getWorks(): Promise<Work[]> {
   const response = await fetch(`${API_BASE}/works`);
-  if (!response.ok) throw new Error('Failed to fetch works');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch works');
+  }
   const data = await response.json();
   return data.works || [];
 }
@@ -430,7 +477,9 @@ export async function getWorks(): Promise<Work[]> {
 // Import Paths
 export async function getImportPaths(): Promise<ImportPath[]> {
   const response = await fetch(`${API_BASE}/import-paths`);
-  if (!response.ok) throw new Error('Failed to fetch import paths');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch import paths');
+  }
   const data = await response.json();
   return data.importPaths || [];
 }
@@ -444,7 +493,9 @@ export async function addImportPath(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, name }),
   });
-  if (!response.ok) throw new Error('Failed to add import path');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to add import path');
+  }
   const data = await response.json();
   // Server returns { importPath, scan_operation_id?: string }
   // Gracefully handle both shapes
@@ -466,7 +517,9 @@ export async function addImportPathDetailed(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, name }),
   });
-  if (!response.ok) throw new Error('Failed to add import path');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to add import path');
+  }
   const data = await response.json();
   if (data.importPath) {
     return {
@@ -484,7 +537,9 @@ export async function removeImportPath(id: number): Promise<void> {
   const response = await fetch(`${API_BASE}/import-paths/${id}`, {
     method: 'DELETE',
   });
-  if (!response.ok) throw new Error('Failed to remove import path');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to remove import path');
+  }
 }
 
 // Operations
@@ -502,19 +557,25 @@ export async function startScan(
       force_update: forceUpdate,
     }),
   });
-  if (!response.ok) throw new Error('Failed to start scan');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start scan');
+  }
   return response.json();
 }
 
 export async function getOperationStatus(id: string): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/${id}/status`);
-  if (!response.ok) throw new Error('Failed to fetch operation status');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch operation status');
+  }
   return response.json();
 }
 
 export async function getOperationLogs(id: string): Promise<OperationLog[]> {
   const response = await fetch(`${API_BASE}/operations/${id}/logs`);
-  if (!response.ok) throw new Error('Failed to fetch operation logs');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch operation logs');
+  }
   const data = await response.json();
   return data.logs || [];
 }
@@ -526,7 +587,9 @@ export async function getOperationLogsTail(
   const response = await fetch(
     `${API_BASE}/operations/${id}/logs?tail=${tail}`
   );
-  if (!response.ok) throw new Error('Failed to fetch operation logs tail');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch operation logs tail');
+  }
   const data = await response.json();
   return data.items || data.logs || [];
 }
@@ -535,12 +598,16 @@ export async function cancelOperation(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/operations/${id}`, {
     method: 'DELETE',
   });
-  if (!response.ok) throw new Error('Failed to cancel operation');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to cancel operation');
+  }
 }
 
 export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
   const response = await fetch(`${API_BASE}/operations/active`);
-  if (!response.ok) throw new Error('Failed to fetch active operations');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch active operations');
+  }
   const data = await response.json();
   return data.operations || [];
 }
@@ -548,21 +615,30 @@ export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
 // System
 export async function getSystemStatus(): Promise<SystemStatus> {
   const response = await fetch(`${API_BASE}/system/status`);
-  if (!response.ok) throw new Error('Failed to fetch system status');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch system status');
+  }
   return response.json();
 }
 
 // Organize operation
 export async function startOrganize(
   folderPath?: string,
-  priority?: number
+  priority?: number,
+  bookIds?: string[]
 ): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/organize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder_path: folderPath, priority }),
+    body: JSON.stringify({
+      folder_path: folderPath,
+      priority,
+      book_ids: bookIds,
+    }),
   });
-  if (!response.ok) throw new Error('Failed to start organize');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start organize');
+  }
   return response.json();
 }
 
@@ -579,14 +655,18 @@ export async function getSystemLogs(params?: {
   if (params?.offset) query.append('offset', params.offset.toString());
 
   const response = await fetch(`${API_BASE}/system/logs?${query}`);
-  if (!response.ok) throw new Error('Failed to fetch system logs');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch system logs');
+  }
   return response.json();
 }
 
 // Config
 export async function getConfig(): Promise<Config> {
   const response = await fetch(`${API_BASE}/config`);
-  if (!response.ok) throw new Error('Failed to fetch config');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch config');
+  }
   const data = await response.json();
   return data.config;
 }
@@ -597,7 +677,9 @@ export async function updateConfig(updates: Partial<Config>): Promise<Config> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  if (!response.ok) throw new Error('Failed to update config');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update config');
+  }
   const data = await response.json();
   return data.config;
 }
@@ -605,7 +687,9 @@ export async function updateConfig(updates: Partial<Config>): Promise<Config> {
 // Version Management
 export async function getBookVersions(bookId: string): Promise<Book[]> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/versions`);
-  if (!response.ok) throw new Error('Failed to fetch book versions');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book versions');
+  }
   const data = await response.json();
   return data.versions || [];
 }
@@ -619,19 +703,25 @@ export async function linkBookVersion(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ other_id: otherBookId }),
   });
-  if (!response.ok) throw new Error('Failed to link book version');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to link book version');
+  }
 }
 
 export async function setPrimaryVersion(bookId: string): Promise<void> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/set-primary`, {
     method: 'PUT',
   });
-  if (!response.ok) throw new Error('Failed to set primary version');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to set primary version');
+  }
 }
 
 export async function getVersionGroup(groupId: string): Promise<Book[]> {
   const response = await fetch(`${API_BASE}/version-groups/${groupId}`);
-  if (!response.ok) throw new Error('Failed to fetch version group');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch version group');
+  }
   const data = await response.json();
   return data.audiobooks || [];
 }
@@ -646,7 +736,9 @@ export async function importFile(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file_path: filePath, organize }),
   });
-  if (!response.ok) throw new Error('Failed to import file');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to import file');
+  }
   return response.json();
 }
 
@@ -672,7 +764,9 @@ export async function searchMetadata(
   const response = await fetch(
     `${API_BASE}/metadata/search?${params.toString()}`
   );
-  if (!response.ok) throw new Error('Failed to search metadata');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to search metadata');
+  }
   return response.json();
 }
 
@@ -685,7 +779,9 @@ export async function fetchBookMetadata(
       method: 'POST',
     }
   );
-  if (!response.ok) throw new Error('Failed to fetch metadata');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch metadata');
+  }
   return response.json();
 }
 
@@ -714,7 +810,9 @@ export async function bulkFetchMetadata(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ book_ids: bookIds, only_missing: onlyMissing }),
   });
-  if (!response.ok) throw new Error('Failed to bulk fetch metadata');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to bulk fetch metadata');
+  }
   return response.json();
 }
 
@@ -738,7 +836,9 @@ export async function parseFilenameWithAI(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filename }),
   });
-  if (!response.ok) throw new Error('Failed to parse filename with AI');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to parse filename with AI');
+  }
   return response.json();
 }
 
@@ -768,7 +868,9 @@ export async function parseAudiobookWithAI(
       method: 'POST',
     }
   );
-  if (!response.ok) throw new Error('Failed to parse audiobook with AI');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to parse audiobook with AI');
+  }
   return response.json();
 }
 
@@ -790,6 +892,9 @@ export interface FilesystemBrowseResult {
     exists: boolean;
     readable: boolean;
     writable: boolean;
+    total_bytes?: number;
+    free_bytes?: number;
+    library_bytes?: number;
   };
 }
 
@@ -799,8 +904,99 @@ export async function browseFilesystem(
   const response = await fetch(
     `${API_BASE}/filesystem/browse?path=${encodeURIComponent(path)}`
   );
-  if (!response.ok) throw new Error('Failed to browse filesystem');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to browse filesystem');
+  }
   return response.json();
+}
+
+export async function excludeFilesystemPath(
+  path: string,
+  reason?: string
+): Promise<{ excluded: boolean; path: string; reason?: string }> {
+  const response = await fetch(`${API_BASE}/filesystem/exclude`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, reason }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to exclude path');
+  }
+  return response.json();
+}
+
+export async function includeFilesystemPath(path: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/filesystem/exclude`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to remove exclusion');
+  }
+}
+
+export interface BackupInfo {
+  filename: string;
+  path?: string;
+  size: number;
+  checksum?: string;
+  database_type?: string;
+  created_at: string;
+  auto?: boolean;
+  trigger?: string;
+  status?: string;
+}
+
+export interface BackupListResponse {
+  backups: BackupInfo[];
+  count: number;
+}
+
+export async function createBackup(maxBackups?: number): Promise<BackupInfo> {
+  const response = await fetch(`${API_BASE}/backup/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      typeof maxBackups === 'number' ? { max_backups: maxBackups } : {}
+    ),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to create backup');
+  }
+  return response.json();
+}
+
+export async function listBackups(): Promise<BackupListResponse> {
+  const response = await fetch(`${API_BASE}/backup/list`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list backups');
+  }
+  return response.json();
+}
+
+export async function restoreBackup(
+  filename: string,
+  verify = true
+): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/backup/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ backup_filename: filename, verify }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to restore backup');
+  }
+  return response.json();
+}
+
+export async function deleteBackup(filename: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/backup/${filename}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete backup');
+  }
 }
 
 // Blocked Hashes Management
@@ -817,7 +1013,9 @@ export interface BlockedHashesResponse {
 
 export async function getBlockedHashes(): Promise<BlockedHashesResponse> {
   const response = await fetch(`${API_BASE}/blocked-hashes`);
-  if (!response.ok) throw new Error('Failed to fetch blocked hashes');
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch blocked hashes');
+  }
   return response.json();
 }
 
@@ -831,8 +1029,7 @@ export async function addBlockedHash(
     body: JSON.stringify({ hash, reason }),
   });
   if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || 'Failed to add blocked hash');
+    throw await buildApiError(response, 'Failed to add blocked hash');
   }
   return response.json();
 }
@@ -844,8 +1041,7 @@ export async function removeBlockedHash(
     method: 'DELETE',
   });
   if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || 'Failed to remove blocked hash');
+    throw await buildApiError(response, 'Failed to remove blocked hash');
   }
   return response.json();
 }
