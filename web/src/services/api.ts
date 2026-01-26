@@ -423,6 +423,7 @@ export async function updateBook(
   updates: Partial<Book> & {
     overrides?: Record<string, OverridePayload>;
     unlock_overrides?: string[];
+    force_update?: boolean;
   }
 ): Promise<Book> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}`, {
