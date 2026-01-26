@@ -1,9 +1,9 @@
 // file: web/src/pages/Library.tsx
-// version: 1.26.0
+// version: 1.28.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -24,10 +24,13 @@ import {
   Checkbox,
   Snackbar,
   Collapse,
+  MenuItem,
+  LinearProgress,
   List,
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  Tooltip,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -49,7 +52,7 @@ import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog'
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import type { Audiobook, FilterOptions } from '../types';
-import { SortField } from '../types';
+import { SortField, SortOrder } from '../types';
 import * as api from '../services/api';
 import {
   eventSourceManager,
@@ -65,16 +68,62 @@ interface ImportPath {
   book_count: number;
 }
 
+interface BulkActionResult {
+  book_id: string;
+  title: string;
+  status: 'updated' | 'organized' | 'error';
+  message?: string;
+}
+
+interface BulkActionProgress {
+  total: number;
+  completed: number;
+  results: BulkActionResult[];
+}
+
 export const Library = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSearch = searchParams.get('search') ?? '';
+  const initialViewMode =
+    (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
+  const initialSortBy = ((): SortField => {
+    const value = searchParams.get('sort');
+    if (value && Object.values(SortField).includes(value as SortField)) {
+      return value as SortField;
+    }
+    return SortField.Title;
+  })();
+  const initialSortOrder =
+    searchParams.get('order') === SortOrder.Descending
+      ? SortOrder.Descending
+      : SortOrder.Ascending;
+  const initialPage = Math.max(
+    1,
+    parseInt(searchParams.get('page') || '1', 10)
+  );
+  const initialItemsPerPage = Math.max(
+    10,
+    parseInt(searchParams.get('limit') || '20', 10)
+  );
+  const initialFilters: FilterOptions = {
+    author: searchParams.get('author') || undefined,
+    series: searchParams.get('series') || undefined,
+    genre: searchParams.get('genre') || undefined,
+    language: searchParams.get('language') || undefined,
+    libraryState: searchParams.get('state') || undefined,
+  };
+
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortBy, setSortBy] = useState<SortField>(SortField.Title);
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const [sortBy, setSortBy] = useState<SortField>(initialSortBy);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterOptions>({});
-  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<FilterOptions>(initialFilters);
+  const [page, setPage] = useState(initialPage);
+  const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
   const [totalPages, setTotalPages] = useState(1);
   const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(
     null
@@ -84,6 +133,10 @@ export const Library = () => {
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] =
     useState<Audiobook | null>(null);
+  const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);
+  const [availableSeries, setAvailableSeries] = useState<string[]>([]);
+  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
 
   // Import path management
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
@@ -111,6 +164,8 @@ export const Library = () => {
     >
   >({});
   const logContainerRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const bulkFetchCancelRef = useRef(false);
+  const bulkOrganizeCancelRef = useRef(false);
   const [softDeletedCount, setSoftDeletedCount] = useState(0);
   const [softDeletedBooks, setSoftDeletedBooks] = useState<Audiobook[]>([]);
   const [softDeletedLoading, setSoftDeletedLoading] = useState(false);
@@ -128,8 +183,11 @@ export const Library = () => {
   const [purgeInProgress, setPurgeInProgress] = useState(false);
   const [purgingBookId, setPurgingBookId] = useState<string | null>(null);
   const [restoringBookId, setRestoringBookId] = useState<string | null>(null);
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
+  const [batchDeleteInProgress, setBatchDeleteInProgress] = useState(false);
+  const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
   const [alert, setAlert] = useState<{
-    severity: 'success' | 'error' | 'info';
+    severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
   } | null>(null);
 
@@ -140,7 +198,12 @@ export const Library = () => {
 
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
   const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
-  const [bulkFetchOnlyMissing, setBulkFetchOnlyMissing] = useState(true);
+  const [bulkFetchProgress, setBulkFetchProgress] =
+    useState<BulkActionProgress | null>(null);
+  const [bulkOrganizeDialogOpen, setBulkOrganizeDialogOpen] = useState(false);
+  const [bulkOrganizeInProgress, setBulkOrganizeInProgress] = useState(false);
+  const [bulkOrganizeProgress, setBulkOrganizeProgress] =
+    useState<BulkActionProgress | null>(null);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -266,6 +329,37 @@ export const Library = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, filters, sortBy, sortOrder, itemsPerPage]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (searchQuery) params.set('search', searchQuery);
+    if (filters.author) params.set('author', filters.author);
+    if (filters.series) params.set('series', filters.series);
+    if (filters.genre) params.set('genre', filters.genre);
+    if (filters.language) params.set('language', filters.language);
+    if (filters.libraryState) params.set('state', filters.libraryState);
+    if (sortBy !== SortField.Title) params.set('sort', sortBy);
+    if (sortOrder !== SortOrder.Ascending) params.set('order', sortOrder);
+    if (viewMode !== 'grid') params.set('view', viewMode);
+    if (page > 1) params.set('page', page.toString());
+    if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
+
+    setSearchParams(params, { replace: true });
+  }, [
+    filters,
+    itemsPerPage,
+    page,
+    searchQuery,
+    setSearchParams,
+    sortBy,
+    sortOrder,
+    viewMode,
+  ]);
+
   const loadSoftDeleted = useCallback(async () => {
     setSoftDeletedLoading(true);
     try {
@@ -281,20 +375,76 @@ export const Library = () => {
     }
   }, []);
 
+  const selectedIds = new Set(selectedAudiobooks.map((book) => book.id));
+  const hasSelection = selectedAudiobooks.length > 0;
+  const allOnPageSelected =
+    audiobooks.length > 0 &&
+    audiobooks.every((book) => selectedIds.has(book.id));
+  const someOnPageSelected = audiobooks.some((book) =>
+    selectedIds.has(book.id)
+  );
+  const selectedHasDeleted = selectedAudiobooks.some(
+    (book) => book.marked_for_deletion
+  );
+  const selectedHasActive = selectedAudiobooks.some(
+    (book) => !book.marked_for_deletion
+  );
+  const selectedHasImport = selectedAudiobooks.some(
+    (book) => book.library_state === 'import'
+  );
+
+  const handleToggleSelect = (audiobook: Audiobook) => {
+    setSelectedAudiobooks((prev) => {
+      if (prev.some((selected) => selected.id === audiobook.id)) {
+        return prev.filter((selected) => selected.id !== audiobook.id);
+      }
+      return [...prev, audiobook];
+    });
+  };
+
+  const handleSelectAllOnPage = () => {
+    setSelectedAudiobooks((prev) => {
+      const byId = new Map(prev.map((book) => [book.id, book]));
+      audiobooks.forEach((book) => {
+        if (!byId.has(book.id)) {
+          byId.set(book.id, book);
+        }
+      });
+      return Array.from(byId.values());
+    });
+  };
+
+  const handleToggleSelectAllOnPage = () => {
+    if (allOnPageSelected) {
+      setSelectedAudiobooks((prev) =>
+        prev.filter(
+          (book) =>
+            !audiobooks.some((pageBook) => pageBook.id === book.id)
+        )
+      );
+      return;
+    }
+    handleSelectAllOnPage();
+  };
+
+  const handleClearSelection = () => {
+    setSelectedAudiobooks([]);
+  };
+
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
     try {
-      const limit = 24;
-      const offset = (page - 1) * limit;
+      const offset = (page - 1) * itemsPerPage;
 
-      // Fetch audiobooks and import paths
-      const [books, folders, bookCount] = await Promise.all([
-        debouncedSearch
-          ? api.searchBooks(debouncedSearch, limit)
-          : api.getBooks(limit, offset),
+      const [bookCount, folders] = await Promise.all([
+        api.countBooks(),
         api.getImportPaths(),
-        debouncedSearch ? Promise.resolve(0) : api.countBooks(),
       ]);
+
+      const fetchLimit = Math.max(bookCount, itemsPerPage);
+      const books = debouncedSearch
+        ? await api.searchBooks(debouncedSearch, fetchLimit)
+        : await api.getBooks(fetchLimit, 0);
 
       // Convert API books to Audiobook type
       const convertedBooks: Audiobook[] = books.map((book) => ({
@@ -303,7 +453,11 @@ export const Library = () => {
         author: book.author_name || 'Unknown',
         narrator: book.narrator,
         series: book.series_name,
-        seriesPosition: book.series_position,
+        series_number: book.series_position,
+        genre: book.genre,
+        language: book.language,
+        audiobook_release_year: book.audiobook_release_year,
+        print_year: book.print_year,
         duration: book.duration,
         coverImage: book.cover_image,
         filePath: book.file_path,
@@ -323,32 +477,111 @@ export const Library = () => {
         organized_file_hash: book.organized_file_hash,
       }));
 
-      // Apply client-side sorting
-      const sortedBooks = [...convertedBooks].sort((a, b) => {
+      const uniqueAuthors = Array.from(
+        new Set(
+          convertedBooks
+            .map((book) => book.author)
+            .filter((author): author is string => Boolean(author))
+        )
+      ).sort();
+      const uniqueSeries = Array.from(
+        new Set(
+          convertedBooks
+            .map((book) => book.series)
+            .filter((series): series is string => Boolean(series))
+        )
+      ).sort();
+      const uniqueGenres = Array.from(
+        new Set(
+          convertedBooks
+            .map((book) => book.genre)
+            .filter((genre): genre is string => Boolean(genre))
+        )
+      ).sort();
+      const uniqueLanguages = Array.from(
+        new Set(
+          convertedBooks
+            .map((book) => book.language)
+            .filter((language): language is string => Boolean(language))
+        )
+      ).sort();
+
+      setAvailableAuthors(uniqueAuthors);
+      setAvailableSeries(uniqueSeries);
+      setAvailableGenres(uniqueGenres);
+      setAvailableLanguages(uniqueLanguages);
+
+      let filteredBooks = [...convertedBooks];
+      if (filters.author) {
+        const authorFilter = filters.author.toLowerCase();
+        filteredBooks = filteredBooks.filter((book) =>
+          (book.author || '').toLowerCase().includes(authorFilter)
+        );
+      }
+      if (filters.series) {
+        const seriesFilter = filters.series.toLowerCase();
+        filteredBooks = filteredBooks.filter((book) =>
+          (book.series || '').toLowerCase().includes(seriesFilter)
+        );
+      }
+      if (filters.genre) {
+        const genreFilter = filters.genre.toLowerCase();
+        filteredBooks = filteredBooks.filter((book) =>
+          (book.genre || '').toLowerCase().includes(genreFilter)
+        );
+      }
+      if (filters.language) {
+        const languageFilter = filters.language.toLowerCase();
+        filteredBooks = filteredBooks.filter((book) =>
+          (book.language || '').toLowerCase().includes(languageFilter)
+        );
+      }
+      if (filters.libraryState) {
+        if (filters.libraryState === 'deleted') {
+          filteredBooks = filteredBooks.filter(
+            (book) => book.marked_for_deletion
+          );
+        } else {
+          filteredBooks = filteredBooks.filter(
+            (book) => book.library_state === filters.libraryState
+          );
+        }
+      }
+
+      const sortedBooks = filteredBooks.sort((a, b) => {
+        let comparison = 0;
         switch (sortBy) {
           case SortField.Title:
-            return a.title.localeCompare(b.title);
+            comparison = a.title.localeCompare(b.title);
+            break;
           case SortField.Author:
-            return (a.author || '').localeCompare(b.author || '');
+            comparison = (a.author || '').localeCompare(b.author || '');
+            break;
           case SortField.Year: {
             const aYear = a.audiobook_release_year || a.print_year || 0;
             const bYear = b.audiobook_release_year || b.print_year || 0;
-            return bYear - aYear;
+            comparison = aYear - bYear;
+            break;
           }
           case SortField.CreatedAt:
-            return (
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime()
-            );
+            comparison =
+              new Date(a.created_at).getTime() -
+              new Date(b.created_at).getTime();
+            break;
           default:
-            return 0;
+            comparison = 0;
         }
+        return sortOrder === SortOrder.Descending ? comparison * -1 : comparison;
       });
 
-      setAudiobooks(sortedBooks);
-      setTotalPages(
-        Math.ceil((debouncedSearch ? books.length : bookCount) / limit)
+      const total = sortedBooks.length;
+      const paginatedBooks = sortedBooks.slice(
+        offset,
+        offset + itemsPerPage
       );
+
+      setAudiobooks(paginatedBooks);
+      setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
 
       // Load import paths
       const convertedPaths: ImportPath[] = folders.map((folder) => ({
@@ -365,7 +598,14 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, page, sortBy]);
+  }, [
+    debouncedSearch,
+    filters,
+    itemsPerPage,
+    page,
+    sortBy,
+    sortOrder,
+  ]);
 
   const handleManualImport = () => {
     setImportFilePath('');
@@ -487,6 +727,65 @@ export const Library = () => {
     setBookPendingDelete(null);
   };
 
+  const handleBatchDelete = async () => {
+    if (!hasSelection) return;
+    setBatchDeleteInProgress(true);
+    try {
+      const activeBooks = selectedAudiobooks.filter(
+        (book) => !book.marked_for_deletion
+      );
+      await Promise.all(
+        activeBooks.map((book) =>
+          api.deleteBook(book.id, { softDelete: true, blockHash: true })
+        )
+      );
+      setAlert({
+        severity: 'success',
+        message: `Soft deleted ${activeBooks.length} selected audiobooks.`,
+      });
+      setSelectedAudiobooks([]);
+      await loadAudiobooks();
+      await loadSoftDeleted();
+    } catch (error) {
+      console.error('Failed to batch delete audiobooks:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to delete selected audiobooks.',
+      });
+    } finally {
+      setBatchDeleteInProgress(false);
+      setBatchDeleteDialogOpen(false);
+    }
+  };
+
+  const handleBatchRestore = async () => {
+    if (!hasSelection) return;
+    setBatchRestoreInProgress(true);
+    try {
+      const deletedBooks = selectedAudiobooks.filter(
+        (book) => book.marked_for_deletion
+      );
+      await Promise.all(
+        deletedBooks.map((book) => api.restoreSoftDeletedBook(book.id))
+      );
+      setAlert({
+        severity: 'success',
+        message: `Restored ${deletedBooks.length} selected audiobooks.`,
+      });
+      setSelectedAudiobooks([]);
+      await loadAudiobooks();
+      await loadSoftDeleted();
+    } catch (error) {
+      console.error('Failed to restore selected audiobooks:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to restore selected audiobooks.',
+      });
+    } finally {
+      setBatchRestoreInProgress(false);
+    }
+  };
+
   const handlePurgeOne = async (book: Audiobook) => {
     setPurgingBookId(book.id);
     try {
@@ -572,6 +871,10 @@ export const Library = () => {
             : ab
         )
       );
+      setAlert({
+        severity: 'success',
+        message: `Updated metadata for ${selectedAudiobooks.length} audiobooks.`,
+      });
       setSelectedAudiobooks([]);
       setBatchEditOpen(false);
     } catch (error) {
@@ -616,25 +919,71 @@ export const Library = () => {
   };
 
   const handleBulkFetchMetadata = async () => {
-    if (audiobooks.length === 0) {
+    if (!hasSelection) {
       setAlert({
         severity: 'info',
-        message: 'No audiobooks loaded to fetch metadata for.',
+        message: 'Select audiobooks to fetch metadata for.',
       });
       return;
     }
 
     setBulkFetchInProgress(true);
+    bulkFetchCancelRef.current = false;
+
+    const total = selectedAudiobooks.length;
+    const results: BulkActionResult[] = [];
+    let completed = 0;
+    setBulkFetchProgress({ total, completed, results: [] });
+
     try {
-      const result = await api.bulkFetchMetadata(
-        audiobooks.map((book) => book.id),
-        bulkFetchOnlyMissing
-      );
-      setAlert({
-        severity: 'success',
-        message: `Bulk fetch complete: ${result.updated_count} updated out of ${result.total_count}.`,
-      });
-      loadAudiobooks();
+      for (const book of selectedAudiobooks) {
+        if (bulkFetchCancelRef.current) {
+          break;
+        }
+
+        try {
+          await api.fetchBookMetadata(book.id);
+          results.push({
+            book_id: book.id,
+            title: book.title,
+            status: 'updated',
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Failed to fetch metadata';
+          results.push({
+            book_id: book.id,
+            title: book.title,
+            status: 'error',
+            message,
+          });
+        }
+
+        completed += 1;
+        setBulkFetchProgress({ total, completed, results: [...results] });
+      }
+
+      if (bulkFetchCancelRef.current) {
+        setAlert({
+          severity: 'info',
+          message: 'Bulk fetch cancelled.',
+        });
+      } else {
+        const successCount = results.filter((result) => result.status !== 'error')
+          .length;
+        const failedCount = results.length - successCount;
+
+        setAlert({
+          severity: failedCount > 0 ? 'warning' : 'success',
+          message:
+            failedCount > 0
+              ? `${successCount} succeeded, ${failedCount} failed.`
+              : `Metadata fetched for ${successCount} books.`,
+        });
+        setSelectedAudiobooks([]);
+      }
+
+      await loadAudiobooks();
     } catch (error) {
       console.error('Failed to bulk fetch metadata:', error);
       setAlert({
@@ -643,8 +992,107 @@ export const Library = () => {
       });
     } finally {
       setBulkFetchInProgress(false);
-      setBulkFetchDialogOpen(false);
+      bulkFetchCancelRef.current = false;
     }
+  };
+
+  const handleCancelBulkFetch = () => {
+    if (!bulkFetchInProgress) {
+      setBulkFetchDialogOpen(false);
+      setBulkFetchProgress(null);
+      return;
+    }
+    bulkFetchCancelRef.current = true;
+  };
+
+  const handleBulkOrganize = async () => {
+    if (!hasSelection) {
+      setAlert({
+        severity: 'info',
+        message: 'Select audiobooks to organize.',
+      });
+      return;
+    }
+
+    const importBooks = selectedAudiobooks.filter(
+      (book) => book.library_state === 'import'
+    );
+    if (importBooks.length === 0) {
+      setAlert({
+        severity: 'info',
+        message: 'Select import-state audiobooks to organize.',
+      });
+      return;
+    }
+
+    setBulkOrganizeInProgress(true);
+    bulkOrganizeCancelRef.current = false;
+
+    const total = importBooks.length;
+    const results: BulkActionResult[] = [];
+    let completed = 0;
+    setBulkOrganizeProgress({ total, completed, results: [] });
+
+    try {
+      await api.startOrganize(
+        undefined,
+        undefined,
+        importBooks.map((b) => b.id)
+      );
+
+      for (const book of importBooks) {
+        if (bulkOrganizeCancelRef.current) {
+          break;
+        }
+        results.push({
+          book_id: book.id,
+          title: book.title,
+          status: 'organized',
+        });
+        setAudiobooks((prev) =>
+          prev.map((ab) =>
+            ab.id === book.id
+              ? { ...ab, library_state: 'organized' }
+              : ab
+          )
+        );
+        completed += 1;
+        setBulkOrganizeProgress({ total, completed, results: [...results] });
+      }
+
+      if (bulkOrganizeCancelRef.current) {
+        setAlert({
+          severity: 'info',
+          message: 'Organize cancelled.',
+        });
+      } else {
+        setAlert({
+          severity: 'success',
+          message: `Successfully organized ${completed} audiobooks.`,
+        });
+        setSelectedAudiobooks([]);
+      }
+
+      await loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to organize selected audiobooks:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Failed to organize selected audiobooks.',
+      });
+    } finally {
+      setBulkOrganizeInProgress(false);
+      bulkOrganizeCancelRef.current = false;
+    }
+  };
+
+  const handleCancelBulkOrganize = () => {
+    if (!bulkOrganizeInProgress) {
+      setBulkOrganizeDialogOpen(false);
+      setBulkOrganizeProgress(null);
+      return;
+    }
+    bulkOrganizeCancelRef.current = true;
   };
 
   const handleParseWithAI = async (audiobook: Audiobook) => {
@@ -665,6 +1113,13 @@ export const Library = () => {
   const handleFiltersChange = (newFilters: FilterOptions) => {
     setFilters(newFilters);
     setPage(1); // Reset to first page on filter change
+  };
+
+  const handleSortChange = (newSort: SortField) => {
+    setSortBy(newSort);
+    if (newSort === SortField.CreatedAt) {
+      setSortOrder(SortOrder.Descending);
+    }
   };
 
   const getActiveFilterCount = () => {
@@ -911,7 +1366,7 @@ export const Library = () => {
             startIcon={<CloudDownloadIcon />}
             onClick={() => setBulkFetchDialogOpen(true)}
             variant="outlined"
-            disabled={audiobooks.length === 0}
+            disabled={!hasSelection}
           >
             Bulk Fetch Metadata
           </Button>
@@ -1228,8 +1683,146 @@ export const Library = () => {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={handleSortChange}
+              sortOrder={sortOrder}
+              onSortOrderChange={setSortOrder}
             />
+
+            <Paper sx={{ p: 2 }}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={2}
+                alignItems={{ xs: 'flex-start', md: 'center' }}
+                justifyContent="space-between"
+              >
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={allOnPageSelected}
+                        indeterminate={someOnPageSelected && !allOnPageSelected}
+                        onChange={handleToggleSelectAllOnPage}
+                      />
+                    }
+                    label="Select All"
+                  />
+                  <Chip label={`${selectedAudiobooks.length} selected`} />
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={handleClearSelection}
+                    disabled={!hasSelection}
+                  >
+                    Deselect All
+                  </Button>
+                </Stack>
+
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                >
+                  <Tooltip
+                    title={!hasSelection ? 'Select books first' : ''}
+                    disableHoverListener={hasSelection}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setBatchEditOpen(true)}
+                        disabled={!hasSelection}
+                      >
+                        Batch Edit
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={!hasSelection ? 'Select books first' : ''}
+                    disableHoverListener={hasSelection}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setBulkFetchDialogOpen(true)}
+                        disabled={!hasSelection}
+                      >
+                        Fetch Metadata
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
+                      !selectedHasImport
+                        ? hasSelection
+                          ? 'Select import books first'
+                          : 'Select books first'
+                        : ''
+                    }
+                    disableHoverListener={selectedHasImport}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => setBulkOrganizeDialogOpen(true)}
+                        disabled={!selectedHasImport}
+                      >
+                        Organize Selected
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
+                      !selectedHasActive
+                        ? hasSelection
+                          ? 'Select active books first'
+                          : 'Select books first'
+                        : ''
+                    }
+                    disableHoverListener={selectedHasActive}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => setBatchDeleteDialogOpen(true)}
+                        disabled={!selectedHasActive}
+                      >
+                        Delete Selected
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
+                      !selectedHasDeleted
+                        ? hasSelection
+                          ? 'Select deleted books first'
+                          : 'Select books first'
+                        : ''
+                    }
+                    disableHoverListener={selectedHasDeleted}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        onClick={handleBatchRestore}
+                        disabled={!selectedHasDeleted || batchRestoreInProgress}
+                      >
+                        {batchRestoreInProgress
+                          ? 'Restoring...'
+                          : 'Restore Selected'}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Stack>
+              </Stack>
+            </Paper>
 
             {viewMode === 'grid' ? (
               <AudiobookGrid
@@ -1241,6 +1834,8 @@ export const Library = () => {
                 onVersionManage={handleVersionManage}
                 onFetchMetadata={handleFetchMetadata}
                 onParseWithAI={handleParseWithAI}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
               />
             ) : (
               <AudiobookList
@@ -1249,18 +1844,41 @@ export const Library = () => {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onClick={handleClick}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleToggleSelectAllOnPage}
               />
             )}
 
-            {!loading && totalPages > 1 && (
-              <Box display="flex" justifyContent="center" mt={4}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, value) => setPage(value)}
-                  color="primary"
-                />
-              </Box>
+            {!loading && (
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                alignItems="center"
+                justifyContent="center"
+                mt={4}
+              >
+                <TextField
+                  select
+                  size="small"
+                  label="Items per page"
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  sx={{ minWidth: 150 }}
+                >
+                  <MenuItem value={20}>20</MenuItem>
+                  <MenuItem value={50}>50</MenuItem>
+                  <MenuItem value={100}>100</MenuItem>
+                </TextField>
+                {totalPages > 1 && (
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, value) => setPage(value)}
+                    color="primary"
+                  />
+                )}
+              </Stack>
             )}
           </Stack>
         )}
@@ -1376,10 +1994,10 @@ export const Library = () => {
           onClose={() => setFilterOpen(false)}
           filters={filters}
           onFiltersChange={handleFiltersChange}
-          authors={[]} // TODO: Load from API
-          series={[]} // TODO: Load from API
-          genres={[]} // TODO: Load from API
-          languages={[]} // TODO: Load from API
+          authors={availableAuthors}
+          series={availableSeries}
+          genres={availableGenres}
+          languages={availableLanguages}
         />
 
         <MetadataEditDialog
@@ -1395,6 +2013,97 @@ export const Library = () => {
           onClose={() => setBatchEditOpen(false)}
           onSave={handleBatchSave}
         />
+
+        <Dialog
+          open={batchDeleteDialogOpen}
+          onClose={() => setBatchDeleteDialogOpen(false)}
+        >
+          <DialogTitle>Delete Selected Audiobooks</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Are you sure you want to soft delete{' '}
+              {selectedAudiobooks.length} selected audiobooks?
+            </Typography>
+            <Alert severity="warning">
+              Selected books will be hidden from the library and can be restored
+              from the soft-deleted list.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setBatchDeleteDialogOpen(false)}
+              disabled={batchDeleteInProgress}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              onClick={handleBatchDelete}
+              disabled={batchDeleteInProgress}
+            >
+              {batchDeleteInProgress ? 'Deleting...' : 'Delete Selected'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={bulkOrganizeDialogOpen}
+          onClose={handleCancelBulkOrganize}
+        >
+          <DialogTitle>Organize Selected Audiobooks</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Organize {selectedAudiobooks.length} selected books.
+            </Typography>
+            {bulkOrganizeProgress && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" gutterBottom>
+                  Organized {bulkOrganizeProgress.completed} of{' '}
+                  {bulkOrganizeProgress.total}
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    bulkOrganizeProgress.total > 0
+                      ? (bulkOrganizeProgress.completed /
+                          bulkOrganizeProgress.total) *
+                        100
+                      : 0
+                  }
+                />
+                {bulkOrganizeProgress.results.length > 0 && (
+                  <List dense sx={{ mt: 2 }}>
+                    {bulkOrganizeProgress.results.map((result) => (
+                      <ListItem key={result.book_id}>
+                        <ListItemText
+                          primary={result.title || result.book_id}
+                          secondary={
+                            result.status === 'error'
+                              ? result.message || 'Failed'
+                              : 'Organized'
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCancelBulkOrganize}>
+              {bulkOrganizeInProgress ? 'Cancel' : 'Close'}
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleBulkOrganize}
+              disabled={bulkOrganizeInProgress || !selectedHasImport}
+            >
+              {bulkOrganizeInProgress ? 'Organizing…' : 'Organize Selected'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog
           open={importFileDialogOpen}
@@ -1456,36 +2165,58 @@ export const Library = () => {
 
         <Dialog
           open={bulkFetchDialogOpen}
-          onClose={() => setBulkFetchDialogOpen(false)}
+          onClose={handleCancelBulkFetch}
         >
           <DialogTitle>Bulk Fetch Metadata</DialogTitle>
           <DialogContent>
             <Typography variant="body1" gutterBottom>
-              Fetch metadata for the {audiobooks.length} currently loaded books.
-              Missing fields will be filled while manual overrides and locks are
-              preserved.
+              Fetch metadata for {selectedAudiobooks.length} selected books.
             </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={bulkFetchOnlyMissing}
-                  onChange={(e) => setBulkFetchOnlyMissing(e.target.checked)}
+            {bulkFetchProgress && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" gutterBottom>
+                  {bulkFetchProgress.completed} / {bulkFetchProgress.total}{' '}
+                  completed
+                </Typography>
+                <LinearProgress
+                  variant="determinate"
+                  value={
+                    bulkFetchProgress.total > 0
+                      ? (bulkFetchProgress.completed /
+                          bulkFetchProgress.total) *
+                        100
+                      : 0
+                  }
                 />
-              }
-              label="Only fill missing fields"
-            />
+                {bulkFetchProgress.results.length > 0 && (
+                  <List dense sx={{ mt: 2 }}>
+                    {bulkFetchProgress.results.map((result) => (
+                      <ListItem key={result.book_id}>
+                        <ListItemText
+                          primary={result.title || result.book_id}
+                          secondary={
+                            result.status === 'error'
+                              ? result.message || 'Failed'
+                              : 'Completed'
+                          }
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Box>
+            )}
           </DialogContent>
           <DialogActions>
             <Button
-              onClick={() => setBulkFetchDialogOpen(false)}
-              disabled={bulkFetchInProgress}
+              onClick={handleCancelBulkFetch}
             >
-              Cancel
+              {bulkFetchInProgress ? 'Cancel' : 'Close'}
             </Button>
             <Button
               variant="contained"
               onClick={handleBulkFetchMetadata}
-              disabled={bulkFetchInProgress || audiobooks.length === 0}
+              disabled={bulkFetchInProgress || !hasSelection}
             >
               {bulkFetchInProgress ? 'Fetching…' : 'Fetch Metadata'}
             </Button>
