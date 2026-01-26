@@ -1,8 +1,8 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.3.1
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, MouseEvent } from 'react';
 import {
   Box,
   Typography,
@@ -16,10 +16,14 @@ import {
   Paper,
   CircularProgress,
   Alert,
+  AlertColor,
   Chip,
   Stack,
   TextField,
   IconButton,
+  Menu,
+  MenuItem,
+  Snackbar,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -74,6 +78,18 @@ export function ServerFileBrowser({
     useState<api.FilesystemBrowseResult['disk_info']>();
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
+  const [extensionFilter, setExtensionFilter] = useState('');
+  const [notice, setNotice] = useState<{
+    message: string;
+    severity: AlertColor;
+  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    mouseX: number;
+    mouseY: number;
+  } | null>(null);
+  const [contextItem, setContextItem] = useState<api.FileSystemItem | null>(
+    null
+  );
 
   const fetchDirectory = useCallback(
     async (path: string) => {
@@ -143,6 +159,48 @@ export function ServerFileBrowser({
     setEditPath(currentPath);
   };
 
+  const handleContextMenu = (
+    event: MouseEvent,
+    item: api.FileSystemItem
+  ) => {
+    if (!item.is_dir) return;
+    event.preventDefault();
+    setContextItem(item);
+    setContextMenu({ mouseX: event.clientX + 2, mouseY: event.clientY - 2 });
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+    setContextItem(null);
+  };
+
+  const handleToggleExclude = async () => {
+    if (!contextItem) return;
+    try {
+      if (contextItem.excluded) {
+        await api.includeFilesystemPath(contextItem.path);
+        setNotice({
+          message: 'Folder included in scan.',
+          severity: 'success',
+        });
+      } else {
+        await api.excludeFilesystemPath(contextItem.path);
+        setNotice({
+          message: 'Folder excluded from scan.',
+          severity: 'success',
+        });
+      }
+      await fetchDirectory(currentPath);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to update exclusion';
+      setError(message);
+      setNotice({ message, severity: 'error' });
+    } finally {
+      handleCloseContextMenu();
+    }
+  };
+
   const getPathParts = (path: string): string[] => {
     const parts = path.split('/').filter(Boolean);
     return ['/', ...parts];
@@ -176,15 +234,58 @@ export function ServerFileBrowser({
     return a.name.localeCompare(b.name);
   });
 
-  // Filter items based on showFiles prop
-  const filteredItems = showFiles
-    ? sortedItems
-    : sortedItems.filter((item) => item.is_dir);
+  const normalizedFilter = extensionFilter.trim().toLowerCase();
+  const extensionQuery =
+    normalizedFilter.length > 0 && !normalizedFilter.startsWith('.')
+      ? `.${normalizedFilter}`
+      : normalizedFilter;
+
+  const filteredItems = sortedItems.filter((item) => {
+    if (item.is_dir) {
+      return true;
+    }
+    if (!showFiles) {
+      return false;
+    }
+    if (!extensionQuery) {
+      return true;
+    }
+    return item.name.toLowerCase().endsWith(extensionQuery);
+  });
 
   const pathParts = getPathParts(currentPath);
+  const availableLabel =
+    diskInfo?.total_bytes !== undefined && diskInfo?.free_bytes !== undefined
+      ? [
+          'Available',
+          formatBytes(diskInfo.free_bytes),
+          '/',
+          formatBytes(diskInfo.total_bytes),
+        ].join(' ')
+      : null;
+  const libraryLabel =
+    diskInfo?.library_bytes !== undefined
+      ? `Library ${formatBytes(diskInfo.library_bytes)}`
+      : null;
 
   return (
     <Box>
+      <Snackbar
+        open={!!notice}
+        autoHideDuration={4000}
+        onClose={() => setNotice(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        {notice ? (
+          <Alert
+            severity={notice.severity}
+            onClose={() => setNotice(null)}
+            sx={{ width: '100%' }}
+          >
+            {notice.message}
+          </Alert>
+        ) : null}
+      </Snackbar>
       {/* Sticky Path Editor */}
       <Paper
         sx={{
@@ -256,6 +357,34 @@ export function ServerFileBrowser({
             </IconButton>
           </Stack>
         )}
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          alignItems={{ xs: 'stretch', md: 'center' }}
+          sx={{ mt: 2 }}
+        >
+          {showFiles && (
+            <TextField
+              size="small"
+              label="Filter extension"
+              placeholder=".m4b"
+              value={extensionFilter}
+              onChange={(e) => setExtensionFilter(e.target.value)}
+              sx={{ maxWidth: 220 }}
+            />
+          )}
+          {availableLabel && (
+            <Chip label={availableLabel} size="small" color="info" />
+          )}
+          {libraryLabel && (
+            <Chip
+              label={libraryLabel}
+              size="small"
+              color="primary"
+              variant="outlined"
+            />
+          )}
+        </Stack>
       </Paper>
 
       {/* Loading State */}
@@ -292,6 +421,7 @@ export function ServerFileBrowser({
               <ListItem
                 key={item.path}
                 disablePadding
+                onContextMenu={(event) => handleContextMenu(event, item)}
                 secondaryAction={
                   item.is_dir && item.excluded ? (
                     <Chip
@@ -338,6 +468,21 @@ export function ServerFileBrowser({
           </List>
         </Paper>
       )}
+
+      <Menu
+        open={contextMenu !== null}
+        onClose={handleCloseContextMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          contextMenu !== null
+            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+            : undefined
+        }
+      >
+        <MenuItem onClick={handleToggleExclude} disabled={!contextItem}>
+          {contextItem?.excluded ? 'Include in scan' : 'Exclude from scan'}
+        </MenuItem>
+      </Menu>
 
       {/* Help Text */}
       <Box mt={2}>
