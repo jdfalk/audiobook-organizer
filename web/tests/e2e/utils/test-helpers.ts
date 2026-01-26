@@ -1,8 +1,8 @@
-// file: tests/e2e/utils/test-helpers.ts
-// version: 1.0.0
+// file: web/tests/e2e/utils/test-helpers.ts
+// version: 1.0.4
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 
-import { Page, expect } from '@playwright/test';
+import { Page } from '@playwright/test';
 
 /**
  * Mock EventSource to prevent SSE connections during tests
@@ -154,12 +154,32 @@ export async function setupLibraryWithBooks(
               ? input.toString()
               : input.url;
         const method = (init?.method || 'GET').toUpperCase();
+        const urlObj = new URL(url, window.location.origin);
+        const pathname = urlObj.pathname;
+
+        const applySearchFilter = (items: typeof libraryBooks, query: string) => {
+          if (!query) return items;
+          const searchLower = query.toLowerCase();
+          return items.filter((b) => {
+            const title = b.title?.toLowerCase() || '';
+            const author = b.author_name?.toLowerCase() || '';
+            const series = b.series_name?.toLowerCase() || '';
+            return (
+              title.includes(searchLower) ||
+              author.includes(searchLower) ||
+              series.includes(searchLower)
+            );
+          });
+        };
 
         // Health/system
-        if (url.includes('/api/v1/health')) {
+        if (pathname === '/api/v1/health') {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
-        if (url.includes('/api/v1/system/status')) {
+        if (pathname === '/api/v1/operations/active' && method === 'GET') {
+          return Promise.resolve(jsonResponse({ operations: [] }));
+        }
+        if (pathname === '/api/v1/system/status') {
           return Promise.resolve(
             jsonResponse({
               status: 'ok',
@@ -176,65 +196,75 @@ export async function setupLibraryWithBooks(
           );
         }
 
-        // Audiobooks list
-        if (url.includes('/api/v1/audiobooks') && method === 'GET') {
-          const urlObj = new URL(url, 'http://localhost');
-          const page = parseInt(urlObj.searchParams.get('page') || '1');
-          const limit = parseInt(urlObj.searchParams.get('limit') || '20');
-          const sort = urlObj.searchParams.get('sort') || 'created_at';
-          const order = urlObj.searchParams.get('order') || 'desc';
-          const search = urlObj.searchParams.get('search') || '';
-          const state = urlObj.searchParams.get('state') || '';
+        if (pathname === '/api/v1/import-paths' && method === 'GET') {
+          return Promise.resolve(jsonResponse({ importPaths: [] }));
+        }
 
-          let filtered = [...libraryBooks];
+        if (pathname === '/api/v1/audiobooks/count' && method === 'GET') {
+          return Promise.resolve(jsonResponse({ count: libraryBooks.length }));
+        }
 
-          // Apply search
-          if (search) {
-            const searchLower = search.toLowerCase();
-            filtered = filtered.filter(
-              (b) =>
-                b.title.toLowerCase().includes(searchLower) ||
-                b.author_name.toLowerCase().includes(searchLower) ||
-                (b.series_name && b.series_name.toLowerCase().includes(searchLower))
-            );
-          }
+        if (pathname === '/api/v1/audiobooks/soft-deleted' && method === 'GET') {
+          const deleted = libraryBooks.filter((book) => book.marked_for_deletion);
+          return Promise.resolve(
+            jsonResponse({
+              items: deleted,
+              total: deleted.length,
+              count: deleted.length,
+            })
+          );
+        }
 
-          // Apply state filter
-          if (state) {
-            filtered = filtered.filter((b) => b.library_state === state);
-          }
+        if (pathname === '/api/v1/audiobooks/search' && method === 'GET') {
+          const query =
+            urlObj.searchParams.get('q') ||
+            urlObj.searchParams.get('search') ||
+            '';
+          const limit = parseInt(urlObj.searchParams.get('limit') || '50');
+          const filtered = applySearchFilter([...libraryBooks], query);
+          const paginated = filtered.slice(0, limit);
+          return Promise.resolve(
+            jsonResponse({
+              items: paginated,
+              audiobooks: paginated,
+              total: filtered.length,
+            })
+          );
+        }
 
-          // Apply sorting
-          filtered.sort((a, b) => {
-            let aVal: string | number = '';
-            let bVal: string | number = '';
-
-            if (sort === 'title') {
-              aVal = a.title.toLowerCase();
-              bVal = b.title.toLowerCase();
-            } else if (sort === 'author_name') {
-              aVal = a.author_name.toLowerCase();
-              bVal = b.author_name.toLowerCase();
-            } else if (sort === 'created_at') {
-              aVal = a.created_at;
-              bVal = b.created_at;
+        if (pathname.startsWith('/api/v1/audiobooks/') && method === 'GET') {
+          const parts = pathname.split('/').filter(Boolean);
+          const bookId = parts[parts.length - 1];
+          if (bookId && bookId !== 'audiobooks') {
+            const match = libraryBooks.find((book) => book.id === bookId);
+            if (!match) {
+              return Promise.resolve(
+                jsonResponse({ error: 'Not found' }, 404)
+              );
             }
+            return Promise.resolve(jsonResponse(match));
+          }
+        }
 
-            if (aVal < bVal) return order === 'asc' ? -1 : 1;
-            if (aVal > bVal) return order === 'asc' ? 1 : -1;
-            return 0;
-          });
+        // Audiobooks list
+        if (pathname === '/api/v1/audiobooks' && method === 'GET') {
+          const limit = parseInt(urlObj.searchParams.get('limit') || '24');
+          const offset = parseInt(urlObj.searchParams.get('offset') || '0');
+          const page = parseInt(urlObj.searchParams.get('page') || '1');
 
-          // Apply pagination
-          const start = (page - 1) * limit;
-          const end = start + limit;
-          const paginatedBooks = filtered.slice(start, end);
+          const effectiveOffset =
+            offset > 0 ? offset : Math.max(0, (page - 1) * limit);
+
+          const paginatedBooks = libraryBooks.slice(
+            effectiveOffset,
+            effectiveOffset + limit
+          );
 
           return Promise.resolve(
             jsonResponse({
               items: paginatedBooks,
               audiobooks: paginatedBooks,
-              total: filtered.length,
+              total: libraryBooks.length,
               page,
               limit,
             })
