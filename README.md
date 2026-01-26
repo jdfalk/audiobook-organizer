@@ -180,6 +180,37 @@ These are only used if the native TagLib write fails.
 ./audiobook-organizer organize --dir /path/to/audiobooks
 ```
 
+## Testing
+
+The project has comprehensive test coverage (86.2%) across all packages.
+
+### Running Tests
+
+**Important**: Always use `-tags=mocks` for accurate coverage:
+
+```bash
+# Run all tests (recommended)
+make test
+
+# Generate coverage report
+make coverage
+
+# Check coverage meets 80% threshold
+make coverage-check
+
+# Or use go test directly with mocks
+go test ./... -tags=mocks -cover -v
+```
+
+**Note**: Running `go test ./...` without `-tags=mocks` will show artificially low coverage (~78%) because it skips tests that require mockery-generated mocks. See [BUILD_TAGS_GUIDE.md](BUILD_TAGS_GUIDE.md) for details.
+
+### Test Coverage
+
+Current coverage (with `-tags=mocks`):
+- **Overall**: 86.2%
+- **Packages at 80%+**: 20/23 (87%)
+- **Test Pass Rate**: 100%
+
 ## Configuration
 
 Configuration can be provided via command-line flags, environment variables, or
