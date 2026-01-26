@@ -1,38 +1,65 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 2.2.0 -->
+<!-- version: 3.0.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-01-19 -->
+<!-- last-edited: 2026-01-25 -->
 
 # CLAUDE.md
 
 > **NOTE:** This file is a pointer. All Claude/AI agent and workflow
-> instructions are now centralized in the `.github/instructions/` and
+> instructions are centralized in the `.github/instructions/` and
 > `.github/prompts/` directories.
+
+## 🎯 Quick Reference
+
+**Main Documentation:**
+
+- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent configuration
+- [Instructions Directory](.github/instructions/) - All coding standards and language-specific rules
+- [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
+
+**For complete list of all instruction files, see [AGENTS.md](AGENTS.md)**
 
 ## 🚨 CRITICAL: Documentation Update Protocol
 
-This repository uses a direct-edit documentation workflow. The legacy doc-update
-scripts and workflows are retired.
+This repository uses direct-edit documentation workflow:
 
-- Edit documentation directly in the target files.
-- Always keep the required header (file path, version, guid) and bump the
-  version on any change.
-- Do not use create-doc-update.sh, doc_update_manager.py, or
-  .github/doc-updates/.
-- **Use `copilot-agent-util` for git operations** - Download latest from
-  [releases](https://github.com/jdfalk/copilot-agent-util-rust/releases/latest)
-  - The utility provides command filtering, safety checks, and consistent
-    logging
-  - VS Code tasks automatically use the utility when available
-  - Use the utility directly for git commands: `copilot-agent-util git add`,
-    `copilot-agent-util git commit`, etc.
+- Edit documentation directly in target files
+- Always update version headers when making changes
+- Do not use legacy doc-update scripts (create-doc-update.sh, doc_update_manager.py)
+- Follow semantic versioning for version numbers
 
-## Canonical Source for Agent Instructions
+## 🔧 Git Operations Policy
 
-- General and language-specific rules: `.github/instructions/` (all code style,
-  documentation, and workflow rules are here)
-- Prompts: `.github/prompts/`
-- System documentation: `.github/copilot-instructions.md`
+**Preferred order for git operations:**
 
-For all agent, Claude, or workflow tasks, **refer to the above files**. Do not
-duplicate or override these rules elsewhere.
+1. **MCP GitHub tools** (preferred) - Use when available
+2. **safe-ai-util** (fallback) - Provides safety checks and logging
+3. **Native git** (last resort) - Use only when other options unavailable
+
+**Use VS Code tasks for non-git operations only** (build, lint, test, generate).
+
+## 📋 Key Instruction Categories
+
+### Workflow & Process
+
+- Commit messages (conventional commits format)
+- Pull request descriptions
+- Code review guidelines
+- Test generation standards
+- Security best practices
+
+### Language-Specific Rules
+
+- Go, Python, TypeScript, JavaScript, Rust, Shell
+- Protobuf, Markdown, JSON, HTML/CSS
+- GitHub Actions workflows
+
+### Specialized Prompts
+
+- Code review, documentation generation
+- Bug reports, feature requests
+- Merge conflict resolution
+- Test generation
+
+> For all Claude, Copilot, or workflow tasks, **refer to the files in `.github/instructions/` and
+> `.github/prompts/`**.
