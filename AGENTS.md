@@ -12,8 +12,10 @@
 
 **Main Documentation:**
 
-- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent configuration
-- [Instructions Directory](.github/instructions/) - All coding standards and language-specific rules
+- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent
+  configuration
+- [Instructions Directory](.github/instructions/) - All coding standards and
+  language-specific rules
 - [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
 
 ## 📋 Instruction Files
@@ -35,38 +37,55 @@
 
 - [general-coding.instructions.md](.github/instructions/general-coding.instructions.md) -
   Universal coding standards
-- [go.instructions.md](.github/instructions/go.instructions.md) - Go language rules
-- [python.instructions.md](.github/instructions/python.instructions.md) - Python language rules
-- [typescript.instructions.md](.github/instructions/typescript.instructions.md) - TypeScript/React rules
-- [javascript.instructions.md](.github/instructions/javascript.instructions.md) - JavaScript rules
-- [rust.instructions.md](.github/instructions/rust.instructions.md) - Rust language rules
-- [shell.instructions.md](.github/instructions/shell.instructions.md) - Shell scripting rules
-- [protobuf.instructions.md](.github/instructions/protobuf.instructions.md) - Protobuf standards
-- [markdown.instructions.md](.github/instructions/markdown.instructions.md) - Markdown formatting
-- [json.instructions.md](.github/instructions/json.instructions.md) - JSON formatting
-- [html-css.instructions.md](.github/instructions/html-css.instructions.md) - HTML/CSS rules
+- [go.instructions.md](.github/instructions/go.instructions.md) - Go language
+  rules
+- [python.instructions.md](.github/instructions/python.instructions.md) - Python
+  language rules
+- [typescript.instructions.md](.github/instructions/typescript.instructions.md) -
+  TypeScript/React rules
+- [javascript.instructions.md](.github/instructions/javascript.instructions.md) -
+  JavaScript rules
+- [rust.instructions.md](.github/instructions/rust.instructions.md) - Rust
+  language rules
+- [shell.instructions.md](.github/instructions/shell.instructions.md) - Shell
+  scripting rules
+- [protobuf.instructions.md](.github/instructions/protobuf.instructions.md) -
+  Protobuf standards
+- [markdown.instructions.md](.github/instructions/markdown.instructions.md) -
+  Markdown formatting
+- [json.instructions.md](.github/instructions/json.instructions.md) - JSON
+  formatting
+- [html-css.instructions.md](.github/instructions/html-css.instructions.md) -
+  HTML/CSS rules
 - [github-actions.instructions.md](.github/instructions/github-actions.instructions.md) -
   CI/CD workflow rules
 
 ### Specialized Prompts
 
-- [code-review.prompt.md](.github/prompts/code-review.prompt.md) - Code review guidance
-- [documentation.prompt.md](.github/prompts/documentation.prompt.md) - Documentation generation
-- [bug-report.prompt.md](.github/prompts/bug-report.prompt.md) - Bug report templates
-- [feature-request.prompt.md](.github/prompts/feature-request.prompt.md) - Feature request templates
+- [code-review.prompt.md](.github/prompts/code-review.prompt.md) - Code review
+  guidance
+- [documentation.prompt.md](.github/prompts/documentation.prompt.md) -
+  Documentation generation
+- [bug-report.prompt.md](.github/prompts/bug-report.prompt.md) - Bug report
+  templates
+- [feature-request.prompt.md](.github/prompts/feature-request.prompt.md) -
+  Feature request templates
 - [merge-conflict-resolution.agent.md](.github/prompts/merge-conflict-resolution.agent.md) -
   Merge conflict help
-- [test-generation.prompt.md](.github/prompts/test-generation.prompt.md) - Test generation prompts
+- [test-generation.prompt.md](.github/prompts/test-generation.prompt.md) - Test
+  generation prompts
 
 ## 🚨 CRITICAL: File Version Updates
 
-**When modifying any file with a version header, ALWAYS update the version number:**
+**When modifying any file with a version header, ALWAYS update the version
+number:**
 
 - **Patch version** (x.y.Z): Bug fixes, typos, minor formatting changes
 - **Minor version** (x.Y.z): New features, significant content additions
 - **Major version** (X.y.z): Breaking changes, structural overhauls
 
-**This applies to ALL files with version headers including documentation, templates, and configuration files.**
+**This applies to ALL files with version headers including documentation,
+templates, and configuration files.**
 
 ## 🔧 Git Operations
 
@@ -78,4 +97,5 @@
 
 **Use VS Code tasks for non-git operations only (build, lint, test).**
 
-> For any agent, Copilot, or workflow task, **always refer to the files listed above.**
+> For any agent, Copilot, or workflow task, **always refer to the files listed
+> above.**

@@ -1,12 +1,12 @@
 # Queue Mock Implementation Summary
 
-**Date**: 2026-01-23
-**Status**: ✅ COMPLETED - Proof of Concept Validated
+**Date**: 2026-01-23 **Status**: ✅ COMPLETED - Proof of Concept Validated
 **Coverage Impact**: +0.0pp (tested already-covered functions)
 
 ## Objective
 
-Expand mockery beyond database.Store to enable testing of queue-dependent server functions.
+Expand mockery beyond database.Store to enable testing of queue-dependent server
+functions.
 
 ## Implementation
 
@@ -27,22 +27,20 @@ type Queue interface {
 
 ### 2. Updated Mockery Configuration
 
-**File**: `.mockery.yaml`
-**Version**: 1.9.0 → 1.10.0
+**File**: `.mockery.yaml` **Version**: 1.9.0 → 1.10.0
 
-Added operations package configuration to generate MockQueue alongside MockStore.
+Added operations package configuration to generate MockQueue alongside
+MockStore.
 
 ### 3. Generated Mock
 
-**Command**: `mockery`
-**Output**: `internal/operations/mocks/mock_queue.go` (257 lines)
-**Pattern**: Same testify expectation pattern as MockStore
+**Command**: `mockery` **Output**: `internal/operations/mocks/mock_queue.go`
+(257 lines) **Pattern**: Same testify expectation pattern as MockStore
 
 ### 4. Created Demonstration Tests
 
-**File**: `internal/server/server_queue_test.go`
-**Tests**: 2 functions, 6 subtests total
-**Result**: ✅ All passing
+**File**: `internal/server/server_queue_test.go` **Tests**: 2 functions, 6
+subtests total **Result**: ✅ All passing
 
 ```
 TestCancelOperationWithQueueMock (3 subtests):
@@ -61,22 +59,30 @@ TestGetOperationsWithQueueMock (3 subtests):
 ### Route Discovery Process
 
 **Initial Assumptions** (WRONG):
+
 - DELETE `/api/v1/operations/:id` returns 200 with JSON message
 - GET `/api/v1/operations` lists active operations
 
 **Actual Implementation** (via grep + code reading):
-- DELETE `/api/v1/operations/:id` → `cancelOperation()` returns **204 No Content**
-- GET `/api/v1/operations/active` → `listActiveOperations()` returns operations array
 
-**Lesson**: Always verify routes and responses by reading actual implementation, not assumptions.
+- DELETE `/api/v1/operations/:id` → `cancelOperation()` returns **204 No
+  Content**
+- GET `/api/v1/operations/active` → `listActiveOperations()` returns operations
+  array
+
+**Lesson**: Always verify routes and responses by reading actual implementation,
+not assumptions.
 
 ### Dependencies Between Handlers
 
 `listActiveOperations()` has hidden dependencies:
+
 - Calls `operations.GlobalQueue.ActiveOperations()` (obvious)
-- Calls `database.GlobalStore.GetOperationByID()` for EACH operation (non-obvious)
+- Calls `database.GlobalStore.GetOperationByID()` for EACH operation
+  (non-obvious)
 
 **Required Mock Setup**:
+
 ```go
 mockQueue.EXPECT().ActiveOperations().Return([]operations.ActiveOperation{
     {ID: "op1", Type: "scan"},
@@ -90,6 +96,7 @@ mockStore.EXPECT().GetOperationByID("op1").Return(&database.Operation{
 ### Mock Pattern Consistency
 
 Queue mock uses identical pattern to database.Store:
+
 1. Define interface with required methods
 2. Change global variable from concrete type to interface type
 3. Generate mock with mockery
@@ -99,13 +106,16 @@ Queue mock uses identical pattern to database.Store:
 
 ## Why No Coverage Gain?
 
-The demonstration tests proved the Queue mock works, but tested already-covered functions:
+The demonstration tests proved the Queue mock works, but tested already-covered
+functions:
+
 - `cancelOperation()` - Already tested in Phase 1 (nil queue check)
 - `listActiveOperations()` - Partially covered by existing tests
 
 ### Real Coverage Opportunity
 
 Functions that call `operations.GlobalQueue.Enqueue()` (5 locations):
+
 1. Line 1993: Background rescan operation
 2. Line 2301: scanDirectory endpoint
 3. Line 2449: importFile with scan
@@ -113,6 +123,7 @@ Functions that call `operations.GlobalQueue.Enqueue()` (5 locations):
 5. Line 2671: Bulk organize operation
 
 **Blocker**: These functions also call:
+
 - `scanner.ScanDirectory()`
 - `scanner.ProcessBooks()`
 - `metadata.ExtractMetadata()`
@@ -124,6 +135,7 @@ Cannot test without mocking scanner and metadata packages.
 ### Phase 4: Scanner Interface + Mock
 
 **Required Interface**:
+
 ```go
 type Scanner interface {
     ScanDirectory(path string) ([]AudioFile, error)
@@ -137,6 +149,7 @@ type Scanner interface {
 ### Phase 5: Metadata Interface + Mock
 
 **Required Interface**:
+
 ```go
 type MetadataExtractor interface {
     ExtractMetadata(path string) (*Metadata, error)
@@ -148,6 +161,7 @@ type MetadataExtractor interface {
 ### Phase 6: Multi-Mock Tests
 
 Once all 4 mocks available (Store, Queue, Scanner, Metadata):
+
 - Test Enqueue-dependent endpoints
 - Test scan and organize operations end-to-end
 - Expected gain: +10-15pp coverage (20-30 new testable functions)

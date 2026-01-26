@@ -7,8 +7,8 @@
 
 ## Summary
 
-Mockery v3 has been successfully implemented with testify-based mocks. All tests are passing with
-excellent coverage (78-93% across packages).
+Mockery v3 has been successfully implemented with testify-based mocks. All tests
+are passing with excellent coverage (78-93% across packages).
 
 ## Implementation Details
 
@@ -24,7 +24,8 @@ excellent coverage (78-93% across packages).
 2. **internal/config/persistence_test.go** - EXPECT() patterns (90.3% coverage)
 3. **internal/metadata/enhanced_test.go** - Updated helpers (86.0% coverage)
 4. **internal/operations/queue_test.go** - Fresh mock pattern (90.6% coverage)
-5. **internal/scanner/save_book_to_database_test.go** - Migration setup (81.4% coverage)
+5. **internal/scanner/save_book_to_database_test.go** - Migration setup (81.4%
+   coverage)
 
 ### Deleted Files
 
@@ -79,11 +80,15 @@ func (s *stubStore) MethodName(args...) (returnType, error) {
 
 ## Key Learnings
 
-1. **Import Aliases** - Use `testifyMock.Anything` when `testifyMock` is the import alias
-2. **Fresh Mocks** - Create new mocks for subtests to avoid expectation conflicts
+1. **Import Aliases** - Use `testifyMock.Anything` when `testifyMock` is the
+   import alias
+2. **Fresh Mocks** - Create new mocks for subtests to avoid expectation
+   conflicts
 3. **Maybe() Pattern** - Use `.Maybe()` when call frequency is uncertain
-4. **Migrations** - Database tests must run migrations before schema-dependent tests
-5. **Stub Stores** - Complete stub implementations work better than partial mocks for CLI testing
+4. **Migrations** - Database tests must run migrations before schema-dependent
+   tests
+5. **Stub Stores** - Complete stub implementations work better than partial
+   mocks for CLI testing
 
 ## Regenerate Mocks
 

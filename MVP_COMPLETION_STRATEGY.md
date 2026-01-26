@@ -7,13 +7,13 @@
 
 ## Current Status: 86.2% Coverage ✅
 
-**Date**: 2026-01-25
-**Status**: ABOVE 80% MVP THRESHOLD!
-**Critical Finding**: Must use `-tags=mocks` for accurate coverage measurement
+**Date**: 2026-01-25 **Status**: ABOVE 80% MVP THRESHOLD! **Critical Finding**:
+Must use `-tags=mocks` for accurate coverage measurement
 
 ## Coverage Analysis (with `-tags=mocks`)
 
 ### Overall Metrics
+
 - **Total Packages**: 23
 - **Average Coverage**: 86.2%
 - **Packages ≥ 80%**: 19/23 (82.6%)
@@ -22,6 +22,7 @@
 ### Package Breakdown
 
 #### ✅ Exceeds Target (90%+)
+
 ```
 internal/metrics:       100.0% 🏆
 internal/mediainfo:      98.2%
@@ -34,6 +35,7 @@ internal/organizer:      89.5%
 ```
 
 #### ✅ Meets Target (80-89%)
+
 ```
 github.com/jdfalk/audiobook-organizer:  87.5%
 internal/metadata:                      85.9%
@@ -47,6 +49,7 @@ internal/scanner:                       80.7%
 ```
 
 #### ⚠️ Below Target (<80%) - NEEDS WORK
+
 ```
 cmd:                    78.6%  (need +1.4%)
 internal/database:      78.0%  (need +2.0%)
@@ -58,10 +61,12 @@ internal/server:        72.1%  (need +7.9%)
 **Issue**: Default `go test ./...` excludes tests with `//go:build mocks` tag
 
 **Impact**:
+
 - Without `-tags=mocks`: 77.9% average (misleading!)
 - With `-tags=mocks`: 86.2% average (accurate!)
 
 **Affected Packages**:
+
 - `internal/operations/queue_test.go` - requires database mocks
 - `internal/metadata/*_test.go` - some tests require mocks
 - `internal/scanner/*_test.go` - some tests require mocks
@@ -80,9 +85,7 @@ go test ./... -cover
 
 ### Priority 1: Boost Server to 80% (2-3 hours)
 
-**Current**: 72.1%
-**Target**: 80%+
-**Gap**: +7.9%
+**Current**: 72.1% **Target**: 80%+ **Gap**: +7.9%
 
 #### Missing Coverage Areas
 
@@ -223,9 +226,7 @@ func TestBulkOperations(t *testing.T) {
 
 ### Priority 2: Boost CMD to 80% (30 min)
 
-**Current**: 78.6%
-**Target**: 80%+
-**Gap**: +1.4%
+**Current**: 78.6% **Target**: 80%+ **Gap**: +1.4%
 
 #### Missing Coverage
 
@@ -261,9 +262,7 @@ func TestHelpTextGeneration(t *testing.T) {
 
 ### Priority 3: Boost Database to 80% (1 hour)
 
-**Current**: 78.0%
-**Target**: 80%+
-**Gap**: +2.0%
+**Current**: 78.0% **Target**: 80%+ **Gap**: +2.0%
 
 #### Missing Coverage
 
@@ -300,6 +299,7 @@ func TestBulkOperations(t *testing.T) {
 ## Implementation Timeline
 
 ### Option A: Focused Sprint (4-5 hours)
+
 Target: Get all packages to 80%+
 
 ```
@@ -313,6 +313,7 @@ Result: ~90% overall coverage
 ```
 
 ### Option B: MVP Minimum (1 hour)
+
 Target: Get server to 75%, call it "good enough"
 
 ```
@@ -322,6 +323,7 @@ Result: ~83% overall coverage (acceptable for MVP)
 ```
 
 ### Option C: Stretch Goal (8-10 hours)
+
 Target: 95%+ coverage across all packages
 
 ```
@@ -336,6 +338,7 @@ Result: ~95% overall coverage (production-grade)
 ## Recommended Approach: Option A
 
 **Rationale**:
+
 - Already at 86.2% overall
 - Just 3 packages below 80%
 - 4-5 hours gets all to 80%+
@@ -406,7 +409,7 @@ ci: test coverage-check
 
 ### Update README.md
 
-```markdown
+````markdown
 ## Testing
 
 Run tests with proper coverage measurement:
@@ -421,11 +424,14 @@ make coverage
 # Check coverage meets threshold
 make coverage-check
 ```
+````
 
 **Important**: Always use `-tags=mocks` when measuring coverage:
+
 - ✅ Correct: `go test ./... -tags=mocks -cover`
 - ❌ Incorrect: `go test ./... -cover` (shows false low numbers)
-```
+
+````
 
 ### Update BUILD_TAGS_GUIDE.md
 
@@ -439,9 +445,11 @@ Add section on coverage measurement:
 ```bash
 go test ./...
 # Shows: ~78% coverage (MISLEADING!)
-```
+````
 
-This excludes tests with `//go:build mocks` tags, resulting in artificially low coverage for:
+This excludes tests with `//go:build mocks` tags, resulting in artificially low
+coverage for:
+
 - internal/operations (8.0% vs 90.6%)
 - internal/metadata (71.2% vs 85.9%)
 
@@ -462,6 +470,7 @@ Always use `-tags=mocks` in CI pipelines:
 - name: Test with coverage
   run: go test ./... -tags=mocks -coverprofile=coverage.out
 ```
+
 ```
 
 ## Success Criteria
@@ -539,3 +548,4 @@ Either way, **the project is in excellent shape for MVP!** 🎉
 *Document Version: 1.0.0*
 *Created: 2026-01-25*
 *Status: Ready for MVP*
+```

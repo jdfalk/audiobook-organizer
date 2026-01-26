@@ -6,12 +6,13 @@
 
 ## Yes, Mockery Can Significantly Help! 🎯
 
-**Current Server Coverage:** 66.0%
-**Expected with Mockery:** 85%+ (19% improvement)
+**Current Server Coverage:** 66.0% **Expected with Mockery:** 85%+ (19%
+improvement)
 
 ## Why Mockery Solves the Problem
 
 The server package is hard to test because it needs:
+
 1. ✅ Database in specific states → **Mockery provides easy state control**
 2. ✅ Error injection for error paths → **Mockery makes errors trivial**
 3. ✅ Argument verification → **Mockery validates exact calls**
@@ -39,6 +40,7 @@ go test ./internal/server -v -cover
 ## Before vs After
 
 ### Before (Manual Mocking) ❌
+
 ```go
 // Complex, error-prone manual setup
 func TestListAudiobooks(t *testing.T) {
@@ -52,6 +54,7 @@ func TestListAudiobooks(t *testing.T) {
 ```
 
 ### After (Mockery) ✅
+
 ```go
 // Clean, type-safe, auto-verified
 func TestListAudiobooks(t *testing.T) {
@@ -64,6 +67,7 @@ func TestListAudiobooks(t *testing.T) {
 ## Key Benefits
 
 ### 1. **Error Path Testing Made Easy**
+
 Currently missing ~30% of error paths because they're hard to trigger.
 
 ```go
@@ -74,6 +78,7 @@ mockStore.EXPECT().
 ```
 
 ### 2. **Argument Verification**
+
 Ensure your handlers pass correct data to the store.
 
 ```go
@@ -84,13 +89,17 @@ mockStore.EXPECT().
 ```
 
 ### 3. **Zero Maintenance**
+
 When `Store` interface changes, just regenerate:
+
 ```bash
 mockery --name=Store --dir=internal/database --output=internal/database/mocks
 ```
 
 ### 4. **Type Safety**
+
 Compiler catches mistakes:
+
 ```go
 // Typo in method name → Compile error
 mockStore.EXPECT().GetAllBoooks() // Won't compile!
@@ -107,32 +116,36 @@ mockStore.EXPECT().GetAllBoooks() // Won't compile!
 ## Implementation Plan (2-3 hours)
 
 ### Phase 1: Setup (30 min)
+
 - ✅ Run setup script
 - ✅ Generate Store mock
 - ✅ Verify mock compiles
 
 ### Phase 2: Convert Tests (1-2 hours)
+
 - Update `server_test.go` to use mocks
 - Update `server_more_test.go` to use mocks
 - Update `server_coverage_test.go` to use mocks
 
 ### Phase 3: Add Missing Coverage (30-60 min)
+
 - Test error paths (database errors, validation)
 - Test edge cases (empty results, missing data)
 - Test complex scenarios (version linking, overrides)
 
 ### Phase 4: CI/CD Integration (15 min)
+
 - Add `make mocks` to build
 - Add verification to pre-commit hooks
 - Update GitHub Actions if needed
 
 ## Expected Results
 
-| Package | Current | With Mockery | Gain |
-|---------|---------|--------------|------|
-| internal/server | 66.0% | 85%+ | +19% |
-| cmd | 78.6% | 82%+ | +3% |
-| **Overall** | **77.9%** | **84%+** | **+6%** |
+| Package         | Current   | With Mockery | Gain    |
+| --------------- | --------- | ------------ | ------- |
+| internal/server | 66.0%     | 85%+         | +19%    |
+| cmd             | 78.6%     | 82%+         | +3%     |
+| **Overall**     | **77.9%** | **84%+**     | **+6%** |
 
 ## Alternative: gomock
 
@@ -153,20 +166,20 @@ Both are excellent - mockery has better ergonomics IMO.
 
 ## Questions Answered
 
-**Q: Will this slow down tests?**
-A: No! Mocks are faster than real database operations.
+**Q: Will this slow down tests?** A: No! Mocks are faster than real database
+operations.
 
-**Q: What about existing MockStore?**
-A: Keep it for now, migrate incrementally. Both can coexist.
+**Q: What about existing MockStore?** A: Keep it for now, migrate incrementally.
+Both can coexist.
 
-**Q: How do we keep mocks in sync?**
-A: Run `make mocks` before tests. Add to CI/CD pipeline.
+**Q: How do we keep mocks in sync?** A: Run `make mocks` before tests. Add to
+CI/CD pipeline.
 
-**Q: Can we mock external APIs?**
-A: Yes! Create interfaces for HTTP clients, then mock them.
+**Q: Can we mock external APIs?** A: Yes! Create interfaces for HTTP clients,
+then mock them.
 
-**Q: What about table-driven tests?**
-A: Works perfectly - set up different mocks for each test case.
+**Q: What about table-driven tests?** A: Works perfectly - set up different
+mocks for each test case.
 
 ## Next Steps
 
@@ -180,6 +193,7 @@ A: Works perfectly - set up different mocks for each test case.
 ✅ **Yes, integrate mockery!**
 
 The 2-3 hour investment will:
+
 - Increase server coverage from 66% → 85%+
 - Make future tests much easier to write
 - Reduce test maintenance burden

@@ -202,11 +202,14 @@ make coverage-check
 go test ./... -tags=mocks -cover -v
 ```
 
-**Note**: Running `go test ./...` without `-tags=mocks` will show artificially low coverage (~78%) because it skips tests that require mockery-generated mocks. See [BUILD_TAGS_GUIDE.md](BUILD_TAGS_GUIDE.md) for details.
+**Note**: Running `go test ./...` without `-tags=mocks` will show artificially
+low coverage (~78%) because it skips tests that require mockery-generated mocks.
+See [BUILD_TAGS_GUIDE.md](BUILD_TAGS_GUIDE.md) for details.
 
 ### Test Coverage
 
 Current coverage (with `-tags=mocks`):
+
 - **Overall**: 86.2%
 - **Packages at 80%+**: 20/23 (87%)
 - **Test Pass Rate**: 100%

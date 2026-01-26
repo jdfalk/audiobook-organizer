@@ -71,7 +71,8 @@
   - [ ] Soft-deleted list: Restore and purge actions
   - **Priority**: P0 - Safety net for frontend changes
   - **Blocker**: None - infrastructure exists, needs test expansion
-  - **Status**: See E2E_TEST_PLAN.md for comprehensive test scenarios (120+ tests)
+  - **Status**: See E2E_TEST_PLAN.md for comprehensive test scenarios (120+
+    tests)
 
 ### iTunes Library Import (Est: 6-8 hours)
 
@@ -89,8 +90,8 @@
   - [ ] Option: Import as organized (if files already in desired location)
   - [ ] Option: Import as unorganized (trigger scan/organize workflow)
   - [ ] **BONUS**: Built-in UI import wizard (not script)
-  - [ ] **BONUS**: Write-back support - Update iTunes library with new file paths
-        after organize
+  - [ ] **BONUS**: Write-back support - Update iTunes library with new file
+        paths after organize
   - **Priority**: P0 - Personal blocker for switching to audiobook-organizer
   - **Blocker**: None - can implement immediately
   - **Status**: See ITUNES_IMPORT_SPECIFICATION.md for detailed requirements

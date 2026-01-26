@@ -6,7 +6,9 @@
 
 ## Why Mockery Would Help
 
-The server package currently has 66% coverage primarily because testing HTTP handlers requires:
+The server package currently has 66% coverage primarily because testing HTTP
+handlers requires:
+
 1. Setting up complex database states
 2. Mocking external services (OpenLibrary API, AI parsers)
 3. Testing error paths that are hard to trigger with real implementations
@@ -15,10 +17,12 @@ The server package currently has 66% coverage primarily because testing HTTP han
 ## Current Manual Mocking
 
 The codebase already has some manual mocks:
+
 - `internal/database/mock_store.go` - Manual implementation of Store interface
 - Test setup helpers in server tests
 
 **Problems with manual mocks:**
+
 - Time-consuming to maintain
 - Easy to get out of sync with interface changes
 - Requires updating every time the Store interface changes
@@ -27,6 +31,7 @@ The codebase already has some manual mocks:
 ## How Mockery Helps
 
 Mockery auto-generates mocks from interfaces with:
+
 - Automatic method stubs for all interface methods
 - Call count tracking
 - Argument matching
@@ -46,10 +51,10 @@ Create `.mockery.yaml`:
 ```yaml
 # For mockery v2
 all: true
-dir: "{{.InterfaceDir}}"
-filename: "mock_{{.InterfaceName}}.go"
-mockname: "Mock{{.InterfaceName}}"
-outpkg: "{{.PackageName}}"
+dir: '{{.InterfaceDir}}'
+filename: 'mock_{{.InterfaceName}}.go'
+mockname: 'Mock{{.InterfaceName}}'
+outpkg: '{{.PackageName}}'
 with-expecter: true
 
 # Generate mocks for specific interfaces
@@ -176,6 +181,7 @@ func TestFetchMetadata(t *testing.T) {
 ## Recommended Implementation Plan
 
 ### Phase 1: Generate Core Mocks
+
 ```bash
 # Database store (most critical)
 mockery --name Store --dir internal/database --output internal/database/mocks
@@ -185,13 +191,17 @@ mockery --name MetadataService --dir internal/metadata --output internal/metadat
 ```
 
 ### Phase 2: Update Server Tests
+
 Replace manual mocks with generated mocks in server tests:
+
 - `server_test.go`
 - `server_more_test.go`
 - `server_coverage_test.go`
 
 ### Phase 3: Add Missing Coverage
+
 With easy mocking, add tests for:
+
 - Error handling paths (database errors, validation errors)
 - Edge cases (empty results, missing data)
 - Complex scenarios (version linking, metadata overrides)
@@ -199,6 +209,7 @@ With easy mocking, add tests for:
 ## Expected Coverage Improvement
 
 With mockery-generated mocks, we could reasonably achieve:
+
 - **Server package**: 66% → 85%+ (19% improvement)
 - **Overall codebase**: Easier to maintain high coverage
 - **Test maintainability**: Significantly improved
@@ -222,6 +233,7 @@ test-coverage: mocks
 ## Alternative: gomock
 
 Another option is `gomock` (from Google):
+
 - Similar functionality to mockery
 - Different syntax (uses reflection or code generation)
 - Well-established in the Go ecosystem
@@ -235,11 +247,14 @@ mockgen -source=internal/database/store.go -destination=internal/database/mocks/
 
 ## Conclusion
 
-Mockery would significantly reduce the effort needed to improve server test coverage by:
+Mockery would significantly reduce the effort needed to improve server test
+coverage by:
+
 1. **Eliminating boilerplate**: No manual mock implementation
 2. **Type safety**: Compile-time verification of mock calls
 3. **Maintainability**: Auto-regenerate when interfaces change
 4. **Better tests**: Easy to test error paths and edge cases
 5. **Documentation**: Generated mocks serve as interface documentation
 
-The initial setup takes ~1 hour, but the long-term benefits for test coverage and maintainability are substantial.
+The initial setup takes ~1 hour, but the long-term benefits for test coverage
+and maintainability are substantial.
