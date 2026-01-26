@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.5.1
+// version: 1.6.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 import { useState, useEffect } from 'react';
@@ -18,6 +18,7 @@ import { BookDetail } from './pages/BookDetail';
 import { Works } from './pages/Works';
 import { System } from './pages/System';
 import { Settings } from './pages/Settings';
+import { Login } from './pages/Login';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 
@@ -109,6 +110,7 @@ function App() {
           <Route path="/works" element={<Works />} />
           <Route path="/system" element={<System />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </MainLayout>
     </Box>
