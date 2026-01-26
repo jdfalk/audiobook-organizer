@@ -1,60 +1,81 @@
 <!-- file: AGENTS.md -->
-<!-- version: 2.2.2 -->
+<!-- version: 3.0.0 -->
 <!-- guid: 2e7c1a4b-5d3f-4b8c-9e1f-7a6b2c3d4e5f -->
-<!-- last-edited: 2026-01-19 -->
+<!-- last-edited: 2026-01-25 -->
 
 # AGENTS.md
 
 > **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow
 > instructions are in the [.github/](.github/) directory.
 
-## 🚨 CRITICAL: Documentation Update Protocol
+## 🎯 Quick Reference
 
-This repository uses a direct-edit documentation workflow. The legacy doc-update
-scripts and workflows are retired.
+**Main Documentation:**
 
-- Edit documentation directly in the target files.
-- Always keep the required header (file path, version, guid) and bump the
-  version on any change.
-- Do not use create-doc-update.sh, doc_update_manager.py, or
-  .github/doc-updates/.
-- Prefer VS Code tasks for git operations (Git Add All, Git Commit, Git Push)
-  when available.
-  - These tasks use the `copilot-agent-util` Rust utility for enhanced logging,
-    error handling, and safety.
-  - Download:
-    <https://github.com/jdfalk/copilot-agent-util-rust/releases/latest>
+- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent configuration
+- [Instructions Directory](.github/instructions/) - All coding standards and language-specific rules
+- [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
 
-## ⚠️ CRITICAL: File Version Updates
+## 📋 Instruction Files
 
-**When modifying any file with a version header, ALWAYS update the version
-number:**
+### Core Workflow Instructions
+
+- [commit-messages.instructions.md](.github/instructions/commit-messages.instructions.md) -
+  Conventional commit standards
+- [pull-request-descriptions.instructions.md](.github/instructions/pull-request-descriptions.instructions.md) -
+  PR description templates
+- [test-generation.instructions.md](.github/instructions/test-generation.instructions.md) -
+  Test writing guidelines
+- [security.instructions.md](.github/instructions/security.instructions.md) -
+  Security best practices
+- [safe-ai-util.instructions.md](.github/instructions/safe-ai-util.instructions.md) -
+  Git operation safety
+
+### Language-Specific Instructions
+
+- [general-coding.instructions.md](.github/instructions/general-coding.instructions.md) -
+  Universal coding standards
+- [go.instructions.md](.github/instructions/go.instructions.md) - Go language rules
+- [python.instructions.md](.github/instructions/python.instructions.md) - Python language rules
+- [typescript.instructions.md](.github/instructions/typescript.instructions.md) - TypeScript/React rules
+- [javascript.instructions.md](.github/instructions/javascript.instructions.md) - JavaScript rules
+- [rust.instructions.md](.github/instructions/rust.instructions.md) - Rust language rules
+- [shell.instructions.md](.github/instructions/shell.instructions.md) - Shell scripting rules
+- [protobuf.instructions.md](.github/instructions/protobuf.instructions.md) - Protobuf standards
+- [markdown.instructions.md](.github/instructions/markdown.instructions.md) - Markdown formatting
+- [json.instructions.md](.github/instructions/json.instructions.md) - JSON formatting
+- [html-css.instructions.md](.github/instructions/html-css.instructions.md) - HTML/CSS rules
+- [github-actions.instructions.md](.github/instructions/github-actions.instructions.md) -
+  CI/CD workflow rules
+
+### Specialized Prompts
+
+- [code-review.prompt.md](.github/prompts/code-review.prompt.md) - Code review guidance
+- [documentation.prompt.md](.github/prompts/documentation.prompt.md) - Documentation generation
+- [bug-report.prompt.md](.github/prompts/bug-report.prompt.md) - Bug report templates
+- [feature-request.prompt.md](.github/prompts/feature-request.prompt.md) - Feature request templates
+- [merge-conflict-resolution.agent.md](.github/prompts/merge-conflict-resolution.agent.md) -
+  Merge conflict help
+- [test-generation.prompt.md](.github/prompts/test-generation.prompt.md) - Test generation prompts
+
+## 🚨 CRITICAL: File Version Updates
+
+**When modifying any file with a version header, ALWAYS update the version number:**
 
 - **Patch version** (x.y.Z): Bug fixes, typos, minor formatting changes
-- **Minor version** (x.Y.z): New features, significant content additions,
-  template changes
-- **Major version** (X.y.z): Breaking changes, structural overhauls, format
-  changes
+- **Minor version** (x.Y.z): New features, significant content additions
+- **Major version** (X.y.z): Breaking changes, structural overhauls
 
-**Examples:**
+**This applies to ALL files with version headers including documentation, templates, and configuration files.**
 
-- Fix typo: `1.2.3` → `1.2.4`
-- Add new section: `1.2.3` → `1.3.0`
-- Change template structure: `1.2.3` → `2.0.0`
+## 🔧 Git Operations
 
-**This applies to ALL files with version headers including documentation,
-templates, and configuration files.**
+**Preferred order for git operations:**
 
-## Key Copilot/Agent Documents
+1. MCP GitHub tools (preferred)
+2. safe-ai-util (fallback)
+3. Native git commands (last resort)
 
-- [Copilot Instructions](.github/copilot-instructions.md)
-- [Commit Message Standards](.github/commit-messages.md)
-- [Pull Request Description Guidelines](.github/pull-request-descriptions.md)
-- [Code Review Guidelines](.github/review-selection.md)
-- [Test Generation Guidelines](.github/test-generation.md)
-- [Security Guidelines](.github/security-guidelines.md)
-- [Repository Setup Guide](.github/repository-setup.md)
-- [Workflow Usage](.github/workflow-usage.md)
-- [All Code Style Guides](.github/)
+**Use VS Code tasks for non-git operations only (build, lint, test).**
 
-> For any agent, Copilot, or workflow task, **always refer to the above files.**
+> For any agent, Copilot, or workflow task, **always refer to the files listed above.**
