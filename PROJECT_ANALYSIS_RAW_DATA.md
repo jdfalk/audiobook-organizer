@@ -71,7 +71,8 @@ mocks_test.go:15:6: NewMockStore redeclared in this block
 mocks_test.go:28:6: MockStore redeclared in this block
 ```
 
-**Root Cause**: Conflicting mock implementations - manual MockStore and mockery-generated mocks coexisting
+**Root Cause**: Conflicting mock implementations - manual MockStore and
+mockery-generated mocks coexisting
 
 #### Issue: Missing Dependencies
 
@@ -89,7 +90,8 @@ go.mod:17:2: missing go.sum entry for module providing package github.com/stretc
 **Files Affected**:
 
 - `mocks_test.go:10`: Error importing github.com/stretchr/testify/mock
-- Multiple method errors: `mock.Mock undefined`, `mock.AssertExpectations undefined`, `_mock.Called undefined`
+- Multiple method errors: `mock.Mock undefined`,
+  `mock.AssertExpectations undefined`, `_mock.Called undefined`
 
 **Root Cause**: Missing transitive dependency (github.com/stretchr/objx)
 
@@ -103,7 +105,8 @@ go.mod:17:2: missing go.sum entry for module providing package github.com/stretc
    - Error injection support
    - Call tracking
 
-2. **Mockery-generated mocks** (`internal/database/mocks_test.go`) - 56,398 lines (!)
+2. **Mockery-generated mocks** (`internal/database/mocks_test.go`) - 56,398
+   lines (!)
    - Auto-generated from mockery tool
    - testify/mock based
    - Conflicts with manual mocks
@@ -146,8 +149,7 @@ audiobook-organizer/
 
 ### Database Package Concerns
 
-**Files**: 29 files in `internal/database/`
-**Issues**:
+**Files**: 29 files in `internal/database/` **Issues**:
 
 - `mocks_test.go`: 56,398 lines (HUGE - likely auto-generated)
 - Mock implementation scattered across 4 files
@@ -169,9 +171,8 @@ interface.go               migrations_extra_test.go     sqlite_store.go
 
 ### Server Package Concerns
 
-**Coverage**: 66.0% (lowest among active packages)
-**Files**: 12 files
-**Missing Coverage Areas** (based on MOCKERY_SUMMARY.md):
+**Coverage**: 66.0% (lowest among active packages) **Files**: 12 files **Missing
+Coverage Areas** (based on MOCKERY_SUMMARY.md):
 
 - Error path testing (~30% missing)
 - Database error scenarios
@@ -315,7 +316,8 @@ From TODO.md "RECENTLY COMPLETED" section:
 
 ### Strengths
 
-1. **Comprehensive testing infrastructure** - Multiple test types (unit, integration, E2E)
+1. **Comprehensive testing infrastructure** - Multiple test types (unit,
+   integration, E2E)
 2. **Good package organization** - Clear separation of concerns
 3. **Documentation** - README, TODO, CHANGELOG, technical docs
 4. **Migration system** - Database versioning in place
@@ -368,8 +370,7 @@ From TODO.md:
 2. Authors and series
 3. Unknown
 4. Unknown
-5. Media info and version fields
-6-8. Unknown
+5. Media info and version fields 6-8. Unknown
 6. State machine (lifecycle tracking)
 7. Metadata provenance tracking
 

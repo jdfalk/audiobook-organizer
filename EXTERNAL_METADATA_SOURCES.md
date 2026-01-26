@@ -5,29 +5,30 @@
 
 # External Metadata Sources - Current Implementation & Roadmap
 
-**Date**: 2026-01-25
-**Status**: ✅ **Open Library Integration Complete**
+**Date**: 2026-01-25 **Status**: ✅ **Open Library Integration Complete**
 
 ---
 
 ## Executive Summary
 
-**Your MVP DOES include external metadata fetching!** The application currently integrates with **Open Library API** for pulling book metadata.
+**Your MVP DOES include external metadata fetching!** The application currently
+integrates with **Open Library API** for pulling book metadata.
 
 ### Current Implementation: ✅ Complete
 
-| Feature | Status | Details |
-|---------|--------|---------|
-| External metadata source | ✅ Complete | Open Library API |
-| Single book metadata fetch | ✅ Complete | `POST /api/v1/audiobooks/:id/fetch-metadata` |
-| Bulk metadata fetch | ✅ Complete | `POST /api/v1/metadata/bulk-fetch` |
-| UI: Single book fetch | ✅ Complete | "Fetch Metadata" button on book detail page |
-| UI: Bulk fetch | ✅ Complete | "Bulk Fetch Metadata" dialog in Library page |
-| Metadata provenance tracking | ✅ Complete | Tracks file/fetched/stored/override values |
-| Override protection | ✅ Complete | Won't overwrite locked or user-overridden fields |
-| ISBN search support | ✅ Complete | Can search by ISBN if available |
+| Feature                      | Status      | Details                                          |
+| ---------------------------- | ----------- | ------------------------------------------------ |
+| External metadata source     | ✅ Complete | Open Library API                                 |
+| Single book metadata fetch   | ✅ Complete | `POST /api/v1/audiobooks/:id/fetch-metadata`     |
+| Bulk metadata fetch          | ✅ Complete | `POST /api/v1/metadata/bulk-fetch`               |
+| UI: Single book fetch        | ✅ Complete | "Fetch Metadata" button on book detail page      |
+| UI: Bulk fetch               | ✅ Complete | "Bulk Fetch Metadata" dialog in Library page     |
+| Metadata provenance tracking | ✅ Complete | Tracks file/fetched/stored/override values       |
+| Override protection          | ✅ Complete | Won't overwrite locked or user-overridden fields |
+| ISBN search support          | ✅ Complete | Can search by ISBN if available                  |
 
-**Assessment**: ✅ **MVP requirement met** - External metadata fetching is fully implemented
+**Assessment**: ✅ **MVP requirement met** - External metadata fetching is fully
+implemented
 
 ---
 
@@ -38,6 +39,7 @@
 **File**: `internal/metadata/openlibrary.go`
 
 **Capabilities**:
+
 - ✅ Search by title
 - ✅ Search by title + author (more accurate)
 - ✅ Search by ISBN
@@ -47,6 +49,7 @@
 - ✅ Fetch language
 
 **Implementation**:
+
 ```go
 type OpenLibraryClient struct {
     httpClient *http.Client
@@ -60,6 +63,7 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 ```
 
 **Metadata Fields Retrieved**:
+
 - Title
 - Author
 - Publisher
@@ -71,9 +75,11 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 ### 2. Backend API Endpoints
 
 #### Single Book Fetch
+
 **Endpoint**: `POST /api/v1/audiobooks/:id/fetch-metadata`
 
 **Behavior**:
+
 1. Fetches metadata from Open Library using book's title + author
 2. Intelligently applies fetched data based on provenance rules:
    - ❌ Won't overwrite if field has `override_locked = true`
@@ -83,32 +89,39 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 3. Returns updated book with source attribution
 
 **Response**:
+
 ```json
 {
   "message": "metadata fetched and applied",
-  "book": { /* updated book data */ },
+  "book": {
+    /* updated book data */
+  },
   "source": "Open Library"
 }
 ```
 
 #### Bulk Fetch
+
 **Endpoint**: `POST /api/v1/metadata/bulk-fetch`
 
 **Request**:
+
 ```json
 {
   "book_ids": ["book-1", "book-2", "book-3"],
-  "only_missing": true  // Only update fields that are currently empty
+  "only_missing": true // Only update fields that are currently empty
 }
 ```
 
 **Behavior**:
+
 - Fetches metadata for multiple books in one operation
 - Respects override locks and user overrides
 - Can optionally only fill missing fields (default: true)
 - Returns per-book results showing what was applied
 
 **Response**:
+
 ```json
 {
   "results": [
@@ -127,9 +140,11 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 ### 3. Frontend UI Integration
 
 #### Book Detail Page
+
 **Location**: `web/src/pages/BookDetail.tsx`
 
 **Features**:
+
 - ✅ "Fetch Metadata" button in action toolbar
 - ✅ Displays success/error messages
 - ✅ Shows which source was used (Open Library)
@@ -137,6 +152,7 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 - ✅ Won't overwrite locked fields
 
 **User Flow**:
+
 1. User opens book detail page
 2. User clicks "Fetch Metadata" button
 3. Request sent to Open Library
@@ -145,15 +161,18 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 6. Page refreshes with updated data
 
 #### Library Page - Bulk Fetch
+
 **Location**: `web/src/pages/Library.tsx`
 
 **Features**:
+
 - ✅ "Bulk Fetch Metadata" dialog
 - ✅ Checkbox: "Only fill missing fields" (default: true)
 - ✅ Progress indicator during fetch
 - ✅ Results summary showing success/failure count
 
 **User Flow**:
+
 1. User selects multiple books (or all books)
 2. User clicks "Bulk Fetch Metadata" action
 3. Dialog appears with options
@@ -170,12 +189,14 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error)
 **How it works**:
 
 The metadata fetch respects the provenance hierarchy:
+
 1. **Override** (highest priority) - User-locked values
 2. **Stored** - Current database values
 3. **Fetched** - Values from Open Library ← **Fetched values stored here**
 4. **File** - Values from audio file tags (lowest priority)
 
 **Smart Application Logic**:
+
 ```
 IF field has override_locked = true:
   → Don't update effective_value
@@ -193,6 +214,7 @@ ELSE:
 ```
 
 **Benefits**:
+
 - Users can see fetched metadata without it overwriting their manual edits
 - "Compare" tab shows all sources side-by-side
 - Users can selectively apply fetched values they want
@@ -200,6 +222,7 @@ ELSE:
 ### 5. E2E Test Coverage
 
 **Current Tests**:
+
 - ✅ `book-detail.spec.ts`: Tests "Fetch Metadata" button
   - Test: "metadata refresh and AI parse actions"
   - Verifies metadata fetch updates book title
@@ -207,6 +230,7 @@ ELSE:
 **Coverage**: Basic functionality tested (~30% of fetch workflows)
 
 **Missing E2E Tests** (from E2E_TEST_PLAN.md):
+
 - ❌ Bulk fetch workflow (select multiple → fetch → verify results)
 - ❌ "Only fill missing fields" option behavior
 - ❌ Verify fetched values don't overwrite locked fields
@@ -224,8 +248,9 @@ ELSE:
 While Open Library is implemented, these sources are NOT currently integrated:
 
 #### 1. Goodreads API ❌
-**Status**: Not implemented
-**Why it would be valuable**:
+
+**Status**: Not implemented **Why it would be valuable**:
+
 - Richer book descriptions
 - User ratings and reviews
 - Better series information
@@ -235,19 +260,21 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Alternative**: Could use web scraping (against ToS) or manual ISBN lookup
 
 #### 2. Amazon/Audible API ❌
-**Status**: Not implemented
-**Why it would be valuable**:
+
+**Status**: Not implemented **Why it would be valuable**:
+
 - Audiobook-specific metadata (narrator, runtime)
 - Accurate audiobook publication dates
 - Audiobook cover art (not book cover)
 - Series information
 
-**Challenge**: No official public API for Audible
-**Alternative**: Amazon Product Advertising API (requires approval)
+**Challenge**: No official public API for Audible **Alternative**: Amazon
+Product Advertising API (requires approval)
 
 #### 3. Google Books API ❌
-**Status**: Not implemented
-**Why it would be valuable**:
+
+**Status**: Not implemented **Why it would be valuable**:
+
 - Free, public API (no approval needed)
 - Good coverage of published books
 - Preview/description text
@@ -256,8 +283,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Implementation Difficulty**: Easy (similar to Open Library)
 
 #### 4. Library of Congress API ❌
-**Status**: Not implemented
-**Why it would be valuable**:
+
+**Status**: Not implemented **Why it would be valuable**:
+
 - Authoritative metadata
 - ISBN validation
 - Subject classifications
@@ -265,8 +293,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Implementation Difficulty**: Easy
 
 #### 5. MusicBrainz API ❌
-**Status**: Not implemented
-**Why it would be valuable**:
+
+**Status**: Not implemented **Why it would be valuable**:
+
 - Audiobook release information
 - Narrator credits
 - Production companies
@@ -276,7 +305,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 ### Enhanced Features (Not Implemented)
 
 #### 1. Multiple Source Aggregation ❌
+
 **What it would do**:
+
 - Query multiple sources (Open Library + Google Books + Amazon)
 - Merge results intelligently
 - Show which source provided each field
@@ -285,7 +316,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: More complete metadata, especially for obscure books
 
 #### 2. Automatic ISBN Extraction ❌
+
 **What it would do**:
+
 - Extract ISBN from audio file metadata if present
 - Use ISBN for more accurate searches
 - Validate ISBN format
@@ -293,7 +326,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: More accurate metadata matches
 
 #### 3. Fuzzy Matching Improvements ❌
+
 **What it would do**:
+
 - Better handling of subtitle variations
 - Series number extraction from title
 - Handle "Book 1 of Series" vs "Series: Book 1" formats
@@ -301,7 +336,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: Better automatic matching for complex titles
 
 #### 4. Manual Source Selection ❌
+
 **What it would do**:
+
 - Let user choose which metadata source to use
 - Per-book source preference
 - Multiple results selection (choose best match)
@@ -309,7 +346,9 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: User control over data quality
 
 #### 5. Scheduled Auto-Fetch ❌
+
 **What it would do**:
+
 - Automatically fetch metadata for new books after scan
 - Configurable: immediate, daily, weekly
 - Background job processing
@@ -325,6 +364,7 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Verdict**: ✅ **External metadata fetching is MVP-complete**
 
 **What you have**:
+
 - ✅ Working Open Library integration
 - ✅ Single and bulk fetch capabilities
 - ✅ Smart provenance-aware application
@@ -332,6 +372,7 @@ While Open Library is implemented, these sources are NOT currently integrated:
 - ✅ Basic E2E test coverage
 
 **What's sufficient for MVP**:
+
 - Open Library is free, reliable, and has good coverage
 - Provenance system prevents data loss
 - Users can manually edit any incorrect fetched data
@@ -342,9 +383,11 @@ While Open Library is implemented, these sources are NOT currently integrated:
 ### Post-MVP Enhancements (Priority Order)
 
 #### Priority 1: Complete E2E Tests (2-3 hours)
+
 **Why**: Validate existing functionality thoroughly
 
 **Tests to add**:
+
 1. Bulk fetch workflow (select → fetch → verify)
 2. "Only fill missing fields" behavior
 3. Verify locked fields aren't overwritten
@@ -355,9 +398,11 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Outcome**: Confidence in existing feature
 
 #### Priority 2: Google Books Integration (1-2 days)
+
 **Why**: Second source for better coverage, especially obscure titles
 
 **Implementation**:
+
 - Add `internal/metadata/googlebooks.go`
 - Similar API to Open Library client
 - Fallback logic: Try Open Library → Google Books
@@ -366,9 +411,11 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: Better metadata for books not in Open Library
 
 #### Priority 3: Multiple Source Aggregation (3-4 days)
+
 **Why**: Richer metadata from multiple sources
 
 **Implementation**:
+
 - Query all sources in parallel
 - Merge results with conflict resolution
 - Show source attribution per field
@@ -377,9 +424,11 @@ While Open Library is implemented, these sources are NOT currently integrated:
 **Value**: Most complete metadata possible
 
 #### Priority 4: Automatic Fetch After Scan (1-2 days)
+
 **Why**: Reduces manual work for new imports
 
 **Implementation**:
+
 - Add configuration option: "Auto-fetch metadata after scan"
 - Background job: Fetch metadata for all new import books
 - Notification when complete
@@ -393,7 +442,8 @@ While Open Library is implemented, these sources are NOT currently integrated:
 
 ❌ **Amazon API without approval**: Requires partnership approval, complex
 
-❌ **Multiple manual source selection per book**: Over-complicated UI for limited value
+❌ **Multiple manual source selection per book**: Over-complicated UI for
+limited value
 
 ---
 
@@ -401,30 +451,33 @@ While Open Library is implemented, these sources are NOT currently integrated:
 
 ### Metadata Fetching Completeness Matrix
 
-| Feature | Implemented | E2E Tested | MVP Required | Status |
-|---------|-------------|------------|--------------|--------|
-| External metadata source | ✅ Yes | ✅ Partial | ✅ Yes | ✅ **MVP Ready** |
-| Single book fetch | ✅ Yes | ✅ Yes | ✅ Yes | ✅ **MVP Ready** |
-| Bulk fetch | ✅ Yes | ❌ No | ✅ Yes | ⚠️ **Needs E2E** |
-| Override protection | ✅ Yes | ❌ No | ✅ Yes | ⚠️ **Needs E2E** |
-| Provenance tracking | ✅ Yes | ✅ Excellent | ✅ Yes | ✅ **MVP Ready** |
-| Cover image fetch | ✅ Yes | ❌ No | ⚠️ Nice-to-have | ⚠️ **Needs E2E** |
-| ISBN search | ✅ Yes | ❌ No | ⚠️ Nice-to-have | ⚠️ **Needs E2E** |
-| Multiple sources | ❌ No | N/A | ❌ No | ⚠️ **Post-MVP** |
+| Feature                  | Implemented | E2E Tested   | MVP Required    | Status           |
+| ------------------------ | ----------- | ------------ | --------------- | ---------------- |
+| External metadata source | ✅ Yes      | ✅ Partial   | ✅ Yes          | ✅ **MVP Ready** |
+| Single book fetch        | ✅ Yes      | ✅ Yes       | ✅ Yes          | ✅ **MVP Ready** |
+| Bulk fetch               | ✅ Yes      | ❌ No        | ✅ Yes          | ⚠️ **Needs E2E** |
+| Override protection      | ✅ Yes      | ❌ No        | ✅ Yes          | ⚠️ **Needs E2E** |
+| Provenance tracking      | ✅ Yes      | ✅ Excellent | ✅ Yes          | ✅ **MVP Ready** |
+| Cover image fetch        | ✅ Yes      | ❌ No        | ⚠️ Nice-to-have | ⚠️ **Needs E2E** |
+| ISBN search              | ✅ Yes      | ❌ No        | ⚠️ Nice-to-have | ⚠️ **Needs E2E** |
+| Multiple sources         | ❌ No       | N/A          | ❌ No           | ⚠️ **Post-MVP**  |
 
 ### Gap Analysis for MVP
 
 **Backend**: ✅ **100% Complete** for MVP requirements
+
 - Open Library integration working
 - Smart metadata application
 - Bulk operations supported
 
 **Frontend**: ✅ **100% Complete** for MVP requirements
+
 - Single book fetch button
 - Bulk fetch dialog
 - Success/error messaging
 
 **E2E Tests**: ⚠️ **30% Complete** for metadata fetching workflows
+
 - Basic fetch tested
 - Bulk fetch NOT tested
 - Override protection NOT tested
@@ -442,9 +495,7 @@ While Open Library is implemented, these sources are NOT currently integrated:
 
 ```typescript
 describe('External Metadata Fetching', () => {
-
   describe('Single Book Fetch', () => {
-
     test('fetches metadata from Open Library by title', async ({ page }) => {
       // GIVEN: Book with title "The Hobbit" but missing publisher
       // WHEN: User clicks "Fetch Metadata" button
@@ -486,7 +537,6 @@ describe('External Metadata Fetching', () => {
   });
 
   describe('Bulk Fetch', () => {
-
     test('bulk fetches metadata for selected books', async ({ page }) => {
       // GIVEN: 5 books selected in library
       // WHEN: User clicks "Bulk Fetch Metadata"
@@ -548,7 +598,6 @@ describe('External Metadata Fetching', () => {
   });
 
   describe('Metadata Provenance Integration', () => {
-
     test('apply fetched value from Compare tab', async ({ page }) => {
       // GIVEN: Book has fetched publisher "Penguin Random House"
       // BUT: Current stored value is "Unknown"
@@ -577,7 +626,6 @@ describe('External Metadata Fetching', () => {
   });
 
   describe('ISBN-based Search', () => {
-
     test('uses ISBN if available for more accurate fetch', async ({ page }) => {
       // GIVEN: Book has ISBN in metadata
       // WHEN: User clicks "Fetch Metadata"
@@ -595,7 +643,6 @@ describe('External Metadata Fetching', () => {
   });
 
   describe('Cover Image Fetching', () => {
-
     test('fetches and displays cover image', async ({ page }) => {
       // GIVEN: Book has no cover image
       // WHEN: User clicks "Fetch Metadata"
@@ -627,6 +674,7 @@ describe('External Metadata Fetching', () => {
 **Your MVP DOES have external metadata fetching!** ✅
 
 **Current State**:
+
 - ✅ Open Library API fully integrated
 - ✅ Single book fetch working
 - ✅ Bulk fetch working
@@ -635,17 +683,20 @@ describe('External Metadata Fetching', () => {
 - ⚠️ E2E tests incomplete (30% coverage)
 
 **For MVP Release**:
+
 1. ✅ **Backend implementation**: Complete
 2. ✅ **Frontend implementation**: Complete
 3. ⚠️ **E2E test coverage**: Needs 4-5 hours of work to add comprehensive tests
 4. ✅ **Feature completeness**: Meets MVP requirements
 
 **Recommendation**:
+
 - Add metadata fetching E2E tests (4-5 hours) as part of Phase 1 testing
 - Include in the E2E test plan from `E2E_TEST_PLAN.md`
 - Then MVP is ready to ship with solid external metadata integration
 
 **Post-MVP Enhancements** (Optional):
+
 - Add Google Books API (second source)
 - Add multiple source aggregation
 - Add automatic fetch after scan
@@ -653,6 +704,5 @@ describe('External Metadata Fetching', () => {
 
 ---
 
-*Analysis completed*: 2026-01-25
-*Status*: Feature implemented, needs E2E test coverage
-*Recommendation*: Add E2E tests, then ship MVP
+_Analysis completed_: 2026-01-25 _Status_: Feature implemented, needs E2E test
+coverage _Recommendation_: Add E2E tests, then ship MVP

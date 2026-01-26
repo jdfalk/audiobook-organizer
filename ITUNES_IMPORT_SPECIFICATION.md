@@ -5,19 +5,25 @@
 
 # iTunes Library Import - Complete Specification
 
-**Date**: 2026-01-25
-**Priority**: P0 - Critical for MVP (personal use case blocker)
-**Status**: Design specification - ready for implementation
+**Date**: 2026-01-25 **Priority**: P0 - Critical for MVP (personal use case
+blocker) **Status**: Design specification - ready for implementation
 
 ---
 
 ## Executive Summary
 
-**Goal**: Enable seamless migration from iTunes library management to audiobook-organizer by importing all iTunes library metadata, file locations, playback statistics, and optionally writing back new file paths after organization.
+**Goal**: Enable seamless migration from iTunes library management to
+audiobook-organizer by importing all iTunes library metadata, file locations,
+playback statistics, and optionally writing back new file paths after
+organization.
 
-**User Story**: "As an iTunes user with 500+ audiobooks, I want to import my entire iTunes library with all my play counts, ratings, and bookmarks preserved, so I can switch to audiobook-organizer without losing years of listening history."
+**User Story**: "As an iTunes user with 500+ audiobooks, I want to import my
+entire iTunes library with all my play counts, ratings, and bookmarks preserved,
+so I can switch to audiobook-organizer without losing years of listening
+history."
 
 **Critical Success Factors**:
+
 1. ✅ Zero data loss - All iTunes metadata preserved
 2. ✅ File discovery - Locate all audiobook files referenced in iTunes
 3. ✅ Playback continuity - Preserve bookmarks and play counts
@@ -30,15 +36,18 @@
 ### iTunes Library.xml
 
 **Location** (macOS):
+
 - Modern iTunes/Music.app: `~/Music/Music/Library.xml`
 - Older iTunes: `~/Music/iTunes/iTunes Music Library.xml`
 
 **Location** (Windows):
+
 - `C:\Users\[Username]\Music\iTunes\iTunes Music Library.xml`
 
 **Format**: XML plist (Property List)
 
 **Key Structure**:
+
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -120,7 +129,8 @@
 
 **Format**: Binary database (SQLite-based)
 
-**Note**: XML is preferred as it's documented and officially exported by iTunes. Binary database requires reverse engineering.
+**Note**: XML is preferred as it's documented and officially exported by iTunes.
+Binary database requires reverse engineering.
 
 ---
 
@@ -128,27 +138,27 @@
 
 ### iTunes Fields → Audiobook Organizer Fields
 
-| iTunes Field | Type | Audiobook Organizer Field | Notes |
-|--------------|------|---------------------------|-------|
-| `Track ID` | integer | Import tracking (temp) | Used during import, not stored |
-| `Persistent ID` | string | `itunes_persistent_id` (new field) | Unique iTunes identifier |
-| `Name` | string | `title` | Direct mapping |
-| `Artist` | string | `author_name` | Direct mapping |
-| `Album Artist` | string | `narrator` (if different from Artist) | Narrator inference |
-| `Album` | string | `series_name` (extract series) | May contain series info |
-| `Genre` | string | `genre` | Direct mapping |
-| `Year` | integer | `audiobook_release_year` | Publication year |
-| `Comments` | string | `description` | User notes/description |
-| `Location` | string | `file_path` (after decoding) | URL-decode file:// path |
-| `Size` | integer | Metadata only | File size in bytes |
-| `Total Time` | integer | `duration` | Duration in milliseconds |
-| `Date Added` | date | `itunes_date_added` (new field) | When added to iTunes |
-| `Play Count` | integer | `itunes_play_count` (new field) | Number of plays |
-| `Play Date` | integer | `itunes_last_played` (new field) | Unix timestamp or iTunes epoch |
-| `Rating` | integer | `itunes_rating` (new field) | 0-100 scale |
-| `Bookmark` | integer | `itunes_bookmark` (new field) | Playback position in ms |
-| `Bookmarkable` | boolean | Metadata only | Always true for audiobooks |
-| `Kind` | string | Filter criteria | Must be "Audiobook" or "Spoken Word" |
+| iTunes Field    | Type    | Audiobook Organizer Field             | Notes                                |
+| --------------- | ------- | ------------------------------------- | ------------------------------------ |
+| `Track ID`      | integer | Import tracking (temp)                | Used during import, not stored       |
+| `Persistent ID` | string  | `itunes_persistent_id` (new field)    | Unique iTunes identifier             |
+| `Name`          | string  | `title`                               | Direct mapping                       |
+| `Artist`        | string  | `author_name`                         | Direct mapping                       |
+| `Album Artist`  | string  | `narrator` (if different from Artist) | Narrator inference                   |
+| `Album`         | string  | `series_name` (extract series)        | May contain series info              |
+| `Genre`         | string  | `genre`                               | Direct mapping                       |
+| `Year`          | integer | `audiobook_release_year`              | Publication year                     |
+| `Comments`      | string  | `description`                         | User notes/description               |
+| `Location`      | string  | `file_path` (after decoding)          | URL-decode file:// path              |
+| `Size`          | integer | Metadata only                         | File size in bytes                   |
+| `Total Time`    | integer | `duration`                            | Duration in milliseconds             |
+| `Date Added`    | date    | `itunes_date_added` (new field)       | When added to iTunes                 |
+| `Play Count`    | integer | `itunes_play_count` (new field)       | Number of plays                      |
+| `Play Date`     | integer | `itunes_last_played` (new field)      | Unix timestamp or iTunes epoch       |
+| `Rating`        | integer | `itunes_rating` (new field)           | 0-100 scale                          |
+| `Bookmark`      | integer | `itunes_bookmark` (new field)         | Playback position in ms              |
+| `Bookmarkable`  | boolean | Metadata only                         | Always true for audiobooks           |
+| `Kind`          | string  | Filter criteria                       | Must be "Audiobook" or "Spoken Word" |
 
 ### New Database Fields Required
 
@@ -168,10 +178,12 @@ CREATE INDEX idx_audiobooks_itunes_persistent_id ON audiobooks(itunes_persistent
 ### Playlist Handling
 
 **Option 1**: Import as tags
+
 - Each iTunes playlist becomes a tag on the audiobook
 - Example: "Fantasy" playlist → `tags: ["fantasy"]`
 
 **Option 2**: Create playlist mapping table
+
 ```sql
 CREATE TABLE itunes_playlists (
     id TEXT PRIMARY KEY,
@@ -189,7 +201,8 @@ CREATE TABLE audiobook_playlists (
 );
 ```
 
-**Recommendation**: Option 1 (tags) for MVP, Option 2 for vNext multi-user support
+**Recommendation**: Option 1 (tags) for MVP, Option 2 for vNext multi-user
+support
 
 ---
 
@@ -198,6 +211,7 @@ CREATE TABLE audiobook_playlists (
 ### Phase 1: Parse iTunes Library
 
 **Step 1**: Locate iTunes Library file
+
 ```
 Search locations:
 1. User-provided path (UI file picker)
@@ -207,6 +221,7 @@ Search locations:
 ```
 
 **Step 2**: Parse XML
+
 ```go
 type ITunesLibrary struct {
     MajorVersion       int
@@ -247,6 +262,7 @@ type ITunesPlaylist struct {
 ```
 
 **Step 3**: Filter audiobooks
+
 ```go
 func isAudiobook(track ITunesTrack) bool {
     // Check Kind field
@@ -274,6 +290,7 @@ func isAudiobook(track ITunesTrack) bool {
 ### Phase 2: File Discovery & Validation
 
 **Step 1**: Decode file paths
+
 ```go
 func decodeITunesLocation(location string) (string, error) {
     // Remove "file://localhost" prefix
@@ -296,6 +313,7 @@ func decodeITunesLocation(location string) (string, error) {
 ```
 
 **Step 2**: Verify files exist
+
 ```go
 type ImportValidationResult struct {
     TotalTracks      int
@@ -601,6 +619,7 @@ const ITunesImportSection: React.FC = () => {
 **Goal**: Update iTunes with new file paths after organizing audiobooks
 
 **Approach**:
+
 1. Read original iTunes Library.xml
 2. Parse to in-memory structure
 3. Update `<key>Location</key>` values for organized audiobooks
@@ -659,6 +678,7 @@ func updateITunesLibrary(iTunesPath string, updates map[string]string) error {
 ```
 
 **Safety Measures**:
+
 1. ✅ Always create backup before modifying
 2. ✅ Validate XML before writing
 3. ✅ Atomic write (write to temp, then rename)
@@ -711,6 +731,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Validate Import
 
 **Request**:
+
 ```json
 {
   "library_path": "/Users/username/Music/iTunes/iTunes Music Library.xml"
@@ -718,6 +739,7 @@ GET    /api/v1/itunes/import-status/:id
 ```
 
 **Response**:
+
 ```json
 {
   "total_tracks": 15000,
@@ -736,6 +758,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Import Library
 
 **Request**:
+
 ```json
 {
   "library_path": "/Users/username/Music/iTunes/iTunes Music Library.xml",
@@ -747,6 +770,7 @@ GET    /api/v1/itunes/import-status/:id
 ```
 
 **Response**:
+
 ```json
 {
   "operation_id": "itunes-import-abc123",
@@ -758,6 +782,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Write-Back
 
 **Request**:
+
 ```json
 {
   "library_path": "/Users/username/Music/iTunes/iTunes Music Library.xml",
@@ -773,6 +798,7 @@ GET    /api/v1/itunes/import-status/:id
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -789,6 +815,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Phase 1: Core Import (6-8 hours)
 
 **Tasks**:
+
 1. [ ] Create iTunes library parser (`internal/itunes/parser.go`) - 2 hours
 2. [ ] Add database migration for iTunes fields (migration 11) - 30 min
 3. [ ] Implement file discovery and validation - 1 hour
@@ -799,6 +826,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Phase 2: UI Implementation (3-4 hours)
 
 **Tasks**:
+
 1. [ ] Create iTunes import settings section - 1.5 hours
 2. [ ] Build validation results display - 1 hour
 3. [ ] Implement import progress monitoring - 1 hour
@@ -807,6 +835,7 @@ GET    /api/v1/itunes/import-status/:id
 ### Phase 3: Write-Back Support (2-3 hours)
 
 **Tasks**:
+
 1. [ ] Implement iTunes XML write-back - 1.5 hours
 2. [ ] Add safety measures (backup, validation) - 1 hour
 3. [ ] Create write-back UI dialog - 0.5 hours
@@ -895,10 +924,13 @@ describe('iTunes Import', () => {
 ### iTunes Import Quick Start
 
 **Step 1**: Locate your iTunes Library file
+
 - macOS: Open Finder → Go → Home → Music → iTunes → `iTunes Music Library.xml`
-- Windows: Open File Explorer → `C:\Users\[Your Name]\Music\iTunes\iTunes Music Library.xml`
+- Windows: Open File Explorer →
+  `C:\Users\[Your Name]\Music\iTunes\iTunes Music Library.xml`
 
 **Step 2**: Import to audiobook-organizer
+
 1. Open audiobook-organizer web interface
 2. Navigate to Settings → Import → iTunes Library
 3. Click "Browse" and select your iTunes Library.xml
@@ -910,12 +942,14 @@ describe('iTunes Import', () => {
 6. Click "Import Library"
 
 **Step 3** (Optional): Update iTunes with new file locations
+
 1. After organizing audiobooks, go to Settings → Import → iTunes Library
 2. Click "Write Back to iTunes"
 3. Confirm backup creation
 4. Click "Update iTunes Library"
 
 **Step 4**: Verify in iTunes
+
 1. Open iTunes/Music app
 2. Check that audiobooks show correct file locations
 3. Verify play counts and ratings are preserved
@@ -925,21 +959,25 @@ describe('iTunes Import', () => {
 ## Part 10: Success Metrics
 
 ### Import Accuracy
+
 - [ ] 100% of iTunes audiobooks discovered (if files exist)
 - [ ] 100% of metadata preserved (title, author, year, genre)
 - [ ] 100% of playback data preserved (play count, rating, bookmark)
 - [ ] 100% of playlists converted to tags
 
 ### Performance
+
 - [ ] Import of 500 audiobooks completes in < 5 minutes
 - [ ] Validation of 500 audiobooks completes in < 30 seconds
 
 ### Safety
+
 - [ ] Zero data loss during import
 - [ ] Automatic backup before iTunes write-back
 - [ ] Rollback on any error during write-back
 
 ### User Experience
+
 - [ ] Clear validation feedback (files found/missing)
 - [ ] Progress indicator during import
 - [ ] Confirmation dialogs for destructive operations
@@ -948,16 +986,20 @@ describe('iTunes Import', () => {
 
 ## Conclusion
 
-This iTunes import feature is **critical for switching from iTunes to audiobook-organizer** as it preserves years of listening history (play counts, ratings, bookmarks) while enabling seamless file organization.
+This iTunes import feature is **critical for switching from iTunes to
+audiobook-organizer** as it preserves years of listening history (play counts,
+ratings, bookmarks) while enabling seamless file organization.
 
 **Priority**: P0 - Must have for MVP (personal blocker)
 
 **Estimated Implementation**: 11-15 hours total
+
 - Core import: 6-8 hours
 - UI: 3-4 hours
 - Write-back: 2-3 hours
 
 **Next Steps**:
+
 1. Review and approve specification
 2. Create database migration 11 (iTunes fields)
 3. Implement iTunes library parser
@@ -968,7 +1010,5 @@ This iTunes import feature is **critical for switching from iTunes to audiobook-
 
 ---
 
-*Specification created*: 2026-01-25
-*Status*: Ready for implementation
-*Owner*: To be assigned
-*Dependencies*: None - can start immediately
+_Specification created_: 2026-01-25 _Status_: Ready for implementation _Owner_:
+To be assigned _Dependencies_: None - can start immediately

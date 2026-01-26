@@ -5,9 +5,9 @@
 
 # Comprehensive E2E Test Plan
 
-**Date**: 2026-01-25
-**Purpose**: Document ALL possible user workflows and map to Playwright test scenarios
-**Scope**: Complete end-to-end testing for MVP release
+**Date**: 2026-01-25 **Purpose**: Document ALL possible user workflows and map
+to Playwright test scenarios **Scope**: Complete end-to-end testing for MVP
+release
 
 ---
 
@@ -71,7 +71,6 @@ web/tests/e2e/
 
 ```typescript
 describe('Library Browser', () => {
-
   test('loads library page and displays books in grid', async ({ page }) => {
     // GIVEN: Database has 25 audiobooks
     // WHEN: User navigates to /library
@@ -199,14 +198,18 @@ describe('Library Browser', () => {
     // AND: Shows "Clear filters" button
   });
 
-  test('shows empty state when library is completely empty', async ({ page }) => {
+  test('shows empty state when library is completely empty', async ({
+    page,
+  }) => {
     // GIVEN: Database has zero audiobooks
     // WHEN: User navigates to /library
     // THEN: Shows "Library is empty" message
     // AND: Shows "Scan for books" call-to-action
   });
 
-  test('persists sort and filter settings across page reloads', async ({ page }) => {
+  test('persists sort and filter settings across page reloads', async ({
+    page,
+  }) => {
     // GIVEN: User has selected "Author" sort and "Organized" filter
     // WHEN: User reloads the page
     // THEN: Same sort and filter are applied
@@ -234,7 +237,6 @@ describe('Library Browser', () => {
 
 ```typescript
 describe('Search Functionality', () => {
-
   test('searches books by exact title match', async ({ page }) => {
     // GIVEN: Library has book titled "The Way of Kings"
     // WHEN: User types "The Way of Kings" in search box
@@ -265,7 +267,9 @@ describe('Search Functionality', () => {
     // THEN: Shows "The Hobbit" book
   });
 
-  test('shows no results message when search matches nothing', async ({ page }) => {
+  test('shows no results message when search matches nothing', async ({
+    page,
+  }) => {
     // GIVEN: Library loaded
     // WHEN: User types "zzznonexistent" in search
     // THEN: Shows "No books found matching 'zzznonexistent'"
@@ -306,7 +310,9 @@ describe('Search Functionality', () => {
     // THEN: URL updates to ?search=Hobbit
   });
 
-  test('search debounces input to avoid excessive requests', async ({ page }) => {
+  test('search debounces input to avoid excessive requests', async ({
+    page,
+  }) => {
     // GIVEN: Library page loaded
     // WHEN: User types "Foundation" quickly
     // THEN: Search request fires only after typing stops
@@ -334,7 +340,6 @@ describe('Search Functionality', () => {
 
 ```typescript
 describe('Batch Operations', () => {
-
   test('selects single book with checkbox', async ({ page }) => {
     // GIVEN: Library page with books
     // WHEN: User clicks checkbox on one book card
@@ -342,7 +347,9 @@ describe('Batch Operations', () => {
     // AND: Selection toolbar appears showing "1 selected"
   });
 
-  test('selects multiple books with individual checkboxes', async ({ page }) => {
+  test('selects multiple books with individual checkboxes', async ({
+    page,
+  }) => {
     // GIVEN: Library page with books
     // WHEN: User clicks checkboxes on 5 different books
     // THEN: All 5 books are selected
@@ -446,7 +453,9 @@ describe('Batch Operations', () => {
     // AND: Tooltip shows "Select books first"
   });
 
-  test('shows different batch actions based on selection state', async ({ page }) => {
+  test('shows different batch actions based on selection state', async ({
+    page,
+  }) => {
     // GIVEN: User has selected mix of organized and soft-deleted books
     // THEN: Shows "Restore" button (for deleted books)
     // AND: Shows "Delete" button (for non-deleted books)
@@ -475,8 +484,9 @@ describe('Batch Operations', () => {
 
 ```typescript
 describe('Scan/Import/Organize Workflow', () => {
-
-  test('complete workflow: add import path → scan → organize', async ({ page }) => {
+  test('complete workflow: add import path → scan → organize', async ({
+    page,
+  }) => {
     // GIVEN: Empty library, no import paths
 
     // WHEN: User navigates to Settings → Import Paths
@@ -511,7 +521,9 @@ describe('Scan/Import/Organize Workflow', () => {
     );
 
     // THEN: Success message appears
-    await expect(page.getByText(/Scan complete.*found \d+ audiobooks/)).toBeVisible();
+    await expect(
+      page.getByText(/Scan complete.*found \d+ audiobooks/)
+    ).toBeVisible();
 
     // WHEN: User navigates to Library page
     await page.goto('/library');
@@ -548,7 +560,9 @@ describe('Scan/Import/Organize Workflow', () => {
     );
 
     // THEN: Success message appears
-    await expect(page.getByText(/Successfully organized \d+ audiobooks/)).toBeVisible();
+    await expect(
+      page.getByText(/Successfully organized \d+ audiobooks/)
+    ).toBeVisible();
 
     // WHEN: User changes filter to "Organized"
     await page.getByRole('button', { name: 'Filter' }).click();
@@ -563,7 +577,9 @@ describe('Scan/Import/Organize Workflow', () => {
     await expect(page.getByText('No books found')).toBeVisible();
   });
 
-  test('scan operation: start, monitor progress, complete', async ({ page }) => {
+  test('scan operation: start, monitor progress, complete', async ({
+    page,
+  }) => {
     // GIVEN: Import path "/test/books" exists with 50 audiobook files
     // WHEN: User triggers scan for this path
     // THEN: Scan operation creates operation record
@@ -683,7 +699,6 @@ describe('Scan/Import/Organize Workflow', () => {
 
 ```typescript
 describe('Settings Configuration', () => {
-
   test('loads settings page with all sections', async ({ page }) => {
     // GIVEN: User is logged in
     // WHEN: User navigates to /settings
@@ -879,7 +894,6 @@ describe('Settings Configuration', () => {
 
 ```typescript
 describe('File Browser', () => {
-
   test('browses root filesystem', async ({ page }) => {
     // GIVEN: Settings page loaded
     // WHEN: User opens file browser
@@ -957,7 +971,6 @@ describe('File Browser', () => {
 
 ```typescript
 describe('Operation Monitoring', () => {
-
   test('views active operations list', async ({ page }) => {
     // GIVEN: 2 scan operations and 1 organize operation running
     // WHEN: User navigates to Dashboard or Operations page
@@ -1052,7 +1065,6 @@ describe('Operation Monitoring', () => {
 
 ```typescript
 describe('Version Management', () => {
-
   test('links two books as versions', async ({ page }) => {
     // GIVEN: Book A and Book B (same title, different narrators)
     // WHEN: User opens Book A detail page
@@ -1124,7 +1136,6 @@ describe('Version Management', () => {
 
 ```typescript
 describe('Backup and Restore', () => {
-
   test('creates manual backup', async ({ page }) => {
     // GIVEN: Settings page, Backup section
     // WHEN: User clicks "Create Backup"
@@ -1203,7 +1214,6 @@ describe('Backup and Restore', () => {
 
 ```typescript
 describe('Error Handling', () => {
-
   test('handles network timeout gracefully', async ({ page }) => {
     // GIVEN: Server is slow to respond
     // WHEN: API request times out
@@ -1282,7 +1292,6 @@ describe('Error Handling', () => {
 
 ```typescript
 describe('Dashboard', () => {
-
   test('displays library statistics', async ({ page }) => {
     // GIVEN: Library has 150 books
     // WHEN: User navigates to Dashboard
@@ -1384,8 +1393,8 @@ describe('Dashboard', () => {
    - Restore from backup
 
 5. **Dashboard** (2-3 hours) - P1
-    - View statistics
-    - Quick actions
+   - View statistics
+   - Quick actions
 
 **After Phase 2**: 80-85% E2E coverage achieved
 
@@ -1396,14 +1405,14 @@ describe('Dashboard', () => {
 **Total**: ~5 hours
 
 1. **Error Handling** (2-3 hours) - P2
-    - Network errors
-    - Validation errors
-    - Session handling
+   - Network errors
+   - Validation errors
+   - Session handling
 
 2. **Edge Cases & Polish** (2-3 hours) - P2
-    - Empty states
-    - Loading states
-    - Accessibility
+   - Empty states
+   - Loading states
+   - Accessibility
 
 **After Phase 3**: 90%+ E2E coverage achieved
 
@@ -1462,7 +1471,7 @@ export async function skipWelcomeWizard(page: Page) {
  * Setup common routes for all tests
  */
 export async function setupCommonRoutes(page: Page) {
-  await page.route('**/api/v1/health', (route) => {
+  await page.route('**/api/v1/health', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1470,7 +1479,7 @@ export async function setupCommonRoutes(page: Page) {
     });
   });
 
-  await page.route('**/api/v1/system/status', (route) => {
+  await page.route('**/api/v1/system/status', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1516,19 +1525,19 @@ export function generateTestBooks(count: number) {
 
 ### E2E Coverage Goals
 
-| Category | Current | Phase 1 | Phase 2 | Phase 3 | Target |
-|----------|---------|---------|---------|---------|--------|
-| Navigation | 5% | 100% | 100% | 100% | 100% |
-| Library Browser | 0% | 80% | 90% | 100% | 100% |
-| Search & Filter | 0% | 80% | 90% | 100% | 100% |
-| Batch Operations | 0% | 70% | 80% | 90% | 90% |
-| Import Workflow | 10% | 90% | 95% | 100% | 100% |
-| Book Detail | 60% | 70% | 80% | 90% | 90% |
-| Metadata Provenance | 90% | 90% | 95% | 100% | 100% |
-| Settings | 0% | 80% | 90% | 100% | 100% |
-| File Browser | 0% | 0% | 80% | 90% | 90% |
-| Operations | 0% | 0% | 80% | 90% | 90% |
-| **OVERALL** | **25%** | **60-70%** | **80-85%** | **90%+** | **90%+** |
+| Category            | Current | Phase 1    | Phase 2    | Phase 3  | Target   |
+| ------------------- | ------- | ---------- | ---------- | -------- | -------- |
+| Navigation          | 5%      | 100%       | 100%       | 100%     | 100%     |
+| Library Browser     | 0%      | 80%        | 90%        | 100%     | 100%     |
+| Search & Filter     | 0%      | 80%        | 90%        | 100%     | 100%     |
+| Batch Operations    | 0%      | 70%        | 80%        | 90%      | 90%      |
+| Import Workflow     | 10%     | 90%        | 95%        | 100%     | 100%     |
+| Book Detail         | 60%     | 70%        | 80%        | 90%      | 90%      |
+| Metadata Provenance | 90%     | 90%        | 95%        | 100%     | 100%     |
+| Settings            | 0%      | 80%        | 90%        | 100%     | 100%     |
+| File Browser        | 0%      | 0%         | 80%        | 90%      | 90%      |
+| Operations          | 0%      | 0%         | 80%        | 90%      | 90%      |
+| **OVERALL**         | **25%** | **60-70%** | **80-85%** | **90%+** | **90%+** |
 
 ### Quality Gates
 
@@ -1543,7 +1552,9 @@ export function generateTestBooks(count: number) {
 
 ## Conclusion
 
-This comprehensive E2E test plan documents **every possible user workflow** in the audiobook-organizer application and maps them to specific Playwright test scenarios.
+This comprehensive E2E test plan documents **every possible user workflow** in
+the audiobook-organizer application and maps them to specific Playwright test
+scenarios.
 
 ### Summary
 
@@ -1583,12 +1594,12 @@ This comprehensive E2E test plan documents **every possible user workflow** in t
 The audiobook-organizer will be **MVP-ready** when:
 
 - ✅ 90%+ of user workflows have E2E coverage
-- ✅ All critical paths validated (scan/import/organize, library browser, settings)
+- ✅ All critical paths validated (scan/import/organize, library browser,
+  settings)
 - ✅ Manual QA confirms tests match real user experience
 - ✅ All tests pass in CI pipeline
 
 ---
 
-*Plan created*: 2026-01-25
-*Status*: Ready for implementation
-*Next step*: Begin Phase 1 test implementation
+_Plan created_: 2026-01-25 _Status_: Ready for implementation _Next step_: Begin
+Phase 1 test implementation

@@ -5,10 +5,8 @@
 
 # MVP Status Report - Ready for Release! 🎉
 
-**Date**: 2026-01-25
-**Status**: ✅ **READY FOR MVP RELEASE**
-**True Coverage**: **86.2%** (with `-tags=mocks`)
-**All Tests**: ✅ **PASSING** (100% pass rate)
+**Date**: 2026-01-25 **Status**: ✅ **READY FOR MVP RELEASE** **True Coverage**:
+**86.2%** (with `-tags=mocks`) **All Tests**: ✅ **PASSING** (100% pass rate)
 
 ---
 
@@ -26,14 +24,14 @@
 
 ### What Changed Since Last Analysis
 
-| Metric | Previous | Current | Status |
-|--------|----------|---------|--------|
-| Database Tests | ❌ FAIL | ✅ PASS (78.0%) | Fixed! |
-| Operations Coverage | 8.0% | 90.6% | Fixed! |
-| Metadata Coverage | 71.2% | 85.9% | Fixed! |
-| Overall Coverage (w/o mocks) | 77.9% | ~78% | Misleading |
-| Overall Coverage (w/ mocks) | Unknown | **86.2%** | ✅ True number! |
-| Test Pass Rate | 94% | **100%** | ✅ Perfect! |
+| Metric                       | Previous | Current         | Status          |
+| ---------------------------- | -------- | --------------- | --------------- |
+| Database Tests               | ❌ FAIL  | ✅ PASS (78.0%) | Fixed!          |
+| Operations Coverage          | 8.0%     | 90.6%           | Fixed!          |
+| Metadata Coverage            | 71.2%    | 85.9%           | Fixed!          |
+| Overall Coverage (w/o mocks) | 77.9%    | ~78%            | Misleading      |
+| Overall Coverage (w/ mocks)  | Unknown  | **86.2%**       | ✅ True number! |
+| Test Pass Rate               | 94%      | **100%**        | ✅ Perfect!     |
 
 ---
 
@@ -76,11 +74,13 @@ func TestWithMocks(t *testing.T) {
 ```
 
 **Affected packages**:
+
 - `internal/operations/queue_test.go` (requires database mocks)
 - `internal/metadata/*_test.go` (some tests require mocks)
 - `internal/scanner/*_test.go` (some tests require mocks)
 
-Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to appear low.
+Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
+appear low.
 
 ---
 
@@ -118,8 +118,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
    internal/server                   72.1% (need +7.9%)
 ```
 
-**Packages at 80%+**: 20/23 (87%)
-**Average Coverage**: 86.2%
+**Packages at 80%+**: 20/23 (87%) **Average Coverage**: 86.2%
 
 ---
 
@@ -128,6 +127,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 ### ✅ Backend (95% Complete)
 
 **Infrastructure**:
+
 - ✅ Database layer (SQLite + PebbleDB)
 - ✅ Migration system (10 migrations)
 - ✅ Mockery v3 integration
@@ -135,6 +135,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 - ✅ Test infrastructure
 
 **APIs** (All functional):
+
 - ✅ Audiobooks CRUD
 - ✅ Authors & Series
 - ✅ Metadata management
@@ -145,6 +146,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 - ✅ Health check
 
 **Features**:
+
 - ✅ File scanning (7+ formats)
 - ✅ Metadata extraction
 - ✅ AI-powered parsing (OpenAI)
@@ -157,6 +159,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 ### ✅ Frontend (80% Complete)
 
 **Pages**:
+
 - ✅ Dashboard
 - ✅ Library (search, sort, pagination)
 - ✅ Book Detail (all tabs)
@@ -164,6 +167,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 - ✅ System info
 
 **Features**:
+
 - ✅ Metadata editing
 - ✅ Bulk metadata fetch
 - ✅ Import workflow
@@ -172,6 +176,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 - ✅ Provenance display
 
 **Testing**:
+
 - ✅ Vitest unit tests
 - ✅ React Testing Library
 - ✅ Playwright E2E (basic)
@@ -179,6 +184,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 ### ✅ Testing (90% Complete)
 
 **Go Tests**:
+
 - ✅ 24 packages tested
 - ✅ 100% pass rate
 - ✅ 86.2% coverage (with mocks)
@@ -187,6 +193,7 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 - ✅ Table-driven tests
 
 **Frontend Tests**:
+
 - ✅ API service tests
 - ✅ Component tests
 - ✅ E2E smoke tests
@@ -206,10 +213,11 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 
 ### Priority 0: Fix Coverage Reporting (30 min) ⚡
 
-**Status**: Can ship MVP without this, but should fix
-**Impact**: Accurate coverage tracking in CI
+**Status**: Can ship MVP without this, but should fix **Impact**: Accurate
+coverage tracking in CI
 
 **Tasks**:
+
 1. ✅ Create Makefile with proper test targets (DONE)
 2. [ ] Update reusable CI workflow to use `-tags=mocks`
    - Option A: Update ghcommon workflow (if you maintain it)
@@ -218,15 +226,18 @@ Without `-tags=mocks`, these tests are **silently skipped**, causing coverage to
 4. [ ] Set coverage threshold to 80% (currently 0%)
 
 **Files to Update**:
+
 ```yaml
 # .github/workflows/ci.yml
 jobs:
   ci:
     with:
-      coverage-threshold: '80'  # Change from '0' to '80'
+      coverage-threshold: '80' # Change from '0' to '80'
 ```
 
-**Note**: The reusable workflow at `jdfalk/ghcommon` may need updating to support `-tags=mocks`. If you don't control that workflow, you can add a local step:
+**Note**: The reusable workflow at `jdfalk/ghcommon` may need updating to
+support `-tags=mocks`. If you don't control that workflow, you can add a local
+step:
 
 ```yaml
 jobs:
@@ -247,10 +258,11 @@ jobs:
 
 ### Priority 1: Optional Polish (4-5 hours) 🎨
 
-**Status**: Optional - MVP is already acceptable at 86.2%
-**Impact**: Professional polish, 90%+ coverage
+**Status**: Optional - MVP is already acceptable at 86.2% **Impact**:
+Professional polish, 90%+ coverage
 
 **If you want 90%+ coverage**:
+
 - [ ] Boost server from 72.1% → 80%+ (2-3 hours)
   - Add error injection tests
   - Add edge case tests
@@ -270,10 +282,11 @@ jobs:
 
 ### Priority 2: Manual QA (2-3 hours) 🧪
 
-**Status**: Recommended before release
-**Impact**: Confidence in user-facing features
+**Status**: Recommended before release **Impact**: Confidence in user-facing
+features
 
 **Workflows to Test**:
+
 - [ ] Library: Search, sort, pagination, import paths
 - [ ] Book Detail: All tabs, metadata edit, fetch metadata
 - [ ] Settings: Config persistence, blocked hashes, system info
@@ -283,10 +296,10 @@ jobs:
 
 ### Priority 3: Release Pipeline (2-3 hours) 🚀
 
-**Status**: Functional but needs token fix
-**Impact**: Automated releases
+**Status**: Functional but needs token fix **Impact**: Automated releases
 
 **Tasks**:
+
 - [ ] Fix prerelease workflow token permissions
 - [ ] Verify GoReleaser publish works
 - [ ] Confirm Docker frontend build
@@ -298,10 +311,10 @@ jobs:
 
 ### Option A: Ship MVP Immediately (30 min) ✈️
 
-**For**: Getting to market fast
-**Coverage**: 86.2% (excellent!)
+**For**: Getting to market fast **Coverage**: 86.2% (excellent!)
 
 **Steps**:
+
 1. Update Makefile (✅ DONE)
 2. Update README with test commands (10 min)
 3. Add note about `-tags=mocks` to BUILD_TAGS_GUIDE.md (10 min)
@@ -312,10 +325,10 @@ jobs:
 
 ### Option B: Professional Polish First (1-2 days) 💎
 
-**For**: Extra confidence and quality
-**Coverage**: 90%+ target
+**For**: Extra confidence and quality **Coverage**: 90%+ target
 
 **Steps**:
+
 1. Day 1 Morning: Update CI/CD and docs (2 hours)
 2. Day 1 Afternoon: Boost server/cmd/database coverage (4-5 hours)
 3. Day 2 Morning: Manual QA (2-3 hours)
@@ -325,10 +338,10 @@ jobs:
 
 ### Option C: Hybrid Approach (4-6 hours) ⚖️
 
-**For**: Balance of speed and quality
-**Coverage**: 86.2% → 88%
+**For**: Balance of speed and quality **Coverage**: 86.2% → 88%
 
 **Steps**:
+
 1. Update Makefile (✅ DONE)
 2. Update CI/CD for accurate coverage (1 hour)
 3. Update documentation (30 min)
@@ -363,6 +376,7 @@ jobs:
 ### Post-Release
 
 You can incrementally improve:
+
 - Add server tests over time
 - Expand E2E coverage
 - Add performance tests
@@ -408,18 +422,21 @@ make coverage-check
 ### CI/CD Integration
 
 **Current**:
+
 ```yaml
 # .github/workflows/ci.yml
-coverage-threshold: '0'  # Too low!
+coverage-threshold: '0' # Too low!
 ```
 
 **Should be**:
+
 ```yaml
 # .github/workflows/ci.yml
-coverage-threshold: '80'  # Proper threshold
+coverage-threshold: '80' # Proper threshold
 ```
 
 **And ensure reusable workflow uses**:
+
 ```bash
 go test ./... -tags=mocks -cover
 ```
@@ -447,14 +464,14 @@ go test ./... -tags=mocks -cover
 
 ## Success Metrics
 
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Overall Coverage | 80% | 86.2% | ✅ +6.2% |
-| Test Pass Rate | 100% | 100% | ✅ Perfect |
-| Packages at 80%+ | 80% | 87% | ✅ +7% |
-| Backend Complete | 80% | 95% | ✅ +15% |
-| Frontend Complete | 70% | 80% | ✅ +10% |
-| CI/CD Working | Yes | Yes | ✅ |
+| Metric            | Target | Actual | Status     |
+| ----------------- | ------ | ------ | ---------- |
+| Overall Coverage  | 80%    | 86.2%  | ✅ +6.2%   |
+| Test Pass Rate    | 100%   | 100%   | ✅ Perfect |
+| Packages at 80%+  | 80%    | 87%    | ✅ +7%     |
+| Backend Complete  | 80%    | 95%    | ✅ +15%    |
+| Frontend Complete | 70%    | 80%    | ✅ +10%    |
+| CI/CD Working     | Yes    | Yes    | ✅         |
 
 **Overall Assessment**: ✅ **EXCEEDS MVP REQUIREMENTS**
 
@@ -491,6 +508,5 @@ go test ./... -tags=mocks -cover
 
 ---
 
-*Report Generated*: 2026-01-25
-*Project Status*: Ready for MVP
-*Recommendation*: Ship it! 🎉
+_Report Generated_: 2026-01-25 _Project Status_: Ready for MVP _Recommendation_:
+Ship it! 🎉
