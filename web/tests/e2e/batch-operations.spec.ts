@@ -1,5 +1,5 @@
-// file: tests/e2e/batch-operations.spec.ts
-// version: 1.0.0
+// file: web/tests/e2e/batch-operations.spec.ts
+// version: 1.0.2
 // guid: 5d6e7f80-9a0b-1c2d-3e4f-5a6b7c8d9e0f
 
 import { test, expect, type Page } from '@playwright/test';
@@ -38,7 +38,9 @@ test.describe('Batch Operations', () => {
     await expect(page.getByText('1 selected')).toBeVisible();
   });
 
-  test('selects multiple books with individual checkboxes', async ({ page }) => {
+  test('selects multiple books with individual checkboxes', async ({
+    page,
+  }) => {
     // Arrange
     await arrangeLibrary(page);
 
@@ -238,7 +240,9 @@ test.describe('Batch Operations', () => {
 
     // Assert
     await expect(page.getByText('Select books first')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Batch Edit' })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Batch Edit' })
+    ).toBeDisabled();
     await expect(
       page.getByRole('button', { name: 'Fetch Metadata' })
     ).toBeDisabled();

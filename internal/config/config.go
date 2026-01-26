@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -74,6 +74,7 @@ type Config struct {
 	} `json:"api_keys"`
 
 	SupportedExtensions []string `json:"supported_extensions"`
+	ExcludePatterns     []string `json:"exclude_patterns"`
 }
 
 var AppConfig Config
@@ -123,6 +124,18 @@ func InitConfig() {
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("enable_json_logging", false)
+	viper.SetDefault("supported_extensions", []string{
+		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
+	})
+	viper.SetDefault("exclude_patterns", []string{})
+
+	supportedExtensions := []string{
+		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
+	}
+	if viper.IsSet("supported_extensions") {
+		supportedExtensions = viper.GetStringSlice("supported_extensions")
+	}
+	excludePatterns := viper.GetStringSlice("exclude_patterns")
 
 	AppConfig = Config{
 		// Core paths
@@ -172,9 +185,8 @@ func InitConfig() {
 		LogFormat:         viper.GetString("log_format"),
 		EnableJsonLogging: viper.GetBool("enable_json_logging"),
 
-		SupportedExtensions: []string{
-			".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
-		},
+		SupportedExtensions: supportedExtensions,
+		ExcludePatterns:     excludePatterns,
 	}
 
 	// API Keys
