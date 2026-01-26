@@ -4,7 +4,7 @@
 
 import { Component, ReactNode, ErrorInfo } from 'react';
 import { Box, Typography, Button, Paper } from '@mui/material';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline.js';
 
 interface Props {
   children: ReactNode;
