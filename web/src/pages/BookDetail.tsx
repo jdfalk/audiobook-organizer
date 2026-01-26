@@ -34,10 +34,10 @@ import {
   TableCell,
   TableBody,
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import DeleteIcon from '@mui/icons-material/Delete';
-import RestoreIcon from '@mui/icons-material/Restore';
-import EditIcon from '@mui/icons-material/Edit';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
+import DeleteIcon from '@mui/icons-material/Delete.js';
+import RestoreIcon from '@mui/icons-material/Restore.js';
+import EditIcon from '@mui/icons-material/Edit.js';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import CompareIcon from '@mui/icons-material/Compare';
