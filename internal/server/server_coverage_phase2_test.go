@@ -1,5 +1,3 @@
-//go:build mocks
-
 package server
 
 import (
