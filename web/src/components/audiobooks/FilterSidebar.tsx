@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/FilterSidebar.tsx
-// version: 1.0.0
+// version: 1.2.0
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 import React from 'react';
@@ -82,6 +82,24 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
         <Stack spacing={3}>
           <FormControl fullWidth>
+            <InputLabel>Library State</InputLabel>
+            <Select
+              value={filters.libraryState || ''}
+              onChange={(e) =>
+                handleFilterChange('libraryState', e.target.value)
+              }
+              label="Library State"
+            >
+              <MenuItem value="">
+                <em>All States</em>
+              </MenuItem>
+              <MenuItem value="organized">Organized</MenuItem>
+              <MenuItem value="import">Import</MenuItem>
+              <MenuItem value="deleted">Deleted</MenuItem>
+            </Select>
+          </FormControl>
+
+          <FormControl fullWidth>
             <InputLabel>Author</InputLabel>
             <Select
               value={filters.author || ''}
@@ -153,33 +171,6 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
             </Select>
           </FormControl>
 
-          <Divider />
-
-          <FormControl fullWidth>
-            <InputLabel>Sort By</InputLabel>
-            <Select
-              value={filters.sortBy || 'title'}
-              onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-              label="Sort By"
-            >
-              <MenuItem value="title">Title</MenuItem>
-              <MenuItem value="author">Author</MenuItem>
-              <MenuItem value="year">Year</MenuItem>
-              <MenuItem value="created_at">Date Added</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl fullWidth>
-            <InputLabel>Sort Order</InputLabel>
-            <Select
-              value={filters.sortOrder || 'asc'}
-              onChange={(e) => handleFilterChange('sortOrder', e.target.value)}
-              label="Sort Order"
-            >
-              <MenuItem value="asc">Ascending</MenuItem>
-              <MenuItem value="desc">Descending</MenuItem>
-            </Select>
-          </FormControl>
         </Stack>
       </Box>
     </Drawer>

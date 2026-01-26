@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 import React from 'react';
@@ -19,6 +19,7 @@ import {
   Chip,
   Box,
   CircularProgress,
+  Checkbox,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -33,6 +34,9 @@ interface AudiobookListProps {
   onEdit?: (audiobook: Audiobook) => void;
   onDelete?: (audiobook: Audiobook) => void;
   onClick?: (audiobook: Audiobook) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (audiobook: Audiobook) => void;
+  onSelectAll?: () => void;
 }
 
 export const AudiobookList: React.FC<AudiobookListProps> = ({
@@ -41,6 +45,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   onEdit,
   onDelete,
   onClick,
+  selectedIds,
+  onToggleSelect,
+  onSelectAll,
 }) => {
   const [anchorEls, setAnchorEls] = React.useState<
     Record<string, HTMLElement | null>
@@ -71,6 +78,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   const handleRowClick = (audiobook: Audiobook) => {
     onClick?.(audiobook);
   };
+
+  const allSelected =
+    audiobooks.length > 0 &&
+    audiobooks.every((book) => selectedIds?.has(book.id));
+  const someSelected = audiobooks.some((book) => selectedIds?.has(book.id));
 
   const formatDuration = (seconds?: number): string => {
     if (!seconds) return '--';
@@ -126,6 +138,18 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
       <Table>
         <TableHead>
           <TableRow>
+            <TableCell width={50} padding="checkbox">
+              {onSelectAll && (
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected && !allSelected}
+                  onChange={onSelectAll}
+                  inputProps={{
+                    'aria-label': 'Select all books on page',
+                  }}
+                />
+              )}
+            </TableCell>
             <TableCell width={50}></TableCell>
             <TableCell>Title</TableCell>
             <TableCell>Author</TableCell>
@@ -145,6 +169,18 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               onClick={() => handleRowClick(audiobook)}
               sx={{ cursor: onClick ? 'pointer' : 'default' }}
             >
+              <TableCell>
+                {onToggleSelect && (
+                  <Checkbox
+                    checked={selectedIds?.has(audiobook.id) || false}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => onToggleSelect(audiobook)}
+                    inputProps={{
+                      'aria-label': `Select ${audiobook.title || 'audiobook'}`,
+                    }}
+                  />
+                )}
+              </TableCell>
               <TableCell>
                 {audiobook.cover_path ? (
                   <Avatar

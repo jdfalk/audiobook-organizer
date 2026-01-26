@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataEditDialog.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
 import React, { useState, useEffect } from 'react';
@@ -32,15 +32,39 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
   const [formData, setFormData] = useState<Partial<Audiobook>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [yearInput, setYearInput] = useState('');
+  const [yearError, setYearError] = useState<string | null>(null);
 
   useEffect(() => {
     if (audiobook) {
       setFormData(audiobook);
+      setYearInput(
+        typeof audiobook.year === 'number' ? String(audiobook.year) : ''
+      );
+      setYearError(null);
     }
   }, [audiobook]);
 
   const handleChange = (field: keyof Audiobook, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleYearChange = (value: string) => {
+    setYearInput(value);
+    if (value.trim() === '') {
+      setYearError(null);
+      setFormData((prev) => ({ ...prev, year: undefined }));
+      return;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      setYearError('Year must be a number');
+      return;
+    }
+
+    setYearError(null);
+    setFormData((prev) => ({ ...prev, year: parsed }));
   };
 
   const handleSave = async () => {
@@ -50,6 +74,11 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
     setError(null);
 
     try {
+      if (yearError) {
+        setError(yearError);
+        setSaving(false);
+        return;
+      }
       await onSave({ ...audiobook, ...formData });
       onClose();
     } catch (err) {
@@ -135,11 +164,12 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
               <TextField
                 fullWidth
                 label="Year"
-                type="number"
-                value={formData.year || ''}
-                onChange={(e) =>
-                  handleChange('year', parseInt(e.target.value) || 0)
-                }
+                type="text"
+                inputMode="numeric"
+                value={yearInput}
+                onChange={(e) => handleYearChange(e.target.value)}
+                error={Boolean(yearError)}
+                helperText={yearError || ' '}
               />
             </Grid>
 
