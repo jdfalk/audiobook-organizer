@@ -71,6 +71,29 @@
   - [ ] Soft-deleted list: Restore and purge actions
   - **Priority**: P0 - Safety net for frontend changes
   - **Blocker**: None - infrastructure exists, needs test expansion
+  - **Status**: See E2E_TEST_PLAN.md for comprehensive test scenarios (120+ tests)
+
+### iTunes Library Import (Est: 6-8 hours)
+
+- [ ] **iTunes Library Database Import** - Critical for migration from iTunes to
+      audiobook-organizer
+  - [ ] Parse iTunes Library.xml or iTunes Music Library.xml
+  - [ ] Extract audiobook entries (distinguish from music/podcasts)
+  - [ ] Preserve all iTunes metadata:
+    - [ ] Title, Artist, Album, Genre, Year
+    - [ ] Play count, rating, last played date
+    - [ ] Bookmarks, playback position
+    - [ ] Playlist memberships
+    - [ ] File location paths
+  - [ ] Map iTunes audiobook paths to import operations
+  - [ ] Option: Import as organized (if files already in desired location)
+  - [ ] Option: Import as unorganized (trigger scan/organize workflow)
+  - [ ] **BONUS**: Built-in UI import wizard (not script)
+  - [ ] **BONUS**: Write-back support - Update iTunes library with new file paths
+        after organize
+  - **Priority**: P0 - Personal blocker for switching to audiobook-organizer
+  - **Blocker**: None - can implement immediately
+  - **Status**: See ITUNES_IMPORT_SPECIFICATION.md for detailed requirements
 
 ---
 
@@ -1169,6 +1192,55 @@
 - [ ] Create web_test.go - test HTTP handlers and API endpoints
 
 ## Future Improvements
+
+### vNext - Advanced Tagging & Templating System
+
+- [ ] **Comprehensive Tagging System**
+  - [ ] Tag-based configuration profiles (different settings per tag)
+  - [ ] Tag inheritance and hierarchies
+  - [ ] Bulk tag operations (add/remove tags from multiple books)
+  - [ ] Tag-based filters and smart collections
+  - [ ] Tag-based automation rules (auto-tag based on criteria)
+  - [ ] Tag colors and icons for visual organization
+
+- [ ] **Advanced File/Folder Naming Templates** - Similar to Sonarr/Radarr
+      templating
+  - [ ] Custom field placeholders for file names:
+    - [ ] `{Title}`, `{CleanTitle}`, `{TitleThe}` (article handling)
+    - [ ] `{Author}`, `{AuthorLast}`, `{AuthorFirst}`
+    - [ ] `{Narrator}`, `{NarratorLast}`, `{NarratorFirst}`
+    - [ ] `{Series}`, `{SeriesTitle}`, `{SeriesPosition}`
+    - [ ] `{Year}`, `{PublishYear}`, `{AudiobookReleaseYear}`
+    - [ ] `{Publisher}`, `{Language}`, `{Edition}`
+    - [ ] `{Quality}` (bitrate, codec, sample rate)
+    - [ ] `{Duration}`, `{FileSize}`, `{Format}`
+    - [ ] `{Genre}`, `{SubGenre}`, `{Tags}`
+    - [ ] `{ISBN}`, `{ASIN}`, `{ISBN13}`
+  - [ ] Format modifiers:
+    - [ ] Case transformations: `{Title:upper}`, `{Title:lower}`,
+          `{Title:title}`, `{Title:camel}`
+    - [ ] Truncation: `{Title:30}` (30 chars from end), `{Title:-30}` (from
+          start)
+    - [ ] Padding: `{SeriesPosition:00}`, `{SeriesPosition:000}`
+    - [ ] Replacement: `{Title:replace(' ','.')}`
+    - [ ] Conditionals: `{Series:+[Series]}` (only if series exists)
+  - [ ] Folder naming templates:
+    - [ ] `{Author}/{Series}/{Title}` - Standard series organization
+    - [ ] `{Author}/{Title} ({Year})` - Author-centric flat
+    - [ ] `{Genre}/{Author}/{Title}` - Genre-first hierarchy
+    - [ ] `{Language}/{Author}/{Series}` - Language separation
+  - [ ] File naming templates:
+    - [ ] `{Author} - {Title} ({Year})` - Simple format
+    - [ ] `{Series} - {SeriesPosition:00} - {Title}` - Series format
+    - [ ] `{Author}.{Title}.{Year}.{Quality}` - Dot-separated
+    - [ ] Custom patterns with all placeholders available
+  - [ ] Live preview of naming patterns during configuration
+  - [ ] Pattern validation (filesystem compatibility checks)
+  - [ ] Import existing patterns from other media managers
+  - [ ] Per-tag template overrides (different patterns per library section)
+  - **Priority**: vNext - Major feature for power users
+  - **Inspiration**: Sonarr/Radarr naming system
+  - **Benefit**: Complete control over library organization structure
 
 ### Multi-User & Security
 
