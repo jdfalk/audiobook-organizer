@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -10,6 +10,13 @@ import {
   Grid,
   Paper,
   LinearProgress,
+  Button,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert,
   Card,
   CardContent,
   List,
@@ -39,6 +46,8 @@ interface SystemStats {
   library_size_gb: number;
   import_size_gb: number;
   total_size_gb: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
   disk_usage_percent: number;
 }
 
@@ -62,9 +71,14 @@ export function Dashboard() {
     library_size_gb: 0,
     import_size_gb: 0,
     total_size_gb: 0,
+    disk_used_gb: 0,
+    disk_total_gb: 0,
     disk_usage_percent: 0,
   });
   const [operations, setOperations] = useState<RecentOperation[]>([]);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
+  const [organizeInProgress, setOrganizeInProgress] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -104,6 +118,12 @@ export function Dashboard() {
         0;
       const totalSizeBytes =
         systemStatus.total_size_bytes ?? librarySizeBytes + importSizeBytes;
+      const diskTotalBytes =
+        systemStatus.disk_total_bytes ?? totalSizeBytes;
+      const diskUsedBytes =
+        systemStatus.disk_used_bytes ?? librarySizeBytes + importSizeBytes;
+      const diskUsagePercent =
+        diskTotalBytes > 0 ? (diskUsedBytes / diskTotalBytes) * 100 : 0;
 
       setStats({
         library_books: libraryBooks,
@@ -115,7 +135,9 @@ export function Dashboard() {
         library_size_gb: librarySizeBytes / (1024 * 1024 * 1024),
         import_size_gb: importSizeBytes / (1024 * 1024 * 1024),
         total_size_gb: totalSizeBytes / (1024 * 1024 * 1024),
-        disk_usage_percent: 0, // Calculate if needed
+        disk_used_gb: diskUsedBytes / (1024 * 1024 * 1024),
+        disk_total_gb: diskTotalBytes / (1024 * 1024 * 1024),
+        disk_usage_percent: diskUsagePercent,
       });
 
       // Convert recent operations to dashboard format
@@ -137,6 +159,38 @@ export function Dashboard() {
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       // Keep default/empty state on error
+    }
+  };
+
+  const handleScanAll = async () => {
+    setActionNotice(null);
+    try {
+      await api.startScan();
+      setActionNotice('Scan started for all import paths.');
+      navigate('/operations');
+    } catch (error) {
+      console.error('Failed to start scan', error);
+      setActionNotice('Failed to start scan.');
+    }
+  };
+
+  const handleOrganizeAll = () => {
+    setOrganizeDialogOpen(true);
+  };
+
+  const handleConfirmOrganizeAll = async () => {
+    setOrganizeInProgress(true);
+    setActionNotice(null);
+    try {
+      await api.startOrganize();
+      setActionNotice('Organize operation started.');
+      setOrganizeDialogOpen(false);
+      navigate('/operations');
+    } catch (error) {
+      console.error('Failed to start organize', error);
+      setActionNotice('Failed to start organize.');
+    } finally {
+      setOrganizeInProgress(false);
     }
   };
 
@@ -205,6 +259,12 @@ export function Dashboard() {
         Dashboard
       </Typography>
 
+      {actionNotice && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {actionNotice}
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -253,7 +313,8 @@ export function Dashboard() {
                   Total Size
                 </Typography>
                 <Typography variant="body2" fontWeight="medium">
-                  {stats.total_size_gb.toFixed(1)} GB
+                  {stats.disk_used_gb.toFixed(1)} GB /{' '}
+                  {stats.disk_total_gb.toFixed(1)} GB
                 </Typography>
               </Box>
               <LinearProgress
@@ -266,7 +327,7 @@ export function Dashboard() {
                 color="text.secondary"
                 sx={{ mt: 0.5, display: 'block' }}
               >
-                {stats.disk_usage_percent}% of disk used
+                {stats.disk_usage_percent.toFixed(0)}% of disk used
               </Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
@@ -316,7 +377,50 @@ export function Dashboard() {
             )}
           </Paper>
         </Grid>
+
+        <Grid item xs={12}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Quick Actions
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <Button variant="contained" onClick={handleScanAll}>
+                Scan All Import Paths
+              </Button>
+              <Button variant="outlined" onClick={handleOrganizeAll}>
+                Organize All
+              </Button>
+            </Stack>
+          </Paper>
+        </Grid>
       </Grid>
+
+      <Dialog
+        open={organizeDialogOpen}
+        onClose={() => setOrganizeDialogOpen(false)}
+      >
+        <DialogTitle>Organize All Import Books</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This will organize all books currently in the import queue.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOrganizeDialogOpen(false)}
+            disabled={organizeInProgress}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmOrganizeAll}
+            disabled={organizeInProgress}
+          >
+            {organizeInProgress ? 'Organizing...' : 'Organize'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
