@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookGrid.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 import React from 'react';
@@ -16,6 +16,8 @@ interface AudiobookGridProps {
   onVersionManage?: (audiobook: Audiobook) => void;
   onFetchMetadata?: (audiobook: Audiobook) => void;
   onParseWithAI?: (audiobook: Audiobook) => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
@@ -27,6 +29,8 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
   onVersionManage,
   onFetchMetadata,
   onParseWithAI,
+  selectedIds,
+  onToggleSelect,
 }) => {
   if (loading) {
     return (
@@ -73,6 +77,9 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
             onVersionManage={onVersionManage}
             onFetchMetadata={onFetchMetadata}
             onParseWithAI={onParseWithAI}
+            selectable={Boolean(onToggleSelect)}
+            selected={selectedIds?.has(audiobook.id) || false}
+            onToggleSelect={onToggleSelect}
           />
         </Grid>
       ))}

@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React from 'react';
@@ -21,7 +21,7 @@ import {
   GridView as GridViewIcon,
   ViewList as ViewListIcon,
 } from '@mui/icons-material';
-import { SortField } from '../../types';
+import { SortField, SortOrder } from '../../types';
 
 export type ViewMode = 'grid' | 'list';
 
@@ -32,6 +32,8 @@ interface SearchBarProps {
   onViewModeChange: (mode: ViewMode) => void;
   sortBy?: SortField;
   onSortChange?: (sort: SortField) => void;
+  sortOrder?: SortOrder;
+  onSortOrderChange?: (order: SortOrder) => void;
   placeholder?: string;
 }
 
@@ -42,6 +44,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onViewModeChange,
   sortBy = SortField.Title,
   onSortChange,
+  sortOrder = SortOrder.Ascending,
+  onSortOrderChange,
   placeholder = 'Search audiobooks...',
 }) => {
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -97,6 +101,21 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             <MenuItem value={SortField.Author}>Author</MenuItem>
             <MenuItem value={SortField.Year}>Year</MenuItem>
             <MenuItem value={SortField.CreatedAt}>Date Added</MenuItem>
+          </Select>
+        </FormControl>
+      )}
+
+      {onSortOrderChange && (
+        <FormControl sx={{ minWidth: 140 }}>
+          <InputLabel id="sort-order-label">Order</InputLabel>
+          <Select
+            labelId="sort-order-label"
+            value={sortOrder}
+            label="Order"
+            onChange={(e) => onSortOrderChange(e.target.value as SortOrder)}
+          >
+            <MenuItem value={SortOrder.Ascending}>Ascending</MenuItem>
+            <MenuItem value={SortOrder.Descending}>Descending</MenuItem>
           </Select>
         </FormControl>
       )}
