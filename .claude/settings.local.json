@@ -18,7 +18,22 @@
       "Bash(mockery:*)",
       "Bash(chmod:*)",
       "Bash(./scripts/setup-mockery.sh:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(wc:*)",
+      "Bash(npm test:*)",
+      "Bash(npx playwright test --reporter=list)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm run test:e2e:*)",
+      "mcp__plugin_github_github__create_pull_request",
+      "mcp__plugin_github_github__merge_pull_request",
+      "Bash(git pull:*)",
+      "mcp__plugin_github_github__list_releases",
+      "Bash(git rev-parse:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh api:*)",
+      "Bash(gh run watch:*)",
+      "Bash(xargs gh run watch:*)"
     ]
   }
 }
