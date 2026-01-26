@@ -1495,6 +1495,28 @@ export const BookDetail = () => {
         onSave={handleEditSave}
       />
 
+      <Dialog
+        open={conflictDialogOpen}
+        onClose={() => setConflictDialogOpen(false)}
+      >
+        <DialogTitle>Update Conflict</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            This audiobook was updated by another user while you were editing.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Reload to fetch the latest data, or overwrite to save your changes
+            anyway.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleConflictReload}>Reload</Button>
+          <Button variant="contained" onClick={handleConflictOverwrite}>
+            Overwrite
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <VersionManagement
         audiobookId={book.id}
         open={versionDialogOpen}
