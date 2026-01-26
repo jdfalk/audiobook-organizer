@@ -14,11 +14,13 @@
 ## Overview
 
 ### Current State
+
 - **Existing E2E tests**: 4 files, 21 test cases
 - **Current coverage**: ~25% of user workflows
 - **Target coverage**: 90%+ of critical user workflows
 
 ### Goals
+
 1. Document **every possible user workflow** in the application
 2. Map each workflow to specific Playwright test scenarios
 3. Prioritize tests by user impact and workflow criticality
@@ -58,6 +60,7 @@ web/tests/e2e/
 **File**: `library-browser.spec.ts`
 
 #### User Stories
+
 - As a user, I want to view all my audiobooks in a grid/list
 - As a user, I want to sort books by different fields
 - As a user, I want to filter books by state/author/series
@@ -221,6 +224,7 @@ describe('Library Browser', () => {
 **File**: `search-and-filter.spec.ts`
 
 #### User Stories
+
 - As a user, I want to search for books by title
 - As a user, I want to search for books by author
 - As a user, I want to see search results instantly
@@ -320,6 +324,7 @@ describe('Search Functionality', () => {
 **File**: `batch-operations.spec.ts`
 
 #### User Stories
+
 - As a user, I want to select multiple books
 - As a user, I want to fetch metadata for multiple books at once
 - As a user, I want to update metadata for multiple books
@@ -458,6 +463,7 @@ describe('Batch Operations', () => {
 **File**: `scan-import-organize.spec.ts`
 
 #### User Stories
+
 - As a user, I want to add a folder to scan for books
 - As a user, I want to scan that folder
 - As a user, I want to see progress of the scan
@@ -667,6 +673,7 @@ describe('Scan/Import/Organize Workflow', () => {
 **File**: `settings-configuration.spec.ts`
 
 #### User Stories
+
 - As a user, I want to configure my library root directory
 - As a user, I want to configure my OpenAI API key for AI parsing
 - As a user, I want to configure scan settings
@@ -1328,6 +1335,7 @@ describe('Dashboard', () => {
 ## Part 4: Implementation Priority & Timeline
 
 ### Phase 1: Critical Workflows (2-3 days)
+
 **Total**: ~25 hours
 
 1. **Library Browser** (6-8 hours) - P0
@@ -1356,25 +1364,26 @@ describe('Dashboard', () => {
 ---
 
 ### Phase 2: Important Workflows (1-2 days)
+
 **Total**: ~15 hours
 
-6. **File Browser** (3-4 hours) - P1
+1. **File Browser** (3-4 hours) - P1
    - Browse filesystem
    - Create/remove .jabexclude
 
-7. **Operation Monitoring** (3-4 hours) - P1
+2. **Operation Monitoring** (3-4 hours) - P1
    - View active operations
    - Monitor progress, view logs
 
-8. **Version Management** (2-3 hours) - P1
+3. **Version Management** (2-3 hours) - P1
    - Link/unlink versions
    - Set primary version
 
-9. **Backup and Restore** (2-3 hours) - P1
+4. **Backup and Restore** (2-3 hours) - P1
    - Create backup
    - Restore from backup
 
-10. **Dashboard** (2-3 hours) - P1
+5. **Dashboard** (2-3 hours) - P1
     - View statistics
     - Quick actions
 
@@ -1383,14 +1392,15 @@ describe('Dashboard', () => {
 ---
 
 ### Phase 3: Secondary Workflows (1 day)
+
 **Total**: ~5 hours
 
-11. **Error Handling** (2-3 hours) - P2
+1. **Error Handling** (2-3 hours) - P2
     - Network errors
     - Validation errors
     - Session handling
 
-12. **Edge Cases & Polish** (2-3 hours) - P2
+2. **Edge Cases & Polish** (2-3 hours) - P2
     - Empty states
     - Loading states
     - Accessibility
@@ -1571,6 +1581,7 @@ This comprehensive E2E test plan documents **every possible user workflow** in t
 ### Success Criteria
 
 The audiobook-organizer will be **MVP-ready** when:
+
 - ✅ 90%+ of user workflows have E2E coverage
 - ✅ All critical paths validated (scan/import/organize, library browser, settings)
 - ✅ Manual QA confirms tests match real user experience
