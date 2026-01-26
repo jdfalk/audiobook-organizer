@@ -89,49 +89,82 @@ packages:
 ## Best Practices
 
 1. **Default Testing**: Use `go test ./...` for day-to-day development
-2. **Mock Testing**: Use `go test -tags=mocks ./...` when working on mock-dependent tests
-3. **CI/CD**: Run both commands in CI to ensure all tests pass:
-   ```bash
-   go test ./...                  # Test without mocks
-   go test -tags=mocks ./...      # Test with mocks
-   ```
-4. **Coverage**: Generate coverage separately for each mode:
+   - Mocks are now included by default (no build tags required)
+2. **Coverage**: Generate coverage with standard commands:
    ```bash
    go test -cover ./...
-   go test -tags=mocks -cover ./...
+   make coverage
    ```
 
-## Why This Approach?
+## Why Mocks Are Default
 
-### Benefits
-- ✅ No manual `--exclude` flags needed
-- ✅ Clear separation between mock and real implementations
-- ✅ Faster test runs (mock tests are optional)
-- ✅ Explicit about when mocks are used
-- ✅ Standard Go mechanism (build constraints)
+As of 2026-01-25, all `//go:build mocks` tags have been removed from test and mock files. This means:
+- ✅ All tests run by default (no special flags needed)
+- ✅ Coverage measurements are always accurate
+- ✅ Simpler developer experience
+- ✅ No confusion about which tests are running
 
-### Trade-offs
-- Manual build tag addition after mockery generation
-- Need to remember `-tags=mocks` when working on mock tests
-- Slight complexity in understanding which tests run when
+### Previous Approach (Deprecated)
 
-## Troubleshooting
+Previously, mock files and tests used `//go:build mocks` tags to make them optional. This required using `-tags=mocks` flag to include them. **This is no longer necessary.**
 
-### "build constraints exclude all Go files"
-This error means you're trying to import the mocks package but didn't specify `-tags=mocks`. Either:
-1. Add `-tags=mocks` to your test command, OR
-2. Add `//go:build mocks` to the test file that imports mocks
+## Coverage Measurement
 
-### Tests Not Running
-- Without `-tags=mocks`: Only tests that DON'T import mocks will run
-- With `-tags=mocks`: ALL tests will run, including those that import mocks
+### ✅ Standard Coverage Measurement
 
-### Mock Not Found During Test
-If a test file imports `internal/database/mocks` but you see "package not found":
-1. Ensure the test file has `//go:build mocks` at the top
-2. Run with `-tags=mocks`
+```bash
+# Option 1: Use Makefile (recommended)
+make test           # Run all tests
+make coverage       # Generate HTML report
+make coverage-check # Verify >= 80%
+
+# Option 2: Use go test directly
+go test ./... -cover
+# Shows: ~86% coverage
+```
+
+### Coverage Breakdown
+
+```
+Overall: 86.1%
+- internal/operations: 90.6% ✅
+- internal/metadata:   85.9% ✅
+- internal/scanner:    80.7% ✅
+- internal/server:     72.1% ⚠️
+- cmd:                 78.6% ⚠️
+```
+
+### CI/CD Integration
+
+Use standard test commands in CI pipelines:
+
+```yaml
+# .github/workflows/ci.yml
+- name: Test with coverage
+  run: go test ./... -coverprofile=coverage.out
+
+# Or use Makefile
+- name: Test with coverage
+  run: make coverage-check
+```
+
+### Summary
+
+| Command | Coverage | Status |
+|---------|----------|--------|
+| `go test ./...` | 86.1% | ✅ Accurate |
+| `make test` | 86.1% | ✅ Recommended |
+| `make coverage-check` | Verifies >= 80% | ✅ Best for CI |
+
+**All mocks are included by default - no special flags needed!**
 
 ## Related Files
 - `.mockery.yaml` - Mockery configuration
 - `MOCKERY_IMPLEMENTATION_COMPLETE.md` - Original mockery implementation guide
 - `internal/database/mocks/mock_store.go` - Generated mock with build tag
+- `Makefile` - Test targets with proper mocks tags
+
+## References
+- [Go Build Tags Documentation](https://pkg.go.dev/cmd/go#hdr-Build_constraints)
+- [Mockery v3 Documentation](https://vektra.github.io/mockery/latest/)
+- [Testify Mock Documentation](https://pkg.go.dev/github.com/stretchr/testify/mock)
