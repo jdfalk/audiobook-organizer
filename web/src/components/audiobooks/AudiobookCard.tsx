@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -13,6 +13,7 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Checkbox,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -32,6 +33,9 @@ interface AudiobookCardProps {
   onVersionManage?: (audiobook: Audiobook) => void;
   onFetchMetadata?: (audiobook: Audiobook) => void;
   onParseWithAI?: (audiobook: Audiobook) => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (audiobook: Audiobook) => void;
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -42,6 +46,9 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
   onVersionManage,
   onFetchMetadata,
   onParseWithAI,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -89,6 +96,11 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
     onClick?.(audiobook);
   };
 
+  const handleSelectToggle = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    onToggleSelect?.(audiobook);
+  };
+
   // Placeholder cover art with first letter of title
   const getCoverPlaceholder = () => {
     return audiobook.title?.charAt(0).toUpperCase() || '?';
@@ -110,6 +122,23 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
       onClick={handleCardClick}
     >
       <Box sx={{ position: 'relative' }}>
+        {selectable && (
+          <Checkbox
+            checked={selected}
+            onClick={handleSelectToggle}
+            inputProps={{
+              'aria-label': `Select ${audiobook.title || 'audiobook'}`,
+            }}
+            sx={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              bgcolor: 'background.paper',
+              borderRadius: 1,
+              zIndex: 1,
+            }}
+          />
+        )}
         {audiobook.cover_path ? (
           <CardMedia
             component="img"
