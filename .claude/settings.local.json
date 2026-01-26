@@ -17,7 +17,8 @@
       "Bash(cut:*)",
       "Bash(mockery:*)",
       "Bash(chmod:*)",
-      "Bash(./scripts/setup-mockery.sh:*)"
+      "Bash(./scripts/setup-mockery.sh:*)",
+      "Bash(done)"
     ]
   }
 }
