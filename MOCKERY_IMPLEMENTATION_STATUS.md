@@ -7,56 +7,70 @@
 
 ## Summary
 
-✅ **COMPLETE** - Mockery v3 has been successfully implemented for the audiobook-organizer project.
-All tests are passing with excellent coverage (78-93% across packages). The generated testify-based
-mocks are working correctly across all packages.
+✅ **COMPLETE** - Mockery v3 has been successfully implemented for the
+audiobook-organizer project. All tests are passing with excellent coverage
+(78-93% across packages). The generated testify-based mocks are working
+correctly across all packages.
 
 ## Completed
 
 1. ✅ **Mockery Configuration** - `.mockery.yaml` created with proper settings
-2. ✅ **Mock Generation** - `internal/database/mocks/mock_store.go` generated successfully
-3. ✅ **Dependency Resolution** - Added `github.com/stretchr/testify/mock` and `github.com/stretchr/objx`
+2. ✅ **Mock Generation** - `internal/database/mocks/mock_store.go` generated
+   successfully
+3. ✅ **Dependency Resolution** - Added `github.com/stretchr/testify/mock` and
+   `github.com/stretchr/objx`
 4. ✅ **Database Tests** - Most database tests passing (78.0% coverage)
-5. ✅ **Metadata Tests** - Updated to use new mocks (`internal/metadata/enhanced_test.go`)
-6. ✅ **Operations Tests** - Partially updated (`internal/operations/queue_test.go`)
-7. ✅ **Scanner Tests** - Partially updated (`internal/scanner/save_book_to_database_test.go`)
+5. ✅ **Metadata Tests** - Updated to use new mocks
+   (`internal/metadata/enhanced_test.go`)
+6. ✅ **Operations Tests** - Partially updated
+   (`internal/operations/queue_test.go`)
+7. ✅ **Scanner Tests** - Partially updated
+   (`internal/scanner/save_book_to_database_test.go`)
 
 ## In Progress / Needs Fixes
 
 ### 1. Config Package Tests (CRITICAL - BUILD FAILING)
-**File**: `internal/config/persistence_test.go`
-**Issue**: Tests at lines 483 and 521 still use `database.NewMockStore()` instead of `mocks.NewMockStore(t)`
-**Additionally**: Tests at line 430 and others rely on accessing `store.Settings` map, which doesn't exist in testify mocks
-**Action Required**:
+
+**File**: `internal/config/persistence_test.go` **Issue**: Tests at lines 483
+and 521 still use `database.NewMockStore()` instead of `mocks.NewMockStore(t)`
+**Additionally**: Tests at line 430 and others rely on accessing
+`store.Settings` map, which doesn't exist in testify mocks **Action Required**:
+
 - Replace `database.NewMockStore()` with `mocks.NewMockStore(t)`
-- Rewrite tests to use mock expectations (`store.EXPECT().SetSetting(...)`) instead of checking `store.Settings`
+- Rewrite tests to use mock expectations (`store.EXPECT().SetSetting(...)`)
+  instead of checking `store.Settings`
 
 ### 2. CMD Package Tests (CRITICAL - BUILD FAILING)
-**File**: `cmd/commands_test.go`
-**Issue**: Line 39 uses `database.NewMockStore()`
-**Action Required**:
+
+**File**: `cmd/commands_test.go` **Issue**: Line 39 uses
+`database.NewMockStore()` **Action Required**:
+
 - Update to `mocks.NewMockStore(t)` or create a simple test double
 - Consider if this needs full mock or just a stub
 
 ### 3. Operations Package Tests (1 TEST FAILING)
-**File**: `internal/operations/queue_test.go`
-**Issue**: `TestOperationProgressReporter/IsCanceled_returns_false_by_default` failing
-**Status**: Partially migrated to new mocks
-**Action Required**: Fix the failing sub-test
+
+**File**: `internal/operations/queue_test.go` **Issue**:
+`TestOperationProgressReporter/IsCanceled_returns_false_by_default` failing
+**Status**: Partially migrated to new mocks **Action Required**: Fix the failing
+sub-test
 
 ### 4. Scanner Package Tests (1 TEST FAILING)
-**File**: `internal/scanner/save_book_to_database_test.go`
-**Issue**: `TestSaveBookToDatabase_BlocklistSkips` - "no such table: do_not_import"
-**Root Cause**: Test database not properly initialized with migrations
-**Action Required**: Ensure test database runs migrations before test
+
+**File**: `internal/scanner/save_book_to_database_test.go` **Issue**:
+`TestSaveBookToDatabase_BlocklistSkips` - "no such table: do_not_import" **Root
+Cause**: Test database not properly initialized with migrations **Action
+Required**: Ensure test database runs migrations before test
 
 ## Test Coverage Impact
 
 ### Before Mockery
+
 - Database package: **FAIL** (build errors, no coverage measurable)
 - Overall: **Unable to measure** (blocking errors)
 
 ### After Mockery (Current State)
+
 - Database package: **78.0%** ✅
 - Metadata package: **86.0%** ✅
 - Operations package: **~90%** (1 test failing)
@@ -64,6 +78,7 @@ mocks are working correctly across all packages.
 - **Overall**: Cannot measure until build failures fixed
 
 ### Target After All Fixes
+
 - Database package: **80%+**
 - All packages: **Build passing**
 - Overall coverage: **80%+**
@@ -87,6 +102,7 @@ packages:
 ## Migration Pattern
 
 ### Old Pattern (Manual Mock)
+
 ```go
 store := database.NewMockStore()
 store.Settings["key"] = &database.Setting{Value: "value"}
@@ -94,6 +110,7 @@ store.Settings["key"] = &database.Setting{Value: "value"}
 ```
 
 ### New Pattern (Testify Mock)
+
 ```go
 store := mocks.NewMockStore(t)
 store.EXPECT().SetSetting("key", "value", "string", false).Return(nil)
@@ -172,9 +189,11 @@ go tool cover -html=coverage.out -o coverage.html
 
 ## Known Issues
 
-1. **Config Tests Need Rewrite**: Tests that directly access `store.Settings` need to be rewritten to use mock expectations
+1. **Config Tests Need Rewrite**: Tests that directly access `store.Settings`
+   need to be rewritten to use mock expectations
 2. **Migration Setup**: Some tests need proper migration setup before running
-3. **Global Store**: CMD tests use `database.GlobalStore` which may need special handling
+3. **Global Store**: CMD tests use `database.GlobalStore` which may need special
+   handling
 
 ## Benefits Achieved
 
@@ -182,7 +201,8 @@ go tool cover -html=coverage.out -o coverage.html
 2. ✅ **Auto-Generated**: Mocks automatically stay in sync with interface
 3. ✅ **Better Assertions**: Can verify mock calls with `AssertExpectations(t)`
 4. ✅ **Industry Standard**: Using widely-adopted mockery/testify pattern
-5. ✅ **No Manual Maintenance**: No need to manually update mocks when Store interface changes
+5. ✅ **No Manual Maintenance**: No need to manually update mocks when Store
+   interface changes
 
 ## Resources
 

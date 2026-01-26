@@ -7,18 +7,24 @@
 
 ## Overview
 
-This project uses Go build tags to automatically exclude generated mock files from normal test runs. This improves the developer experience by eliminating the need for manual exclusion flags.
+This project uses Go build tags to automatically exclude generated mock files
+from normal test runs. This improves the developer experience by eliminating the
+need for manual exclusion flags.
 
 ## How It Works
 
-Mock files and their dependent tests are tagged with `//go:build mocks`, which acts as a build constraint. Files with this tag are only included when the `mocks` build tag is explicitly specified.
+Mock files and their dependent tests are tagged with `//go:build mocks`, which
+acts as a build constraint. Files with this tag are only included when the
+`mocks` build tag is explicitly specified.
 
 ## Files Tagged with `mocks`
 
 ### Generated Mock
+
 - `internal/database/mocks/mock_store.go` - Auto-generated testify mock
 
 ### Test Files Using Mocks
+
 - `internal/config/persistence_test.go`
 - `internal/metadata/enhanced_test.go`
 - `internal/operations/queue_test.go`
@@ -26,24 +32,29 @@ Mock files and their dependent tests are tagged with `//go:build mocks`, which a
 ## Running Tests
 
 ### Normal Test Run (Without Mocks)
+
 ```bash
 go test ./...
 ```
+
 - Runs all tests that don't depend on mocks
 - Tests 20 packages
 - Mock files are excluded automatically
 - Most tests use real SQLite/PebbleDB implementations
 
 ### Test Run With Mocks
+
 ```bash
 go test -tags=mocks ./...
 ```
+
 - Runs ALL tests including mock-dependent tests
 - Tests 21 packages
 - Includes the mocks directory (shows as "[no test files]")
 - Required for testing code that uses testify mocks
 
 ### Running Specific Mock Tests
+
 ```bash
 go test -tags=mocks ./internal/config/...
 go test -tags=mocks ./internal/metadata/...
@@ -55,11 +66,13 @@ go test -tags=mocks ./internal/operations/...
 When regenerating mocks with mockery, you must manually add the build tag:
 
 1. Run mockery:
+
    ```bash
    mockery
    ```
 
 2. Add the build tag to the top of the generated file:
+
    ```go
    //go:build mocks
 
@@ -72,6 +85,7 @@ When regenerating mocks with mockery, you must manually add the build tag:
 ## Configuration
 
 The `.mockery.yaml` file contains minimal configuration:
+
 ```yaml
 all: false
 dir: internal/database/mocks
@@ -84,7 +98,8 @@ packages:
       Store:
 ```
 
-**Note**: Mockery v3 does not support automatic build tag injection via configuration. The build tag must be added manually after generation.
+**Note**: Mockery v3 does not support automatic build tag injection via
+configuration. The build tag must be added manually after generation.
 
 ## Best Practices
 
@@ -98,7 +113,9 @@ packages:
 
 ## Why Mocks Are Default
 
-As of 2026-01-25, all `//go:build mocks` tags have been removed from test and mock files. This means:
+As of 2026-01-25, all `//go:build mocks` tags have been removed from test and
+mock files. This means:
+
 - ✅ All tests run by default (no special flags needed)
 - ✅ Coverage measurements are always accurate
 - ✅ Simpler developer experience
@@ -106,7 +123,9 @@ As of 2026-01-25, all `//go:build mocks` tags have been removed from test and mo
 
 ### Previous Approach (Deprecated)
 
-Previously, mock files and tests used `//go:build mocks` tags to make them optional. This required using `-tags=mocks` flag to include them. **This is no longer necessary.**
+Previously, mock files and tests used `//go:build mocks` tags to make them
+optional. This required using `-tags=mocks` flag to include them. **This is no
+longer necessary.**
 
 ## Coverage Measurement
 
@@ -150,21 +169,23 @@ Use standard test commands in CI pipelines:
 
 ### Summary
 
-| Command | Coverage | Status |
-|---------|----------|--------|
-| `go test ./...` | 86.1% | ✅ Accurate |
-| `make test` | 86.1% | ✅ Recommended |
+| Command               | Coverage        | Status         |
+| --------------------- | --------------- | -------------- |
+| `go test ./...`       | 86.1%           | ✅ Accurate    |
+| `make test`           | 86.1%           | ✅ Recommended |
 | `make coverage-check` | Verifies >= 80% | ✅ Best for CI |
 
 **All mocks are included by default - no special flags needed!**
 
 ## Related Files
+
 - `.mockery.yaml` - Mockery configuration
 - `MOCKERY_IMPLEMENTATION_COMPLETE.md` - Original mockery implementation guide
 - `internal/database/mocks/mock_store.go` - Generated mock with build tag
 - `Makefile` - Test targets with proper mocks tags
 
 ## References
+
 - [Go Build Tags Documentation](https://pkg.go.dev/cmd/go#hdr-Build_constraints)
 - [Mockery v3 Documentation](https://vektra.github.io/mockery/latest/)
 - [Testify Mock Documentation](https://pkg.go.dev/github.com/stretchr/testify/mock)

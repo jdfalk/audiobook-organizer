@@ -5,9 +5,9 @@
 
 # MVP Feature Gap Analysis
 
-**Date**: 2026-01-25
-**Purpose**: Compare MVP specification against actual implementation
-**Status**: Analysis complete - identifies features complete, partial, and missing
+**Date**: 2026-01-25 **Purpose**: Compare MVP specification against actual
+implementation **Status**: Analysis complete - identifies features complete,
+partial, and missing
 
 ---
 
@@ -15,16 +15,19 @@
 
 ### Overall MVP Completeness: ~85%
 
-**Backend API**: ✅ **95% Complete** - Exceeds MVP requirements
-**Frontend UI**: ✅ **80% Complete** - Core features done, some polish needed
-**E2E Testing**: ⚠️ **25% Complete** - Significant gaps in workflow coverage
-**Documentation**: ✅ **90% Complete** - Comprehensive docs exist
+**Backend API**: ✅ **95% Complete** - Exceeds MVP requirements **Frontend UI**:
+✅ **80% Complete** - Core features done, some polish needed **E2E Testing**: ⚠️
+**25% Complete** - Significant gaps in workflow coverage **Documentation**: ✅
+**90% Complete** - Comprehensive docs exist
 
 ### Critical Gap
 
-The primary gap is **E2E test coverage**. The backend and frontend implementation exceed MVP requirements, but comprehensive end-to-end tests covering all user workflows are missing.
+The primary gap is **E2E test coverage**. The backend and frontend
+implementation exceed MVP requirements, but comprehensive end-to-end tests
+covering all user workflows are missing.
 
-**Recommendation**: Focus on E2E test expansion to validate complete user workflows before MVP release.
+**Recommendation**: Focus on E2E test expansion to validate complete user
+workflows before MVP release.
 
 ---
 
@@ -35,6 +38,7 @@ The primary gap is **E2E test coverage**. The backend and frontend implementatio
 #### ✅ Library Management (100% Complete)
 
 **Spec Requirements:**
+
 ```
 GET    /api/audiobooks              # List all audiobooks with pagination/filtering
 GET    /api/audiobooks/{id}         # Get specific audiobook details
@@ -46,6 +50,7 @@ GET    /api/series                  # List all series
 ```
 
 **Actual Implementation:**
+
 ```go
 ✅ api.GET("/audiobooks", s.listAudiobooks)                      // With pagination/filtering
 ✅ api.GET("/audiobooks/:id", s.getAudiobook)                    // Get book details
@@ -64,11 +69,13 @@ GET    /api/series                  # List all series
 ✅ api.GET("/audiobooks/:id/tags", s.getAudiobookTags)
 ```
 
-**Status**: ✅ **Exceeds MVP requirements** - Soft delete, restore, and provenance tracking added
+**Status**: ✅ **Exceeds MVP requirements** - Soft delete, restore, and
+provenance tracking added
 
 #### ✅ File Operations (100% Complete)
 
 **Spec Requirements:**
+
 ```
 POST   /api/operations/scan         # Trigger library scan
 POST   /api/operations/move         # Move/rename files
@@ -78,6 +85,7 @@ DELETE /api/operations/{id}         # Cancel operation
 ```
 
 **Actual Implementation:**
+
 ```go
 ✅ api.POST("/operations/scan", s.startScan)                     // Trigger scan
 ✅ api.POST("/operations/organize", s.startOrganize)             // Organize library
@@ -90,13 +98,16 @@ DELETE /api/operations/{id}         # Cancel operation
 ✅ api.POST("/import/file", s.importFile)
 ```
 
-**Status**: ✅ **Exceeds MVP requirements** - Operation logs and active operation tracking added
+**Status**: ✅ **Exceeds MVP requirements** - Operation logs and active
+operation tracking added
 
-**Note**: `/api/operations/move` endpoint not explicitly found, but organize operation handles file movement.
+**Note**: `/api/operations/move` endpoint not explicitly found, but organize
+operation handles file movement.
 
 #### ✅ Folder Management (100% Complete)
 
 **Spec Requirements:**
+
 ```
 GET    /api/filesystem/browse       # Browse server filesystem
 POST   /api/filesystem/exclude      # Create .jabexclude file
@@ -107,6 +118,7 @@ DELETE /api/library/folders/{id}    # Remove folder from library
 ```
 
 **Actual Implementation:**
+
 ```go
 ✅ api.GET("/filesystem/browse", s.browseFilesystem)             // Browse filesystem
 ✅ api.POST("/filesystem/exclude", s.createExclusion)            // Create .jabexclude
@@ -123,6 +135,7 @@ DELETE /api/library/folders/{id}    # Remove folder from library
 #### ✅ System (100% Complete)
 
 **Spec Requirements:**
+
 ```
 GET    /api/system/status           # System health and statistics
 GET    /api/system/logs             # Application logs
@@ -131,6 +144,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **Actual Implementation:**
+
 ```go
 ✅ api.GET("/system/status", s.getSystemStatus)                  // System health
 ✅ api.GET("/system/logs", s.getSystemLogs)                      // App logs
@@ -148,6 +162,7 @@ PUT    /api/config                  # Update configuration
 #### ✅ BONUS Features Beyond MVP (Not in Spec)
 
 **Backup/Restore:**
+
 ```go
 ✅ api.POST("/backup/create", s.createBackup)
 ✅ api.GET("/backup/list", s.listBackups)
@@ -156,6 +171,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **Enhanced Metadata:**
+
 ```go
 ✅ api.POST("/metadata/batch-update", s.batchUpdateMetadata)
 ✅ api.POST("/metadata/validate", s.validateMetadata)
@@ -168,6 +184,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **AI Integration:**
+
 ```go
 ✅ api.POST("/ai/parse-filename", s.parseFilenameWithAI)
 ✅ api.POST("/ai/test-connection", s.testAIConnection)
@@ -175,6 +192,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **Work Management (for editions/translations):**
+
 ```go
 ✅ api.GET("/works", s.listWorks)
 ✅ api.POST("/works", s.createWork)
@@ -187,6 +205,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **Version Management (for duplicates):**
+
 ```go
 ✅ api.GET("/audiobooks/:id/versions", s.listAudiobookVersions)
 ✅ api.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
@@ -195,6 +214,7 @@ PUT    /api/config                  # Update configuration
 ```
 
 **Hash Blocking (for permanently removed books):**
+
 ```go
 ✅ api.GET("/blocked-hashes", s.listBlockedHashes)
 ✅ api.POST("/blocked-hashes", s.addBlockedHash)
@@ -203,14 +223,14 @@ PUT    /api/config                  # Update configuration
 
 ### Backend Summary
 
-| Category | Spec Requirement | Implementation | Status |
-|----------|------------------|----------------|--------|
-| Library Management | 7 endpoints | 13 endpoints | ✅ 186% |
-| File Operations | 5 endpoints | 8 endpoints | ✅ 160% |
-| Folder Management | 6 endpoints | 6 endpoints | ✅ 100% |
-| System | 4 endpoints | 7 endpoints | ✅ 175% |
-| **BONUS Features** | 0 endpoints | 30+ endpoints | ✅ Exceeded |
-| **TOTAL** | **22 endpoints** | **64+ endpoints** | ✅ **290%** |
+| Category           | Spec Requirement | Implementation    | Status      |
+| ------------------ | ---------------- | ----------------- | ----------- |
+| Library Management | 7 endpoints      | 13 endpoints      | ✅ 186%     |
+| File Operations    | 5 endpoints      | 8 endpoints       | ✅ 160%     |
+| Folder Management  | 6 endpoints      | 6 endpoints       | ✅ 100%     |
+| System             | 4 endpoints      | 7 endpoints       | ✅ 175%     |
+| **BONUS Features** | 0 endpoints      | 30+ endpoints     | ✅ Exceeded |
+| **TOTAL**          | **22 endpoints** | **64+ endpoints** | ✅ **290%** |
 
 **Backend Assessment**: ✅ **Significantly exceeds MVP requirements**
 
@@ -223,6 +243,7 @@ PUT    /api/config                  # Update configuration
 #### Phase 3: React Frontend Foundation (Weeks 5-6)
 
 **Spec Requirements:**
+
 1. ✅ Project Setup: Create React app with Material-UI and TypeScript
 2. ✅ Layout Components: Implement sidebar navigation and main content areas
 3. ✅ API Integration: Set up Axios client with proper error handling
@@ -232,6 +253,7 @@ PUT    /api/config                  # Update configuration
 **Actual Implementation:**
 
 Based on README.md and E2E tests:
+
 ```
 ✅ web/ - Vite + TypeScript + React 18
 ✅ Material-UI v5 theme configuration
@@ -245,6 +267,7 @@ Based on README.md and E2E tests:
 #### Phase 4: Library Browser (Weeks 7-8)
 
 **Spec Requirements:**
+
 1. Audiobook Grid: Display audiobooks with sorting and filtering
 2. Metadata Editor: Inline editing with validation and error handling
 3. Search Functionality: Full-text search across metadata
@@ -254,6 +277,7 @@ Based on README.md and E2E tests:
 **Actual Implementation:**
 
 From E2E tests and README:
+
 ```
 ✅ Library page exists (navigable via E2E tests)
 ✅ Book detail page with comprehensive tabs (Info, Files, Tags, Compare, Versions)
@@ -263,11 +287,13 @@ From E2E tests and README:
 ✅ Progress indicators: SSE events for real-time updates (README)
 ```
 
-**Status**: ✅ **~85% Complete** - Core features done, batch operations need E2E validation
+**Status**: ✅ **~85% Complete** - Core features done, batch operations need E2E
+validation
 
 #### Phase 5: File Management (Weeks 9-10)
 
 **Spec Requirements:**
+
 1. Directory Browser: Server filesystem navigation component
 2. Folder Management: Add/remove library folders interface
 3. Exclusion Management: Create/delete .jabexclude files
@@ -277,6 +303,7 @@ From E2E tests and README:
 **Actual Implementation:**
 
 From E2E tests:
+
 ```
 ✅ Import paths management (import-paths.spec.ts shows add/remove UI)
 ⚠️ Directory browser: API exists (/filesystem/browse) but UI not E2E tested
@@ -285,11 +312,13 @@ From E2E tests:
 ⚠️ Rescan operations UI: Backend exists (/operations/scan) but not E2E tested
 ```
 
-**Status**: ⚠️ **~50% Complete** - APIs ready, UI likely exists, needs E2E validation
+**Status**: ⚠️ **~50% Complete** - APIs ready, UI likely exists, needs E2E
+validation
 
 #### Phase 6: Settings & Status (Weeks 11-12)
 
 **Spec Requirements:**
+
 1. Settings Interface: Configuration management UI
 2. Status Dashboard: Operation monitoring and system stats
 3. Log Viewer: Application logs with filtering and search
@@ -299,6 +328,7 @@ From E2E tests:
 **Actual Implementation:**
 
 From E2E tests and README:
+
 ```
 ✅ Settings page exists (app.spec.ts navigates to Settings)
 ✅ Dashboard exists (README: "Dashboard" page in MVP features)
@@ -307,19 +337,21 @@ From E2E tests and README:
 ⚠️ Performance optimization: Not directly testable via E2E
 ```
 
-**Status**: ✅ **~75% Complete** - Core settings UI done, logs viewer needs E2E validation
+**Status**: ✅ **~75% Complete** - Core settings UI done, logs viewer needs E2E
+validation
 
 ### Frontend Summary
 
-| Phase | Spec Requirement | Implementation | E2E Coverage | Status |
-|-------|------------------|----------------|--------------|--------|
-| Phase 3 (Foundation) | 5 features | 5 features | 100% | ✅ Complete |
-| Phase 4 (Library Browser) | 5 features | ~4.5 features | 70% | ✅ ~85% |
-| Phase 5 (File Management) | 5 features | ~2.5 features | 20% | ⚠️ ~50% |
-| Phase 6 (Settings) | 5 features | ~4 features | 40% | ✅ ~75% |
-| **TOTAL** | **20 features** | **~16 features** | **~50%** | ✅ **~80%** |
+| Phase                     | Spec Requirement | Implementation   | E2E Coverage | Status      |
+| ------------------------- | ---------------- | ---------------- | ------------ | ----------- |
+| Phase 3 (Foundation)      | 5 features       | 5 features       | 100%         | ✅ Complete |
+| Phase 4 (Library Browser) | 5 features       | ~4.5 features    | 70%          | ✅ ~85%     |
+| Phase 5 (File Management) | 5 features       | ~2.5 features    | 20%          | ⚠️ ~50%     |
+| Phase 6 (Settings)        | 5 features       | ~4 features      | 40%          | ✅ ~75%     |
+| **TOTAL**                 | **20 features**  | **~16 features** | **~50%**     | ✅ **~80%** |
 
-**Frontend Assessment**: ✅ **80% of MVP features implemented, but only 50% have E2E coverage**
+**Frontend Assessment**: ✅ **80% of MVP features implemented, but only 50% have
+E2E coverage**
 
 ---
 
@@ -328,6 +360,7 @@ From E2E tests and README:
 ### Current E2E Tests (4 files)
 
 #### ✅ app.spec.ts - Basic Navigation
+
 ```typescript
 ✅ Loads dashboard and shows title
 ✅ Shows import path empty state on Library page
@@ -337,6 +370,7 @@ From E2E tests and README:
 **Coverage**: Basic smoke tests only (~5% of required workflows)
 
 #### ✅ import-paths.spec.ts - Import Path Management
+
 ```typescript
 ✅ Add and remove import path via Settings page (mocked API)
 ```
@@ -344,6 +378,7 @@ From E2E tests and README:
 **Coverage**: Single workflow (~10% of import path workflows)
 
 #### ✅ metadata-provenance.spec.ts - Comprehensive Provenance Testing
+
 ```typescript
 ✅ Displays provenance data in Tags tab (11 test cases)
 ✅ Shows correct effective source for different fields
@@ -358,9 +393,11 @@ From E2E tests and README:
 ✅ Updates effective value when applying different source
 ```
 
-**Coverage**: Excellent coverage of metadata provenance system (~90% of provenance workflows)
+**Coverage**: Excellent coverage of metadata provenance system (~90% of
+provenance workflows)
 
 #### ✅ book-detail.spec.ts - Book Detail Workflows
+
 ```typescript
 ✅ Renders info, files, and versions tabs
 ✅ Soft delete, restore, and purge flow
@@ -374,19 +411,19 @@ From E2E tests and README:
 
 ### E2E Coverage Summary
 
-| Workflow Category | Test Files | Test Cases | Coverage | Status |
-|------------------|-----------|------------|----------|--------|
-| Navigation | 1 | 3 | ~5% | ⚠️ Minimal |
-| Library Browser | 0 | 0 | 0% | ❌ Missing |
-| Search & Filter | 0 | 0 | 0% | ❌ Missing |
-| Batch Operations | 0 | 0 | 0% | ❌ Missing |
-| Import Paths | 1 | 1 | ~10% | ⚠️ Minimal |
-| Book Detail | 1 | 6 | ~60% | ✅ Good |
-| Metadata Provenance | 1 | 11 | ~90% | ✅ Excellent |
-| File Operations | 0 | 0 | 0% | ❌ Missing |
-| Settings | 0 | 0 | 0% | ❌ Missing |
-| Operations Monitoring | 0 | 0 | 0% | ❌ Missing |
-| **TOTAL** | **4** | **21** | **~25%** | ⚠️ **Major Gaps** |
+| Workflow Category     | Test Files | Test Cases | Coverage | Status            |
+| --------------------- | ---------- | ---------- | -------- | ----------------- |
+| Navigation            | 1          | 3          | ~5%      | ⚠️ Minimal        |
+| Library Browser       | 0          | 0          | 0%       | ❌ Missing        |
+| Search & Filter       | 0          | 0          | 0%       | ❌ Missing        |
+| Batch Operations      | 0          | 0          | 0%       | ❌ Missing        |
+| Import Paths          | 1          | 1          | ~10%     | ⚠️ Minimal        |
+| Book Detail           | 1          | 6          | ~60%     | ✅ Good           |
+| Metadata Provenance   | 1          | 11         | ~90%     | ✅ Excellent      |
+| File Operations       | 0          | 0          | 0%       | ❌ Missing        |
+| Settings              | 0          | 0          | 0%       | ❌ Missing        |
+| Operations Monitoring | 0          | 0          | 0%       | ❌ Missing        |
+| **TOTAL**             | **4**      | **21**     | **~25%** | ⚠️ **Major Gaps** |
 
 **E2E Assessment**: ⚠️ **Only 25% of required workflows have E2E coverage**
 
@@ -472,6 +509,7 @@ From E2E tests and README:
 ### What's Complete ✅
 
 **Backend** (95%):
+
 - All core MVP API endpoints ✅
 - Extensive bonus features (backup, AI, versions, works) ✅
 - Safe file operations ✅
@@ -479,6 +517,7 @@ From E2E tests and README:
 - 86% test coverage ✅
 
 **Frontend** (80%):
+
 - Core UI framework and layout ✅
 - Library browser (basic) ✅
 - Book detail page (comprehensive) ✅
@@ -487,6 +526,7 @@ From E2E tests and README:
 - Settings page (basic) ✅
 
 **E2E Tests** (25%):
+
 - Navigation smoke tests ✅
 - Metadata provenance (excellent coverage) ✅
 - Book detail workflows (good coverage) ✅
@@ -512,6 +552,7 @@ From E2E tests and README:
 #### For Immediate MVP Release
 
 **Option A: Ship with current state** ✈️
+
 - **Pros**:
   - 95% backend complete
   - 80% frontend complete
@@ -524,6 +565,7 @@ From E2E tests and README:
 **Recommendation**: ⚠️ **Not recommended** - Too many untested workflows
 
 **Option B: Add critical E2E tests first** 🎯 (Recommended)
+
 - **Timeline**: 2-3 days
 - **Tests to add**:
   1. Library browser (sort, filter, navigate) - 4 hours
@@ -544,6 +586,7 @@ From E2E tests and README:
 #### For Production-Grade Release
 
 **Option C: Comprehensive E2E coverage** 💎
+
 - **Timeline**: 1 week
 - **Tests to add**: All workflows from Part 4
 - **Result**: 90%+ E2E coverage
@@ -563,17 +606,21 @@ From E2E tests and README:
 
 ### Current State
 
-| Component | Completion | Quality | E2E Coverage | MVP Ready? |
-|-----------|-----------|---------|--------------|------------|
-| Backend API | 95% | Excellent | N/A | ✅ Yes |
-| Frontend UI | 80% | Good | 25% | ⚠️ Partial |
-| E2E Tests | 25% | Excellent (where exists) | 25% | ❌ No |
-| Documentation | 90% | Excellent | N/A | ✅ Yes |
-| **OVERALL** | **85%** | **Very Good** | **25%** | ⚠️ **Needs E2E** |
+| Component     | Completion | Quality                  | E2E Coverage | MVP Ready?       |
+| ------------- | ---------- | ------------------------ | ------------ | ---------------- |
+| Backend API   | 95%        | Excellent                | N/A          | ✅ Yes           |
+| Frontend UI   | 80%        | Good                     | 25%          | ⚠️ Partial       |
+| E2E Tests     | 25%        | Excellent (where exists) | 25%          | ❌ No            |
+| Documentation | 90%        | Excellent                | N/A          | ✅ Yes           |
+| **OVERALL**   | **85%**    | **Very Good**            | **25%**      | ⚠️ **Needs E2E** |
 
 ### Primary Blocker for MVP
 
-**E2E test coverage is insufficient** to validate complete user workflows. While backend and frontend implementation exceed MVP requirements, without comprehensive E2E tests covering critical paths (library browser, scan/import/organize, settings, batch operations), there's significant risk of undiscovered integration issues.
+**E2E test coverage is insufficient** to validate complete user workflows. While
+backend and frontend implementation exceed MVP requirements, without
+comprehensive E2E tests covering critical paths (library browser,
+scan/import/organize, settings, batch operations), there's significant risk of
+undiscovered integration issues.
 
 ### Recommended Path Forward
 
@@ -607,9 +654,10 @@ From E2E tests and README:
 - [ ] Manual QA: All critical paths validated ⚠️ (Not yet done)
 - [ ] Documentation: Complete ✅ (Already met: 90%)
 
-**Bottom Line**: Need 2-3 days of focused E2E test development to achieve MVP-ready state.
+**Bottom Line**: Need 2-3 days of focused E2E test development to achieve
+MVP-ready state.
 
 ---
 
-*Analysis completed*: 2026-01-25
-*Next document*: E2E_TEST_PLAN.md (detailed test scenarios and implementation plan)
+_Analysis completed_: 2026-01-25 _Next document_: E2E_TEST_PLAN.md (detailed
+test scenarios and implementation plan)

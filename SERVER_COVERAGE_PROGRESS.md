@@ -1,10 +1,8 @@
 # Server Coverage Improvement Progress
 
-**Date**: 2026-01-23
-**Target**: 80%+ coverage for server package
-**Starting Coverage**: 66.0%
-**Current Coverage**: 67.4%
-**Progress**: +1.4 percentage points (10.6% toward goal)
+**Date**: 2026-01-23 **Target**: 80%+ coverage for server package **Starting
+Coverage**: 66.0% **Current Coverage**: 67.4% **Progress**: +1.4 percentage
+points (10.6% toward goal)
 
 ## Strategy Evolution
 
@@ -14,13 +12,14 @@
 - **Phase 2**: +0.5pp via targeted low-coverage functions
 - **Total**: +1.4pp from 12 tests
 
-**Problem Identified**: Many server functions depend on unmocked components (queue,
-scanner, metadata), limiting what can be tested with database mocks alone.
+**Problem Identified**: Many server functions depend on unmocked components
+(queue, scanner, metadata), limiting what can be tested with database mocks
+alone.
 
 ### Phase 3: Expanded Mockery Strategy (NEW APPROACH)
 
-**Decision**: Expand mockery to mock Queue, Scanner, and Metadata dependencies using same
-interface pattern as database.Store.
+**Decision**: Expand mockery to mock Queue, Scanner, and Metadata dependencies
+using same interface pattern as database.Store.
 
 **Implementation**:
 
@@ -29,7 +28,8 @@ interface pattern as database.Store.
 3. ✅ Created 6 demonstration tests - all passing
 4. ✅ Validated approach works seamlessly
 
-**Coverage Impact**: +0.0pp (tested already-covered functions as proof of concept)
+**Coverage Impact**: +0.0pp (tested already-covered functions as proof of
+concept)
 
 **Next Steps**:
 
@@ -41,8 +41,8 @@ interface pattern as database.Store.
 
 ### Phase 1: Initial Error Injection Tests (✅ COMPLETED)
 
-**File**: `internal/server/server_coverage_improvements_test.go`
-**Coverage Gain**: 66.0% → 66.9% (+0.9pp)
+**File**: `internal/server/server_coverage_improvements_test.go` **Coverage
+Gain**: 66.0% → 66.9% (+0.9pp)
 
 Created 8 test functions with 11 test scenarios:
 
@@ -57,10 +57,11 @@ Created 8 test functions with 11 test scenarios:
 
 ### Phase 2: Targeted Low-Coverage Functions (✅ COMPLETED)
 
-**File**: `internal/server/server_coverage_phase2_test.go`
-**Coverage Gain**: 66.9% → 67.4% (+0.5pp)
+**File**: `internal/server/server_coverage_phase2_test.go` **Coverage Gain**:
+66.9% → 67.4% (+0.5pp)
 
-Created 4 test functions with 9 test scenarios targeting functions with 50-70% coverage:
+Created 4 test functions with 9 test scenarios targeting functions with 50-70%
+coverage:
 
 1. **TestGetAudiobookTagsErrors** (2 subtests):
    - Database error scenario → HTTP 500
@@ -83,7 +84,9 @@ Created 4 test functions with 9 test scenarios targeting functions with 50-70% c
    - **Function Coverage**: 63.6% → 81.8% (+18.2pp) ⭐
 
 **Key Learnings from Phase 2**:
-- IDs in this codebase are ULID strings (e.g., "01HQWKV1234567890ABCDEFGHJK"), not integers
+
+- IDs in this codebase are ULID strings (e.g., "01HQWKV1234567890ABCDEFGHJK"),
+  not integers
 - Gin field validation errors use capitalized field names ("Hash" not "hash")
 - Hash validation requires exactly 64 characters (SHA256 format)
 - Both hash and reason fields are required for blocked hashes
@@ -92,6 +95,7 @@ Created 4 test functions with 9 test scenarios targeting functions with 50-70% c
 ## Combined Impact Analysis
 
 **Total Tests Added**: 12 test functions, 20 individual test scenarios
+
 - All tests passing: ✅
 - Build tags: `//go:build mocks`
 - Total coverage gain: +1.4 percentage points
@@ -99,11 +103,13 @@ Created 4 test functions with 9 test scenarios targeting functions with 50-70% c
 
 ## Remaining Work to Reach 80%
 
-**Gap**: Need +12.6 percentage points more (80% - 67.4% = 12.6pp)
-**Progress**: 10.6% toward goal (1.4 / 13.2 * 100)
+**Gap**: Need +12.6 percentage points more (80% - 67.4% = 12.6pp) **Progress**:
+10.6% toward goal (1.4 / 13.2 \* 100)
 
-Note: Functions getAudiobookTags, deleteWork, and addBlockedHash now exceed 70% and meet coverage targets! 🎉
+Note: Functions getAudiobookTags, deleteWork, and addBlockedHash now exceed 70%
+and meet coverage targets! 🎉
 
 ## Next Steps - Phase 3
 
-Focus on remaining low-coverage functions to continue progress toward 80% target.
+Focus on remaining low-coverage functions to continue progress toward 80%
+target.

@@ -13,8 +13,10 @@
 
 **Main Documentation:**
 
-- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent configuration
-- [Instructions Directory](.github/instructions/) - All coding standards and language-specific rules
+- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent
+  configuration
+- [Instructions Directory](.github/instructions/) - All coding standards and
+  language-specific rules
 - [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
 
 **For complete list of all instruction files, see [AGENTS.md](AGENTS.md)**
@@ -25,7 +27,8 @@ This repository uses direct-edit documentation workflow:
 
 - Edit documentation directly in target files
 - Always update version headers when making changes
-- Do not use legacy doc-update scripts (create-doc-update.sh, doc_update_manager.py)
+- Do not use legacy doc-update scripts (create-doc-update.sh,
+  doc_update_manager.py)
 - Follow semantic versioning for version numbers
 
 ## 🔧 Git Operations Policy
@@ -61,5 +64,5 @@ This repository uses direct-edit documentation workflow:
 - Merge conflict resolution
 - Test generation
 
-> For all Claude, Copilot, or workflow tasks, **refer to the files in `.github/instructions/` and
-> `.github/prompts/`**.
+> For all Claude, Copilot, or workflow tasks, **refer to the files in
+> `.github/instructions/` and `.github/prompts/`**.
