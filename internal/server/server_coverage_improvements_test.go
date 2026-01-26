@@ -1,5 +1,3 @@
-//go:build mocks
-
 // file: internal/server/server_coverage_improvements_test.go
 // version: 1.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
