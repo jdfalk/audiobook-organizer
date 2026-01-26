@@ -1,11 +1,13 @@
-// file: tests/e2e/scan-import-organize.spec.ts
-// version: 1.0.0
+// file: web/tests/e2e/scan-import-organize.spec.ts
+// version: 1.2.1
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 import { test, expect, type Page } from '@playwright/test';
 import {
+  generateTestBooks,
   mockEventSource,
   setupCommonRoutes,
+  setupLibraryWithBooks,
   skipWelcomeWizard,
   waitForToast,
 } from './utils/test-helpers';
@@ -13,12 +15,14 @@ import {
 type ScanMockOptions = {
   scanBooks: Array<Record<string, unknown>>;
   scanError?: boolean;
+  scanErrors?: string[];
 };
 
 const setupScanWorkflow = async (page: Page, options: ScanMockOptions) => {
-  await page.addInitScript(({ scanBooks, scanError }) => {
+  await page.addInitScript(({ scanBooks, scanError, scanErrors }) => {
     let importPaths: Array<Record<string, unknown>> = [];
     let libraryBooks = [...scanBooks];
+    const scanErrorList = Array.isArray(scanErrors) ? scanErrors : [];
 
     const jsonResponse = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), {
@@ -80,6 +84,7 @@ const setupScanWorkflow = async (page: Page, options: ScanMockOptions) => {
             total: libraryBooks.length,
             message: 'Scanning',
             created_at: new Date().toISOString(),
+            errors: scanErrorList,
           })
         );
       }
@@ -144,6 +149,9 @@ const setupScanWorkflow = async (page: Page, options: ScanMockOptions) => {
       if (pathname === '/api/v1/operations/active' && method === 'GET') {
         return Promise.resolve(jsonResponse({ operations: [] }));
       }
+      if (pathname.startsWith('/api/v1/operations/') && method === 'DELETE') {
+        return Promise.resolve(jsonResponse({ message: 'Cancelled' }));
+      }
 
       return originalFetch(input, init);
     };
@@ -200,17 +208,20 @@ test.describe('Scan/Import/Organize Workflow', () => {
 
     // Assert: scan progress and completion
     await expect(page.getByText('Scanning...')).toBeVisible();
-    await expect(page.getByText('Scan complete.')).toBeVisible();
+    await expect(page.getByText(/Scan complete/)).toBeVisible();
 
     // Act: filter import books and organize
     await page.goto('/library');
-    await page.getByRole('button', { name: 'Filter' }).click();
+    await page.getByRole('button', { name: /filters/i }).click();
     await page.getByLabel('Library State').click();
     await page.getByRole('option', { name: 'Import' }).click();
     await expect(page.getByText('Import Book 1')).toBeVisible();
     await page.getByLabel('Select All').click();
     await page.getByRole('button', { name: 'Organize Selected' }).click();
-    await page.getByRole('button', { name: 'Organize Selected' }).last().click();
+    await page
+      .getByRole('button', { name: 'Organize Selected' })
+      .last()
+      .click();
 
     // Assert: organize progress and success
     await expect(page.getByText('Organized 3 of 3')).toBeVisible();
@@ -246,21 +257,217 @@ test.describe('Scan/Import/Organize Workflow', () => {
 
     // Assert
     await expect(page.getByText('Scanning...')).toBeVisible();
-    await expect(page.getByText('Scan complete.')).toBeVisible();
+    await expect(page.getByText(/Scan complete/)).toBeVisible();
   });
 
-  test('scan operation handles errors', async ({ page }) => {
+  test('scan operation: cancel in progress', async ({ page }) => {
     // Arrange
-    await setupScanWorkflow(page, { scanBooks: [], scanError: true });
+    await setupScanWorkflow(page, {
+      scanBooks: [
+        {
+          id: 'scan-1',
+          title: 'Import Book 1',
+          author_name: 'Test Author',
+          file_path: '/test/cancel/book1.m4b',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
     await page.goto('/settings');
     await page.getByRole('button', { name: 'Add Import Path' }).click();
-    await page.getByLabel('Folder Path').fill('/test/error-books');
+    await page.getByLabel('Folder Path').fill('/test/cancel');
+    await page.getByRole('button', { name: 'Add Path' }).click();
+
+    // Act
+    await page.getByRole('button', { name: 'Scan' }).click();
+    await expect(page.getByText('Scanning...')).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel Scan' }).click();
+    await page
+      .getByRole('dialog', { name: 'Cancel Scan' })
+      .getByRole('button', { name: 'Cancel Scan' })
+      .click();
+
+    // Assert
+    await expect(page.getByText(/Scan cancelled/)).toBeVisible();
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Import Book 1')).toBeVisible();
+  });
+
+  test('scan operation: handles errors gracefully', async ({ page }) => {
+    // Arrange
+    await setupScanWorkflow(page, {
+      scanBooks: [
+        {
+          id: 'scan-2',
+          title: 'Import Book 2',
+          author_name: 'Test Author',
+          file_path: '/test/corrupt/book2.m4b',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+      scanErrors: ['Corrupt file: book2.m4b'],
+    });
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Add Import Path' }).click();
+    await page.getByLabel('Folder Path').fill('/test/corrupt');
     await page.getByRole('button', { name: 'Add Path' }).click();
 
     // Act
     await page.getByRole('button', { name: 'Scan' }).click();
 
     // Assert
-    await expect(page.getByText('Scan failed.')).toBeVisible();
+    await expect(page.getByText(/Scan complete/)).toBeVisible();
+    await page.getByRole('button', { name: 'View Errors' }).click();
+    await expect(page.getByText('Corrupt file: book2.m4b')).toBeVisible();
+  });
+
+  test('organize operation: moves files to library root', async ({
+    page,
+  }) => {
+    // Arrange
+    const baseBook = generateTestBooks(1)[0];
+    const importBook = {
+      ...baseBook,
+      id: 'import-1',
+      title: 'Import Book 1',
+      library_state: 'import',
+      marked_for_deletion: false,
+      file_path: '/imports/import-book-1.m4b',
+    };
+    await setupLibraryWithBooks(page, [importBook], {
+      config: { root_dir: '/library' },
+    });
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // Act
+    await page.getByLabel('Select Import Book 1').click();
+    await page.getByRole('button', { name: 'Organize Selected' }).click();
+    await page
+      .getByRole('button', { name: 'Organize Selected' })
+      .last()
+      .click();
+
+    // Assert
+    await waitForToast(page, 'Successfully organized 1 audiobooks.');
+    await page
+      .getByRole('dialog', { name: 'Organize Selected Audiobooks' })
+      .getByRole('button', { name: 'Close' })
+      .click();
+    await page
+      .getByRole('heading', { name: 'Import Book 1', exact: true })
+      .click();
+    await page.getByRole('tab', { name: 'Files' }).click();
+    await expect(
+      page.getByText('/library/import-book-1.m4b')
+    ).toBeVisible();
+    await expect(page.getByText('Organized Hash')).toBeVisible();
+  });
+
+  test('organize operation: handles duplicate files', async ({ page }) => {
+    // Arrange
+    const baseBook = generateTestBooks(1)[0];
+    const organizedBook = {
+      ...baseBook,
+      id: 'organized-1',
+      title: 'Duplicate Book',
+      library_state: 'organized',
+      file_hash: 'dup-hash',
+    };
+    const importBook = {
+      ...baseBook,
+      id: 'import-dup',
+      title: 'Duplicate Book (Import)',
+      library_state: 'import',
+      file_hash: 'dup-hash',
+      file_path: '/imports/duplicate.m4b',
+    };
+    await setupLibraryWithBooks(page, [organizedBook, importBook], {
+      config: { root_dir: '/library' },
+    });
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // Act
+    await page.getByLabel('Select Duplicate Book (Import)').click();
+    await page.getByRole('button', { name: 'Organize Selected' }).click();
+    await page
+      .getByRole('button', { name: 'Organize Selected' })
+      .last()
+      .click();
+    const duplicateDialog = page.getByRole('dialog', {
+      name: 'Duplicate File Detected',
+    });
+    await expect(duplicateDialog).toBeVisible();
+    await duplicateDialog
+      .getByRole('button', { name: 'Link as Version' })
+      .click();
+
+    // Assert
+    await waitForToast(page, 'Successfully organized 1 audiobooks.');
+    await page
+      .getByRole('dialog', { name: 'Organize Selected Audiobooks' })
+      .getByRole('button', { name: 'Close' })
+      .click();
+    await page
+      .getByRole('heading', {
+        name: 'Duplicate Book (Import)',
+        exact: true,
+      })
+      .click();
+    await page.getByRole('tab', { name: /Versions/ }).click();
+    await expect(
+      page.getByText('Part of version group with 2 books.')
+    ).toBeVisible();
+  });
+
+  test('organize operation: rollback on error', async ({ page }) => {
+    // Arrange
+    const books = generateTestBooks(3).map((book, index) => ({
+      ...book,
+      id: `import-${index + 1}`,
+      title: `Import Book ${index + 1}`,
+      library_state: 'import',
+      organize_error: index === 2 ? 'Disk full' : undefined,
+    }));
+    await setupLibraryWithBooks(page, books, {
+      config: { root_dir: '/library' },
+    });
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // Act
+    await page.getByLabel('Select Import Book 1').click();
+    await page.getByLabel('Select Import Book 2').click();
+    await page.getByLabel('Select Import Book 3').click();
+    await page.getByRole('button', { name: 'Organize Selected' }).click();
+    await page
+      .getByRole('button', { name: 'Organize Selected' })
+      .last()
+      .click();
+
+    // Assert
+    await expect(page.getByText('Organize Error')).toBeVisible();
+    await expect(
+      page.getByText('Failed to organize Import Book 3.')
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Rollback' }).click();
+    await waitForToast(page, 'Rollback complete.');
+    await page
+      .getByRole('dialog', { name: 'Organize Selected Audiobooks' })
+      .getByRole('button', { name: 'Close' })
+      .click();
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Import' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Import Book 1', exact: true })
+    ).toBeVisible();
   });
 });

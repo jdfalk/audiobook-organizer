@@ -1,10 +1,11 @@
 // file: internal/config/persistence.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -86,6 +87,18 @@ func applySetting(key, value, typ string) error {
 	case "create_backups":
 		if b, err := strconv.ParseBool(value); err == nil {
 			AppConfig.CreateBackups = b
+		}
+	case "supported_extensions":
+		var extensions []string
+		if err := json.Unmarshal([]byte(value), &extensions); err == nil {
+			if len(extensions) > 0 {
+				AppConfig.SupportedExtensions = extensions
+			}
+		}
+	case "exclude_patterns":
+		var patterns []string
+		if err := json.Unmarshal([]byte(value), &patterns); err == nil {
+			AppConfig.ExcludePatterns = patterns
 		}
 
 	// Storage quotas
@@ -174,6 +187,15 @@ func SaveConfigToDatabase(store database.Store) error {
 
 	log.Println("Saving configuration to database...")
 
+	extensionsJSON, err := json.Marshal(AppConfig.SupportedExtensions)
+	if err != nil {
+		return fmt.Errorf("failed to marshal supported_extensions: %w", err)
+	}
+	excludeJSON, err := json.Marshal(AppConfig.ExcludePatterns)
+	if err != nil {
+		return fmt.Errorf("failed to marshal exclude_patterns: %w", err)
+	}
+
 	settings := map[string]struct {
 		value    string
 		typ      string
@@ -191,6 +213,8 @@ func SaveConfigToDatabase(store database.Store) error {
 		"folder_naming_pattern": {AppConfig.FolderNamingPattern, "string", false},
 		"file_naming_pattern":   {AppConfig.FileNamingPattern, "string", false},
 		"create_backups":        {strconv.FormatBool(AppConfig.CreateBackups), "bool", false},
+		"supported_extensions":  {string(extensionsJSON), "json", false},
+		"exclude_patterns":      {string(excludeJSON), "json", false},
 
 		// Storage quotas
 		"enable_disk_quota":     {strconv.FormatBool(AppConfig.EnableDiskQuota), "bool", false},

@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.28.0
+// version: 1.30.2
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -71,7 +71,7 @@ interface ImportPath {
 interface BulkActionResult {
   book_id: string;
   title: string;
-  status: 'updated' | 'organized' | 'error';
+  status: 'updated' | 'organized' | 'error' | 'skipped';
   message?: string;
 }
 
@@ -80,6 +80,34 @@ interface BulkActionProgress {
   completed: number;
   results: BulkActionResult[];
 }
+
+type DuplicateAction = 'skip' | 'link' | 'replace';
+
+type DuplicateDialogState = {
+  duplicate: Audiobook;
+  existing: Audiobook;
+};
+
+type OrganizeErrorState = {
+  book: Audiobook;
+  message: string;
+};
+
+const buildHashCandidates = (book: Audiobook): string[] => {
+  const hashes: string[] = [];
+  if (book.file_hash) hashes.push(book.file_hash);
+  if (book.original_file_hash) hashes.push(book.original_file_hash);
+  if (book.organized_file_hash) hashes.push(book.organized_file_hash);
+  return hashes;
+};
+
+const getResultLabel = (result: BulkActionResult): string => {
+  if (result.message) return result.message;
+  if (result.status === 'organized') return 'Organized';
+  if (result.status === 'updated') return 'Updated';
+  if (result.status === 'skipped') return 'Skipped';
+  return 'Failed';
+};
 
 export const Library = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -192,6 +220,12 @@ export const Library = () => {
     actionLabel?: string;
     onAction?: () => void;
   } | null>(null);
+  const [sseNotice, setSseNotice] = useState<{
+    severity: 'warning' | 'success';
+    message: string;
+  } | null>(null);
+  const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
+  const sseNoticeTimerRef = useRef<number | null>(null);
 
   const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
   const [importFilePath, setImportFilePath] = useState('');
@@ -206,6 +240,15 @@ export const Library = () => {
   const [bulkOrganizeInProgress, setBulkOrganizeInProgress] = useState(false);
   const [bulkOrganizeProgress, setBulkOrganizeProgress] =
     useState<BulkActionProgress | null>(null);
+  const [duplicateDialog, setDuplicateDialog] =
+    useState<DuplicateDialogState | null>(null);
+  const duplicateResolverRef =
+    useRef<((action: DuplicateAction) => void) | null>(null);
+  const [bulkOrganizeError, setBulkOrganizeError] =
+    useState<OrganizeErrorState | null>(null);
+  const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(
+    new Map()
+  );
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -296,18 +339,47 @@ export const Library = () => {
         }
       },
       (status: EventSourceStatus) => {
+        const previousState = sseStatusRef.current;
+        sseStatusRef.current = status.state;
+
+        if (sseNoticeTimerRef.current) {
+          window.clearTimeout(sseNoticeTimerRef.current);
+          sseNoticeTimerRef.current = null;
+        }
+
+        if (status.state === 'reconnecting' || status.state === 'error') {
+          setSseNotice({
+            severity: 'warning',
+            message: 'Connection lost. Reconnecting...',
+          });
+        } else if (status.state === 'open') {
+          if (previousState && previousState !== 'open') {
+            setSseNotice({
+              severity: 'success',
+              message: 'Connection restored.',
+            });
+            sseNoticeTimerRef.current = window.setTimeout(() => {
+              setSseNotice(null);
+              sseNoticeTimerRef.current = null;
+            }, 3000);
+          }
+          console.log('EventSource connection established');
+        }
+
         if (status.state === 'reconnecting' && status.delayMs) {
           console.warn(
             `EventSource connection lost (attempt ${status.attempt}), reconnecting in ${Math.round(status.delayMs / 1000)}s...`
           );
-        } else if (status.state === 'open') {
-          console.log('EventSource connection established');
         }
       }
     );
 
     return () => {
       unsubscribe();
+      if (sseNoticeTimerRef.current) {
+        window.clearTimeout(sseNoticeTimerRef.current);
+        sseNoticeTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -1031,6 +1103,23 @@ export const Library = () => {
     bulkFetchCancelRef.current = true;
   };
 
+  const requestDuplicateAction = (
+    duplicate: Audiobook,
+    existing: Audiobook
+  ): Promise<DuplicateAction> =>
+    new Promise((resolve) => {
+      duplicateResolverRef.current = resolve;
+      setDuplicateDialog({ duplicate, existing });
+    });
+
+  const handleDuplicateAction = (action: DuplicateAction) => {
+    if (duplicateResolverRef.current) {
+      duplicateResolverRef.current(action);
+      duplicateResolverRef.current = null;
+    }
+    setDuplicateDialog(null);
+  };
+
   const handleBulkOrganize = async () => {
     if (!hasSelection) {
       setAlert({
@@ -1050,26 +1139,123 @@ export const Library = () => {
       });
       return;
     }
+    const importBookIds = importBooks.map((book) => book.id);
 
     setBulkOrganizeInProgress(true);
+    setBulkOrganizeError(null);
     bulkOrganizeCancelRef.current = false;
+    const snapshot = new Map<string, Audiobook>();
+    importBooks.forEach((book) => {
+      snapshot.set(book.id, { ...book });
+    });
+    bulkOrganizeSnapshotRef.current = snapshot;
 
     const total = importBooks.length;
     const results: BulkActionResult[] = [];
     let completed = 0;
+    let encounteredError = false;
     setBulkOrganizeProgress({ total, completed, results: [] });
 
+    const organizedByHash = new Map<string, Audiobook>();
+    audiobooks
+      .filter((item) => item.library_state === 'organized')
+      .forEach((item) => {
+        buildHashCandidates(item).forEach((hash) => {
+          organizedByHash.set(hash, item);
+        });
+      });
+
+    const findDuplicate = (target: Audiobook): Audiobook | null => {
+      for (const hash of buildHashCandidates(target)) {
+        const match = organizedByHash.get(hash);
+        if (match && match.id !== target.id) {
+          return match;
+        }
+      }
+      return null;
+    };
+
     try {
-      await api.startOrganize(
-        undefined,
-        undefined,
-        importBooks.map((b) => b.id)
-      );
+      await api.startOrganize(undefined, undefined, importBookIds);
 
       for (const book of importBooks) {
         if (bulkOrganizeCancelRef.current) {
           break;
         }
+        const organizeError = book.organize_error;
+        if (organizeError) {
+          const errorMessage = `Failed to organize ${
+            book.title || 'audiobook'
+          }.`;
+          results.push({
+            book_id: book.id,
+            title: book.title,
+            status: 'error',
+            message: organizeError,
+          });
+          completed += 1;
+          setBulkOrganizeProgress({
+            total,
+            completed,
+            results: [...results],
+          });
+          setBulkOrganizeError({
+            book,
+            message: errorMessage,
+          });
+          encounteredError = true;
+          break;
+        }
+
+        const duplicate = findDuplicate(book);
+        if (duplicate) {
+          const action = await requestDuplicateAction(book, duplicate);
+          if (action === 'skip') {
+            results.push({
+              book_id: book.id,
+              title: book.title,
+              status: 'skipped',
+              message: 'Skipped duplicate file.',
+            });
+            completed += 1;
+            setBulkOrganizeProgress({
+              total,
+              completed,
+              results: [...results],
+            });
+            continue;
+          }
+          if (action === 'link') {
+            const groupId =
+              duplicate.version_group_id || `group-${duplicate.id}`;
+            await api.linkBookVersion(duplicate.id, book.id);
+            setAudiobooks((prev) =>
+              prev.map((item) => {
+                if (item.id === duplicate.id) {
+                  return {
+                    ...item,
+                    version_group_id: groupId,
+                    is_primary_version: true,
+                  };
+                }
+                if (item.id === book.id) {
+                  return { ...item, version_group_id: groupId };
+                }
+                return item;
+              })
+            );
+          }
+          if (action === 'replace') {
+            setAudiobooks((prev) =>
+              prev.map((item) =>
+                item.id === duplicate.id
+                  ? { ...item, marked_for_deletion: true }
+                  : item
+              )
+            );
+          }
+        }
+
         results.push({
           book_id: book.id,
           title: book.title,
@@ -1082,6 +1268,9 @@ export const Library = () => {
               : ab
           )
         );
+        buildHashCandidates(book).forEach((hash) => {
+          organizedByHash.set(hash, book);
+        });
         completed += 1;
         setBulkOrganizeProgress({ total, completed, results: [...results] });
       }
@@ -1091,7 +1280,7 @@ export const Library = () => {
           severity: 'info',
           message: 'Organize cancelled.',
         });
-      } else {
+      } else if (!encounteredError) {
         setAlert({
           severity: 'success',
           message: `Successfully organized ${completed} audiobooks.`,
@@ -1099,7 +1288,9 @@ export const Library = () => {
         setSelectedAudiobooks([]);
       }
 
-      await loadAudiobooks();
+      if (!bulkOrganizeCancelRef.current && !encounteredError) {
+        await loadAudiobooks();
+      }
     } catch (error) {
       console.error('Failed to organize selected audiobooks:', error);
       setAlert({
@@ -1116,9 +1307,44 @@ export const Library = () => {
     if (!bulkOrganizeInProgress) {
       setBulkOrganizeDialogOpen(false);
       setBulkOrganizeProgress(null);
+      setBulkOrganizeError(null);
       return;
     }
     bulkOrganizeCancelRef.current = true;
+  };
+
+  const handleCloseOrganizeError = () => {
+    setBulkOrganizeError(null);
+  };
+
+  const handleOrganizeRollback = async () => {
+    const snapshot = bulkOrganizeSnapshotRef.current;
+    if (!snapshot.size) {
+      setBulkOrganizeError(null);
+      return;
+    }
+
+    try {
+      for (const book of snapshot.values()) {
+        await api.updateBook(book.id, {
+          library_state: book.library_state,
+          file_path: book.file_path,
+          organized_file_hash: book.organized_file_hash,
+        });
+      }
+      setAlert({
+        severity: 'success',
+        message: 'Rollback complete.',
+      });
+      setBulkOrganizeError(null);
+      await loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to rollback organize:', error);
+      setAlert({
+        severity: 'error',
+        message: 'Rollback failed.',
+      });
+    }
   };
 
   const handleParseWithAI = async (audiobook: Audiobook) => {
@@ -1366,6 +1592,22 @@ export const Library = () => {
             }
           >
             {alert.message}
+          </Alert>
+        ) : undefined}
+      </Snackbar>
+      <Snackbar
+        open={!!sseNotice}
+        autoHideDuration={sseNotice?.severity === 'success' ? 3000 : null}
+        onClose={() => setSseNotice(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        {sseNotice ? (
+          <Alert
+            severity={sseNotice.severity}
+            onClose={() => setSseNotice(null)}
+            sx={{ width: '100%' }}
+          >
+            {sseNotice.message}
           </Alert>
         ) : undefined}
       </Snackbar>
@@ -2115,11 +2357,7 @@ export const Library = () => {
                       <ListItem key={result.book_id}>
                         <ListItemText
                           primary={result.title || result.book_id}
-                          secondary={
-                            result.status === 'error'
-                              ? result.message || 'Failed'
-                              : 'Organized'
-                          }
+                          secondary={getResultLabel(result)}
                         />
                       </ListItem>
                     ))}
@@ -2138,6 +2376,64 @@ export const Library = () => {
               disabled={bulkOrganizeInProgress || !selectedHasImport}
             >
               {bulkOrganizeInProgress ? 'Organizing…' : 'Organize Selected'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(duplicateDialog)}
+          onClose={() => handleDuplicateAction('skip')}
+        >
+          <DialogTitle>Duplicate File Detected</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" gutterBottom>
+              The file for{' '}
+              <strong>
+                {duplicateDialog?.duplicate.title || 'this audiobook'}
+              </strong>{' '}
+              matches an existing audiobook.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Existing:{' '}
+              {duplicateDialog?.existing.title || 'Unknown audiobook'}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => handleDuplicateAction('skip')}>
+              Skip
+            </Button>
+            <Button onClick={() => handleDuplicateAction('link')}>
+              Link as Version
+            </Button>
+            <Button
+              color="warning"
+              variant="contained"
+              onClick={() => handleDuplicateAction('replace')}
+            >
+              Replace
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={Boolean(bulkOrganizeError)}
+          onClose={handleCloseOrganizeError}
+        >
+          <DialogTitle>Organize Error</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" gutterBottom>
+              {bulkOrganizeError?.message ||
+                'Organize operation failed.'}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseOrganizeError}>Close</Button>
+            <Button
+              color="warning"
+              variant="contained"
+              onClick={handleOrganizeRollback}
+            >
+              Rollback
             </Button>
           </DialogActions>
         </Dialog>
@@ -2231,11 +2527,7 @@ export const Library = () => {
                       <ListItem key={result.book_id}>
                         <ListItemText
                           primary={result.title || result.book_id}
-                          secondary={
-                            result.status === 'error'
-                              ? result.message || 'Failed'
-                              : 'Completed'
-                          }
+                          secondary={getResultLabel(result)}
                         />
                       </ListItem>
                     ))}

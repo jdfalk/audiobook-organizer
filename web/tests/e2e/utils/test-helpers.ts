@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 1.2.0
+// version: 1.4.3
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 
 import { Page } from '@playwright/test';
@@ -185,6 +185,7 @@ interface TestBook {
   is_primary_version?: boolean;
   fetch_metadata_error?: boolean;
   fetch_metadata_delay_ms?: number;
+  organize_error?: string;
   force_update_required?: boolean;
 }
 
@@ -426,7 +427,7 @@ export function generateTestBooks(count: number) {
     series_name: i % 3 === 0 ? series[i % series.length] : null,
     series_position: i % 3 === 0 ? (i % 5) + 1 : null,
     library_state: i % 4 === 0 ? 'import' : 'organized',
-    marked_for_deletion: i % 10 === 0,
+    marked_for_deletion: false,
     language: languages[i % languages.length],
     file_path: `/library/book${i + 1}.m4b`,
     file_hash: `hash-${i + 1}`,
@@ -619,6 +620,34 @@ export async function setupMockApi(
         return libraryBooks.filter((book) => book.version_group_id === groupId);
       };
 
+      const normalizeRoot = (root: string) => {
+        return root.endsWith('/') ? root.slice(0, -1) : root;
+      };
+
+      const getFileName = (path: string | undefined, id: string) => {
+        if (!path) return `${id}.m4b`;
+        const parts = path.split('/');
+        const name = parts[parts.length - 1];
+        return name || `${id}.m4b`;
+      };
+
+      const buildOrganizedBook = (book: TestBook): TestBook => {
+        const rootDir = normalizeRoot(configState.root_dir || '/library');
+        const fileName = getFileName(book.file_path, book.id);
+        const organizedHash =
+          book.organized_file_hash ||
+          (book.file_hash
+            ? `organized-${book.file_hash}`
+            : `organized-${book.id}`);
+        return {
+          ...book,
+          library_state: 'organized',
+          marked_for_deletion: false,
+          file_path: `${rootDir}/${fileName}`,
+          organized_file_hash: organizedHash,
+        };
+      };
+
       (window as unknown as { __apiMock: unknown }).__apiMock = {
         state: apiState,
         setActiveOperations: (ops: MockActiveOperation[]) => {
@@ -737,7 +766,7 @@ export async function setupMockApi(
             return Promise.resolve(jsonResponse({ config: maskedConfig() }));
           }
         }
-        if (pathname === '/api/v1/openai/test' && method === 'POST') {
+        if (pathname === '/api/v1/ai/test-connection' && method === 'POST') {
           const failed = failWithStatus(
             failures.openaiTest,
             'Connection failed'
@@ -876,7 +905,10 @@ export async function setupMockApi(
             return Promise.resolve(failed);
           }
           return Promise.resolve(
-            jsonResponse({ blocked_hashes: blockedHashes })
+            jsonResponse({
+              items: blockedHashes,
+              total: blockedHashes.length,
+            })
           );
         }
         if (pathname === '/api/v1/blocked-hashes' && method === 'POST') {
@@ -980,9 +1012,7 @@ export async function setupMockApi(
           const ids = Array.isArray(payload.book_ids) ? payload.book_ids : [];
           if (ids.length > 0) {
             libraryBooks = libraryBooks.map((book) =>
-              ids.includes(book.id)
-                ? { ...book, library_state: 'organized' }
-                : book
+              ids.includes(book.id) ? buildOrganizedBook(book) : book
             );
           }
           const op = {
@@ -1207,13 +1237,31 @@ export async function setupMockApi(
           method === 'DELETE'
         ) {
           const parts = pathname.split('/').filter(Boolean);
+          const bookId = parts[parts.length - 2];
           const payload = parseJsonBody(init) || {};
           const otherId = payload.other_id;
+          const groupId = getVersionGroupId(bookId);
           libraryBooks = libraryBooks.map((book) =>
             book.id === otherId
               ? { ...book, version_group_id: '', is_primary_version: false }
               : book
           );
+          if (groupId) {
+            const remaining = libraryBooks.filter(
+              (book) => book.version_group_id === groupId
+            );
+            if (remaining.length <= 1) {
+              libraryBooks = libraryBooks.map((book) =>
+                book.version_group_id === groupId
+                  ? {
+                      ...book,
+                      version_group_id: '',
+                      is_primary_version: false,
+                    }
+                  : book
+              );
+            }
+          }
           return Promise.resolve(jsonResponse({ message: 'Unlinked' }));
         }
         if (

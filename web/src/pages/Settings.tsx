@@ -1,8 +1,8 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.23.0
+// version: 1.25.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import {
   Box,
@@ -40,6 +40,8 @@ import {
 } from '@mui/material';
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
+import BlockedHashesTab from '../components/settings/BlockedHashesTab';
+import { SystemInfoTab } from '../components/system/SystemInfoTab';
 import {
   Save as SaveIcon,
   RestartAlt as RestartAltIcon,
@@ -58,6 +60,19 @@ interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
+}
+
+interface ScanStatus {
+  status: 'scanning' | 'complete' | 'error' | 'cancelled';
+  scanned: number;
+  total: number;
+  operationId?: string;
+  errors?: string[];
+}
+
+interface ScanErrorTarget {
+  path: string;
+  errors: string[];
 }
 
 function TabPanel(props: TabPanelProps) {
@@ -88,6 +103,7 @@ export function Settings() {
   const [tabValue, setTabValue] = useState(0);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const scanIntervalsRef = useRef<Record<number, number>>({});
 
   // Import folder management
   const [importPaths, setImportFolders] = useState<api.ImportPath[]>([]);
@@ -95,11 +111,12 @@ export function Settings() {
   const [newFolderPath, setNewFolderPath] = useState('');
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [scanStatuses, setScanStatuses] = useState<
-    Record<
-      number,
-      { status: 'scanning' | 'complete' | 'error'; scanned: number; total: number }
-    >
+    Record<number, ScanStatus>
   >({});
+  const [cancelScanTarget, setCancelScanTarget] =
+    useState<api.ImportPath | null>(null);
+  const [scanErrorTarget, setScanErrorTarget] =
+    useState<ScanErrorTarget | null>(null);
   const [backups, setBackups] = useState<api.BackupInfo[]>([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{
@@ -116,6 +133,27 @@ export function Settings() {
     useState<api.BackupInfo | null>(null);
   const [deleteBackupInProgress, setDeleteBackupInProgress] = useState(false);
   const [createBackupInProgress, setCreateBackupInProgress] = useState(false);
+  const [openaiTestState, setOpenaiTestState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    message?: string;
+    model?: string;
+  }>({ status: 'idle' });
+  const [libraryPathError, setLibraryPathError] = useState<string | null>(null);
+  const [openaiKeyError, setOpenaiKeyError] = useState<string | null>(null);
+  const [extensionsInput, setExtensionsInput] = useState('');
+  const [excludePatternInput, setExcludePatternInput] = useState('');
+  const [extensionsError, setExtensionsError] = useState<string | null>(null);
+  const [excludePatternError, setExcludePatternError] =
+    useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importPayload, setImportPayload] =
+    useState<Partial<api.Config> | null>(null);
+  const [importFileName, setImportFileName] = useState('');
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [exportInProgress, setExportInProgress] = useState(false);
+  const [importInProgress, setImportInProgress] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   interface UiMetadataSource {
     id: string;
@@ -134,6 +172,8 @@ export function Settings() {
     folderNamingPattern: string;
     fileNamingPattern: string;
     createBackups: boolean;
+    supportedExtensions: string[];
+    excludePatterns: string[];
     enableDiskQuota: boolean;
     diskQuotaPercent: number;
     enableUserQuotas: boolean;
@@ -158,12 +198,15 @@ export function Settings() {
   const initialSettings: SettingsState = {
     // Library settings
     libraryPath: '/path/to/audiobooks/library',
-    organizationStrategy: 'auto', // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
+    // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
+    organizationStrategy: 'auto',
     scanOnStartup: false,
     autoOrganize: true,
     folderNamingPattern: '{author}/{series}/{title} ({print_year})',
     fileNamingPattern: '{title} - {author} - read by {narrator}',
     createBackups: true,
+    supportedExtensions: ['.m4b', '.mp3', '.m4a'],
+    excludePatterns: [],
 
     // Storage quotas
     enableDiskQuota: false,
@@ -215,7 +258,8 @@ export function Settings() {
     concurrentScans: 4,
 
     // Memory management
-    memoryLimitType: 'items', // 'items', 'percent', 'absolute'
+    // 'items', 'percent', 'absolute'
+    memoryLimitType: 'items',
     cacheSize: 1000, // items
     memoryLimitPercent: 25, // % of system memory
     memoryLimitMB: 512, // MB
@@ -233,7 +277,37 @@ export function Settings() {
   const [settings, setSettings] = useState<SettingsState>(initialSettings);
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
-  const [savedApiKeyMask, setSavedApiKeyMask] = useState<string>(''); // Track if we have a saved key
+  const [savedApiKeyMask, setSavedApiKeyMask] = useState<string>('');
+  const settingsSnapshot = useMemo(
+    () => JSON.stringify(settings),
+    [settings]
+  );
+  const hasUnsavedChanges =
+    savedSnapshot !== '' && settingsSnapshot !== savedSnapshot;
+  const blocker = useBlocker(hasUnsavedChanges);
+  const savedSettings = useMemo(() => {
+    if (!savedSnapshot) return null;
+    try {
+      return JSON.parse(savedSnapshot) as SettingsState;
+    } catch {
+      return null;
+    }
+  }, [savedSnapshot]);
+  const importKeys = useMemo(() => {
+    if (!importPayload) return [];
+    return Object.keys(importPayload);
+  }, [importPayload]);
+  const openaiPlaceholder = savedApiKeyMask
+    ? `Key saved: ${savedApiKeyMask} (enter new key to change)`
+    : 'sk-...';
+  const openaiHelperText =
+    openaiKeyError ||
+    (settings.enableAIParsing
+      ? savedApiKeyMask
+        ? 'Key is currently set. Enter a new key to update it.'
+        : 'Get your API key from ' +
+          'https://platform.openai.com/api-keys'
+      : 'Enable AI parsing to configure API key');
 
   // Load configuration on mount
   useEffect(() => {
@@ -241,6 +315,16 @@ export function Settings() {
     loadImportFolders();
     loadBackups();
   }, []);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const loadConfig = async () => {
     try {
@@ -254,7 +338,7 @@ export function Settings() {
         setSavedApiKeyMask(config.openai_api_key);
       }
       // Map all backend config fields to frontend settings format
-      setSettings({
+      const nextSettings: SettingsState = {
         // Library settings
         libraryPath: config.root_dir || '',
         organizationStrategy: config.organization_strategy || 'auto',
@@ -267,6 +351,10 @@ export function Settings() {
           config.file_naming_pattern ||
           '{title} - {author} - read by {narrator}',
         createBackups: config.create_backups ?? true,
+        supportedExtensions: config.supported_extensions?.length
+          ? config.supported_extensions
+          : ['.m4b', '.mp3', '.m4a'],
+        excludePatterns: config.exclude_patterns || [],
 
         // Storage quotas
         enableDiskQuota: config.enable_disk_quota ?? false,
@@ -343,7 +431,9 @@ export function Settings() {
         logLevel: config.log_level || 'info',
         logFormat: config.log_format || 'text',
         enableJsonLogging: config.enable_json_logging ?? false,
-      });
+      };
+      setSettings(nextSettings);
+      setSavedSnapshot(JSON.stringify(nextSettings));
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {
         navigate('/login');
@@ -443,9 +533,31 @@ export function Settings() {
     return result + '.m4b';
   };
 
-  const handleChange = (field: string, value: string | boolean | number) => {
+  const normalizeExtension = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const withDot = trimmed.startsWith('.') ? trimmed : `.${trimmed}`;
+    return withDot.toLowerCase();
+  };
+
+  const isValidOpenAIKey = (value: string): boolean => {
+    if (!value) return true;
+    return /^sk-[A-Za-z0-9]{8,}$/.test(value);
+  };
+
+  const handleChange = (
+    field: string,
+    value: string | boolean | number | string[]
+  ) => {
     setSettings((prev) => ({ ...prev, [field]: value }));
     setSaved(false);
+    if (field === 'libraryPath') {
+      setLibraryPathError(null);
+    }
+    if (field === 'openaiApiKey') {
+      setOpenaiKeyError(null);
+      setOpenaiTestState({ status: 'idle' });
+    }
   };
 
   const handleBrowseLibraryPath = () => {
@@ -510,36 +622,116 @@ export function Settings() {
   const handleScanImportFolder = async (folder: api.ImportPath) => {
     setScanStatuses((prev) => ({
       ...prev,
-      [folder.id]: { status: 'scanning', scanned: 0, total: 50 },
+      [folder.id]: {
+        status: 'scanning',
+        scanned: 0,
+        total: prev[folder.id]?.total || 0,
+      },
     }));
 
+    let total = 50;
+    let errors: string[] = [];
+    let operationId: string | undefined;
+
     try {
-      await api.startScan(folder.path);
+      const response = await api.startScan(folder.path);
+      if (typeof response.total === 'number') {
+        total = response.total;
+      }
+      if (Array.isArray(response.errors)) {
+        errors = response.errors;
+      }
+      operationId = response.id;
     } catch (error) {
       console.error('Failed to scan import folder:', error);
+      const message =
+        error instanceof Error ? error.message : 'Scan failed.';
       setScanStatuses((prev) => ({
         ...prev,
-        [folder.id]: { status: 'error', scanned: 0, total: 0 },
+        [folder.id]: {
+          status: 'error',
+          scanned: 0,
+          total: 0,
+          errors: [message],
+        },
       }));
       return;
     }
 
+    setScanStatuses((prev) => ({
+      ...prev,
+      [folder.id]: {
+        status: 'scanning',
+        scanned: 0,
+        total,
+        operationId,
+        errors,
+      },
+    }));
+
     let scanned = 0;
-    const total = 50;
+    const increment = Math.max(1, Math.ceil(total / 10));
     const interval = window.setInterval(() => {
-      scanned += 5;
+      scanned += increment;
       setScanStatuses((prev) => ({
         ...prev,
         [folder.id]: {
           status: scanned >= total ? 'complete' : 'scanning',
           scanned: Math.min(scanned, total),
           total,
+          operationId,
+          errors,
         },
       }));
       if (scanned >= total) {
         window.clearInterval(interval);
+        delete scanIntervalsRef.current[folder.id];
       }
     }, 300);
+
+    scanIntervalsRef.current[folder.id] = interval;
+  };
+
+  const handleRequestCancelScan = (folder: api.ImportPath) => {
+    setCancelScanTarget(folder);
+  };
+
+  const handleConfirmCancelScan = async () => {
+    if (!cancelScanTarget) return;
+    const target = cancelScanTarget;
+    setCancelScanTarget(null);
+    const status = scanStatuses[target.id];
+    if (!status) return;
+    const interval = scanIntervalsRef.current[target.id];
+    if (interval) {
+      window.clearInterval(interval);
+      delete scanIntervalsRef.current[target.id];
+    }
+    if (status.operationId) {
+      try {
+        await api.cancelOperation(status.operationId);
+      } catch (error) {
+        console.error('Failed to cancel scan operation:', error);
+      }
+    }
+    setScanStatuses((prev) => ({
+      ...prev,
+      [target.id]: {
+        ...status,
+        status: 'cancelled',
+      },
+    }));
+  };
+
+  const handleViewScanErrors = (
+    folder: api.ImportPath,
+    status: ScanStatus
+  ) => {
+    if (!status.errors?.length) return;
+    setScanErrorTarget({
+      path: folder.path,
+      errors: status.errors,
+    });
   };
 
   const loadBackups = async () => {
@@ -700,13 +892,41 @@ export function Settings() {
     setSaved(false);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
+    setLibraryPathError(null);
+    setOpenaiKeyError(null);
+    setExtensionsError(null);
+    setExcludePatternError(null);
+
+    const libraryPath = settings.libraryPath.trim();
+    if (!libraryPath) {
+      setLibraryPathError('Library path is required.');
+      return false;
+    }
+    if (savedSettings && savedSettings.libraryPath !== libraryPath) {
+      try {
+        await api.browseFilesystem(libraryPath);
+      } catch (error) {
+        console.error('Library path validation failed:', error);
+        setLibraryPathError('Directory does not exist.');
+        return false;
+      }
+    }
+    if (settings.supportedExtensions.length === 0) {
+      setExtensionsError('Add at least one extension.');
+      return false;
+    }
+    if (!isValidOpenAIKey(settings.openaiApiKey)) {
+      setOpenaiKeyError('Invalid API key format.');
+      return false;
+    }
+
     try {
       // Map all frontend settings to backend config format
       const updates: Partial<api.Config> = {
         // Core paths
-        root_dir: settings.libraryPath,
-        playlist_dir: settings.libraryPath + '/playlists',
+        root_dir: libraryPath,
+        playlist_dir: `${libraryPath}/playlists`,
 
         // Library organization
         organization_strategy: settings.organizationStrategy,
@@ -715,6 +935,8 @@ export function Settings() {
         folder_naming_pattern: settings.folderNamingPattern,
         file_naming_pattern: settings.fileNamingPattern,
         create_backups: settings.createBackups,
+        supported_extensions: settings.supportedExtensions,
+        exclude_patterns: settings.excludePatterns,
 
         // Storage quotas
         enable_disk_quota: settings.enableDiskQuota,
@@ -768,21 +990,25 @@ export function Settings() {
       const response = await api.updateConfig(updates);
       console.log('Save response:', response);
 
-      // If we saved a new API key, store the masked version and clear the field
+      let nextSettings = settings;
       if (settings.openaiApiKey && response.openai_api_key) {
         setSavedApiKeyMask(response.openai_api_key);
-        setSettings((prev) => ({ ...prev, openaiApiKey: '' }));
+        nextSettings = { ...settings, openaiApiKey: '' };
+        setSettings(nextSettings);
       }
 
+      setSavedSnapshot(JSON.stringify(nextSettings));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      return true;
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {
         navigate('/login');
-        return;
+        return false;
       }
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
+      return false;
     }
   };
 
@@ -790,6 +1016,218 @@ export function Settings() {
     if (!confirm('Reset all settings to defaults?')) return;
 
     setSettings(initialSettings);
+    setSaved(false);
+    setLibraryPathError(null);
+    setOpenaiKeyError(null);
+    setExtensionsError(null);
+    setExcludePatternError(null);
+  };
+
+  const handleAddExtension = () => {
+    const normalized = normalizeExtension(extensionsInput);
+    if (!normalized) {
+      setExtensionsError('Enter a file extension.');
+      return;
+    }
+    if (!/^\.[a-z0-9]+$/i.test(normalized)) {
+      setExtensionsError('Use letters or numbers, like .m4b');
+      return;
+    }
+    if (settings.supportedExtensions.includes(normalized)) {
+      setExtensionsError('Extension already added.');
+      return;
+    }
+    setSettings((prev) => ({
+      ...prev,
+      supportedExtensions: [...prev.supportedExtensions, normalized].sort(),
+    }));
+    setExtensionsInput('');
+    setExtensionsError(null);
+    setSaved(false);
+  };
+
+  const handleRemoveExtension = (extension: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      supportedExtensions: prev.supportedExtensions.filter(
+        (item) => item !== extension
+      ),
+    }));
+    setExtensionsError(null);
+    setSaved(false);
+  };
+
+  const handleAddExcludePattern = () => {
+    const normalized = excludePatternInput.trim();
+    if (!normalized) {
+      setExcludePatternError('Enter a pattern to exclude.');
+      return;
+    }
+    if (settings.excludePatterns.includes(normalized)) {
+      setExcludePatternError('Pattern already added.');
+      return;
+    }
+    setSettings((prev) => ({
+      ...prev,
+      excludePatterns: [...prev.excludePatterns, normalized],
+    }));
+    setExcludePatternInput('');
+    setExcludePatternError(null);
+    setSaved(false);
+  };
+
+  const handleRemoveExcludePattern = (pattern: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      excludePatterns: prev.excludePatterns.filter((item) => item !== pattern),
+    }));
+    setExcludePatternError(null);
+    setSaved(false);
+  };
+
+  const handleTestAIConnection = async () => {
+    const apiKey = settings.openaiApiKey.trim();
+    if (!settings.enableAIParsing) {
+      setOpenaiTestState({
+        status: 'error',
+        message: 'Enable AI parsing to test the connection.',
+      });
+      return;
+    }
+    if (apiKey && !isValidOpenAIKey(apiKey)) {
+      setOpenaiKeyError('Invalid API key format.');
+      return;
+    }
+    if (!apiKey && !savedApiKeyMask) {
+      setOpenaiTestState({
+        status: 'error',
+        message: 'API key not provided.',
+      });
+      return;
+    }
+    setOpenaiTestState({ status: 'loading' });
+    try {
+      const response = await api.testAIConnection(apiKey || undefined);
+      setOpenaiTestState({
+        status: 'success',
+        message: response.message || 'Connection successful.',
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Connection failed.';
+      setOpenaiTestState({
+        status: 'error',
+        message,
+      });
+    }
+  };
+
+  const sanitizeImportPayload = (
+    payload: Partial<api.Config>
+  ): Partial<api.Config> => {
+    const cleaned = { ...payload };
+    delete cleaned.database_type;
+    delete cleaned.enable_sqlite;
+    if (
+      typeof cleaned.openai_api_key === 'string' &&
+      cleaned.openai_api_key.includes('***')
+    ) {
+      delete cleaned.openai_api_key;
+    }
+    if (cleaned.api_keys?.goodreads?.includes('***')) {
+      cleaned.api_keys = {
+        ...cleaned.api_keys,
+        goodreads: '',
+      };
+    }
+    return cleaned;
+  };
+
+  const handleExportSettings = async () => {
+    setExportInProgress(true);
+    setImportNotice(null);
+    try {
+      const config = await api.getConfig();
+      const blob = new Blob([JSON.stringify(config, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `settings-${new Date().toISOString()}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setImportNotice('Settings exported.');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Export failed.';
+      setImportNotice(message);
+    } finally {
+      setExportInProgress(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    setImportNotice(null);
+    if (importInputRef.current) {
+      importInputRef.current.value = '';
+      importInputRef.current.click();
+    }
+  };
+
+  const handleImportFileChange = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<api.Config>;
+      const cleaned = sanitizeImportPayload(parsed);
+      setImportFileName(file.name);
+      setImportPayload(cleaned);
+      setImportDialogOpen(true);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Import failed.';
+      setImportNotice(message);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPayload) return;
+    setImportInProgress(true);
+    try {
+      await api.updateConfig(importPayload);
+      await loadConfig();
+      setImportDialogOpen(false);
+      setImportPayload(null);
+      setImportFileName('');
+      setImportNotice('Settings imported successfully.');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Import failed.';
+      setImportNotice(message);
+    } finally {
+      setImportInProgress(false);
+    }
+  };
+
+  const handleSaveAndNavigate = async () => {
+    const success = await handleSave();
+    if (success) {
+      blocker.proceed();
+    }
+  };
+
+  const handleDiscardNavigation = () => {
+    blocker.proceed();
+  };
+
+  const handleCancelNavigation = () => {
+    blocker.reset();
   };
 
   return (
@@ -812,6 +1250,11 @@ export function Settings() {
           Settings saved successfully!
         </Alert>
       )}
+      {importNotice && (
+        <Alert severity="info" sx={{ mb: 2, flexShrink: 0 }}>
+          {importNotice}
+        </Alert>
+      )}
 
       <Paper
         sx={{
@@ -831,6 +1274,8 @@ export function Settings() {
             <Tab label="Library" />
             <Tab label="Metadata" />
             <Tab label="Performance" />
+            <Tab label="Security" />
+            <Tab label="System Info" />
           </Tabs>
         </Box>
 
@@ -849,7 +1294,12 @@ export function Settings() {
                 label="Library Path"
                 value={settings.libraryPath}
                 onChange={(e) => handleChange('libraryPath', e.target.value)}
-                helperText="Main library directory where organized audiobooks are stored. Import paths are configured in File Manager."
+                error={Boolean(libraryPathError)}
+                helperText={
+                  libraryPathError ||
+                  'Main library directory where organized audiobooks are ' +
+                    'stored. Import paths are configured in File Manager.'
+                }
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -941,6 +1391,81 @@ export function Settings() {
             </Grid>
 
             <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+                Scan Settings
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" gutterBottom>
+                Supported Extensions
+              </Typography>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Add extension"
+                    placeholder=".m4b"
+                    value={extensionsInput}
+                    onChange={(e) => setExtensionsInput(e.target.value)}
+                    error={Boolean(extensionsError)}
+                  />
+                  <Button variant="outlined" onClick={handleAddExtension}>
+                    Add
+                  </Button>
+                </Stack>
+                {extensionsError && (
+                  <Alert severity="error">{extensionsError}</Alert>
+                )}
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {settings.supportedExtensions.map((extension) => (
+                    <Chip
+                      key={extension}
+                      label={extension}
+                      onDelete={() => handleRemoveExtension(extension)}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" gutterBottom>
+                Exclude Patterns
+              </Typography>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Add exclude pattern"
+                    placeholder="*_preview.m4b"
+                    value={excludePatternInput}
+                    onChange={(e) => setExcludePatternInput(e.target.value)}
+                    error={Boolean(excludePatternError)}
+                  />
+                  <Button variant="outlined" onClick={handleAddExcludePattern}>
+                    Add
+                  </Button>
+                </Stack>
+                {excludePatternError && (
+                  <Alert severity="error">{excludePatternError}</Alert>
+                )}
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {settings.excludePatterns.map((pattern) => (
+                    <Chip
+                      key={pattern}
+                      label={pattern}
+                      onDelete={() => handleRemoveExcludePattern(pattern)}
+                    />
+                  ))}
+                </Stack>
+              </Stack>
+            </Grid>
+
+            <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="Folder Naming Pattern"
@@ -948,14 +1473,19 @@ export function Settings() {
                 onChange={(e) =>
                   handleChange('folderNamingPattern', e.target.value)
                 }
-                helperText="Available: {title}, {author}, {series}, {series_number}, {print_year}, {audiobook_release_year}, {year}, {publisher}, {edition}, {narrator}, {language}, {isbn10}, {isbn13}, {track_number}, {total_tracks}."
+                helperText={
+                  'Available: {title}, {author}, {series}, {series_number}, ' +
+                  '{print_year}, {audiobook_release_year}, {year}, ' +
+                  '{publisher}, {edition}, {narrator}, {language}, ' +
+                  '{isbn10}, {isbn13}, {track_number}, {total_tracks}.'
+                }
               />
               <Alert severity="info" sx={{ mt: 1, mb: 1 }}>
                 <Typography variant="caption">
                   <strong>Smart Path Handling:</strong> Empty fields (like{' '}
-                  {'{series}'}) are automatically removed from paths. If a book
-                  has no series, that segment disappears gracefully—no duplicate
-                  slashes or empty folders.
+                  {'{series}'}) are automatically removed from paths. If a
+                  book has no series, that segment disappears gracefully—no
+                  duplicate slashes or empty folders.
                 </Typography>
               </Alert>
               <Box
@@ -1025,7 +1555,11 @@ export function Settings() {
                 onChange={(e) =>
                   handleChange('fileNamingPattern', e.target.value)
                 }
-                helperText="Pattern for individual audiobook files. All folder fields plus {track_number}, {total_tracks}, {bitrate}, {codec}, {quality} (parsed from media)"
+                helperText={
+                  'Pattern for individual audiobook files. All folder fields ' +
+                  'plus {track_number}, {total_tracks}, {bitrate}, {codec}, ' +
+                  '{quality} (parsed from media)'
+                }
               />
               <Box
                 sx={{
@@ -1091,14 +1625,14 @@ export function Settings() {
                   multiple files (e.g., 50 MP3s), the system automatically
                   appends track numbers. Pattern detection: Uses hyphens if
                   pattern contains "-", underscores if "_", otherwise spaces.
-                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator 03
-                  of 50.mp3"
+                  Example: "Title - Narrator-03-of-50.mp3" or "Title Narrator
+                  03 of 50.mp3"
                   <br />
                   <strong>Override:</strong> Include {'{track_number}'} and{' '}
                   {'{total_tracks}'} in your pattern to control exact
-                  formatting. Example: "{'{title}'} - Part {'{track_number}'} of{' '}
-                  {'{total_tracks}'}" → "To Kill a Mockingbird - Part 03 of
-                  50.m4b"
+                  formatting. Example: "{'{title}'} - Part{' '}
+                  {'{track_number}'} of {'{total_tracks}'}" → "To Kill a
+                  Mockingbird - Part 03 of 50.m4b"
                 </Typography>
               </Alert>
             </Grid>
@@ -1128,28 +1662,77 @@ export function Settings() {
                   <List>
                     {importPaths.map((folder) => {
                       const scanStatus = scanStatuses[folder.id];
-                      const secondaryText = scanStatus
-                        ? scanStatus.status === 'scanning'
-                          ? `Scanning... Scanned ${scanStatus.scanned} files`
-                          : scanStatus.status === 'complete'
-                            ? `Scan complete. Found ${scanStatus.scanned} audiobooks.`
-                            : 'Scan failed.'
-                        : `${folder.book_count || 0} books`;
+                      const errorCount = scanStatus?.errors?.length || 0;
+                      const isScanning = scanStatus?.status === 'scanning';
+                      let secondaryText = `${folder.book_count || 0} books`;
+                      if (scanStatus) {
+                        if (scanStatus.status === 'scanning') {
+                          secondaryText =
+                            `Scanning... Scanned ${scanStatus.scanned} files`;
+                        } else if (scanStatus.status === 'complete') {
+                          if (errorCount > 0) {
+                            secondaryText =
+                              'Scan complete. Found ' +
+                              scanStatus.scanned +
+                              ' audiobooks, ' +
+                              errorCount +
+                              ' errors.';
+                          } else {
+                            secondaryText =
+                              'Scan complete. Found ' +
+                              scanStatus.scanned +
+                              ' audiobooks.';
+                          }
+                        } else if (scanStatus.status === 'cancelled') {
+                          secondaryText =
+                            'Scan cancelled. Processed ' +
+                            scanStatus.scanned +
+                            ' files.';
+                        } else if (scanStatus.status === 'error') {
+                          secondaryText =
+                            errorCount > 0
+                              ? `Scan failed. ${errorCount} errors.`
+                              : 'Scan failed.';
+                        }
+                      }
 
                       return (
                         <ListItem
                           key={folder.id}
                           secondaryAction={
                             <Stack direction="row" spacing={1}>
+                              {scanStatus && errorCount > 0 && (
+                                <Button
+                                  size="small"
+                                  onClick={() =>
+                                    handleViewScanErrors(
+                                      folder,
+                                      scanStatus
+                                    )
+                                  }
+                                >
+                                  View Errors
+                                </Button>
+                              )}
+                              {isScanning && (
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  variant="outlined"
+                                  onClick={() =>
+                                    handleRequestCancelScan(folder)
+                                  }
+                                >
+                                  Cancel Scan
+                                </Button>
+                              )}
                               <Button
                                 size="small"
                                 variant="outlined"
                                 onClick={() => handleScanImportFolder(folder)}
-                                disabled={scanStatus?.status === 'scanning'}
+                                disabled={isScanning}
                               >
-                                {scanStatus?.status === 'scanning'
-                                  ? 'Scanning...'
-                                  : 'Scan'}
+                                {isScanning ? 'Scanning...' : 'Scan'}
                               </Button>
                               <IconButton
                                 edge="end"
@@ -1332,7 +1915,9 @@ export function Settings() {
                     ),
                   }}
                   inputProps={{ min: 1, max: 100 }}
-                  helperText="Maximum percentage of disk space the library can use"
+                  helperText={
+                    'Maximum percentage of disk space the library can use'
+                  }
                 />
               </Grid>
             )}
@@ -1431,77 +2016,58 @@ export function Settings() {
             </Grid>
 
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="OpenAI API Key"
-                type="password"
-                value={settings.openaiApiKey}
-                onChange={(e) => {
-                  handleChange('openaiApiKey', e.target.value);
-                  // Clear saved mask when user starts typing
-                  if (e.target.value && savedApiKeyMask) {
-                    setSavedApiKeyMask('');
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                API Keys
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={2}
+                alignItems={{ xs: 'stretch', md: 'center' }}
+              >
+                <TextField
+                  fullWidth
+                  label="OpenAI API Key"
+                  type="password"
+                  value={settings.openaiApiKey}
+                  onChange={(e) => {
+                    handleChange('openaiApiKey', e.target.value);
+                    // Clear saved mask when user starts typing
+                    if (e.target.value && savedApiKeyMask) {
+                      setSavedApiKeyMask('');
+                    }
+                  }}
+                  disabled={!settings.enableAIParsing}
+                  error={Boolean(openaiKeyError)}
+                  placeholder={openaiPlaceholder}
+                  helperText={openaiHelperText}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleTestAIConnection}
+                  disabled={
+                    !settings.enableAIParsing ||
+                    openaiTestState.status === 'loading'
                   }
-                }}
-                disabled={!settings.enableAIParsing}
-                placeholder={
-                  savedApiKeyMask
-                    ? `Key saved: ${savedApiKeyMask} (enter new key to change)`
-                    : 'sk-...'
-                }
-                helperText={
-                  settings.enableAIParsing
-                    ? savedApiKeyMask
-                      ? 'Key is currently set. Enter a new key to update it.'
-                      : 'Get your API key from https://platform.openai.com/api-keys'
-                    : 'Enable AI parsing to configure API key'
-                }
-                InputProps={{
-                  endAdornment: settings.enableAIParsing &&
-                    (settings.openaiApiKey || savedApiKeyMask) && (
-                      <InputAdornment position="end">
-                        <Button
-                          size="small"
-                          onClick={async () => {
-                            try {
-                              const keyToTest = settings.openaiApiKey;
-
-                              // If user hasn't entered a new key, test the saved one by not passing a key
-                              // Backend will use the key from config
-                              if (!keyToTest && savedApiKeyMask) {
-                                const response = await api.testAIConnection();
-                                if (response.success) {
-                                  alert('✅ Connection successful!');
-                                }
-                                return;
-                              }
-
-                              // Test with the key user just entered
-                              if (keyToTest && keyToTest.length >= 20) {
-                                const response =
-                                  await api.testAIConnection(keyToTest);
-                                if (response.success) {
-                                  alert('✅ Connection successful!');
-                                }
-                              } else {
-                                alert(
-                                  '❌ Please enter a valid API key (minimum 20 characters)'
-                                );
-                              }
-                            } catch (error) {
-                              alert(
-                                '❌ Connection failed: ' +
-                                  (error as Error).message
-                              );
-                            }
-                          }}
-                        >
-                          Test
-                        </Button>
-                      </InputAdornment>
-                    ),
-                }}
-              />
+                >
+                  {openaiTestState.status === 'loading'
+                    ? 'Testing...'
+                    : 'Test Connection'}
+                </Button>
+              </Stack>
+              {openaiTestState.status === 'success' && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  {openaiTestState.message}
+                </Alert>
+              )}
+              {openaiTestState.status === 'error' && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {openaiTestState.message}
+                </Alert>
+              )}
             </Grid>
 
             <Grid item xs={12}>
@@ -1665,7 +2231,9 @@ export function Settings() {
                                         e.target.value
                                       )
                                     }
-                                    placeholder="Enter your Goodreads API secret"
+                                    placeholder={
+                                      'Enter your Goodreads API ' + 'secret'
+                                    }
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -1701,7 +2269,9 @@ export function Settings() {
                                         e.target.value
                                       )
                                     }
-                                    placeholder={`Enter your ${source.name} API key`}
+                                    placeholder={
+                                      'Enter your ' + source.name + ' API key'
+                                    }
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -1713,7 +2283,12 @@ export function Settings() {
                                       <>
                                         Get your API key at:{' '}
                                         <a
-                                          href="https://console.cloud.google.com/apis/credentials"
+                                          href={
+                                            'https://console.' +
+                                            'cloud.google.com/' +
+                                            'apis/' +
+                                            'credentials'
+                                          }
                                           target="_blank"
                                           rel="noopener noreferrer"
                                         >
@@ -1992,6 +2567,14 @@ export function Settings() {
           </Grid>
         </TabPanel>
 
+        <TabPanel value={tabValue} index={3}>
+          <BlockedHashesTab />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
+          <SystemInfoTab />
+        </TabPanel>
+
         <Box
           sx={{
             p: 2,
@@ -2003,6 +2586,27 @@ export function Settings() {
             bgcolor: 'background.paper',
           }}
         >
+          <input
+            type="file"
+            accept="application/json"
+            ref={importInputRef}
+            onChange={handleImportFileChange}
+            style={{ display: 'none' }}
+          />
+          <Button
+            variant="outlined"
+            onClick={handleExportSettings}
+            disabled={exportInProgress}
+          >
+            {exportInProgress ? 'Exporting...' : 'Export Settings'}
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={handleImportClick}
+            disabled={importInProgress}
+          >
+            {importInProgress ? 'Importing...' : 'Import Settings'}
+          </Button>
           <Button
             variant="outlined"
             startIcon={<RestartAltIcon />}
@@ -2140,6 +2744,60 @@ export function Settings() {
       </Dialog>
 
       <Dialog
+        open={Boolean(cancelScanTarget)}
+        onClose={() => setCancelScanTarget(null)}
+      >
+        <DialogTitle>Cancel Scan</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            Cancel scan for{' '}
+            <strong>{cancelScanTarget?.path || 'this folder'}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelScanTarget(null)}>
+            Keep Scanning
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={handleConfirmCancelScan}
+          >
+            Cancel Scan
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(scanErrorTarget)}
+        onClose={() => setScanErrorTarget(null)}
+      >
+        <DialogTitle>Scan Errors</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            Errors while scanning{' '}
+            <strong>{scanErrorTarget?.path || 'this folder'}</strong>:
+          </Typography>
+          {scanErrorTarget?.errors?.length ? (
+            <List dense>
+              {scanErrorTarget.errors.map((error, index) => (
+                <ListItem key={`${error}-${index}`}>
+                  <ListItemText primary={error} />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No errors recorded.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setScanErrorTarget(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={restoreDialogOpen}
         onClose={() => setRestoreDialogOpen(false)}
       >
@@ -2204,6 +2862,73 @@ export function Settings() {
             disabled={deleteBackupInProgress}
           >
             {deleteBackupInProgress ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Import Settings</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Importing settings will overwrite your current configuration.
+          </Alert>
+          <Typography variant="body2" gutterBottom>
+            Import from <strong>{importFileName || 'selected file'}</strong>?
+          </Typography>
+          {importKeys.length > 0 && (
+            <List dense>
+              {importKeys.slice(0, 12).map((key) => (
+                <ListItem key={key}>
+                  <ListItemText primary={key} />
+                </ListItem>
+              ))}
+              {importKeys.length > 12 && (
+                <ListItem>
+                  <ListItemText
+                    primary={`+${importKeys.length - 12} more fields`}
+                  />
+                </ListItem>
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setImportDialogOpen(false)}
+            disabled={importInProgress}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmImport}
+            disabled={importInProgress}
+          >
+            {importInProgress ? 'Importing...' : 'Import Settings'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={blocker.state === 'blocked'}
+        onClose={handleCancelNavigation}
+      >
+        <DialogTitle>Unsaved Changes</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            You have unsaved changes. Save before leaving?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelNavigation}>Cancel</Button>
+          <Button onClick={handleDiscardNavigation}>Discard</Button>
+          <Button variant="contained" onClick={handleSaveAndNavigate}>
+            Save
           </Button>
         </DialogActions>
       </Dialog>

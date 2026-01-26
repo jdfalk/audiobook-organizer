@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.36.1
+// version: 1.37.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2956,6 +2956,26 @@ func (s *Server) updateConfig(c *gin.Context) {
 	if val, ok := updates["create_backups"].(bool); ok {
 		config.AppConfig.CreateBackups = val
 		updated = append(updated, "create_backups")
+	}
+	if val, ok := updates["supported_extensions"].([]interface{}); ok {
+		extensions := make([]string, 0, len(val))
+		for _, item := range val {
+			if ext, ok := item.(string); ok {
+				extensions = append(extensions, ext)
+			}
+		}
+		config.AppConfig.SupportedExtensions = extensions
+		updated = append(updated, "supported_extensions")
+	}
+	if val, ok := updates["exclude_patterns"].([]interface{}); ok {
+		patterns := make([]string, 0, len(val))
+		for _, item := range val {
+			if pattern, ok := item.(string); ok {
+				patterns = append(patterns, pattern)
+			}
+		}
+		config.AppConfig.ExcludePatterns = patterns
+		updated = append(updated, "exclude_patterns")
 	}
 
 	// Database type and enable_sqlite are read-only at runtime for safety

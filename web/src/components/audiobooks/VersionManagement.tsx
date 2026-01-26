@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/VersionManagement.tsx
-// version: 1.1.0
+// version: 1.1.2
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -150,8 +150,8 @@ export function VersionManagement({
       return;
     }
     const currentGroup =
-      versions.find((version) => version.id === audiobookId)?.version_group_id ??
-      versions[0]?.version_group_id;
+      versions.find((version) => version.id === audiobookId)
+        ?.version_group_id ?? versions[0]?.version_group_id;
     const selected = searchResults.find((version) => version.id === targetId);
     if (currentGroup && selected?.version_group_id === currentGroup) {
       setError('Cannot create circular version links');
@@ -242,6 +242,7 @@ export function VersionManagement({
               {versions.map((version, index) => {
                 const qualityTier = getQualityTier(version);
                 const qualityColor = getQualityColor(qualityTier);
+                const labelTitle = version.title || 'audiobook';
 
                 return (
                   <Box key={version.id}>
@@ -259,6 +260,11 @@ export function VersionManagement({
                             onClick={() => handleSetPrimary(version.id)}
                             color={
                               version.is_primary_version ? 'primary' : 'default'
+                            }
+                            aria-label={
+                              version.is_primary_version
+                                ? `Primary version for ${labelTitle}`
+                                : `Set primary for ${labelTitle}`
                             }
                           >
                             {version.is_primary_version ? (
@@ -387,7 +393,12 @@ export function VersionManagement({
             placeholder="Search audiobooks"
           />
           {searchLoading && (
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ mt: 2 }}
+            >
               <CircularProgress size={16} />
               <Typography variant="body2">Searching...</Typography>
             </Stack>

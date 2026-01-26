@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.6.0
+// version: 1.7.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -46,6 +46,7 @@ export interface Audiobook {
   quantity?: number;
   marked_for_deletion?: boolean;
   marked_for_deletion_at?: string;
+  organize_error?: string;
 
   created_at: string;
   updated_at: string;
