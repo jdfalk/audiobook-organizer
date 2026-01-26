@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.12.2
+// version: 1.13.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -44,6 +44,22 @@ type Scanner interface {
 // GlobalScanner, when set, is used by the package-level functions below.
 // If nil, the concrete implementations in this file are used.
 var GlobalScanner Scanner
+
+// isExcludedPath checks whether a path matches any configured exclude pattern.
+func isExcludedPath(path string) bool {
+	for _, pattern := range config.AppConfig.ExcludePatterns {
+		if pattern == "" {
+			continue
+		}
+		if matched, err := filepath.Match(pattern, filepath.Base(path)); err == nil && matched {
+			return true
+		}
+		if matched, err := filepath.Match(pattern, path); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
 
 // Book represents an audiobook file
 type Book struct {
@@ -119,6 +135,9 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 				}
 
 				path := filepath.Join(scanDir, entry.Name())
+				if isExcludedPath(path) {
+					continue
+				}
 				ext := strings.ToLower(filepath.Ext(path))
 				for _, supportedExt := range config.AppConfig.SupportedExtensions {
 					if ext == supportedExt {

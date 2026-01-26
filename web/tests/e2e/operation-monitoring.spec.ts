@@ -1,0 +1,308 @@
+// file: web/tests/e2e/operation-monitoring.spec.ts
+// version: 1.0.1
+// guid: 9845a5f8-e3e4-472f-ae99-2723b6163aae
+
+import { test, expect, type Page } from '@playwright/test';
+import {
+  mockEventSource,
+  setupMockApi,
+  skipWelcomeWizard,
+} from './utils/test-helpers';
+
+type OperationSeed = {
+  active: Array<Record<string, unknown>>;
+  history: Array<Record<string, unknown>>;
+  logs: Record<string, Array<Record<string, unknown>>>;
+};
+
+const baseActive = [
+  {
+    id: 'scan-1',
+    type: 'scan',
+    status: 'running',
+    progress: 20,
+    total: 100,
+    message: 'Scanning',
+    folder_path: '/imports',
+  },
+  {
+    id: 'scan-2',
+    type: 'scan',
+    status: 'running',
+    progress: 5,
+    total: 50,
+    message: 'Scanning',
+    folder_path: '/downloads',
+  },
+  {
+    id: 'organize-1',
+    type: 'organize',
+    status: 'running',
+    progress: 5,
+    total: 20,
+    message: 'Organizing',
+    folder_path: '/imports',
+  },
+];
+
+const baseHistory = [
+  {
+    id: 'hist-1',
+    type: 'scan',
+    status: 'completed',
+    progress: 100,
+    total: 100,
+    message: 'Completed scan',
+    created_at: '2026-01-25T10:00:00Z',
+  },
+  {
+    id: 'hist-2',
+    type: 'scan',
+    status: 'failed',
+    progress: 20,
+    total: 100,
+    message: 'Network error',
+    error_message: 'Network error while scanning',
+    created_at: '2026-01-25T09:00:00Z',
+  },
+  {
+    id: 'hist-3',
+    type: 'organize',
+    status: 'running',
+    progress: 3,
+    total: 10,
+    message: 'Organizing',
+    created_at: '2026-01-25T08:00:00Z',
+  },
+];
+
+const baseLogs = {
+  'scan-1': [
+    {
+      id: 'log-1',
+      level: 'info',
+      message: 'Scanning file: book1.m4b',
+      created_at: '2026-01-25T10:00:00Z',
+    },
+    {
+      id: 'log-2',
+      level: 'warning',
+      message: 'Skipping hidden file',
+      created_at: '2026-01-25T10:00:10Z',
+    },
+    {
+      id: 'log-3',
+      level: 'error',
+      message: 'Failed to read file',
+      created_at: '2026-01-25T10:00:20Z',
+    },
+  ],
+  'hist-1': [
+    {
+      id: 'log-4',
+      level: 'info',
+      message: 'Completed. Found 50 books, 2 errors.',
+      created_at: '2026-01-25T10:05:00Z',
+    },
+  ],
+  'hist-2': [
+    {
+      id: 'log-5',
+      level: 'error',
+      message: 'Network error while scanning',
+      created_at: '2026-01-25T09:05:00Z',
+    },
+  ],
+};
+
+const openOperations = async (page: Page, seed?: Partial<OperationSeed>) => {
+  await setupMockApi(page, {
+    operations: {
+      active: seed?.active || baseActive,
+      history: seed?.history || baseHistory,
+      logs: seed?.logs || baseLogs,
+    },
+  });
+  await page.goto('/operations');
+  await page.waitForLoadState('networkidle');
+};
+
+test.describe('Operation Monitoring', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockEventSource(page);
+    await skipWelcomeWizard(page);
+  });
+
+  test('views active operations list', async ({ page }) => {
+    // Arrange
+    await openOperations(page);
+
+    // Act + Assert
+    await expect(page.getByText('scan • running')).toBeVisible();
+    await expect(page.getByText('organize • running')).toBeVisible();
+    await expect(page.getByText('20/100')).toBeVisible();
+  });
+
+  test('monitors operation progress in real-time', async ({ page }) => {
+    // Arrange
+    await openOperations(page);
+
+    // Act
+    await page.evaluate(() => {
+      const apiMock = (window as unknown as { __apiMock?: {
+        setActiveOperations?: (ops: Array<Record<string, unknown>>) => void;
+      } }).__apiMock;
+      apiMock?.setActiveOperations?.([
+        {
+          id: 'scan-1',
+          type: 'scan',
+          status: 'running',
+          progress: 25,
+          total: 100,
+          message: 'Scanning',
+          folder_path: '/imports',
+        },
+      ]);
+    });
+    await page.getByRole('button', { name: 'Refresh' }).click();
+
+    // Assert
+    await expect(page.getByText('25/100')).toBeVisible();
+  });
+
+  test('views operation logs', async ({ page }) => {
+    // Arrange
+    await openOperations(page);
+
+    // Act
+    const activeItem = page
+      .getByRole('listitem')
+      .filter({ hasText: 'scan • running' })
+      .first();
+    await activeItem.getByRole('button', { name: 'View Logs' }).click();
+
+    // Assert
+    await expect(page.getByText('Scanning file: book1.m4b')).toBeVisible();
+  });
+
+  test('views completed operation logs', async ({ page }) => {
+    // Arrange
+    await openOperations(page);
+
+    // Act
+    const historyItem = page
+      .getByRole('listitem')
+      .filter({ hasText: 'scan • completed' })
+      .first();
+    await historyItem.getByRole('button', { name: 'View Logs' }).click();
+
+    // Assert
+    await expect(
+      page.getByText('Completed. Found 50 books, 2 errors.')
+    ).toBeVisible();
+  });
+
+  test('filters operation logs by level', async ({ page }) => {
+    // Arrange
+    await openOperations(page);
+    const activeItem = page
+      .getByRole('listitem')
+      .filter({ hasText: 'scan • running' })
+      .first();
+    await activeItem.getByRole('button', { name: 'View Logs' }).click();
+
+    // Act
+    await page.getByLabel('Filter').click();
+    await page.getByRole('option', { name: 'Error' }).click();
+
+    // Assert
+    await expect(page.getByText('Failed to read file')).toBeVisible();
+    await expect(page.getByText('Scanning file: book1.m4b')).not.toBeVisible();
+  });
+
+  test('cancels running operation', async ({ page }) => {
+    // Arrange
+    await openOperations(page, {
+      active: [baseActive[0]],
+      history: [],
+    });
+
+    // Act
+    const activeItem = page
+      .getByRole('listitem')
+      .filter({ hasText: 'scan • running' })
+      .first();
+    await activeItem.getByRole('button', { name: 'Cancel' }).click();
+
+    // Assert
+    await expect(page.getByText('Operation cancelled.')).toBeVisible();
+  });
+
+  test('retries failed operation', async ({ page }) => {
+    // Arrange
+    await openOperations(page, {
+      active: [],
+      history: [baseHistory[1]],
+    });
+
+    // Act
+    await page.getByRole('button', { name: 'Retry' }).click();
+
+    // Assert
+    await expect(page.getByText('Operation retried.')).toBeVisible();
+  });
+
+  test('clears completed operations', async ({ page }) => {
+    // Arrange
+    await openOperations(page, {
+      active: [],
+      history: baseHistory,
+    });
+
+    // Act
+    await page.getByRole('button', { name: 'Clear Completed' }).click();
+
+    // Assert
+    await expect(page.getByText('scan • completed')).not.toBeVisible();
+  });
+
+  test('shows operation error details', async ({ page }) => {
+    // Arrange
+    await openOperations(page, {
+      active: [],
+      history: [baseHistory[1]],
+    });
+
+    // Act
+    await page.getByRole('button', { name: 'Details' }).click();
+
+    // Assert
+    await expect(
+      page.getByText('Network error while scanning')
+    ).toBeVisible();
+  });
+
+  test('operation history pagination', async ({ page }) => {
+    // Arrange
+    const history = Array.from({ length: 25 }, (_, index) => ({
+      id: `hist-${index + 1}`,
+      type: index < 20 ? 'scan' : 'organize',
+      status: 'completed',
+      progress: 100,
+      total: 100,
+      message: `Operation ${index + 1}`,
+      created_at: `2026-01-25T10:${index.toString().padStart(2, '0')}:00Z`,
+    }));
+    await openOperations(page, {
+      active: [],
+      history,
+      logs: {},
+    });
+
+    // Act
+    await page.getByRole('button', { name: '2' }).click();
+
+    // Assert
+    await expect(page.getByText('organize • completed')).toBeVisible();
+  });
+});

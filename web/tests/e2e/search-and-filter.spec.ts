@@ -1,5 +1,5 @@
 // file: web/tests/e2e/search-and-filter.spec.ts
-// version: 1.1.2
+// version: 1.2.1
 // guid: c3d4e5f6-a7b8-9012-cdef-a3b4c5d6e7f8
 
 import { test, expect } from '@playwright/test';
@@ -40,7 +40,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "The Way of Kings" in search box
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('The Way of Kings');
-    await page.waitForTimeout(400); // Debounce
 
     // THEN: Shows only books matching that title
     await expect(
@@ -81,7 +80,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "Found" in search box
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('Found');
-    await page.waitForTimeout(400);
 
     // THEN: Shows all books with "Found" in title
     await expect(
@@ -125,7 +123,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "Sanderson" in search
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('Sanderson');
-    await page.waitForTimeout(400);
 
     // THEN: Shows all books by authors matching "Sanderson"
     await expect(
@@ -172,7 +169,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "Stormlight" in search box
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('Stormlight');
-    await page.waitForTimeout(400);
 
     // THEN: Shows all books in series matching "Stormlight"
     await expect(
@@ -204,7 +200,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "the hobbit" (lowercase) in search
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('the hobbit');
-    await page.waitForTimeout(400);
 
     // THEN: Shows "The Hobbit" book
     await expect(
@@ -225,7 +220,6 @@ test.describe('Search and Filter Functionality', () => {
     // WHEN: User types "zzznonexistent" in search
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('zzznonexistent');
-    await page.waitForTimeout(400);
 
     // THEN: Shows "No audiobooks found" message
     await expect(page.getByText(/no audiobooks found/i)).toBeVisible();
@@ -254,7 +248,6 @@ test.describe('Search and Filter Functionality', () => {
 
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('Foundation');
-    await page.waitForTimeout(400);
 
     // AND: Results are filtered
     await expect(
@@ -306,7 +299,6 @@ test.describe('Search and Filter Functionality', () => {
 
     const searchInput = page.getByPlaceholder(/search audiobooks/i);
     await searchInput.fill('Foundation');
-    await page.waitForTimeout(400);
 
     // Verify filtered
     await expect(
@@ -318,7 +310,6 @@ test.describe('Search and Filter Functionality', () => {
 
     // WHEN: User backspaces to empty string
     await searchInput.clear();
-    await page.waitForTimeout(400);
 
     // THEN: All books are shown again
     await expect(
@@ -329,41 +320,138 @@ test.describe('Search and Filter Functionality', () => {
     ).toBeVisible();
   });
 
-  test.skip('search works with other filters combined', async ({ page }) => {
-    // TODO: Filters drawer needs author/state filters wired into data load.
+  test('search works with other filters combined', async ({ page }) => {
+    // GIVEN: Library has organized and import books by same author
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Organized Book',
+        author_name: 'Brandon Sanderson',
+        library_state: 'organized',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'Import Book',
+        author_name: 'Brandon Sanderson',
+        library_state: 'import',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    // WHEN: User selects "Organized" state filter
+    await page.getByRole('button', { name: /filters/i }).click();
+    await page.getByLabel('Library State').click();
+    await page.getByRole('option', { name: 'Organized' }).click();
+
+    // AND: User types "Sanderson" in search
+    const searchInput = page.getByPlaceholder(/search audiobooks/i);
+    await searchInput.fill('Sanderson');
+
+    // THEN: Only organized books by Sanderson are shown
+    await expect(
+      page.getByRole('heading', { name: 'Organized Book', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Import Book', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('search persists across page navigation', async ({ page }) => {
+    // GIVEN: User has searched for "Foundation"
+    const books = [
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-1',
+        title: 'Foundation',
+        author_name: 'Isaac Asimov',
+      },
+      {
+        ...generateTestBooks(1)[0],
+        id: 'book-2',
+        title: 'The Hobbit',
+        author_name: 'J.R.R. Tolkien',
+      },
+    ];
+    await setupLibraryWithBooks(page, books);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+
+    const searchInput = page.getByPlaceholder(/search audiobooks/i);
+    await searchInput.fill('Foundation');
+
+    // WHEN: User clicks a book to view details
+    await page
+      .getByRole('heading', { name: 'Foundation', exact: true })
+      .click();
+    await page.waitForLoadState('networkidle');
+
+    // AND: User clicks browser back button
+    await page.goBack();
+    await page.waitForLoadState('networkidle');
+
+    // THEN: Search term remains
+    await expect(searchInput).toHaveValue('Foundation');
+    await expect(
+      page.getByRole('heading', { name: 'Foundation', exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'The Hobbit', exact: true })
+    ).not.toBeVisible();
+  });
+
+  test('search updates URL with query parameter', async ({ page }) => {
+    // GIVEN: Library page loaded
     const books = generateTestBooks(2);
     await setupLibraryWithBooks(page, books);
 
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
+
+    // WHEN: User types "Hobbit" in search
+    const searchInput = page.getByPlaceholder(/search audiobooks/i);
+    await searchInput.fill('Hobbit');
+
+    // THEN: URL updates to ?search=Hobbit
+    await page.waitForFunction(() =>
+      window.location.search.includes('search=Hobbit')
+    );
   });
 
-  test.skip('search persists across page navigation', async ({ page }) => {
-    // TODO: Persist search term in URL or global state.
-    const books = generateTestBooks(2);
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-  });
-
-  test.skip('search updates URL with query parameter', async ({ page }) => {
-    // TODO: Add query param sync for search term.
-    const books = generateTestBooks(2);
-    await setupLibraryWithBooks(page, books);
-
-    await page.goto('/library');
-    await page.waitForLoadState('networkidle');
-  });
-
-  test.skip('search debounces input to avoid excessive requests', async ({
+  test('search debounces input to avoid excessive requests', async ({
     page,
   }) => {
-    // TODO: Track search API requests for debounce verification.
-    const books = generateTestBooks(2);
+    // GIVEN: Library page loaded
+    const books = generateTestBooks(5);
     await setupLibraryWithBooks(page, books);
 
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
+
+    const searchInput = page.getByPlaceholder(/search audiobooks/i);
+    await searchInput.click();
+    await page.keyboard.type('Foundation', { delay: 10 });
+
+    await page.waitForFunction(() => {
+      const apiMock = (window as unknown as { __apiMock?: { state?: {
+        searchCalls?: number;
+      } } }).__apiMock;
+      return apiMock?.state?.searchCalls === 1;
+    });
+
+    const searchCalls = await page.evaluate(() => {
+      const apiMock = (window as unknown as { __apiMock?: { state?: {
+        searchCalls?: number;
+      } } }).__apiMock;
+      return apiMock?.state?.searchCalls ?? 0;
+    });
+
+    // THEN: Search request fires once after typing stops
+    expect(searchCalls).toBe(1);
   });
 });
