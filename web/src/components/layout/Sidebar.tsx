@@ -1,5 +1,5 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.2.0
+// version: 1.4.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -18,6 +18,8 @@ import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import MonitorIcon from '@mui/icons-material/Monitor';
 import SettingsIcon from '@mui/icons-material/Settings';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 
 interface SidebarProps {
   open: boolean;
@@ -28,7 +30,9 @@ interface SidebarProps {
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Library', icon: <LibraryBooksIcon />, path: '/library' },
+  { text: 'File Browser', icon: <FolderOpenIcon />, path: '/files' },
   { text: 'Works', icon: <MenuBookIcon />, path: '/works' },
+  { text: 'Operations', icon: <ListAltIcon />, path: '/operations' },
   { text: 'System', icon: <MonitorIcon />, path: '/system' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];

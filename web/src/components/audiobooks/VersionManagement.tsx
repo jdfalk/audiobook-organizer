@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/VersionManagement.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -18,8 +18,10 @@ import {
   AlertTitle,
   List,
   ListItem,
+  ListItemButton,
   Divider,
   TextField,
+  CircularProgress,
 } from '@mui/material';
 import {
   Star as StarIcon,
@@ -51,6 +53,11 @@ export function VersionManagement({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkAudiobookId, setLinkAudiobookId] = useState('');
   const [versionNotes, setVersionNotes] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Version[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<Version | null>(null);
 
   const loadVersions = async () => {
     setLoading(true);
@@ -73,6 +80,50 @@ export function VersionManagement({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, audiobookId]);
 
+  useEffect(() => {
+    if (linkDialogOpen) return;
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setLinkAudiobookId('');
+    setVersionNotes('');
+  }, [linkDialogOpen]);
+
+  useEffect(() => {
+    if (!linkDialogOpen) return;
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+    setSearchError(null);
+    const timer = window.setTimeout(async () => {
+      try {
+        const results = await api.searchBooks(query, 10);
+        if (!cancelled) {
+          setSearchResults(results);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSearchError('Failed to search audiobooks');
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [linkDialogOpen, searchQuery]);
+
   const handleSetPrimary = async (versionId: string) => {
     try {
       await api.setPrimaryVersion(versionId);
@@ -85,22 +136,58 @@ export function VersionManagement({
   };
 
   const handleLinkVersion = async () => {
-    if (!linkAudiobookId.trim()) {
-      setError('Please enter an audiobook ID');
+    const targetId = linkAudiobookId.trim();
+    if (!targetId) {
+      setError('Please select an audiobook to link');
+      return;
+    }
+    if (targetId === audiobookId) {
+      setError('Cannot link a book to itself');
+      return;
+    }
+    if (versions.some((version) => version.id === targetId)) {
+      setError('Cannot create circular version links');
+      return;
+    }
+    const currentGroup =
+      versions.find((version) => version.id === audiobookId)?.version_group_id ??
+      versions[0]?.version_group_id;
+    const selected = searchResults.find((version) => version.id === targetId);
+    if (currentGroup && selected?.version_group_id === currentGroup) {
+      setError('Cannot create circular version links');
       return;
     }
 
     try {
       // TODO: Add version_notes support to backend API
-      await api.linkBookVersion(audiobookId, linkAudiobookId);
+      await api.linkBookVersion(audiobookId, targetId);
       setLinkDialogOpen(false);
       setLinkAudiobookId('');
+      setSearchQuery('');
+      setSearchResults([]);
       setVersionNotes('');
       await loadVersions();
       onUpdate?.();
     } catch (err) {
       setError('Failed to link version');
       console.error('Failed to link version:', err);
+    }
+  };
+
+  const handleRequestUnlink = (version: Version) => {
+    setUnlinkTarget(version);
+  };
+
+  const handleConfirmUnlink = async () => {
+    if (!unlinkTarget) return;
+    try {
+      await api.unlinkBookVersion(audiobookId, unlinkTarget.id);
+      setUnlinkTarget(null);
+      await loadVersions();
+      onUpdate?.();
+    } catch (err) {
+      setError('Failed to unlink version');
+      console.error('Failed to unlink version:', err);
     }
   };
 
@@ -190,6 +277,15 @@ export function VersionManagement({
                               size="small"
                             />
                           )}
+                          {version.id !== audiobookId && (
+                            <Button
+                              size="small"
+                              color="secondary"
+                              onClick={() => handleRequestUnlink(version)}
+                            >
+                              Unlink
+                            </Button>
+                          )}
                         </Stack>
 
                         <Stack
@@ -278,18 +374,54 @@ export function VersionManagement({
         <DialogTitle>Link Version</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter the ID of another audiobook to link it as a version. This is
-            useful for different qualities, formats, or editions of the same
-            book.
+            Search for an audiobook to link as another version. This is useful
+            for different qualities, formats, or editions of the same book.
           </Typography>
           <TextField
             autoFocus
             margin="dense"
-            label="Audiobook ID"
+            label="Search by title or author"
+            fullWidth
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search audiobooks"
+          />
+          {searchLoading && (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2">Searching...</Typography>
+            </Stack>
+          )}
+          {searchError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {searchError}
+            </Alert>
+          )}
+          {searchResults.length > 0 && (
+            <List dense sx={{ mt: 2, maxHeight: 200, overflow: 'auto' }}>
+              {searchResults.map((result) => (
+                <ListItem key={result.id} disablePadding>
+                  <ListItemButton
+                    selected={linkAudiobookId === result.id}
+                    onClick={() => setLinkAudiobookId(result.id)}
+                  >
+                    <ListItemText
+                      primary={result.title}
+                      secondary={result.author_name || result.author_id || ''}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+          <TextField
+            margin="dense"
+            label="Selected Audiobook ID"
             fullWidth
             value={linkAudiobookId}
             onChange={(e) => setLinkAudiobookId(e.target.value)}
-            placeholder="01H..."
+            placeholder="Select from search results"
+            sx={{ mt: 2 }}
           />
           <TextField
             margin="dense"
@@ -307,6 +439,30 @@ export function VersionManagement({
           <Button onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleLinkVersion} variant="contained">
             Link Version
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(unlinkTarget)}
+        onClose={() => setUnlinkTarget(null)}
+      >
+        <DialogTitle>Unlink Version</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Unlink{' '}
+            <strong>{unlinkTarget?.title || 'this audiobook'}</strong> from this
+            version group?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUnlinkTarget(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handleConfirmUnlink}
+          >
+            Unlink
           </Button>
         </DialogActions>
       </Dialog>

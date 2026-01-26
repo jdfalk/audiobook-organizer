@@ -1018,6 +1018,11 @@ export const BookDetail = () => {
             <CompareIcon />
             <Typography variant="h6">Versions</Typography>
           </Stack>
+          {versionSummary?.linkedCount ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Part of version group with {versionSummary.linkedCount + 1} books.
+            </Alert>
+          ) : null}
           {versionsError && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {versionsError}
@@ -1045,6 +1050,12 @@ export const BookDetail = () => {
                       version.id === book.id
                         ? 'primary.light'
                         : 'background.paper',
+                    cursor: version.id === book.id ? 'default' : 'pointer',
+                  }}
+                  onClick={() => {
+                    if (version.id !== book.id) {
+                      navigate(`/library/${version.id}`);
+                    }
                   }}
                 >
                   <Stack

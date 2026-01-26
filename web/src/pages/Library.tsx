@@ -189,6 +189,8 @@ export const Library = () => {
   const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'info' | 'warning';
     message: string;
+    actionLabel?: string;
+    onAction?: () => void;
   } | null>(null);
 
   const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
@@ -457,6 +459,7 @@ export const Library = () => {
         genre: book.genre,
         language: book.language,
         audiobook_release_year: book.audiobook_release_year,
+        year: book.audiobook_release_year || book.print_year,
         print_year: book.print_year,
         duration: book.duration,
         coverImage: book.cover_image,
@@ -592,6 +595,26 @@ export const Library = () => {
       }));
       setImportPaths(convertedPaths);
     } catch (error) {
+      if (error instanceof api.ApiError && error.status === 401) {
+        navigate('/login');
+        return;
+      }
+      if (error instanceof api.ApiError && error.status >= 500) {
+        setAlert({
+          severity: 'error',
+          message: 'Server error occurred.',
+        });
+      }
+      const message =
+        error instanceof Error ? error.message : 'Failed to load audiobooks.';
+      if (message.toLowerCase().includes('timeout')) {
+        setAlert({
+          severity: 'error',
+          message: 'Request timed out.',
+          actionLabel: 'Retry',
+          onAction: () => loadAudiobooks(),
+        });
+      }
       console.error('Failed to load audiobooks:', error);
       setAudiobooks([]);
       setTotalPages(1);
@@ -605,6 +628,7 @@ export const Library = () => {
     page,
     sortBy,
     sortOrder,
+    navigate,
   ]);
 
   const handleManualImport = () => {
@@ -635,9 +659,11 @@ export const Library = () => {
       await loadAudiobooks();
     } catch (error) {
       console.error('Failed to import file:', error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to import file.';
       setAlert({
         severity: 'error',
-        message: 'Failed to import file.',
+        message,
       });
     } finally {
       setImportFileInProgress(false);
@@ -1327,6 +1353,17 @@ export const Library = () => {
             severity={alert.severity}
             onClose={() => setAlert(null)}
             sx={{ width: '100%' }}
+            action={
+              alert.actionLabel && alert.onAction ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={alert.onAction}
+                >
+                  {alert.actionLabel}
+                </Button>
+              ) : undefined
+            }
           >
             {alert.message}
           </Alert>
