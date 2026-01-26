@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -59,7 +59,7 @@ export const BookDetail = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionLabel, setActionLabel] = useState<string | null>(null);
   const [alert, setAlert] = useState<{
-    severity: 'success' | 'error';
+    severity: 'success' | 'error' | 'warning';
     message: string;
   } | null>(null);
   const [activeTab, setActiveTab] = useState<
@@ -70,6 +70,9 @@ export const BookDetail = () => {
     softDelete: true,
     blockHash: true,
   });
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
+  const [pendingUpdate, setPendingUpdate] =
+    useState<Partial<Book> | null>(null);
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -87,6 +90,17 @@ export const BookDetail = () => {
       const data = await api.getBook(id);
       setBook(data);
     } catch (error) {
+      if (error instanceof api.ApiError) {
+        if (error.status === 404) {
+          setBook(null);
+          return;
+        }
+        if (error.status === 401) {
+          setAlert({ severity: 'error', message: 'Session expired.' });
+          navigate('/login');
+          return;
+        }
+      }
       console.error('Failed to load book', error);
       setAlert({
         severity: 'error',
@@ -517,8 +531,53 @@ export const BookDetail = () => {
       setAlert({ severity: 'success', message: 'Metadata updated.' });
       setEditDialogOpen(false);
     } catch (error) {
+      if (error instanceof api.ApiError) {
+        if (error.status === 409) {
+          setPendingUpdate(payload);
+          setConflictDialogOpen(true);
+          setAlert({
+            severity: 'warning',
+            message: 'Book was updated by another user.',
+          });
+          return;
+        }
+        if (error.status === 401) {
+          setAlert({ severity: 'error', message: 'Session expired.' });
+          navigate('/login');
+          return;
+        }
+      }
       console.error('Failed to update metadata', error);
       setAlert({ severity: 'error', message: 'Failed to update metadata.' });
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleConflictReload = async () => {
+    setConflictDialogOpen(false);
+    setPendingUpdate(null);
+    await loadBook();
+  };
+
+  const handleConflictOverwrite = async () => {
+    if (!book || !pendingUpdate) return;
+    setActionLoading(true);
+    setActionLabel('Overwriting...');
+    try {
+      const saved = await api.updateBook(book.id, {
+        ...pendingUpdate,
+        force_update: true,
+      });
+      setBook(saved);
+      setAlert({ severity: 'success', message: 'Metadata updated.' });
+      setEditDialogOpen(false);
+      setConflictDialogOpen(false);
+      setPendingUpdate(null);
+    } catch (error) {
+      console.error('Failed to overwrite metadata', error);
+      setAlert({ severity: 'error', message: 'Failed to overwrite metadata.' });
     } finally {
       setActionLabel(null);
       setActionLoading(false);
