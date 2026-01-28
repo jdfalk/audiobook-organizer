@@ -40,6 +40,15 @@ type Audiobook struct {
 	ISBN10               *string `json:"isbn10" db:"isbn10"`
 	ISBN13               *string `json:"isbn13" db:"isbn13"`
 
+	// iTunes import fields (preserved from iTunes library)
+	ITunesPersistentID *string    `json:"itunes_persistent_id" db:"itunes_persistent_id"` // iTunes unique identifier
+	ITunesDateAdded    *time.Time `json:"itunes_date_added" db:"itunes_date_added"`       // When added to iTunes
+	ITunesPlayCount    *int       `json:"itunes_play_count" db:"itunes_play_count"`       // Number of plays in iTunes
+	ITunesLastPlayed   *time.Time `json:"itunes_last_played" db:"itunes_last_played"`     // Last played in iTunes
+	ITunesRating       *int       `json:"itunes_rating" db:"itunes_rating"`               // Rating (0-100 scale)
+	ITunesBookmark     *int64     `json:"itunes_bookmark" db:"itunes_bookmark"`           // Playback position in ms
+	ITunesImportSource *string    `json:"itunes_import_source" db:"itunes_import_source"` // Path to iTunes Library.xml
+
 	// Media info fields (parsed from file metadata)
 	Bitrate    *int    `json:"bitrate_kbps" db:"bitrate_kbps"`     // Bitrate in kbps
 	Codec      *string `json:"codec" db:"codec"`                   // e.g., 'AAC', 'MP3', 'FLAC'

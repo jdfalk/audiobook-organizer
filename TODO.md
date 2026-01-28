@@ -5,17 +5,17 @@
 
 # Project TODO
 
-## 🎯 MVP STATUS - January 18, 2026
+## 🎯 MVP STATUS - January 27, 2026
 
-**Current Completion: ~75-85% MVP Complete**
+**Current Completion: ~85% MVP Complete**
 
-- **Backend**: ~90% (all APIs functional, 100% test pass rate, ~25% coverage)
-- **Frontend**: ~70% (Book Detail, Library, Settings, System complete; E2E
-  infrastructure needs expansion)
-- **Testing**: Go tests 100% pass (~25% coverage needs increase to 60%+ for MVP)
+- **Backend**: ~95% (all APIs functional, 100% test pass rate, 86.2% coverage)
+- **Frontend**: ~80% (Book Detail, Library, Settings, System complete; 141 E2E tests, 92% coverage)
+- **Testing**: Go tests 100% pass (86.2% coverage with `-tags=mocks`)
 - **CI/CD**: Release pipeline functional but needs token permissions fix
+- **BLOCKER**: iTunes integration (11-15 hours) - Critical for 10TB+ library migration
 
-**Time to MVP**: Estimated 2-4 weeks with focused effort on P0 items
+**Time to MVP**: 1-2 weeks (iTunes integration + manual QA + release fixes)
 
 ---
 
@@ -74,27 +74,46 @@
   - **Status**: See E2E_TEST_PLAN.md for comprehensive test scenarios (120+
     tests)
 
-### iTunes Library Import (Est: 6-8 hours)
+### iTunes Library Import (Est: 7.5-10 hours remaining) ⚡ IN PROGRESS - 40% COMPLETE
 
-- [ ] **iTunes Library Database Import** - Critical for migration from iTunes to
-      audiobook-organizer
-  - [ ] Parse iTunes Library.xml or iTunes Music Library.xml
-  - [ ] Extract audiobook entries (distinguish from music/podcasts)
-  - [ ] Preserve all iTunes metadata:
-    - [ ] Title, Artist, Album, Genre, Year
-    - [ ] Play count, rating, last played date
-    - [ ] Bookmarks, playback position
-    - [ ] Playlist memberships
-    - [ ] File location paths
-  - [ ] Map iTunes audiobook paths to import operations
-  - [ ] Option: Import as organized (if files already in desired location)
-  - [ ] Option: Import as unorganized (trigger scan/organize workflow)
-  - [ ] **BONUS**: Built-in UI import wizard (not script)
-  - [ ] **BONUS**: Write-back support - Update iTunes library with new file
-        paths after organize
-  - **Priority**: P0 - Personal blocker for switching to audiobook-organizer
-  - **Blocker**: None - can implement immediately
-  - **Status**: See ITUNES_IMPORT_SPECIFICATION.md for detailed requirements
+- **Phase 1: Core Infrastructure** ✅ COMPLETE (6 hours done)
+  - [x] Database migration 11 for iTunes fields
+  - [x] Update Audiobook model with iTunes fields
+  - [x] Parse iTunes Library.xml (plist parser with howett.net/plist)
+  - [x] Extract audiobook entries (distinguish from music/podcasts)
+  - [x] Preserve all iTunes metadata (title, artist, play count, rating, bookmarks, playlists)
+  - [x] Import service with validation and conversion
+  - [x] All import modes (organized, import, organize)
+  - [x] Write-back support with automatic backup and rollback
+  - [x] Manual QA guide created
+
+- **Phase 2: API Endpoints** ⏳ NEXT (3-4 hours)
+  - [ ] POST /api/v1/itunes/validate - Validate iTunes library
+  - [ ] POST /api/v1/itunes/import - Trigger import operation
+  - [ ] POST /api/v1/itunes/write-back - Update iTunes with new paths
+  - [ ] GET /api/v1/itunes/import-status/:id - Check import progress
+  - [ ] Service integration with database
+  - [ ] Operation tracking for import/write-back
+  - [ ] SSE progress updates
+
+- **Phase 3: UI Components** ⏳ PENDING (3-4 hours)
+  - [ ] Settings → iTunes Import section
+  - [ ] File picker for iTunes Library.xml
+  - [ ] Validation results display
+  - [ ] Import options dialog (mode, playlists, duplicates)
+  - [ ] Progress monitoring
+  - [ ] Write-back confirmation dialog
+
+- **Phase 4: Testing** ⏳ PENDING (1.5-2 hours)
+  - [ ] Unit tests (parser, import, write-back)
+  - [ ] Integration tests
+  - [ ] E2E tests for UI workflow
+
+  - **Priority**: P0 - HIGHEST PRIORITY - Blocking MVP release
+  - **Blocker**: None
+  - **Status**: ⚡ IN PROGRESS - Phase 1 Complete (40% done)
+  - **Progress**: See ITUNES_INTEGRATION_PROGRESS.md for detailed status
+  - **Estimated Completion**: 7.5-10 hours remaining (was 13.5-16 total)
 
 ---
 
@@ -1193,6 +1212,74 @@
 - [ ] Create web_test.go - test HTTP handlers and API endpoints
 
 ## Future Improvements
+
+## 🔮 vNEXT - CRITICAL FEATURES (Post-MVP v1.1+)
+
+### Release Group & Provenance Tracking
+
+- [ ] **Release Group Support** - Track who released the audiobook
+  - [ ] Add `release_group` field to audiobooks table (e.g., "[PZG]", "[AudioBook Bay]")
+  - [ ] Parse release group from filename patterns: `[GroupName]`, `{GroupName}`, `-GroupName-`
+  - [ ] Display release group in Book Detail and Library views
+  - [ ] Filter by release group in search
+  - [ ] Stats: Show audiobooks per release group
+  - **Priority**: vNext v1.1 - Important for tracking source quality
+  - **Use Case**: Know which release groups produce best quality rips
+
+- [ ] **Original Filename Preservation**
+  - [ ] Add `original_filename` field to audiobooks table
+  - [ ] Store complete original filename before any organization
+  - [ ] Display in Book Detail → Files tab
+  - [ ] Use for duplicate detection (same original filename = likely duplicate)
+  - [ ] Helpful for tracking downloads and verifying file integrity
+  - **Priority**: vNext v1.1 - Useful for provenance and debugging
+  - **Use Case**: Know exact filename from torrent/NZB for troubleshooting
+
+### Download Client Integration
+
+- [ ] **Deluge Torrent Integration** - Manage torrents for audiobooks
+  - [ ] Connect to Deluge RPC API
+  - [ ] Monitor downloads folder for completed torrents
+  - [ ] Auto-import completed audiobooks
+  - [ ] Maintain hard links in shadow directory for seeding
+    - [ ] Create `/audiobooks-seeding/` mirror structure
+    - [ ] Keep original torrent structure for seeding
+    - [ ] Update Deluge to serve from shadow directory
+    - [ ] Handle cross-filesystem scenarios (copy instead of hard link)
+  - [ ] Optional: Remove torrent after successful import (preserve seeding)
+  - [ ] Show torrent status in Book Detail (seeding/completed/removed)
+  - **Priority**: vNext v1.2 - Quality of life for torrent users
+  - **Use Case**: Seamless integration with existing torrent workflow
+
+- [ ] **SABnzbd NZB Integration** - Manage Usenet downloads
+  - [ ] Connect to SABnzbd API
+  - [ ] Monitor downloads folder for completed NZBs
+  - [ ] Auto-import completed audiobooks
+  - [ ] Link back to NZB source for re-download if needed
+  - [ ] Show download history and repair status
+  - **Priority**: vNext v1.2 - Quality of life for Usenet users
+  - **Use Case**: Seamless integration with existing Usenet workflow
+
+### Bidirectional iTunes Sync
+
+- [ ] **Playcount Management**
+  - [ ] Add increment/decrement playcount buttons in Book Detail
+  - [ ] Keyboard shortcuts: `+` to increment, `-` to decrement
+  - [ ] Bulk playcount operations (mark all as played, reset playcounts)
+  - [ ] Track playcount history (when changed, old/new values)
+  - **Priority**: vNext v1.1 - Nice to have for manual tracking
+  - **Use Case**: Manually track listening progress
+
+- [ ] **Bidirectional iTunes Playcount Sync**
+  - [ ] Background job to poll iTunes Library.xml for changes
+  - [ ] Detect playcount changes in iTunes → sync to audiobook-organizer
+  - [ ] Detect playcount changes in audiobook-organizer → write back to iTunes
+  - [ ] Conflict resolution (both changed): prefer most recent, or sum counts
+  - [ ] Show sync status and last sync time in Settings
+  - [ ] Manual sync trigger button
+  - **Priority**: vNext v1.2 - CRITICAL for seamless iTunes coexistence
+  - **Use Case**: Use both iTunes and audiobook-organizer without losing stats
+  - **Dependencies**: Requires iTunes import + write-back (MVP)
 
 ### vNext - Advanced Tagging & Templating System
 

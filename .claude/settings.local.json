@@ -33,7 +33,9 @@
       "Bash(gh run view:*)",
       "Bash(gh api:*)",
       "Bash(gh run watch:*)",
-      "Bash(xargs gh run watch:*)"
+      "Bash(xargs gh run watch:*)",
+      "Bash(go get:*)",
+      "Bash(echo:*)"
     ]
   }
 }
