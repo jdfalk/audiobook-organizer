@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -97,6 +97,12 @@ var migrations = []Migration{
 		Version:     10,
 		Description: "Add metadata_states table for metadata provenance",
 		Up:          migration010Up,
+		Down:        nil,
+	},
+	{
+		Version:     11,
+		Description: "Add iTunes import metadata fields to books",
+		Up:          migration011Up,
 		Down:        nil,
 	},
 }
@@ -475,6 +481,52 @@ func migration010Up(store Store) error {
 		}
 	}
 
+	return nil
+}
+
+// migration011Up adds iTunes import metadata fields to books table.
+func migration011Up(store Store) error {
+	log.Println("  - Adding iTunes import metadata fields to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN itunes_persistent_id TEXT",
+		"ALTER TABLE books ADD COLUMN itunes_date_added TIMESTAMP",
+		"ALTER TABLE books ADD COLUMN itunes_play_count INTEGER DEFAULT 0",
+		"ALTER TABLE books ADD COLUMN itunes_last_played TIMESTAMP",
+		"ALTER TABLE books ADD COLUMN itunes_rating INTEGER",
+		"ALTER TABLE books ADD COLUMN itunes_bookmark INTEGER",
+		"ALTER TABLE books ADD COLUMN itunes_import_source TEXT",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	indexStatements := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_itunes_persistent_id ON books(itunes_persistent_id)",
+	}
+
+	for _, stmt := range indexStatements {
+		log.Printf("    - Creating index: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	log.Println("  - iTunes import metadata fields added successfully")
 	return nil
 }
 
