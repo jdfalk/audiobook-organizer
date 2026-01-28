@@ -1,8 +1,8 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.0.2
+// version: 1.0.3
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -43,6 +43,8 @@ interface WelcomeWizardProps {
 export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [libraryPath, setLibraryPath] = useState('');
+  const [homePath, setHomePath] = useState('');
+  const [libraryPathSelection, setLibraryPathSelection] = useState('');
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
   const [openaiKey, setOpenaiKey] = useState('');
   const [testingKey, setTestingKey] = useState(false);
@@ -50,10 +52,35 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     'success' | 'error' | null
   >(null);
   const [importFolders, setImportFolders] = useState<string[]>([]);
+  const [importFolderSelection, setImportFolderSelection] = useState('');
   const [showImportBrowser, setShowImportBrowser] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const steps = ['Library Path', 'AI Setup (Optional)', 'Import Folders'];
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    const loadHomePath = async () => {
+      try {
+        const path = await api.getHomeDirectory();
+        if (cancelled) return;
+        setHomePath(path);
+        setLibraryPath((prev) => (prev.trim() ? prev : path));
+      } catch (error) {
+        if (cancelled) return;
+        setHomePath((prev) => (prev.trim() ? prev : '/'));
+        setLibraryPath((prev) => (prev.trim() ? prev : '/'));
+      }
+    };
+
+    loadHomePath();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleNext = () => {
     setActiveStep((prev) => prev + 1);
@@ -63,8 +90,20 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     setActiveStep((prev) => prev - 1);
   };
 
+  const handleOpenLibraryBrowser = () => {
+    setLibraryPathSelection(libraryPath || homePath || '/');
+    setShowLibraryBrowser(true);
+  };
+
   const handleLibraryPathSelect = (path: string) => {
-    setLibraryPath(path);
+    setLibraryPathSelection(path);
+  };
+
+  const handleConfirmLibraryPath = () => {
+    const trimmed = libraryPathSelection.trim();
+    if (trimmed) {
+      setLibraryPath(trimmed);
+    }
     setShowLibraryBrowser(false);
   };
 
@@ -97,9 +136,21 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     }
   };
 
-  const handleAddImportFolder = (path: string) => {
-    if (path && !importFolders.includes(path)) {
-      setImportFolders([...importFolders, path]);
+  const handleOpenImportBrowser = () => {
+    setImportFolderSelection(homePath || '/');
+    setShowImportBrowser(true);
+  };
+
+  const handleImportFolderSelect = (path: string) => {
+    setImportFolderSelection(path);
+  };
+
+  const handleConfirmImportFolder = () => {
+    const trimmed = importFolderSelection.trim();
+    if (trimmed) {
+      setImportFolders((prev) =>
+        prev.includes(trimmed) ? prev : [...prev, trimmed]
+      );
     }
     setShowImportBrowser(false);
   };
@@ -116,6 +167,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       await api.updateConfig({
         root_dir: libraryPath,
         playlist_dir: `${libraryPath}/playlists`,
+        setup_complete: true,
       });
 
       // Step 2: Save OpenAI key if provided
@@ -204,7 +256,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                       <Button
                         variant="outlined"
                         size="small"
-                        onClick={() => setShowLibraryBrowser(true)}
+                        onClick={handleOpenLibraryBrowser}
                       >
                         Browse
                       </Button>
@@ -288,7 +340,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                 <Button
                   variant="outlined"
                   startIcon={<FolderIcon />}
-                  onClick={() => setShowImportBrowser(true)}
+                  onClick={handleOpenImportBrowser}
                   sx={{ mb: 2 }}
                 >
                   Add Import Folder
@@ -373,11 +425,28 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         <DialogContent>
           <ServerFileBrowser
             onSelect={handleLibraryPathSelect}
-            initialPath="/home"
+            initialPath={libraryPathSelection || libraryPath || homePath || '/'}
+            showFiles={false}
+            allowDirSelect
+            allowFileSelect={false}
           />
+          {libraryPathSelection && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Selected:</strong> {libraryPathSelection}
+              </Typography>
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowLibraryBrowser(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmLibraryPath}
+            disabled={!libraryPathSelection.trim()}
+          >
+            Select Folder
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -391,12 +460,29 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         <DialogTitle>Select Import Folder</DialogTitle>
         <DialogContent>
           <ServerFileBrowser
-            onSelect={handleAddImportFolder}
-            initialPath="/home"
+            onSelect={handleImportFolderSelect}
+            initialPath={importFolderSelection || homePath || '/'}
+            showFiles={false}
+            allowDirSelect
+            allowFileSelect={false}
           />
+          {importFolderSelection && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Selected:</strong> {importFolderSelection}
+              </Typography>
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowImportBrowser(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmImportFolder}
+            disabled={!importFolderSelection.trim()}
+          >
+            Add Folder
+          </Button>
         </DialogActions>
       </Dialog>
     </>

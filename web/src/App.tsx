@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.8.0
+// version: 1.8.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -24,6 +24,7 @@ import { FileBrowser } from './pages/FileBrowser';
 import { Operations } from './pages/Operations';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
+import * as api from './services/api';
 
 function App() {
   const [showWizard, setShowWizard] = useState(false);
@@ -32,12 +33,38 @@ function App() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   useEffect(() => {
-    // Check if user has completed the welcome wizard
-    const wizardCompleted = localStorage.getItem('welcome_wizard_completed');
-    if (!wizardCompleted) {
-      setShowWizard(true);
-    }
-    setWizardCheckComplete(true);
+    let cancelled = false;
+    const checkWizardStatus = async () => {
+      try {
+        const config = await api.getConfig();
+        const setupComplete =
+          Boolean(config.root_dir && config.root_dir.trim()) ||
+          Boolean(config.setup_complete);
+        if (!cancelled) {
+          setShowWizard(!setupComplete);
+          if (setupComplete) {
+            localStorage.setItem('welcome_wizard_completed', 'true');
+          }
+        }
+      } catch (error) {
+        const wizardCompleted = localStorage.getItem(
+          'welcome_wizard_completed'
+        );
+        if (!cancelled) {
+          setShowWizard(!wizardCompleted);
+        }
+      } finally {
+        if (!cancelled) {
+          setWizardCheckComplete(true);
+        }
+      }
+    };
+
+    checkWizardStatus();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for server shutdown events and handle reconnection

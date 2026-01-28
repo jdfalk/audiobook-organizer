@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.30.3
+// version: 1.30.4
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -230,6 +230,7 @@ export const Library = () => {
 
   const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
   const [importFilePath, setImportFilePath] = useState('');
+  const [importFilePaths, setImportFilePaths] = useState<string[]>([]);
   const [importFileOrganize, setImportFileOrganize] = useState(true);
   const [importFileInProgress, setImportFileInProgress] = useState(false);
 
@@ -706,29 +707,74 @@ export const Library = () => {
 
   const handleManualImport = () => {
     setImportFilePath('');
+    setImportFilePaths([]);
     setImportFileOrganize(true);
     setImportFileDialogOpen(true);
   };
 
+  const handleAddImportFilePath = () => {
+    const trimmed = importFilePath.trim();
+    if (!trimmed) return;
+    setImportFilePaths((prev) =>
+      prev.includes(trimmed) ? prev : [...prev, trimmed]
+    );
+    setImportFilePath('');
+  };
+
+  const handleToggleImportFilePath = (path: string) => {
+    setImportFilePaths((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
+    );
+  };
+
+  const handleRemoveImportFilePath = (path: string) => {
+    setImportFilePaths((prev) => prev.filter((p) => p !== path));
+  };
+
   const handleImportFile = async () => {
-    const target = importFilePath.trim();
-    if (!target) {
+    const manualPath = importFilePath.trim();
+    const targets = [...importFilePaths];
+    if (manualPath && !targets.includes(manualPath)) {
+      targets.push(manualPath);
+    }
+
+    if (targets.length === 0) {
       setAlert({
         severity: 'info',
-        message: 'Select a file to import from the server.',
+        message: 'Select one or more files to import from the server.',
       });
       return;
     }
 
     setImportFileInProgress(true);
     try {
-      await api.importFile(target, importFileOrganize);
-      setAlert({
-        severity: 'success',
-        message: 'Import started successfully.',
-      });
+      const results = await Promise.allSettled(
+        targets.map((path) => api.importFile(path, importFileOrganize))
+      );
+      const failures = results.filter(
+        (result) => result.status === 'rejected'
+      );
+      if (failures.length === 0) {
+        setAlert({
+          severity: 'success',
+          message:
+            targets.length === 1
+              ? 'Import started successfully.'
+              : `Import started for ${targets.length} files.`,
+        });
+      } else {
+        const successCount = targets.length - failures.length;
+        setAlert({
+          severity: 'warning',
+          message:
+            failures.length === targets.length
+              ? 'Failed to import selected files.'
+              : `Imported ${successCount} of ${targets.length} files.`,
+        });
+      }
       setImportFileDialogOpen(false);
       setImportFilePath('');
+      setImportFilePaths([]);
       await loadAudiobooks();
     } catch (error) {
       console.error('Failed to import file:', error);
@@ -2450,14 +2496,27 @@ export const Library = () => {
               Select a file on the server to import into the library. Use the
               organize toggle to immediately move it into the library layout.
             </Alert>
-            <TextField
-              fullWidth
-              label="Import file path"
-              value={importFilePath}
-              onChange={(e) => setImportFilePath(e.target.value)}
-              placeholder="/path/to/audiobook.m4b"
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
               sx={{ mb: 2 }}
-            />
+            >
+              <TextField
+                fullWidth
+                label="Import file path"
+                value={importFilePath}
+                onChange={(e) => setImportFilePath(e.target.value)}
+                placeholder="/path/to/audiobook.m4b"
+              />
+              <Button
+                variant="outlined"
+                onClick={handleAddImportFilePath}
+                disabled={!importFilePath.trim()}
+                sx={{ minWidth: 140 }}
+              >
+                Add to list
+              </Button>
+            </Stack>
             <ServerFileBrowser
               initialPath="/"
               showFiles
@@ -2465,10 +2524,40 @@ export const Library = () => {
               allowFileSelect
               onSelect={(path, isDir) => {
                 if (!isDir) {
-                  setImportFilePath(path);
+                  handleToggleImportFilePath(path);
                 }
               }}
             />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 1 }}
+            >
+              Click files to add or remove them from the import list.
+            </Typography>
+            {importFilePaths.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Selected Files ({importFilePaths.length}):
+                </Typography>
+                <List dense>
+                  {importFilePaths.map((path) => (
+                    <ListItem key={path}>
+                      <ListItemText primary={path} />
+                      <ListItemSecondaryAction>
+                        <IconButton
+                          edge="end"
+                          aria-label="remove"
+                          onClick={() => handleRemoveImportFilePath(path)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
             <FormControlLabel
               control={
                 <Checkbox
@@ -2489,7 +2578,10 @@ export const Library = () => {
             <Button
               variant="contained"
               onClick={handleImportFile}
-              disabled={importFileInProgress}
+              disabled={
+                importFileInProgress ||
+                (!importFilePath.trim() && importFilePaths.length === 0)
+              }
             >
               {importFileInProgress ? 'Importing…' : 'Import'}
             </Button>
