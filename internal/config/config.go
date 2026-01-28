@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -26,6 +26,7 @@ type Config struct {
 	DatabaseType string `json:"database_type"` // "pebble" (default) or "sqlite"
 	EnableSQLite bool   `json:"enable_sqlite"` // Must be true to use SQLite (safety flag)
 	PlaylistDir  string `json:"playlist_dir"`
+	SetupComplete bool  `json:"setup_complete"`
 
 	// Library organization
 	OrganizationStrategy string `json:"organization_strategy"` // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
@@ -84,6 +85,7 @@ func InitConfig() {
 	// Set core defaults
 	viper.SetDefault("database_type", "pebble")
 	viper.SetDefault("enable_sqlite3_i_know_the_risks", false)
+	viper.SetDefault("setup_complete", false)
 
 	// Set library organization defaults
 	viper.SetDefault("organization_strategy", "auto")
@@ -144,6 +146,7 @@ func InitConfig() {
 		DatabaseType: viper.GetString("database_type"),
 		EnableSQLite: viper.GetBool("enable_sqlite3_i_know_the_risks"),
 		PlaylistDir:  viper.GetString("playlist_dir"),
+		SetupComplete: viper.GetBool("setup_complete"),
 
 		// Library organization
 		OrganizationStrategy: viper.GetString("organization_strategy"),
