@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -68,6 +68,10 @@ func applySetting(key, value, typ string) error {
 		AppConfig.DatabasePath = value
 	case "playlist_dir":
 		AppConfig.PlaylistDir = value
+	case "setup_complete":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.SetupComplete = b
+		}
 
 	// Organization
 	case "organization_strategy":
@@ -205,6 +209,7 @@ func SaveConfigToDatabase(store database.Store) error {
 		"root_dir":      {AppConfig.RootDir, "string", false},
 		"database_path": {AppConfig.DatabasePath, "string", false},
 		"playlist_dir":  {AppConfig.PlaylistDir, "string", false},
+		"setup_complete": {strconv.FormatBool(AppConfig.SetupComplete), "bool", false},
 
 		// Organization
 		"organization_strategy": {AppConfig.OrganizationStrategy, "string", false},

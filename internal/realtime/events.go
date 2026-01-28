@@ -1,5 +1,5 @@
 // file: internal/realtime/events.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 9e8d7f6a-5c4b-3a21-0f9e-8d7c6b5a4392
 
 package realtime
@@ -205,9 +205,10 @@ func (h *EventHub) GetClientCount() int {
 func (h *EventHub) HandleSSE(c *gin.Context) {
 	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
+	c.Header("Cache-Control", "no-cache, no-transform")
 	c.Header("Connection", "keep-alive")
 	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("X-Accel-Buffering", "no")
 
 	// Create client
 	clientID := fmt.Sprintf("client-%d", time.Now().UnixNano())
@@ -238,7 +239,7 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 	}
 
 	// Keep connection alive and stream events
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
 	for {
