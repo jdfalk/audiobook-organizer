@@ -51,5 +51,4 @@ jobs:
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@41a2edb6639d44ac9f328ea263299a55d78d08b3 # v1.10.2
     with:
       node-version: ${{ needs.frontend-config.outputs.node-version }}
-      frontend-dir: ${{ needs.frontend-config.outputs.dir }}
     secrets: inherit
