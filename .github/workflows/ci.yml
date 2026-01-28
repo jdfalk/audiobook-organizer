@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 2.3.5
+# version: 2.3.6
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 
 # CI should be using the upstream shared ci
@@ -23,6 +23,8 @@ permissions:
   actions: write
   checks: write
   packages: write
+  id-token: write
+  attestations: write
 
 jobs:
   ci:
