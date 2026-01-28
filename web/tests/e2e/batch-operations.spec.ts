@@ -1,8 +1,8 @@
 // file: web/tests/e2e/batch-operations.spec.ts
-// version: 1.0.2
+// version: 1.0.7
 // guid: 5d6e7f80-9a0b-1c2d-3e4f-5a6b7c8d9e0f
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import {
   generateTestBooks,
   mockEventSource,
@@ -20,6 +20,24 @@ const arrangeLibrary = async (page: Page, count = 40) => {
   return books;
 };
 
+function getBookCheckboxes(page: Page): Locator {
+  return page.getByRole('checkbox', { name: /Select Test Book/ });
+}
+
+async function selectFirstBooks(page: Page, count: number): Promise<void> {
+  const checkboxes = getBookCheckboxes(page);
+  for (let i = 0; i < count; i += 1) {
+    await checkboxes.nth(i).click();
+  }
+}
+
+async function getFirstBookLabel(page: Page): Promise<string> {
+  const label = await getBookCheckboxes(page)
+    .first()
+    .getAttribute('aria-label');
+  return label || 'Select Test Book 1';
+}
+
 test.describe('Batch Operations', () => {
   test.beforeEach(async ({ page }) => {
     await mockEventSource(page);
@@ -32,7 +50,7 @@ test.describe('Batch Operations', () => {
     await arrangeLibrary(page);
 
     // Act
-    await page.getByLabel('Select Test Book 1').click();
+    await selectFirstBooks(page, 1);
 
     // Assert
     await expect(page.getByText('1 selected')).toBeVisible();
@@ -45,11 +63,7 @@ test.describe('Batch Operations', () => {
     await arrangeLibrary(page);
 
     // Act
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
-    await page.getByLabel('Select Test Book 3').click();
-    await page.getByLabel('Select Test Book 4').click();
-    await page.getByLabel('Select Test Book 5').click();
+    await selectFirstBooks(page, 5);
 
     // Assert
     await expect(page.getByText('5 selected')).toBeVisible();
@@ -81,26 +95,30 @@ test.describe('Batch Operations', () => {
   test('selection persists across page navigation', async ({ page }) => {
     // Arrange
     await arrangeLibrary(page);
-    await page.getByLabel('Select Test Book 1').click();
+    const firstLabel = await getFirstBookLabel(page);
+    await selectFirstBooks(page, 1);
 
     // Act
     await page.getByRole('button', { name: '2' }).click();
     await page.getByRole('button', { name: '1' }).click();
 
     // Assert
-    await expect(page.getByLabel('Select Test Book 1')).toBeChecked();
+    await expect(page.getByLabel(firstLabel, { exact: true })).toBeChecked();
   });
 
   test('bulk fetches metadata for selected books', async ({ page }) => {
     // Arrange
     await arrangeLibrary(page);
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
-    await page.getByLabel('Select Test Book 3').click();
+    await selectFirstBooks(page, 3);
 
     // Act
-    await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await page.getByRole('button', { name: 'Fetch Metadata' }).last().click();
+    await page
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Bulk Fetch Metadata' })
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
 
     // Assert
     await expect(page.getByText('3 / 3 completed')).toBeVisible();
@@ -113,12 +131,24 @@ test.describe('Batch Operations', () => {
     await page.getByLabel('Select All').click();
 
     // Act
-    await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await page.getByRole('button', { name: 'Fetch Metadata' }).last().click();
+    await page
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Bulk Fetch Metadata' })
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
 
     // Assert
-    await expect(page.getByText('20 / 20 completed')).toBeVisible();
-    await expect(page.getByText('Test Book 1')).toBeVisible();
+    const bulkDialog = page.getByRole('dialog', {
+      name: 'Bulk Fetch Metadata',
+    });
+    await expect(
+      bulkDialog.getByText('20 / 20 completed', { exact: true })
+    ).toBeVisible();
+    await expect(
+      bulkDialog.getByText('Test Book 1', { exact: true })
+    ).toBeVisible();
   });
 
   test('bulk fetch completes successfully and clears selection', async ({
@@ -126,15 +156,20 @@ test.describe('Batch Operations', () => {
   }) => {
     // Arrange
     await arrangeLibrary(page);
-    await page.getByLabel('Select Test Book 1').click();
+    await selectFirstBooks(page, 1);
 
     // Act
-    await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await page.getByRole('button', { name: 'Fetch Metadata' }).last().click();
+    await page
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Bulk Fetch Metadata' })
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
 
     // Assert
     await waitForToast(page, 'Metadata fetched for 1 books.');
-    await expect(page.getByText('0 selected')).toBeVisible();
+    await expect(page.getByText('0 selected', { exact: true })).toBeVisible();
   });
 
   test('bulk fetch handles partial failures', async ({ page }) => {
@@ -145,19 +180,20 @@ test.describe('Batch Operations', () => {
     await setupLibraryWithBooks(page, books);
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
-    await page.getByLabel('Select Test Book 3').click();
-    await page.getByLabel('Select Test Book 4').click();
-    await page.getByLabel('Select Test Book 5').click();
+    await selectFirstBooks(page, 5);
 
     // Act
-    await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await page.getByRole('button', { name: 'Fetch Metadata' }).last().click();
+    await page
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Bulk Fetch Metadata' })
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
 
     // Assert
     await waitForToast(page, '3 succeeded, 2 failed.');
-    await expect(page.getByText('Failed')).toBeVisible();
+    await expect(page.getByText('Metadata fetch failed').first()).toBeVisible();
   });
 
   test('cancels bulk fetch operation', async ({ page }) => {
@@ -172,8 +208,13 @@ test.describe('Batch Operations', () => {
     await page.getByLabel('Select All').click();
 
     // Act
-    await page.getByRole('button', { name: 'Fetch Metadata' }).click();
-    await page.getByRole('button', { name: 'Fetch Metadata' }).last().click();
+    await page
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: 'Bulk Fetch Metadata' })
+      .getByRole('button', { name: 'Fetch Metadata', exact: true })
+      .click();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     // Assert
@@ -183,9 +224,7 @@ test.describe('Batch Operations', () => {
   test('batch updates metadata field for selected books', async ({ page }) => {
     // Arrange
     await arrangeLibrary(page);
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
-    await page.getByLabel('Select Test Book 3').click();
+    await selectFirstBooks(page, 3);
 
     // Act
     await page.getByRole('button', { name: 'Batch Edit' }).click();
@@ -200,8 +239,7 @@ test.describe('Batch Operations', () => {
   test('batch soft-deletes selected books', async ({ page }) => {
     // Arrange
     await arrangeLibrary(page);
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
+    await selectFirstBooks(page, 2);
 
     // Act
     await page.getByRole('button', { name: 'Delete Selected' }).click();
@@ -220,9 +258,7 @@ test.describe('Batch Operations', () => {
     await setupLibraryWithBooks(page, books);
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
-    await page.getByLabel('Select Test Book 3').click();
+    await selectFirstBooks(page, 3);
 
     // Act
     await page.getByRole('button', { name: 'Restore Selected' }).click();
@@ -236,7 +272,10 @@ test.describe('Batch Operations', () => {
     await arrangeLibrary(page);
 
     // Act
-    await page.getByText('Batch Edit').hover();
+    await page
+      .locator('span[aria-label=\"Select books first\"]')
+      .filter({ hasText: 'Batch Edit' })
+      .hover();
 
     // Assert
     await expect(page.getByText('Select books first')).toBeVisible();
@@ -244,7 +283,7 @@ test.describe('Batch Operations', () => {
       page.getByRole('button', { name: 'Batch Edit' })
     ).toBeDisabled();
     await expect(
-      page.getByRole('button', { name: 'Fetch Metadata' })
+      page.getByRole('button', { name: 'Fetch Metadata', exact: true })
     ).toBeDisabled();
   });
 
@@ -259,8 +298,7 @@ test.describe('Batch Operations', () => {
     await setupLibraryWithBooks(page, books);
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
-    await page.getByLabel('Select Test Book 1').click();
-    await page.getByLabel('Select Test Book 2').click();
+    await selectFirstBooks(page, 2);
 
     // Assert
     await expect(
