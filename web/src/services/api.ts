@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.12.0
+// version: 1.12.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -243,6 +243,7 @@ export interface Config {
   database_type: string;
   enable_sqlite: boolean;
   playlist_dir: string;
+  setup_complete?: boolean;
 
   // Library organization
   organization_strategy: string;
@@ -928,6 +929,16 @@ export async function browseFilesystem(
     throw await buildApiError(response, 'Failed to browse filesystem');
   }
   return response.json();
+}
+
+/** Fetches the server user's home directory path. */
+export async function getHomeDirectory(): Promise<string> {
+  const response = await fetch(`${API_BASE}/filesystem/home`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch home directory');
+  }
+  const data = await response.json();
+  return data.path as string;
 }
 
 export async function excludeFilesystemPath(

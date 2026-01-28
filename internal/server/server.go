@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.37.0
+// version: 1.37.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -631,6 +631,7 @@ func (s *Server) setupRoutes() {
 		api.GET("/series", s.listSeries)
 
 		// File system routes
+		api.GET("/filesystem/home", s.getHomeDirectory)
 		api.GET("/filesystem/browse", s.browseFilesystem)
 		api.POST("/filesystem/exclude", s.createExclusion)
 		api.DELETE("/filesystem/exclude", s.removeExclusion)
@@ -1725,6 +1726,17 @@ func (s *Server) listSeries(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"items": series, "count": len(series)})
+}
+
+// getHomeDirectory returns the server user's home directory path.
+func (s *Server) getHomeDirectory(c *gin.Context) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(homeDir) == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to determine home directory"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"path": homeDir})
 }
 
 func (s *Server) browseFilesystem(c *gin.Context) {
@@ -2911,8 +2923,16 @@ func (s *Server) updateConfig(c *gin.Context) {
 	updated := []string{}
 
 	if val, ok := updates["root_dir"].(string); ok {
-		config.AppConfig.RootDir = val
+		trimmed := strings.TrimSpace(val)
+		config.AppConfig.RootDir = trimmed
 		updated = append(updated, "root_dir")
+		if trimmed == "" {
+			config.AppConfig.SetupComplete = false
+			updated = append(updated, "setup_complete")
+		} else {
+			config.AppConfig.SetupComplete = true
+			updated = append(updated, "setup_complete")
+		}
 	}
 
 	if val, ok := updates["database_path"].(string); ok {
@@ -2923,6 +2943,11 @@ func (s *Server) updateConfig(c *gin.Context) {
 	if val, ok := updates["playlist_dir"].(string); ok {
 		config.AppConfig.PlaylistDir = val
 		updated = append(updated, "playlist_dir")
+	}
+
+	if val, ok := updates["setup_complete"].(bool); ok {
+		config.AppConfig.SetupComplete = val
+		updated = append(updated, "setup_complete")
 	}
 
 	if apiKeys, ok := updates["api_keys"].(map[string]interface{}); ok {

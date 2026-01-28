@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.25.1
+// version: 1.25.2
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -1218,16 +1218,16 @@ export function Settings() {
   const handleSaveAndNavigate = async () => {
     const success = await handleSave();
     if (success) {
-      blocker?.proceed();
+      blocker.proceed?.();
     }
   };
 
   const handleDiscardNavigation = () => {
-    blocker?.proceed();
+    blocker.proceed?.();
   };
 
   const handleCancelNavigation = () => {
-    blocker?.reset();
+    blocker.reset?.();
   };
 
   return (
