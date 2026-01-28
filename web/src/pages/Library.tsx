@@ -529,7 +529,7 @@ export const Library = () => {
         narrator: book.narrator,
         series: book.series_name,
         series_number: book.series_position,
-        genre: book.genre,
+        genre: book.genre || undefined,
         language: book.language,
         audiobook_release_year: book.audiobook_release_year,
         year: book.audiobook_release_year || book.print_year,
