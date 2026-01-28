@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.25.2
+// version: 1.26.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -41,6 +41,7 @@ import {
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
+import { ITunesImport } from '../components/settings/ITunesImport';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
 import {
   Save as SaveIcon,
@@ -1272,6 +1273,7 @@ export function Settings() {
             aria-label="settings tabs"
           >
             <Tab label="Library" />
+            <Tab label="iTunes Import" />
             <Tab label="Metadata" />
             <Tab label="Performance" />
             <Tab label="Security" />
@@ -1963,6 +1965,10 @@ export function Settings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
+          <ITunesImport />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>
@@ -2327,7 +2333,7 @@ export function Settings() {
           </Grid>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={3}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>
@@ -2567,11 +2573,11 @@ export function Settings() {
           </Grid>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={4}>
           <BlockedHashesTab />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={tabValue} index={5}>
           <SystemInfoTab />
         </TabPanel>
 
