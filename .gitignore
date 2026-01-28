@@ -199,3 +199,12 @@ audiobooks.pebble/
 # Encryption keys
 .encryption_key
 web/test-results/
+
+# iTunes test data (personal library metadata - DO NOT COMMIT)
+testdata/itunes/*.xml
+testdata/itunes/*.itdb
+testdata/itunes/*.itl
+testdata/itunes/*.tmp
+testdata/itunes/sentinel
+!testdata/itunes/README.md
+!testdata/itunes/create_test_subset.go
