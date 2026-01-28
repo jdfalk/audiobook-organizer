@@ -67,11 +67,11 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         const path = await api.getHomeDirectory();
         if (cancelled) return;
         setHomePath(path);
-        setLibraryPath((prev) => (prev.trim() ? prev : path));
+        setLibraryPath((prev) => ((prev || '').trim() ? prev : path));
       } catch (error) {
         if (cancelled) return;
-        setHomePath((prev) => (prev.trim() ? prev : '/'));
-        setLibraryPath((prev) => (prev.trim() ? prev : '/'));
+        setHomePath((prev) => ((prev || '').trim() ? prev : '/'));
+        setLibraryPath((prev) => ((prev || '').trim() ? prev : '/'));
       }
     };
 
@@ -100,7 +100,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   };
 
   const handleConfirmLibraryPath = () => {
-    const trimmed = libraryPathSelection.trim();
+    const trimmed = (libraryPathSelection || '').trim();
     if (trimmed) {
       setLibraryPath(trimmed);
     }
@@ -108,7 +108,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   };
 
   const handleTestOpenAIKey = async () => {
-    if (!openaiKey.trim()) {
+    if (!(openaiKey || '').trim()) {
       setKeyTestResult('error');
       return;
     }
@@ -146,7 +146,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   };
 
   const handleConfirmImportFolder = () => {
-    const trimmed = importFolderSelection.trim();
+    const trimmed = (importFolderSelection || '').trim();
     if (trimmed) {
       setImportFolders((prev) =>
         prev.includes(trimmed) ? prev : [...prev, trimmed]
@@ -171,7 +171,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       });
 
       // Step 2: Save OpenAI key if provided
-      if (openaiKey.trim()) {
+      if ((openaiKey || '').trim()) {
         await api.updateConfig({
           openai_api_key: openaiKey,
           enable_ai_parsing: true,
@@ -202,7 +202,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   const canProceed = () => {
     switch (activeStep) {
       case 0:
-        return libraryPath.trim() !== '';
+        return (libraryPath || '').trim() !== '';
       case 1:
         return true; // Optional step
       case 2:
@@ -298,7 +298,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               <Button
                 variant="outlined"
                 onClick={handleTestOpenAIKey}
-                disabled={!openaiKey.trim() || testingKey}
+                disabled={!(openaiKey || '').trim() || testingKey}
                 startIcon={testingKey ? <CircularProgress size={16} /> : null}
                 sx={{ mb: 2 }}
               >
@@ -443,7 +443,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
           <Button
             variant="contained"
             onClick={handleConfirmLibraryPath}
-            disabled={!libraryPathSelection.trim()}
+            disabled={!(libraryPathSelection || '').trim()}
           >
             Select Folder
           </Button>
@@ -479,7 +479,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
           <Button
             variant="contained"
             onClick={handleConfirmImportFolder}
-            disabled={!importFolderSelection.trim()}
+            disabled={!(importFolderSelection || '').trim()}
           >
             Add Folder
           </Button>
