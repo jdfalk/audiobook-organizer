@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.12.1
+// version: 1.13.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -123,6 +123,60 @@ export interface BookTags {
     duration?: number;
   };
   tags?: Record<string, TagSourceValues>;
+}
+
+export interface ITunesValidateRequest {
+  library_path: string;
+}
+
+export interface ITunesValidateResponse {
+  total_tracks: number;
+  audiobook_tracks: number;
+  files_found: number;
+  files_missing: number;
+  missing_paths?: string[];
+  duplicate_count: number;
+  estimated_import_time: string;
+}
+
+export interface ITunesImportRequest {
+  library_path: string;
+  import_mode: 'organized' | 'import' | 'organize';
+  preserve_location: boolean;
+  import_playlists: boolean;
+  skip_duplicates: boolean;
+}
+
+export interface ITunesImportResponse {
+  operation_id: string;
+  status: string;
+  message: string;
+}
+
+export interface ITunesWriteBackRequest {
+  library_path: string;
+  audiobook_ids: string[];
+  create_backup: boolean;
+}
+
+export interface ITunesWriteBackResponse {
+  success: boolean;
+  updated_count: number;
+  backup_path?: string;
+  message: string;
+}
+
+export interface ITunesImportStatus {
+  operation_id: string;
+  status: string;
+  progress: number;
+  message: string;
+  total_books?: number;
+  processed?: number;
+  imported?: number;
+  skipped?: number;
+  failed?: number;
+  errors?: string[];
 }
 
 export interface ImportPath {
@@ -759,6 +813,60 @@ export async function importFile(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to import file');
+  }
+  return response.json();
+}
+
+export async function validateITunesLibrary(
+  payload: ITunesValidateRequest
+): Promise<ITunesValidateResponse> {
+  const response = await fetch(`${API_BASE}/itunes/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to validate iTunes library');
+  }
+  return response.json();
+}
+
+export async function importITunesLibrary(
+  payload: ITunesImportRequest
+): Promise<ITunesImportResponse> {
+  const response = await fetch(`${API_BASE}/itunes/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to import iTunes library');
+  }
+  return response.json();
+}
+
+export async function writeBackITunesLibrary(
+  payload: ITunesWriteBackRequest
+): Promise<ITunesWriteBackResponse> {
+  const response = await fetch(`${API_BASE}/itunes/write-back`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to write back iTunes library');
+  }
+  return response.json();
+}
+
+export async function getITunesImportStatus(
+  operationId: string
+): Promise<ITunesImportStatus> {
+  const response = await fetch(
+    `${API_BASE}/itunes/import-status/${operationId}`
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch iTunes import status');
   }
   return response.json();
 }

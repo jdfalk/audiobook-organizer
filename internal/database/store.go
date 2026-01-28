@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.12.0
+// version: 2.13.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -177,7 +177,15 @@ type Book struct {
 	AudiobookReleaseYear *int    `json:"audiobook_release_year,omitempty"`
 	ISBN10               *string `json:"isbn10,omitempty"`
 	ISBN13               *string `json:"isbn13,omitempty"`
-	OriginalFilename     *string `json:"original_filename,omitempty"`
+	// iTunes import fields
+	ITunesPersistentID *string    `json:"itunes_persistent_id,omitempty"`
+	ITunesDateAdded    *time.Time `json:"itunes_date_added,omitempty"`
+	ITunesPlayCount    *int       `json:"itunes_play_count,omitempty"`
+	ITunesLastPlayed   *time.Time `json:"itunes_last_played,omitempty"`
+	ITunesRating       *int       `json:"itunes_rating,omitempty"`
+	ITunesBookmark     *int64     `json:"itunes_bookmark,omitempty"`
+	ITunesImportSource *string    `json:"itunes_import_source,omitempty"`
+	OriginalFilename   *string    `json:"original_filename,omitempty"`
 	// Media info fields
 	Bitrate    *int    `json:"bitrate_kbps,omitempty"`
 	Codec      *string `json:"codec,omitempty"`
