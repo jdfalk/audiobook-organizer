@@ -270,13 +270,13 @@ export function ServerFileBrowser({
 
   return (
     <Box>
-      <Snackbar
-        open={!!notice}
-        autoHideDuration={4000}
-        onClose={() => setNotice(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        {notice && (
+      {notice && (
+        <Snackbar
+          open={true}
+          autoHideDuration={4000}
+          onClose={() => setNotice(null)}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        >
           <Alert
             severity={notice.severity}
             onClose={() => setNotice(null)}
@@ -284,8 +284,8 @@ export function ServerFileBrowser({
           >
             {notice.message}
           </Alert>
-        )}
-      </Snackbar>
+        </Snackbar>
+      )}
       {/* Sticky Path Editor */}
       <Paper
         sx={{

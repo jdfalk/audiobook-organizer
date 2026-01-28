@@ -533,7 +533,7 @@ export const BookDetail = () => {
     } catch (error) {
       if (error instanceof api.ApiError) {
         if (error.status === 409) {
-          setPendingUpdate(payload);
+          setPendingUpdate(null);
           setConflictDialogOpen(true);
           setAlert({
             severity: 'warning',

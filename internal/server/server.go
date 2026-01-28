@@ -61,7 +61,7 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func intPtr(i int) *int {
+func intPtrHelper(i int) *int {
 	return &i
 }
 
@@ -2647,19 +2647,19 @@ func (s *Server) importFile(c *gin.Context) {
 	mediaInfo, err := mediainfo.Extract(req.FilePath)
 	if err == nil {
 		if mediaInfo.Bitrate > 0 {
-			book.Bitrate = intPtr(mediaInfo.Bitrate)
+			book.Bitrate = intPtrHelper(mediaInfo.Bitrate)
 		}
 		if mediaInfo.Codec != "" {
 			book.Codec = stringPtr(mediaInfo.Codec)
 		}
 		if mediaInfo.SampleRate > 0 {
-			book.SampleRate = intPtr(mediaInfo.SampleRate)
+			book.SampleRate = intPtrHelper(mediaInfo.SampleRate)
 		}
 		if mediaInfo.Channels > 0 {
-			book.Channels = intPtr(mediaInfo.Channels)
+			book.Channels = intPtrHelper(mediaInfo.Channels)
 		}
 		if mediaInfo.BitDepth > 0 {
-			book.BitDepth = intPtr(mediaInfo.BitDepth)
+			book.BitDepth = intPtrHelper(mediaInfo.BitDepth)
 		}
 		if mediaInfo.Quality != "" {
 			book.Quality = stringPtr(mediaInfo.Quality)
