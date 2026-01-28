@@ -1218,16 +1218,16 @@ export function Settings() {
   const handleSaveAndNavigate = async () => {
     const success = await handleSave();
     if (success) {
-      blocker.proceed();
+      blocker?.proceed();
     }
   };
 
   const handleDiscardNavigation = () => {
-    blocker.proceed();
+    blocker?.proceed();
   };
 
   const handleCancelNavigation = () => {
-    blocker.reset();
+    blocker?.reset();
   };
 
   return (
