@@ -611,12 +611,12 @@ func loadITunesImportStatus(opID string) *itunesImportStatus {
 	return status
 }
 
-func snapshotITunesImportStatus(opID string) itunesImportStatus {
+func snapshotITunesImportStatus(opID string) *itunesImportStatus {
 	status := loadITunesImportStatus(opID)
 	status.mu.Lock()
 	defer status.mu.Unlock()
 
-	snapshot := itunesImportStatus{
+	snapshot := &itunesImportStatus{
 		Total:     status.Total,
 		Processed: status.Processed,
 		Imported:  status.Imported,
