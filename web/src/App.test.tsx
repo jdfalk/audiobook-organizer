@@ -1,16 +1,46 @@
 // file: web/src/App.test.tsx
-// version: 1.0.1
+// version: 1.0.2
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material';
 import App from './App';
 import { theme } from './theme';
 
+// Mock API
+vi.mock('./services/api', () => ({
+  getConfig: vi.fn().mockResolvedValue({
+    root_dir: '/tmp/library',
+    setup_complete: true,
+  }),
+  getHomeDirectory: vi.fn().mockResolvedValue('/home/user'),
+  getSystemStatus: vi.fn().mockResolvedValue({
+    status: 'ok',
+    library: { book_count: 0, folder_count: 1, total_size: 0 },
+    import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
+    memory: {},
+    runtime: {},
+    operations: { recent: [] },
+  }),
+  getImportPaths: vi.fn().mockResolvedValue([{ path: '/tmp' }]),
+  countBooks: vi.fn().mockResolvedValue(0),
+  getActiveOperations: vi.fn().mockResolvedValue([]),
+  getOperationLogsTail: vi.fn().mockResolvedValue([]),
+  getAuthors: vi.fn().mockResolvedValue([]),
+  getNarrators: vi.fn().mockResolvedValue([]),
+  getBooks: vi.fn().mockResolvedValue([]),
+  searchBooks: vi.fn().mockResolvedValue([]),
+  getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('App', () => {
-  it('renders without crashing', () => {
+  it('renders without crashing', async () => {
     render(
       <BrowserRouter>
         <ThemeProvider theme={theme}>
@@ -19,7 +49,7 @@ describe('App', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText('Audiobook Organizer')).toBeInTheDocument();
+    expect(await screen.findByText('Audiobook Organizer')).toBeInTheDocument();
   });
 
   it('renders navigation items', async () => {

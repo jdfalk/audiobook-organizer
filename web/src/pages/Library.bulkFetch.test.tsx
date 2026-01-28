@@ -55,7 +55,7 @@ describe('Library bulk metadata fetch', () => {
     fireEvent.click(openButton);
 
     const confirmButton = await screen.findByRole('button', {
-      name: /fetch metadata/i,
+      name: /^fetch metadata$/i,
     });
     fireEvent.click(confirmButton);
 
