@@ -35,7 +35,12 @@
       "Bash(gh run watch:*)",
       "Bash(xargs gh run watch:*)",
       "Bash(go get:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(make:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)"
     ]
   }
 }

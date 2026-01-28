@@ -276,7 +276,7 @@ export function ServerFileBrowser({
         onClose={() => setNotice(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        {notice ? (
+        {notice && (
           <Alert
             severity={notice.severity}
             onClose={() => setNotice(null)}
@@ -284,7 +284,7 @@ export function ServerFileBrowser({
           >
             {notice.message}
           </Alert>
-        ) : null}
+        )}
       </Snackbar>
       {/* Sticky Path Editor */}
       <Paper

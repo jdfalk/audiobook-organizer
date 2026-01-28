@@ -11,7 +11,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   LinearProgress,
   List,
   ListItem,
@@ -207,7 +206,7 @@ export function Operations() {
                         total: op.total,
                         message: op.message,
                         created_at: new Date().toISOString(),
-                        folder_path: op.folder_path,
+                        folder_path: '',
                       })
                     }
                   >
