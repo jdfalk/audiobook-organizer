@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 1.4.3
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 
 import { Page } from '@playwright/test';
@@ -121,6 +121,34 @@ interface MockActiveOperation {
   folder_path?: string;
 }
 
+interface MockITunesValidation {
+  total_tracks: number;
+  audiobook_tracks: number;
+  files_found: number;
+  files_missing: number;
+  missing_paths?: string[];
+  duplicate_count: number;
+  estimated_import_time: string;
+}
+
+interface MockITunesImportStatus {
+  operation_id: string;
+  status: string;
+  progress: number;
+  message: string;
+  total_books?: number;
+  processed?: number;
+  imported?: number;
+  skipped?: number;
+  failed?: number;
+  errors?: string[];
+}
+
+interface MockITunesState {
+  validation?: MockITunesValidation;
+  importStatus?: MockITunesImportStatus;
+}
+
 interface MockFailures {
   getBooks?: number | 'timeout';
   searchBooks?: number | 'timeout';
@@ -150,6 +178,7 @@ interface MockApiOptions {
     history?: MockOperation[];
     logs?: Record<string, MockOperationLog[]>;
   };
+  itunes?: MockITunesState;
   failures?: MockFailures;
   systemStatus?: Record<string, unknown>;
 }
@@ -487,6 +516,7 @@ export async function setupMockApi(
   const blockedHashesData = options.blockedHashes || [];
   const filesystemData = options.filesystem || {};
   const operationsData = options.operations || {};
+  const itunesData = options.itunes || {};
   const failuresData = options.failures || {};
   const bookData = options.books || [];
 
@@ -499,6 +529,7 @@ export async function setupMockApi(
       blockedHashesData,
       filesystemData,
       operationsData,
+      itunesData,
       failuresData,
       systemStatusData,
     }: {
@@ -513,6 +544,7 @@ export async function setupMockApi(
         history?: MockOperation[];
         logs?: Record<string, MockOperationLog[]>;
       };
+      itunesData: MockITunesState;
       failuresData: MockFailures;
       systemStatusData: Record<string, unknown>;
     }) => {
@@ -525,6 +557,31 @@ export async function setupMockApi(
       let activeOperations = [...(operationsData.active || [])];
       let historyOperations = [...(operationsData.history || [])];
       let operationLogs = { ...(operationsData.logs || {}) };
+      const defaultITunesValidation: MockITunesValidation = {
+        total_tracks: 120,
+        audiobook_tracks: 12,
+        files_found: 12,
+        files_missing: 0,
+        missing_paths: [],
+        duplicate_count: 1,
+        estimated_import_time: '12 seconds',
+      };
+      const defaultITunesImportStatus: MockITunesImportStatus = {
+        operation_id: 'op-itunes-default',
+        status: 'completed',
+        progress: 100,
+        message: 'Import completed',
+        total_books: 12,
+        processed: 12,
+        imported: 11,
+        skipped: 1,
+        failed: 0,
+        errors: [],
+      };
+      const itunesValidation = itunesData.validation || defaultITunesValidation;
+      let itunesImportStatus =
+        itunesData.importStatus || defaultITunesImportStatus;
+      let itunesOperationId = itunesImportStatus.operation_id;
       const failures = { ...failuresData };
 
       const jsonResponse = (body: unknown, status = 200) =>
@@ -981,6 +1038,42 @@ export async function setupMockApi(
           );
         }
 
+        if (pathname === '/api/v1/itunes/validate' && method === 'POST') {
+          return Promise.resolve(jsonResponse(itunesValidation));
+        }
+        if (pathname === '/api/v1/itunes/import' && method === 'POST') {
+          itunesOperationId = `op-itunes-${Date.now()}`;
+          itunesImportStatus = {
+            ...itunesImportStatus,
+            operation_id: itunesOperationId,
+          };
+          return Promise.resolve(
+            jsonResponse({
+              operation_id: itunesOperationId,
+              status: 'queued',
+              message: 'iTunes import queued',
+            })
+          );
+        }
+        if (
+          pathname.startsWith('/api/v1/itunes/import-status/') &&
+          method === 'GET'
+        ) {
+          const opId = pathname.split('/').pop() || itunesOperationId;
+          return Promise.resolve(
+            jsonResponse({ ...itunesImportStatus, operation_id: opId })
+          );
+        }
+        if (pathname === '/api/v1/itunes/write-back' && method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({
+              success: true,
+              updated_count: itunesImportStatus.imported || 0,
+              message: 'Write-back completed',
+            })
+          );
+        }
+
         if (pathname === '/api/v1/operations/active' && method === 'GET') {
           const failed = failWithStatus(
             failures.operationsActive,
@@ -1391,6 +1484,7 @@ export async function setupMockApi(
       blockedHashesData,
       filesystemData,
       operationsData,
+      itunesData,
       failuresData,
       systemStatusData,
     }
