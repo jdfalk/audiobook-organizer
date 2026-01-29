@@ -1,13 +1,55 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.3.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-01-19 -->
+<!-- last-edited: 2026-01-28 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### January 28, 2026 - CI/CD Fixes and Compilation Error Resolution (v1.3.0)
+
+This release resolves critical CI/CD issues and all compilation errors across the codebase.
+
+##### Bug Fixes
+
+**CI/CD False Success Reporting** (`ghcommon/.github/workflows/scripts/ci_workflow.py`):
+- Fixed `frontend_run` function to properly exit with error code on test failures
+- CI workflows now correctly report failures instead of false successes
+- Ensures test failures are visible and block merges
+
+**Frontend Compilation** (`web/src/`):
+- Fixed WelcomeWizard undefined `.trim()` errors with safe null checks
+- Fixed App.test.tsx with comprehensive API mocks
+- Fixed Library.bulkFetch.test.tsx button selector specificity
+- Fixed ServerFileBrowser.tsx Snackbar children type error
+- Fixed BookDetail.tsx undefined payload variable
+- Fixed Library.tsx removed non-existent genre field
+
+**Backend Compilation** (`internal/server/`):
+- Removed duplicate `intPtr` function declaration
+- Fixed go vet warning about mutex lock copy in itunes.go
+- All Go code now compiles cleanly with zero warnings
+
+**Repository Configuration** (`.github/repository-config.yml`):
+- Added top-level `working_directories` and `versions` for frontend detection
+- Fixes PR #140 frontend detection failure with get-frontend-config-action v1.1.3
+- Maintains backward compatibility with language-specific configuration
+
+##### Branch Management
+
+- Rebased `feat/itunes-integration` onto main (incorporates compilation fixes)
+- Rebased `fix/critical-bugs-20260128` onto main (incorporates compilation fixes)
+- Both feature branches now build cleanly
+
+##### Test Status
+
+- All frontend tests passing (17/17)
+- All backend tests passing with 86.2% coverage
+- All CI workflows passing with zero errors
+- PR #140 (Dependabot) now passing all checks
 
 #### January 18, 2026 - Comprehensive Test Coverage Documentation (v1.2.0)
 
