@@ -43,7 +43,19 @@
       "Bash(pkill:*)",
       "Bash(go vet:*)",
       "Bash(npm run test:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(git fetch:*)",
+      "Bash(git log:*)",
+      "mcp__plugin_github_github__pull_request_read",
+      "Bash(gh pr checks:*)",
+      "Bash(git worktree:*)",
+      "Bash(git rebase:*)",
+      "Bash(git:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr view:*)",
+      "Bash(ruff format:*)"
     ]
   }
 }
