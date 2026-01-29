@@ -40,7 +40,10 @@
       "Bash(npm run build:*)",
       "Bash(npx vite:*)",
       "Bash(curl:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(go vet:*)",
+      "Bash(npm run test:*)",
+      "Bash(git restore:*)"
     ]
   }
 }
