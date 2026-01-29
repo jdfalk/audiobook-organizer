@@ -1,21 +1,30 @@
 <!-- file: TODO.md -->
-<!-- version: 1.30.0 -->
+<!-- version: 1.31.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-01-19 -->
+<!-- last-edited: 2026-01-28 -->
 
 # Project TODO
 
-## 🎯 MVP STATUS - January 27, 2026
+## 🎯 MVP STATUS - January 28, 2026
 
 **Current Completion: ~85% MVP Complete**
 
 - **Backend**: ~95% (all APIs functional, 100% test pass rate, 86.2% coverage)
-- **Frontend**: ~80% (Book Detail, Library, Settings, System complete; 141 E2E tests, 92% coverage)
-- **Testing**: Go tests 100% pass (86.2% coverage with `-tags=mocks`)
-- **CI/CD**: Release pipeline functional but needs token permissions fix
+- **Frontend**: ~80% (Book Detail, Library, Settings, System complete; 141 E2E tests, 92% coverage, **all tests now passing**)
+- **Testing**: Go tests 100% pass (86.2% coverage with `-tags=mocks`), Frontend tests fixed
+- **CI/CD**: ✅ **FIXED** - False success reporting resolved in ghcommon, all workflows reporting correctly
 - **BLOCKER**: iTunes integration (11-15 hours) - Critical for 10TB+ library migration
 
 **Time to MVP**: 1-2 weeks (iTunes integration + manual QA + release fixes)
+
+## 📝 Recent Updates (Jan 28, 2026)
+
+- ✅ Fixed all compilation errors (Go backend, TypeScript frontend)
+- ✅ Fixed CI/CD false success reporting in ghcommon (frontend tests now properly fail CI)
+- ✅ Resolved WelcomeWizard undefined `.trim()` errors
+- ✅ Fixed PR #140 frontend detection (repository-config.yml structure)
+- ✅ Rebased `feat/itunes-integration` and `fix/critical-bugs-20260128` branches onto main
+- ✅ All GitHub Actions workflows now passing with zero errors
 
 ---
 
