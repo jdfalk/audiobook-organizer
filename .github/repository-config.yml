@@ -1,5 +1,5 @@
 # file: .github/repository-config.yml
-# version: 1.1.1
+# version: 1.1.2
 # guid: audiobook-organizer-repo-config-001
 
 # Repository Metadata
@@ -8,6 +8,14 @@ repository:
   type: 'application'
   primary_language: 'go'
   description: 'Audiobook organization and management tool'
+
+# Frontend Configuration (top-level for get-frontend-config-action)
+working_directories:
+  frontend: 'web'
+  node: 'web'
+
+versions:
+  node: ['22']
 
 # Language Detection and Support
 languages:
