@@ -317,6 +317,12 @@ var serveCmd = &cobra.Command{
 				cfg.IdleTimeout = d
 			}
 		}
+		if tlsCert := cmd.Flag("tls-cert").Value.String(); tlsCert != "" {
+			cfg.TLSCertFile = tlsCert
+		}
+		if tlsKey := cmd.Flag("tls-key").Value.String(); tlsKey != "" {
+			cfg.TLSKeyFile = tlsKey
+		}
 
 		return startServer(srv, cfg)
 	},
@@ -357,6 +363,8 @@ func init() {
 	serveCmd.Flags().String("read-timeout", "0s", "read timeout (0s disables timeout for SSE compatibility)")
 	serveCmd.Flags().String("write-timeout", "0s", "write timeout (0s disables timeout for SSE compatibility)")
 	serveCmd.Flags().String("idle-timeout", "120s", "idle timeout (e.g. 60s, 2m)")
+	serveCmd.Flags().String("tls-cert", "", "TLS certificate file for HTTPS/HTTP2 (optional)")
+	serveCmd.Flags().String("tls-key", "", "TLS key file for HTTPS/HTTP2 (optional)")
 	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
 
 	metadataInspectCmd.Flags().StringVar(&metadataInspectFile, "file", "", "audio file to inspect (can also pass as positional argument)")
