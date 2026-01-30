@@ -90,6 +90,7 @@ export function ServerFileBrowser({
   const [contextItem, setContextItem] = useState<api.FileSystemItem | null>(
     null
   );
+  const [homeDirectory, setHomeDirectory] = useState<string>('/');
 
   const fetchDirectory = useCallback(
     async (path: string) => {
@@ -121,6 +122,21 @@ export function ServerFileBrowser({
     fetchDirectory(currentPath);
     setEditPath(currentPath);
   }, [currentPath, fetchDirectory]);
+
+  // Fetch home directory on mount
+  useEffect(() => {
+    const fetchHome = async () => {
+      try {
+        const home = await api.getHomeDirectory();
+        setHomeDirectory(home);
+      } catch (err) {
+        console.error('Failed to fetch home directory:', err);
+        // Fallback to root if home fetch fails
+        setHomeDirectory('/');
+      }
+    };
+    fetchHome();
+  }, []);
 
   const handleItemClick = (item: api.FileSystemItem) => {
     if (item.is_dir) {
@@ -209,7 +225,8 @@ export function ServerFileBrowser({
   const navigateToPath = (index: number) => {
     const parts = getPathParts(currentPath);
     if (index === 0) {
-      setCurrentPath('/');
+      // Navigate to user's home directory when home icon is clicked
+      setCurrentPath(homeDirectory);
     } else {
       const newPath = '/' + parts.slice(1, index + 1).join('/');
       setCurrentPath(newPath);
