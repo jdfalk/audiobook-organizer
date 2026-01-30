@@ -295,13 +295,10 @@ var serveCmd = &cobra.Command{
 		srv := newServer()
 		cfg := getDefaultServerConfig()
 
-		// Override with command line flags if provided
-		if port := cmd.Flag("port").Value.String(); port != "" {
-			cfg.Port = port
-		}
-		if host := cmd.Flag("host").Value.String(); host != "" {
-			cfg.Host = host
-		}
+		// Apply command line flags (use defaults or user-provided values)
+		cfg.Port = cmd.Flag("port").Value.String()
+		cfg.Host = cmd.Flag("host").Value.String()
+
 		if rt := cmd.Flag("read-timeout").Value.String(); rt != "" {
 			if d, err := time.ParseDuration(rt); err == nil {
 				cfg.ReadTimeout = d
@@ -317,12 +314,11 @@ var serveCmd = &cobra.Command{
 				cfg.IdleTimeout = d
 			}
 		}
-		if tlsCert := cmd.Flag("tls-cert").Value.String(); tlsCert != "" {
-			cfg.TLSCertFile = tlsCert
-		}
-		if tlsKey := cmd.Flag("tls-key").Value.String(); tlsKey != "" {
-			cfg.TLSKeyFile = tlsKey
-		}
+
+		// TLS configuration (defaults to snake oil certs)
+		cfg.TLSCertFile = cmd.Flag("tls-cert").Value.String()
+		cfg.TLSKeyFile = cmd.Flag("tls-key").Value.String()
+		cfg.HTTP3Port = cmd.Flag("http3-port").Value.String()
 
 		return startServer(srv, cfg)
 	},
@@ -363,8 +359,9 @@ func init() {
 	serveCmd.Flags().String("read-timeout", "0s", "read timeout (0s disables timeout for SSE compatibility)")
 	serveCmd.Flags().String("write-timeout", "0s", "write timeout (0s disables timeout for SSE compatibility)")
 	serveCmd.Flags().String("idle-timeout", "120s", "idle timeout (e.g. 60s, 2m)")
-	serveCmd.Flags().String("tls-cert", "", "TLS certificate file for HTTPS/HTTP2 (optional)")
-	serveCmd.Flags().String("tls-key", "", "TLS key file for HTTPS/HTTP2 (optional)")
+	serveCmd.Flags().String("tls-cert", "certs/localhost.crt", "TLS certificate file for HTTPS/HTTP2/HTTP3")
+	serveCmd.Flags().String("tls-key", "certs/localhost.key", "TLS key file for HTTPS/HTTP2/HTTP3")
+	serveCmd.Flags().String("http3-port", "8443", "HTTP/3 (QUIC) port on UDP (set to empty string to disable)")
 	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
 
 	metadataInspectCmd.Flags().StringVar(&metadataInspectFile, "file", "", "audio file to inspect (can also pass as positional argument)")
