@@ -361,7 +361,7 @@ func init() {
 	serveCmd.Flags().String("idle-timeout", "120s", "idle timeout (e.g. 60s, 2m)")
 	serveCmd.Flags().String("tls-cert", "certs/localhost.crt", "TLS certificate file for HTTPS/HTTP2/HTTP3")
 	serveCmd.Flags().String("tls-key", "certs/localhost.key", "TLS key file for HTTPS/HTTP2/HTTP3")
-	serveCmd.Flags().String("http3-port", "8443", "HTTP/3 (QUIC) port on UDP (set to empty string to disable)")
+	serveCmd.Flags().String("http3-port", "8080", "HTTP/3 (QUIC) port on UDP (same as --port for best compatibility)")
 	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
 
 	metadataInspectCmd.Flags().StringVar(&metadataInspectFile, "file", "", "audio file to inspect (can also pass as positional argument)")

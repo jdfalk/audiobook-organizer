@@ -60,7 +60,8 @@
       "Bash(actionlint:*)",
       "Bash(./audiobook-organizer:*)",
       "Bash(pgrep:*)",
-      "Bash(openssl req:*)"
+      "Bash(openssl req:*)",
+      "Bash(lsof:*)"
     ]
   }
 }

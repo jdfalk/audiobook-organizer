@@ -534,6 +534,38 @@ func (s *Server) Start(cfg ServerConfig) error {
 				}
 			}()
 		}
+
+		// Start HTTP to HTTPS redirect server on port 80
+		go func() {
+			redirectAddr := fmt.Sprintf("%s:80", cfg.Host)
+			httpsPort := cfg.Port
+			if httpsPort == "80" {
+				httpsPort = "443" // Don't redirect 80->80
+			}
+
+			redirectHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Build HTTPS URL
+				target := "https://" + r.Host
+				// Add port if not default HTTPS port
+				if httpsPort != "443" {
+					target = fmt.Sprintf("https://%s:%s", cfg.Host, httpsPort)
+				}
+				target += r.URL.RequestURI()
+
+				log.Printf("HTTP->HTTPS redirect: %s -> %s", r.URL.String(), target)
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+			})
+
+			log.Printf("Starting HTTP->HTTPS redirect server on %s (redirects to :%s)", redirectAddr, httpsPort)
+			httpRedirectServer := &http.Server{
+				Addr:    redirectAddr,
+				Handler: redirectHandler,
+			}
+			if err := httpRedirectServer.ListenAndServe(); err != nil {
+				// Don't fatal - port 80 might require sudo
+				log.Printf("Warning: HTTP redirect server failed (port 80 may require sudo): %v", err)
+			}
+		}()
 	} else {
 		// Start HTTP/1.1 server without TLS
 		go func() {
