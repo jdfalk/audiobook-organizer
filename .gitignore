@@ -208,3 +208,7 @@ testdata/itunes/*.tmp
 testdata/itunes/sentinel
 !testdata/itunes/README.md
 !testdata/itunes/create_test_subset.go
+
+# Test TLS certificates
+server.crt
+server.key
