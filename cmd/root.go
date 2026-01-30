@@ -354,9 +354,9 @@ func init() {
 	// Add serve command specific flags
 	serveCmd.Flags().String("port", "8080", "port to run the web server on")
 	serveCmd.Flags().String("host", "localhost", "host to bind the web server to")
-	serveCmd.Flags().String("read-timeout", "15s", "read timeout (e.g. 15s, 1m)")
-	serveCmd.Flags().String("write-timeout", "15s", "write timeout (e.g. 15s, 1m)")
-	serveCmd.Flags().String("idle-timeout", "60s", "idle timeout (e.g. 60s, 2m)")
+	serveCmd.Flags().String("read-timeout", "0s", "read timeout (0s disables timeout for SSE compatibility)")
+	serveCmd.Flags().String("write-timeout", "0s", "write timeout (0s disables timeout for SSE compatibility)")
+	serveCmd.Flags().String("idle-timeout", "120s", "idle timeout (e.g. 60s, 2m)")
 	serveCmd.Flags().Int("workers", 2, "number of background operation workers")
 
 	metadataInspectCmd.Flags().StringVar(&metadataInspectFile, "file", "", "audio file to inspect (can also pass as positional argument)")

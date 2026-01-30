@@ -32,6 +32,7 @@ export const createEventSourceManager = (url = '/api/events') => {
   let eventSource: EventSource | null = null;
   let reconnectAttempt = 0;
   let reconnectTimer: number | null = null;
+  let connecting = false; // Prevent race conditions
 
   const listeners = new Set<EventSourceListener>();
   const statusListeners = new Set<EventSourceStatusListener>();
@@ -51,6 +52,7 @@ export const createEventSourceManager = (url = '/api/events') => {
       eventSource.close();
       eventSource = null;
     }
+    connecting = false;
     reconnectAttempt = 0;
     notifyStatus({ state: 'closed', attempt: 0 });
   };
@@ -89,11 +91,14 @@ export const createEventSourceManager = (url = '/api/events') => {
   };
 
   const connect = () => {
-    if (eventSource || !hasSubscribers()) return;
+    // Prevent duplicate connections from race conditions
+    if (eventSource || connecting || !hasSubscribers()) return;
 
+    connecting = true;
     eventSource = new EventSource(url);
     eventSource.onmessage = handleMessage;
     eventSource.onerror = (error) => {
+      connecting = false;
       if (eventSource) {
         eventSource.close();
         eventSource = null;
@@ -102,6 +107,7 @@ export const createEventSourceManager = (url = '/api/events') => {
       scheduleReconnect(error);
     };
     eventSource.onopen = () => {
+      connecting = false;
       reconnectAttempt = 0;
       notifyStatus({ state: 'open', attempt: 0 });
     };

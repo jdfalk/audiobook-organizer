@@ -10,17 +10,19 @@ import App from './App';
 import { theme } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+const app = (
+  <ErrorBoundary>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <App />
+      </ThemeProvider>
+    </BrowserRouter>
+  </ErrorBoundary>
+);
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <BrowserRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-        </ThemeProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
-  </React.StrictMode>
+  import.meta.env.DEV ? <React.StrictMode>{app}</React.StrictMode> : app
 );
