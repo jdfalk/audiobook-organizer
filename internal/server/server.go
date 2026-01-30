@@ -4304,8 +4304,8 @@ func GetDefaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Port:         "8080",
 		Host:         "localhost",
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 0, // Disable write timeout so SSE streams stay open.
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  0, // Disable read timeout for SSE compatibility (safe for localhost)
+		WriteTimeout: 0, // Disable write timeout so SSE streams stay open
+		IdleTimeout:  120 * time.Second, // 2 minute idle timeout
 	}
 }
