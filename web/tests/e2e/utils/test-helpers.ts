@@ -173,6 +173,7 @@ interface MockApiOptions {
   backups?: MockBackup[];
   blockedHashes?: MockBlockedHash[];
   filesystem?: Record<string, MockFilesystemEntry>;
+  homeDirectory?: string;
   operations?: {
     active?: MockActiveOperation[];
     history?: MockOperation[];
@@ -515,6 +516,7 @@ export async function setupMockApi(
   const backupsData = options.backups || [];
   const blockedHashesData = options.blockedHashes || [];
   const filesystemData = options.filesystem || {};
+  const homeDirectoryData = options.homeDirectory || '/';
   const operationsData = options.operations || {};
   const itunesData = options.itunes || {};
   const failuresData = options.failures || {};
@@ -528,6 +530,7 @@ export async function setupMockApi(
       backupsData,
       blockedHashesData,
       filesystemData,
+      homeDirectoryData,
       operationsData,
       itunesData,
       failuresData,
@@ -539,6 +542,7 @@ export async function setupMockApi(
       backupsData: MockBackup[];
       blockedHashesData: MockBlockedHash[];
       filesystemData: Record<string, MockFilesystemEntry>;
+      homeDirectoryData: string;
       operationsData: {
         active?: MockActiveOperation[];
         history?: MockOperation[];
@@ -985,6 +989,12 @@ export async function setupMockApi(
           const hash = pathname.split('/').pop() || '';
           blockedHashes = blockedHashes.filter((item) => item.hash !== hash);
           return Promise.resolve(jsonResponse({ message: 'Removed' }));
+        }
+
+        if (pathname === '/api/v1/filesystem/home' && method === 'GET') {
+          return Promise.resolve(
+            jsonResponse({ path: homeDirectoryData })
+          );
         }
 
         if (pathname === '/api/v1/filesystem/browse' && method === 'GET') {
@@ -1483,6 +1493,7 @@ export async function setupMockApi(
       backupsData,
       blockedHashesData,
       filesystemData,
+      homeDirectoryData,
       operationsData,
       itunesData,
       failuresData,
