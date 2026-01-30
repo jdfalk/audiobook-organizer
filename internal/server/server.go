@@ -38,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
 )
 
@@ -443,8 +444,9 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
-	TLSCertFile  string // Optional TLS certificate file for HTTPS/HTTP2
-	TLSKeyFile   string // Optional TLS key file for HTTPS/HTTP2
+	TLSCertFile  string // Optional TLS certificate file for HTTPS/HTTP2/HTTP3
+	TLSKeyFile   string // Optional TLS key file for HTTPS/HTTP2/HTTP3
+	HTTP3Port    string // Optional HTTP/3 port (UDP). If set with TLS, enables HTTP/3
 }
 
 // NewServer creates a new server instance
@@ -481,10 +483,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Enable HTTP/2 if TLS is configured
 	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
-		// Configure TLS with HTTP/2
+		// Configure TLS with HTTP/2 (and optionally HTTP/3)
+		nextProtos := []string{"h2", "http/1.1"}
+		if cfg.HTTP3Port != "" {
+			// Add h3 to advertised protocols
+			nextProtos = append([]string{"h3"}, nextProtos...)
+		}
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
-			NextProtos: []string{"h2", "http/1.1"}, // Prefer HTTP/2
+			NextProtos: nextProtos,
 		}
 		s.httpServer.TLSConfig = tlsConfig
 
@@ -493,17 +500,44 @@ func (s *Server) Start(cfg ServerConfig) error {
 			return fmt.Errorf("failed to configure HTTP/2: %w", err)
 		}
 
+		// Add Alt-Svc header to advertise HTTP/3 if enabled
+		if cfg.HTTP3Port != "" {
+			s.router.Use(func(c *gin.Context) {
+				c.Header("Alt-Svc", fmt.Sprintf(`h3=":%s"; ma=2592000`, cfg.HTTP3Port))
+				c.Next()
+			})
+		}
+
 		// Start HTTPS server with HTTP/2
 		go func() {
-			log.Printf("Starting HTTPS/HTTP2 server on %s", s.httpServer.Addr)
+			protocols := "HTTPS/HTTP2"
+			if cfg.HTTP3Port != "" {
+				protocols = "HTTPS/HTTP2 (HTTP/3 on UDP port " + cfg.HTTP3Port + ")"
+			}
+			log.Printf("Starting %s server on %s", protocols, s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("Failed to start HTTPS server: %v", err)
 			}
 		}()
+
+		// Start HTTP/3 server if configured
+		if cfg.HTTP3Port != "" {
+			go func() {
+				http3Server := &http3.Server{
+					Addr:      fmt.Sprintf("%s:%s", cfg.Host, cfg.HTTP3Port),
+					Handler:   s.router,
+					TLSConfig: tlsConfig,
+				}
+				log.Printf("Starting HTTP/3 (QUIC) server on UDP %s:%s", cfg.Host, cfg.HTTP3Port)
+				if err := http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
+					log.Fatalf("Failed to start HTTP/3 server: %v", err)
+				}
+			}()
+		}
 	} else {
 		// Start HTTP/1.1 server without TLS
 		go func() {
-			log.Printf("Starting HTTP/1.1 server on %s (use --tls-cert and --tls-key for HTTP/2)", s.httpServer.Addr)
+			log.Printf("Starting HTTP/1.1 server on %s (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Fatalf("Failed to start server: %v", err)
 			}

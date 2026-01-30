@@ -12,13 +12,22 @@ The included certificates (`localhost.crt` and `localhost.key`) are:
 
 ## For Development
 
-To run the server with HTTP/2 support using the included certificates:
+The server uses these snake oil certificates **by default** for local development:
 
 ```bash
-./audiobook-organizer serve --tls-cert=certs/localhost.crt --tls-key=certs/localhost.key
+# HTTP/3 (QUIC on UDP 8443) + HTTP/2 (TCP 8080) with default snake oil certs
+./audiobook-organizer serve
+
+# To disable HTTP/3:
+./audiobook-organizer serve --http3-port=""
+
+# To use HTTP/1.1 only (no TLS):
+./audiobook-organizer serve --tls-cert="" --tls-key=""
 ```
 
 Your browser will show a security warning because the certificate is self-signed. This is expected and safe for local development.
+
+The server will advertise HTTP/3 availability via the `Alt-Svc` header, and browsers that support HTTP/3 (Chrome, Firefox, Safari, Edge) will automatically upgrade to HTTP/3 after the first request.
 
 ## For Production
 
