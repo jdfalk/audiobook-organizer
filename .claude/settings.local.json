@@ -55,7 +55,11 @@
       "Bash(gh pr:*)",
       "Bash(gh pr comment:*)",
       "Bash(gh pr view:*)",
-      "Bash(ruff format:*)"
+      "Bash(ruff format:*)",
+      "Bash(yamllint:*)",
+      "Bash(actionlint:*)",
+      "Bash(./audiobook-organizer:*)",
+      "Bash(pgrep:*)"
     ]
   }
 }
