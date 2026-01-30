@@ -2626,7 +2626,10 @@ func (s *Server) importFile(c *gin.Context) {
 				return
 			}
 		}
-		book.AuthorID = &author.ID
+		// Defensive check: ensure author is not nil before accessing fields
+		if author != nil {
+			book.AuthorID = &author.ID
+		}
 	}
 
 	// Set additional metadata
