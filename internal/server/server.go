@@ -6,6 +6,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/net/http2"
 )
 
 // Cached library and import path sizes to avoid expensive recalculation on frequent status checks
@@ -441,6 +443,8 @@ type ServerConfig struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+	TLSCertFile  string // Optional TLS certificate file for HTTPS/HTTP2
+	TLSKeyFile   string // Optional TLS key file for HTTPS/HTTP2
 }
 
 // NewServer creates a new server instance
@@ -475,13 +479,36 @@ func (s *Server) Start(cfg ServerConfig) error {
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
-	// Start server in a goroutine
-	go func() {
-		log.Printf("Starting server on %s", s.httpServer.Addr)
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+	// Enable HTTP/2 if TLS is configured
+	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+		// Configure TLS with HTTP/2
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"h2", "http/1.1"}, // Prefer HTTP/2
 		}
-	}()
+		s.httpServer.TLSConfig = tlsConfig
+
+		// Explicitly configure HTTP/2
+		if err := http2.ConfigureServer(s.httpServer, &http2.Server{}); err != nil {
+			return fmt.Errorf("failed to configure HTTP/2: %w", err)
+		}
+
+		// Start HTTPS server with HTTP/2
+		go func() {
+			log.Printf("Starting HTTPS/HTTP2 server on %s", s.httpServer.Addr)
+			if err := s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start HTTPS server: %v", err)
+			}
+		}()
+	} else {
+		// Start HTTP/1.1 server without TLS
+		go func() {
+			log.Printf("Starting HTTP/1.1 server on %s (use --tls-cert and --tls-key for HTTP/2)", s.httpServer.Addr)
+			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start server: %v", err)
+			}
+		}()
+	}
 
 	// Heartbeat: push periodic system.status events via SSE (every 5s) while running
 	quit := make(chan os.Signal, 1)
