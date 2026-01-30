@@ -209,6 +209,9 @@ testdata/itunes/sentinel
 !testdata/itunes/README.md
 !testdata/itunes/create_test_subset.go
 
-# Test TLS certificates
-server.crt
-server.key
+# Production TLS certificates (DO NOT COMMIT - snake oil certs are in certs/ for development)
+*.pem
+prod-*.crt
+prod-*.key
+production.crt
+production.key
