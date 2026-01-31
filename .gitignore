@@ -215,3 +215,7 @@ prod-*.crt
 prod-*.key
 production.crt
 production.key
+test-reports/go-coverage.html
+copilot_fix_tasks_*.json
+summary_report_*.md
+failure_analyses_*.json
