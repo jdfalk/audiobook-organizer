@@ -8,8 +8,12 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
+    "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:e2e:headed": "playwright test -c tests/e2e/playwright.config.ts --headed",
+    "test:e2e:debug": "playwright test -c tests/e2e/playwright.config.ts --debug",
     "test:ui": "vitest --ui",
+    "test:all": "vitest run && playwright test -c tests/e2e/playwright.config.ts",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\""
   },

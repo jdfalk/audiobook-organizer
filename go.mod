@@ -11,11 +11,14 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.2
+	github.com/quic-go/quic-go v0.59.0
 	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	go.senan.xyz/taglib v0.11.1
+	golang.org/x/net v0.48.0
+	howett.net/plist v1.0.1
 )
 
 require (
@@ -63,7 +66,6 @@ require (
 	github.com/prometheus/common v0.67.4 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
@@ -84,11 +86,9 @@ require (
 	golang.org/x/arch v0.23.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
-	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	howett.net/plist v1.0.1 // indirect
 )

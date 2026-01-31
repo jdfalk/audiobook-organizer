@@ -132,11 +132,19 @@ func (o *Organizer) generateTargetPath(book *database.Book) (string, error) {
 func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, error) {
 	result := placeholderNormalizeRegex.ReplaceAllStringFunc(pattern, strings.ToLower)
 
-	// Get author name from embedded Author object or default
+	// Get author name - look up by ID if Author object is nil but AuthorID is set
 	authorName := "Unknown Author"
 	if book.Author != nil {
 		if trimmed := strings.TrimSpace(book.Author.Name); trimmed != "" {
 			authorName = trimmed
+		}
+	} else if book.AuthorID != nil && database.GlobalStore != nil {
+		// Author object not populated, but we have an ID - look it up
+		author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID)
+		if err == nil && author != nil {
+			if trimmed := strings.TrimSpace(author.Name); trimmed != "" {
+				authorName = trimmed
+			}
 		}
 	}
 
@@ -145,10 +153,16 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, 
 		title = defaultTitle
 	}
 
-	// Get series info from embedded Series object
+	// Get series info - look up by ID if Series object is nil but SeriesID is set
 	seriesName := ""
 	if book.Series != nil {
 		seriesName = strings.TrimSpace(book.Series.Name)
+	} else if book.SeriesID != nil && database.GlobalStore != nil {
+		// Series object not populated, but we have an ID - look it up
+		series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID)
+		if err == nil && series != nil {
+			seriesName = strings.TrimSpace(series.Name)
+		}
 	}
 
 	seriesNum := ""

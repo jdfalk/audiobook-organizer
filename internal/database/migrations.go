@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -103,6 +103,12 @@ var migrations = []Migration{
 		Version:     11,
 		Description: "Add iTunes import metadata fields to books",
 		Up:          migration011Up,
+		Down:        nil,
+	},
+	{
+		Version:     12,
+		Description: "Add created_at and updated_at timestamps to books table",
+		Up:          migration012Up,
 		Down:        nil,
 	},
 }
@@ -527,6 +533,36 @@ func migration011Up(store Store) error {
 	}
 
 	log.Println("  - iTunes import metadata fields added successfully")
+	return nil
+}
+
+// migration012Up adds created_at and updated_at timestamp columns to books table
+func migration012Up(store Store) error {
+	log.Println("  - Adding created_at and updated_at timestamp columns to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB handles timestamps natively)")
+		return nil
+	}
+
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP",
+		"ALTER TABLE books ADD COLUMN updated_at DATETIME",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	log.Println("  - Timestamp columns added successfully")
 	return nil
 }
 

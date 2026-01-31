@@ -10,6 +10,7 @@ import {
   Grid,
   Paper,
   LinearProgress,
+  CircularProgress,
   Button,
   Stack,
   Dialog,
@@ -79,6 +80,7 @@ export function Dashboard() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
+  const [scanInProgress, setScanInProgress] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -163,6 +165,7 @@ export function Dashboard() {
   };
 
   const handleScanAll = async () => {
+    setScanInProgress(true);
     setActionNotice(null);
     try {
       await api.startScan();
@@ -171,6 +174,8 @@ export function Dashboard() {
     } catch (error) {
       console.error('Failed to start scan', error);
       setActionNotice('Failed to start scan.');
+    } finally {
+      setScanInProgress(false);
     }
   };
 
@@ -384,8 +389,15 @@ export function Dashboard() {
               Quick Actions
             </Typography>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <Button variant="contained" onClick={handleScanAll}>
-                Scan All Import Paths
+              <Button
+                variant="contained"
+                onClick={handleScanAll}
+                disabled={scanInProgress}
+                startIcon={
+                  scanInProgress ? <CircularProgress size={20} /> : undefined
+                }
+              >
+                {scanInProgress ? 'Starting Scan...' : 'Scan All Import Paths'}
               </Button>
               <Button variant="outlined" onClick={handleOrganizeAll}>
                 Organize All
@@ -399,10 +411,10 @@ export function Dashboard() {
         open={organizeDialogOpen}
         onClose={() => setOrganizeDialogOpen(false)}
       >
-        <DialogTitle>Organize All Import Books</DialogTitle>
+        <DialogTitle>Organize All Scanned Books</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            This will organize all books currently in the import queue.
+            This will organize all books currently scanned but not yet imported to the library.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -416,6 +428,9 @@ export function Dashboard() {
             variant="contained"
             onClick={handleConfirmOrganizeAll}
             disabled={organizeInProgress}
+            startIcon={
+              organizeInProgress ? <CircularProgress size={20} /> : undefined
+            }
           >
             {organizeInProgress ? 'Organizing...' : 'Organize'}
           </Button>

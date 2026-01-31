@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -919,7 +920,27 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		books = []database.Book{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": books, "count": len(books), "limit": limit, "offset": offset})
+	// Add author and series names to response
+	type bookResponse struct {
+		database.Book
+		AuthorName *string `json:"author_name,omitempty"`
+		SeriesName *string `json:"series_name,omitempty"`
+	}
+
+	enrichedBooks := make([]bookResponse, 0, len(books))
+	for _, book := range books {
+		authorName, seriesName := resolveAuthorAndSeriesNames(&book)
+		resp := bookResponse{Book: book}
+		if authorName != "" {
+			resp.AuthorName = &authorName
+		}
+		if seriesName != "" {
+			resp.SeriesName = &seriesName
+		}
+		enrichedBooks = append(enrichedBooks, resp)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"items": enrichedBooks, "count": len(enrichedBooks), "limit": limit, "offset": offset})
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
@@ -1180,7 +1201,22 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	now := time.Now().UTC()
 	book.MetadataProvenanceAt = &now
 
-	c.JSON(http.StatusOK, book)
+	// Add author and series names to response
+	type bookResponse struct {
+		database.Book
+		AuthorName *string `json:"author_name,omitempty"`
+		SeriesName *string `json:"series_name,omitempty"`
+	}
+
+	resp := bookResponse{Book: *book}
+	if authorName != "" {
+		resp.AuthorName = &authorName
+	}
+	if seriesName != "" {
+		resp.SeriesName = &seriesName
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) getAudiobookTags(c *gin.Context) {
@@ -2725,6 +2761,26 @@ func (s *Server) importFile(c *gin.Context) {
 		}
 	}
 
+	// Set series if available
+	if meta.Series != "" && book.AuthorID != nil {
+		series, err := database.GlobalStore.GetSeriesByName(meta.Series, book.AuthorID)
+		if err != nil {
+			// Create new series
+			series, err = database.GlobalStore.CreateSeries(meta.Series, book.AuthorID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create series"})
+				return
+			}
+		}
+		// Defensive check: ensure series is not nil before accessing fields
+		if series != nil {
+			book.SeriesID = &series.ID
+			if meta.SeriesIndex > 0 {
+				book.SeriesSequence = &meta.SeriesIndex
+			}
+		}
+	}
+
 	// Set additional metadata
 	if meta.Album != "" && book.Title == "" {
 		book.Title = meta.Album
@@ -3467,6 +3523,32 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	})
 }
 
+// stripChapterFromTitle removes chapter/book numbers from titles to improve search results
+// Examples: "The Odyssey: Book 01" -> "The Odyssey", "Harry Potter - Chapter 5" -> "Harry Potter"
+func stripChapterFromTitle(title string) string {
+	// Common patterns for chapters/books
+	patterns := []string{
+		`: Book \d+`,
+		`: Chapter \d+`,
+		` - Book \d+`,
+		` - Chapter \d+`,
+		`, Book \d+`,
+		`, Chapter \d+`,
+		`\(Book \d+\)`,
+		`\(Chapter \d+\)`,
+		` Book \d+$`,
+		` Chapter \d+$`,
+	}
+
+	cleaned := title
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		cleaned = re.ReplaceAllString(cleaned, "")
+	}
+
+	return strings.TrimSpace(cleaned)
+}
+
 // fetchAudiobookMetadata fetches and applies metadata to an audiobook
 func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
@@ -3485,9 +3567,41 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 
 	// Search for metadata using current title
 	client := metadata.NewOpenLibraryClient()
-	results, err := client.SearchByTitle(book.Title)
+
+	// Strip chapter/book numbers to improve search results
+	searchTitle := stripChapterFromTitle(book.Title)
+
+	// Try with cleaned title first
+	results, err := client.SearchByTitle(searchTitle)
+
+	// Fall back to original title if cleaned search fails
+	if (err != nil || len(results) == 0) && searchTitle != book.Title {
+		results, err = client.SearchByTitle(book.Title)
+	}
+
+	// Final fallback: try with author if we have one
+	if (err != nil || len(results) == 0) && book.AuthorID != nil {
+		author, authorErr := database.GlobalStore.GetAuthorByID(*book.AuthorID)
+		if authorErr == nil && author != nil && author.Name != "" {
+			log.Printf("[INFO] fetchAudiobookMetadata: Trying fallback search with author: %s", author.Name)
+			results, err = client.SearchByTitleAndAuthor(searchTitle, author.Name)
+
+			// Also try with original title + author if cleaned title failed
+			if (err != nil || len(results) == 0) && searchTitle != book.Title {
+				results, err = client.SearchByTitleAndAuthor(book.Title, author.Name)
+			}
+		}
+	}
+
 	if err != nil || len(results) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no metadata found"})
+		errorMsg := "no metadata found for this book in Open Library"
+		if book.AuthorID != nil {
+			author, _ := database.GlobalStore.GetAuthorByID(*book.AuthorID)
+			if author != nil {
+				errorMsg = fmt.Sprintf("no metadata found for '%s' by '%s' in Open Library", book.Title, author.Name)
+			}
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": errorMsg})
 		return
 	}
 
@@ -3503,6 +3617,9 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	}
 	if meta.Language != "" {
 		book.Language = stringPtr(meta.Language)
+	}
+	if meta.PublishYear != 0 {
+		book.AudiobookReleaseYear = intPtrHelper(meta.PublishYear)
 	}
 
 	// Update in database

@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,7 +10,6 @@ import {
   Paper,
   Stack,
   Chip,
-  Divider,
   Button,
   CircularProgress,
   Alert,
@@ -19,14 +18,12 @@ import {
   Grid,
   Tabs,
   Tab,
-  Tooltip,
   FormControlLabel,
   Checkbox,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
   LinearProgress,
   Table,
   TableHead,
@@ -42,7 +39,6 @@ import PsychologyIcon from '@mui/icons-material/Psychology';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import CompareIcon from '@mui/icons-material/Compare';
 import InfoIcon from '@mui/icons-material/Info';
-import FileCopyIcon from '@mui/icons-material/FileCopy';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import StorageIcon from '@mui/icons-material/Storage';
 import type { Book, BookTags, OverridePayload } from '../services/api';
@@ -58,6 +54,9 @@ export const BookDetail = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionLabel, setActionLabel] = useState<string | null>(null);
+  const [loadingField, setLoadingField] = useState<string | null>(null);
+  const [fetchingMetadata, setFetchingMetadata] = useState(false);
+  const [parsingWithAI, setParsingWithAI] = useState(false);
   const [alert, setAlert] = useState<{
     severity: 'success' | 'error' | 'warning';
     message: string;
@@ -232,34 +231,34 @@ export const BookDetail = () => {
 
   const handleFetchMetadata = async () => {
     if (!book) return;
-    setActionLoading(true);
-    setActionLabel('Fetching metadata...');
+    setFetchingMetadata(true);
     try {
       const result = await api.fetchBookMetadata(book.id);
       setBook(result.book);
+      // Reload tags to reflect updated stored values in Compare tab
+      await loadTags();
       setAlert({
         severity: 'success',
         message:
           result.message ||
           `Metadata refreshed from ${result.source || 'provider'}.`,
       });
-      setActiveTab('info');
     } catch (error) {
       console.error('Failed to fetch metadata', error);
       setAlert({ severity: 'error', message: 'Metadata fetch failed.' });
     } finally {
-      setActionLabel(null);
-      setActionLoading(false);
+      setFetchingMetadata(false);
     }
   };
 
   const handleParseWithAI = async () => {
     if (!book) return;
-    setActionLoading(true);
-    setActionLabel('Asking AI to parse...');
+    setParsingWithAI(true);
     try {
       const result = await api.parseAudiobookWithAI(book.id);
       setBook(result.book);
+      // Reload tags to reflect updated stored values in Compare tab
+      await loadTags();
       setAlert({
         severity: 'success',
         message: result.message || 'AI parsing completed.',
@@ -268,8 +267,7 @@ export const BookDetail = () => {
       console.error('Failed to parse with AI', error);
       setAlert({ severity: 'error', message: 'AI parsing failed.' });
     } finally {
-      setActionLabel(null);
-      setActionLoading(false);
+      setParsingWithAI(false);
     }
   };
 
@@ -362,8 +360,7 @@ export const BookDetail = () => {
           ? entry.fetched
           : entry.override;
     if (value === undefined) return;
-    setActionLoading(true);
-    setActionLabel(`Applying ${source} value...`);
+    setLoadingField(`${field}-${source}`);
     try {
       const override: OverridePayload = { value, locked: true };
       if (source === 'file') {
@@ -395,20 +392,17 @@ export const BookDetail = () => {
           },
         };
       });
-      setAlert({ severity: 'success', message: 'Field updated.' });
     } catch (error) {
       console.error('Failed to apply field value', error);
       setAlert({ severity: 'error', message: 'Failed to apply field value.' });
     } finally {
-      setActionLabel(null);
-      setActionLoading(false);
+      setLoadingField(null);
     }
   };
 
   const clearOverride = async (field: string) => {
     if (!book) return;
-    setActionLoading(true);
-    setActionLabel('Clearing override...');
+    setLoadingField(`${field}-clear`);
     try {
       const payload: Partial<Book> & {
         overrides: Record<string, { clear: boolean }>;
@@ -455,20 +449,17 @@ export const BookDetail = () => {
           },
         };
       });
-      setAlert({ severity: 'success', message: 'Override cleared.' });
     } catch (error) {
       console.error('Failed to clear override', error);
       setAlert({ severity: 'error', message: 'Failed to clear override.' });
     } finally {
-      setActionLabel(null);
-      setActionLoading(false);
+      setLoadingField(null);
     }
   };
 
   const unlockOverride = async (field: string) => {
     if (!book) return;
-    setActionLoading(true);
-    setActionLabel('Unlocking override...');
+    setLoadingField(`${field}-unlock`);
     try {
       const payload: Partial<Book> & {
         overrides: Record<string, { locked: boolean }>;
@@ -491,13 +482,11 @@ export const BookDetail = () => {
           },
         };
       });
-      setAlert({ severity: 'success', message: 'Override unlocked.' });
     } catch (error) {
       console.error('Failed to unlock override', error);
       setAlert({ severity: 'error', message: 'Failed to unlock override.' });
     } finally {
-      setActionLabel(null);
-      setActionLoading(false);
+      setLoadingField(null);
     }
   };
 
@@ -766,19 +755,31 @@ export const BookDetail = () => {
             </Button>
             <Button
               variant="outlined"
-              startIcon={<CloudDownloadIcon />}
+              startIcon={
+                fetchingMetadata ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <CloudDownloadIcon />
+                )
+              }
               onClick={handleFetchMetadata}
-              disabled={actionLoading}
+              disabled={fetchingMetadata || actionLoading}
             >
-              Fetch Metadata
+              {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
             </Button>
             <Button
               variant="outlined"
-              startIcon={<PsychologyIcon />}
+              startIcon={
+                parsingWithAI ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <PsychologyIcon />
+                )
+              }
               onClick={handleParseWithAI}
-              disabled={actionLoading}
+              disabled={parsingWithAI || actionLoading}
             >
-              Parse with AI
+              {parsingWithAI ? 'Parsing...' : 'Parse with AI'}
             </Button>
             <Button
               variant="contained"
@@ -841,22 +842,14 @@ export const BookDetail = () => {
           <Grid container spacing={2}>
             {[
               { label: 'Title', value: book.title || 'Untitled' },
-              { label: 'Author', value: book.author_name || book.author_id },
-              { label: 'Series', value: book.series_name || book.series_id },
+              { label: 'Author', value: book.author_name || 'Unknown' },
+              { label: 'Series', value: book.series_name },
               { label: 'Narrator', value: book.narrator },
-              { label: 'Publisher', value: book.publisher },
               { label: 'Language', value: book.language },
-              { label: 'Edition', value: book.edition },
-              {
-                label: 'Release Year',
-                value: book.audiobook_release_year || book.print_year,
-              },
+              { label: 'ISBN 13', value: book.isbn13 },
               { label: 'Work ID', value: book.work_id },
-              { label: 'Library State', value: book.library_state },
-              { label: 'Quantity', value: book.quantity },
-              { label: 'Quality', value: book.quality },
             ]
-              .filter((item) => item.value !== undefined && item.value !== '')
+              .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null)
               .map((item) => (
                 <Grid item xs={12} sm={6} md={4} key={item.label}>
                   <Box
@@ -945,61 +938,6 @@ export const BookDetail = () => {
                       </Typography>
                       <Typography
                         variant="body1"
-                        sx={{ wordBreak: 'break-all' }}
-                      >
-                        {item.value as string}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-            </Grid>
-            <Divider />
-            <Grid container spacing={2}>
-              {[
-                { label: 'File Hash', value: book.file_hash },
-                { label: 'Original Hash', value: book.original_file_hash },
-                { label: 'Organized Hash', value: book.organized_file_hash },
-              ]
-                .filter((item) => item.value)
-                .map((item) => (
-                  <Grid item xs={12} md={4} key={item.label}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: 1,
-                        bgcolor: 'grey.50',
-                        border: '1px dashed',
-                        borderColor: 'divider',
-                        height: '100%',
-                      }}
-                    >
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                      >
-                        <Typography variant="subtitle2">
-                          {item.label}
-                        </Typography>
-                        <Tooltip title="Copy to clipboard">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              navigator.clipboard.writeText(
-                                item.value as string
-                              );
-                              setAlert({
-                                severity: 'success',
-                                message: `${item.label} copied`,
-                              });
-                            }}
-                          >
-                            <FileCopyIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                      <Typography
-                        variant="body2"
                         sx={{ wordBreak: 'break-all' }}
                       >
                         {item.value as string}
@@ -1370,17 +1308,37 @@ export const BookDetail = () => {
                             size="small"
                             variant="outlined"
                             onClick={() => applySourceValue(field, 'file')}
-                            disabled={!entry?.file && entry?.file !== 0}
+                            disabled={
+                              (!entry?.file && entry?.file !== 0) ||
+                              loadingField === `${field}-file`
+                            }
+                            startIcon={
+                              loadingField === `${field}-file` ? (
+                                <CircularProgress size={16} />
+                              ) : undefined
+                            }
                           >
-                            Use File
+                            {loadingField === `${field}-file`
+                              ? 'Applying...'
+                              : 'Use File'}
                           </Button>
                           <Button
                             size="small"
                             variant="outlined"
                             onClick={() => applySourceValue(field, 'fetched')}
-                            disabled={!entry?.fetched && entry?.fetched !== 0}
+                            disabled={
+                              (!entry?.fetched && entry?.fetched !== 0) ||
+                              loadingField === `${field}-fetched`
+                            }
+                            startIcon={
+                              loadingField === `${field}-fetched` ? (
+                                <CircularProgress size={16} />
+                              ) : undefined
+                            }
                           >
-                            Use Fetched
+                            {loadingField === `${field}-fetched`
+                              ? 'Applying...'
+                              : 'Use Fetched'}
                           </Button>
                           {entry?.override && (
                             <Button
@@ -1388,8 +1346,16 @@ export const BookDetail = () => {
                               variant="outlined"
                               color="secondary"
                               onClick={() => clearOverride(field)}
+                              disabled={loadingField === `${field}-clear`}
+                              startIcon={
+                                loadingField === `${field}-clear` ? (
+                                  <CircularProgress size={16} />
+                                ) : undefined
+                              }
                             >
-                              Clear
+                              {loadingField === `${field}-clear`
+                                ? 'Clearing...'
+                                : 'Clear'}
                             </Button>
                           )}
                           {entry?.locked && (
@@ -1397,8 +1363,16 @@ export const BookDetail = () => {
                               size="small"
                               variant="outlined"
                               onClick={() => unlockOverride(field)}
+                              disabled={loadingField === `${field}-unlock`}
+                              startIcon={
+                                loadingField === `${field}-unlock` ? (
+                                  <CircularProgress size={16} />
+                                ) : undefined
+                              }
                             >
-                              Unlock
+                              {loadingField === `${field}-unlock`
+                                ? 'Unlocking...'
+                                : 'Unlock'}
                             </Button>
                           )}
                         </Stack>

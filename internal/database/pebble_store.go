@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -222,7 +222,8 @@ func (p *PebbleStore) GetAuthorByID(id int) (*Author, error) {
 }
 
 func (p *PebbleStore) GetAuthorByName(name string) (*Author, error) {
-	indexKey := []byte(fmt.Sprintf("author:name:%s", name))
+	// Use lowercase for case-insensitive lookup
+	indexKey := []byte(fmt.Sprintf("author:name:%s", strings.ToLower(name)))
 	value, closer, err := p.db.Get(indexKey)
 	if err == pebble.ErrNotFound {
 		return nil, nil
@@ -263,7 +264,8 @@ func (p *PebbleStore) CreateAuthor(name string) (*Author, error) {
 
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("author:%d", id))
-	indexKey := []byte(fmt.Sprintf("author:name:%s", name))
+	// Use lowercase for case-insensitive lookup
+	indexKey := []byte(fmt.Sprintf("author:name:%s", strings.ToLower(name)))
 
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
@@ -334,7 +336,8 @@ func (p *PebbleStore) GetSeriesByName(name string, authorID *int) (*Series, erro
 		authorIDStr = strconv.Itoa(*authorID)
 	}
 
-	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", name, authorIDStr))
+	// Use lowercase for case-insensitive lookup
+	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(name), authorIDStr))
 	value, closer, err := p.db.Get(indexKey)
 	if err == pebble.ErrNotFound {
 		return nil, nil
@@ -380,7 +383,8 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 
 	batch := p.db.NewBatch()
 	key := []byte(fmt.Sprintf("series:%d", id))
-	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", name, authorIDStr))
+	// Use lowercase for case-insensitive lookup
+	indexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(name), authorIDStr))
 
 	if err := batch.Set(key, data, nil); err != nil {
 		batch.Close()
@@ -801,6 +805,11 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		book.ID = id
 	}
 
+	// Set timestamps
+	now := time.Now()
+	book.CreatedAt = &now
+	book.UpdatedAt = &now
+
 	data, err := json.Marshal(book)
 	if err != nil {
 		return nil, err
@@ -883,6 +892,14 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	}
 
 	book.ID = id
+
+	// Preserve created_at from old book, update updated_at
+	if oldBook.CreatedAt != nil {
+		book.CreatedAt = oldBook.CreatedAt
+	}
+	now := time.Now()
+	book.UpdatedAt = &now
+
 	data, err := json.Marshal(book)
 	if err != nil {
 		return nil, err

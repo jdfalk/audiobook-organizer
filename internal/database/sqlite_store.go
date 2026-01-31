@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -27,7 +27,7 @@ const bookSelectColumns = `
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
 	original_file_hash, organized_file_hash, library_state, quantity,
-	marked_for_deletion, marked_for_deletion_at
+	marked_for_deletion, marked_for_deletion_at, created_at, updated_at
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -46,7 +46,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		isPrimaryVersion                                                     sql.NullBool
 		libraryState                                                         sql.NullString
 		markedForDeletion                                                    sql.NullBool
-		markedForDeletionAt                                                  sql.NullTime
+		markedForDeletionAt, createdAt, updatedAt                            sql.NullTime
 	)
 
 	if err := scanner.Scan(
@@ -59,7 +59,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&fileHash, &fileSize, &bitrate, &codec, &sampleRate, &channels,
 		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
-		&markedForDeletion, &markedForDeletionAt,
+		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
 	); err != nil {
 		return err
 	}
@@ -122,6 +122,12 @@ func scanBook(scanner rowScanner, book *Book) error {
 	}
 	if markedForDeletionAt.Valid {
 		book.MarkedForDeletionAt = &markedForDeletionAt.Time
+	}
+	if createdAt.Valid {
+		book.CreatedAt = &createdAt.Time
+	}
+	if updatedAt.Valid {
+		book.UpdatedAt = &updatedAt.Time
 	}
 	return nil
 }
@@ -534,7 +540,8 @@ func (s *SQLiteStore) GetAuthorByID(id int) (*Author, error) {
 
 func (s *SQLiteStore) GetAuthorByName(name string) (*Author, error) {
 	var author Author
-	err := s.db.QueryRow("SELECT id, name FROM authors WHERE name = ?", name).Scan(&author.ID, &author.Name)
+	// Use LOWER() for case-insensitive lookup
+	err := s.db.QueryRow("SELECT id, name FROM authors WHERE LOWER(name) = LOWER(?)", name).Scan(&author.ID, &author.Name)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -592,11 +599,12 @@ func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
 func (s *SQLiteStore) GetSeriesByName(name string, authorID *int) (*Series, error) {
 	var series Series
 	var err error
+	// Use LOWER() for case-insensitive lookup
 	if authorID != nil {
-		err = s.db.QueryRow("SELECT id, name, author_id FROM series WHERE name = ? AND author_id = ?", name, *authorID).
+		err = s.db.QueryRow("SELECT id, name, author_id FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ?", name, *authorID).
 			Scan(&series.ID, &series.Name, &series.AuthorID)
 	} else {
-		err = s.db.QueryRow("SELECT id, name, author_id FROM series WHERE name = ? AND author_id IS NULL", name).
+		err = s.db.QueryRow("SELECT id, name, author_id FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL", name).
 			Scan(&series.ID, &series.Name, &series.AuthorID)
 	}
 	if err == sql.ErrNoRows {
@@ -946,6 +954,11 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.ID = id
 	}
 
+	// Set timestamps
+	now := time.Now()
+	book.CreatedAt = &now
+	book.UpdatedAt = &now
+
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
 		format, duration, work_id, narrator, edition, language, publisher,
@@ -954,8 +967,9 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		itunes_rating, itunes_bookmark, itunes_import_source,
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
-		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
+		created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
@@ -965,6 +979,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
+		book.CreatedAt, book.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -973,6 +988,10 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 }
 
 func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
+	// Set updated_at timestamp
+	now := time.Now()
+	book.UpdatedAt = &now
+
 	query := `UPDATE books SET
 		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 		file_path = ?, original_filename = ?, format = ?, duration = ?,
@@ -983,7 +1002,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
-		marked_for_deletion = ?, marked_for_deletion_at = ?
+		marked_for_deletion = ?, marked_for_deletion_at = ?, updated_at = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -995,7 +1014,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
-		book.MarkedForDeletion, book.MarkedForDeletionAt, id,
+		book.MarkedForDeletion, book.MarkedForDeletionAt, book.UpdatedAt, id,
 	)
 	if err != nil {
 		return nil, err
