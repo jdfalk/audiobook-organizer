@@ -61,7 +61,19 @@
       "Bash(./audiobook-organizer:*)",
       "Bash(pgrep:*)",
       "Bash(openssl req:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(go mod:*)",
+      "Bash(go:*)",
+      "Bash(./scripts/run-all-tests.sh:*)",
+      "Bash(ffmpeg:*)",
+      "Bash(./scripts/create-test-audiobooks.sh:*)",
+      "Bash(./testdata/scripts/create_test_audiobooks.sh:*)",
+      "Bash(while read f)",
+      "Bash(do ls -lh \"$f\")",
+      "Bash(find:*)",
+      "Bash(du -h:*)",
+      "Bash(xargs -I {} sh -c 'echo \"\"{}: $\\(du -h \"\"{}\"\" | cut -f1\\)\"\"')"
     ]
   }
 }
