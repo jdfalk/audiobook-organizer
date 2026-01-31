@@ -75,7 +75,8 @@
       "Bash(du -h:*)",
       "Bash(xargs -I {} sh -c 'echo \"\"{}: $\\(du -h \"\"{}\"\" | cut -f1\\)\"\"')",
       "Bash(while read hash file)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(tree:*)"
     ]
   }
 }
