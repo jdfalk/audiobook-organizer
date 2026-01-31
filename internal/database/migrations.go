@@ -111,6 +111,12 @@ var migrations = []Migration{
 		Up:          migration012Up,
 		Down:        nil,
 	},
+	{
+		Version:     13,
+		Description: "Add wanted state support and multi-path tracking",
+		Up:          migration013Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -563,6 +569,95 @@ func migration012Up(store Store) error {
 	}
 
 	log.Println("  - Timestamp columns added successfully")
+	return nil
+}
+
+// migration013Up adds wanted state support and multi-path tracking
+func migration013Up(store Store) error {
+	log.Println("  - Adding wanted state support and multi-path tracking")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// Step 1: Create audiobook_source_paths table for multi-path tracking
+	log.Println("    - Creating audiobook_source_paths table")
+	createTableSQL := `CREATE TABLE IF NOT EXISTS audiobook_source_paths (
+		id TEXT PRIMARY KEY,
+		audiobook_id TEXT NOT NULL,
+		source_path TEXT NOT NULL UNIQUE,
+		still_exists BOOLEAN DEFAULT 1,
+		added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_verified DATETIME,
+		FOREIGN KEY (audiobook_id) REFERENCES books(id) ON DELETE CASCADE
+	)`
+	if _, err := sqliteStore.db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("failed to create audiobook_source_paths table: %w", err)
+	}
+
+	// Step 2: Create indices for source_paths table
+	indices := []string{
+		"CREATE INDEX IF NOT EXISTS idx_source_paths_audiobook ON audiobook_source_paths(audiobook_id)",
+		"CREATE INDEX IF NOT EXISTS idx_source_paths_path ON audiobook_source_paths(source_path)",
+	}
+	for _, idx := range indices {
+		log.Printf("    - Creating index: %s", idx)
+		if _, err := sqliteStore.db.Exec(idx); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	// Step 3: Migrate existing file paths to source_paths table
+	log.Println("    - Migrating existing file paths to source_paths table")
+	migrateSQLQuery := `
+		INSERT INTO audiobook_source_paths (id, audiobook_id, source_path, added_at)
+		SELECT
+			lower(hex(randomblob(16))),
+			id,
+			file_path,
+			COALESCE(created_at, CURRENT_TIMESTAMP)
+		FROM books
+		WHERE file_path IS NOT NULL AND file_path != ''
+		ON CONFLICT(source_path) DO NOTHING
+	`
+	if _, err := sqliteStore.db.Exec(migrateSQLQuery); err != nil {
+		log.Printf("    - Warning: Could not migrate paths (may already exist): %v", err)
+	}
+
+	// Step 4: Add wanted boolean to authors table
+	log.Println("    - Adding wanted field to authors table")
+	alterAuthors := "ALTER TABLE authors ADD COLUMN wanted BOOLEAN DEFAULT 0"
+	if _, err := sqliteStore.db.Exec(alterAuthors); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			return fmt.Errorf("failed to add wanted to authors: %w", err)
+		}
+		log.Printf("    - Column already exists, skipping")
+	}
+
+	// Step 5: Add wanted boolean to series table
+	log.Println("    - Adding wanted field to series table")
+	alterSeries := "ALTER TABLE series ADD COLUMN wanted BOOLEAN DEFAULT 0"
+	if _, err := sqliteStore.db.Exec(alterSeries); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			return fmt.Errorf("failed to add wanted to series: %w", err)
+		}
+		log.Printf("    - Column already exists, skipping")
+	}
+
+	// Step 6: Note about library_state - it already exists and supports 'wanted'
+	// The library_state column was added in migration 9 as TEXT with default 'imported'
+	// It can already store 'wanted', 'imported', 'organized', 'deleted' values
+	// No schema change needed, just update documentation
+	log.Println("    - library_state already supports 'wanted' value (no change needed)")
+
+	// Step 7: Note about file_path - we DON'T make it nullable to preserve data integrity
+	// Instead, wanted books will use a special sentinel value or empty string
+	// This prevents breaking existing queries and constraints
+	log.Println("    - file_path remains NOT NULL; wanted books will use empty string ''")
+
+	log.Println("  - Wanted state and multi-path tracking added successfully")
 	return nil
 }
 
