@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.30.4
+// version: 1.32.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -26,6 +26,7 @@ import {
   Collapse,
   MenuItem,
   LinearProgress,
+  CircularProgress,
   List,
   ListItem,
   ListItemText,
@@ -42,6 +43,9 @@ import {
   ExpandMore as ExpandMoreIcon,
   CloudDownload as CloudDownloadIcon,
   Refresh as RefreshIcon,
+  PushPin as PushPinIcon,
+  PushPinOutlined as PushPinOutlinedIcon,
+  VerticalAlignTop as VerticalAlignTopIcon,
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
 import { AudiobookList } from '../components/audiobooks/AudiobookList';
@@ -180,6 +184,12 @@ export const Library = () => {
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
   const [activeOrganizeOp, setActiveOrganizeOp] =
     useState<api.Operation | null>(null);
+
+  // Storage section pin mode: 'scrollable' (default), 'floating', or 'pinned'
+  const [storagePinMode, setStoragePinMode] = useState<'scrollable' | 'floating' | 'pinned'>(() => {
+    const saved = localStorage.getItem('library-storage-pin-mode');
+    return (saved as 'scrollable' | 'floating' | 'pinned') || 'floating';
+  });
   const [operationLogs, setOperationLogs] = useState<
     Record<
       string,
@@ -234,6 +244,11 @@ export const Library = () => {
   const [importFileOrganize, setImportFileOrganize] = useState(true);
   const [importFileInProgress, setImportFileInProgress] = useState(false);
 
+  // Per-action loading states for dynamic UI
+  const [scanningAll, setScanningAll] = useState(false);
+  const [scanningPathId, setScanningPathId] = useState<string | null>(null);
+  const [removingPathId, setRemovingPathId] = useState<string | null>(null);
+
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
   const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
   const [bulkFetchProgress, setBulkFetchProgress] =
@@ -251,6 +266,11 @@ export const Library = () => {
   const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(
     new Map()
   );
+
+  // Save storage pin mode preference
+  useEffect(() => {
+    localStorage.setItem('library-storage-pin-mode', storagePinMode);
+  }, [storagePinMode]);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -384,6 +404,20 @@ export const Library = () => {
       }
     };
   }, []);
+
+  // Reset loading states when operations complete
+  useEffect(() => {
+    if (activeScanOp?.status === 'completed' || activeScanOp?.status === 'failed') {
+      setScanningAll(false);
+      setScanningPathId(null);
+    }
+  }, [activeScanOp?.status]);
+
+  useEffect(() => {
+    if (activeOrganizeOp?.status === 'completed' || activeOrganizeOp?.status === 'failed') {
+      setOrganizeRunning(false);
+    }
+  }, [activeOrganizeOp?.status]);
 
   // Auto-scroll effect when logs update (placed at component top-level, not inside JSX)
   useEffect(() => {
@@ -1509,11 +1543,14 @@ export const Library = () => {
   };
 
   const handleRemoveImportPath = async (id: number) => {
+    setRemovingPathId(id.toString());
     try {
       await api.removeImportPath(id);
       setImportPaths((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
       console.error('Failed to remove import path:', error);
+    } finally {
+      setRemovingPathId(null);
     }
   };
 
@@ -1551,6 +1588,7 @@ export const Library = () => {
   };
 
   const handleScanImportPath = async (id: number) => {
+    setScanningPathId(id.toString());
     try {
       const pathEntry = importPaths.find((p) => p.id === id);
       const path = pathEntry?.path;
@@ -1565,10 +1603,12 @@ export const Library = () => {
       setImportPaths((prev) =>
         prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p))
       );
+      setScanningPathId(null);
     }
   };
 
   const handleScanAll = async () => {
+    setScanningAll(true);
     try {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
@@ -1577,6 +1617,7 @@ export const Library = () => {
     } catch (error) {
       console.error('Failed to start full scan:', error);
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'idle' })));
+      setScanningAll(false);
     }
   };
 
@@ -1660,14 +1701,17 @@ export const Library = () => {
         display="flex"
         justifyContent="space-between"
         alignItems="center"
-        mb={3}
+        mb={2}
+        flexWrap="wrap"
+        gap={2}
       >
         <Typography variant="h4">Library</Typography>
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={1} flexWrap="wrap">
           <Button
             startIcon={<UploadIcon />}
             onClick={handleManualImport}
             variant="contained"
+            size="small"
           >
             Import Files
           </Button>
@@ -1675,6 +1719,7 @@ export const Library = () => {
             startIcon={<FilterListIcon />}
             onClick={() => setFilterOpen(true)}
             variant="outlined"
+            size="small"
           >
             Filters
             {getActiveFilterCount() > 0 && (
@@ -1690,14 +1735,56 @@ export const Library = () => {
             startIcon={<CloudDownloadIcon />}
             onClick={() => setBulkFetchDialogOpen(true)}
             variant="outlined"
+            size="small"
             disabled={!hasSelection}
           >
             Bulk Fetch Metadata
           </Button>
           <Button
+            variant="outlined"
+            size="small"
+            startIcon={
+              organizeRunning ? <CircularProgress size={16} /> : undefined
+            }
+            disabled={organizeRunning}
+            onClick={handleOrganizeLibrary}
+          >
+            {organizeRunning ? 'Organizing…' : 'Organize Library'}
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={
+              activeScanOp !== null ? (
+                <CircularProgress size={16} />
+              ) : (
+                <RefreshIcon />
+              )
+            }
+            disabled={activeScanOp !== null}
+            onClick={handleFullRescan}
+          >
+            {activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={async () => {
+              try {
+                const status = await api.getSystemStatus();
+                setSystemStatus(status);
+              } catch (e) {
+                /* ignore refresh error */
+              }
+            }}
+          >
+            Refresh Stats
+          </Button>
+          <Button
             startIcon={<DeleteSweepIcon />}
             onClick={() => setPurgeDialogOpen(true)}
             variant="outlined"
+            size="small"
             color="secondary"
             disabled={softDeletedCount === 0}
           >
@@ -1707,38 +1794,53 @@ export const Library = () => {
       </Box>
 
       {systemStatus && (
-        <Paper sx={{ p: 2, mb: 3 }}>
+        <Paper
+          sx={{
+            p: 1.5,
+            mb: storagePinMode === 'scrollable' ? 2 : 2,
+            ...(storagePinMode === 'pinned' && {
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              boxShadow: 2,
+            }),
+            ...(storagePinMode === 'floating' && {
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              boxShadow: 2,
+              transition: 'transform 0.2s',
+            }),
+          }}
+        >
           <Stack
             direction="row"
             justifyContent="space-between"
             alignItems="center"
-            flexWrap="wrap"
             gap={2}
           >
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Main Library Storage
-              </Typography>
+            <Box flex={1}>
+              <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
+                <Typography variant="subtitle1" fontWeight="600">
+                  Main Library Storage
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {libraryBookCount} in Library • {importBookCount} Scanned but not imported • {systemStatus.import_paths?.folder_count || 0} Import Paths
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {(librarySizeBytes / (1024 * 1024)).toFixed(0)} MB Library • {(importSizeBytes / (1024 * 1024)).toFixed(0)} MB Scanned
+                </Typography>
+              </Stack>
               <Typography
-                variant="body2"
+                variant="caption"
                 color={
                   systemStatus.library.path ? 'text.secondary' : 'warning.main'
                 }
+                display="block"
+                mt={0.5}
               >
-                Path:{' '}
                 {systemStatus.library.path ||
                   'Not configured - Please set library path in Settings'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Library Books: {libraryBookCount} | Import Books:{' '}
-                {importBookCount} | Import Paths:{' '}
-                {systemStatus.import_paths?.folder_count || 0}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Library Size: {(librarySizeBytes / (1024 * 1024)).toFixed(2)} MB
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Import Size: {(importSizeBytes / (1024 * 1024)).toFixed(2)} MB
               </Typography>
               {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
                 <Box mt={1}>
@@ -1891,41 +1993,42 @@ export const Library = () => {
               )}
               {/* Auto-scroll handled by top-level hook */}
             </Box>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                disabled={organizeRunning}
-                onClick={handleOrganizeLibrary}
-              >
-                {organizeRunning ? 'Organizing…' : 'Organize Library'}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                disabled={activeScanOp !== null}
-                onClick={handleFullRescan}
-              >
-                {activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={async () => {
-                  try {
-                    const status = await api.getSystemStatus();
-                    setSystemStatus(status);
-                  } catch (e) {
-                    /* ignore refresh error */
-                  }
-                }}
-              >
-                Refresh Stats
-              </Button>
+
+            {/* Pin mode toggle buttons */}
+            <Stack direction="row" spacing={0.5}>
+              <Tooltip title={storagePinMode === 'pinned' ? 'Pinned (stays at top)' : 'Pin to top'}>
+                <IconButton
+                  size="small"
+                  onClick={() => setStoragePinMode('pinned')}
+                  color={storagePinMode === 'pinned' ? 'primary' : 'default'}
+                >
+                  <PushPinIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={storagePinMode === 'floating' ? 'Floating (follows scroll)' : 'Float with scroll'}>
+                <IconButton
+                  size="small"
+                  onClick={() => setStoragePinMode('floating')}
+                  color={storagePinMode === 'floating' ? 'primary' : 'default'}
+                >
+                  <PushPinOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={storagePinMode === 'scrollable' ? 'Scrollable (scrolls away)' : 'Make scrollable'}>
+                <IconButton
+                  size="small"
+                  onClick={() => setStoragePinMode('scrollable')}
+                  color={storagePinMode === 'scrollable' ? 'primary' : 'default'}
+                >
+                  <VerticalAlignTopIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Stack>
           </Stack>
         </Paper>
       )}
 
-      <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
         {audiobooks.length === 0 && !loading ? (
           <Paper
             sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
@@ -1991,10 +2094,13 @@ export const Library = () => {
                 <Button
                   variant="outlined"
                   size="large"
-                  startIcon={<RefreshIcon />}
+                  startIcon={
+                    scanningAll ? <CircularProgress size={20} /> : <RefreshIcon />
+                  }
                   onClick={handleScanAll}
+                  disabled={scanningAll}
                 >
-                  Scan All
+                  {scanningAll ? 'Scanning...' : 'Scan All'}
                 </Button>
               )}
             </Box>
@@ -2080,7 +2186,7 @@ export const Library = () => {
                     title={
                       !selectedHasImport
                         ? hasSelection
-                          ? 'Select import books first'
+                          ? 'Select scanned books (not yet imported) first'
                           : 'Select books first'
                         : ''
                     }
@@ -2857,16 +2963,20 @@ export const Library = () => {
                 <Button
                   size="small"
                   variant="outlined"
+                  startIcon={
+                    scanningAll ? <CircularProgress size={16} /> : undefined
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     handleScanAll();
                   }}
                   disabled={
+                    scanningAll ||
                     importPaths.length === 0 ||
                     importPaths.some((p) => p.status === 'scanning')
                   }
                 >
-                  Scan All
+                  {scanningAll ? 'Scanning...' : 'Scan All'}
                 </Button>
                 <IconButton
                   size="small"
@@ -2902,16 +3012,28 @@ export const Library = () => {
                       <IconButton
                         edge="end"
                         onClick={() => handleScanImportPath(path.id)}
-                        disabled={path.status === 'scanning'}
+                        disabled={
+                          path.status === 'scanning' ||
+                          scanningPathId === path.id.toString()
+                        }
                         sx={{ mr: 1 }}
                       >
-                        <RefreshIcon />
+                        {scanningPathId === path.id.toString() ? (
+                          <CircularProgress size={20} />
+                        ) : (
+                          <RefreshIcon />
+                        )}
                       </IconButton>
                       <IconButton
                         edge="end"
                         onClick={() => handleRemoveImportPath(path.id)}
+                        disabled={removingPathId === path.id.toString()}
                       >
-                        <DeleteIcon />
+                        {removingPathId === path.id.toString() ? (
+                          <CircularProgress size={20} />
+                        ) : (
+                          <DeleteIcon />
+                        )}
                       </IconButton>
                     </ListItemSecondaryAction>
                   </ListItem>

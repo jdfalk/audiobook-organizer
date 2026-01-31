@@ -207,6 +207,8 @@ type Book struct {
 	Quantity            *int       `json:"quantity,omitempty"`
 	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
+	CreatedAt           *time.Time `json:"created_at,omitempty"`
+	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
 	Author               *Author                            `json:"author,omitempty" db:"-"`
 	Series               *Series                            `json:"series,omitempty" db:"-"`

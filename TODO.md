@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 1.31.0 -->
+<!-- version: 1.32.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-01-28 -->
+<!-- last-edited: 2026-01-30 -->
 
 # Project TODO
 
@@ -17,14 +17,91 @@
 
 **Time to MVP**: 1-2 weeks (iTunes integration + manual QA + release fixes)
 
-## 📝 Recent Updates (Jan 28, 2026)
+## 📝 Recent Updates (Jan 31, 2026)
 
-- ✅ Fixed all compilation errors (Go backend, TypeScript frontend)
-- ✅ Fixed CI/CD false success reporting in ghcommon (frontend tests now properly fail CI)
-- ✅ Resolved WelcomeWizard undefined `.trim()` errors
-- ✅ Fixed PR #140 frontend detection (repository-config.yml structure)
-- ✅ Rebased `feat/itunes-integration` and `fix/critical-bugs-20260128` branches onto main
-- ✅ All GitHub Actions workflows now passing with zero errors
+### Testing Infrastructure Improvements
+- ✅ **Enabled video recording for all test failures** - Playwright now captures video of every failed test
+- ✅ **Added comprehensive dynamic UI tests** - New test file `dynamic-ui-interactions.spec.ts` with 15+ tests
+- ✅ **Created unit tests for BookDetail** - Component testing with loading states and optimistic updates
+- ✅ **Enhanced Playwright config** - Screenshots on failure, traces on failure, HTML report generation
+- ✅ **Added test scripts** - `test:coverage`, `test:e2e:headed`, `test:e2e:debug`, `test:all`
+- ✅ **Created run-all-tests.sh** - Comprehensive script to run all tests and generate reports
+- ✅ **Created TESTING.md** - Complete testing documentation with patterns and best practices
+
+### Test Coverage Added
+- **Dynamic UI**: Button spinners, loading states, per-field updates
+- **BookDetail**: All action buttons (Fetch, Parse, Use Fetched, Clear, Unlock)
+- **Library**: Scan All, Organize, individual path operations
+- **Dashboard**: Quick action buttons with spinners
+- **Visual Regression**: Screenshot comparisons for button states
+
+## 📝 Recent Updates (Jan 30, 2026)
+
+- ✅ Fixed Library page layout - moved buttons out of storage box, made storage compact
+- ✅ Changed "Import Books" terminology to "Scanned but not imported"
+- ✅ Fixed BookDetail INFO page - shows only relevant fields (Title, Author, Series, Narrator, Language, ISBN13, Work ID)
+- ✅ Removed white hash boxes in Files tab (dark theme issue)
+- ✅ Fixed case-insensitive author/series lookup (prevents duplicates)
+- ✅ Added series creation to importFile function
+- ✅ Fixed metadata refresh to strip chapter numbers before searching ("The Odyssey: Book 01" → "The Odyssey")
+- ✅ Fixed organize to use actual author names from database (no more "Unknown Author" folders)
+- ✅ Fixed UI to show author/series names instead of IDs in API responses
+
+---
+
+## 🚨 URGENT FIXES NEEDED (Jan 30, 2026)
+
+### Database & Timestamps
+- [x] **Update CreateBook to populate created_at** - ✅ COMPLETED (Jan 31, 2026)
+  - SQLite: Lines 958-960, 982 in sqlite_store.go
+  - PebbleDB: Lines 809-811 in pebble_store.go
+- [x] **Update UpdateBook to populate updated_at** - ✅ COMPLETED (Jan 31, 2026)
+  - SQLite: Lines 992-993, 1017 in sqlite_store.go
+  - PebbleDB: Lines 900-901 in pebble_store.go
+
+### Metadata Fetching Issues
+- [x] **Auto-store audiobook_release_year** - ✅ COMPLETED (Jan 31, 2026)
+  - Server already auto-saves fetched values to database
+  - Fixed UI to reload tags after fetch, showing updated stored values
+  - Added `await loadTags()` in handleFetchMetadata and handleParseWithAI
+  - Location: `web/src/pages/BookDetail.tsx` lines 237, 257
+
+- [ ] **Fix metadata fetch still failing for "The Odyssey"** - Despite stripChapterFromTitle fix, search may still fail
+  - Debug: Check if Open Library has "The Odyssey" (translated by Samuel Butler)
+  - Consider: Fallback to searching by author name only if title search fails
+  - Consider: Better error messaging explaining why no metadata found
+
+### Dynamic UI Updates
+- [x] **Make metadata comparison UI update dynamically** - ✅ COMPLETED (Jan 31, 2026)
+  - Tags now reload after fetching metadata, showing updated values in Compare tab
+  - No page reload needed - React state updates in-place
+  - applySourceValue, clearOverride, and unlockOverride update local state optimistically
+
+- [x] **App-wide dynamic UI improvements** - ✅ COMPLETED (Jan 31, 2026)
+  - Per-button loading states with in-place spinners (Sonarr/Radarr style)
+  - No full page reloads - all actions update in-place
+  - **BookDetail.tsx**: Fetch Metadata, Parse with AI, Use Fetched, Clear, Unlock buttons
+  - **Library.tsx**: Scan All, Scan Path, Remove Path, Organize Library, Full Rescan buttons
+  - **Dashboard.tsx**: Scan All Import Paths, Organize All buttons
+  - Buttons show CircularProgress spinners and change text during actions
+  - Operations complete smoothly without navigation or page jumps
+
+### Multiple Authors/Narrators Support
+- [ ] **Design data model for multiple authors** - Books can have multiple authors
+  - Option 1: Create junction table `book_authors` (book_id, author_id, role, sequence)
+  - Option 2: Store as JSON array in Book struct (simpler but less queryable)
+  - Option 3: Concatenate author names with delimiter (current approach, limited)
+  - Decision needed: How to display multiple authors in UI? Chips? Comma-separated?
+
+- [ ] **Design data model for multiple narrators** - Audiobooks often have multiple narrators
+  - Same options as authors above
+  - Consider: Narrator-specific metadata (character names, chapter ranges)
+
+### Library Page Scrolling
+- [x] **Fix bottom section scroll cutoff** - ✅ COMPLETED (Jan 31, 2026)
+  - Import Paths section at bottom was cut off
+  - Fixed: Added `pb: 3` to scrollable Box container
+  - Location: `web/src/pages/Library.tsx` line 1995
 
 ---
 
