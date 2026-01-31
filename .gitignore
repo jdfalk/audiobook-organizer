@@ -219,3 +219,5 @@ test-reports/go-coverage.html
 copilot_fix_tasks_*.json
 summary_report_*.md
 failure_analyses_*.json
+test_results.txt
+test-results.txt
