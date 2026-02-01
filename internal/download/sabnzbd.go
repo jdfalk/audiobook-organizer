@@ -1,5 +1,5 @@
 // file: internal/download/sabnzbd.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2670e805-a4a5-4cd0-870a-fe15f09bd4e8
 
 package download
@@ -10,7 +10,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 )
 
-// SABnzbdClient implements TorrentClient for SABnzbd.
+// SABnzbdClient implements UsenetClient for SABnzbd.
 type SABnzbdClient struct {
 	cfg config.SABnzbdConfig
 }
@@ -26,21 +26,21 @@ func (s *SABnzbdClient) Connect(ctx context.Context) error {
 	return ErrNotImplemented
 }
 
-// GetTorrent returns detailed info for a torrent.
-func (s *SABnzbdClient) GetTorrent(ctx context.Context, id string) (*TorrentInfo, error) {
+// GetJob returns detailed info for a Usenet job.
+func (s *SABnzbdClient) GetJob(ctx context.Context, id string) (*NZBInfo, error) {
 	_ = ctx
 	_ = id
 	return nil, ErrNotImplemented
 }
 
-// GetUploadStats returns a lightweight stats snapshot.
-func (s *SABnzbdClient) GetUploadStats(ctx context.Context, id string) (*UploadStats, error) {
+// GetQueueStats returns a lightweight stats snapshot.
+func (s *SABnzbdClient) GetQueueStats(ctx context.Context, id string) (*UsenetStats, error) {
 	_ = ctx
 	_ = id
 	return nil, ErrNotImplemented
 }
 
-// SetDownloadPath moves a torrent to a new download directory.
+// SetDownloadPath moves a Usenet job to a new download directory.
 func (s *SABnzbdClient) SetDownloadPath(ctx context.Context, id, newPath string) error {
 	_ = ctx
 	_ = id
@@ -48,16 +48,16 @@ func (s *SABnzbdClient) SetDownloadPath(ctx context.Context, id, newPath string)
 	return ErrNotImplemented
 }
 
-// RemoveTorrent removes a torrent from the client.
-func (s *SABnzbdClient) RemoveTorrent(ctx context.Context, id string, deleteFiles bool) error {
+// RemoveJob removes a Usenet job from the client.
+func (s *SABnzbdClient) RemoveJob(ctx context.Context, id string, deleteFiles bool) error {
 	_ = ctx
 	_ = id
 	_ = deleteFiles
 	return ErrNotImplemented
 }
 
-// ListCompleted returns all completed torrents.
-func (s *SABnzbdClient) ListCompleted(ctx context.Context) ([]TorrentInfo, error) {
+// ListCompleted returns all completed Usenet jobs.
+func (s *SABnzbdClient) ListCompleted(ctx context.Context) ([]NZBInfo, error) {
 	_ = ctx
 	return nil, ErrNotImplemented
 }

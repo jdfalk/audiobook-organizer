@@ -1,5 +1,5 @@
 <!-- file: docs/plans/download-client-integration.md -->
-<!-- version: 1.3.0 -->
+<!-- version: 1.4.0 -->
 <!-- guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b -->
 <!-- last-edited: 2026-02-01 -->
 
@@ -42,15 +42,15 @@ via shadow directories.
 
 ## Torrent Client API Abstraction
 
-All three download clients (Deluge, qBittorrent, SABnzbd) are hidden behind a
-single Go interface. This lets the rest of the system (shadow creation, cleanup
-job, status reporting) operate on one code path regardless of which client the
-user has configured. Each concrete implementation lives in its own file under
-`internal/download/`.
+Torrent clients (Deluge and qBittorrent) share a single Go interface. Usenet
+clients (SABnzbd) use a separate interface because NZB workflows and statuses
+are different from torrents. This lets the rest of the system (shadow creation,
+cleanup job, status reporting) operate on one code path per protocol. Each
+concrete implementation lives in its own file under `internal/download/`.
 
 **Status: ✅ Complete (2026-02-01)**
 
-### Interface definition
+### Torrent interface definition
 
 ```go
 // internal/download/client.go
@@ -136,6 +136,64 @@ type TorrentClient interface {
 }
 ```
 
+### Usenet interface definition
+
+```go
+// internal/download/client.go
+
+package download
+
+import (
+    "context"
+    "time"
+)
+
+// NZBInfo is the read-only view of a Usenet job.
+type NZBInfo struct {
+    ID          string       // Client-opaque identifier
+    Name        string       // User-visible name
+    DownloadDir string       // Current download path on disk
+    Status      UsenetStatus // Normalized state
+    Progress    float64      // 0.0 – 1.0, completion
+    TotalBytes  int64        // Total bytes expected (if known)
+    Files       []NZBFile
+    CreatedAt   time.Time
+    IsPaused    bool
+}
+
+type NZBFile struct {
+    Path string
+    Size int64
+}
+
+type UsenetStatus int
+
+const (
+    UsenetStatusQueued UsenetStatus = iota
+    UsenetStatusDownloading
+    UsenetStatusCompleted
+    UsenetStatusPaused
+    UsenetStatusFailed
+    UsenetStatusNotFound
+)
+
+type UsenetStats struct {
+    TotalDownloaded int64
+    IsPaused        bool
+    Exists          bool
+}
+
+type UsenetClient interface {
+    Connect(ctx context.Context) error
+    GetJob(ctx context.Context, id string) (*NZBInfo, error)
+    GetQueueStats(ctx context.Context, id string) (*UsenetStats, error)
+    SetDownloadPath(ctx context.Context, id, newPath string) error
+    RemoveJob(ctx context.Context, id string, deleteFiles bool) error
+    ListCompleted(ctx context.Context) ([]NZBInfo, error)
+    ClientType() string
+}
+```
+
 ### Concrete adapter sketch (Deluge)
 
 ```go
@@ -172,18 +230,27 @@ func (d *DelugeClient) ClientType() string { return "deluge" }
 ```go
 // internal/download/factory.go
 
-func NewClientFromConfig(cfg *config.Config) (TorrentClient, error) {
-    switch cfg.DownloadClient.Type {
+func NewTorrentClientFromConfig(cfg *config.Config) (TorrentClient, error) {
+    switch cfg.DownloadClient.Torrent.Type {
     case "deluge":
-        return NewDelugeClient(cfg.DownloadClient.Deluge), nil
+        return NewDelugeClient(cfg.DownloadClient.Torrent.Deluge), nil
     case "qbittorrent":
-        return NewQBittorrentClient(cfg.DownloadClient.QBittorrent), nil
-    case "sabnzbd":
-        return NewSABnzbdClient(cfg.DownloadClient.SABnzbd), nil
+        return NewQBittorrentClient(cfg.DownloadClient.Torrent.QBittorrent), nil
     case "":
-        return nil, nil // download integration disabled
+        return nil, nil // torrent integration disabled
     default:
-        return nil, fmt.Errorf("unsupported download client type: %s", cfg.DownloadClient.Type)
+        return nil, fmt.Errorf("unsupported torrent client type: %s", cfg.DownloadClient.Torrent.Type)
+    }
+}
+
+func NewUsenetClientFromConfig(cfg *config.Config) (UsenetClient, error) {
+    switch cfg.DownloadClient.Usenet.Type {
+    case "sabnzbd":
+        return NewSABnzbdClient(cfg.DownloadClient.Usenet.SABnzbd), nil
+    case "":
+        return nil, nil // usenet integration disabled
+    default:
+        return nil, fmt.Errorf("unsupported usenet client type: %s", cfg.DownloadClient.Usenet.Type)
     }
 }
 ```

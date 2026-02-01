@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -20,10 +20,21 @@ type MetadataSource struct {
 
 // DownloadClientConfig represents download client connection settings.
 type DownloadClientConfig struct {
+	Torrent TorrentClientConfig `json:"torrent"`
+	Usenet  UsenetClientConfig  `json:"usenet"`
+}
+
+// TorrentClientConfig holds torrent client configuration.
+type TorrentClientConfig struct {
 	Type        string            `json:"type"`
 	Deluge      DelugeConfig      `json:"deluge"`
 	QBittorrent QBittorrentConfig `json:"qbittorrent"`
-	SABnzbd     SABnzbdConfig     `json:"sabnzbd"`
+}
+
+// UsenetClientConfig holds Usenet client configuration.
+type UsenetClientConfig struct {
+	Type    string        `json:"type"`
+	SABnzbd SABnzbdConfig `json:"sabnzbd"`
 }
 
 // DelugeConfig holds Deluge RPC configuration.
@@ -164,20 +175,21 @@ func InitConfig() {
 	viper.SetDefault("enable_json_logging", false)
 
 	// Download client defaults
-	viper.SetDefault("download_client.type", "")
-	viper.SetDefault("download_client.deluge.host", "")
-	viper.SetDefault("download_client.deluge.port", 0)
-	viper.SetDefault("download_client.deluge.username", "")
-	viper.SetDefault("download_client.deluge.password", "")
-	viper.SetDefault("download_client.qbittorrent.host", "")
-	viper.SetDefault("download_client.qbittorrent.port", 0)
-	viper.SetDefault("download_client.qbittorrent.username", "")
-	viper.SetDefault("download_client.qbittorrent.password", "")
-	viper.SetDefault("download_client.qbittorrent.use_https", false)
-	viper.SetDefault("download_client.sabnzbd.host", "")
-	viper.SetDefault("download_client.sabnzbd.port", 0)
-	viper.SetDefault("download_client.sabnzbd.api_key", "")
-	viper.SetDefault("download_client.sabnzbd.use_https", false)
+	viper.SetDefault("download_client.torrent.type", "")
+	viper.SetDefault("download_client.torrent.deluge.host", "")
+	viper.SetDefault("download_client.torrent.deluge.port", 0)
+	viper.SetDefault("download_client.torrent.deluge.username", "")
+	viper.SetDefault("download_client.torrent.deluge.password", "")
+	viper.SetDefault("download_client.torrent.qbittorrent.host", "")
+	viper.SetDefault("download_client.torrent.qbittorrent.port", 0)
+	viper.SetDefault("download_client.torrent.qbittorrent.username", "")
+	viper.SetDefault("download_client.torrent.qbittorrent.password", "")
+	viper.SetDefault("download_client.torrent.qbittorrent.use_https", false)
+	viper.SetDefault("download_client.usenet.type", "")
+	viper.SetDefault("download_client.usenet.sabnzbd.host", "")
+	viper.SetDefault("download_client.usenet.sabnzbd.port", 0)
+	viper.SetDefault("download_client.usenet.sabnzbd.api_key", "")
+	viper.SetDefault("download_client.usenet.sabnzbd.use_https", false)
 	viper.SetDefault("supported_extensions", []string{
 		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
 	})
@@ -242,25 +254,30 @@ func InitConfig() {
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
-			Type: viper.GetString("download_client.type"),
-			Deluge: DelugeConfig{
-				Host:     viper.GetString("download_client.deluge.host"),
-				Port:     viper.GetInt("download_client.deluge.port"),
-				Username: viper.GetString("download_client.deluge.username"),
-				Password: viper.GetString("download_client.deluge.password"),
+			Torrent: TorrentClientConfig{
+				Type: viper.GetString("download_client.torrent.type"),
+				Deluge: DelugeConfig{
+					Host:     viper.GetString("download_client.torrent.deluge.host"),
+					Port:     viper.GetInt("download_client.torrent.deluge.port"),
+					Username: viper.GetString("download_client.torrent.deluge.username"),
+					Password: viper.GetString("download_client.torrent.deluge.password"),
+				},
+				QBittorrent: QBittorrentConfig{
+					Host:     viper.GetString("download_client.torrent.qbittorrent.host"),
+					Port:     viper.GetInt("download_client.torrent.qbittorrent.port"),
+					Username: viper.GetString("download_client.torrent.qbittorrent.username"),
+					Password: viper.GetString("download_client.torrent.qbittorrent.password"),
+					UseHTTPS: viper.GetBool("download_client.torrent.qbittorrent.use_https"),
+				},
 			},
-			QBittorrent: QBittorrentConfig{
-				Host:     viper.GetString("download_client.qbittorrent.host"),
-				Port:     viper.GetInt("download_client.qbittorrent.port"),
-				Username: viper.GetString("download_client.qbittorrent.username"),
-				Password: viper.GetString("download_client.qbittorrent.password"),
-				UseHTTPS: viper.GetBool("download_client.qbittorrent.use_https"),
-			},
-			SABnzbd: SABnzbdConfig{
-				Host:     viper.GetString("download_client.sabnzbd.host"),
-				Port:     viper.GetInt("download_client.sabnzbd.port"),
-				APIKey:   viper.GetString("download_client.sabnzbd.api_key"),
-				UseHTTPS: viper.GetBool("download_client.sabnzbd.use_https"),
+			Usenet: UsenetClientConfig{
+				Type: viper.GetString("download_client.usenet.type"),
+				SABnzbd: SABnzbdConfig{
+					Host:     viper.GetString("download_client.usenet.sabnzbd.host"),
+					Port:     viper.GetInt("download_client.usenet.sabnzbd.port"),
+					APIKey:   viper.GetString("download_client.usenet.sabnzbd.api_key"),
+					UseHTTPS: viper.GetBool("download_client.usenet.sabnzbd.use_https"),
+				},
 			},
 		},
 
