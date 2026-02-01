@@ -41,10 +41,6 @@ Use this template for your pull request descriptions:
 
 Brief overview of the entire PR and its purpose
 
-## Summary
-
-Brief overview of the entire PR and its purpose
-
 ## Changes Made
 
 ### type(scope): description (#issue-number)
