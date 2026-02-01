@@ -19,6 +19,12 @@ export class ApiError extends Error {
   }
 }
 
+export interface DeleteBookResponse {
+  message: string;
+  blocked?: boolean;
+  soft_delete?: boolean;
+}
+
 const buildApiError = async (
   response: Response,
   fallbackMessage: string
@@ -455,7 +461,7 @@ export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
 export async function deleteBook(
   bookId: string,
   options: { softDelete?: boolean; blockHash?: boolean } = {}
-): Promise<void> {
+): Promise<DeleteBookResponse> {
   const params = new URLSearchParams();
   if (options.softDelete) params.set('soft_delete', 'true');
   if (options.blockHash) params.set('block_hash', 'true');
@@ -470,6 +476,7 @@ export async function deleteBook(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to delete audiobook');
   }
+  return response.json();
 }
 
 export type OverridePayload = {

@@ -1,11 +1,21 @@
 // file: web/src/components/layout/TopBar.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useEffect, useRef, useState } from 'react';
-import { AppBar, Toolbar, IconButton, Typography, Chip } from '@mui/material';
+import {
+  AppBar,
+  Toolbar,
+  IconButton,
+  Typography,
+  Chip,
+  Tooltip,
+} from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu.js';
+import Brightness4Icon from '@mui/icons-material/Brightness4.js';
+import Brightness7Icon from '@mui/icons-material/Brightness7.js';
 import { eventSourceManager } from '../../services/eventSourceManager';
+import { useAppStore } from '../../stores/useAppStore';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -20,6 +30,8 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
     null
   );
   const lastStateRef = useRef(connectionState);
+  const themeMode = useAppStore((state) => state.themeMode);
+  const toggleThemeMode = useAppStore((state) => state.toggleThemeMode);
 
   useEffect(() => {
     const unsubscribe = eventSourceManager.subscribe(
@@ -67,6 +79,20 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
         <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
           Audiobook Organizer
         </Typography>
+        <Tooltip title="Toggle color mode">
+          <IconButton
+            color="inherit"
+            aria-label="toggle color mode"
+            onClick={toggleThemeMode}
+            sx={{ mr: 1 }}
+          >
+            {themeMode === 'dark' ? (
+              <Brightness7Icon />
+            ) : (
+              <Brightness4Icon />
+            )}
+          </IconButton>
+        </Tooltip>
         {connectionMessage && (
           <Chip
             label={connectionMessage}
