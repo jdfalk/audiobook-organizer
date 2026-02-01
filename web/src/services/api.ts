@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.13.0
+// version: 1.14.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -17,6 +17,12 @@ export class ApiError extends Error {
     this.status = status;
     this.data = data;
   }
+}
+
+export interface DeleteBookResponse {
+  message: string;
+  blocked?: boolean;
+  soft_delete?: boolean;
 }
 
 const buildApiError = async (
@@ -454,7 +460,7 @@ export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
 export async function deleteBook(
   bookId: string,
   options: { softDelete?: boolean; blockHash?: boolean } = {}
-): Promise<void> {
+): Promise<DeleteBookResponse> {
   const params = new URLSearchParams();
   if (options.softDelete) params.set('soft_delete', 'true');
   if (options.blockHash) params.set('block_hash', 'true');
@@ -469,6 +475,7 @@ export async function deleteBook(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to delete audiobook');
   }
+  return response.json();
 }
 
 export type OverridePayload = {
