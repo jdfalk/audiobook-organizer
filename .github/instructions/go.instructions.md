@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/go.instructions.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: 4a5b6c7d-8e9f-1a2b-3c4d-5e6f7a8b9c0d -->
 <!-- last-edited: 2026-01-31 -->
 
@@ -93,9 +93,9 @@ func BenchmarkProcess(b *testing.B) {
 }
 ```
 
-## Go 1.25 Features
+## Go 1.22+ Features
 
-### Integer Range: `for i := range n`
+### Integer Range: `for i := range n` (1.22)
 
 Replaces `for i := 0; i < n; i++` for simple 0-to-n loops. Same performance, less boilerplate.
 Still use traditional loops for non-zero start, custom step, or countdown.
@@ -106,7 +106,7 @@ for i := range count {
 }
 ```
 
-### Filesystem Isolation: `os.Root()`
+### Filesystem Isolation: `os.Root()` (1.24+)
 
 Creates a sandboxed filesystem view. Blocks path traversal automatically.
 
@@ -120,30 +120,53 @@ file, err := root.Open("data.txt") // confined to /safe/dir
 Use for: untrusted plugin execution, multi-tenant isolation, secure file serving.
 Combine with input validation — `os.Root()` prevents path escape but not logic errors.
 
-### Generics
+### Generics (1.18+)
 
 - Constrain type parameters appropriately (`comparable`, `constraints.Ordered`).
 - Don't over-genericize simple functions — prefer concrete types for hot paths.
 - Go 1.25 has better type inference; explicit type args often unnecessary.
 
-## Concurrency
+### `sync.WaitGroup.Go` (1.25)
+
+Replaces the manual Add/Done/closure pattern. Loop variable is captured correctly.
 
 ```go
 func processItems(items []Item) {
     var wg sync.WaitGroup
     for _, item := range items {
-        wg.Add(1)
-        go func(item Item) {
-            defer wg.Done()
+        wg.Go(func() {
             process(item)
-        }(item)
+        })
     }
     wg.Wait()
 }
 ```
 
+### `testing/synctest` (1.25)
+
+Test concurrent code with virtualized time — goroutine blocking advances the clock instantly.
+
+```go
+synctest.Test(t, func(ctx context.Context) {
+    go myAsyncFunc(ctx)
+    synctest.Wait() // blocks until all goroutines are blocked or done
+})
+```
+
+### Container-Aware GOMAXPROCS (1.25)
+
+Runtime auto-detects Linux cgroup CPU limits. Important for Kubernetes. Disable with `GODEBUG=containermaxprocs=0`.
+
+### Nil Pointer Check Fix (1.25)
+
+A compiler bug in 1.21–1.24 delayed nil checks, allowing use-before-check patterns to silently succeed. Fixed in 1.25 — code relying on this will now panic. Always check errors before using the result.
+
+## Concurrency
+
+- Use `sync.WaitGroup.Go` (1.25+) for simple fan-out; fall back to manual Add/Done for complex patterns.
 - Always consider how goroutines exit.
 - Close channels when done sending. Use `defer close(ch)`.
+- New vet analyzer `waitgroup` catches misplaced `Add` calls; `hostport` catches IPv6-unsafe address construction.
 
 ## Testing
 
