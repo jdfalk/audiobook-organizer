@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.13.0
+// version: 1.14.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -68,6 +68,7 @@ export interface Book {
   file_hash?: string;
   original_file_hash?: string;
   organized_file_hash?: string;
+  itunes_persistent_id?: string;
   library_state?: string;
   quantity?: number;
   marked_for_deletion?: boolean;

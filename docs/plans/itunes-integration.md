@@ -1,7 +1,7 @@
 <!-- file: docs/plans/itunes-integration.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-01 -->
 
 # iTunes Integration
 
@@ -11,7 +11,7 @@ Full bidirectional iTunes integration: import library metadata, organize and
 write back updated paths, and eventually sync playcounts. Phase 1 (core
 infrastructure) is complete. This is the **primary MVP blocker**.
 
-**Status: ⚡ In Progress — 40% complete (Phase 1 done)**
+**Status: 🟡 In Progress — Phase 1-3 complete; Phase 4 tests in progress**
 
 ---
 
@@ -443,6 +443,8 @@ export async function writeBackITunesLibrary(payload: ITunesWriteBackRequest): P
 
 ## Phase 3 — UI Components
 
+**Status: ✅ Complete (2026-02-01)**
+
 Settings page additions:
 
 - iTunes Import section with file picker for Library.xml
@@ -583,16 +585,15 @@ const pollImportStatus = async (operationId: string) => {
 </Dialog>
 ```
 
-### Write-back confirmation dialog (to be added)
+### Write-back confirmation dialog (completed)
 
-The write-back UI does not yet exist. When implemented, it should follow the
-same Dialog pattern. The confirmation dialog needs to:
+The write-back UI now follows the same Dialog pattern. The confirmation dialog
+handles:
 
-1. Accept a list of book IDs (selected from the book list or "all books with
-   iTunes persistent ID").
+1. Accept a list of book IDs (manual entry).
 2. Show a preview table: `Title | Current Path | iTunes Persistent ID`.
-3. Have a "Create backup" checkbox (default true).
-4. On confirm, call `writeBackITunesLibrary(payload)` and show result.
+3. Provide a "Create backup" checkbox (default true).
+4. Call `writeBackITunesLibrary(payload)` and render the result summary.
 
 Skeleton:
 
@@ -652,6 +653,8 @@ export function WriteBackConfirmDialog({
 ---
 
 ## Phase 4 — Testing
+
+**Status: 🟡 In Progress (unit tests updated 2026-02-01)**
 
 - Unit tests: XML parser, import logic, write-back logic
 - Integration tests: full import → organize → write-back cycle
