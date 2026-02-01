@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.5.1
+// version: 1.6.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -18,15 +18,48 @@ type MetadataSource struct {
 	Credentials  map[string]string `json:"credentials"`
 }
 
+// DownloadClientConfig represents download client connection settings.
+type DownloadClientConfig struct {
+	Type        string            `json:"type"`
+	Deluge      DelugeConfig      `json:"deluge"`
+	QBittorrent QBittorrentConfig `json:"qbittorrent"`
+	SABnzbd     SABnzbdConfig     `json:"sabnzbd"`
+}
+
+// DelugeConfig holds Deluge RPC configuration.
+type DelugeConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// QBittorrentConfig holds qBittorrent Web API configuration.
+type QBittorrentConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	UseHTTPS bool   `json:"use_https"`
+}
+
+// SABnzbdConfig holds SABnzbd API configuration.
+type SABnzbdConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	APIKey   string `json:"api_key"`
+	UseHTTPS bool   `json:"use_https"`
+}
+
 // Config holds application configuration
 type Config struct {
 	// Core paths
-	RootDir      string `json:"root_dir"`
-	DatabasePath string `json:"database_path"`
-	DatabaseType string `json:"database_type"` // "pebble" (default) or "sqlite"
-	EnableSQLite bool   `json:"enable_sqlite"` // Must be true to use SQLite (safety flag)
-	PlaylistDir  string `json:"playlist_dir"`
-	SetupComplete bool  `json:"setup_complete"`
+	RootDir       string `json:"root_dir"`
+	DatabasePath  string `json:"database_path"`
+	DatabaseType  string `json:"database_type"` // "pebble" (default) or "sqlite"
+	EnableSQLite  bool   `json:"enable_sqlite"` // Must be true to use SQLite (safety flag)
+	PlaylistDir   string `json:"playlist_dir"`
+	SetupComplete bool   `json:"setup_complete"`
 
 	// Library organization
 	OrganizationStrategy string `json:"organization_strategy"` // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
@@ -68,6 +101,9 @@ type Config struct {
 	LogLevel          string `json:"log_level"`  // 'debug', 'info', 'warn', 'error'
 	LogFormat         string `json:"log_format"` // 'text' or 'json'
 	EnableJsonLogging bool   `json:"enable_json_logging"`
+
+	// Download client integration
+	DownloadClient DownloadClientConfig `json:"download_client"`
 
 	// API Keys (kept for backward compatibility)
 	APIKeys struct {
@@ -126,6 +162,22 @@ func InitConfig() {
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("enable_json_logging", false)
+
+	// Download client defaults
+	viper.SetDefault("download_client.type", "")
+	viper.SetDefault("download_client.deluge.host", "")
+	viper.SetDefault("download_client.deluge.port", 0)
+	viper.SetDefault("download_client.deluge.username", "")
+	viper.SetDefault("download_client.deluge.password", "")
+	viper.SetDefault("download_client.qbittorrent.host", "")
+	viper.SetDefault("download_client.qbittorrent.port", 0)
+	viper.SetDefault("download_client.qbittorrent.username", "")
+	viper.SetDefault("download_client.qbittorrent.password", "")
+	viper.SetDefault("download_client.qbittorrent.use_https", false)
+	viper.SetDefault("download_client.sabnzbd.host", "")
+	viper.SetDefault("download_client.sabnzbd.port", 0)
+	viper.SetDefault("download_client.sabnzbd.api_key", "")
+	viper.SetDefault("download_client.sabnzbd.use_https", false)
 	viper.SetDefault("supported_extensions", []string{
 		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
 	})
@@ -141,11 +193,11 @@ func InitConfig() {
 
 	AppConfig = Config{
 		// Core paths
-		RootDir:      viper.GetString("root_dir"),
-		DatabasePath: viper.GetString("database_path"),
-		DatabaseType: viper.GetString("database_type"),
-		EnableSQLite: viper.GetBool("enable_sqlite3_i_know_the_risks"),
-		PlaylistDir:  viper.GetString("playlist_dir"),
+		RootDir:       viper.GetString("root_dir"),
+		DatabasePath:  viper.GetString("database_path"),
+		DatabaseType:  viper.GetString("database_type"),
+		EnableSQLite:  viper.GetBool("enable_sqlite3_i_know_the_risks"),
+		PlaylistDir:   viper.GetString("playlist_dir"),
 		SetupComplete: viper.GetBool("setup_complete"),
 
 		// Library organization
@@ -187,6 +239,30 @@ func InitConfig() {
 		LogLevel:          viper.GetString("log_level"),
 		LogFormat:         viper.GetString("log_format"),
 		EnableJsonLogging: viper.GetBool("enable_json_logging"),
+
+		// Download client integration
+		DownloadClient: DownloadClientConfig{
+			Type: viper.GetString("download_client.type"),
+			Deluge: DelugeConfig{
+				Host:     viper.GetString("download_client.deluge.host"),
+				Port:     viper.GetInt("download_client.deluge.port"),
+				Username: viper.GetString("download_client.deluge.username"),
+				Password: viper.GetString("download_client.deluge.password"),
+			},
+			QBittorrent: QBittorrentConfig{
+				Host:     viper.GetString("download_client.qbittorrent.host"),
+				Port:     viper.GetInt("download_client.qbittorrent.port"),
+				Username: viper.GetString("download_client.qbittorrent.username"),
+				Password: viper.GetString("download_client.qbittorrent.password"),
+				UseHTTPS: viper.GetBool("download_client.qbittorrent.use_https"),
+			},
+			SABnzbd: SABnzbdConfig{
+				Host:     viper.GetString("download_client.sabnzbd.host"),
+				Port:     viper.GetInt("download_client.sabnzbd.port"),
+				APIKey:   viper.GetString("download_client.sabnzbd.api_key"),
+				UseHTTPS: viper.GetBool("download_client.sabnzbd.use_https"),
+			},
+		},
 
 		SupportedExtensions: supportedExtensions,
 		ExcludePatterns:     excludePatterns,
