@@ -88,7 +88,7 @@ Add fields to the existing `Book` struct in `store.go`:
 ```go
 // In the Book struct, after the existing lifecycle fields:
 SupersededBy *string `json:"superseded_by,omitempty"` // ULID of anthology that replaced this book
-IsAntholgy   *bool   `json:"is_anthology,omitempty"`  // true if confirmed anthology
+IsAnthology   *bool   `json:"is_anthology,omitempty"`  // true if confirmed anthology
 ```
 
 ---
@@ -154,15 +154,15 @@ var (
 
 // DetectionResult holds the outcome of anthology detection for one book.
 type DetectionResult struct {
-    IsAnthlogy      bool     // true if any signal fired
+    IsAnthology      bool     // true if any signal fired
     Tier            string   // "pending_high_confidence" | "pending_needs_review" | ""
     DetectedSignals []string // which signals matched
     MatchedSeriesID *int     // series that matched (if any)
 }
 
-// DetectAnthlogy evaluates a single book against anthology signals.
+// DetectAnthology evaluates a single book against anthology signals.
 // store is used to look up series, books, and ISBN data.
-func DetectAnthlogy(book *database.Book, store database.Store) DetectionResult {
+func DetectAnthology(book *database.Book, store database.Store) DetectionResult {
     result := DetectionResult{}
     var signals []string
 
@@ -214,7 +214,7 @@ func DetectAnthlogy(book *database.Book, store database.Store) DetectionResult {
     }
 
     result.DetectedSignals = signals
-    result.IsAnthlogy = len(signals) > 0
+    result.IsAnthology = len(signals) > 0
     return result
 }
 
@@ -286,7 +286,7 @@ In `internal/scanner/scanner.go`, at the end of each book's processing
 
 ```go
 // After saveBook(&books[idx]) succeeds:
-if detection := anthology.DetectAnthlogy(&dbBook, database.GlobalStore); detection.IsAnthlogy {
+if detection := anthology.DetectAnthology(&dbBook, database.GlobalStore); detection.IsAnthology {
     log.Printf("[INFO] scanner: anthology signal(s) detected for %s: %v", books[idx].Title, detection.DetectedSignals)
     // Create the review entry — implemented via store method (see migration below)
     review := &database.AnthologyReview{
@@ -533,7 +533,7 @@ func (s *Server) resolveAnthologyReview(c *gin.Context) {
     if anthology != nil {
         if body.Resolution == "contains" || body.Resolution == "replaces" {
             t := true
-            anthology.IsAnthlogy = &t
+            anthology.IsAnthology = &t
             _ = database.GlobalStore.UpdateBook(anthology.ID, anthology)
         }
         if body.Resolution == "replaces" {
