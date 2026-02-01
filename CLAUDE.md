@@ -1,68 +1,23 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 3.0.0 -->
+<!-- version: 4.0.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-01-25 -->
+<!-- last-edited: 2026-01-31 -->
 
 # CLAUDE.md
 
-> **NOTE:** This file is a pointer. All Claude/AI agent and workflow
-> instructions are centralized in the `.github/instructions/` and
-> `.github/prompts/` directories.
+This is an **audiobook organizer** — Go backend + React/TypeScript frontend.
+All AI agent instructions live in `.github/`. This file is the entry point.
 
-## 🎯 Quick Reference
+## Quick Start
 
-**Main Documentation:**
+- **Architecture & workflows:** [.github/copilot-instructions.md](.github/copilot-instructions.md)
+- **Coding standards:** [.github/instructions/](https://github.com/jdfalk/audiobook-organizer/tree/main/.github/instructions/)
+- **Prompts:** [.github/prompts/](https://github.com/jdfalk/audiobook-organizer/tree/main/.github/prompts/)
+- **Full file index:** [AGENTS.md](AGENTS.md)
 
-- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent
-  configuration
-- [Instructions Directory](.github/instructions/) - All coding standards and
-  language-specific rules
-- [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
+## Critical Rules
 
-**For complete list of all instruction files, see [AGENTS.md](AGENTS.md)**
-
-## 🚨 CRITICAL: Documentation Update Protocol
-
-This repository uses direct-edit documentation workflow:
-
-- Edit documentation directly in target files
-- Always update version headers when making changes
-- Do not use legacy doc-update scripts (create-doc-update.sh,
-  doc_update_manager.py)
-- Follow semantic versioning for version numbers
-
-## 🔧 Git Operations Policy
-
-**Preferred order for git operations:**
-
-1. **MCP GitHub tools** (preferred) - Use when available
-2. **safe-ai-util** (fallback) - Provides safety checks and logging
-3. **Native git** (last resort) - Use only when other options unavailable
-
-**Use VS Code tasks for non-git operations only** (build, lint, test, generate).
-
-## 📋 Key Instruction Categories
-
-### Workflow & Process
-
-- Commit messages (conventional commits format)
-- Pull request descriptions
-- Code review guidelines
-- Test generation standards
-- Security best practices
-
-### Language-Specific Rules
-
-- Go, Python, TypeScript, JavaScript, Rust, Shell
-- Protobuf, Markdown, JSON, HTML/CSS
-- GitHub Actions workflows
-
-### Specialized Prompts
-
-- Code review, documentation generation
-- Bug reports, feature requests
-- Merge conflict resolution
-- Test generation
-
-> For all Claude, Copilot, or workflow tasks, **refer to the files in
-> `.github/instructions/` and `.github/prompts/`**.
+1. **Git:** Use MCP GitHub tools first. Native git as fallback. Conventional commits mandatory.
+2. **File headers:** All files need versioned headers. Bump version on every change.
+3. **Docs:** Edit files directly. Update version headers. No legacy doc-update scripts.
+4. **Scripts:** Python for anything non-trivial. Shell only for simple ops under 20 lines.

@@ -1,101 +1,60 @@
 <!-- file: AGENTS.md -->
-<!-- version: 3.0.0 -->
+<!-- version: 4.0.0 -->
 <!-- guid: 2e7c1a4b-5d3f-4b8c-9e1f-7a6b2c3d4e5f -->
-<!-- last-edited: 2026-01-25 -->
+<!-- last-edited: 2026-01-31 -->
 
-# AGENTS.md
+# AGENTS.md — Instruction File Index
 
-> **NOTE:** This is a pointer file. All detailed Copilot, agent, and workflow
-> instructions are in the [.github/](.github/) directory.
+All coding standards and AI agent instructions for the audiobook organizer.
 
-## 🎯 Quick Reference
+## Core Instructions
 
-**Main Documentation:**
+| File | Applies to | Purpose |
+|------|-----------|---------|
+| [copilot-instructions.md](.github/copilot-instructions.md) | All | Repo architecture, workflow policy |
+| [general-coding.instructions.md](.github/instructions/general-coding.instructions.md) | `**` | Universal rules: headers, git, testing |
+| [commit-messages.instructions.md](.github/instructions/commit-messages.instructions.md) | `**` | Conventional commit format |
+| [pull-request-descriptions.instructions.md](.github/instructions/pull-request-descriptions.instructions.md) | `**` | PR description template |
+| [test-generation.instructions.md](.github/instructions/test-generation.instructions.md) | test files | Testing standards |
+| [security.instructions.md](.github/instructions/security.instructions.md) | `**` | Security best practices |
 
-- [Copilot Instructions](.github/copilot-instructions.md) - Primary AI agent
-  configuration
-- [Instructions Directory](.github/instructions/) - All coding standards and
-  language-specific rules
-- [Prompts Directory](.github/prompts/) - Specialized prompts for specific tasks
+## Language Instructions
 
-## 📋 Instruction Files
+| File | Applies to |
+|------|-----------|
+| [go.instructions.md](.github/instructions/go.instructions.md) | `**/*.go` |
+| [typescript.instructions.md](.github/instructions/typescript.instructions.md) | `**/*.{ts,tsx}` |
+| [javascript.instructions.md](.github/instructions/javascript.instructions.md) | `**/*.{js,jsx}` |
+| [python.instructions.md](.github/instructions/python.instructions.md) | `**/*.py` |
+| [shell.instructions.md](.github/instructions/shell.instructions.md) | `**/*.{sh,bash}` |
+| [rust.instructions.md](.github/instructions/rust.instructions.md) | `**/*.rs` |
+| [protobuf.instructions.md](.github/instructions/protobuf.instructions.md) | `**/*.proto` |
+| [markdown.instructions.md](.github/instructions/markdown.instructions.md) | `**/*.md` |
+| [json.instructions.md](.github/instructions/json.instructions.md) | `**/*.json` |
+| [html-css.instructions.md](.github/instructions/html-css.instructions.md) | `**/*.{html,css}` |
+| [github-actions.instructions.md](.github/instructions/github-actions.instructions.md) | `.github/workflows/*.yml` |
 
-### Core Workflow Instructions
+## Prompts
 
-- [commit-messages.instructions.md](.github/instructions/commit-messages.instructions.md) -
-  Conventional commit standards
-- [pull-request-descriptions.instructions.md](.github/instructions/pull-request-descriptions.instructions.md) -
-  PR description templates
-- [test-generation.instructions.md](.github/instructions/test-generation.instructions.md) -
-  Test writing guidelines
-- [security.instructions.md](.github/instructions/security.instructions.md) -
-  Security best practices
-- [safe-ai-util.instructions.md](.github/instructions/safe-ai-util.instructions.md) -
-  Git operation safety
+All in `.github/prompts/`. Key ones:
 
-### Language-Specific Instructions
+- `code-review.prompt.md` — Code review guidance
+- `pull-request.prompt.md` — PR creation
+- `commit-message.prompt.md` — Commit message generation
+- `security-review.prompt.md` — Security review
+- `bug-report.prompt.md` / `feature-request.prompt.md` — Issue templates
+- `merge-conflict-resolution.agent.md` — Merge conflict resolution
+- `ai-rebase-system.prompt.md` — Rebase workflow
 
-- [general-coding.instructions.md](.github/instructions/general-coding.instructions.md) -
-  Universal coding standards
-- [go.instructions.md](.github/instructions/go.instructions.md) - Go language
-  rules
-- [python.instructions.md](.github/instructions/python.instructions.md) - Python
-  language rules
-- [typescript.instructions.md](.github/instructions/typescript.instructions.md) -
-  TypeScript/React rules
-- [javascript.instructions.md](.github/instructions/javascript.instructions.md) -
-  JavaScript rules
-- [rust.instructions.md](.github/instructions/rust.instructions.md) - Rust
-  language rules
-- [shell.instructions.md](.github/instructions/shell.instructions.md) - Shell
-  scripting rules
-- [protobuf.instructions.md](.github/instructions/protobuf.instructions.md) -
-  Protobuf standards
-- [markdown.instructions.md](.github/instructions/markdown.instructions.md) -
-  Markdown formatting
-- [json.instructions.md](.github/instructions/json.instructions.md) - JSON
-  formatting
-- [html-css.instructions.md](.github/instructions/html-css.instructions.md) -
-  HTML/CSS rules
-- [github-actions.instructions.md](.github/instructions/github-actions.instructions.md) -
-  CI/CD workflow rules
+## Version Policy
 
-### Specialized Prompts
+When modifying any file with a version header, **always update the version:**
 
-- [code-review.prompt.md](.github/prompts/code-review.prompt.md) - Code review
-  guidance
-- [documentation.prompt.md](.github/prompts/documentation.prompt.md) -
-  Documentation generation
-- [bug-report.prompt.md](.github/prompts/bug-report.prompt.md) - Bug report
-  templates
-- [feature-request.prompt.md](.github/prompts/feature-request.prompt.md) -
-  Feature request templates
-- [merge-conflict-resolution.agent.md](.github/prompts/merge-conflict-resolution.agent.md) -
-  Merge conflict help
-- [test-generation.prompt.md](.github/prompts/test-generation.prompt.md) - Test
-  generation prompts
+- **Patch** (x.y.Z): typos, minor fixes
+- **Minor** (x.Y.z): new content, additions
+- **Major** (X.y.z): structural changes
 
-## 🚨 CRITICAL: File Version Updates
-
-**When modifying any file with a version header, ALWAYS update the version
-number:**
-
-- **Patch version** (x.y.Z): Bug fixes, typos, minor formatting changes
-- **Minor version** (x.Y.z): New features, significant content additions
-- **Major version** (X.y.z): Breaking changes, structural overhauls
-
-**This applies to ALL files with version headers including documentation,
-templates, and configuration files.**
-
-## 🔧 Git Operations
-
-**Preferred order for git operations:**
+## Git Operations
 
 1. MCP GitHub tools (preferred)
-2. safe-ai-util (fallback)
-3. Native git commands (last resort)
-
-**Use VS Code tasks for non-git operations only (build, lint, test).**
-
-> For any agent, Copilot, or workflow task, **always refer to the files listed
-> above.**
+2. Native git (fallback)
