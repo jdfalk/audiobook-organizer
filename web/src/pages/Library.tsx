@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.32.0
+// version: 1.34.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -22,7 +22,6 @@ import {
   IconButton,
   FormControlLabel,
   Checkbox,
-  Snackbar,
   Collapse,
   MenuItem,
   LinearProgress,
@@ -55,6 +54,7 @@ import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
+import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
 import * as api from '../services/api';
@@ -116,6 +116,7 @@ const getResultLabel = (result: BulkActionResult): string => {
 export const Library = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const initialSearch = searchParams.get('search') ?? '';
   const initialViewMode =
     (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
@@ -225,18 +226,7 @@ export const Library = () => {
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [batchDeleteInProgress, setBatchDeleteInProgress] = useState(false);
   const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
-  const [alert, setAlert] = useState<{
-    severity: 'success' | 'error' | 'info' | 'warning';
-    message: string;
-    actionLabel?: string;
-    onAction?: () => void;
-  } | null>(null);
-  const [sseNotice, setSseNotice] = useState<{
-    severity: 'warning' | 'success';
-    message: string;
-  } | null>(null);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
-  const sseNoticeTimerRef = useRef<number | null>(null);
 
   const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
   const [importFilePath, setImportFilePath] = useState('');
@@ -364,26 +354,14 @@ export const Library = () => {
         const previousState = sseStatusRef.current;
         sseStatusRef.current = status.state;
 
-        if (sseNoticeTimerRef.current) {
-          window.clearTimeout(sseNoticeTimerRef.current);
-          sseNoticeTimerRef.current = null;
-        }
-
-        if (status.state === 'reconnecting' || status.state === 'error') {
-          setSseNotice({
-            severity: 'warning',
-            message: 'Connection lost. Reconnecting...',
-          });
+        if (
+          (status.state === 'reconnecting' || status.state === 'error') &&
+          previousState !== status.state
+        ) {
+          toast('Connection lost. Reconnecting...', 'warning');
         } else if (status.state === 'open') {
           if (previousState && previousState !== 'open') {
-            setSseNotice({
-              severity: 'success',
-              message: 'Connection restored.',
-            });
-            sseNoticeTimerRef.current = window.setTimeout(() => {
-              setSseNotice(null);
-              sseNoticeTimerRef.current = null;
-            }, 3000);
+            toast('Connection restored.', 'success');
           }
           console.log('EventSource connection established');
         }
@@ -398,12 +376,8 @@ export const Library = () => {
 
     return () => {
       unsubscribe();
-      if (sseNoticeTimerRef.current) {
-        window.clearTimeout(sseNoticeTimerRef.current);
-        sseNoticeTimerRef.current = null;
-      }
     };
-  }, []);
+  }, [toast]);
 
   // Reset loading states when operations complete
   useEffect(() => {
@@ -707,20 +681,12 @@ export const Library = () => {
         return;
       }
       if (error instanceof api.ApiError && error.status >= 500) {
-        setAlert({
-          severity: 'error',
-          message: 'Server error occurred.',
-        });
+        toast('Server error occurred.', 'error');
       }
       const message =
         error instanceof Error ? error.message : 'Failed to load audiobooks.';
       if (message.toLowerCase().includes('timeout')) {
-        setAlert({
-          severity: 'error',
-          message: 'Request timed out.',
-          actionLabel: 'Retry',
-          onAction: () => loadAudiobooks(),
-        });
+        toast('Request timed out.', 'error');
       }
       console.error('Failed to load audiobooks:', error);
       setAudiobooks([]);
@@ -736,6 +702,7 @@ export const Library = () => {
     sortBy,
     sortOrder,
     navigate,
+    toast,
   ]);
 
   const handleManualImport = () => {
@@ -772,10 +739,7 @@ export const Library = () => {
     }
 
     if (targets.length === 0) {
-      setAlert({
-        severity: 'info',
-        message: 'Select one or more files to import from the server.',
-      });
+      toast('Select one or more files to import from the server.', 'info');
       return;
     }
 
@@ -788,22 +752,20 @@ export const Library = () => {
         (result) => result.status === 'rejected'
       );
       if (failures.length === 0) {
-        setAlert({
-          severity: 'success',
-          message:
-            targets.length === 1
-              ? 'Import started successfully.'
-              : `Import started for ${targets.length} files.`,
-        });
+        toast(
+          targets.length === 1
+            ? 'Import started successfully.'
+            : `Import started for ${targets.length} files.`,
+          'success'
+        );
       } else {
         const successCount = targets.length - failures.length;
-        setAlert({
-          severity: 'warning',
-          message:
-            failures.length === targets.length
-              ? 'Failed to import selected files.'
-              : `Imported ${successCount} of ${targets.length} files.`,
-        });
+        toast(
+          failures.length === targets.length
+            ? 'Failed to import selected files.'
+            : `Imported ${successCount} of ${targets.length} files.`,
+          'warning'
+        );
       }
       setImportFileDialogOpen(false);
       setImportFilePath('');
@@ -813,10 +775,7 @@ export const Library = () => {
       console.error('Failed to import file:', error);
       const message =
         error instanceof Error ? error.message : 'Failed to import file.';
-      setAlert({
-        severity: 'error',
-        message,
-      });
+      toast(message, 'error');
     } finally {
       setImportFileInProgress(false);
     }
@@ -875,26 +834,28 @@ export const Library = () => {
     if (!bookPendingDelete) return;
     setDeleteInProgress(true);
     try {
-      await api.deleteBook(bookPendingDelete.id, {
+      const result = await api.deleteBook(bookPendingDelete.id, {
         softDelete: deleteOptions.softDelete,
         blockHash: deleteOptions.blockHash,
       });
-      setAlert({
-        severity: 'success',
-        message: deleteOptions.softDelete
-          ? 'Audiobook was soft deleted and hidden from the library.'
-          : 'Audiobook was deleted.',
-      });
+      const baseMessage = deleteOptions.softDelete
+        ? 'Audiobook was soft deleted and hidden from the library.'
+        : 'Audiobook was deleted.';
+      const blockNotice = deleteOptions.blockHash
+        ? result.blocked
+          ? ' Hash blocked.'
+          : ' Hash could not be blocked.'
+        : '';
+      const severity =
+        deleteOptions.blockHash && !result.blocked ? 'warning' : 'success';
+      toast(`${baseMessage}${blockNotice}`, severity);
       setDeleteDialogOpen(false);
       setBookPendingDelete(null);
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to delete audiobook:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to delete audiobook. Please try again.',
-      });
+      toast('Failed to delete audiobook. Please try again.', 'error');
     } finally {
       setDeleteInProgress(false);
     }
@@ -912,24 +873,29 @@ export const Library = () => {
       const activeBooks = selectedAudiobooks.filter(
         (book) => !book.marked_for_deletion
       );
-      await Promise.all(
+      const results = await Promise.all(
         activeBooks.map((book) =>
           api.deleteBook(book.id, { softDelete: true, blockHash: true })
         )
       );
-      setAlert({
-        severity: 'success',
-        message: `Soft deleted ${activeBooks.length} selected audiobooks.`,
-      });
+      const blockedFailures = results.filter(
+        (result) => result.blocked !== true
+      ).length;
+      const baseMessage = `Soft deleted ${activeBooks.length} selected audiobooks.`;
+      if (blockedFailures > 0) {
+        toast(
+          `${baseMessage} ${blockedFailures} hash${blockedFailures === 1 ? '' : 'es'} could not be blocked.`,
+          'warning'
+        );
+      } else {
+        toast(baseMessage, 'success');
+      }
       setSelectedAudiobooks([]);
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to batch delete audiobooks:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to delete selected audiobooks.',
-      });
+      toast('Failed to delete selected audiobooks.', 'error');
     } finally {
       setBatchDeleteInProgress(false);
       setBatchDeleteDialogOpen(false);
@@ -946,19 +912,16 @@ export const Library = () => {
       await Promise.all(
         deletedBooks.map((book) => api.restoreSoftDeletedBook(book.id))
       );
-      setAlert({
-        severity: 'success',
-        message: `Restored ${deletedBooks.length} selected audiobooks.`,
-      });
+      toast(
+        `Restored ${deletedBooks.length} selected audiobooks.`,
+        'success'
+      );
       setSelectedAudiobooks([]);
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to restore selected audiobooks:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to restore selected audiobooks.',
-      });
+      toast('Failed to restore selected audiobooks.', 'error');
     } finally {
       setBatchRestoreInProgress(false);
     }
@@ -968,15 +931,12 @@ export const Library = () => {
     setPurgingBookId(book.id);
     try {
       await api.deleteBook(book.id, { softDelete: false, blockHash: false });
-      setAlert({
-        severity: 'success',
-        message: `"${book.title}" was purged from the library.`,
-      });
+      toast(`"${book.title}" was purged from the library.`, 'success');
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to purge audiobook', error);
-      setAlert({ severity: 'error', message: 'Failed to purge audiobook.' });
+      toast('Failed to purge audiobook.', 'error');
     } finally {
       setPurgingBookId(null);
     }
@@ -986,15 +946,12 @@ export const Library = () => {
     setRestoringBookId(book.id);
     try {
       await api.restoreSoftDeletedBook(book.id);
-      setAlert({
-        severity: 'success',
-        message: `"${book.title}" was restored to the library.`,
-      });
+      toast(`"${book.title}" was restored to the library.`, 'success');
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to restore audiobook', error);
-      setAlert({ severity: 'error', message: 'Failed to restore audiobook.' });
+      toast('Failed to restore audiobook.', 'error');
     } finally {
       setRestoringBookId(null);
     }
@@ -1004,20 +961,17 @@ export const Library = () => {
     setPurgeInProgress(true);
     try {
       const result = await api.purgeSoftDeletedBooks(purgeDeleteFiles);
-      setAlert({
-        severity: 'success',
-        message: `Purged ${result.purged} soft-deleted ${result.purged === 1 ? 'book' : 'books'}.`,
-      });
+      toast(
+        `Purged ${result.purged} soft-deleted ${result.purged === 1 ? 'book' : 'books'}.`,
+        'success'
+      );
       setPurgeDialogOpen(false);
       setPurgeDeleteFiles(false);
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
       console.error('Failed to purge soft-deleted books', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to purge soft-deleted books.',
-      });
+      toast('Failed to purge soft-deleted books.', 'error');
     } finally {
       setPurgeInProgress(false);
     }
@@ -1049,10 +1003,10 @@ export const Library = () => {
             : ab
         )
       );
-      setAlert({
-        severity: 'success',
-        message: `Updated metadata for ${selectedAudiobooks.length} audiobooks.`,
-      });
+      toast(
+        `Updated metadata for ${selectedAudiobooks.length} audiobooks.`,
+        'success'
+      );
       setSelectedAudiobooks([]);
       setBatchEditOpen(false);
     } catch (error) {
@@ -1097,10 +1051,7 @@ export const Library = () => {
 
   const handleBulkFetchMetadata = async () => {
     if (!hasSelection) {
-      setAlert({
-        severity: 'info',
-        message: 'Select audiobooks to fetch metadata for.',
-      });
+      toast('Select audiobooks to fetch metadata for.', 'info');
       return;
     }
 
@@ -1141,32 +1092,25 @@ export const Library = () => {
       }
 
       if (bulkFetchCancelRef.current) {
-        setAlert({
-          severity: 'info',
-          message: 'Bulk fetch cancelled.',
-        });
+        toast('Bulk fetch cancelled.', 'info');
       } else {
         const successCount = results.filter((result) => result.status !== 'error')
           .length;
         const failedCount = results.length - successCount;
 
-        setAlert({
-          severity: failedCount > 0 ? 'warning' : 'success',
-          message:
-            failedCount > 0
-              ? `${successCount} succeeded, ${failedCount} failed.`
-              : `Metadata fetched for ${successCount} books.`,
-        });
+        toast(
+          failedCount > 0
+            ? `${successCount} succeeded, ${failedCount} failed.`
+            : `Metadata fetched for ${successCount} books.`,
+          failedCount > 0 ? 'warning' : 'success'
+        );
         setSelectedAudiobooks([]);
       }
 
       await loadAudiobooks();
     } catch (error) {
       console.error('Failed to bulk fetch metadata:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to bulk fetch metadata.',
-      });
+      toast('Failed to bulk fetch metadata.', 'error');
     } finally {
       setBulkFetchInProgress(false);
       bulkFetchCancelRef.current = false;
@@ -1201,10 +1145,7 @@ export const Library = () => {
 
   const handleBulkOrganize = async () => {
     if (!hasSelection) {
-      setAlert({
-        severity: 'info',
-        message: 'Select audiobooks to organize.',
-      });
+      toast('Select audiobooks to organize.', 'info');
       return;
     }
 
@@ -1212,10 +1153,7 @@ export const Library = () => {
       (book) => book.library_state === 'import'
     );
     if (importBooks.length === 0) {
-      setAlert({
-        severity: 'info',
-        message: 'Select import-state audiobooks to organize.',
-      });
+      toast('Select import-state audiobooks to organize.', 'info');
       return;
     }
     const importBookIds = importBooks.map((book) => book.id);
@@ -1355,15 +1293,9 @@ export const Library = () => {
       }
 
       if (bulkOrganizeCancelRef.current) {
-        setAlert({
-          severity: 'info',
-          message: 'Organize cancelled.',
-        });
+        toast('Organize cancelled.', 'info');
       } else if (!encounteredError) {
-        setAlert({
-          severity: 'success',
-          message: `Successfully organized ${completed} audiobooks.`,
-        });
+        toast(`Successfully organized ${completed} audiobooks.`, 'success');
         setSelectedAudiobooks([]);
       }
 
@@ -1372,10 +1304,7 @@ export const Library = () => {
       }
     } catch (error) {
       console.error('Failed to organize selected audiobooks:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to organize selected audiobooks.',
-      });
+      toast('Failed to organize selected audiobooks.', 'error');
     } finally {
       setBulkOrganizeInProgress(false);
       bulkOrganizeCancelRef.current = false;
@@ -1411,18 +1340,12 @@ export const Library = () => {
           organized_file_hash: book.organized_file_hash,
         });
       }
-      setAlert({
-        severity: 'success',
-        message: 'Rollback complete.',
-      });
+      toast('Rollback complete.', 'success');
       setBulkOrganizeError(null);
       await loadAudiobooks();
     } catch (error) {
       console.error('Failed to rollback organize:', error);
-      setAlert({
-        severity: 'error',
-        message: 'Rollback failed.',
-      });
+      toast('Rollback failed.', 'error');
     }
   };
 
@@ -1654,49 +1577,6 @@ export const Library = () => {
         overflow: 'hidden',
       }}
     >
-      <Snackbar
-        open={!!alert}
-        autoHideDuration={5000}
-        onClose={() => setAlert(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        {alert ? (
-          <Alert
-            severity={alert.severity}
-            onClose={() => setAlert(null)}
-            sx={{ width: '100%' }}
-            action={
-              alert.actionLabel && alert.onAction ? (
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={alert.onAction}
-                >
-                  {alert.actionLabel}
-                </Button>
-              ) : undefined
-            }
-          >
-            {alert.message}
-          </Alert>
-        ) : undefined}
-      </Snackbar>
-      <Snackbar
-        open={!!sseNotice}
-        autoHideDuration={sseNotice?.severity === 'success' ? 3000 : null}
-        onClose={() => setSseNotice(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        {sseNotice ? (
-          <Alert
-            severity={sseNotice.severity}
-            onClose={() => setSseNotice(null)}
-            sx={{ width: '100%' }}
-          >
-            {sseNotice.message}
-          </Alert>
-        ) : undefined}
-      </Snackbar>
       <Box
         display="flex"
         justifyContent="space-between"

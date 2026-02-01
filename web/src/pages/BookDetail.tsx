@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.7.0
+// version: 1.9.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -13,7 +13,6 @@ import {
   Button,
   CircularProgress,
   Alert,
-  Snackbar,
   Typography,
   Grid,
   Tabs,
@@ -45,6 +44,7 @@ import type { Book, BookTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
+import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
 export const BookDetail = () => {
@@ -57,10 +57,7 @@ export const BookDetail = () => {
   const [loadingField, setLoadingField] = useState<string | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
-  const [alert, setAlert] = useState<{
-    severity: 'success' | 'error' | 'warning';
-    message: string;
-  } | null>(null);
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
     'info' | 'files' | 'versions' | 'tags' | 'compare'
   >('info');
@@ -95,20 +92,17 @@ export const BookDetail = () => {
           return;
         }
         if (error.status === 401) {
-          setAlert({ severity: 'error', message: 'Session expired.' });
+          toast('Session expired.', 'error');
           navigate('/login');
           return;
         }
       }
       console.error('Failed to load book', error);
-      setAlert({
-        severity: 'error',
-        message: 'Failed to load audiobook details.',
-      });
+      toast('Failed to load audiobook details.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, navigate, toast]);
 
   const loadVersions = useCallback(async () => {
     if (!id) return;
@@ -171,21 +165,26 @@ export const BookDetail = () => {
       deleteOptions.softDelete ? 'Soft deleting...' : 'Deleting...'
     );
     try {
-      await api.deleteBook(book.id, {
+      const result = await api.deleteBook(book.id, {
         softDelete: deleteOptions.softDelete,
         blockHash: deleteOptions.blockHash,
       });
-      setAlert({
-        severity: 'success',
-        message: deleteOptions.softDelete
-          ? 'Audiobook marked for deletion.'
-          : 'Audiobook deleted permanently.',
-      });
+      const baseMessage = deleteOptions.softDelete
+        ? 'Audiobook marked for deletion.'
+        : 'Audiobook deleted permanently.';
+      const blockNotice = deleteOptions.blockHash
+        ? result.blocked
+          ? ' Hash blocked.'
+          : ' Hash could not be blocked.'
+        : '';
+      const severity =
+        deleteOptions.blockHash && !result.blocked ? 'warning' : 'success';
+      toast(`${baseMessage}${blockNotice}`, severity);
       setDeleteDialogOpen(false);
       await loadBook();
     } catch (error) {
       console.error('Failed to delete audiobook', error);
-      setAlert({ severity: 'error', message: 'Failed to delete audiobook.' });
+      toast('Failed to delete audiobook.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -198,11 +197,11 @@ export const BookDetail = () => {
     setActionLabel('Restoring...');
     try {
       await api.restoreSoftDeletedBook(book.id);
-      setAlert({ severity: 'success', message: 'Audiobook restored.' });
+      toast('Audiobook restored.', 'success');
       await loadBook();
     } catch (error) {
       console.error('Failed to restore audiobook', error);
-      setAlert({ severity: 'error', message: 'Failed to restore audiobook.' });
+      toast('Failed to restore audiobook.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -215,14 +214,11 @@ export const BookDetail = () => {
     setActionLabel('Purging...');
     try {
       await api.deleteBook(book.id, { softDelete: false, blockHash: false });
-      setAlert({
-        severity: 'success',
-        message: 'Audiobook permanently deleted.',
-      });
+      toast('Audiobook permanently deleted.', 'success');
       navigate('/library');
     } catch (error) {
       console.error('Failed to purge audiobook', error);
-      setAlert({ severity: 'error', message: 'Failed to purge audiobook.' });
+      toast('Failed to purge audiobook.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -237,15 +233,14 @@ export const BookDetail = () => {
       setBook(result.book);
       // Reload tags to reflect updated stored values in Compare tab
       await loadTags();
-      setAlert({
-        severity: 'success',
-        message:
-          result.message ||
+      toast(
+        result.message ||
           `Metadata refreshed from ${result.source || 'provider'}.`,
-      });
+        'success'
+      );
     } catch (error) {
       console.error('Failed to fetch metadata', error);
-      setAlert({ severity: 'error', message: 'Metadata fetch failed.' });
+      toast('Metadata fetch failed.', 'error');
     } finally {
       setFetchingMetadata(false);
     }
@@ -259,13 +254,10 @@ export const BookDetail = () => {
       setBook(result.book);
       // Reload tags to reflect updated stored values in Compare tab
       await loadTags();
-      setAlert({
-        severity: 'success',
-        message: result.message || 'AI parsing completed.',
-      });
+      toast(result.message || 'AI parsing completed.', 'success');
     } catch (error) {
       console.error('Failed to parse with AI', error);
-      setAlert({ severity: 'error', message: 'AI parsing failed.' });
+      toast('AI parsing failed.', 'error');
     } finally {
       setParsingWithAI(false);
     }
@@ -394,7 +386,7 @@ export const BookDetail = () => {
       });
     } catch (error) {
       console.error('Failed to apply field value', error);
-      setAlert({ severity: 'error', message: 'Failed to apply field value.' });
+      toast('Failed to apply field value.', 'error');
     } finally {
       setLoadingField(null);
     }
@@ -451,7 +443,7 @@ export const BookDetail = () => {
       });
     } catch (error) {
       console.error('Failed to clear override', error);
-      setAlert({ severity: 'error', message: 'Failed to clear override.' });
+      toast('Failed to clear override.', 'error');
     } finally {
       setLoadingField(null);
     }
@@ -484,7 +476,7 @@ export const BookDetail = () => {
       });
     } catch (error) {
       console.error('Failed to unlock override', error);
-      setAlert({ severity: 'error', message: 'Failed to unlock override.' });
+      toast('Failed to unlock override.', 'error');
     } finally {
       setLoadingField(null);
     }
@@ -517,27 +509,24 @@ export const BookDetail = () => {
       };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
-      setAlert({ severity: 'success', message: 'Metadata updated.' });
+      toast('Metadata updated.', 'success');
       setEditDialogOpen(false);
     } catch (error) {
       if (error instanceof api.ApiError) {
         if (error.status === 409) {
           setPendingUpdate(null);
           setConflictDialogOpen(true);
-          setAlert({
-            severity: 'warning',
-            message: 'Book was updated by another user.',
-          });
+          toast('Book was updated by another user.', 'warning');
           return;
         }
         if (error.status === 401) {
-          setAlert({ severity: 'error', message: 'Session expired.' });
+          toast('Session expired.', 'error');
           navigate('/login');
           return;
         }
       }
       console.error('Failed to update metadata', error);
-      setAlert({ severity: 'error', message: 'Failed to update metadata.' });
+      toast('Failed to update metadata.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -560,13 +549,13 @@ export const BookDetail = () => {
         force_update: true,
       });
       setBook(saved);
-      setAlert({ severity: 'success', message: 'Metadata updated.' });
+      toast('Metadata updated.', 'success');
       setEditDialogOpen(false);
       setConflictDialogOpen(false);
       setPendingUpdate(null);
     } catch (error) {
       console.error('Failed to overwrite metadata', error);
-      setAlert({ severity: 'error', message: 'Failed to overwrite metadata.' });
+      toast('Failed to overwrite metadata.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -613,22 +602,6 @@ export const BookDetail = () => {
           aria-label={actionLabel || 'Processing action'}
         />
       )}
-      <Snackbar
-        open={!!alert}
-        autoHideDuration={4000}
-        onClose={() => setAlert(null)}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        {alert ? (
-          <Alert
-            severity={alert.severity}
-            onClose={() => setAlert(null)}
-            sx={{ width: '100%' }}
-          >
-            {alert.message}
-          </Alert>
-        ) : undefined}
-      </Snackbar>
 
       <Stack
         direction="row"

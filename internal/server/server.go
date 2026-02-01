@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.38.0
+// version: 1.39.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1594,6 +1594,12 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 
 	// If soft delete requested, mark for deletion instead of hard delete
 	if softDelete {
+		if (book.MarkedForDeletion != nil && *book.MarkedForDeletion) ||
+			(book.LibraryState != nil && strings.EqualFold(*book.LibraryState, "deleted")) {
+			c.JSON(http.StatusConflict, gin.H{"error": "audiobook already soft deleted"})
+			return
+		}
+
 		now := time.Now()
 		book.MarkedForDeletion = boolPtr(true)
 		book.MarkedForDeletionAt = &now
@@ -1605,15 +1611,18 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		}
 
 		// Optionally block the hash
+		blocked := false
 		if blockHash && book.FileHash != nil && *book.FileHash != "" {
 			if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - soft delete"); err != nil {
 				log.Printf("Warning: failed to block hash during soft delete: %v", err)
+			} else {
+				blocked = true
 			}
 		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":     "audiobook soft deleted",
-			"blocked":     blockHash && book.FileHash != nil,
+			"blocked":     blocked,
 			"soft_delete": true,
 		})
 		return
@@ -1621,10 +1630,13 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 
 	// Hard delete path
 	// Optionally block the hash before deleting
+	blocked := false
 	if blockHash && book.FileHash != nil && *book.FileHash != "" {
 		if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - prevent reimport"); err != nil {
 			log.Printf("Warning: failed to block hash before delete: %v", err)
 			// Continue with delete even if blocking fails
+		} else {
+			blocked = true
 		}
 	}
 
@@ -1639,7 +1651,7 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "audiobook deleted",
-		"blocked": blockHash && book.FileHash != nil,
+		"blocked": blocked,
 	})
 }
 

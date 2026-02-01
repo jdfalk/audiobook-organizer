@@ -1,7 +1,7 @@
 <!-- file: docs/plans/frontend-ux-and-accessibility.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: c8d9e0f1-a2b3-4c5d-6e7f-8a9b0c1d2e3f -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-01 -->
 
 # Frontend, UX, and Accessibility
 
@@ -10,6 +10,8 @@
 UI polish, new interactive components, accessibility compliance, and
 internationalization. Covers everything from dark mode to mobile responsiveness
 to screen reader support.
+
+**Status: ✅ Complete (2026-02-01)**
 
 ---
 
@@ -21,6 +23,8 @@ Revisit Book Detail delete workflows for correctness and safety:
 
 - Soft delete + block-hash verification end-to-end
 - State transition validation (imported → organized → deleted)
+
+**Status: ✅ Complete (2026-02-01)**
 
 ---
 
@@ -159,6 +163,8 @@ Replace every standalone `<Snackbar>` + local state pattern in
 to `useToast()`. The local alert state and its JSX can be removed entirely once
 all usages migrate.
 
+**Status: ✅ Complete (2026-02-01)**
+
 ---
 
 ### Dark Mode
@@ -204,6 +210,8 @@ export function createAppTheme(mode: PaletteMode = 'dark') {
 // Keep a default export for backwards compatibility during migration:
 export const theme = createAppTheme('dark');
 ```
+
+**Status: ✅ Complete (2026-02-01)**
 
 **File: `web/src/main.tsx`** — replace the static `theme` import with a
 stateful theme that reads the persisted preference:
