@@ -1,3 +1,7 @@
+// file: internal/itunes/import.go
+// version: 1.1.0
+// guid: 4b58a17d-b2b4-4743-9b7e-3462e2ed55ac
+
 package itunes
 
 import (
@@ -37,13 +41,13 @@ type ImportOptions struct {
 
 // ValidationResult contains the results of validating an iTunes import
 type ValidationResult struct {
-	TotalTracks      int               // Total tracks in iTunes library
-	AudiobookTracks  int               // Tracks identified as audiobooks
-	FilesFound       int               // Audiobook files that exist on disk
-	FilesMissing     int               // Audiobook files that are missing
-	MissingPaths     []string          // List of missing file paths
-	DuplicateHashes  map[string][]string // hash -> list of titles
-	EstimatedTime    string            // Estimated import time
+	TotalTracks     int                 // Total tracks in iTunes library
+	AudiobookTracks int                 // Tracks identified as audiobooks
+	FilesFound      int                 // Audiobook files that exist on disk
+	FilesMissing    int                 // Audiobook files that are missing
+	MissingPaths    []string            // List of missing file paths
+	DuplicateHashes map[string][]string // hash -> list of titles
+	EstimatedTime   string              // Estimated import time
 }
 
 // ImportResult contains the results of an iTunes import operation
@@ -200,13 +204,18 @@ func ConvertTrack(track *Track, opts ImportOptions) (*models.Audiobook, error) {
 
 // extractSeriesFromAlbum attempts to extract series name and position from an album field
 func extractSeriesFromAlbum(album string) (series string, position float64) {
+	album = strings.TrimSpace(album)
+	if album == "" {
+		return "", 0.0
+	}
+
 	// Common patterns:
 	// "Series Name, Book 1"
 	// "Series Name - Book 1"
 	// "Series Name: Book 1"
 
 	// Try comma separator
-	if parts := strings.Split(album, ","); len(parts) == 2 {
+	if parts := strings.SplitN(album, ",", 2); len(parts) == 2 {
 		series = strings.TrimSpace(parts[0])
 		// Try to extract number from second part
 		// This is simplified - in production you'd use regex
@@ -214,7 +223,13 @@ func extractSeriesFromAlbum(album string) (series string, position float64) {
 	}
 
 	// Try dash separator
-	if parts := strings.Split(album, "-"); len(parts) == 2 {
+	if parts := strings.SplitN(album, "-", 2); len(parts) == 2 {
+		series = strings.TrimSpace(parts[0])
+		return series, 0.0
+	}
+
+	// Try colon separator
+	if parts := strings.SplitN(album, ":", 2); len(parts) == 2 {
 		series = strings.TrimSpace(parts[0])
 		return series, 0.0
 	}

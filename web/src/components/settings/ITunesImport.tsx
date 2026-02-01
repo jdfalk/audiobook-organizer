@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   CardContent,
   CardHeader,
   Checkbox,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -23,8 +24,16 @@ import {
   List,
   ListItem,
   ListItemText,
+  Paper,
   Radio,
   RadioGroup,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -32,12 +41,16 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import {
+  getBook,
   getITunesImportStatus,
   importITunesLibrary,
+  type Book,
   type ITunesImportRequest,
   type ITunesImportStatus,
   type ITunesValidateResponse,
+  type ITunesWriteBackResponse,
   validateITunesLibrary,
+  writeBackITunesLibrary,
 } from '../../services/api';
 
 interface ITunesImportSettings {
@@ -72,6 +85,18 @@ export function ITunesImport() {
     useState<ITunesImportStatus | null>(null);
   const [showMissingFiles, setShowMissingFiles] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [writeBackOpen, setWriteBackOpen] = useState(false);
+  const [writeBackIds, setWriteBackIds] = useState('');
+  const [writeBackBooks, setWriteBackBooks] = useState<Book[]>([]);
+  const [writeBackLoading, setWriteBackLoading] = useState(false);
+  const [writeBackNotice, setWriteBackNotice] = useState<{
+    severity: 'error' | 'warning' | 'success';
+    message: string;
+  } | null>(null);
+  const [writeBackResult, setWriteBackResult] =
+    useState<ITunesWriteBackResponse | null>(null);
+  const [writeBackBackup, setWriteBackBackup] = useState(true);
+  const [writeBackLibraryPath, setWriteBackLibraryPath] = useState('');
   const pollTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -128,6 +153,127 @@ export function ITunesImport() {
       const message = err instanceof Error ? err.message : 'Import failed';
       setError(message);
       setImporting(false);
+    }
+  };
+
+  function parseWriteBackIds(raw: string): string[] {
+    return raw
+      .split(/[\n,]+/)
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+  }
+
+  const handleOpenWriteBack = () => {
+    setWriteBackOpen(true);
+    setWriteBackIds('');
+    setWriteBackBooks([]);
+    setWriteBackNotice(null);
+    setWriteBackResult(null);
+    setWriteBackBackup(true);
+    setWriteBackLibraryPath(settings.libraryPath);
+  };
+
+  const handleLoadWriteBackPreview = async () => {
+    const ids = parseWriteBackIds(writeBackIds);
+    if (!writeBackLibraryPath.trim()) {
+      setWriteBackBooks([]);
+      setWriteBackNotice({
+        severity: 'error',
+        message: 'Library path is required for write-back.',
+      });
+      return;
+    }
+    if (ids.length === 0) {
+      setWriteBackBooks([]);
+      setWriteBackNotice({
+        severity: 'error',
+        message: 'Enter one or more audiobook IDs to preview.',
+      });
+      return;
+    }
+
+    setWriteBackLoading(true);
+    setWriteBackNotice(null);
+    setWriteBackResult(null);
+
+    try {
+      const results = await Promise.allSettled(ids.map((id) => getBook(id)));
+      const books: Book[] = [];
+      const missing: string[] = [];
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          books.push(result.value);
+        } else {
+          missing.push(ids[index]);
+        }
+      });
+
+      const eligible = books.filter((book) => book.itunes_persistent_id);
+      setWriteBackBooks(eligible);
+
+      const excludedCount = books.length - eligible.length;
+      if (missing.length > 0 || excludedCount > 0) {
+        const parts = [];
+        if (missing.length > 0) {
+          parts.push(
+            `${missing.length} missing ID${missing.length === 1 ? '' : 's'}`
+          );
+        }
+        if (excludedCount > 0) {
+          parts.push(`${excludedCount} missing iTunes persistent ID`);
+        }
+        setWriteBackNotice({
+          severity: 'warning',
+          message: `Preview loaded with ${parts.join(' and ')}.`,
+        });
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to load preview.';
+      setWriteBackNotice({ severity: 'error', message });
+    } finally {
+      setWriteBackLoading(false);
+    }
+  };
+
+  const handleWriteBack = async () => {
+    if (!writeBackLibraryPath.trim()) {
+      setWriteBackNotice({
+        severity: 'error',
+        message: 'Library path is required for write-back.',
+      });
+      return;
+    }
+    if (writeBackBooks.length === 0) {
+      setWriteBackNotice({
+        severity: 'error',
+        message: 'Load at least one audiobook with an iTunes persistent ID.',
+      });
+      return;
+    }
+
+    setWriteBackLoading(true);
+    setWriteBackNotice(null);
+    setWriteBackResult(null);
+
+    try {
+      const result = await writeBackITunesLibrary({
+        library_path: writeBackLibraryPath,
+        audiobook_ids: writeBackBooks.map((book) => book.id),
+        create_backup: writeBackBackup,
+      });
+      setWriteBackResult(result);
+      setWriteBackNotice({
+        severity: 'success',
+        message: result.message || `Updated ${result.updated_count} entries.`,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Write-back failed.';
+      setWriteBackNotice({ severity: 'error', message });
+    } finally {
+      setWriteBackLoading(false);
     }
   };
 
@@ -373,6 +519,18 @@ export function ITunesImport() {
           </Box>
         )}
 
+        <Divider sx={{ my: 4 }} />
+
+        <Stack spacing={1}>
+          <Typography variant="subtitle1">Write Back to iTunes</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Update file paths in your Library.xml after organizing audiobooks.
+          </Typography>
+          <Button variant="outlined" onClick={handleOpenWriteBack}>
+            Open Write-Back Dialog
+          </Button>
+        </Stack>
+
         <Dialog
           open={showMissingFiles}
           onClose={() => setShowMissingFiles(false)}
@@ -391,6 +549,116 @@ export function ITunesImport() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowMissingFiles(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={writeBackOpen}
+          onClose={() => setWriteBackOpen(false)}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>Write Back to iTunes</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              {writeBackLoading && <LinearProgress />}
+              {writeBackNotice && (
+                <Alert severity={writeBackNotice.severity}>
+                  {writeBackNotice.message}
+                </Alert>
+              )}
+              {writeBackResult && (
+                <Alert severity={writeBackResult.success ? 'success' : 'warning'}>
+                  <Typography variant="body2">
+                    {writeBackResult.message}
+                  </Typography>
+                  <Typography variant="caption" display="block">
+                    Updated {writeBackResult.updated_count} entries
+                  </Typography>
+                  {writeBackResult.backup_path && (
+                    <Typography variant="caption" display="block">
+                      Backup created at {writeBackResult.backup_path}
+                    </Typography>
+                  )}
+                </Alert>
+              )}
+              <TextField
+                label="Library.xml Path"
+                value={writeBackLibraryPath}
+                onChange={(event) => setWriteBackLibraryPath(event.target.value)}
+                fullWidth
+                placeholder="/Users/username/Music/iTunes/Library.xml"
+              />
+              <TextField
+                label="Audiobook IDs"
+                value={writeBackIds}
+                onChange={(event) => setWriteBackIds(event.target.value)}
+                placeholder="One ID per line or comma-separated"
+                helperText="Paste audiobook IDs to update in iTunes."
+                fullWidth
+                multiline
+                minRows={3}
+              />
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Button
+                  variant="outlined"
+                  onClick={handleLoadWriteBackPreview}
+                  disabled={writeBackLoading}
+                >
+                  Load Preview
+                </Button>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={writeBackBackup}
+                      onChange={(event) =>
+                        setWriteBackBackup(event.target.checked)
+                      }
+                    />
+                  }
+                  label="Create backup before writing"
+                />
+              </Stack>
+              {writeBackBooks.length > 0 && (
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Title</TableCell>
+                        <TableCell>File Path</TableCell>
+                        <TableCell>iTunes ID</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {writeBackBooks.map((book) => (
+                        <TableRow key={book.id}>
+                          <TableCell>{book.title}</TableCell>
+                          <TableCell>{book.file_path}</TableCell>
+                          <TableCell>{book.itunes_persistent_id}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setWriteBackOpen(false)}
+              disabled={writeBackLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleWriteBack}
+              disabled={writeBackLoading || writeBackBooks.length === 0}
+            >
+              {writeBackLoading
+                ? 'Writing...'
+                : `Update ${writeBackBooks.length} entries`}
+            </Button>
           </DialogActions>
         </Dialog>
       </CardContent>
