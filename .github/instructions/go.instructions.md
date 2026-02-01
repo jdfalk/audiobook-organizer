@@ -1,5 +1,5 @@
 <!-- file: .github/instructions/go.instructions.md -->
-<!-- version: 2.1.0 -->
+<!-- version: 2.2.0 -->
 <!-- guid: 4a5b6c7d-8e9f-1a2b-3c4d-5e6f7a8b9c0d -->
 <!-- last-edited: 2026-01-31 -->
 
@@ -23,6 +23,22 @@ description: |
 
 - **Go 1.25** on main branch. Use `go 1.25` in `go.mod`.
 - No Windows support. Build targets: linux/macOS amd64+arm64.
+
+## Building
+
+Use `make` — do not `go build` directly for a full binary. The binary embeds
+the React frontend via `//go:embed web/dist`, gated by the `embed_frontend`
+build tag. `web/dist` must exist first or the embed fails at compile time.
+
+```bash
+make build       # Full: npm install + npm run build + go build -tags embed_frontend
+make build-api   # Backend only (no embed tag), for quick iteration
+make run         # Full build then ./audiobook-organizer serve
+```
+
+`go build ./...` (no tag) is fine for type-checking or testing individual
+packages. It compiles `web_nonembed.go` which stubs out the embed and serves
+a placeholder at `/`.
 
 ## Naming
 

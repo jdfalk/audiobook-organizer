@@ -17,18 +17,20 @@ All AI agent instructions live in `.github/`. This file is the entry point.
 
 ## Build & Test Commands
 
-```bash
-# Go backend
-make test            # go test ./... -v -race
-make ci              # test + 80% coverage check
-make coverage        # HTML coverage report
+The Go binary embeds the React frontend via `//go:embed web/dist` (build tag
+`embed_frontend`). Frontend must be built first — use `make` for everything.
 
-# Web frontend (from web/ directory)
-npm run dev          # Vite dev server
-npm run build        # tsc + Vite build
-npm run test         # Vitest unit tests
-npm run lint         # ESLint
-npm run test:e2e     # Playwright E2E
+```bash
+make build           # Full build: npm install + npm run build + go build (embedded UI)
+make build-api       # Backend only, no frontend (quick iteration)
+make run             # Full build then serve
+make run-api         # API-only build then serve
+make test            # Go backend tests
+make test-all        # Backend + frontend tests
+make test-e2e        # Playwright E2E tests
+make ci              # All tests + 80% coverage check
+make web-dev         # Vite dev server (frontend only)
+make help            # All targets
 ```
 
 > **Note:** `go.mod` currently says `go 1.24.0`. The Go instructions reference 1.25 features — update go.mod when upgrading.
