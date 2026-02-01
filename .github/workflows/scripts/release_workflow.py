@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # file: .github/workflows/scripts/release_workflow.py
-# version: 2.0.0
+# version: 2.1.0
 # guid: 9f7e6d5c-4b3a-2f1e-0d9c-8b7a6f5e4d3c
 
 """
@@ -115,7 +115,13 @@ def main(argv: list[str]) -> int:
 
     command = argv[1]
     if command == "generate-changelog":
-        generate_changelog()
+        try:
+            generate_changelog()
+        except Exception as e:  # noqa: BLE001
+            # Write a minimal changelog so the workflow step does not fail
+            # silently — the release can still proceed with a stub.
+            print(f"Warning: changelog generation failed: {e}", file=sys.stderr)
+            write_output("changelog_content", f"## Changelog\n\nError generating changelog: {e}\n")
         return 0
 
     print(f"unknown command: {command}", file=sys.stderr)

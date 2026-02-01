@@ -1,5 +1,5 @@
 # file: .github/workflows/test-action-integration.yml
-# version: 1.1.2
+# version: 1.2.0
 # guid: test-action-integration-001
 
 name: Test Frontend Config Action Integration
@@ -20,6 +20,7 @@ on:
 permissions:
   contents: read
   checks: write
+  issues: write
 
 jobs:
   test-action:
@@ -69,3 +70,39 @@ jobs:
           echo "  Frontend Dir: ${{ steps.frontend-config.outputs.dir }}"
           echo "  Node Version: ${{ steps.frontend-config.outputs.node-version }}"
           echo "  Has Frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
+
+      - name: Alert on output drift
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context } = require('@actions/github');
+            const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+
+            const body = [
+              '## CI/CD Configuration Drift Detected',
+              '',
+              'The `test-action-integration.yml` workflow detected unexpected outputs',
+              'from `get-frontend-config-action`. This may indicate a breaking change',
+              'in the upstream action or a configuration regression.',
+              '',
+              '**Expected values:**',
+              '- `dir` = `web`',
+              '- `node-version` = `22`',
+              '- `has-frontend` = `true`',
+              '',
+              '**Workflow run:** ' + context.payload.repository.html_url +
+                '/actions/runs/' + context.runId,
+              '',
+              'Please investigate and update `.github/repository-config.yml` or',
+              'pin the action to a known-good version.',
+            ].join('\n');
+
+            await octokit.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[CI DRIFT] get-frontend-config-action outputs changed',
+              body: body,
+              labels: ['ci', 'priority:high'],
+            });
