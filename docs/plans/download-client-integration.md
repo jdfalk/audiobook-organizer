@@ -1,7 +1,7 @@
 <!-- file: docs/plans/download-client-integration.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.3.0 -->
 <!-- guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-01 -->
 
 # Download Client Integration
 
@@ -12,6 +12,8 @@ import, and manage audiobook downloads. Includes seeding-preservation support
 via shadow directories.
 
 **Priority**: Post-MVP (vNext v1.2)
+
+**Status: 🟡 In Progress (abstraction + config implemented as of 2026-02-01)**
 
 ---
 
@@ -45,6 +47,8 @@ single Go interface. This lets the rest of the system (shadow creation, cleanup
 job, status reporting) operate on one code path regardless of which client the
 user has configured. Each concrete implementation lives in its own file under
 `internal/download/`.
+
+**Status: ✅ Complete (2026-02-01)**
 
 ### Interface definition
 
