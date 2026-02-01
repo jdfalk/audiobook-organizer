@@ -1,7 +1,7 @@
 <!-- file: docs/plans/database-and-data-quality.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-01 -->
 
 # Database and Data Quality
 
@@ -10,6 +10,8 @@
 Tools and processes for keeping the library data accurate, deduplicated, and
 well-maintained. Includes deduplication, orphan detection, search indexing,
 backup improvements, and routine housekeeping.
+
+**Status: 🟡 In Progress (Active Bug complete as of 2026-02-01)**
 
 ---
 
@@ -20,6 +22,11 @@ backup improvements, and routine housekeeping.
 The `total_size` calculation for import paths is returning negative values.
 Debug the size computation in the library folder stats logic to identify the
 overflow or sign error.
+
+**Status: ✅ Complete (2026-02-01)**
+
+Implemented the `track.Size` overflow guard in `internal/itunes/plist_parser.go`
+and ensured dashboard totals skip non-positive file sizes.
 
 #### Where the computation lives
 
