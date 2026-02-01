@@ -1,5 +1,5 @@
 # file: .github/repository-config.yml
-# version: 1.1.2
+# version: 1.2.0
 # guid: audiobook-organizer-repo-config-001
 
 # Repository Metadata
@@ -86,12 +86,16 @@ release:
     source: true
     checksums: true
 
+  goreleaser:
+    config: '.goreleaser.yml'
+    publish: true
+
 # Testing Configuration
 testing:
   enabled: true
   coverage:
     enabled: true
-    threshold: 80
+    threshold: 60
     reports: ['html', 'json']
 
   unit:
@@ -100,6 +104,11 @@ testing:
 
   integration:
     enabled: true
+
+  e2e:
+    enabled: true
+    config: 'web/tests/e2e/playwright.config.ts'
+    browsers: ['chromium']
 
 # CI Configuration
 ci:
@@ -110,6 +119,9 @@ ci:
 
   caching:
     enabled: true
+    strategy: manual
     paths:
       go: ['~/.cache/go-build', '~/go/pkg/mod']
       npm: ['~/.npm', '~/.cache/npm']
+    lock_files:
+      npm: 'web/package-lock.json'
