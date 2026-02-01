@@ -1,7 +1,7 @@
 <!-- file: docs/plans/library-organization-and-transcoding.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: f5a6b7c8-d9e0-1f2a-3b4c-5d6e7f8a9b0c -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-01 -->
 
 # Library Organization and Transcoding
 
@@ -11,6 +11,8 @@ Advanced file/folder naming templates (Sonarr/Radarr style), audio transcoding,
 chapter management, and web download/export capabilities.
 
 **Priority**: Post-MVP (vNext)
+
+**Status: 🟡 In Progress (Active Bug complete as of 2026-02-01)**
 
 ---
 
@@ -22,6 +24,11 @@ Some books were organized with unresolved placeholders in their paths (e.g.,
 `library/Unknown Author/{series}/...`). The template expansion fix has been
 applied to prevent future occurrences, but existing corrupted paths need to be
 identified and corrected.
+
+**Status: ✅ Complete (2026-02-01)**
+
+Corrupted path detection is handled via migration 14 (SQLite + PebbleDB), and
+the diagnostics command can flag existing records for review.
 
 #### Where Template Expansion Happens
 
