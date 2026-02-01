@@ -1,27 +1,118 @@
 # file: Makefile
-# version: 1.0.0
+# version: 2.0.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
-.PHONY: all test coverage coverage-check ci clean help
+BINARY := audiobook-organizer
+WEB_DIR := web
 
-# Default target
-all: test
+.PHONY: all build build-api run run-api install clean help \
+        web-install web-build web-dev web-test web-lint \
+        test test-all test-e2e coverage coverage-check ci
 
-## help: Show this help message
+# Default: full build (frontend + backend with embed)
+all: build
+
+## help: Show available targets
 help:
-	@echo "Available targets:"
-	@echo "  make test           - Run all tests with mocks"
-	@echo "  make coverage       - Generate HTML coverage report"
-	@echo "  make coverage-check - Check coverage meets 80% threshold"
-	@echo "  make ci             - Run all CI checks (test + coverage-check)"
-	@echo "  make clean          - Remove generated files"
-	@echo "  make help           - Show this help message"
+	@echo "Build:"
+	@echo "  make build          - Full build: frontend + Go binary with embedded UI"
+	@echo "  make build-api      - Backend only (no embedded frontend, for quick iteration)"
+	@echo "  make run            - Full build then serve"
+	@echo "  make run-api        - Backend-only build then serve (API endpoints only)"
+	@echo ""
+	@echo "Frontend:"
+	@echo "  make web-install    - Install npm dependencies"
+	@echo "  make web-build      - Build frontend (outputs to web/dist)"
+	@echo "  make web-dev        - Start Vite dev server"
+	@echo "  make web-test       - Run frontend unit tests"
+	@echo "  make web-lint       - Lint frontend code"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test           - Run Go backend tests"
+	@echo "  make test-all       - Run all tests (backend + frontend)"
+	@echo "  make test-e2e       - Run Playwright E2E tests"
+	@echo "  make coverage       - Generate coverage report"
+	@echo "  make coverage-check - Verify 80% coverage threshold"
+	@echo "  make ci             - Full CI: all tests + coverage check"
+	@echo ""
+	@echo "Setup:"
+	@echo "  make install        - Install dependencies (npm)"
+	@echo "  make clean          - Remove build artifacts"
 
-## test: Run all tests
+## install: Install all dependencies
+install: web-install
+
+# --- Build targets ---
+# The binary embeds the React frontend via //go:embed web/dist (build tag:
+# embed_frontend). This requires web/dist to exist, so web-build runs first.
+# Use build-api for quick backend iteration when you don't need the UI.
+
+## build: Full build with embedded frontend
+build: web-build
+	@echo "🔨 Building $(BINARY) with embedded frontend..."
+	@go build -tags embed_frontend -o $(BINARY) .
+	@echo "✅ Built ./$(BINARY)"
+
+## build-api: Backend-only build (no frontend, serves placeholder at /)
+build-api:
+	@echo "🔨 Building $(BINARY) (API only)..."
+	@go build -o $(BINARY) .
+	@echo "✅ Built ./$(BINARY)"
+
+## run: Full build and serve
+run: build
+	@./$(BINARY) serve
+
+## run-api: API-only build and serve
+run-api: build-api
+	@./$(BINARY) serve
+
+# --- Frontend targets ---
+
+## web-install: Install npm dependencies
+web-install:
+	@echo "📦 Installing frontend dependencies..."
+	@cd $(WEB_DIR) && npm install
+	@echo "✅ Dependencies installed"
+
+## web-build: Build frontend (produces web/dist for embedding)
+web-build: web-install
+	@echo "🌐 Building frontend..."
+	@cd $(WEB_DIR) && npm run build
+	@echo "✅ Frontend built (web/dist)"
+
+## web-dev: Start Vite dev server
+web-dev:
+	@cd $(WEB_DIR) && npm run dev
+
+## web-test: Run frontend unit tests
+web-test:
+	@echo "🧪 Running frontend tests..."
+	@cd $(WEB_DIR) && npm run test
+	@echo "✅ Frontend tests passed"
+
+## web-lint: Lint frontend code
+web-lint:
+	@echo "🔍 Linting frontend..."
+	@cd $(WEB_DIR) && npm run lint
+	@echo "✅ Frontend lint passed"
+
+# --- Testing targets ---
+
+## test: Run Go backend tests
 test:
-	@echo "🧪 Running tests..."
+	@echo "🧪 Running backend tests..."
 	@go test ./... -v -race
-	@echo "✅ All tests passed!"
+	@echo "✅ Backend tests passed"
+
+## test-all: Run all tests (backend + frontend)
+test-all: test web-test
+
+## test-e2e: Run Playwright E2E tests
+test-e2e:
+	@echo "🧪 Running E2E tests..."
+	@cd $(WEB_DIR) && npm run test:e2e
+	@echo "✅ E2E tests passed"
 
 ## coverage: Generate coverage report
 coverage:
@@ -46,17 +137,18 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 80% threshold"
 
-## ci: Run all CI checks
-ci: test coverage-check
+## ci: Full CI check (all tests + coverage)
+ci: test-all coverage-check
 	@echo "✅ All CI checks passed!"
 
-## clean: Remove generated files
+## clean: Remove build artifacts
 clean:
-	@echo "🧹 Cleaning up..."
-	@rm -f coverage.out coverage.html
-	@echo "✅ Clean complete!"
+	@echo "🧹 Cleaning..."
+	@rm -f $(BINARY) coverage.out coverage.html
+	@echo "✅ Clean complete"
 
 # Quick aliases
-.PHONY: t c
+.PHONY: t c b
 t: test
 c: coverage
+b: build
