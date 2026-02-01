@@ -117,6 +117,12 @@ var migrations = []Migration{
 		Up:          migration013Up,
 		Down:        nil,
 	},
+	{
+		Version:     14,
+		Description: "Flag books with corrupted organize paths for review",
+		Up:          migration014Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -658,6 +664,62 @@ func migration013Up(store Store) error {
 	log.Println("    - file_path remains NOT NULL; wanted books will use empty string ''")
 
 	log.Println("  - Wanted state and multi-path tracking added successfully")
+	return nil
+}
+
+
+// migration014Up flags books with corrupted organize paths (unresolved
+// placeholders like {series} or {author}) by setting library_state to
+// 'needs_review'. This is a one-time cleanup for paths written before the
+// leftover-placeholder guard was added to expandPattern.
+func migration014Up(store Store) error {
+	log.Println("  Running migration 14: Flag books with corrupted organize paths")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		// PebbleDB: iterate all books and check FilePath
+		log.Println("    - Skipping SQLite-specific path; checking PebbleDB books")
+		return migration014UpPebble(store)
+	}
+
+	// SQLite path: UPDATE in bulk using LIKE '%{%}%' pattern
+	query := `
+		UPDATE books
+		SET library_state = 'needs_review'
+		WHERE file_path LIKE '%{%}%'
+		  AND library_state != 'needs_review'
+	`
+	result, err := sqliteStore.db.Exec(query)
+	if err != nil {
+		return fmt.Errorf("migration 14: failed to flag corrupted paths: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("    - Flagged %d books with corrupted organize paths for review", rowsAffected)
+	return nil
+}
+
+// migration014UpPebble handles the corrupted-path check for PebbleDB stores.
+func migration014UpPebble(store Store) error {
+	books, err := store.GetAllBooks(1000000, 0)
+	if err != nil {
+		return fmt.Errorf("migration 14: failed to list books: %w", err)
+	}
+
+	flagged := 0
+	for _, book := range books {
+		if !strings.Contains(book.FilePath, "{") {
+			continue
+		}
+		// FilePath contains a literal brace — flag for review
+		state := "needs_review"
+		book.LibraryState = &state
+		if _, updateErr := store.UpdateBook(book.ID, &book); updateErr != nil {
+			log.Printf("    - Warning: could not flag book %d (%s): %v", book.ID, book.FilePath, updateErr)
+			continue
+		}
+		flagged++
+	}
+	log.Printf("    - Flagged %d books with corrupted organize paths for review (PebbleDB)", flagged)
 	return nil
 }
 

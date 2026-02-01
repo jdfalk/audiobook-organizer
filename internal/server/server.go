@@ -4239,7 +4239,7 @@ func (s *Server) getDashboard(c *gin.Context) {
 
 	for _, book := range allBooks {
 		// Size distribution
-		if book.FileSize != nil {
+		if book.FileSize != nil && *book.FileSize > 0 {
 			totalSize += *book.FileSize
 			sizeMB := float64(*book.FileSize) / (1024 * 1024)
 			sizeGB := sizeMB / 1024

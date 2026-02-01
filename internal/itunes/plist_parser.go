@@ -76,6 +76,15 @@ func parsePlist(data []byte) (*Library, error) {
 
 	// Convert tracks
 	for id, rawTrack := range raw.Tracks {
+		// Guard against int64 overflow: iTunes occasionally writes file sizes
+		// as unsigned 64-bit integers. Values > math.MaxInt64 wrap negative
+		// when parsed into int64; reset to 0 so the os.Stat fallback in
+		// buildBookFromTrack populates the correct value.
+		size := rawTrack.Size
+		if size < 0 {
+			size = 0
+		}
+
 		library.Tracks[id] = &Track{
 			TrackID:      rawTrack.TrackID,
 			PersistentID: rawTrack.PersistentID,
@@ -88,7 +97,7 @@ func parsePlist(data []byte) (*Library, error) {
 			Year:         rawTrack.Year,
 			Comments:     rawTrack.Comments,
 			Location:     rawTrack.Location,
-			Size:         rawTrack.Size,
+			Size:         size,
 			TotalTime:    rawTrack.TotalTime,
 			DateAdded:    rawTrack.DateAdded,
 			PlayCount:    rawTrack.PlayCount,
