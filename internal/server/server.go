@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.39.0
+// version: 1.41.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -434,8 +434,9 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer *http.Server
-	router     *gin.Engine
+	httpServer       *http.Server
+	router           *gin.Engine
+	audiobookService *AudiobookService
 }
 
 // ServerConfig holds server configuration
@@ -463,7 +464,8 @@ func NewServer() *Server {
 	metrics.Register()
 
 	server := &Server{
-		router: router,
+		router:           router,
+		audiobookService: NewAudiobookService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -883,140 +885,73 @@ func (s *Server) healthCheck(c *gin.Context) {
 }
 
 func (s *Server) listAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	// Query params
+	// Parse query parameters
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
 	search := c.Query("search")
 	authorIDStr := c.Query("author_id")
 	seriesIDStr := c.Query("series_id")
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > 100000 {
-		limit = 50
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
+
+	var authorID, seriesID *int
+	if authorIDStr != "" {
+		if aid, err := strconv.Atoi(authorIDStr); err == nil {
+			authorID = &aid
+		}
 	}
-	offset, err := strconv.Atoi(offsetStr)
-	if err != nil || offset < 0 {
-		offset = 0
+	if seriesIDStr != "" {
+		if sid, err := strconv.Atoi(seriesIDStr); err == nil {
+			seriesID = &sid
+		}
 	}
 
-	// Initialize as empty slice to ensure JSON returns [] instead of null
-	books := []database.Book{}
-	if search != "" {
-		books, err = database.GlobalStore.SearchBooks(search, limit, offset)
-	} else if authorIDStr != "" {
-		if authorID, convErr := strconv.Atoi(authorIDStr); convErr == nil {
-			books, err = database.GlobalStore.GetBooksByAuthorID(authorID)
-		}
-	} else if seriesIDStr != "" {
-		if seriesID, convErr := strconv.Atoi(seriesIDStr); convErr == nil {
-			books, err = database.GlobalStore.GetBooksBySeriesID(seriesID)
-		}
-	}
-	if len(books) == 0 && err == nil { // fall back to generic list if no results yet
-		books, err = database.GlobalStore.GetAllBooks(limit, offset)
-	}
+	// Call service
+	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), limit, offset, search, authorID, seriesID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Ensure we never return null - always return empty array
-	if books == nil {
-		books = []database.Book{}
-	}
-
-	// Add author and series names to response
-	type bookResponse struct {
-		database.Book
-		AuthorName *string `json:"author_name,omitempty"`
-		SeriesName *string `json:"series_name,omitempty"`
-	}
-
-	enrichedBooks := make([]bookResponse, 0, len(books))
-	for _, book := range books {
-		authorName, seriesName := resolveAuthorAndSeriesNames(&book)
-		resp := bookResponse{Book: book}
-		if authorName != "" {
-			resp.AuthorName = &authorName
-		}
-		if seriesName != "" {
-			resp.SeriesName = &seriesName
-		}
-		enrichedBooks = append(enrichedBooks, resp)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"items": enrichedBooks, "count": len(enrichedBooks), "limit": limit, "offset": offset})
+	// Enrich with author and series names
+	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": limit, "offset": offset})
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	duplicateGroups, err := database.GlobalStore.GetDuplicateBooks()
+	result, err := s.audiobookService.GetDuplicateBooks(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Ensure we never return null - always return empty array
-	if duplicateGroups == nil {
-		duplicateGroups = [][]database.Book{}
-	}
-
-	// Calculate total duplicates count (sum of all books in duplicate groups minus the count of groups)
-	totalDuplicates := 0
-	for _, group := range duplicateGroups {
-		totalDuplicates += len(group) - 1 // Count extras in each group
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"groups":          duplicateGroups,
-		"group_count":     len(duplicateGroups),
-		"duplicate_count": totalDuplicates,
+		"groups":          result.Groups,
+		"group_count":     result.GroupCount,
+		"duplicate_count": result.DuplicateCount,
 	})
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
 	olderThanStr := c.Query("older_than_days")
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > 500 {
-		limit = 50
-	}
-	offset, err := strconv.Atoi(offsetStr)
-	if err != nil || offset < 0 {
-		offset = 0
-	}
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
 
-	var cutoff *time.Time
+	var olderThanDays *int
 	if olderThanStr != "" {
-		if days, convErr := strconv.Atoi(olderThanStr); convErr == nil && days > 0 {
-			ts := time.Now().AddDate(0, 0, -days)
-			cutoff = &ts
+		if days, err := strconv.Atoi(olderThanStr); err == nil && days > 0 {
+			olderThanDays = &days
 		}
 	}
 
-	books, err := database.GlobalStore.ListSoftDeletedBooks(limit, offset, cutoff)
+	books, err := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), limit, offset, olderThanDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-	if books == nil {
-		books = []database.Book{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1029,70 +964,23 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 }
 
 func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
 	deleteFiles := c.Query("delete_files") == "true"
 	olderThanStr := c.Query("older_than_days")
 
-	var cutoff *time.Time
+	var olderThanDays *int
 	if olderThanStr != "" {
 		if days, err := strconv.Atoi(olderThanStr); err == nil && days > 0 {
-			ts := time.Now().AddDate(0, 0, -days)
-			cutoff = &ts
+			olderThanDays = &days
 		}
 	}
 
-	result, err := s.purgeSoftDeletedBooks(deleteFiles, cutoff)
+	result, err := s.audiobookService.PurgeSoftDeletedBooks(c.Request.Context(), deleteFiles, olderThanDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, result)
-}
-
-type purgeResult struct {
-	Attempted    int      `json:"attempted"`
-	Purged       int      `json:"purged"`
-	FilesDeleted int      `json:"files_deleted"`
-	Errors       []string `json:"errors"`
-}
-
-func (s *Server) purgeSoftDeletedBooks(deleteFiles bool, cutoff *time.Time) (*purgeResult, error) {
-	if database.GlobalStore == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	books, err := database.GlobalStore.ListSoftDeletedBooks(1_000_000, 0, cutoff)
-	if err != nil {
-		return nil, err
-	}
-
-	res := &purgeResult{
-		Attempted: len(books),
-		Errors:    []string{},
-	}
-
-	for _, book := range books {
-		if deleteFiles && book.FilePath != "" {
-			if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
-				res.Errors = append(res.Errors, fmt.Sprintf("%s: failed to delete file: %v", book.ID, err))
-			} else if err == nil {
-				res.FilesDeleted++
-			}
-		}
-
-		if err := database.GlobalStore.DeleteBook(book.ID); err != nil {
-			res.Errors = append(res.Errors, fmt.Sprintf("%s: %v", book.ID, err))
-			continue
-		}
-		res.Purged++
-	}
-
-	return res, nil
 }
 
 func (s *Server) runAutoPurgeSoftDeleted() {
@@ -1104,8 +992,8 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 		return
 	}
 
-	cutoff := time.Now().AddDate(0, 0, -config.AppConfig.PurgeSoftDeletedAfterDays)
-	result, err := s.purgeSoftDeletedBooks(config.AppConfig.PurgeSoftDeletedDeleteFiles, &cutoff)
+	days := config.AppConfig.PurgeSoftDeletedAfterDays
+	result, err := s.audiobookService.PurgeSoftDeletedBooks(context.Background(), config.AppConfig.PurgeSoftDeletedDeleteFiles, &days)
 	if err != nil {
 		log.Printf("[WARN] Auto-purge failed: %v", err)
 		return
@@ -1123,26 +1011,10 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 }
 
 func (s *Server) restoreAudiobook(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
 	id := c.Param("id")
-	book, err := database.GlobalStore.GetBookByID(id)
-	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-		return
-	}
-
-	book.MarkedForDeletion = boolPtr(false)
-	book.MarkedForDeletionAt = nil
-	// Restore to imported state so the UI can re-process if needed
-	book.LibraryState = stringPtr("imported")
-
-	updated, err := database.GlobalStore.UpdateBook(id, book)
+	updated, err := s.audiobookService.RestoreAudiobook(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -1153,72 +1025,36 @@ func (s *Server) restoreAudiobook(c *gin.Context) {
 }
 
 func (s *Server) countAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	count, err := database.GlobalStore.CountBooks()
+	count, err := s.audiobookService.CountAudiobooks(c.Request.Context())
 	if err != nil {
-		log.Printf("[DEBUG] countAudiobooks: Error counting books: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[DEBUG] countAudiobooks: Returning count: %d", count)
 	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 func (s *Server) getAudiobook(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-	id := c.Param("id") // ULID string
-
-	book, err := database.GlobalStore.GetBookByID(id)
+	id := c.Param("id")
+	book, err := s.audiobookService.GetAudiobook(c.Request.Context(), id)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-		return
-	}
-
-	state, err := loadMetadataState(book.ID)
-	if err != nil {
-		log.Printf("[ERROR] getAudiobook: failed to load metadata state for %s: %v", book.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
-		return
-	}
-	if state == nil {
-		state = map[string]metadataFieldState{}
-	}
-
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
-
-	var meta metadata.Metadata
-	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
-			meta = m
-		} else {
-			log.Printf("[WARN] getAudiobook: failed to extract metadata for %s: %v", book.FilePath, err)
-		}
-	}
-
-	book.MetadataProvenance = buildMetadataProvenance(book, state, meta, authorName, seriesName)
-	now := time.Now().UTC()
-	book.MetadataProvenanceAt = &now
 
 	// Add author and series names to response
 	type bookResponse struct {
-		database.Book
+		*database.Book
 		AuthorName *string `json:"author_name,omitempty"`
 		SeriesName *string `json:"series_name,omitempty"`
 	}
 
-	resp := bookResponse{Book: *book}
+	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+	resp := bookResponse{Book: book}
 	if authorName != "" {
 		resp.AuthorName = &authorName
 	}
@@ -1230,80 +1066,22 @@ func (s *Server) getAudiobook(c *gin.Context) {
 }
 
 func (s *Server) getAudiobookTags(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
 	id := c.Param("id")
-
-	book, err := database.GlobalStore.GetBookByID(id)
+	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-		return
-	}
 
-	state, err := loadMetadataState(book.ID)
-	if err != nil {
-		log.Printf("[ERROR] getAudiobookTags: failed to load metadata state for %s: %v", book.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
-		return
-	}
-	if state == nil {
-		state = map[string]metadataFieldState{}
-	}
-
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
-
-	response := struct {
-		MediaInfo map[string]interface{}                      `json:"media_info,omitempty"`
-		Tags      map[string]database.MetadataProvenanceEntry `json:"tags,omitempty"`
-	}{
-		MediaInfo: map[string]interface{}{
-			"codec":       stringVal(book.Codec),
-			"bitrate":     intVal(book.Bitrate),
-			"sample_rate": intVal(book.SampleRate),
-			"channels":    intVal(book.Channels),
-			"bit_depth":   intVal(book.BitDepth),
-			"quality":     stringVal(book.Quality),
-			"duration":    intVal(book.Duration),
-		},
-		Tags: map[string]database.MetadataProvenanceEntry{},
-	}
-
-	var meta metadata.Metadata
-	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
-			meta = m
-		} else {
-			log.Printf("[WARN] getAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
-		}
-	}
-
-	response.Tags = buildMetadataProvenance(book, state, meta, authorName, seriesName)
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-	id := c.Param("id") // ULID string
-
-	currentBook, err := database.GlobalStore.GetBookByID(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if currentBook == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-		return
-	}
+	id := c.Param("id")
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -1315,354 +1093,156 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		return
 	}
 
-	type overridePayload struct {
-		Value        json.RawMessage `json:"value"`
-		Locked       *bool           `json:"locked,omitempty"`
-		FetchedValue json.RawMessage `json:"fetched_value,omitempty"`
-		Clear        bool            `json:"clear,omitempty"`
-	}
+	// Get raw payload for field detection
+	rawPayload := map[string]json.RawMessage{}
+	_ = json.Unmarshal(body, &rawPayload)
 
-	type updateAudiobookPayload struct {
-		database.Book
-		AuthorName      *string                    `json:"author_name,omitempty"`
-		SeriesName      *string                    `json:"series_name,omitempty"`
-		Overrides       map[string]overridePayload `json:"overrides,omitempty"`
-		UnlockOverrides []string                   `json:"unlock_overrides,omitempty"`
-	}
-
-	payload := updateAudiobookPayload{
-		Book: *currentBook,
-	}
-
-	if err := json.Unmarshal(body, &payload); err != nil {
+	// Parse into generic map first to avoid type mismatch on embedded Book struct
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(body, &payloadMap); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	rawPayload := map[string]json.RawMessage{}
-	_ = json.Unmarshal(body, &rawPayload)
-
-	now := time.Now()
-
-	state, err := loadMetadataState(id)
-	if err != nil {
-		log.Printf("[ERROR] updateAudiobook: failed to load metadata state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load metadata state"})
+	// Get current book from database
+	currentBook, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || currentBook == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
-	if state == nil {
-		state = map[string]metadataFieldState{}
+
+	// Build AudiobookUpdate with current book data, then apply updates
+	// Make a copy of the current book to avoid modifying the original
+	bookCopy := *currentBook
+	updates := &AudiobookUpdate{
+		Book: &bookCopy,
 	}
 
-	applyOverrideToPayload := func(field string, value interface{}) {
-		switch field {
-		case "title":
-			if v, ok := value.(string); ok {
-				payload.Title = v
-			}
-		case "author_name":
-			if v, ok := value.(string); ok {
-				payload.AuthorName = &v
-			}
-		case "series_name":
-			if v, ok := value.(string); ok {
-				payload.SeriesName = &v
-			}
-		case "narrator":
-			if v, ok := value.(string); ok {
-				payload.Narrator = stringPtr(v)
-			}
-		case "publisher":
-			if v, ok := value.(string); ok {
-				payload.Publisher = stringPtr(v)
-			}
-		case "language":
-			if v, ok := value.(string); ok {
-				payload.Language = stringPtr(v)
-			}
-		case "audiobook_release_year":
-			switch v := value.(type) {
-			case float64:
-				year := int(v)
-				payload.AudiobookReleaseYear = &year
-			case int:
-				year := v
-				payload.AudiobookReleaseYear = &year
-			}
-		case "isbn10":
-			if v, ok := value.(string); ok {
-				payload.ISBN10 = stringPtr(v)
-			}
-		case "isbn13":
-			if v, ok := value.(string); ok {
-				payload.ISBN13 = stringPtr(v)
-			}
-		}
+	// Copy relevant fields from the map to the Book struct
+	if title, ok := payloadMap["title"].(string); ok {
+		updates.Title = title
+	}
+	if authorID, ok := payloadMap["author_id"].(float64); ok {
+		aid := int(authorID)
+		updates.AuthorID = &aid
+	}
+	if seriesID, ok := payloadMap["series_id"].(float64); ok {
+		sid := int(seriesID)
+		updates.SeriesID = &sid
 	}
 
-	for field, override := range payload.Overrides {
-		entry := state[field]
-		if override.Clear {
-			entry.OverrideValue = nil
-			entry.OverrideLocked = false
-			entry.UpdatedAt = now
-		} else {
-			if len(override.Value) > 0 {
-				val := decodeRawValue(override.Value)
-				entry.OverrideValue = val
-				entry.OverrideLocked = override.Locked == nil || *override.Locked
-				entry.UpdatedAt = now
-				applyOverrideToPayload(field, val)
-			} else if override.Locked != nil {
-				entry.OverrideLocked = *override.Locked
-				entry.UpdatedAt = now
-			}
-			if len(override.FetchedValue) > 0 {
-				entry.FetchedValue = decodeRawValue(override.FetchedValue)
-				if entry.UpdatedAt.IsZero() {
-					entry.UpdatedAt = now
+	// Handle author_name and series_name
+	if authorName, ok := payloadMap["author_name"].(string); ok {
+		updates.AuthorName = &authorName
+	}
+	if seriesName, ok := payloadMap["series_name"].(string); ok {
+		updates.SeriesName = &seriesName
+	}
+
+	// Handle other Book fields
+	if format, ok := payloadMap["format"].(string); ok {
+		updates.Format = format
+	}
+	if filePath, ok := payloadMap["file_path"].(string); ok {
+		updates.FilePath = filePath
+	}
+	if narrator, ok := payloadMap["narrator"].(string); ok {
+		updates.Narrator = &narrator
+	}
+	if publisher, ok := payloadMap["publisher"].(string); ok {
+		updates.Publisher = &publisher
+	}
+	if language, ok := payloadMap["language"].(string); ok {
+		updates.Language = &language
+	}
+	if year, ok := payloadMap["audiobook_release_year"].(float64); ok {
+		y := int(year)
+		updates.AudiobookReleaseYear = &y
+	}
+	if isbn10, ok := payloadMap["isbn10"].(string); ok {
+		updates.ISBN10 = &isbn10
+	}
+	if isbn13, ok := payloadMap["isbn13"].(string); ok {
+		updates.ISBN13 = &isbn13
+	}
+
+	// Handle overrides if present
+	if overridesMap, ok := payloadMap["overrides"].(map[string]interface{}); ok {
+		updates.Overrides = make(map[string]OverridePayload)
+		for k, v := range overridesMap {
+			if vm, ok := v.(map[string]interface{}); ok {
+				op := OverridePayload{}
+				if val, ok := vm["value"]; ok {
+					if valBytes, err := json.Marshal(val); err == nil {
+						op.Value = valBytes
+					}
 				}
-			}
-		}
-		state[field] = entry
-	}
-
-	resolvedAuthorName := ""
-	if payload.AuthorName != nil {
-		name := strings.TrimSpace(*payload.AuthorName)
-		if name != "" {
-			author, err := database.GlobalStore.GetAuthorByName(name)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve author"})
-				return
-			}
-			if author == nil {
-				author, err = database.GlobalStore.CreateAuthor(name)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create author"})
-					return
+				if locked, ok := vm["locked"].(bool); ok {
+					op.Locked = &locked
 				}
-			}
-			payload.AuthorID = &author.ID
-			resolvedAuthorName = author.Name
-		} else {
-			payload.AuthorID = nil
-		}
-	} else if payload.AuthorID != nil {
-		if author, err := database.GlobalStore.GetAuthorByID(*payload.AuthorID); err == nil && author != nil {
-			resolvedAuthorName = author.Name
-		}
-	}
-
-	resolvedSeriesName := ""
-	if payload.SeriesName != nil {
-		name := strings.TrimSpace(*payload.SeriesName)
-		if name != "" {
-			series, err := database.GlobalStore.GetSeriesByName(name, payload.AuthorID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve series"})
-				return
-			}
-			if series == nil {
-				series, err = database.GlobalStore.CreateSeries(name, payload.AuthorID)
-				if err != nil {
-					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create series"})
-					return
+				if fetchedVal, ok := vm["fetched_value"]; ok {
+					if fetchedBytes, err := json.Marshal(fetchedVal); err == nil {
+						op.FetchedValue = fetchedBytes
+					}
 				}
+				if clear, ok := vm["clear"].(bool); ok {
+					op.Clear = clear
+				}
+				updates.Overrides[k] = op
 			}
-			payload.SeriesID = &series.ID
-			resolvedSeriesName = series.Name
-		} else {
-			payload.SeriesID = nil
-		}
-	} else if payload.SeriesID != nil {
-		if series, err := database.GlobalStore.GetSeriesByID(*payload.SeriesID); err == nil && series != nil {
-			resolvedSeriesName = series.Name
 		}
 	}
 
-	fieldExtractors := map[string]func() (interface{}, bool){
-		"title": func() (interface{}, bool) {
-			return payload.Title, true
-		},
-		"author_name": func() (interface{}, bool) {
-			if resolvedAuthorName == "" {
-				return nil, false
+	// Handle unlock_overrides if present
+	if unlockOverridesRaw, ok := payloadMap["unlock_overrides"].([]interface{}); ok {
+		updates.UnlockOverrides = make([]string, len(unlockOverridesRaw))
+		for i, v := range unlockOverridesRaw {
+			if s, ok := v.(string); ok {
+				updates.UnlockOverrides[i] = s
 			}
-			return resolvedAuthorName, true
-		},
-		"series_name": func() (interface{}, bool) {
-			if resolvedSeriesName == "" {
-				return nil, false
-			}
-			return resolvedSeriesName, true
-		},
-		"narrator": func() (interface{}, bool) {
-			if payload.Narrator == nil {
-				return nil, false
-			}
-			return *payload.Narrator, true
-		},
-		"publisher": func() (interface{}, bool) {
-			if payload.Publisher == nil {
-				return nil, false
-			}
-			return *payload.Publisher, true
-		},
-		"language": func() (interface{}, bool) {
-			if payload.Language == nil {
-				return nil, false
-			}
-			return *payload.Language, true
-		},
-		"audiobook_release_year": func() (interface{}, bool) {
-			if payload.AudiobookReleaseYear == nil {
-				return nil, false
-			}
-			return *payload.AudiobookReleaseYear, true
-		},
-		"isbn10": func() (interface{}, bool) {
-			if payload.ISBN10 == nil {
-				return nil, false
-			}
-			return *payload.ISBN10, true
-		},
-		"isbn13": func() (interface{}, bool) {
-			if payload.ISBN13 == nil {
-				return nil, false
-			}
-			return *payload.ISBN13, true
-		},
-	}
-
-	for field, extractor := range fieldExtractors {
-		if _, ok := rawPayload[field]; !ok {
-			continue
-		}
-		if _, hasOverride := payload.Overrides[field]; hasOverride {
-			continue
-		}
-		if value, ok := extractor(); ok {
-			entry := state[field]
-			entry.OverrideValue = value
-			entry.OverrideLocked = true
-			entry.UpdatedAt = now
-			state[field] = entry
 		}
 	}
 
-	for _, field := range payload.UnlockOverrides {
-		entry := state[field]
-		entry.OverrideLocked = false
-		entry.UpdatedAt = now
-		state[field] = entry
+	// Call service
+	req := &UpdateAudiobookRequest{
+		Updates:    updates,
+		RawPayload: rawPayload,
 	}
 
-	updatedBook, err := database.GlobalStore.UpdateBook(id, &payload.Book)
+	updatedBook, err := s.audiobookService.UpdateAudiobook(c.Request.Context(), id, req)
 	if err != nil {
-		if err.Error() == "book not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	if err := saveMetadataState(id, state); err != nil {
-		log.Printf("[ERROR] updateAudiobook: failed to save metadata state: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist metadata state"})
-		return
-	}
-
-	if resolvedAuthorName != "" && updatedBook.AuthorID != nil {
-		updatedBook.Author = &database.Author{ID: *updatedBook.AuthorID, Name: resolvedAuthorName}
-	}
-	if resolvedSeriesName != "" && updatedBook.SeriesID != nil {
-		updatedBook.Series = &database.Series{ID: *updatedBook.SeriesID, Name: resolvedSeriesName, AuthorID: payload.AuthorID}
 	}
 
 	c.JSON(http.StatusOK, updatedBook)
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-	id := c.Param("id") // ULID string
-
-	// Check for query parameters for enhanced delete options
+	id := c.Param("id")
 	blockHash := c.Query("block_hash") == "true"
 	softDelete := c.Query("soft_delete") == "true"
 
-	// Get the book first to access its hash
-	book, err := database.GlobalStore.GetBookByID(id)
+	opts := &DeleteAudiobookOptions{
+		SoftDelete: softDelete,
+		BlockHash:  blockHash,
+	}
+
+	result, err := s.audiobookService.DeleteAudiobook(c.Request.Context(), id, opts)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		if strings.Contains(err.Error(), "already soft deleted") {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	// If soft delete requested, mark for deletion instead of hard delete
-	if softDelete {
-		if (book.MarkedForDeletion != nil && *book.MarkedForDeletion) ||
-			(book.LibraryState != nil && strings.EqualFold(*book.LibraryState, "deleted")) {
-			c.JSON(http.StatusConflict, gin.H{"error": "audiobook already soft deleted"})
-			return
-		}
-
-		now := time.Now()
-		book.MarkedForDeletion = boolPtr(true)
-		book.MarkedForDeletionAt = &now
-		book.LibraryState = stringPtr("deleted")
-
-		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Optionally block the hash
-		blocked := false
-		if blockHash && book.FileHash != nil && *book.FileHash != "" {
-			if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - soft delete"); err != nil {
-				log.Printf("Warning: failed to block hash during soft delete: %v", err)
-			} else {
-				blocked = true
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"message":     "audiobook soft deleted",
-			"blocked":     blocked,
-			"soft_delete": true,
-		})
-		return
-	}
-
-	// Hard delete path
-	// Optionally block the hash before deleting
-	blocked := false
-	if blockHash && book.FileHash != nil && *book.FileHash != "" {
-		if err := database.GlobalStore.AddBlockedHash(*book.FileHash, "User deleted - prevent reimport"); err != nil {
-			log.Printf("Warning: failed to block hash before delete: %v", err)
-			// Continue with delete even if blocking fails
-		} else {
-			blocked = true
-		}
-	}
-
-	if err := database.GlobalStore.DeleteBook(id); err != nil {
-		if err.Error() == "book not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "audiobook deleted",
-		"blocked": blocked,
-	})
+	c.JSON(http.StatusOK, result)
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
