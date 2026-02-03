@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -103,7 +103,7 @@ func TestHealthCheck(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]interface{}
+		var response map[string]any
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
 
@@ -130,7 +130,7 @@ func TestListAudiobooks(t *testing.T) {
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
 				assert.NotNil(t, response["items"])
@@ -141,7 +141,7 @@ func TestListAudiobooks(t *testing.T) {
 			queryParams:    "?limit=10&offset=0",
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
 				assert.NotNil(t, response["items"])
@@ -152,7 +152,7 @@ func TestListAudiobooks(t *testing.T) {
 			queryParams:    "?search=test",
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
 				assert.NotNil(t, response["items"])
@@ -194,11 +194,12 @@ func TestUpdateAudiobook(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	updateData := map[string]interface{}{
+	updateData := map[string]any{
 		"title":  "Updated Title",
 		"author": "Updated Author",
 	}
-	body, _ := json.Marshal(updateData)
+	body, err := json.Marshal(updateData)
+	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/audiobooks/01HXZ123456789ABCDEFGHJ", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -216,9 +217,7 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 
 	tempDir := t.TempDir()
 	tempFile := filepath.Join(tempDir, "book.m4b")
-	otherFile := filepath.Join(tempDir, "other.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	require.NoError(t, os.WriteFile(otherFile, []byte("audio"), 0o644))
 
 	created, err := database.GlobalStore.CreateBook(&database.Book{
 		Title:    "Stored Title",
@@ -247,11 +246,11 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 
 	var response struct {
 		Tags map[string]struct {
-			EffectiveValue  interface{} `json:"effective_value"`
+			EffectiveValue  any `json:"effective_value"`
 			EffectiveSource string      `json:"effective_source"`
-			StoredValue     interface{} `json:"stored_value"`
-			OverrideValue   interface{} `json:"override_value"`
-			FetchedValue    interface{} `json:"fetched_value"`
+			StoredValue     any `json:"stored_value"`
+			OverrideValue   any `json:"override_value"`
+			FetchedValue    any `json:"fetched_value"`
 			OverrideLocked  bool        `json:"override_locked"`
 		} `json:"tags"`
 	}
@@ -328,10 +327,11 @@ func TestBatchUpdateAudiobooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	batchData := map[string]interface{}{
-		"audiobooks": []map[string]interface{}{},
+	batchData := map[string]any{
+		"audiobooks": []map[string]any{},
 	}
-	body, _ := json.Marshal(batchData)
+	body, err := json.Marshal(batchData)
+	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/audiobooks/batch", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -354,7 +354,7 @@ func TestListAuthors(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.NotNil(t, response["items"])
@@ -372,7 +372,7 @@ func TestListSeries(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.NotNil(t, response["items"])
@@ -424,7 +424,7 @@ func TestListImportPaths(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.NotNil(t, response["importPaths"])
@@ -469,7 +469,7 @@ func TestGetConfig(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.NotNil(t, response["config"])
@@ -487,7 +487,7 @@ func TestListBackups(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.NotNil(t, response["backups"])
@@ -500,20 +500,20 @@ func TestBatchUpdateMetadata(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    map[string]interface{}
+		requestBody    map[string]any
 		expectedStatus int
 	}{
 		{
 			name: "empty batch",
-			requestBody: map[string]interface{}{
-				"updates":  []interface{}{},
+			requestBody: map[string]any{
+				"updates":  []any{},
 				"validate": true,
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name: "invalid request - missing updates",
-			requestBody: map[string]interface{}{
+			requestBody: map[string]any{
 				"validate": true,
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -522,7 +522,8 @@ func TestBatchUpdateMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.requestBody)
+			body, err := json.Marshal(tt.requestBody)
+			require.NoError(t, err, "failed to marshal request body for test case %s", tt.name)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/metadata/batch-update", bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
@@ -541,14 +542,14 @@ func TestValidateMetadata(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    map[string]interface{}
+		requestBody    map[string]any
 		expectedStatus int
 		expectValid    bool
 	}{
 		{
 			name: "valid metadata",
-			requestBody: map[string]interface{}{
-				"updates": map[string]interface{}{
+			requestBody: map[string]any{
+				"updates": map[string]any{
 					"title":  "Test Book",
 					"author": "Test Author",
 				},
@@ -558,8 +559,8 @@ func TestValidateMetadata(t *testing.T) {
 		},
 		{
 			name: "invalid metadata - missing required field",
-			requestBody: map[string]interface{}{
-				"updates": map[string]interface{}{
+			requestBody: map[string]any{
+				"updates": map[string]any{
 					"title": "",
 				},
 			},
@@ -570,7 +571,8 @@ func TestValidateMetadata(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.requestBody)
+			body, err := json.Marshal(tt.requestBody)
+			require.NoError(t, err, "failed to marshal request body for test case %s", tt.name)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/metadata/validate", bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
@@ -579,8 +581,8 @@ func TestValidateMetadata(t *testing.T) {
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
-			var response map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &response)
+			var response map[string]any
+			err = json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
 			if valid, ok := response["valid"].(bool); ok {
@@ -644,10 +646,12 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 		}
 		title := r.URL.Query().Get("title")
 		if title == "The Hobbit" {
-			_, _ = w.Write([]byte(`{"numFound":1,"start":0,"docs":[{"title":"The Hobbit","author_name":["J.R.R. Tolkien"],"first_publish_year":1937,"isbn":["1234567890"],"publisher":["Test Publisher"],"language":["eng"]}]}`))
+			_, err := w.Write([]byte(`{"numFound":1,"start":0,"docs":[{"title":"The Hobbit","author_name":["J.R.R. Tolkien"],"first_publish_year":1937,"isbn":["1234567890"],"publisher":["Test Publisher"],"language":["eng"]}]}`))
+			_ = err
 			return
 		}
-		_, _ = w.Write([]byte(`{"numFound":0,"start":0,"docs":[]}`))
+		_, err := w.Write([]byte(`{"numFound":0,"start":0,"docs":[]}`))
+		_ = err
 	}))
 	defer mockServer.Close()
 
@@ -658,10 +662,11 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	})
 
 	// Act: bulk fetch metadata for both books.
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"book_ids": []string{created.ID, other.ID},
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/metadata/bulk-fetch", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -864,20 +869,12 @@ func TestResponseTimes(t *testing.T) {
 		{http.MethodGet, "/api/v1/config"},
 	}
 
-	maxDuration := int64(500) // 500ms max
-
 	for _, endpoint := range endpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
 			w := httptest.NewRecorder()
 
-			start := httptest.NewRecorder()
 			server.router.ServeHTTP(w, req)
-
-			// Note: In actual test, we'd measure time properly
-			// This is a placeholder to show the pattern
-			_ = start
-			_ = maxDuration
 
 			assert.Equal(t, http.StatusOK, w.Code)
 		})
@@ -900,17 +897,17 @@ func TestDashboardSizeFormat(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	// Verify sizeDistribution exists
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
 	assert.True(t, ok, "sizeDistribution should exist")
 	assert.NotNil(t, sizeDistribution)
 
 	// Verify formatDistribution exists
-	formatDistribution, ok := response["formatDistribution"].(map[string]interface{})
+	formatDistribution, ok := response["formatDistribution"].(map[string]any)
 	assert.True(t, ok, "formatDistribution should exist")
 	assert.NotNil(t, formatDistribution)
 
@@ -953,7 +950,7 @@ func TestSizeCalculationAccuracy(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -1003,11 +1000,11 @@ func TestSizeBucketDistribution(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
 	require.True(t, ok, "sizeDistribution should exist")
 
 	// Verify all size buckets are present
@@ -1030,16 +1027,16 @@ func TestEmptyDashboardSizeFormat(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	// Even with no audiobooks, size and format distributions should exist
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]interface{})
+	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
 	assert.True(t, ok, "sizeDistribution should exist even when empty")
 	assert.NotNil(t, sizeDistribution)
 
-	formatDistribution, ok := response["formatDistribution"].(map[string]interface{})
+	formatDistribution, ok := response["formatDistribution"].(map[string]any)
 	assert.True(t, ok, "formatDistribution should exist even when empty")
 	assert.NotNil(t, formatDistribution)
 }
@@ -1060,12 +1057,12 @@ func TestGetMetadataFields(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	// Verify fields structure
-	fields, ok := response["fields"].([]interface{})
+	fields, ok := response["fields"].([]any)
 	assert.True(t, ok, "fields should be an array")
 	assert.NotNil(t, fields)
 
@@ -1074,7 +1071,7 @@ func TestGetMetadataFields(t *testing.T) {
 	fieldNames := make(map[string]bool)
 
 	for _, field := range fields {
-		fieldMap, ok := field.(map[string]interface{})
+		fieldMap, ok := field.(map[string]any)
 		if ok {
 			if name, ok := fieldMap["name"].(string); ok {
 				fieldNames[name] = true
@@ -1095,7 +1092,7 @@ func TestMetadataFieldValidation(t *testing.T) {
 	tests := []struct {
 		name           string
 		field          string
-		value          interface{}
+		value          any
 		expectedValid  bool
 		expectedStatus int
 	}{
@@ -1131,13 +1128,14 @@ func TestMetadataFieldValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			requestBody := map[string]interface{}{
-				"updates": map[string]interface{}{
+			requestBody := map[string]any{
+				"updates": map[string]any{
 					tt.field: tt.value,
 				},
 			}
 
-			body, _ := json.Marshal(requestBody)
+			body, err := json.Marshal(requestBody)
+			require.NoError(t, err, "failed to marshal request body for test case %s", tt.name)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/metadata/validate", bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
@@ -1165,12 +1163,12 @@ func TestGetWork(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	// Verify work queue structure
-	workItems, ok := response["items"].([]interface{})
+	workItems, ok := response["items"].([]any)
 	assert.True(t, ok, "work items should be an array")
 	assert.NotNil(t, workItems)
 }
@@ -1225,18 +1223,18 @@ func TestWorkQueuePriority(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	workItems, ok := response["items"].([]interface{})
+	workItems, ok := response["items"].([]any)
 	assert.True(t, ok)
 
 	// Verify priority ordering if items exist
 	if len(workItems) > 1 {
 		for i := 0; i < len(workItems)-1; i++ {
-			current := workItems[i].(map[string]interface{})
-			next := workItems[i+1].(map[string]interface{})
+			current := workItems[i].(map[string]any)
+			next := workItems[i+1].(map[string]any)
 
 			currentPriority, _ := current["priority"].(float64)
 			nextPriority, _ := next["priority"].(float64)
@@ -1290,10 +1288,10 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 
 	var resp struct {
 		Tags map[string]struct {
-			FileValue      interface{} `json:"file_value"`
-			FetchedValue   interface{} `json:"fetched_value"`
-			StoredValue    interface{} `json:"stored_value"`
-			OverrideValue  interface{} `json:"override_value"`
+			FileValue      any `json:"file_value"`
+			FetchedValue   any `json:"fetched_value"`
+			StoredValue    any `json:"stored_value"`
+			OverrideValue  any `json:"override_value"`
 			OverrideLocked bool        `json:"override_locked"`
 		} `json:"tags"`
 	}
@@ -1329,11 +1327,11 @@ func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"title":       "Updated Title",
 		"author_name": "Override Author",
-		"overrides": map[string]interface{}{
-			"narrator": map[string]interface{}{
+		"overrides": map[string]any{
+			"narrator": map[string]any{
 				"value":  "Narrator Override",
 				"locked": true,
 			},
