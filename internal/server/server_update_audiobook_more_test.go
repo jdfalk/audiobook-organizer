@@ -107,9 +107,15 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 		stateByField[st.Field] = st
 	}
 
+	// Debug: print all fields
+	t.Logf("Retrieved %d metadata state entries:", len(states))
+	for _, st := range states {
+		t.Logf("  Field: %s, OverrideLocked: %v, OverrideValue: %v", st.Field, st.OverrideLocked, st.OverrideValue)
+	}
+
 	// Override via payload.Overrides.
 	stTitle, ok := stateByField["title"]
-	require.True(t, ok)
+	require.True(t, ok, "title state not found")
 	assert.True(t, stTitle.OverrideLocked)
 	require.NotNil(t, stTitle.OverrideValue)
 	assert.Equal(t, "Override Title", decodeMetadataValue(stTitle.OverrideValue))
@@ -118,8 +124,8 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 
 	// Auto-created from raw payload for fields with no explicit override.
 	stIsbn13, ok := stateByField["isbn13"]
-	require.True(t, ok)
-	assert.True(t, stIsbn13.OverrideLocked)
+	require.True(t, ok, "isbn13 state not found")
+	assert.True(t, stIsbn13.OverrideLocked, "isbn13 OverrideLocked should be true")
 	require.NotNil(t, stIsbn13.OverrideValue)
 	assert.Equal(t, "9999999999999", decodeMetadataValue(stIsbn13.OverrideValue))
 
