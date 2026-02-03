@@ -1,7 +1,7 @@
 // file: internal/server/server_import_paths_and_blocklist_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 2f4a6b8c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-01-24
+// last-edited: 2026-02-03
 
 package server
 
@@ -34,16 +34,12 @@ func (noopProgress) Log(level, message string, details *string) error        { r
 func (noopProgress) IsCanceled() bool                                        { return false }
 
 func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
 	store := dbmocks.NewMockStore(t)
 	store.EXPECT().GetAllAuthors().Return(([]database.Author)(nil), nil)
 	store.EXPECT().GetAllSeries().Return(([]database.Series)(nil), nil)
 
-	origStore := database.GlobalStore
-	database.GlobalStore = store
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	server, cleanup := setupTestServerWithStore(t, store)
+	defer cleanup()
 
 	// Authors
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/authors", nil)

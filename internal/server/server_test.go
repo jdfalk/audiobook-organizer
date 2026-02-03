@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.5.1
+// version: 1.6.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -66,6 +66,25 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 			_ = queue.Shutdown(5 * time.Second)
 		}
 		_ = os.RemoveAll(tempDir)
+	}
+
+	return server, cleanup
+}
+
+// setupTestServerWithStore creates a test server with a provided database store
+func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func()) {
+	// Set Gin to test mode
+	gin.SetMode(gin.TestMode)
+
+	// Set the global store to the provided store
+	database.GlobalStore = store
+
+	// Create server with the provided store (services will use it)
+	server := NewServer()
+
+	// Cleanup function
+	cleanup := func() {
+		// Don't close the store - caller is responsible for cleanup
 	}
 
 	return server, cleanup
