@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"os"
 	"testing"
+	"time"
 
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -394,5 +395,326 @@ func TestCountBooks(t *testing.T) {
 	// Assert
 	if newCount != initialCount+1 {
 		t.Errorf("Expected count to increase by 1, got %d -> %d", initialCount, newCount)
+	}
+}
+
+// ============================================================================
+// Hash Query Tests - Verify deduplication functionality
+// ============================================================================
+
+// TestGetBookByFileHash_Success verifies we can retrieve a book by its file hash
+func TestGetBookByFileHash_Success(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	hash := "abc123def456"
+	book := &Book{
+		Title:    "Hashed Book",
+		FilePath: "/test/hashed.mp3",
+		FileHash: &hash,
+	}
+
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	retrieved, err := store.GetBookByFileHash(hash)
+	if err != nil {
+		t.Fatalf("Failed to get book by file hash: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("Expected non-nil book")
+	}
+	if retrieved.ID != created.ID {
+		t.Errorf("Expected book ID %s, got %s", created.ID, retrieved.ID)
+	}
+	if retrieved.FileHash == nil || *retrieved.FileHash != hash {
+		t.Errorf("Expected FileHash %s, got %v", hash, retrieved.FileHash)
+	}
+}
+
+// TestGetBookByFileHash_NotFound verifies non-existent hashes return nil
+func TestGetBookByFileHash_NotFound(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	retrieved, err := store.GetBookByFileHash("nonexistent_hash")
+	if err != nil {
+		t.Fatalf("Expected nil for non-existent hash, got error: %v", err)
+	}
+	if retrieved != nil {
+		t.Error("Expected nil result for non-existent hash")
+	}
+}
+
+// TestGetBookByOriginalHash_Success verifies original file hash lookup
+func TestGetBookByOriginalHash_Success(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	originalHash := "original_abc123"
+	book := &Book{
+		Title:            "Original Book",
+		FilePath:         "/test/original.mp3",
+		OriginalFileHash: &originalHash,
+	}
+
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	retrieved, err := store.GetBookByOriginalHash(originalHash)
+	if err != nil {
+		t.Fatalf("Failed to get book by original hash: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("Expected non-nil book")
+	}
+	if retrieved.ID != created.ID {
+		t.Errorf("Expected book ID %s, got %s", created.ID, retrieved.ID)
+	}
+}
+
+// TestGetBookByOrganizedHash_Success verifies organized file hash lookup
+func TestGetBookByOrganizedHash_Success(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	organizedHash := "organized_def789"
+	book := &Book{
+		Title:             "Organized Book",
+		FilePath:          "/test/organized.mp3",
+		OrganizedFileHash: &organizedHash,
+	}
+
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	retrieved, err := store.GetBookByOrganizedHash(organizedHash)
+	if err != nil {
+		t.Fatalf("Failed to get book by organized hash: %v", err)
+	}
+	if retrieved == nil {
+		t.Fatal("Expected non-nil book")
+	}
+	if retrieved.ID != created.ID {
+		t.Errorf("Expected book ID %s, got %s", created.ID, retrieved.ID)
+	}
+}
+
+// TestGetDuplicateBooks_Success verifies duplicate detection by file hash
+func TestGetDuplicateBooks_Success(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	sharedHash := "duplicate_hash_123"
+
+	// Create two books with the same file hash
+	book1 := &Book{
+		Title:    "Book 1",
+		FilePath: "/test/book1.mp3",
+		FileHash: &sharedHash,
+	}
+	created1, err := store.CreateBook(book1)
+	if err != nil {
+		t.Fatalf("Failed to create first book: %v", err)
+	}
+
+	book2 := &Book{
+		Title:    "Book 2",
+		FilePath: "/test/book2.mp3",
+		FileHash: &sharedHash,
+	}
+	created2, err := store.CreateBook(book2)
+	if err != nil {
+		t.Fatalf("Failed to create second book: %v", err)
+	}
+
+	// Get duplicates
+	duplicates, err := store.GetDuplicateBooks()
+	if err != nil {
+		t.Fatalf("Failed to get duplicates: %v", err)
+	}
+
+	// Find our duplicate group
+	found := false
+	for _, group := range duplicates {
+		if len(group) >= 2 {
+			ids := make(map[string]bool)
+			for _, b := range group {
+				ids[b.ID] = true
+			}
+			if ids[created1.ID] && ids[created2.ID] {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Expected duplicate group containing both books")
+	}
+}
+
+// ============================================================================
+// Soft Delete Tests - Verify soft deletion functionality
+// ============================================================================
+
+// TestMarkBookForDeletion_Success verifies marking a book for deletion
+func TestMarkBookForDeletion_Success(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	book := &Book{
+		Title:    "Book to Delete",
+		FilePath: "/test/delete.mp3",
+	}
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	// Mark for deletion
+	trueVal := true
+	now := time.Now()
+	updated := &Book{
+		ID:                  created.ID,
+		Title:               created.Title,
+		FilePath:            created.FilePath,
+		MarkedForDeletion:   &trueVal,
+		MarkedForDeletionAt: &now,
+	}
+	_, err = store.UpdateBook(created.ID, updated)
+	if err != nil {
+		t.Fatalf("Failed to update book: %v", err)
+	}
+
+	// Verify it's marked
+	retrieved, err := store.GetBookByID(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve book: %v", err)
+	}
+	if retrieved.MarkedForDeletion == nil || !*retrieved.MarkedForDeletion {
+		t.Error("Expected MarkedForDeletion to be true")
+	}
+	if retrieved.MarkedForDeletionAt == nil {
+		t.Error("Expected MarkedForDeletionAt to be set")
+	}
+}
+
+// TestListSoftDeletedBooks_Includes verifies ListSoftDeletedBooks returns soft-deleted books
+func TestListSoftDeletedBooks_Includes(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create active book
+	active := &Book{
+		Title:    "Active Book",
+		FilePath: "/test/active.mp3",
+	}
+	_, err := store.CreateBook(active)
+	if err != nil {
+		t.Fatalf("Failed to create active book: %v", err)
+	}
+
+	// Create and mark deleted book
+	deleted := &Book{
+		Title:    "Deleted Book",
+		FilePath: "/test/deleted.mp3",
+	}
+	createdDeleted, err := store.CreateBook(deleted)
+	if err != nil {
+		t.Fatalf("Failed to create deleted book: %v", err)
+	}
+
+	trueVal := true
+	now := time.Now()
+	deletedUpdate := &Book{
+		ID:                  createdDeleted.ID,
+		Title:               createdDeleted.Title,
+		FilePath:            createdDeleted.FilePath,
+		MarkedForDeletion:   &trueVal,
+		MarkedForDeletionAt: &now,
+	}
+	_, err = store.UpdateBook(createdDeleted.ID, deletedUpdate)
+	if err != nil {
+		t.Fatalf("Failed to mark book for deletion: %v", err)
+	}
+
+	// List soft-deleted books
+	softDeleted, err := store.ListSoftDeletedBooks(10, 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to list soft-deleted books: %v", err)
+	}
+
+	found := false
+	for _, b := range softDeleted {
+		if b.ID == createdDeleted.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected to find deleted book in soft-deleted list")
+	}
+}
+
+// TestRestoreSoftDeletedBook verifies restoration of soft-deleted books
+func TestRestoreSoftDeletedBook(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	book := &Book{
+		Title:    "Book to Restore",
+		FilePath: "/test/restore.mp3",
+	}
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	// Mark for deletion
+	trueVal := true
+	now := time.Now()
+	deleted := &Book{
+		ID:                  created.ID,
+		Title:               created.Title,
+		FilePath:            created.FilePath,
+		MarkedForDeletion:   &trueVal,
+		MarkedForDeletionAt: &now,
+	}
+	_, err = store.UpdateBook(created.ID, deleted)
+	if err != nil {
+		t.Fatalf("Failed to mark for deletion: %v", err)
+	}
+
+	// Restore (unmark deletion)
+	falseVal := false
+	restored := &Book{
+		ID:                  created.ID,
+		Title:               created.Title,
+		FilePath:            created.FilePath,
+		MarkedForDeletion:   &falseVal,
+		MarkedForDeletionAt: nil,
+	}
+	_, err = store.UpdateBook(created.ID, restored)
+	if err != nil {
+		t.Fatalf("Failed to restore book: %v", err)
+	}
+
+	// Verify restoration
+	retrieved, err := store.GetBookByID(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve restored book: %v", err)
+	}
+	if retrieved.MarkedForDeletion == nil || *retrieved.MarkedForDeletion {
+		t.Error("Expected MarkedForDeletion to be false after restoration")
+	}
+	if retrieved.MarkedForDeletionAt != nil {
+		t.Error("Expected MarkedForDeletionAt to be nil after restoration")
 	}
 }
