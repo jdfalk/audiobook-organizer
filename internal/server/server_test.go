@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -52,7 +52,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Initialize realtime hub
 	hub := realtime.NewEventHub()
-	realtime.GlobalHub = hub
+	realtime.SetGlobalHub(hub)
 
 	// Create server
 	server := NewServer()

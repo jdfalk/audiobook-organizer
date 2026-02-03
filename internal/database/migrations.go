@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.7.0
+// version: 1.7.1
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -667,7 +667,6 @@ func migration013Up(store Store) error {
 	return nil
 }
 
-
 // migration014Up flags books with corrupted organize paths (unresolved
 // placeholders like {series} or {author}) by setting library_state to
 // 'needs_review'. This is a one-time cleanup for paths written before the
@@ -714,7 +713,7 @@ func migration014UpPebble(store Store) error {
 		state := "needs_review"
 		book.LibraryState = &state
 		if _, updateErr := store.UpdateBook(book.ID, &book); updateErr != nil {
-			log.Printf("    - Warning: could not flag book %d (%s): %v", book.ID, book.FilePath, updateErr)
+			log.Printf("    - Warning: could not flag book %s (%s): %v", book.ID, book.FilePath, updateErr)
 			continue
 		}
 		flagged++

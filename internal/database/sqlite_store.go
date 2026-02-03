@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.14.0
+// version: 1.14.1
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -252,6 +252,8 @@ func (s *SQLiteStore) createTables() error {
 		quantity INTEGER DEFAULT 1,
 		marked_for_deletion BOOLEAN DEFAULT 0,
 		marked_for_deletion_at DATETIME,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -395,6 +397,8 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"quantity":               "INTEGER DEFAULT 1",
 		"marked_for_deletion":    "BOOLEAN DEFAULT 0",
 		"marked_for_deletion_at": "DATETIME",
+		"created_at":             "DATETIME DEFAULT CURRENT_TIMESTAMP",
+		"updated_at":             "DATETIME",
 	}
 
 	// Fetch existing columns

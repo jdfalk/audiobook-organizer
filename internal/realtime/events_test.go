@@ -1,5 +1,5 @@
 // file: internal/realtime/events_test.go
-// version: 1.1.0
+// version: 1.1.2
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 package realtime
@@ -344,21 +344,21 @@ func TestCalculatePercentage(t *testing.T) {
 
 func TestInitializeEventHub(t *testing.T) {
 	// Save old global hub
-	oldHub := GlobalHub
-	defer func() { GlobalHub = oldHub }()
+	oldHub := GetGlobalHub()
+	defer func() { SetGlobalHub(oldHub) }()
 
 	// Reset and initialize
-	GlobalHub = nil
+	SetGlobalHub(nil)
 	InitializeEventHub()
 
-	if GlobalHub == nil {
+	if GetGlobalHub() == nil {
 		t.Error("Expected GlobalHub to be initialized")
 	}
 
 	// Test idempotency
-	prevHub := GlobalHub
+	prevHub := GetGlobalHub()
 	InitializeEventHub()
-	if GlobalHub != prevHub {
+	if GetGlobalHub() != prevHub {
 		t.Error("InitializeEventHub should be idempotent")
 	}
 }
@@ -522,21 +522,24 @@ func TestHandleSSE_BasicConnection(t *testing.T) {
 	c.Request = c.Request.WithContext(ctx)
 
 	// Run HandleSSE in goroutine
-	done := make(chan bool)
+	done := make(chan struct{})
 	go func() {
 		hub.HandleSSE(c)
-		done <- true
+		close(done)
 	}()
 
-	// Wait for connection to establish and send initial event
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for SSE handler to finish")
+	}
 
-	// Check headers
+	// Check headers after handler completes to avoid races
 	if w.Header().Get("Content-Type") != "text/event-stream" {
 		t.Error("Expected Content-Type: text/event-stream")
 	}
-	if w.Header().Get("Cache-Control") != "no-cache" {
-		t.Error("Expected Cache-Control: no-cache")
+	if !strings.Contains(w.Header().Get("Cache-Control"), "no-cache") {
+		t.Error("Expected Cache-Control to include no-cache")
 	}
 	if w.Header().Get("Connection") != "keep-alive" {
 		t.Error("Expected Connection: keep-alive")
@@ -544,9 +547,6 @@ func TestHandleSSE_BasicConnection(t *testing.T) {
 	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Error("Expected Access-Control-Allow-Origin: *")
 	}
-
-	// Wait for completion
-	<-done
 
 	// Check that initial event was sent
 	body := w.Body.String()

@@ -580,13 +580,17 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Heartbeat: push periodic system.status events via SSE (every 5s) while running
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	shutdown := make(chan struct{})
+	var backgroundWG sync.WaitGroup
 	ticker := time.NewTicker(5 * time.Second)
+	backgroundWG.Add(1)
 	go func() {
+		defer backgroundWG.Done()
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				if realtime.GlobalHub != nil {
+				if hub := realtime.GetGlobalHub(); hub != nil {
 					// Gather lightweight metrics
 					var alloc runtime.MemStats
 					runtime.ReadMemStats(&alloc)
@@ -612,7 +616,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 					metrics.SetMemoryAlloc(alloc.Alloc)
 					metrics.SetGoroutines(runtime.NumGoroutine())
 
-					realtime.GlobalHub.SendSystemStatus(map[string]interface{}{
+					hub.SendSystemStatus(map[string]interface{}{
 						"books":        bookCount,
 						"folders":      folderCount,
 						"memory_alloc": alloc.Alloc,
@@ -620,7 +624,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 						"timestamp":    time.Now().Unix(),
 					})
 				}
-			case <-quit:
+			case <-shutdown:
 				return
 			}
 		}
@@ -629,7 +633,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Background purge of soft-deleted books (configurable retention)
 	if config.AppConfig.PurgeSoftDeletedAfterDays > 0 {
 		purgeTicker := time.NewTicker(6 * time.Hour)
+		backgroundWG.Add(1)
 		go func() {
+			defer backgroundWG.Done()
 			defer purgeTicker.Stop()
 			// Initial run on startup
 			s.runAutoPurgeSoftDeleted()
@@ -637,7 +643,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 				select {
 				case <-purgeTicker.C:
 					s.runAutoPurgeSoftDeleted()
-				case <-quit:
+				case <-shutdown:
 					return
 				}
 			}
@@ -646,12 +652,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	<-quit
+	close(shutdown)
+	signal.Stop(quit)
 
 	log.Println("Shutting down server...")
 
 	// Broadcast shutdown event to all connected clients
-	if realtime.GlobalHub != nil {
-		realtime.GlobalHub.Broadcast(&realtime.Event{
+	if hub := realtime.GetGlobalHub(); hub != nil {
+		hub.Broadcast(&realtime.Event{
 			Type: "system.shutdown",
 			Data: map[string]interface{}{
 				"message": "Server is shutting down",
@@ -666,9 +674,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
+		backgroundWG.Wait()
 		return fmt.Errorf("server forced to shutdown: %w", err)
 	}
 
+	backgroundWG.Wait()
 	log.Println("Server exited")
 	return nil
 }
@@ -3271,11 +3281,12 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 
 // handleEvents handles Server-Sent Events (SSE) for real-time updates
 func (s *Server) handleEvents(c *gin.Context) {
-	if realtime.GlobalHub == nil {
+	hub := realtime.GetGlobalHub()
+	if hub == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "event hub not initialized"})
 		return
 	}
-	realtime.GlobalHub.HandleSSE(c)
+	hub.HandleSSE(c)
 }
 
 // createBackup creates a database backup
@@ -4526,8 +4537,8 @@ func GetDefaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Port:         "8080",
 		Host:         "localhost",
-		ReadTimeout:  0, // Disable read timeout for SSE compatibility (safe for localhost)
-		WriteTimeout: 0, // Disable write timeout so SSE streams stay open
+		ReadTimeout:  15 * time.Second,  // Allow slow clients without stalling forever
+		WriteTimeout: 0,                 // Disable write timeout so SSE streams stay open
 		IdleTimeout:  120 * time.Second, // 2 minute idle timeout
 	}
 }
