@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.50.0
+// version: 1.51.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -73,8 +73,8 @@ func boolPtr(b bool) *bool {
 }
 
 type metadataFieldState struct {
-	FetchedValue   interface{} `json:"fetched_value,omitempty"`
-	OverrideValue  interface{} `json:"override_value,omitempty"`
+	FetchedValue   any `json:"fetched_value,omitempty"`
+	OverrideValue  any `json:"override_value,omitempty"`
 	OverrideLocked bool        `json:"override_locked"`
 	UpdatedAt      time.Time   `json:"updated_at,omitempty"`
 }
@@ -93,18 +93,18 @@ func metadataStateKey(bookID string) string {
 	return fmt.Sprintf("metadata_state_%s", bookID)
 }
 
-func decodeMetadataValue(raw *string) interface{} {
+func decodeMetadataValue(raw *string) any {
 	if raw == nil || *raw == "" {
 		return nil
 	}
-	var value interface{}
+	var value any
 	if err := json.Unmarshal([]byte(*raw), &value); err != nil {
 		return *raw
 	}
 	return value
 }
 
-func encodeMetadataValue(value interface{}) (*string, error) {
+func encodeMetadataValue(value any) (*string, error) {
 	if value == nil {
 		return nil, nil
 	}
@@ -221,18 +221,18 @@ func saveMetadataState(bookID string, state map[string]metadataFieldState) error
 	return nil
 }
 
-func decodeRawValue(raw json.RawMessage) interface{} {
+func decodeRawValue(raw json.RawMessage) any {
 	if raw == nil {
 		return nil
 	}
-	var value interface{}
+	var value any
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return string(raw)
 	}
 	return value
 }
 
-func updateFetchedMetadataState(bookID string, values map[string]interface{}) error {
+func updateFetchedMetadataState(bookID string, values map[string]any) error {
 	state, err := loadMetadataState(bookID)
 	if err != nil {
 		return err
@@ -249,14 +249,14 @@ func updateFetchedMetadataState(bookID string, values map[string]interface{}) er
 	return saveMetadataState(bookID, state)
 }
 
-func stringVal(p *string) interface{} {
+func stringVal(p *string) any {
 	if p == nil {
 		return nil
 	}
 	return *p
 }
 
-func intVal(p *int) interface{} {
+func intVal(p *int) any {
 	if p == nil {
 		return nil
 	}
@@ -292,10 +292,10 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 
 	provenance := map[string]database.MetadataProvenanceEntry{}
 
-	addEntry := func(field string, fileValue interface{}, storedValue interface{}) {
+	addEntry := func(field string, fileValue any, storedValue any) {
 		entryState := state[field]
 		effectiveSource := ""
-		var effectiveValue interface{}
+		var effectiveValue any
 		switch {
 		case entryState.OverrideValue != nil:
 			effectiveSource = "override"
@@ -342,7 +342,7 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	return provenance
 }
 
-func stringFromSeries(series *database.Series) interface{} {
+func stringFromSeries(series *database.Series) any {
 	if series == nil {
 		return nil
 	}
@@ -627,7 +627,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 					metrics.SetMemoryAlloc(alloc.Alloc)
 					metrics.SetGoroutines(runtime.NumGoroutine())
 
-					hub.SendSystemStatus(map[string]interface{}{
+					hub.SendSystemStatus(map[string]any{
 						"books":        bookCount,
 						"folders":      folderCount,
 						"memory_alloc": alloc.Alloc,
@@ -672,7 +672,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	if hub := realtime.GetGlobalHub(); hub != nil {
 		hub.Broadcast(&realtime.Event{
 			Type: "system.shutdown",
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"message": "Server is shutting down",
 			},
 		})
@@ -1107,7 +1107,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	_ = json.Unmarshal(body, &rawPayload)
 
 	// Parse into generic map first to avoid type mismatch on embedded Book struct
-	var payloadMap map[string]interface{}
+	var payloadMap map[string]any
 	if err := json.Unmarshal(body, &payloadMap); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -1176,10 +1176,10 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	// Handle overrides if present
-	if overridesMap, ok := payloadMap["overrides"].(map[string]interface{}); ok {
+	if overridesMap, ok := payloadMap["overrides"].(map[string]any); ok {
 		updates.Overrides = make(map[string]OverridePayload)
 		for k, v := range overridesMap {
-			if vm, ok := v.(map[string]interface{}); ok {
+			if vm, ok := v.(map[string]any); ok {
 				op := OverridePayload{}
 				if val, ok := vm["value"]; ok {
 					if valBytes, err := json.Marshal(val); err == nil {
@@ -1203,7 +1203,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	// Handle unlock_overrides if present
-	if unlockOverridesRaw, ok := payloadMap["unlock_overrides"].([]interface{}); ok {
+	if unlockOverridesRaw, ok := payloadMap["unlock_overrides"].([]any); ok {
 		updates.UnlockOverrides = make([]string, len(unlockOverridesRaw))
 		for i, v := range unlockOverridesRaw {
 			if s, ok := v.(string); ok {
@@ -2330,7 +2330,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 		return
 	}
 
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -2367,7 +2367,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 		updated = append(updated, "setup_complete")
 	}
 
-	if apiKeys, ok := updates["api_keys"].(map[string]interface{}); ok {
+	if apiKeys, ok := updates["api_keys"].(map[string]any); ok {
 		if goodreads, ok := apiKeys["goodreads"].(string); ok {
 			config.AppConfig.APIKeys.Goodreads = goodreads
 			updated = append(updated, "api_keys.goodreads")
@@ -2399,7 +2399,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 		config.AppConfig.CreateBackups = val
 		updated = append(updated, "create_backups")
 	}
-	if val, ok := updates["supported_extensions"].([]interface{}); ok {
+	if val, ok := updates["supported_extensions"].([]any); ok {
 		extensions := make([]string, 0, len(val))
 		for _, item := range val {
 			if ext, ok := item.(string); ok {
@@ -2409,7 +2409,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 		config.AppConfig.SupportedExtensions = extensions
 		updated = append(updated, "supported_extensions")
 	}
-	if val, ok := updates["exclude_patterns"].([]interface{}); ok {
+	if val, ok := updates["exclude_patterns"].([]any); ok {
 		patterns := make([]string, 0, len(val))
 		for _, item := range val {
 			if pattern, ok := item.(string); ok {
@@ -2660,7 +2660,7 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 // validateMetadata validates metadata updates without applying them
 func (s *Server) validateMetadata(c *gin.Context) {
 	var req struct {
-		Updates map[string]interface{} `json:"updates" binding:"required"`
+		Updates map[string]any `json:"updates" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2720,7 +2720,7 @@ func (s *Server) importMetadata(c *gin.Context) {
 	}
 
 	var req struct {
-		Data     map[string]interface{} `json:"data" binding:"required"`
+		Data     map[string]any `json:"data" binding:"required"`
 		Validate bool                   `json:"validate"`
 	}
 
@@ -2886,7 +2886,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
-	fetchedValues := map[string]interface{}{}
+	fetchedValues := map[string]any{}
 	if meta.Title != "" {
 		fetchedValues["title"] = meta.Title
 	}
@@ -3016,11 +3016,11 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		}
 
 		meta := metaResults[0]
-		fetchedValues := map[string]interface{}{}
+		fetchedValues := map[string]any{}
 		appliedFields := []string{}
 		fetchedFields := []string{}
 
-		addFetched := func(field string, value interface{}) {
+		addFetched := func(field string, value any) {
 			fetchedValues[field] = value
 			fetchedFields = append(fetchedFields, field)
 		}
@@ -3189,7 +3189,7 @@ func (s *Server) listAudiobookVersions(c *gin.Context) {
 	}
 
 	if book.VersionGroupID == nil {
-		c.JSON(http.StatusOK, gin.H{"versions": []interface{}{book}})
+		c.JSON(http.StatusOK, gin.H{"versions": []any{book}})
 		return
 	}
 
@@ -3537,7 +3537,7 @@ func (s *Server) getDashboard(c *gin.Context) {
 
 // getMetadataFields returns available metadata fields with their types and validation rules
 func (s *Server) getMetadataFields(c *gin.Context) {
-	fields := []map[string]interface{}{
+	fields := []map[string]any{
 		{
 			"name":        "title",
 			"type":        "string",
@@ -3627,14 +3627,14 @@ func (s *Server) listWork(c *gin.Context) {
 	}
 
 	// For each work, get associated books
-	items := make([]map[string]interface{}, 0, len(works))
+	items := make([]map[string]any, 0, len(works))
 	for _, work := range works {
 		books, err := database.GlobalStore.GetBooksByWorkID(work.ID)
 		if err != nil {
 			books = []database.Book{}
 		}
 
-		items = append(items, map[string]interface{}{
+		items = append(items, map[string]any{
 			"id":         work.ID,
 			"title":      work.Title,
 			"author_id":  work.AuthorID,
