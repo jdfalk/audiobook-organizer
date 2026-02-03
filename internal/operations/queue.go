@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -242,8 +242,8 @@ func (q *OperationQueue) worker(id int) {
 				}
 				metrics.IncOperationFailed(op.Type)
 				// Send real-time error status
-				if realtime.GlobalHub != nil {
-					realtime.GlobalHub.SendOperationStatus(op.ID, "failed", map[string]interface{}{
+				if hub := realtime.GetGlobalHub(); hub != nil {
+					hub.SendOperationStatus(op.ID, "failed", map[string]interface{}{
 						"error": err.Error(),
 					})
 				}
@@ -252,8 +252,8 @@ func (q *OperationQueue) worker(id int) {
 				// Already marked as canceled
 				metrics.IncOperationCanceled(op.Type)
 				// Send real-time canceled status
-				if realtime.GlobalHub != nil {
-					realtime.GlobalHub.SendOperationStatus(op.ID, "canceled", map[string]interface{}{
+				if hub := realtime.GetGlobalHub(); hub != nil {
+					hub.SendOperationStatus(op.ID, "canceled", map[string]interface{}{
 						"message": "operation canceled",
 					})
 				}
@@ -264,8 +264,8 @@ func (q *OperationQueue) worker(id int) {
 				}
 				metrics.IncOperationCompleted(op.Type)
 				// Send real-time completed status
-				if realtime.GlobalHub != nil {
-					realtime.GlobalHub.SendOperationStatus(op.ID, "completed", map[string]interface{}{
+				if hub := realtime.GetGlobalHub(); hub != nil {
+					hub.SendOperationStatus(op.ID, "completed", map[string]interface{}{
 						"current": reporter.current,
 						"total":   reporter.total,
 						"message": "operation completed",
@@ -340,8 +340,8 @@ func (r *operationProgressReporter) UpdateProgress(current, total int, message s
 	})
 
 	// Send real-time event
-	if realtime.GlobalHub != nil {
-		realtime.GlobalHub.SendOperationProgress(r.operationID, current, total, message)
+	if hub := realtime.GetGlobalHub(); hub != nil {
+		hub.SendOperationProgress(r.operationID, current, total, message)
 	}
 
 	return nil
@@ -355,8 +355,8 @@ func (r *operationProgressReporter) Log(level, message string, details *string) 
 	}
 
 	// Send real-time log event
-	if realtime.GlobalHub != nil {
-		realtime.GlobalHub.SendOperationLog(r.operationID, level, message, details)
+	if hub := realtime.GetGlobalHub(); hub != nil {
+		hub.SendOperationLog(r.operationID, level, message, details)
 	}
 
 	return nil

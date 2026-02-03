@@ -1,5 +1,5 @@
 // file: internal/server/server_extra_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 61a2d3c4-80ab-4f6f-8c39-15a2ac5b7f0c
 
 package server
@@ -471,10 +471,10 @@ func TestHandleEventsUnavailable(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origHub := realtime.GlobalHub
-	realtime.GlobalHub = nil
+	origHub := realtime.GetGlobalHub()
+	realtime.SetGlobalHub(nil)
 	defer func() {
-		realtime.GlobalHub = origHub
+		realtime.SetGlobalHub(origHub)
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
