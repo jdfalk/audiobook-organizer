@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.41.0
+// version: 1.50.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -29,7 +29,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -434,9 +433,14 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer       *http.Server
-	router           *gin.Engine
-	audiobookService *AudiobookService
+	httpServer           *http.Server
+	router               *gin.Engine
+	audiobookService     *AudiobookService
+	batchService         *BatchService
+	workService          *WorkService
+	authorSeriesService  *AuthorSeriesService
+	filesystemService    *FilesystemService
+	importService        *ImportService
 }
 
 // ServerConfig holds server configuration
@@ -464,8 +468,13 @@ func NewServer() *Server {
 	metrics.Register()
 
 	server := &Server{
-		router:           router,
-		audiobookService: NewAudiobookService(database.GlobalStore),
+		router:              router,
+		audiobookService:    NewAudiobookService(database.GlobalStore),
+		batchService:        NewBatchService(database.GlobalStore),
+		workService:         NewWorkService(database.GlobalStore),
+		authorSeriesService: NewAuthorSeriesService(database.GlobalStore),
+		filesystemService:   NewFilesystemService(),
+		importService:       NewImportService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -1246,132 +1255,52 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	var req struct {
-		IDs     []string               `json:"ids"` // ULID strings
-		Updates map[string]interface{} `json:"updates"`
-	}
+	var req BatchUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Allow empty batches - return success with 0 updates
-	if len(req.IDs) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": 0,
-			"failed":  0,
-			"total":   0,
-			"message": "no items to update",
-		})
-		return
-	}
-
-	results := []gin.H{}
-	for _, id := range req.IDs {
-		book, err := database.GlobalStore.GetBookByID(id)
-		if err != nil {
-			results = append(results, gin.H{"id": id, "error": "not found"})
-			continue
-		}
-
-		// Apply updates
-		if title, ok := req.Updates["title"].(string); ok {
-			book.Title = title
-		}
-		if format, ok := req.Updates["format"].(string); ok {
-			book.Format = format
-		}
-		if authorID, ok := req.Updates["author_id"].(float64); ok {
-			aid := int(authorID)
-			book.AuthorID = &aid
-		}
-		if seriesID, ok := req.Updates["series_id"].(float64); ok {
-			sid := int(seriesID)
-			book.SeriesID = &sid
-		}
-		if seriesSeq, ok := req.Updates["series_sequence"].(float64); ok {
-			seq := int(seriesSeq)
-			book.SeriesSequence = &seq
-		}
-
-		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
-			results = append(results, gin.H{"id": id, "error": err.Error()})
-		} else {
-			results = append(results, gin.H{"id": id, "success": true})
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"results": results})
+	resp := s.batchService.UpdateAudiobooks(&req)
+	c.JSON(http.StatusOK, resp)
 }
 
 // ---- Work handlers ----
 
 func (s *Server) listWorks(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-	works, err := database.GlobalStore.GetAllWorks()
+	resp, err := s.workService.ListWorks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if works == nil {
-		works = []database.Work{}
-	}
-	c.JSON(http.StatusOK, gin.H{"items": works, "count": len(works)})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) createWork(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
 	var work database.Work
 	if err := c.ShouldBindJSON(&work); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if strings.TrimSpace(work.Title) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
-		return
-	}
-	created, err := database.GlobalStore.CreateWork(&work)
+	created, err := s.workService.CreateWork(&work)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, created)
 }
 
 func (s *Server) getWork(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
 	id := c.Param("id")
-	work, err := database.GlobalStore.GetWorkByID(id)
+	work, err := s.workService.GetWork(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if work == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, work)
 }
 
 func (s *Server) updateWork(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
 	id := c.Param("id")
 	var work database.Work
 	if err := c.ShouldBindJSON(&work); err != nil {
@@ -1382,10 +1311,10 @@ func (s *Server) updateWork(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return
 	}
-	updated, err := database.GlobalStore.UpdateWork(id, &work)
+	updated, err := s.workService.UpdateWork(id, &work)
 	if err != nil {
 		if err.Error() == "work not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1395,14 +1324,10 @@ func (s *Server) updateWork(c *gin.Context) {
 }
 
 func (s *Server) deleteWork(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
 	id := c.Param("id")
-	if err := database.GlobalStore.DeleteWork(id); err != nil {
+	if err := s.workService.DeleteWork(id); err != nil {
 		if err.Error() == "work not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "work not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1429,43 +1354,21 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 }
 
 func (s *Server) listAuthors(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	authors, err := database.GlobalStore.GetAllAuthors()
+	resp, err := s.authorSeriesService.ListAuthors()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Ensure we never return null - always return empty array
-	if authors == nil {
-		authors = []database.Author{}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"items": authors, "count": len(authors)})
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) listSeries(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	series, err := database.GlobalStore.GetAllSeries()
+	resp, err := s.authorSeriesService.ListSeries()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Ensure we never return null - always return empty array
-	if series == nil {
-		series = []database.Series{}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"items": series, "count": len(series)})
+	c.JSON(http.StatusOK, resp)
 }
 
 // getHomeDirectory returns the server user's home directory path.
@@ -1481,123 +1384,27 @@ func (s *Server) getHomeDirectory(c *gin.Context) {
 
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
-	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path query parameter is required"})
-		return
-	}
-
-	// Security check: prevent directory traversal attacks
-	absPath, err := filepath.Abs(path)
+	result, err := s.filesystemService.BrowseDirectory(path)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Read directory contents
-	entries, err := os.ReadDir(absPath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to read directory: %v", err)})
-		return
-	}
-
-	type FileInfo struct {
-		Name     string `json:"name"`
-		Path     string `json:"path"`
-		IsDir    bool   `json:"is_dir"`
-		Size     int64  `json:"size,omitempty"`
-		ModTime  int64  `json:"mod_time,omitempty"`
-		Excluded bool   `json:"excluded"`
-	}
-
-	items := []FileInfo{}
-	for _, entry := range entries {
-		fullPath := filepath.Join(absPath, entry.Name())
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		// Check if directory is excluded
-		excluded := false
-		if entry.IsDir() {
-			jabExcludePath := filepath.Join(fullPath, ".jabexclude")
-			if _, err := os.Stat(jabExcludePath); err == nil {
-				excluded = true
-			}
-		}
-
-		item := FileInfo{
-			Name:     entry.Name(),
-			Path:     fullPath,
-			IsDir:    entry.IsDir(),
-			Excluded: excluded,
-		}
-
-		if !entry.IsDir() {
-			item.Size = info.Size()
-			item.ModTime = info.ModTime().Unix()
-		}
-
-		items = append(items, item)
-	}
-
-	// Get disk space info
-	var diskInfo map[string]interface{}
-	if stat, err := os.Stat(absPath); err == nil {
-		diskInfo = map[string]interface{}{
-			"exists":   true,
-			"readable": stat.Mode().Perm()&0400 != 0,
-			"writable": stat.Mode().Perm()&0200 != 0,
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"path":      absPath,
-		"items":     items,
-		"count":     len(items),
-		"disk_info": diskInfo,
-	})
+	c.JSON(http.StatusOK, result)
 }
 
 func (s *Server) createExclusion(c *gin.Context) {
 	var req struct {
-		Path   string `json:"path" binding:"required"`
-		Reason string `json:"reason"`
+		Path string `json:"path" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Ensure it's a directory
-	info, err := os.Stat(req.Path)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path does not exist"})
+	if err := s.filesystemService.CreateExclusion(req.Path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !info.IsDir() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path must be a directory"})
-		return
-	}
-
-	// Create .jabexclude file
-	jabExcludePath := filepath.Join(req.Path, ".jabexclude")
-	content := "# Excluded from audiobook organization\n"
-	if req.Reason != "" {
-		content += fmt.Sprintf("# Reason: %s\n", req.Reason)
-	}
-	content += fmt.Sprintf("# Created: %s\n", time.Now().Format(time.RFC3339))
-
-	if err := os.WriteFile(jabExcludePath, []byte(content), 0644); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create exclusion: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"path":     req.Path,
-		"excluded": true,
-		"file":     jabExcludePath,
-	})
+	c.JSON(http.StatusCreated, gin.H{"message": "exclusion created"})
 }
 
 func (s *Server) removeExclusion(c *gin.Context) {
@@ -1608,13 +1415,10 @@ func (s *Server) removeExclusion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	jabExcludePath := filepath.Join(req.Path, ".jabexclude")
-	if err := os.Remove(jabExcludePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to remove exclusion: %v", err)})
+	if err := s.filesystemService.RemoveExclusion(req.Path); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.Status(http.StatusNoContent)
 }
 
@@ -2287,168 +2091,18 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 }
 
 func (s *Server) importFile(c *gin.Context) {
-	var req struct {
-		FilePath string `json:"file_path" binding:"required"`
-		Organize bool   `json:"organize"`
-	}
-
+	var req ImportFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Validate file exists and is supported
-	fileInfo, err := os.Stat(req.FilePath)
+	result, err := s.importService.ImportFile(&req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file not found or inaccessible"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if fileInfo.IsDir() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path is a directory, not a file"})
-		return
-	}
-
-	// Check if file extension is supported
-	ext := strings.ToLower(filepath.Ext(req.FilePath))
-	supported := false
-	for _, supportedExt := range config.AppConfig.SupportedExtensions {
-		if ext == supportedExt {
-			supported = true
-			break
-		}
-	}
-
-	if !supported {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":                fmt.Sprintf("unsupported file type: %s", ext),
-			"supported_extensions": config.AppConfig.SupportedExtensions,
-		})
-		return
-	}
-
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	// Extract metadata
-	meta, err := metadata.ExtractMetadata(req.FilePath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to extract metadata: %v", err)})
-		return
-	}
-
-	// Create book record
-	book := &database.Book{
-		Title:            meta.Title,
-		FilePath:         req.FilePath,
-		OriginalFilename: stringPtr(filepath.Base(req.FilePath)),
-	}
-
-	// Set author if available
-	if meta.Artist != "" {
-		author, err := database.GlobalStore.GetAuthorByName(meta.Artist)
-		if err != nil {
-			// Create new author
-			author, err = database.GlobalStore.CreateAuthor(meta.Artist)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create author"})
-				return
-			}
-		}
-		// Defensive check: ensure author is not nil before accessing fields
-		if author != nil {
-			book.AuthorID = &author.ID
-		}
-	}
-
-	// Set series if available
-	if meta.Series != "" && book.AuthorID != nil {
-		series, err := database.GlobalStore.GetSeriesByName(meta.Series, book.AuthorID)
-		if err != nil {
-			// Create new series
-			series, err = database.GlobalStore.CreateSeries(meta.Series, book.AuthorID)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create series"})
-				return
-			}
-		}
-		// Defensive check: ensure series is not nil before accessing fields
-		if series != nil {
-			book.SeriesID = &series.ID
-			if meta.SeriesIndex > 0 {
-				book.SeriesSequence = &meta.SeriesIndex
-			}
-		}
-	}
-
-	// Set additional metadata
-	if meta.Album != "" && book.Title == "" {
-		book.Title = meta.Album
-	}
-	if meta.Narrator != "" {
-		book.Narrator = &meta.Narrator
-	}
-	if meta.Language != "" {
-		book.Language = &meta.Language
-	}
-	if meta.Publisher != "" {
-		book.Publisher = &meta.Publisher
-	}
-
-	// Extract media info
-	mediaInfo, err := mediainfo.Extract(req.FilePath)
-	if err == nil {
-		if mediaInfo.Bitrate > 0 {
-			book.Bitrate = intPtrHelper(mediaInfo.Bitrate)
-		}
-		if mediaInfo.Codec != "" {
-			book.Codec = stringPtr(mediaInfo.Codec)
-		}
-		if mediaInfo.SampleRate > 0 {
-			book.SampleRate = intPtrHelper(mediaInfo.SampleRate)
-		}
-		if mediaInfo.Channels > 0 {
-			book.Channels = intPtrHelper(mediaInfo.Channels)
-		}
-		if mediaInfo.BitDepth > 0 {
-			book.BitDepth = intPtrHelper(mediaInfo.BitDepth)
-		}
-		if mediaInfo.Quality != "" {
-			book.Quality = stringPtr(mediaInfo.Quality)
-		}
-	}
-
-	// Create book in database
-	createdBook, err := database.GlobalStore.CreateBook(book)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create book: %v", err)})
-		return
-	}
-
-	response := gin.H{
-		"message": "file imported successfully",
-		"book":    createdBook,
-	}
-
-	// If organize flag is set, trigger organization operation
-	if req.Organize && operations.GlobalQueue != nil {
-		opID := ulid.Make().String()
-		op, err := database.GlobalStore.CreateOperation(opID, "organize", nil)
-		if err == nil {
-			// Queue the organization operation
-			operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-				_ = progress.Log("info", fmt.Sprintf("Organizing imported file: %s", req.FilePath), nil)
-				// TODO: Implement actual organization logic
-				return nil
-			}
-			operations.GlobalQueue.Enqueue(opID, "organize", operations.PriorityNormal, operationFunc)
-			response["operation_id"] = op.ID
-		}
-	}
-
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusCreated, result)
 }
 
 func (s *Server) getSystemStatus(c *gin.Context) {
