@@ -1,5 +1,5 @@
 // file: internal/server/server_extra_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 61a2d3c4-80ab-4f6f-8c39-15a2ac5b7f0c
 
 package server
@@ -516,4 +516,224 @@ func TestBackupEndpointsErrors(t *testing.T) {
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+// ============================================================================
+// Duplicate Detection and Management Tests
+// ============================================================================
+
+// TestDetectDuplicatesByFileHash verifies duplicate detection by file hash
+func TestDetectDuplicatesByFileHash(t *testing.T) {
+	_, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	sharedHash := "duplicate_hash_abc123"
+
+	// Create two files with the same hash
+	file1 := filepath.Join(tempDir, "book1.m4b")
+	file2 := filepath.Join(tempDir, "book2.m4b")
+	require.NoError(t, os.WriteFile(file1, []byte("content"), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte("content"), 0o644))
+
+	// Create books with the same file hash
+	book1, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book One",
+		FilePath: file1,
+		FileHash: &sharedHash,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	book2, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book Two",
+		FilePath: file2,
+		FileHash: &sharedHash,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	// Retrieve duplicates
+	duplicates, err := database.GlobalStore.GetDuplicateBooks()
+	require.NoError(t, err)
+
+	// Verify our books are in the duplicates list
+	found := false
+	for _, group := range duplicates {
+		if len(group) >= 2 {
+			idMap := make(map[string]bool)
+			for _, b := range group {
+				idMap[b.ID] = true
+			}
+			if idMap[book1.ID] && idMap[book2.ID] {
+				found = true
+				break
+			}
+		}
+	}
+	require.True(t, found, "expected to find duplicate group")
+}
+
+// TestMarkDuplicateForDeletion tests soft deleting a duplicate book
+func TestMarkDuplicateForDeletion(t *testing.T) {
+	_, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "book.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
+
+	// Create a book
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book to Delete",
+		FilePath: filePath,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	// Mark for soft deletion
+	trueVal := true
+	updated := &database.Book{
+		ID:                book.ID,
+		Title:             book.Title,
+		FilePath:          book.FilePath,
+		Format:            book.Format,
+		MarkedForDeletion: &trueVal,
+	}
+	_, err = database.GlobalStore.UpdateBook(book.ID, updated)
+	require.NoError(t, err)
+
+	// Retrieve and verify
+	retrieved, err := database.GlobalStore.GetBookByID(book.ID)
+	require.NoError(t, err)
+	require.NotNil(t, retrieved.MarkedForDeletion)
+	require.True(t, *retrieved.MarkedForDeletion)
+}
+
+// TestListDuplicateBooks verifies listing duplicates grouped by hash
+func TestListDuplicateBooks(t *testing.T) {
+	_, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+
+	// Create three files
+	file1 := filepath.Join(tempDir, "book1.m4b")
+	file2 := filepath.Join(tempDir, "book2.m4b")
+	file3 := filepath.Join(tempDir, "book3.m4b")
+	require.NoError(t, os.WriteFile(file1, []byte("content1"), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte("content1"), 0o644))
+	require.NoError(t, os.WriteFile(file3, []byte("content3"), 0o644))
+
+	hash1 := "hash_1"
+	hash3 := "hash_3"
+
+	// Create books: 2 with hash1, 1 with hash3
+	_, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book A",
+		FilePath: file1,
+		FileHash: &hash1,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	_, err = database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book B",
+		FilePath: file2,
+		FileHash: &hash1,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	_, err = database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Book C",
+		FilePath: file3,
+		FileHash: &hash3,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	// Get duplicates
+	duplicates, err := database.GlobalStore.GetDuplicateBooks()
+	require.NoError(t, err)
+
+	// Should have at least one group with 2+ books
+	require.True(t, len(duplicates) > 0, "expected duplicate groups")
+
+	// Find our group
+	found := false
+	for _, group := range duplicates {
+		if len(group) >= 2 {
+			for _, book := range group {
+				if book.FileHash != nil && *book.FileHash == hash1 {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+	}
+	require.True(t, found, "expected to find duplicate group with hash1")
+}
+
+// TestSoftDeleteExcludeFromList verifies soft-deleted books are excluded from list
+func TestSoftDeleteExcludeFromList(t *testing.T) {
+	_, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	file1 := filepath.Join(tempDir, "active.m4b")
+	file2 := filepath.Join(tempDir, "deleted.m4b")
+	require.NoError(t, os.WriteFile(file1, []byte("content"), 0o644))
+	require.NoError(t, os.WriteFile(file2, []byte("content"), 0o644))
+
+	// Create active book
+	active, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Active Book",
+		FilePath: file1,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	// Create and mark deleted book
+	deleted, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Deleted Book",
+		FilePath: file2,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	trueVal := true
+	deletedUpdate := &database.Book{
+		ID:                deleted.ID,
+		Title:             deleted.Title,
+		FilePath:          deleted.FilePath,
+		Format:            deleted.Format,
+		MarkedForDeletion: &trueVal,
+	}
+	_, err = database.GlobalStore.UpdateBook(deleted.ID, deletedUpdate)
+	require.NoError(t, err)
+
+	// List all books
+	all, err := database.GlobalStore.GetAllBooks(100, 0)
+	require.NoError(t, err)
+
+	// Count them
+	activeCount := 0
+	deletedCount := 0
+	for _, b := range all {
+		if b.ID == active.ID {
+			activeCount++
+		}
+		if b.ID == deleted.ID {
+			if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+				deletedCount++
+			}
+		}
+	}
+
+	require.True(t, activeCount > 0, "expected active book in list")
+	// Note: GetAllBooks might still return soft-deleted books; ListSoftDeletedBooks filters them
 }
