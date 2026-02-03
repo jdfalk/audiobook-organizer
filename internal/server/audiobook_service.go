@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -187,7 +187,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 }
 
 // GetAudiobookTags retrieves metadata tags and media info for an audiobook
-func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (map[string]interface{}, error) {
+func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (map[string]any, error) {
 	if svc.store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -208,8 +208,8 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (m
 
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
 
-	response := map[string]interface{}{
-		"media_info": map[string]interface{}{
+	response := map[string]any{
+		"media_info": map[string]any{
 			"codec":       stringVal(book.Codec),
 			"bitrate":     intVal(book.Bitrate),
 			"sample_rate": intVal(book.SampleRate),
@@ -535,53 +535,53 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	}
 
 	// Process direct field updates (non-override)
-	fieldExtractors := map[string]func() (interface{}, bool){
-		"title": func() (interface{}, bool) {
+	fieldExtractors := map[string]func() (any, bool){
+		"title": func() (any, bool) {
 			return payload.Title, true
 		},
-		"author_name": func() (interface{}, bool) {
+		"author_name": func() (any, bool) {
 			if resolvedAuthorName == "" {
 				return nil, false
 			}
 			return resolvedAuthorName, true
 		},
-		"series_name": func() (interface{}, bool) {
+		"series_name": func() (any, bool) {
 			if resolvedSeriesName == "" {
 				return nil, false
 			}
 			return resolvedSeriesName, true
 		},
-		"narrator": func() (interface{}, bool) {
+		"narrator": func() (any, bool) {
 			if payload.Narrator == nil {
 				return nil, false
 			}
 			return *payload.Narrator, true
 		},
-		"publisher": func() (interface{}, bool) {
+		"publisher": func() (any, bool) {
 			if payload.Publisher == nil {
 				return nil, false
 			}
 			return *payload.Publisher, true
 		},
-		"language": func() (interface{}, bool) {
+		"language": func() (any, bool) {
 			if payload.Language == nil {
 				return nil, false
 			}
 			return *payload.Language, true
 		},
-		"audiobook_release_year": func() (interface{}, bool) {
+		"audiobook_release_year": func() (any, bool) {
 			if payload.AudiobookReleaseYear == nil {
 				return nil, false
 			}
 			return *payload.AudiobookReleaseYear, true
 		},
-		"isbn10": func() (interface{}, bool) {
+		"isbn10": func() (any, bool) {
 			if payload.ISBN10 == nil {
 				return nil, false
 			}
 			return *payload.ISBN10, true
 		},
-		"isbn13": func() (interface{}, bool) {
+		"isbn13": func() (any, bool) {
 			if payload.ISBN13 == nil {
 				return nil, false
 			}
@@ -648,7 +648,7 @@ type DeleteAudiobookOptions struct {
 }
 
 // DeleteAudiobook deletes an audiobook (soft or hard delete)
-func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opts *DeleteAudiobookOptions) (map[string]interface{}, error) {
+func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opts *DeleteAudiobookOptions) (map[string]any, error) {
 	if svc.store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -689,7 +689,7 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 			}
 		}
 
-		return map[string]interface{}{
+		return map[string]any{
 			"message":     "audiobook soft deleted",
 			"blocked":     blocked,
 			"soft_delete": true,
@@ -715,14 +715,14 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"message": "audiobook deleted",
 		"blocked": blocked,
 	}, nil
 }
 
 // applyOverrideToPayload applies an override value to the update payload
-func applyOverrideToPayload(payload *AudiobookUpdate, field string, value interface{}) {
+func applyOverrideToPayload(payload *AudiobookUpdate, field string, value any) {
 	switch field {
 	case "title":
 		if v, ok := value.(string); ok {

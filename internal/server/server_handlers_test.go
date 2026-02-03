@@ -1,5 +1,5 @@
 // file: internal/server/server_handlers_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
 
 package server
@@ -59,7 +59,7 @@ func TestMetadataFetchAndUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to fetch metadata for this book
-	fetchReq := map[string]interface{}{
+	fetchReq := map[string]any{
 		"book_ids": []string{book.ID},
 	}
 	body, _ := json.Marshal(fetchReq)
@@ -97,7 +97,7 @@ func TestSearchAudiobooks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 	// Should have results or empty array
 	assert.True(t, response != nil)
@@ -129,7 +129,7 @@ func TestListAudiobooksWithPagination(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.True(t, response != nil)
 }
@@ -146,7 +146,7 @@ func TestConfigEndpoints(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Test PUT config
-	configReq := map[string]interface{}{
+	configReq := map[string]any{
 		"language": "en",
 	}
 	body, _ := json.Marshal(configReq)
@@ -167,7 +167,7 @@ func TestSystemStatus(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 }
@@ -202,7 +202,7 @@ func TestImportPathListingEndpoint(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.True(t, response != nil)
 }

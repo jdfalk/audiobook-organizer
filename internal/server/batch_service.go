@@ -1,5 +1,5 @@
 // file: internal/server/batch_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -18,7 +18,7 @@ func NewBatchService(db database.Store) *BatchService {
 
 type BatchUpdateRequest struct {
 	IDs     []string               `json:"ids"`
-	Updates map[string]interface{} `json:"updates"`
+	Updates map[string]any `json:"updates"`
 }
 
 type BatchUpdateResult struct {
