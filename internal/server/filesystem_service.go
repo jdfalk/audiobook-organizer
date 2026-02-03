@@ -29,7 +29,7 @@ type BrowseResult struct {
 	Path     string                 `json:"path"`
 	Items    []FileInfo             `json:"items"`
 	Count    int                    `json:"count"`
-	DiskInfo map[string]interface{} `json:"disk_info"`
+	DiskInfo map[string]any `json:"disk_info"`
 }
 
 func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error) {
@@ -78,9 +78,9 @@ func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error)
 		items = append(items, item)
 	}
 
-	diskInfo := map[string]interface{}{}
+	diskInfo := map[string]any{}
 	if stat, err := os.Stat(absPath); err == nil {
-		diskInfo = map[string]interface{}{
+		diskInfo = map[string]any{
 			"exists":   true,
 			"readable": stat.Mode().Perm()&0400 != 0,
 			"writable": stat.Mode().Perm()&0200 != 0,

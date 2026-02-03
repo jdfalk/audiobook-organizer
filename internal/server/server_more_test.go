@@ -89,7 +89,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	update := map[string]interface{}{
+	update := map[string]any{
 		"root_dir":         "/tmp/library",
 		"playlist_dir":     "/tmp/playlists",
 		"openai_api_key":   "secret-key",
@@ -107,7 +107,7 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	badBody, err := json.Marshal(map[string]interface{}{"database_type": "pebble"})
+	badBody, err := json.Marshal(map[string]any{"database_type": "pebble"})
 	require.NoError(t, err)
 	req = httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(badBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -133,9 +133,9 @@ func TestImportMetadataEndpoint(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusPartialContent, w.Code)
 
-	goodPayload := map[string]interface{}{
-		"data": map[string]interface{}{
-			"books": []map[string]interface{}{
+	goodPayload := map[string]any{
+		"data": map[string]any{
+			"books": []map[string]any{
 				{
 					"title":     "Imported Book",
 					"file_path": "/tmp/imported.m4b",
@@ -159,10 +159,10 @@ func TestSearchAndFetchMetadata(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search.json", func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"numFound": 1,
 			"start":    0,
-			"docs": []map[string]interface{}{
+			"docs": []map[string]any{
 				{
 					"title":              "Test Book",
 					"author_name":        []string{"Test Author"},
@@ -214,7 +214,7 @@ func TestImportFileEndpoint(t *testing.T) {
 	filePath := copyFixtureToDir(t, "test_sample.m4b", tempDir)
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"file_path": filePath,
 		"organize":  true,
 	}
@@ -227,7 +227,7 @@ func TestImportFileEndpoint(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	if opID, ok := resp["operation_id"].(string); ok && opID != "" {
 		waitForOperationStatus(t, opID, 5*time.Second)
@@ -248,7 +248,7 @@ func TestAddImportPathAutoScan(t *testing.T) {
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
 	config.AppConfig.ConcurrentScans = 1
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"path":    importDir,
 		"name":    "Test Import",
 		"enabled": true,
@@ -261,13 +261,13 @@ func TestAddImportPathAutoScan(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	if opID, ok := resp["scan_operation_id"].(string); ok && opID != "" {
 		waitForOperationStatus(t, opID, 10*time.Second)
 	}
 
-	disabledPayload := map[string]interface{}{
+	disabledPayload := map[string]any{
 		"path":    filepath.Join(importDir, "secondary"),
 		"name":    "Disabled Import",
 		"enabled": false,
@@ -299,7 +299,7 @@ func TestAddImportPathFallbackScan(t *testing.T) {
 	config.AppConfig.AutoOrganize = true
 	config.AppConfig.RootDir = ""
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"path":    importDir,
 		"name":    "Fallback Import",
 		"enabled": true,
@@ -501,7 +501,7 @@ func TestUpdateDeleteBatchAudiobook(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	updatePayload := map[string]interface{}{
+	updatePayload := map[string]any{
 		"title":                   "New Title",
 		"author_name":             "Author Name",
 		"series_name":             "Series Name",
@@ -519,9 +519,9 @@ func TestUpdateDeleteBatchAudiobook(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	batchPayload := map[string]interface{}{
+	batchPayload := map[string]any{
 		"ids": []string{book.ID},
-		"updates": map[string]interface{}{
+		"updates": map[string]any{
 			"title":           "Batch Title",
 			"series_sequence": 1,
 		},
@@ -577,7 +577,7 @@ func TestStartScanOperation(t *testing.T) {
 	_, err := database.GlobalStore.CreateImportPath(importDir, "Import")
 	require.NoError(t, err)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"force_update": true,
 	}
 	body, err := json.Marshal(payload)
