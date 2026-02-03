@@ -80,7 +80,10 @@
       "Bash(# Find duplicate/similar files across the repo - linter configs, editor configs, etc. echo \"\"=== Root dotfiles ===\"\" && ls -la .*rc .*.yml .*.yaml .*.json .*.toml .*.cfg .*.ini .*.conf echo \"\"=== .github dotfiles ===\"\" && ls -la .github/.*rc .github/*.yml .github/*.yaml .github/*.json .github/*.toml echo \"\"=== Linter/format configs ===\"\" && find . -maxdepth 3 \\\\\\( -name \"\".golangci*\"\" -o -name \"\".eslintrc*\"\" -o -name \"\".prettierrc*\"\" -o -name \"\".editorconfig\"\" -o -name \"\".yamllint*\"\" -o -name \"\".markdownlint*\"\" -o -name \"\"*.eslintrc*\"\" -o -name \"\".gitignore\"\" -o -name \"\".golintrc*\"\" \\\\\\) -not -path \"\"./docs/*\"\")",
       "Bash(# Check what CLAUDE.md currently says about build/test commands cat CLAUDE.md echo \"\"===\"\" # Check if there''s a Makefile or common build commands ls Makefile makefile GNUmakefile && echo \"\"Has Makefile\"\" || echo \"\"No Makefile\"\" ls scripts/*.sh)",
       "Bash(xcodebuild:*)",
-      "Bash(sudo xcodebuild:*)"
+      "Bash(sudo xcodebuild:*)",
+      "Bash(head:*)",
+      "mcp__plugin_github_github__search_issues",
+      "Bash(staticcheck:*)"
     ]
   }
 }
