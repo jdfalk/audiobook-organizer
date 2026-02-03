@@ -1,5 +1,5 @@
 // file: internal/server/server_more_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
 
 package server
@@ -325,11 +325,13 @@ func TestServerStartGracefulShutdown(t *testing.T) {
 	config.AppConfig.PurgeSoftDeletedAfterDays = 1
 	config.AppConfig.PurgeSoftDeletedDeleteFiles = false
 
-	_, _ = database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GlobalStore.CreateBook(&database.Book{
 		Title:    "Heartbeat Book",
 		FilePath: "/tmp/heartbeat.m4b",
 	})
-	_, _ = database.GlobalStore.CreateImportPath(t.TempDir(), "Heartbeat Import")
+	require.NoError(t, err)
+	_, err = database.GlobalStore.CreateImportPath(t.TempDir(), "Heartbeat Import")
+	require.NoError(t, err)
 
 	done := make(chan error, 1)
 	cfg := ServerConfig{
