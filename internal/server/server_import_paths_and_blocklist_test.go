@@ -1,5 +1,5 @@
 // file: internal/server/server_import_paths_and_blocklist_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 2f4a6b8c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-02-03
 
@@ -98,9 +98,6 @@ func TestImportPaths_ListNilAndRemoveInvalidID(t *testing.T) {
 }
 
 func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
 	// Ensure deterministic worker selection.
 	origCfg := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = origCfg })
@@ -109,13 +106,14 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	config.AppConfig.RootDir = ""
 
 	store := dbmocks.NewMockStore(t)
+	origStore := database.GlobalStore
+	server, cleanup := setupTestServerWithStore(t, store)
+	defer cleanup()
 	queue := qmock.NewMockQueue(t)
 	scannerMock := scannermocks.NewMockScanner(t)
 
-	origStore := database.GlobalStore
 	origQueue := operations.GlobalQueue
 	origScanner := scanner.GlobalScanner
-	database.GlobalStore = store
 	operations.GlobalQueue = queue
 	scanner.GlobalScanner = scannerMock
 	t.Cleanup(func() {
