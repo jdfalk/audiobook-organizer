@@ -83,7 +83,8 @@
       "Bash(sudo xcodebuild:*)",
       "Bash(head:*)",
       "mcp__plugin_github_github__search_issues",
-      "Bash(staticcheck:*)"
+      "Bash(staticcheck:*)",
+      "Bash(xargs:*)"
     ]
   }
 }
