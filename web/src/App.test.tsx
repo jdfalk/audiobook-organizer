@@ -1,5 +1,5 @@
 // file: web/src/App.test.tsx
-// version: 1.0.3
+// version: 1.0.4
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -31,6 +31,7 @@ vi.mock('./services/api', () => ({
   getActiveOperations: vi.fn().mockResolvedValue([]),
   getOperationLogsTail: vi.fn().mockResolvedValue([]),
   getAuthors: vi.fn().mockResolvedValue([]),
+  getSeries: vi.fn().mockResolvedValue([]),
   getNarrators: vi.fn().mockResolvedValue([]),
   getBooks: vi.fn().mockResolvedValue([]),
   searchBooks: vi.fn().mockResolvedValue([]),

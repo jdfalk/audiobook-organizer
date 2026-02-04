@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.importFile.test.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6f4a7b0d-9c9f-4f0b-8d85-1dd9e1ffb913
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -32,6 +32,7 @@ vi.mock('../services/api', () => ({
     runtime: {},
     operations: { recent: [] },
   }),
+  getHomeDirectory: vi.fn().mockResolvedValue('/tmp'),
   getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
   browseFilesystem: vi.fn().mockResolvedValue({
     path: '/',

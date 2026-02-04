@@ -1,5 +1,5 @@
 // file: web/tests/unit/BookDetail.test.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 /**
@@ -15,7 +15,24 @@ import { BookDetail } from '../../src/pages/BookDetail';
 import * as api from '../../src/services/api';
 
 // Mock the API module
-vi.mock('../../src/services/api');
+vi.mock('../../src/services/api', async () => {
+  const actual = await vi.importActual<typeof import('../../src/services/api')>(
+    '../../src/services/api'
+  );
+  return {
+    ...actual,
+    getBook: vi.fn(),
+    getBookVersions: vi.fn(),
+    getBookTags: vi.fn(),
+    fetchBookMetadata: vi.fn(),
+    parseAudiobookWithAI: vi.fn(),
+    updateBook: vi.fn(),
+    deleteBook: vi.fn(),
+    restoreSoftDeletedBook: vi.fn(),
+  };
+});
+
+const navigateMock = vi.fn();
 
 // Mock react-router-dom hooks
 vi.mock('react-router-dom', async () => {
@@ -23,7 +40,7 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useParams: () => ({ id: 'test-book-id' }),
-    useNavigate: () => vi.fn(),
+    useNavigate: () => navigateMock,
   };
 });
 
@@ -53,6 +70,15 @@ const mockTags = {
       effective_value: 'The Odyssey',
       effective_source: 'stored',
     },
+    author_name: {
+      file_value: null,
+      fetched_value: 'Homer',
+      stored_value: null,
+      override_value: null,
+      override_locked: false,
+      effective_value: null,
+      effective_source: null,
+    },
     audiobook_release_year: {
       file_value: null,
       fetched_value: 2020,
@@ -68,7 +94,8 @@ const mockTags = {
 describe('BookDetail Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.getBookById).mockResolvedValue(mockBook);
+    navigateMock.mockReset();
+    vi.mocked(api.getBook).mockResolvedValue(mockBook);
     vi.mocked(api.getBookVersions).mockResolvedValue([]);
     vi.mocked(api.getBookTags).mockResolvedValue(mockTags);
   });
@@ -80,9 +107,10 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
+    const titleHeading = await screen.findByRole('heading', {
+      name: 'The Odyssey',
     });
+    expect(titleHeading).toBeInTheDocument();
   });
 
   it('Fetch Metadata button shows loading state', async () => {
@@ -109,9 +137,7 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: 'The Odyssey' });
 
     const fetchButton = screen.getByRole('button', { name: /fetch metadata/i });
     expect(fetchButton).toHaveTextContent('Fetch Metadata');
@@ -155,9 +181,7 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: 'The Odyssey' });
 
     const parseButton = screen.getByRole('button', { name: /parse with ai/i });
     expect(parseButton).toHaveTextContent('Parse with AI');
@@ -193,20 +217,21 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: 'The Odyssey' });
 
     // Navigate to Compare tab
-    const compareTab = screen.getByRole('tab', { name: /compare/i });
+    const compareTab = await screen.findByRole('tab', { name: /compare/i });
     await user.click(compareTab);
 
-    await waitFor(() => {
-      expect(screen.getByText(/audiobook release year/i)).toBeInTheDocument();
-    });
+    const compareTable = await screen.findByRole('table');
+    expect(
+      within(compareTable).getByText(/audiobook release year/i)
+    ).toBeInTheDocument();
 
     // Find Use Fetched button
-    const useFetchedButtons = screen.getAllByRole('button', { name: /use fetched/i });
+    const useFetchedButtons = within(compareTable).getAllByRole('button', {
+      name: /use fetched/i,
+    });
     const useFetchedButton = useFetchedButtons[0];
 
     await user.click(useFetchedButton);
@@ -238,9 +263,7 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: 'The Odyssey' });
 
     // Should start on Info tab
     const infoTab = screen.getByRole('tab', { name: /^info$/i });
@@ -274,27 +297,30 @@ describe('BookDetail Component', () => {
       </BrowserRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('The Odyssey')).toBeInTheDocument();
-    });
+    await screen.findByRole('heading', { name: 'The Odyssey' });
 
     const compareTab = screen.getByRole('tab', { name: /compare/i });
     await user.click(compareTab);
 
-    await waitFor(() => {
-      expect(screen.getByText(/audiobook release year/i)).toBeInTheDocument();
-    });
+    const compareTable = await screen.findByRole('table');
+    expect(
+      within(compareTable).getByText(/audiobook release year/i)
+    ).toBeInTheDocument();
 
-    const useFetchedButtons = screen.getAllByRole('button', { name: /use fetched/i });
+    const useFetchedButtons = within(compareTable).getAllByRole('button', {
+      name: /use fetched/i,
+    });
+    const enabledButtons = useFetchedButtons.filter((button) =>
+      button instanceof HTMLButtonElement ? !button.disabled : false
+    );
+    expect(enabledButtons.length).toBeGreaterThanOrEqual(2);
 
     // Click first button
-    await user.click(useFetchedButtons[0]);
-    expect(useFetchedButtons[0]).toBeDisabled();
+    await user.click(enabledButtons[0]);
+    expect(enabledButtons[0]).toBeDisabled();
 
     // Second button (for different field) should still be enabled
     // This tests per-field loading states
-    if (useFetchedButtons.length > 1) {
-      expect(useFetchedButtons[1]).not.toBeDisabled();
-    }
+    expect(enabledButtons[1]).not.toBeDisabled();
   });
 });
