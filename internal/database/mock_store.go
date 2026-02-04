@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -136,6 +136,7 @@ type MockStore struct {
 
 	// Lifecycle
 	CloseFunc func() error
+	ResetFunc func() error
 }
 
 // Implement all Store interface methods
@@ -747,4 +748,11 @@ func (m *MockStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 		return m.GetBlockedHashByHashFunc(hash)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) Reset() error {
+	if m.ResetFunc != nil {
+		return m.ResetFunc()
+	}
+	return nil
 }

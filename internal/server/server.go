@@ -787,6 +787,7 @@ func (s *Server) setupRoutes() {
 		// System routes
 		api.GET("/system/status", s.getSystemStatus)
 		api.GET("/system/logs", s.getSystemLogs)
+		api.POST("/system/reset", s.resetSystem)
 		api.GET("/config", s.getConfig)
 		api.PUT("/config", s.updateConfig)
 		api.GET("/dashboard", s.getDashboard)
@@ -1685,6 +1686,22 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 		"offset": params.Offset,
 		"total":  total,
 	})
+}
+
+func (s *Server) resetSystem(c *gin.Context) {
+	// Reset database
+	if err := database.GlobalStore.Reset(); err != nil {
+		RespondWithInternalError(c, "failed to reset database: "+err.Error())
+		return
+	}
+
+	// Reset config to defaults
+	config.ResetToDefaults()
+
+	// Reset library size cache
+	resetLibrarySizeCache()
+
+	RespondWithOK(c, gin.H{"message": "System reset successfully"})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
