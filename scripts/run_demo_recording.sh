@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_PORT="${API_PORT:-8080}"
-API_URL="http://localhost:${API_PORT}"
+API_URL="https://localhost:${API_PORT}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/demo_recordings}"
 BUILD_DIR="${PROJECT_ROOT}"
 DEMO_VIDEO="${OUTPUT_DIR}/audiobook-demo.webm"
@@ -59,10 +59,10 @@ main() {
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
 
-    # Step 1: Build the project
-    log_info "Building project..."
+    # Step 1: Build the project with embedded frontend
+    log_info "Building project with embedded frontend..."
     cd "$BUILD_DIR"
-    if ! make build-api > /dev/null 2>&1; then
+    if ! make build > /dev/null 2>&1; then
         log_error "Build failed"
         exit 1
     fi
@@ -80,7 +80,7 @@ main() {
     max_attempts=30
     attempt=0
     while [ $attempt -lt $max_attempts ]; do
-        if curl -s "${API_URL}/api/health" > /dev/null 2>&1; then
+        if curl -s -k "${API_URL}/api/health" > /dev/null 2>&1; then
             log_success "API server is ready"
             break
         fi

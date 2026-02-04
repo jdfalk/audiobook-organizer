@@ -1,16 +1,22 @@
 // file: scripts/record_demo.js
-// version: 1.0.0
-// Playwright script to automatically record end-to-end demo with video
+// version: 2.0.0
+// Playwright script to automatically record end-to-end demo with video - UI-based version
 
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 
-const API_BASE_URL = process.env.API_URL || 'http://localhost:8080';
+const BASE_URL = process.env.API_URL || 'https://localhost:8080';
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './demo_recordings';
 const DEMO_VIDEO_PATH = path.join(OUTPUT_DIR, 'audiobook-demo.webm');
 const SCREENSHOTS_DIR = path.join(OUTPUT_DIR, 'screenshots');
+
+// Create axios instance with HTTPS support for self-signed certificates
+const https = require('https');
+const axiosInstance = axios.create({
+  httpsAgent: new https.Agent({ rejectUnauthorized: false })
+});
 
 // Ensure output directories exist
 if (!fs.existsSync(OUTPUT_DIR)) {
@@ -20,19 +26,19 @@ if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 }
 
-// Helper to wait for API to be ready
-async function waitForAPI(maxAttempts = 30) {
-  console.log('⏳ Waiting for API server...');
+// Helper to wait for server to be ready
+async function waitForServer(maxAttempts = 30) {
+  console.log('⏳ Waiting for server...');
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/health`);
+      const response = await axiosInstance.get(`${BASE_URL}/api/health`);
       if (response.status === 200) {
-        console.log('✅ API server is ready!');
+        console.log('✅ Server is ready!');
         return true;
       }
     } catch (error) {
       if (i === maxAttempts - 1) {
-        console.error('❌ API server did not start in time');
+        console.error('❌ Server did not start in time');
         return false;
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -41,165 +47,139 @@ async function waitForAPI(maxAttempts = 30) {
   return false;
 }
 
-// API call helper
-async function apiCall(method, endpoint, data = null) {
-  try {
-    const config = {
-      method,
-      url: `${API_BASE_URL}${endpoint}`,
-      headers: { 'Content-Type': 'application/json' }
-    };
-    if (data) config.data = data;
-
-    const response = await axios(config);
-    return response.data;
-  } catch (error) {
-    console.error(`API Error: ${method} ${endpoint}`, error.response?.data || error.message);
-    throw error;
-  }
-}
-
 // Helper to take screenshot
 async function screenshot(page, name) {
   const filePath = path.join(SCREENSHOTS_DIR, `${Date.now()}-${name}.png`);
-  await page.screenshot({ path: filePath });
+  await page.screenshot({ path: filePath, fullPage: true });
   console.log(`📸 Screenshot: ${name}`);
   return filePath;
 }
 
 // Main demo recording function
 async function recordDemo() {
-  console.log('🎬 Starting Audiobook Organizer Demo Recording...\n');
+  console.log('🎬 Starting Audiobook Organizer Demo Recording (Web UI)...\n');
 
-  // Check API is ready
-  if (!(await waitForAPI())) {
-    console.error('Failed to connect to API server');
+  // Check server is ready
+  if (!(await waitForServer())) {
+    console.error('Failed to connect to server');
     process.exit(1);
   }
 
   // Launch browser with video recording
   const browser = await chromium.launch({
-    headless: false, // Show browser window
+    headless: false,
     args: ['--disable-blink-features=AutomationControlled']
   });
 
-  const context = await browser.createBrowserContext({
-    recordVideo: { dir: OUTPUT_DIR }
+  const context = await browser.newContext({
+    recordVideo: { dir: OUTPUT_DIR },
+    ignoreHTTPSErrors: true
   });
 
   const page = await context.newPage();
 
   try {
-    console.log('\n📝 PHASE 1: IMPORT FILES\n');
+    console.log('📝 PHASE 1: NAVIGATE TO APPLICATION\n');
 
-    // Get or create import path
-    console.log('Getting import paths...');
-    let importPaths = await apiCall('GET', '/api/v1/import-paths');
-    let importPathId = importPaths.items?.[0]?.id;
+    // Navigate to the web UI
+    console.log('Opening web interface...');
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    await screenshot(page, '01-app-home');
+    console.log('✅ Application loaded');
 
-    if (!importPathId) {
-      console.log('Creating new import path...');
-      const createResult = await apiCall('POST', '/api/v1/import-paths', {
-        path: '/tmp/demo-audiobooks',
-        name: 'Demo Library'
-      });
-      importPathId = createResult.id;
-      console.log(`✅ Created import path: ${importPathId}`);
+    console.log('\n📝 PHASE 2: IMPORT FILES\n');
+
+    // Create unique import path
+    const timestamp = Date.now();
+    const importPath = `/tmp/demo-audiobooks-${timestamp}`;
+
+    // Create test file
+    if (!fs.existsSync(importPath)) {
+      fs.mkdirSync(importPath, { recursive: true });
     }
+    const testFilePath = `${importPath}/test_book.m4b`;
+    fs.writeFileSync(testFilePath, Buffer.alloc(1024 * 100));
+    console.log('✅ Created test audiobook file');
 
-    // Create test audiobook file
-    const testFilePath = '/tmp/demo-audiobooks/test_book.m4b';
-    if (!fs.existsSync('/tmp/demo-audiobooks')) {
-      fs.mkdirSync('/tmp/demo-audiobooks', { recursive: true });
-    }
-    if (!fs.existsSync(testFilePath)) {
-      fs.writeFileSync(testFilePath, Buffer.alloc(1024 * 100)); // 100KB dummy file
-      console.log('✅ Created test audiobook file');
-    }
-
-    // Import the file
-    console.log('Importing audiobook...');
-    const importResult = await apiCall('POST', '/api/v1/import/file', {
+    // Import the file via API (to set up data, then we'll show it in UI)
+    console.log('Importing audiobook via API...');
+    const importResult = await axiosInstance.post(`${BASE_URL}/api/v1/import/file`, {
       file_path: testFilePath,
       organize: false
     });
-    const bookId = importResult.id;
+    const bookId = importResult.data.id;
     console.log(`✅ Imported book: ${bookId}`);
 
-    // Pause to show import result
-    await page.goto(`${API_BASE_URL}/api/v1/audiobooks/${bookId}`);
-    await screenshot(page, '01-imported-book');
+    // Refresh the page to show the imported book
+    await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await screenshot(page, '02-books-list');
+    console.log('✅ Book visible in library');
 
-    console.log('\n📝 PHASE 2: FETCH METADATA\n');
+    console.log('\n📝 PHASE 3: FETCH METADATA\n');
+
+    // Get all books
+    const allBooks = await axiosInstance.get(`${BASE_URL}/api/v1/audiobooks?limit=100`);
+    const bookIds = (allBooks.data.items || []).map(book => book.id);
+    console.log(`Found ${bookIds.length} books`);
 
     // Fetch metadata
-    console.log('Fetching metadata from Open Library...');
-    const fetchResult = await apiCall('POST', '/api/v1/metadata/bulk-fetch', {
-      missing_only: false
+    console.log('Fetching metadata...');
+    await axiosInstance.post(`${BASE_URL}/api/v1/metadata/bulk-fetch`, {
+      book_ids: bookIds,
+      only_missing: false
     });
-    console.log(`✅ Metadata fetch completed`);
+    console.log('✅ Metadata fetch completed');
 
-    // Verify metadata was fetched
-    const bookWithMetadata = await apiCall('GET', `/api/v1/audiobooks/${bookId}`);
-    console.log(`✅ Title: ${bookWithMetadata.title}`);
-    console.log(`✅ Author: ${bookWithMetadata.author_name || 'N/A'}`);
-    console.log(`✅ Description: ${bookWithMetadata.description?.substring(0, 50)}...` || 'N/A');
-
-    // Show metadata on page
-    await page.goto(`${API_BASE_URL}/api/v1/audiobooks/${bookId}`);
-    await screenshot(page, '02-with-metadata');
+    // Reload page to show metadata
+    await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await screenshot(page, '03-metadata-populated');
+    console.log('✅ Metadata displayed in library');
 
-    console.log('\n📝 PHASE 3: ORGANIZE FILES\n');
+    console.log('\n📝 PHASE 4: ORGANIZE FILES\n');
 
-    // Check current file location
-    console.log('Original file location:', testFilePath);
+    // Start organize operation
+    console.log('Starting file organization...');
+    const organizeResult = await axiosInstance.post(`${BASE_URL}/api/v1/operations/organize`, {});
+    console.log(`✅ Organization started (Operation: ${organizeResult.data.id})`);
 
-    // Organize the book
-    console.log('Organizing files...');
-    const organizeResult = await apiCall('POST', `/api/v1/audiobooks/${bookId}/organize`, {});
-    console.log(`✅ File organization completed`);
-    console.log(`Status: ${organizeResult.status}`);
+    // Wait for organization to process
+    await page.waitForTimeout(3000);
+    await screenshot(page, '04-organization-in-progress');
+    console.log('✅ Organization processing visible');
 
-    await screenshot(page, '03-organized-files');
-    await page.waitForTimeout(2000);
+    console.log('\n📝 PHASE 5: EDIT METADATA\n');
 
-    console.log('\n📝 PHASE 4: EDIT METADATA\n');
-
-    // Update metadata with overrides
-    console.log('Updating book metadata...');
-    const updateResult = await apiCall('PUT', `/api/v1/audiobooks/${bookId}`, {
-      title: 'Custom Audio Title',
+    // Update book metadata
+    console.log('Editing book metadata...');
+    await axiosInstance.put(`${BASE_URL}/api/v1/audiobooks/${bookId}`, {
+      title: 'Custom Demo Title',
       narrator: 'Professional Narrator',
-      publisher: 'Custom Publisher',
+      publisher: 'Demo Publisher',
       language: 'en'
     });
-    console.log(`✅ Updated title: ${updateResult.title}`);
-    console.log(`✅ Updated narrator: ${updateResult.narrator}`);
+    console.log('✅ Metadata updated');
 
-    // Show updated metadata
-    await page.goto(`${API_BASE_URL}/api/v1/audiobooks/${bookId}`);
-    await screenshot(page, '04-edited-metadata');
+    // Reload to show changes
+    await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(2000);
+    await screenshot(page, '05-metadata-edited');
+    console.log('✅ Changes displayed in UI');
 
-    console.log('\n📝 PHASE 5: VERIFY PERSISTENCE\n');
+    console.log('\n📝 PHASE 6: VERIFY PERSISTENCE\n');
 
-    // Verify changes persisted
-    const finalBook = await apiCall('GET', `/api/v1/audiobooks/${bookId}`);
+    // Get final book state
+    const finalBook = await axiosInstance.get(`${BASE_URL}/api/v1/audiobooks/${bookId}`);
     console.log('✅ Verification Results:');
-    console.log(`   - Title persisted: ${finalBook.title === 'Custom Audio Title' ? '✅' : '❌'}`);
-    console.log(`   - Narrator persisted: ${finalBook.narrator === 'Professional Narrator' ? '✅' : '❌'}`);
-    console.log(`   - Publisher persisted: ${finalBook.publisher === 'Custom Publisher' ? '✅' : '❌'}`);
+    console.log(`   - Title persisted: ${finalBook.data.title === 'Custom Demo Title' ? '✅' : '❌'}`);
+    console.log(`   - Narrator persisted: ${finalBook.data.narrator === 'Professional Narrator' ? '✅' : '❌'}`);
+    console.log(`   - Publisher persisted: ${finalBook.data.publisher === 'Demo Publisher' ? '✅' : '❌'}`);
 
-    // List all books
-    const allBooks = await apiCall('GET', '/api/v1/audiobooks?limit=10');
-    console.log(`✅ Total books in library: ${allBooks.count}`);
-
-    // Final screenshot showing all data
-    await page.goto(`${API_BASE_URL}/api/v1/audiobooks`);
-    await screenshot(page, '05-final-library-view');
-    await page.waitForTimeout(2000);
+    // Final screenshot
+    await screenshot(page, '06-final-state');
+    console.log('✅ Final library state captured');
 
     console.log('\n✅ DEMO COMPLETED SUCCESSFULLY!\n');
 
@@ -222,15 +202,20 @@ async function recordDemo() {
     console.error('❌ Demo failed:', error.message);
     process.exit(1);
   } finally {
-    // Close browser and save video
+    // Close browser and finalize video
     await page.close();
-    const video = await context.video();
-    if (video) {
-      await video.saveAs(DEMO_VIDEO_PATH);
-      console.log(`📹 Demo video saved to: ${DEMO_VIDEO_PATH}`);
-    }
     await context.close();
     await browser.close();
+
+    // Find the recorded video and rename it to the expected name
+    const files = fs.readdirSync(OUTPUT_DIR);
+    const webmFile = files.find(f => f.endsWith('.webm') && f !== 'audiobook-demo.webm' && fs.statSync(path.join(OUTPUT_DIR, f)).size > 1024);
+
+    if (webmFile) {
+      const sourcePath = path.join(OUTPUT_DIR, webmFile);
+      fs.renameSync(sourcePath, DEMO_VIDEO_PATH);
+      console.log(`📹 Demo video saved to: ${DEMO_VIDEO_PATH}`);
+    }
 
     console.log('\n🎉 Recording complete!');
     console.log(`Video: ${DEMO_VIDEO_PATH}`);
