@@ -1,13 +1,35 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.3.0 -->
+<!-- version: 1.3.1 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-01-28 -->
+<!-- last-edited: 2026-02-04 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### February 4, 2026 - Phase 2 Handler Integration Completion (v1.3.1)
+
+Phase 2 handler refactoring is complete and frontend tests are aligned with the
+current API behavior.
+
+##### Backend Refactors
+
+- Integrated Phase 2 services into `updateConfig`, `getSystemStatus`,
+  `getSystemLogs`, `addImportPath`, and `updateAudiobook` handlers
+- Updated config update flow to validate forbidden fields and mask secrets
+- Routed system log collection through the SystemService query pipeline
+
+##### Frontend Tests
+
+- Stabilized BookDetail unit tests with consistent router mocks and compare-table
+  scoping
+- Updated bulk metadata fetch test to exercise per-book metadata requests
+
+##### Documentation
+
+- Updated Phase 2 quick start and status plan documents with completion details
 
 #### January 28, 2026 - CI/CD Fixes and Compilation Error Resolution (v1.3.0)
 
