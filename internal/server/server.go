@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.51.0
+// version: 1.52.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -433,14 +432,17 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer           *http.Server
-	router               *gin.Engine
-	audiobookService     *AudiobookService
-	batchService         *BatchService
-	workService          *WorkService
-	authorSeriesService  *AuthorSeriesService
-	filesystemService    *FilesystemService
-	importService        *ImportService
+	httpServer               *http.Server
+	router                   *gin.Engine
+	audiobookService         *AudiobookService
+	batchService             *BatchService
+	workService              *WorkService
+	authorSeriesService      *AuthorSeriesService
+	filesystemService        *FilesystemService
+	importService            *ImportService
+	scanService              *ScanService
+	organizeService          *OrganizeService
+	metadataFetchService     *MetadataFetchService
 }
 
 // ServerConfig holds server configuration
@@ -468,13 +470,16 @@ func NewServer() *Server {
 	metrics.Register()
 
 	server := &Server{
-		router:              router,
-		audiobookService:    NewAudiobookService(database.GlobalStore),
-		batchService:        NewBatchService(database.GlobalStore),
-		workService:         NewWorkService(database.GlobalStore),
-		authorSeriesService: NewAuthorSeriesService(database.GlobalStore),
-		filesystemService:   NewFilesystemService(),
-		importService:       NewImportService(database.GlobalStore),
+		router:                   router,
+		audiobookService:         NewAudiobookService(database.GlobalStore),
+		batchService:             NewBatchService(database.GlobalStore),
+		workService:              NewWorkService(database.GlobalStore),
+		authorSeriesService:      NewAuthorSeriesService(database.GlobalStore),
+		filesystemService:        NewFilesystemService(),
+		importService:            NewImportService(database.GlobalStore),
+		scanService:              NewScanService(database.GlobalStore),
+		organizeService:          NewOrganizeService(database.GlobalStore),
+		metadataFetchService:     NewMetadataFetchService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -1627,12 +1632,7 @@ func (s *Server) startScan(c *gin.Context) {
 		Priority    *int    `json:"priority"`
 		ForceUpdate *bool   `json:"force_update"`
 	}
-	_ = c.ShouldBindJSON(&req) // optional
-
-	forceUpdate := req.ForceUpdate != nil && *req.ForceUpdate
-	if forceUpdate {
-		log.Printf("[DEBUG] startScan: Force update enabled - will update all book file paths in database")
-	}
+	_ = c.ShouldBindJSON(&req)
 
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
@@ -1647,210 +1647,15 @@ func (s *Server) startScan(c *gin.Context) {
 		priority = *req.Priority
 	}
 
-	// Create operation function
+	// Create operation function that delegates to service
+	scanReq := &ScanRequest{
+		FolderPath:  req.FolderPath,
+		Priority:    req.Priority,
+		ForceUpdate: req.ForceUpdate,
+	}
+
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		// Determine which folders to scan
-		var foldersToScan []string
-		if req.FolderPath != nil && *req.FolderPath != "" {
-			// Scan specific folder
-			foldersToScan = []string{*req.FolderPath}
-			_ = progress.Log("info", fmt.Sprintf("Starting scan of folder: %s", *req.FolderPath), nil)
-		} else {
-			// Full scan: include RootDir if force_update enabled, then all import paths
-			if forceUpdate && config.AppConfig.RootDir != "" {
-				foldersToScan = append(foldersToScan, config.AppConfig.RootDir)
-				_ = progress.Log("info", fmt.Sprintf("Full rescan: including library path %s", config.AppConfig.RootDir), nil)
-			}
-
-			// Add all import paths (import paths)
-			folders, err := database.GlobalStore.GetAllImportPaths()
-			if err != nil {
-				return fmt.Errorf("failed to get import paths: %w", err)
-			}
-			for _, folder := range folders {
-				if folder.Enabled {
-					foldersToScan = append(foldersToScan, folder.Path)
-				}
-			}
-			_ = progress.Log("info", fmt.Sprintf("Scanning %d total folders (%d import paths)", len(foldersToScan), len(folders)), nil)
-		}
-
-		if len(foldersToScan) == 0 {
-			_ = progress.Log("warn", "No folders to scan", nil)
-			return nil
-		}
-
-		// First pass: count total files across all folders
-		totalFilesAcrossFolders := 0
-		for _, folderPath := range foldersToScan {
-			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-				_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
-				continue
-			}
-			fileCount := 0
-			err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
-				if err != nil || info.IsDir() {
-					return nil
-				}
-				ext := strings.ToLower(filepath.Ext(path))
-				for _, supported := range config.AppConfig.SupportedExtensions {
-					if ext == supported {
-						fileCount++
-						break
-					}
-				}
-				return nil
-			})
-			if err == nil {
-				_ = progress.Log("info", fmt.Sprintf("Folder %s: Found %d audiobook files", folderPath, fileCount), nil)
-				totalFilesAcrossFolders += fileCount
-			}
-		}
-		_ = progress.Log("info", fmt.Sprintf("Total audiobook files across all folders: %d", totalFilesAcrossFolders), nil)
-		if totalFilesAcrossFolders == 0 {
-			_ = progress.Log("warn", "No audiobook files detected during pre-scan; totals will update as files are processed", nil)
-		}
-
-		progressTotal := totalFilesAcrossFolders
-		var processedFiles atomic.Int32
-
-		// Scan each folder
-		totalBooks := 0
-		libraryBooks := 0
-		importBooks := 0
-		for folderIdx, folderPath := range foldersToScan {
-			if progress.IsCanceled() {
-				_ = progress.Log("info", "Scan canceled", nil)
-				return fmt.Errorf("scan canceled")
-			}
-
-			currentProcessed := int(processedFiles.Load())
-			displayTotal := totalFilesAcrossFolders
-			if currentProcessed > displayTotal {
-				displayTotal = currentProcessed
-			}
-			_ = progress.UpdateProgress(currentProcessed, displayTotal, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
-			_ = progress.Log("info", fmt.Sprintf("Scanning folder: %s", folderPath), nil)
-
-			// Check if folder exists
-			if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-				_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
-				continue
-			}
-
-			// Scan directory for audiobook files (parallel)
-			workers := config.AppConfig.ConcurrentScans
-			if workers < 1 {
-				workers = 4
-			}
-			books, err := scanner.ScanDirectoryParallel(folderPath, workers)
-			if err != nil {
-				_ = progress.Log("error", fmt.Sprintf("Failed to scan folder %s: %v", folderPath, err), nil)
-				continue
-			}
-
-			_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files in %s", len(books), folderPath), nil)
-			totalBooks += len(books)
-			if folderPath == config.AppConfig.RootDir {
-				libraryBooks += len(books)
-			} else {
-				importBooks += len(books)
-			}
-			// Prepare per-book progress reporting
-			targetTotal := progressTotal
-			if targetTotal == 0 {
-				targetTotal = len(books)
-			}
-			progressCallback := func(_ int, _ int, bookPath string) {
-				current := processedFiles.Add(1)
-				displayTotal := targetTotal
-				if int(current) > displayTotal {
-					displayTotal = int(current)
-				}
-				message := fmt.Sprintf("Processed: %d/%d books", current, displayTotal)
-				if bookPath != "" {
-					message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
-				}
-				_ = progress.UpdateProgress(int(current), displayTotal, message)
-			}
-
-			// Process the books to extract metadata (parallel)
-			// This automatically upserts books by FilePath, creating new records or updating existing ones
-			if len(books) > 0 {
-				_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
-				if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback); err != nil {
-					_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
-				} else {
-					_ = progress.Log("info", fmt.Sprintf("Successfully processed %d books", len(books)), nil)
-				}
-
-				// Auto-organize if enabled
-				if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
-					org := organizer.NewOrganizer(&config.AppConfig)
-					organized := 0
-					for _, b := range books {
-						if progress.IsCanceled() {
-							break
-						}
-						// Lookup DB book by file path
-						dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
-						if err != nil || dbBook == nil {
-							continue
-						}
-						newPath, err := org.OrganizeBook(dbBook)
-						if err != nil {
-							_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
-							continue
-						}
-						// Update DB path if changed
-						if newPath != dbBook.FilePath {
-							dbBook.FilePath = newPath
-							applyOrganizedFileMetadata(dbBook, newPath)
-							if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
-								_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
-							} else {
-								organized++
-							}
-						}
-					}
-					_ = progress.Log("info", fmt.Sprintf("Auto-organize complete: %d organized", organized), nil)
-				} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
-					_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
-				}
-			}
-
-			// Update book count for this import path
-			folders, _ := database.GlobalStore.GetAllImportPaths()
-			for _, folder := range folders {
-				if folder.Path == folderPath {
-					folder.BookCount = len(books)
-					if err := database.GlobalStore.UpdateImportPath(folder.ID, &folder); err != nil {
-						_ = progress.Log("warn", fmt.Sprintf("Failed to update book count for folder %s: %v", folderPath, err), nil)
-					}
-					break
-				}
-			}
-		}
-
-		// Format completion message with separate library/import counts
-		var completionMsg string
-		if libraryBooks > 0 && importBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed. Library: %d books, Import: %d books (Total: %d)", libraryBooks, importBooks, totalBooks)
-		} else if libraryBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed. Library: %d books", libraryBooks)
-		} else if importBooks > 0 {
-			completionMsg = fmt.Sprintf("Scan completed. Import: %d books", importBooks)
-		} else {
-			completionMsg = "Scan completed. No books found"
-		}
-		finalProcessed := int(processedFiles.Load())
-		finalTotal := totalFilesAcrossFolders
-		if finalProcessed > finalTotal {
-			finalTotal = finalProcessed
-		}
-		_ = progress.UpdateProgress(finalProcessed, finalTotal, completionMsg)
-		_ = progress.Log("info", completionMsg, nil)
-		return nil
+		return s.scanService.PerformScan(ctx, scanReq, progress)
 	}
 
 	// Enqueue the operation
@@ -1891,127 +1696,14 @@ func (s *Server) startOrganize(c *gin.Context) {
 		priority = *req.Priority
 	}
 
-	// Create operation function
+	// Create operation function that delegates to service
+	organizeReq := &OrganizeRequest{
+		FolderPath: req.FolderPath,
+		Priority:   req.Priority,
+	}
+
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		org := organizer.NewOrganizer(&config.AppConfig)
-
-		_ = progress.Log("info", "Starting file organization", nil)
-
-		// Get books to organize
-		allBooks, err := database.GlobalStore.GetAllBooks(1000, 0)
-		if err != nil {
-			errDetails := err.Error()
-			_ = progress.Log("error", "Failed to fetch books", &errDetails)
-			return fmt.Errorf("failed to fetch books: %w", err)
-		}
-
-		logMsg := fmt.Sprintf("Fetched %d total books from database", len(allBooks))
-		_ = progress.Log("info", logMsg, nil)
-		log.Printf("[DEBUG] Organize: %s", logMsg)
-
-		// Filter books that need organizing (not already in root directory)
-		booksToOrganize := make([]database.Book, 0)
-		for _, book := range allBooks {
-			// Skip if book is already in the root directory (already organized)
-			if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
-				logMsg := fmt.Sprintf("Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
-				log.Printf("[DEBUG] Organize: %s", logMsg)
-				continue
-			}
-			// Skip if file doesn't exist
-			if _, err := os.Stat(book.FilePath); os.IsNotExist(err) {
-				logMsg := fmt.Sprintf("Skipping non-existent file: %s", book.FilePath)
-				log.Printf("[DEBUG] Organize: %s", logMsg)
-				continue
-			}
-			booksToOrganize = append(booksToOrganize, book)
-		}
-
-		logMsg = fmt.Sprintf("Found %d books that need organizing (out of %d total)", len(booksToOrganize), len(allBooks))
-		_ = progress.Log("info", logMsg, nil)
-		log.Printf("[DEBUG] Organize: %s", logMsg)
-
-		organized := 0
-		failed := 0
-		for i, book := range booksToOrganize {
-			if progress.IsCanceled() {
-				_ = progress.Log("info", "Organize canceled", nil)
-				return fmt.Errorf("organize canceled")
-			}
-
-			_ = progress.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
-
-			newPath, err := org.OrganizeBook(&book)
-			if err != nil {
-				errDetails := fmt.Sprintf("Failed to organize %s: %s", book.Title, err.Error())
-				_ = progress.Log("warn", errDetails, nil)
-				failed++
-				continue
-			}
-
-			// Update book's file path and state in database
-			book.FilePath = newPath
-			book.LibraryState = stringPtr("organized")
-			applyOrganizedFileMetadata(&book, newPath)
-			if _, err := database.GlobalStore.UpdateBook(book.ID, &book); err != nil {
-				errDetails := fmt.Sprintf("Failed to update book path: %s", err.Error())
-				_ = progress.Log("warn", errDetails, nil)
-			} else {
-				organized++
-			}
-		}
-
-		summary := fmt.Sprintf("Organization completed: %d organized, %d failed", organized, failed)
-		_ = progress.Log("info", summary, nil)
-
-		// Trigger automatic rescan of library path after organize completes
-		if organized > 0 && config.AppConfig.RootDir != "" {
-			_ = progress.Log("info", "Starting automatic rescan of library path...", nil)
-
-			// Create a new scan operation
-			scanID := ulid.Make().String()
-			scanOp, err := database.GlobalStore.CreateOperation(scanID, "scan", &config.AppConfig.RootDir)
-			if err != nil {
-				errDetails := fmt.Sprintf("Failed to create rescan operation: %s", err.Error())
-				_ = progress.Log("warn", errDetails, nil)
-			} else {
-				// Enqueue the scan operation with low priority (don't block other operations)
-				scanFunc := func(ctx context.Context, scanProgress operations.ProgressReporter) error {
-					_ = scanProgress.Log("info", fmt.Sprintf("Scanning organized books in: %s", config.AppConfig.RootDir), nil)
-
-					// Scan the root directory for newly organized books
-					workers := config.AppConfig.ConcurrentScans
-					if workers < 1 {
-						workers = 4
-					}
-					books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers)
-					if err != nil {
-						return fmt.Errorf("failed to rescan root directory: %w", err)
-					}
-
-					_ = scanProgress.Log("info", fmt.Sprintf("Found %d books in root directory", len(books)), nil)
-
-					// Process the books to extract metadata
-					if len(books) > 0 {
-						if err := scanner.ProcessBooksParallel(ctx, books, workers, nil); err != nil {
-							return fmt.Errorf("failed to process books: %w", err)
-						}
-					}
-
-					_ = scanProgress.Log("info", "Rescan completed successfully", nil)
-					return nil
-				}
-
-				if err := operations.GlobalQueue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
-					errDetails := fmt.Sprintf("Failed to enqueue rescan: %s", err.Error())
-					_ = progress.Log("warn", errDetails, nil)
-				} else {
-					_ = progress.Log("info", "Rescan operation queued successfully", nil)
-				}
-			}
-		}
-
-		return nil
+		return s.organizeService.PerformOrganize(ctx, organizeReq, progress)
 	}
 
 	// Enqueue the operation
@@ -2815,110 +2507,16 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
-	// Get the audiobook
-	book, err := database.GlobalStore.GetBookByID(id)
+	resp, err := s.metadataFetchService.FetchMetadataForBook(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Search for metadata using current title
-	client := metadata.NewOpenLibraryClient()
-
-	// Strip chapter/book numbers to improve search results
-	searchTitle := stripChapterFromTitle(book.Title)
-
-	// Try with cleaned title first
-	results, err := client.SearchByTitle(searchTitle)
-
-	// Fall back to original title if cleaned search fails
-	if (err != nil || len(results) == 0) && searchTitle != book.Title {
-		results, err = client.SearchByTitle(book.Title)
-	}
-
-	// Final fallback: try with author if we have one
-	if (err != nil || len(results) == 0) && book.AuthorID != nil {
-		author, authorErr := database.GlobalStore.GetAuthorByID(*book.AuthorID)
-		if authorErr == nil && author != nil && author.Name != "" {
-			log.Printf("[INFO] fetchAudiobookMetadata: Trying fallback search with author: %s", author.Name)
-			results, err = client.SearchByTitleAndAuthor(searchTitle, author.Name)
-
-			// Also try with original title + author if cleaned title failed
-			if (err != nil || len(results) == 0) && searchTitle != book.Title {
-				results, err = client.SearchByTitleAndAuthor(book.Title, author.Name)
-			}
-		}
-	}
-
-	if err != nil || len(results) == 0 {
-		errorMsg := "no metadata found for this book in Open Library"
-		if book.AuthorID != nil {
-			author, _ := database.GlobalStore.GetAuthorByID(*book.AuthorID)
-			if author != nil {
-				errorMsg = fmt.Sprintf("no metadata found for '%s' by '%s' in Open Library", book.Title, author.Name)
-			}
-		}
-		c.JSON(http.StatusNotFound, gin.H{"error": errorMsg})
-		return
-	}
-
-	// Use the first result
-	meta := results[0]
-
-	// Update book with fetched metadata (only fields that exist in Book struct)
-	if meta.Title != "" {
-		book.Title = meta.Title
-	}
-	if meta.Publisher != "" {
-		book.Publisher = stringPtr(meta.Publisher)
-	}
-	if meta.Language != "" {
-		book.Language = stringPtr(meta.Language)
-	}
-	if meta.PublishYear != 0 {
-		book.AudiobookReleaseYear = intPtrHelper(meta.PublishYear)
-	}
-
-	// Update in database
-	updatedBook, err := database.GlobalStore.UpdateBook(id, book)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update book: %v", err)})
-		return
-	}
-
-	fetchedValues := map[string]any{}
-	if meta.Title != "" {
-		fetchedValues["title"] = meta.Title
-	}
-	if meta.Publisher != "" {
-		fetchedValues["publisher"] = meta.Publisher
-	}
-	if meta.Language != "" {
-		fetchedValues["language"] = meta.Language
-	}
-	if meta.PublishYear != 0 {
-		fetchedValues["audiobook_release_year"] = meta.PublishYear
-	}
-	if meta.Author != "" {
-		fetchedValues["author_name"] = meta.Author
-	}
-	if meta.ISBN != "" {
-		if len(meta.ISBN) == 10 {
-			fetchedValues["isbn10"] = meta.ISBN
-		} else {
-			fetchedValues["isbn13"] = meta.ISBN
-		}
-	}
-	if len(fetchedValues) > 0 {
-		if err := updateFetchedMetadataState(id, fetchedValues); err != nil {
-			log.Printf("[ERROR] fetchAudiobookMetadata: failed to persist fetched metadata state: %v", err)
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "metadata fetched and applied",
-		"book":    updatedBook,
-		"source":  "Open Library",
+		"message": resp.Message,
+		"book":    resp.Book,
+		"source":  resp.Source,
 	})
 }
 
