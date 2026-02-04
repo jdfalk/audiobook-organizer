@@ -13,7 +13,7 @@ import (
 func TestAudiobookUpdateService_ValidateRequest_EmptyID(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	_, err := service.ValidateRequest("", map[string]interface{}{})
+	_, err := service.ValidateRequest("", map[string]any{})
 
 	if err == nil {
 		t.Error("expected error for empty ID")
@@ -23,7 +23,7 @@ func TestAudiobookUpdateService_ValidateRequest_EmptyID(t *testing.T) {
 func TestAudiobookUpdateService_ValidateRequest_NoUpdates(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	_, err := service.ValidateRequest("book1", map[string]interface{}{})
+	_, err := service.ValidateRequest("book1", map[string]any{})
 
 	if err == nil {
 		t.Error("expected error for empty updates")
@@ -33,7 +33,7 @@ func TestAudiobookUpdateService_ValidateRequest_NoUpdates(t *testing.T) {
 func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"title": "New Title",
 	}
 
@@ -47,7 +47,7 @@ func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {
 func TestAudiobookUpdateService_ExtractIntField(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"author_id": float64(42),
 	}
 
@@ -61,7 +61,7 @@ func TestAudiobookUpdateService_ExtractIntField(t *testing.T) {
 func TestAudiobookUpdateService_ExtractStringField_NotFound(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	payload := map[string]interface{}{}
+	payload := map[string]any{}
 
 	_, ok := service.ExtractStringField(payload, "missing")
 
@@ -73,8 +73,8 @@ func TestAudiobookUpdateService_ExtractStringField_NotFound(t *testing.T) {
 func TestAudiobookUpdateService_ExtractOverrides_Success(t *testing.T) {
 	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	payload := map[string]interface{}{
-		"overrides": map[string]interface{}{
+	payload := map[string]any{
+		"overrides": map[string]any{
 			"key1": "value1",
 			"key2": "value2",
 		},
@@ -95,7 +95,7 @@ func TestAudiobookUpdateService_ApplyUpdatesToBook(t *testing.T) {
 		Title: "Original Title",
 	}
 
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"title": "Updated Title",
 	}
 
@@ -115,7 +115,7 @@ func TestAudiobookUpdateService_ApplyUpdatesToBook_MultipleFields(t *testing.T) 
 	}
 
 	authorID := 10
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"title":     "Updated Title",
 		"author_id": float64(authorID),
 	}
