@@ -77,7 +77,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 	meta := results[0]
 
 	// Update book with fetched metadata
-	mfs.applyMetadataToBook(book, &meta)
+	mfs.applyMetadataToBook(book, meta)
 
 	// Update in database
 	updatedBook, err := mfs.db.UpdateBook(id, book)
@@ -86,7 +86,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 	}
 
 	// Persist fetched metadata state
-	mfs.persistFetchedMetadata(id, &meta)
+	mfs.persistFetchedMetadata(id, meta)
 
 	return &FetchMetadataResponse{
 		Message: "metadata fetched and applied",
@@ -95,7 +95,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 	}, nil
 }
 
-func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta *metadata.BookMetadata) {
+func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
 	if meta.Title != "" {
 		book.Title = meta.Title
 	}
@@ -110,7 +110,7 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta *
 	}
 }
 
-func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta *metadata.BookMetadata) {
+func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
 	fetchedValues := map[string]any{}
 	if meta.Title != "" {
 		fetchedValues["title"] = meta.Title
