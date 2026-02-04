@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -342,5 +342,135 @@ func InitConfig() {
 	}
 	if AppConfig.DatabaseType == "" {
 		AppConfig.DatabaseType = "pebble"
+	}
+}
+
+// ResetToDefaults resets the AppConfig to factory defaults
+func ResetToDefaults() {
+	AppConfig = Config{
+		// Core paths
+		RootDir:       AppConfig.RootDir,       // Keep existing paths
+		DatabasePath:  AppConfig.DatabasePath,  // Keep existing paths
+		DatabaseType:  "pebble",
+		EnableSQLite:  false,
+		PlaylistDir:   AppConfig.PlaylistDir,   // Keep existing paths
+		SetupComplete: false,
+
+		// Library organization
+		OrganizationStrategy: "auto",
+		ScanOnStartup:        false,
+		AutoOrganize:         true,
+		FolderNamingPattern:  "{author}/{series}/{title} ({print_year})",
+		FileNamingPattern:    "{title} - {author} - read by {narrator}",
+		CreateBackups:        true,
+
+		// Storage quotas
+		EnableDiskQuota:    false,
+		DiskQuotaPercent:   80,
+		EnableUserQuotas:   false,
+		DefaultUserQuotaGB: 100,
+
+		// Metadata
+		AutoFetchMetadata: true,
+		Language:          "en",
+
+		// AI parsing
+		EnableAIParsing: false,
+		OpenAIAPIKey:    "",
+
+		// Performance
+		ConcurrentScans: 4,
+
+		// Memory management
+		MemoryLimitType:    "items",
+		CacheSize:          1000,
+		MemoryLimitPercent: 25,
+		MemoryLimitMB:      512,
+
+		// Lifecycle / retention
+		PurgeSoftDeletedAfterDays:   30,
+		PurgeSoftDeletedDeleteFiles: false,
+
+		// Logging
+		LogLevel:          "info",
+		LogFormat:         "text",
+		EnableJsonLogging: false,
+
+		// Download client integration
+		DownloadClient: DownloadClientConfig{
+			Torrent: TorrentClientConfig{
+				Type: "",
+				Deluge: DelugeConfig{
+					Host:     "",
+					Port:     0,
+					Username: "",
+					Password: "",
+				},
+				QBittorrent: QBittorrentConfig{
+					Host:     "",
+					Port:     0,
+					Username: "",
+					Password: "",
+					UseHTTPS: false,
+				},
+			},
+			Usenet: UsenetClientConfig{
+				Type: "",
+				SABnzbd: SABnzbdConfig{
+					Host:     "",
+					Port:     0,
+					APIKey:   "",
+					UseHTTPS: false,
+				},
+			},
+		},
+
+		SupportedExtensions: []string{
+			".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
+		},
+		ExcludePatterns: []string{},
+
+		// Default metadata sources
+		MetadataSources: []MetadataSource{
+			{
+				ID:           "audible",
+				Name:         "Audible",
+				Enabled:      true,
+				Priority:     1,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
+			},
+			{
+				ID:           "goodreads",
+				Name:         "Goodreads",
+				Enabled:      true,
+				Priority:     2,
+				RequiresAuth: true,
+				Credentials: map[string]string{
+					"apiKey":    "",
+					"apiSecret": "",
+				},
+			},
+			{
+				ID:           "openlibrary",
+				Name:         "Open Library",
+				Enabled:      false,
+				Priority:     3,
+				RequiresAuth: true,
+				Credentials: map[string]string{
+					"apiKey": "",
+				},
+			},
+			{
+				ID:           "google-books",
+				Name:         "Google Books",
+				Enabled:      false,
+				Priority:     4,
+				RequiresAuth: true,
+				Credentials: map[string]string{
+					"apiKey": "",
+				},
+			},
+		},
 	}
 }

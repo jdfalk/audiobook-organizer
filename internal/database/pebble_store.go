@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2366,4 +2366,42 @@ func (p *PebbleStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 	}
 
 	return &item, nil
+}
+
+// Reset clears all data from the store and resets all counters to initial state
+func (p *PebbleStore) Reset() error {
+	// Delete all keys by iterating through the entire keyspace
+	iter, err := p.db.NewIter(nil)
+	if err != nil {
+		return fmt.Errorf("failed to create iterator: %w", err)
+	}
+	defer iter.Close()
+
+	// Collect keys to delete (can't delete during iteration)
+	var keysToDelete [][]byte
+	for iter.First(); iter.Valid(); iter.Next() {
+		keysToDelete = append(keysToDelete, append([]byte(nil), iter.Key()...))
+	}
+
+	if err := iter.Error(); err != nil {
+		return fmt.Errorf("iterator error: %w", err)
+	}
+
+	// Delete all keys
+	for _, key := range keysToDelete {
+		if err := p.db.Delete(key, pebble.Sync); err != nil {
+			return fmt.Errorf("failed to delete key: %w", err)
+		}
+	}
+
+	// Reinitialize counters to their initial state
+	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference", "library"}
+	for _, counter := range counters {
+		key := fmt.Sprintf("counter:%s", counter)
+		if err := p.db.Set([]byte(key), []byte("1"), pebble.Sync); err != nil {
+			return fmt.Errorf("failed to initialize counter %s: %w", counter, err)
+		}
+	}
+
+	return nil
 }

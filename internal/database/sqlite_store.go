@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.14.1
+// version: 1.15.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1557,4 +1557,54 @@ func (s *SQLiteStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 		return nil, err
 	}
 	return &item, nil
+}
+
+// Reset clears all data from all tables
+func (s *SQLiteStore) Reset() error {
+	// List of all tables to truncate
+	tables := []string{
+		"books",
+		"authors",
+		"series",
+		"works",
+		"import_paths",
+		"operations",
+		"operation_logs",
+		"user_preferences",
+		"playlists",
+		"playlist_items",
+		"metadata_field_states",
+		"users",
+		"sessions",
+		"user_preference_kv",
+		"book_segments",
+		"playback_events",
+		"playback_progress",
+		"book_stats",
+		"user_stats",
+		"settings",
+		"do_not_import",
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete all rows from each table
+	for _, table := range tables {
+		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", table)); err != nil {
+			// Some tables might not exist, so we ignore errors
+			// This is safe because the query is constructed from a hardcoded list
+			continue
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
