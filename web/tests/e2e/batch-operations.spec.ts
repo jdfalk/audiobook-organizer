@@ -1,6 +1,7 @@
 // file: web/tests/e2e/batch-operations.spec.ts
-// version: 1.0.7
+// version: 1.1.0
 // guid: 5d6e7f80-9a0b-1c2d-3e4f-5a6b7c8d9e0f
+// last-edited: 2026-02-04
 
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import {
@@ -8,7 +9,7 @@ import {
   mockEventSource,
   setupCommonRoutes,
   setupLibraryWithBooks,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
   waitForToast,
 } from './utils/test-helpers';
 
@@ -40,8 +41,10 @@ async function getFirstBookLabel(page: Page): Promise<string> {
 
 test.describe('Batch Operations', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
     await setupCommonRoutes(page);
   });
 

@@ -1,6 +1,7 @@
 // file: tests/e2e/metadata-provenance.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
+// last-edited: 2026-02-04
 
 /**
  * E2E tests for metadata provenance features (SESSION-003).
@@ -9,6 +10,7 @@
  */
 
 import { expect, test } from '@playwright/test';
+import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
 
 const bookId = 'prov-test-book';
 
@@ -135,21 +137,8 @@ const createTagsData = (): TagsData => ({
 /**
  * Mocks EventSource to prevent SSE connections
  */
-const mockEventSource = async (page: import('@playwright/test').Page) => {
-  await page.addInitScript(() => {
-    class MockEventSource {
-      url: string;
-      constructor(url: string) {
-        this.url = url;
-      }
-      addEventListener() {}
-      removeEventListener() {}
-      close() {}
-    }
-    (window as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-};
+// Note: Using mockEventSource from test-helpers instead of this local definition
+// to avoid duplication
 
 /**
  * Recomputes effective value and source based on provenance hierarchy
@@ -338,10 +327,10 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
 
 test.describe('Metadata Provenance E2E', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await page.addInitScript(() => {
-      localStorage.setItem('welcome_wizard_completed', 'true');
-    });
   });
 
   test('displays provenance data in Tags tab', async ({ page }) => {

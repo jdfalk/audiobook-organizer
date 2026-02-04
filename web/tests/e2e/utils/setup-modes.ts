@@ -1,6 +1,7 @@
 // file: web/tests/e2e/utils/setup-modes.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2d3c4-b5a6-7890-cdef-a1b2c3d4e5f6
+// last-edited: 2026-02-04
 
 import { Page } from '@playwright/test';
 import type { MockApiOptions } from './test-helpers';
@@ -12,10 +13,13 @@ import { skipWelcomeWizard, setupMockApi } from './test-helpers';
  * This endpoint is called on the backend to clear all data and state.
  * Falls back gracefully if the endpoint doesn't exist (404) for testing
  * with backends that don't yet support the reset endpoint.
+ *
+ * @param page - Playwright test page object
+ * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
  */
 export async function resetToFactoryDefaults(
   page: Page,
-  baseURL: string
+  baseURL: string = 'http://127.0.0.1:4173'
 ): Promise<boolean> {
   try {
     const response = await page.evaluate(
@@ -58,10 +62,13 @@ export async function resetToFactoryDefaults(
  * - Testing actual API behavior and error handling
  *
  * Skips the welcome wizard since we're using real APIs.
+ *
+ * @param page - Playwright test page object
+ * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
  */
 export async function setupPhase1ApiDriven(
   page: Page,
-  baseURL: string
+  baseURL: string = 'http://127.0.0.1:4173'
 ): Promise<void> {
   // Attempt to reset to factory defaults
   await resetToFactoryDefaults(page, baseURL);
@@ -81,10 +88,14 @@ export async function setupPhase1ApiDriven(
  * - Running tests in CI/CD environments
  *
  * The mockOptions parameter allows customizing the mock API responses.
+ *
+ * @param page - Playwright test page object
+ * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
+ * @param mockOptions - Options for mock API responses
  */
 export async function setupPhase2Interactive(
   page: Page,
-  baseURL: string,
+  baseURL: string = 'http://127.0.0.1:4173',
   mockOptions: MockApiOptions = {}
 ): Promise<void> {
   // Attempt to reset to factory defaults

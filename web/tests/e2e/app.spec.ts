@@ -1,79 +1,24 @@
 // file: tests/e2e/app.spec.ts
-// version: 1.0.2
+// version: 1.1.0
 // guid: 1f2a3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b6c
+// last-edited: 2026-02-04
 
 import { test, expect } from '@playwright/test';
-
-const mockApi = async (page: import('@playwright/test').Page) => {
-  await page.addInitScript(() => {
-    // Avoid real SSE connections during tests
-    class MockEventSource {
-      url: string;
-      constructor(url: string) {
-        this.url = url;
-      }
-      addEventListener() {}
-      removeEventListener() {}
-      close() {}
-    }
-    (window as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-
-  await page.route('**/api/v1/system/status', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'ok',
-        library: { book_count: 0, folder_count: 1, total_size: 0 },
-        import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
-        memory: {},
-        runtime: {},
-        operations: { recent: [] },
-      }),
-    });
-  });
-
-  await page.route('**/api/v1/import-paths', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ importPaths: [] }),
-    });
-  });
-
-  await page.route('**/api/v1/audiobooks', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ audiobooks: [] }),
-    });
-  });
-
-  await page.route('**/api/v1/health', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ status: 'ok' }),
-    });
-  });
-
-  await page.route('**/api/**', (route) => {
-    // Default fallback for any other API call
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({}),
-    });
-  });
-};
+import {
+  setupPhase1ApiDriven,
+  setupMockApi,
+  mockEventSource,
+} from './utils/test-helpers';
 
 test.describe('App smoke', () => {
   test.beforeEach(async ({ page }) => {
-    await mockApi(page);
-    await page.addInitScript(() => {
-      localStorage.setItem('welcome_wizard_completed', 'true');
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
+    await mockEventSource(page);
+    // Setup mock APIs for empty library
+    await setupMockApi(page, {
+      books: [],
     });
   });
 

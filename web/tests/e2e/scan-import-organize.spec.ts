@@ -1,6 +1,7 @@
 // file: web/tests/e2e/scan-import-organize.spec.ts
-// version: 1.2.1
+// version: 1.3.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
+// last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -8,7 +9,7 @@ import {
   mockEventSource,
   setupCommonRoutes,
   setupLibraryWithBooks,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
   waitForToast,
 } from './utils/test-helpers';
 
@@ -160,8 +161,10 @@ const setupScanWorkflow = async (page: Page, options: ScanMockOptions) => {
 
 test.describe('Scan/Import/Organize Workflow', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
     await setupCommonRoutes(page);
   });
 

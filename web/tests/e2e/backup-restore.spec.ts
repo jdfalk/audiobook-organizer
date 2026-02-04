@@ -1,12 +1,13 @@
 // file: web/tests/e2e/backup-restore.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 467b5537-3e41-4190-938c-e2f2ccb2e127
+// last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
   mockEventSource,
   setupMockApi,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const backups = [
@@ -34,8 +35,10 @@ const openBackupSettings = async (
 
 test.describe('Backup and Restore', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('creates manual backup', async ({ page }) => {

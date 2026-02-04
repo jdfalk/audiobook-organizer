@@ -1,26 +1,17 @@
 // file: tests/e2e/import-paths.spec.ts
-// version: 1.0.2
+// version: 1.1.0
 // guid: e3f4a5b6-c7d8-9e0f-1a2b-3c4d5e6f7a8b
+// last-edited: 2026-02-04
 
 import { test, expect } from '@playwright/test';
+import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
 
 test.describe('Import paths workflows', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('welcome_wizard_completed', 'true');
-      // Silence EventSource in tests
-      class MockEventSource {
-        url: string;
-        constructor(url: string) {
-          this.url = url;
-        }
-        addEventListener() {}
-        removeEventListener() {}
-        close() {}
-      }
-      (window as unknown as { EventSource: typeof EventSource }).EventSource =
-        MockEventSource as unknown as typeof EventSource;
-    });
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
+    await mockEventSource(page);
   });
 
   test('add and remove import path via Settings page (mocked API)', async ({

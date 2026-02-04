@@ -1,19 +1,22 @@
 // file: web/tests/e2e/library-browser.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f2a3b4c5d6e7
+// last-edited: 2026-02-04
 
 import { test, expect } from '@playwright/test';
 import {
   mockEventSource,
-  skipWelcomeWizard,
   generateTestBooks,
   setupLibraryWithBooks,
+  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 test.describe('Library Browser', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('loads library page and displays books in grid', async ({ page }) => {
