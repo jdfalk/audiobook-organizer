@@ -1,12 +1,13 @@
 # file: .github/dependabot.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: b9694b1e-0b81-4642-84a6-4fecb2d9099d
 
-# Smart Dependabot configuration for audiobook-organizer
-# Supports: github-actions, go, python-scripts
+# Simplified Dependabot configuration for audiobook-organizer
+# One group per ecosystem for easy PR approval
 
 version: 2
 updates:
+  # GitHub Actions - all actions grouped together
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -23,28 +24,20 @@ updates:
       - github-actions
       - ci-cd
     groups:
-      ci-dependencies:
-        patterns:
-          - actions/*
-          - github/*
-        update-types:
-          - minor
-          - patch
-      external-actions:
+      github-actions:
         patterns:
           - '*'
-        exclude-patterns:
-          - actions/*
-          - github/*
         update-types:
           - minor
           - patch
+
+  # Go modules - all Go dependencies grouped together
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
       day: monday
-      time: 09:00
+      time: '09:00'
       timezone: America/New_York
     open-pull-requests-limit: 5
     commit-message:
@@ -53,12 +46,46 @@ updates:
     labels:
       - dependencies
       - tech:go
-    allow:
-      - dependency-type: direct
+    groups:
+      go-dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
     ignore:
       - dependency-name: '*'
         update-types:
           - version-update:semver-major
+
+  # npm - all npm dependencies grouped together
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: America/New_York
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: npm
+      include: scope
+    labels:
+      - dependencies
+      - tech:javascript
+    groups:
+      npm-dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+
+  # Python - all Python dependencies grouped together
   - package-ecosystem: pip
     directory: /scripts
     schedule:
@@ -73,8 +100,13 @@ updates:
     labels:
       - dependencies
       - tech:python
-    allow:
-      - dependency-type: direct
+    groups:
+      python-dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
     ignore:
       - dependency-name: '*'
         update-types:
