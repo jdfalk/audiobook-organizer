@@ -36,7 +36,7 @@ func TestMetadataFetchService_ApplyMetadataToBook(t *testing.T) {
 		Publisher: "Test Publisher",
 	}
 
-	mfs.applyMetadataToBook(book, &meta)
+	mfs.applyMetadataToBook(book, meta)
 
 	if book.Title != "Fetched Title" {
 		t.Errorf("expected title 'Fetched Title', got %q", book.Title)

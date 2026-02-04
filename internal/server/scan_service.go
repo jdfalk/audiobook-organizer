@@ -214,7 +214,10 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 	return nil
 }
 
-func (ss *ScanService) autoOrganizeScannedBooks(ctx context.Context, books []scanner.Book, progress operations.ProgressReporter) {
+func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scanner.Book, progress operations.ProgressReporter) {
+	if len(books) == 0 {
+		return
+	}
 	if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
 		org := organizer.NewOrganizer(&config.AppConfig)
 		organized := 0
