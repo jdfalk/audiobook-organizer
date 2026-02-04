@@ -86,7 +86,19 @@
       "Bash(staticcheck:*)",
       "Bash(xargs:*)",
       "Bash(bash:*)",
-      "Bash(npx playwright:*)"
+      "Bash(npx playwright:*)",
+      "Bash(__NEW_LINE_1710d40a255ef0d4__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(__NEW_LINE_d0b2f90efd5606cd__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(if [ $? -eq 0 ])",
+      "Bash(then)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(__NEW_LINE_85a48a1148945de1__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(__NEW_LINE_f433f2c5d65bb151__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(__NEW_LINE_91521491ca160c50__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(__NEW_LINE_dbc8192fcc233756__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
+      "Bash(__NEW_LINE_755b12e4efd59737__ pkill -9 audiobook-organizer)",
+      "Bash(__NEW_LINE_df99226a1cd35331__ ls -lh /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/demo_recordings/audiobook-demo.webm)"
     ]
   }
 }

@@ -1,7 +1,8 @@
+//go:build embed_frontend
+
 // file: internal/server/static_embed.go
 // version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
-//go:build embed_frontend
 
 package server
 
@@ -26,12 +27,11 @@ func SetEmbeddedFS(fs embed.FS) {
 
 // setupStaticFiles serves the embedded React frontend
 func (s *Server) setupStaticFiles() {
-	// Get the subdirectory for web/dist
+	// Get the web/dist subdirectory from the embedded filesystem
 	webDist, err := fs.Sub(webFS, "web/dist")
 	if err != nil {
-		// If embedded files not available, fall back to placeholder
-		s.setupPlaceholder()
-		return
+		// If Sub fails, log and continue - we'll fall back to placeholder
+		webDist = nil
 	}
 
 	// NoRoute handler to serve static files or SPA index.html
@@ -39,6 +39,14 @@ func (s *Server) setupStaticFiles() {
 		// Return 404 for unknown API routes
 		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
+			return
+		}
+
+		// If webDist is nil, show placeholder
+		if webDist == nil {
+			s.setupPlaceholder()
+			c.Request.URL.Path = "/"
+			s.router.HandleContext(c)
 			return
 		}
 

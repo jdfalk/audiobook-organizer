@@ -83,7 +83,8 @@ async function recordDemo() {
 
     // Navigate to the web UI
     console.log('Opening web interface...');
-    await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForSelector('#root', { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(2000);
     await screenshot(page, '01-app-home');
     console.log('✅ Application loaded');
@@ -112,7 +113,7 @@ async function recordDemo() {
     console.log(`✅ Imported book: ${bookId}`);
 
     // Refresh the page to show the imported book
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(2000);
     await screenshot(page, '02-books-list');
     console.log('✅ Book visible in library');
@@ -133,7 +134,7 @@ async function recordDemo() {
     console.log('✅ Metadata fetch completed');
 
     // Reload page to show metadata
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(2000);
     await screenshot(page, '03-metadata-populated');
     console.log('✅ Metadata displayed in library');
@@ -163,7 +164,7 @@ async function recordDemo() {
     console.log('✅ Metadata updated');
 
     // Reload to show changes
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
     await page.waitForTimeout(2000);
     await screenshot(page, '05-metadata-edited');
     console.log('✅ Changes displayed in UI');

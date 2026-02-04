@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2395,7 +2395,9 @@ func (p *PebbleStore) Reset() error {
 	}
 
 	// Reinitialize counters to their initial state
-	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference", "library"}
+	// Note: "library" counter was removed as it's a legacy counter that was migrated
+	// to use the new distributed library system and is no longer maintained
+	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
 		key := fmt.Sprintf("counter:%s", counter)
 		if err := p.db.Set([]byte(key), []byte("1"), pebble.Sync); err != nil {
