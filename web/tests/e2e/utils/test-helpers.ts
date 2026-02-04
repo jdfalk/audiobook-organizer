@@ -1,10 +1,17 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 
 import { Page } from '@playwright/test';
 
-interface MockMetadataSource {
+// Re-export setup mode helpers for convenience
+export {
+  resetToFactoryDefaults,
+  setupPhase1ApiDriven,
+  setupPhase2Interactive,
+} from './setup-modes';
+
+export interface MockMetadataSource {
   id: string;
   name: string;
   enabled: boolean;
@@ -13,7 +20,7 @@ interface MockMetadataSource {
   credentials: Record<string, string>;
 }
 
-interface MockConfig {
+export interface MockConfig {
   root_dir: string;
   database_path: string;
   database_type: string;
@@ -166,7 +173,7 @@ interface MockFailures {
   operationLogs?: number;
 }
 
-interface MockApiOptions {
+export interface MockApiOptions {
   books?: TestBook[];
   config?: Partial<MockConfig>;
   importPaths?: MockImportPath[];
