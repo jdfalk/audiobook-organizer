@@ -1,6 +1,7 @@
 // file: internal/server/error_handler.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5d6e7f8a-9b0c-1d2e-3f4a-5b6c7d8e9f0a
+// last-edited: 2026-02-04
 
 package server
 
@@ -183,4 +184,37 @@ func ParseQueryBool(c *gin.Context, key string, defaultValue bool) bool {
 // ParseQueryString returns a query parameter as a string, or empty string if not present
 func ParseQueryString(c *gin.Context, key string) string {
 	return c.Query(key)
+}
+
+// ParsePaginationParams parses common pagination parameters from query string
+func ParsePaginationParams(c *gin.Context) PaginationParams {
+	limit := ParseQueryInt(c, "limit", 50)
+	offset := ParseQueryInt(c, "offset", 0)
+	search := ParseQueryString(c, "search")
+
+	// Validate pagination parameters
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return PaginationParams{
+		Limit:  limit,
+		Offset: offset,
+		Search: search,
+	}
+}
+
+// EnsureNotNil converts nil slices to empty slices to avoid null JSON marshalling
+func EnsureNotNil(slice any) any {
+	// Handle nil case - return empty slice equivalent
+	if slice == nil {
+		return []any{}
+	}
+	return slice
 }
