@@ -1,21 +1,27 @@
 // file: internal/server/audiobook_update_service.go
-// version: 1.0.0
+// version: 1.1.1
 // guid: b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7
 
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 type AudiobookUpdateService struct {
-	db database.Store
+	db               database.Store
+	audiobookService *AudiobookService
 }
 
 func NewAudiobookUpdateService(db database.Store) *AudiobookUpdateService {
-	return &AudiobookUpdateService{db: db}
+	return &AudiobookUpdateService{
+		db:               db,
+		audiobookService: NewAudiobookService(db),
+	}
 }
 
 // ValidateRequest checks if the update request has required fields
@@ -108,26 +114,115 @@ func (aus *AudiobookUpdateService) ApplyUpdatesToBook(book *database.Book, updat
 
 // UpdateAudiobook is the main business logic method
 func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string]any) (*database.Book, error) {
-	// Validate request
-	_, err := aus.ValidateRequest(id, payload)
-	if err != nil {
-		return nil, err
+	if id == "" {
+		return nil, fmt.Errorf("audiobook ID is required")
+	}
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("no updates provided")
+	}
+	if aus.audiobookService == nil {
+		return nil, fmt.Errorf("audiobook service not initialized")
 	}
 
-	// Get the book from database
-	book, err := aus.db.GetBookByID(id)
-	if err != nil || book == nil {
+	currentBook, err := aus.db.GetBookByID(id)
+	if err != nil || currentBook == nil {
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
-	// Apply updates
-	aus.ApplyUpdatesToBook(book, payload)
+	bookCopy := *currentBook
+	updates := &AudiobookUpdate{Book: &bookCopy}
 
-	// Persist to database
-	updated, err := aus.db.UpdateBook(id, book)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update audiobook: %w", err)
+	if title, ok := aus.ExtractStringField(payload, "title"); ok {
+		updates.Title = title
+	}
+	if authorID, ok := aus.ExtractIntField(payload, "author_id"); ok {
+		updates.AuthorID = &authorID
+	}
+	if seriesID, ok := aus.ExtractIntField(payload, "series_id"); ok {
+		updates.SeriesID = &seriesID
+	}
+	if authorName, ok := aus.ExtractStringField(payload, "author_name"); ok {
+		updates.AuthorName = &authorName
+	}
+	if seriesName, ok := aus.ExtractStringField(payload, "series_name"); ok {
+		updates.SeriesName = &seriesName
+	}
+	if format, ok := aus.ExtractStringField(payload, "format"); ok {
+		updates.Format = format
+	}
+	if filePath, ok := aus.ExtractStringField(payload, "file_path"); ok {
+		updates.FilePath = filePath
+	}
+	if narrator, ok := aus.ExtractStringField(payload, "narrator"); ok {
+		updates.Narrator = &narrator
+	}
+	if publisher, ok := aus.ExtractStringField(payload, "publisher"); ok {
+		updates.Publisher = &publisher
+	}
+	if language, ok := aus.ExtractStringField(payload, "language"); ok {
+		updates.Language = &language
+	}
+	if year, ok := aus.ExtractIntField(payload, "audiobook_release_year"); ok {
+		updates.AudiobookReleaseYear = &year
+	}
+	if isbn10, ok := aus.ExtractStringField(payload, "isbn10"); ok {
+		updates.ISBN10 = &isbn10
+	}
+	if isbn13, ok := aus.ExtractStringField(payload, "isbn13"); ok {
+		updates.ISBN13 = &isbn13
 	}
 
-	return updated, nil
+	if overridesMap, ok := aus.ExtractOverrides(payload); ok {
+		updates.Overrides = make(map[string]OverridePayload)
+		for key, value := range overridesMap {
+			overrideValue, ok := value.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			override := OverridePayload{}
+			if val, ok := overrideValue["value"]; ok {
+				if valBytes, err := json.Marshal(val); err == nil {
+					override.Value = valBytes
+				}
+			}
+			if locked, ok := overrideValue["locked"].(bool); ok {
+				override.Locked = &locked
+			}
+			if fetchedVal, ok := overrideValue["fetched_value"]; ok {
+				if fetchedBytes, err := json.Marshal(fetchedVal); err == nil {
+					override.FetchedValue = fetchedBytes
+				}
+			}
+			if clear, ok := overrideValue["clear"].(bool); ok {
+				override.Clear = clear
+			}
+			updates.Overrides[key] = override
+		}
+	}
+
+	if unlockOverridesRaw, ok := payload["unlock_overrides"].([]any); ok {
+		updates.UnlockOverrides = make([]string, 0, len(unlockOverridesRaw))
+		for _, value := range unlockOverridesRaw {
+			if str, ok := value.(string); ok {
+				updates.UnlockOverrides = append(updates.UnlockOverrides, str)
+			}
+		}
+	}
+
+	rawPayload := make(map[string]json.RawMessage, len(payload))
+	for key, value := range payload {
+		rawValue, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		rawPayload[key] = rawValue
+	}
+
+	req := &UpdateAudiobookRequest{
+		Updates:    updates,
+		RawPayload: rawPayload,
+	}
+
+	return aus.audiobookService.UpdateAudiobook(context.Background(), id, req)
 }

@@ -1,5 +1,5 @@
 // file: internal/server/server_ai_integration_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6d5c4b3a-2918-1706-f5e4-d3c2b1a09f8e
 // last-edited: 2026-01-24
 
@@ -8,6 +8,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,7 +27,7 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	defer cleanup()
 
 	// Stub OpenAI Chat Completions.
-	openAI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	openAI := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Accept any path that ends with /chat/completions.
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -56,7 +57,11 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	defer openAI.Close()
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	openAI.Listener = listener
+	openAI.Start()
+	t.Cleanup(openAI.Close)
 
 	// Configure AI parsing to be enabled and point at stub server.
 	origCfg := config.AppConfig

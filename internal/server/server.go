@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.52.0
+// version: 1.53.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -34,7 +33,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
@@ -435,14 +433,18 @@ type Server struct {
 	httpServer               *http.Server
 	router                   *gin.Engine
 	audiobookService         *AudiobookService
+	audiobookUpdateService   *AudiobookUpdateService
 	batchService             *BatchService
 	workService              *WorkService
 	authorSeriesService      *AuthorSeriesService
 	filesystemService        *FilesystemService
+	importPathService        *ImportPathService
 	importService            *ImportService
 	scanService              *ScanService
 	organizeService          *OrganizeService
 	metadataFetchService     *MetadataFetchService
+	configUpdateService      *ConfigUpdateService
+	systemService            *SystemService
 }
 
 // ServerConfig holds server configuration
@@ -472,14 +474,18 @@ func NewServer() *Server {
 	server := &Server{
 		router:                   router,
 		audiobookService:         NewAudiobookService(database.GlobalStore),
+		audiobookUpdateService:   NewAudiobookUpdateService(database.GlobalStore),
 		batchService:             NewBatchService(database.GlobalStore),
 		workService:              NewWorkService(database.GlobalStore),
 		authorSeriesService:      NewAuthorSeriesService(database.GlobalStore),
 		filesystemService:        NewFilesystemService(),
+		importPathService:        NewImportPathService(database.GlobalStore),
 		importService:            NewImportService(database.GlobalStore),
 		scanService:              NewScanService(database.GlobalStore),
 		organizeService:          NewOrganizeService(database.GlobalStore),
 		metadataFetchService:     NewMetadataFetchService(database.GlobalStore),
+		configUpdateService:      NewConfigUpdateService(database.GlobalStore),
+		systemService:            NewSystemService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -1097,133 +1103,13 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 func (s *Server) updateAudiobook(c *gin.Context) {
 	id := c.Param("id")
 
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	if len(body) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "request body is required"})
-		return
-	}
-
-	// Get raw payload for field detection
-	rawPayload := map[string]json.RawMessage{}
-	_ = json.Unmarshal(body, &rawPayload)
-
-	// Parse into generic map first to avoid type mismatch on embedded Book struct
-	var payloadMap map[string]any
-	if err := json.Unmarshal(body, &payloadMap); err != nil {
+	var payload map[string]any
+	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Get current book from database
-	currentBook, err := database.GlobalStore.GetBookByID(id)
-	if err != nil || currentBook == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
-		return
-	}
-
-	// Build AudiobookUpdate with current book data, then apply updates
-	// Make a copy of the current book to avoid modifying the original
-	bookCopy := *currentBook
-	updates := &AudiobookUpdate{
-		Book: &bookCopy,
-	}
-
-	// Copy relevant fields from the map to the Book struct
-	if title, ok := payloadMap["title"].(string); ok {
-		updates.Title = title
-	}
-	if authorID, ok := payloadMap["author_id"].(float64); ok {
-		aid := int(authorID)
-		updates.AuthorID = &aid
-	}
-	if seriesID, ok := payloadMap["series_id"].(float64); ok {
-		sid := int(seriesID)
-		updates.SeriesID = &sid
-	}
-
-	// Handle author_name and series_name
-	if authorName, ok := payloadMap["author_name"].(string); ok {
-		updates.AuthorName = &authorName
-	}
-	if seriesName, ok := payloadMap["series_name"].(string); ok {
-		updates.SeriesName = &seriesName
-	}
-
-	// Handle other Book fields
-	if format, ok := payloadMap["format"].(string); ok {
-		updates.Format = format
-	}
-	if filePath, ok := payloadMap["file_path"].(string); ok {
-		updates.FilePath = filePath
-	}
-	if narrator, ok := payloadMap["narrator"].(string); ok {
-		updates.Narrator = &narrator
-	}
-	if publisher, ok := payloadMap["publisher"].(string); ok {
-		updates.Publisher = &publisher
-	}
-	if language, ok := payloadMap["language"].(string); ok {
-		updates.Language = &language
-	}
-	if year, ok := payloadMap["audiobook_release_year"].(float64); ok {
-		y := int(year)
-		updates.AudiobookReleaseYear = &y
-	}
-	if isbn10, ok := payloadMap["isbn10"].(string); ok {
-		updates.ISBN10 = &isbn10
-	}
-	if isbn13, ok := payloadMap["isbn13"].(string); ok {
-		updates.ISBN13 = &isbn13
-	}
-
-	// Handle overrides if present
-	if overridesMap, ok := payloadMap["overrides"].(map[string]any); ok {
-		updates.Overrides = make(map[string]OverridePayload)
-		for k, v := range overridesMap {
-			if vm, ok := v.(map[string]any); ok {
-				op := OverridePayload{}
-				if val, ok := vm["value"]; ok {
-					if valBytes, err := json.Marshal(val); err == nil {
-						op.Value = valBytes
-					}
-				}
-				if locked, ok := vm["locked"].(bool); ok {
-					op.Locked = &locked
-				}
-				if fetchedVal, ok := vm["fetched_value"]; ok {
-					if fetchedBytes, err := json.Marshal(fetchedVal); err == nil {
-						op.FetchedValue = fetchedBytes
-					}
-				}
-				if clear, ok := vm["clear"].(bool); ok {
-					op.Clear = clear
-				}
-				updates.Overrides[k] = op
-			}
-		}
-	}
-
-	// Handle unlock_overrides if present
-	if unlockOverridesRaw, ok := payloadMap["unlock_overrides"].([]any); ok {
-		updates.UnlockOverrides = make([]string, len(unlockOverridesRaw))
-		for i, v := range unlockOverridesRaw {
-			if s, ok := v.(string); ok {
-				updates.UnlockOverrides[i] = s
-			}
-		}
-	}
-
-	// Call service
-	req := &UpdateAudiobookRequest{
-		Updates:    updates,
-		RawPayload: rawPayload,
-	}
-
-	updatedBook, err := s.audiobookService.UpdateAudiobook(c.Request.Context(), id, req)
+	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -1460,11 +1346,12 @@ func (s *Server) addImportPath(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	folder, err := database.GlobalStore.CreateImportPath(req.Path, req.Name)
+	createdPath, err := s.importPathService.CreateImportPath(req.Path, req.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	folder := createdPath
 	if req.Enabled != nil && !*req.Enabled {
 		folder.Enabled = false
 		if err := database.GlobalStore.UpdateImportPath(folder.ID, folder); err != nil {
@@ -1798,98 +1685,13 @@ func (s *Server) importFile(c *gin.Context) {
 }
 
 func (s *Server) getSystemStatus(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+	status, err := s.systemService.CollectSystemStatus()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Get import folders
-	importFolders, err := database.GlobalStore.GetAllImportPaths()
-	if err != nil {
-		log.Printf("[DEBUG] getSystemStatus: Failed to get import paths: %v", err)
-		importFolders = []database.ImportPath{}
-	} else {
-		log.Printf("[DEBUG] getSystemStatus: Got %d import paths", len(importFolders))
-		for i, f := range importFolders {
-			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
-		}
-	}
-
-	// Use database-based counts for efficiency
-	// Get all books to count library vs import paths
-	allBooks, err := database.GlobalStore.GetAllBooks(100000, 0)
-	if err != nil {
-		allBooks = []database.Book{}
-	}
-
-	libraryBookCount := 0
-	importBookCount := 0
-	rootDir := config.AppConfig.RootDir
-
-	for _, book := range allBooks {
-		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
-			libraryBookCount++
-		} else {
-			importBookCount++
-		}
-	}
-
-	log.Printf("[DEBUG] getSystemStatus: Library books: %d, Import path books: %d", libraryBookCount, importBookCount)
-
-	// Get recent operations
-	recentOps, err := database.GlobalStore.GetRecentOperations(5)
-	if err != nil {
-		recentOps = []database.Operation{}
-	}
-
-	// Memory stats
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
-	// Use cached size calculations to avoid expensive file system walks
-	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
-	totalSize := librarySize + importSize
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":             "running",
-		"library_book_count": libraryBookCount,
-		"import_book_count":  importBookCount,
-		"total_book_count":   libraryBookCount + importBookCount,
-		"library_size_bytes": librarySize,
-		"import_size_bytes":  importSize,
-		"total_size_bytes":   totalSize,
-		"root_directory":     rootDir,
-		"library": gin.H{
-			"book_count":   libraryBookCount,
-			"folder_count": 1, // Always 1 for RootDir
-			"total_size":   librarySize,
-			"path":         rootDir,
-		},
-		"import_paths": gin.H{
-			"book_count":   importBookCount,
-			"folder_count": len(importFolders),
-			"total_size":   importSize,
-		},
-		"memory": gin.H{
-			"alloc_bytes":       memStats.Alloc,
-			"total_alloc_bytes": memStats.TotalAlloc,
-			"sys_bytes":         memStats.Sys,
-			"num_gc":            memStats.NumGC,
-			"heap_alloc":        memStats.HeapAlloc,
-			"heap_sys":          memStats.HeapSys,
-			"system_total":      sysinfo.GetTotalMemory(),
-		},
-		"runtime": gin.H{
-			"go_version":    runtime.Version(),
-			"num_goroutine": runtime.NumGoroutine(),
-			"num_cpu":       runtime.NumCPU(),
-			"os":            runtime.GOOS,
-			"arch":          runtime.GOARCH,
-		},
-		"operations": gin.H{
-			"recent": recentOps,
-		},
-	})
+	c.JSON(http.StatusOK, status)
 }
 
 func (s *Server) getSystemLogs(c *gin.Context) {
@@ -1899,108 +1701,31 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
+	level := c.Query("level")
+	search := c.Query("search")
+	limitStr := c.DefaultQuery("limit", "100")
+	offsetStr := c.DefaultQuery("offset", "0")
 
-	// Query parameters for filtering
-	level := c.Query("level")      // Filter by log level (info, warn, error)
-	search := c.Query("search")    // Search in message/details
-	limitStr := c.Query("limit")   // Pagination limit
-	offsetStr := c.Query("offset") // Pagination offset
-
-	// Parse pagination
 	limit := 100
 	offset := 0
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		limit = l
 	}
-	if offsetStr != "" {
-		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-			offset = o
-		}
+	if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+		offset = o
 	}
 
-	// Get recent operations to collect logs from
-	operations, err := database.GlobalStore.GetRecentOperations(50)
+	logs, total, err := s.systemService.CollectSystemLogs(level, search, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch operations"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Collect logs from all operations
-	type LogEntry struct {
-		OperationID string    `json:"operation_id"`
-		Timestamp   time.Time `json:"timestamp"`
-		Level       string    `json:"level"`
-		Message     string    `json:"message"`
-		Details     *string   `json:"details,omitempty"`
-	}
-	var allLogs []LogEntry
-
-	for _, op := range operations {
-		logs, err := database.GlobalStore.GetOperationLogs(op.ID)
-		if err != nil {
-			continue
-		}
-
-		for _, log := range logs {
-			// Apply level filter
-			if level != "" && log.Level != level {
-				continue
-			}
-
-			// Apply search filter
-			if search != "" {
-				found := strings.Contains(strings.ToLower(log.Message), strings.ToLower(search))
-				if !found && log.Details != nil {
-					found = strings.Contains(strings.ToLower(*log.Details), strings.ToLower(search))
-				}
-				if !found {
-					continue
-				}
-			}
-
-			allLogs = append(allLogs, LogEntry{
-				OperationID: op.ID,
-				Timestamp:   log.CreatedAt,
-				Level:       log.Level,
-				Message:     log.Message,
-				Details:     log.Details,
-			})
-		}
-	}
-
-	// Sort by timestamp (newest first) - simple bubble sort for now
-	for i := 0; i < len(allLogs)-1; i++ {
-		for j := i + 1; j < len(allLogs); j++ {
-			if allLogs[j].Timestamp.After(allLogs[i].Timestamp) {
-				allLogs[i], allLogs[j] = allLogs[j], allLogs[i]
-			}
-		}
-	}
-
-	// Apply pagination
-	total := len(allLogs)
-	start := offset
-	end := offset + limit
-	if start > total {
-		start = total
-	}
-	if end > total {
-		end = total
-	}
-
-	paginatedLogs := allLogs[start:end]
-
 	c.JSON(http.StatusOK, gin.H{
-		"logs":   paginatedLogs,
-		"total":  total,
+		"logs":   logs,
 		"limit":  limit,
 		"offset": offset,
+		"total":  total,
 	})
 }
 
@@ -2017,171 +1742,19 @@ func (s *Server) getConfig(c *gin.Context) {
 }
 
 func (s *Server) updateConfig(c *gin.Context) {
-	if database.GlobalStore == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
-		return
-	}
-
-	var updates map[string]any
-	if err := c.ShouldBindJSON(&updates); err != nil {
+	var payload map[string]any
+	if err := c.ShouldBindJSON(&payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Update allowed fields and persist to database
-	updated := []string{}
-
-	if val, ok := updates["root_dir"].(string); ok {
-		trimmed := strings.TrimSpace(val)
-		config.AppConfig.RootDir = trimmed
-		updated = append(updated, "root_dir")
-		if trimmed == "" {
-			config.AppConfig.SetupComplete = false
-			updated = append(updated, "setup_complete")
-		} else {
-			config.AppConfig.SetupComplete = true
-			updated = append(updated, "setup_complete")
-		}
-	}
-
-	if val, ok := updates["database_path"].(string); ok {
-		config.AppConfig.DatabasePath = val
-		updated = append(updated, "database_path")
-	}
-
-	if val, ok := updates["playlist_dir"].(string); ok {
-		config.AppConfig.PlaylistDir = val
-		updated = append(updated, "playlist_dir")
-	}
-
-	if val, ok := updates["setup_complete"].(bool); ok {
-		config.AppConfig.SetupComplete = val
-		updated = append(updated, "setup_complete")
-	}
-
-	if apiKeys, ok := updates["api_keys"].(map[string]any); ok {
-		if goodreads, ok := apiKeys["goodreads"].(string); ok {
-			config.AppConfig.APIKeys.Goodreads = goodreads
-			updated = append(updated, "api_keys.goodreads")
-		}
-	}
-
-	// Library organization related updates
-	if val, ok := updates["organization_strategy"].(string); ok {
-		config.AppConfig.OrganizationStrategy = val
-		updated = append(updated, "organization_strategy")
-	}
-	if val, ok := updates["scan_on_startup"].(bool); ok {
-		config.AppConfig.ScanOnStartup = val
-		updated = append(updated, "scan_on_startup")
-	}
-	if val, ok := updates["auto_organize"].(bool); ok {
-		config.AppConfig.AutoOrganize = val
-		updated = append(updated, "auto_organize")
-	}
-	if val, ok := updates["folder_naming_pattern"].(string); ok {
-		config.AppConfig.FolderNamingPattern = val
-		updated = append(updated, "folder_naming_pattern")
-	}
-	if val, ok := updates["file_naming_pattern"].(string); ok {
-		config.AppConfig.FileNamingPattern = val
-		updated = append(updated, "file_naming_pattern")
-	}
-	if val, ok := updates["create_backups"].(bool); ok {
-		config.AppConfig.CreateBackups = val
-		updated = append(updated, "create_backups")
-	}
-	if val, ok := updates["supported_extensions"].([]any); ok {
-		extensions := make([]string, 0, len(val))
-		for _, item := range val {
-			if ext, ok := item.(string); ok {
-				extensions = append(extensions, ext)
-			}
-		}
-		config.AppConfig.SupportedExtensions = extensions
-		updated = append(updated, "supported_extensions")
-	}
-	if val, ok := updates["exclude_patterns"].([]any); ok {
-		patterns := make([]string, 0, len(val))
-		for _, item := range val {
-			if pattern, ok := item.(string); ok {
-				patterns = append(patterns, pattern)
-			}
-		}
-		config.AppConfig.ExcludePatterns = patterns
-		updated = append(updated, "exclude_patterns")
-	}
-
-	// Database type and enable_sqlite are read-only at runtime for safety
-	if _, ok := updates["database_type"]; ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "database_type cannot be changed at runtime"})
+	if err := s.configUpdateService.ApplyUpdates(payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if _, ok := updates["enable_sqlite"]; ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "enable_sqlite cannot be changed at runtime"})
-		return
-	}
-
-	// Handle AI API key updates
-	if val, ok := updates["openai_api_key"].(string); ok {
-		log.Printf("[DEBUG] updateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
-			if len(val) > 4 {
-				return val[len(val)-4:]
-			}
-			return val
-		}())
-		config.AppConfig.OpenAIAPIKey = val
-		updated = append(updated, "openai_api_key")
-	} else {
-		log.Printf("[DEBUG] updateConfig: No openai_api_key in updates (present: %v, type: %T)", ok, updates["openai_api_key"])
-	}
-	if val, ok := updates["enable_ai_parsing"].(bool); ok {
-		log.Printf("[DEBUG] updateConfig: Updating enable_ai_parsing to: %v", val)
-		config.AppConfig.EnableAIParsing = val
-		updated = append(updated, "enable_ai_parsing")
-	}
-
-	// Handle additional config fields
-	if val, ok := updates["concurrent_scans"].(float64); ok {
-		config.AppConfig.ConcurrentScans = int(val)
-		updated = append(updated, "concurrent_scans")
-	}
-	if val, ok := updates["language"].(string); ok {
-		config.AppConfig.Language = val
-		updated = append(updated, "language")
-	}
-	if val, ok := updates["log_level"].(string); ok {
-		config.AppConfig.LogLevel = val
-		updated = append(updated, "log_level")
-	}
-
-	// Persist to database
-	if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
-		log.Printf("ERROR: Failed to persist config to database: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "failed to save configuration",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	log.Printf("Configuration saved successfully. Updated fields: %v", updated)
-
-	// Reload to confirm persistence
-	maskedConfig := config.AppConfig
-	if maskedConfig.OpenAIAPIKey != "" {
-		maskedConfig.OpenAIAPIKey = database.MaskSecret(maskedConfig.OpenAIAPIKey)
-	}
-	if maskedConfig.APIKeys.Goodreads != "" {
-		maskedConfig.APIKeys.Goodreads = database.MaskSecret(maskedConfig.APIKeys.Goodreads)
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "configuration updated and saved to database",
-		"updated": updated,
-		"config":  maskedConfig,
-	})
+	maskedConfig := s.configUpdateService.MaskSecrets(config.AppConfig)
+	c.JSON(http.StatusOK, maskedConfig)
 }
 
 // getOperationLogs returns logs for a given operation

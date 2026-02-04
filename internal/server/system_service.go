@@ -1,15 +1,19 @@
 // file: internal/server/system_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
 
 import (
+	"fmt"
+	"log"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 )
 
 type SystemService struct {
@@ -21,25 +25,150 @@ func NewSystemService(db database.Store) *SystemService {
 }
 
 type SystemStatus struct {
-	RootDir              string                    `json:"root_dir"`
-	ImportPaths          []database.ImportPath     `json:"import_paths"`
-	TotalBooks           int                       `json:"total_books"`
-	MemoryUsage          uint64                    `json:"memory_usage"`
-	Uptime               string                    `json:"uptime"`
-	RuntimeVersion       string                    `json:"go_version"`
-	ActiveOperationCount int                       `json:"active_operations"`
+	Status           string               `json:"status"`
+	LibraryBookCount int                  `json:"library_book_count"`
+	ImportBookCount  int                  `json:"import_book_count"`
+	TotalBookCount   int                  `json:"total_book_count"`
+	LibrarySizeBytes int64                `json:"library_size_bytes"`
+	ImportSizeBytes  int64                `json:"import_size_bytes"`
+	TotalSizeBytes   int64                `json:"total_size_bytes"`
+	RootDirectory    string               `json:"root_directory"`
+	Library          SystemLibraryStatus  `json:"library"`
+	ImportPaths      SystemImportStatus   `json:"import_paths"`
+	Memory           SystemMemoryStatus   `json:"memory"`
+	Runtime          SystemRuntimeStatus  `json:"runtime"`
+	Operations       SystemOperationsInfo `json:"operations"`
+}
+
+type SystemLibraryStatus struct {
+	BookCount   int    `json:"book_count"`
+	FolderCount int    `json:"folder_count"`
+	TotalSize   int64  `json:"total_size"`
+	Path        string `json:"path"`
+}
+
+type SystemImportStatus struct {
+	BookCount   int   `json:"book_count"`
+	FolderCount int   `json:"folder_count"`
+	TotalSize   int64 `json:"total_size"`
+}
+
+type SystemMemoryStatus struct {
+	AllocBytes      uint64 `json:"alloc_bytes"`
+	TotalAllocBytes uint64 `json:"total_alloc_bytes"`
+	SysBytes        uint64 `json:"sys_bytes"`
+	NumGC           uint32 `json:"num_gc"`
+	HeapAlloc       uint64 `json:"heap_alloc"`
+	HeapSys         uint64 `json:"heap_sys"`
+	SystemTotal     uint64 `json:"system_total"`
+}
+
+type SystemRuntimeStatus struct {
+	GoVersion    string `json:"go_version"`
+	NumGoroutine int    `json:"num_goroutine"`
+	NumCPU       int    `json:"num_cpu"`
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+}
+
+type SystemOperationsInfo struct {
+	Recent []database.Operation `json:"recent"`
+}
+
+type SystemLogEntry struct {
+	OperationID string    `json:"operation_id"`
+	Timestamp   time.Time `json:"timestamp"`
+	Level       string    `json:"level"`
+	Message     string    `json:"message"`
+	Details     *string   `json:"details,omitempty"`
 }
 
 // CollectSystemStatus gathers system status information
 func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
-	paths, err := ss.db.GetAllImportPaths()
-	if err != nil {
-		paths = []database.ImportPath{}
+	if ss.db == nil {
+		return nil, fmt.Errorf("database not initialized")
 	}
 
+	importFolders, err := ss.db.GetAllImportPaths()
+	if err != nil {
+		log.Printf("[DEBUG] getSystemStatus: Failed to get import paths: %v", err)
+		importFolders = []database.ImportPath{}
+	} else {
+		log.Printf("[DEBUG] getSystemStatus: Got %d import paths", len(importFolders))
+		for i, f := range importFolders {
+			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
+		}
+	}
+
+	allBooks, err := ss.db.GetAllBooks(100000, 0)
+	if err != nil {
+		allBooks = []database.Book{}
+	}
+
+	libraryBookCount := 0
+	importBookCount := 0
+	rootDir := config.AppConfig.RootDir
+
+	for _, book := range allBooks {
+		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
+			libraryBookCount++
+		} else {
+			importBookCount++
+		}
+	}
+
+	log.Printf("[DEBUG] getSystemStatus: Library books: %d, Import path books: %d", libraryBookCount, importBookCount)
+
+	recentOps, err := ss.db.GetRecentOperations(5)
+	if err != nil {
+		recentOps = []database.Operation{}
+	}
+
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
+	totalSize := librarySize + importSize
+
 	status := &SystemStatus{
-		RootDir:     config.AppConfig.RootDir,
-		ImportPaths: paths,
+		Status:           "running",
+		LibraryBookCount: libraryBookCount,
+		ImportBookCount:  importBookCount,
+		TotalBookCount:   libraryBookCount + importBookCount,
+		LibrarySizeBytes: librarySize,
+		ImportSizeBytes:  importSize,
+		TotalSizeBytes:   totalSize,
+		RootDirectory:    rootDir,
+		Library: SystemLibraryStatus{
+			BookCount:   libraryBookCount,
+			FolderCount: 1,
+			TotalSize:   librarySize,
+			Path:        rootDir,
+		},
+		ImportPaths: SystemImportStatus{
+			BookCount:   importBookCount,
+			FolderCount: len(importFolders),
+			TotalSize:   importSize,
+		},
+		Memory: SystemMemoryStatus{
+			AllocBytes:      memStats.Alloc,
+			TotalAllocBytes: memStats.TotalAlloc,
+			SysBytes:        memStats.Sys,
+			NumGC:           memStats.NumGC,
+			HeapAlloc:       memStats.HeapAlloc,
+			HeapSys:         memStats.HeapSys,
+			SystemTotal:     sysinfo.GetTotalMemory(),
+		},
+		Runtime: SystemRuntimeStatus{
+			GoVersion:    runtime.Version(),
+			NumGoroutine: runtime.NumGoroutine(),
+			NumCPU:       runtime.NumCPU(),
+			OS:           runtime.GOOS,
+			Arch:         runtime.GOARCH,
+		},
+		Operations: SystemOperationsInfo{
+			Recent: recentOps,
+		},
 	}
 
 	return status, nil
@@ -105,4 +234,77 @@ func (ss *SystemService) PaginateLogs(logs []database.OperationLog, page, pageSi
 // GetFormattedUptime returns uptime as a formatted string
 func (ss *SystemService) GetFormattedUptime(startTime time.Time) string {
 	return time.Now().Sub(startTime).String()
+}
+
+// CollectSystemLogs gathers logs for recent operations with filtering and pagination.
+func (ss *SystemService) CollectSystemLogs(level, search string, limit, offset int) ([]SystemLogEntry, int, error) {
+	if ss.db == nil {
+		return nil, 0, fmt.Errorf("database not initialized")
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	operations, err := ss.db.GetRecentOperations(50)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to fetch operations")
+	}
+
+	var allLogs []SystemLogEntry
+	searchLower := strings.ToLower(search)
+
+	for _, op := range operations {
+		logs, err := ss.db.GetOperationLogs(op.ID)
+		if err != nil {
+			continue
+		}
+
+		for _, logEntry := range logs {
+			if level != "" && logEntry.Level != level {
+				continue
+			}
+
+			if searchLower != "" {
+				found := strings.Contains(strings.ToLower(logEntry.Message), searchLower)
+				if !found && logEntry.Details != nil {
+					found = strings.Contains(strings.ToLower(*logEntry.Details), searchLower)
+				}
+				if !found {
+					continue
+				}
+			}
+
+			allLogs = append(allLogs, SystemLogEntry{
+				OperationID: op.ID,
+				Timestamp:   logEntry.CreatedAt,
+				Level:       logEntry.Level,
+				Message:     logEntry.Message,
+				Details:     logEntry.Details,
+			})
+		}
+	}
+
+	for i := 0; i < len(allLogs)-1; i++ {
+		for j := i + 1; j < len(allLogs); j++ {
+			if allLogs[j].Timestamp.After(allLogs[i].Timestamp) {
+				allLogs[i], allLogs[j] = allLogs[j], allLogs[i]
+			}
+		}
+	}
+
+	total := len(allLogs)
+	start := offset
+	end := offset + limit
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	return allLogs[start:end], total, nil
 }

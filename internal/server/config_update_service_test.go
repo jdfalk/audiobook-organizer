@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6g7h8-i9j0-k1l2-m3n4-o5p6q7r8s9t0
 
 package server
@@ -11,7 +11,7 @@ import (
 )
 
 func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
-	service := NewConfigUpdateService()
+	service := NewConfigUpdateService(nil)
 
 	err := service.ValidateUpdate(map[string]any{})
 
@@ -21,7 +21,7 @@ func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractStringField(t *testing.T) {
-	service := NewConfigUpdateService()
+	service := NewConfigUpdateService(nil)
 
 	payload := map[string]any{
 		"root_dir": "/library",
@@ -35,7 +35,7 @@ func TestConfigUpdateService_ExtractStringField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
-	service := NewConfigUpdateService()
+	service := NewConfigUpdateService(nil)
 
 	payload := map[string]any{
 		"auto_organize": true,
@@ -49,7 +49,7 @@ func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractIntField(t *testing.T) {
-	service := NewConfigUpdateService()
+	service := NewConfigUpdateService(nil)
 
 	payload := map[string]any{
 		"concurrent_scans": float64(4),
@@ -63,7 +63,7 @@ func TestConfigUpdateService_ExtractIntField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ApplyUpdates_Success(t *testing.T) {
-	service := NewConfigUpdateService()
+	service := NewConfigUpdateService(nil)
 
 	updates := map[string]any{
 		"root_dir": "/new/library",
@@ -74,7 +74,9 @@ func TestConfigUpdateService_ApplyUpdates_Success(t *testing.T) {
 		config.AppConfig.RootDir = originalDir
 	}()
 
-	service.ApplyUpdates(updates)
+	if err := service.ApplyUpdates(updates); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 
 	if config.AppConfig.RootDir != "/new/library" {
 		t.Errorf("expected '/new/library', got %q", config.AppConfig.RootDir)

@@ -1,10 +1,11 @@
 // file: internal/server/import_path_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6g7-h8i9-j0k1-l2m3-n4o5p6q7r8s9
 
 package server
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -19,10 +20,12 @@ func NewImportPathService(db database.Store) *ImportPathService {
 	return &ImportPathService{db: db}
 }
 
+var ErrImportPathEmpty = errors.New("import path cannot be empty")
+
 // ValidatePath validates that an import path is not empty
 func (ips *ImportPathService) ValidatePath(path string) error {
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("import path cannot be empty")
+		return ErrImportPathEmpty
 	}
 	return nil
 }
