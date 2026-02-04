@@ -98,7 +98,10 @@
       "Bash(__NEW_LINE_91521491ca160c50__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
       "Bash(__NEW_LINE_dbc8192fcc233756__ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer)",
       "Bash(__NEW_LINE_755b12e4efd59737__ pkill -9 audiobook-organizer)",
-      "Bash(__NEW_LINE_df99226a1cd35331__ ls -lh /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/demo_recordings/audiobook-demo.webm)"
+      "Bash(__NEW_LINE_df99226a1cd35331__ ls -lh /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/demo_recordings/audiobook-demo.webm)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

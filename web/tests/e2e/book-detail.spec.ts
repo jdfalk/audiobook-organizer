@@ -1,8 +1,10 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.6.0
+// version: 1.7.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
+// last-edited: 2026-02-04
 
 import { expect, test } from '@playwright/test';
+import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
 
 const bookId = 'book-1';
 
@@ -35,21 +37,8 @@ const createInitialBook = (): BookState => ({
   updated_at: new Date('2024-01-02T12:00:00Z').toISOString(),
 });
 
-const mockEventSource = async (page: import('@playwright/test').Page) => {
-  await page.addInitScript(() => {
-    class MockEventSource {
-      url: string;
-      constructor(url: string) {
-        this.url = url;
-      }
-      addEventListener() {}
-      removeEventListener() {}
-      close() {}
-    }
-    (window as unknown as { EventSource: typeof EventSource }).EventSource =
-      MockEventSource as unknown as typeof EventSource;
-  });
-};
+// Note: Using mockEventSource from test-helpers instead of this local definition
+// to avoid duplication. This file also has custom route setup below.
 
 const setupRoutes = async (page: import('@playwright/test').Page) => {
   const initialBook = createInitialBook();
@@ -355,10 +344,11 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
 
 test.describe('Book Detail page', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections (custom setup in this file)
+    const bookId = 'book-1';
     await mockEventSource(page);
-    await page.addInitScript(() => {
-      localStorage.setItem('welcome_wizard_completed', 'true');
-    });
   });
 
   test('renders info, files, and versions tabs', async ({ page }) => {

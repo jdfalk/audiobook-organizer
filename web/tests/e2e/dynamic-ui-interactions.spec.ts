@@ -1,6 +1,7 @@
 // file: web/tests/e2e/dynamic-ui-interactions.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9f8e7d6c-5b4a-3210-fedc-ba9876543210
+// last-edited: 2026-02-04
 
 /**
  * E2E tests for dynamic UI interactions with in-place loading states
@@ -8,9 +9,15 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
 
 test.describe('Dynamic UI - BookDetail Page', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
+    await mockEventSource(page);
+
     // Mock API responses
     await page.route('**/api/v1/audiobooks/*', async (route) => {
       const url = route.request().url();

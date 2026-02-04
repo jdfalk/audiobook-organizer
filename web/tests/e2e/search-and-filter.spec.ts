@@ -1,19 +1,22 @@
 // file: web/tests/e2e/search-and-filter.spec.ts
-// version: 1.2.1
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-a3b4c5d6e7f8
+// last-edited: 2026-02-04
 
 import { test, expect } from '@playwright/test';
 import {
   mockEventSource,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
   setupLibraryWithBooks,
   generateTestBooks,
 } from './utils/test-helpers';
 
 test.describe('Search and Filter Functionality', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('searches books by exact title match', async ({ page }) => {

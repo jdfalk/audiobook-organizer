@@ -6,13 +6,15 @@ import { test, expect } from '@playwright/test';
 import {
   mockEventSource,
   setupMockApi,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 test.describe('iTunes Import', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('validates iTunes library', async ({ page }) => {

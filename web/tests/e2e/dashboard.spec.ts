@@ -1,13 +1,14 @@
 // file: web/tests/e2e/dashboard.spec.ts
-// version: 1.0.2
+// version: 1.1.0
 // guid: f6e23777-438b-4931-88d9-d2c6d2225a00
+// last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
   generateTestBooks,
   mockEventSource,
   setupMockApi,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const buildBooks = () => {
@@ -96,8 +97,10 @@ const openDashboard = async (page: Page) => {
 
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('displays library statistics', async ({ page }) => {

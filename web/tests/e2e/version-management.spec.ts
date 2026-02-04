@@ -1,13 +1,14 @@
 // file: web/tests/e2e/version-management.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 570ee522-c0f2-4d0c-ba5c-b5399cede9a9
+// last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
   generateTestBooks,
   mockEventSource,
   setupMockApi,
-  skipWelcomeWizard,
+  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const baseBook = generateTestBooks(1)[0];
@@ -25,8 +26,10 @@ const openBookDetail = async (page: Page, books: Record<string, unknown>[]) => {
 
 test.describe('Version Management', () => {
   test.beforeEach(async ({ page }) => {
+    // Phase 1 setup: Reset and skip welcome wizard
+    await setupPhase1ApiDriven(page);
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
-    await skipWelcomeWizard(page);
   });
 
   test('links two books as versions', async ({ page }) => {
