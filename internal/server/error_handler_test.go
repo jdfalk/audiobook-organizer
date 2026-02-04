@@ -1,6 +1,7 @@
 // file: internal/server/error_handler_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
+// last-edited: 2026-02-04
 
 package server
 
@@ -146,4 +147,118 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestParsePaginationParams(t *testing.T) {
+	tests := []struct {
+		name       string
+		queryStr   string
+		wantLimit  int
+		wantOffset int
+		wantSearch string
+	}{
+		{
+			name:       "default values",
+			queryStr:   "/",
+			wantLimit:  50,
+			wantOffset: 0,
+			wantSearch: "",
+		},
+		{
+			name:       "custom limit and offset",
+			queryStr:   "/?limit=100&offset=20",
+			wantLimit:  100,
+			wantOffset: 20,
+			wantSearch: "",
+		},
+		{
+			name:       "with search term",
+			queryStr:   "/?limit=25&offset=0&search=test",
+			wantLimit:  25,
+			wantOffset: 0,
+			wantSearch: "test",
+		},
+		{
+			name:       "limit exceeds max",
+			queryStr:   "/?limit=2000",
+			wantLimit:  1000,
+			wantOffset: 0,
+			wantSearch: "",
+		},
+		{
+			name:       "negative offset",
+			queryStr:   "/?offset=-5",
+			wantLimit:  50,
+			wantOffset: 0,
+			wantSearch: "",
+		},
+		{
+			name:       "zero limit",
+			queryStr:   "/?limit=0",
+			wantLimit:  50,
+			wantOffset: 0,
+			wantSearch: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest("GET", tt.queryStr, nil)
+
+			params := ParsePaginationParams(c)
+
+			if params.Limit != tt.wantLimit {
+				t.Errorf("limit: got %d, want %d", params.Limit, tt.wantLimit)
+			}
+			if params.Offset != tt.wantOffset {
+				t.Errorf("offset: got %d, want %d", params.Offset, tt.wantOffset)
+			}
+			if params.Search != tt.wantSearch {
+				t.Errorf("search: got %q, want %q", params.Search, tt.wantSearch)
+			}
+		})
+	}
+}
+
+func TestEnsureNotNil(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		wantNil  bool
+		wantType string
+	}{
+		{
+			name:     "nil slice",
+			input:    nil,
+			wantNil:  false,
+			wantType: "[]interface {}",
+		},
+		{
+			name:     "non-nil slice",
+			input:    []string{"a", "b"},
+			wantNil:  false,
+			wantType: "[]string",
+		},
+		{
+			name:     "empty slice",
+			input:    []int{},
+			wantNil:  false,
+			wantType: "[]int",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := EnsureNotNil(tt.input)
+
+			if result == nil && !tt.wantNil {
+				t.Errorf("got nil, want non-nil")
+			}
+
+			if result != nil && tt.wantNil {
+				t.Errorf("got non-nil, want nil")
+			}
+		})
+	}
 }

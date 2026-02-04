@@ -69,13 +69,6 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-type metadataFieldState struct {
-	FetchedValue   any `json:"fetched_value,omitempty"`
-	OverrideValue  any `json:"override_value,omitempty"`
-	OverrideLocked bool        `json:"override_locked"`
-	UpdatedAt      time.Time   `json:"updated_at,omitempty"`
-}
-
 type aiParser interface {
 	IsEnabled() bool
 	ParseFilename(ctx context.Context, filename string) (*ai.ParsedMetadata, error)
@@ -445,6 +438,8 @@ type Server struct {
 	metadataFetchService     *MetadataFetchService
 	configUpdateService      *ConfigUpdateService
 	systemService            *SystemService
+	metadataStateService     *MetadataStateService
+	dashboardService         *DashboardService
 }
 
 // ServerConfig holds server configuration
@@ -486,6 +481,8 @@ func NewServer() *Server {
 		metadataFetchService:     NewMetadataFetchService(database.GlobalStore),
 		configUpdateService:      NewConfigUpdateService(database.GlobalStore),
 		systemService:            NewSystemService(database.GlobalStore),
+		metadataStateService:     NewMetadataStateService(database.GlobalStore),
+		dashboardService:         NewDashboardService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -905,30 +902,13 @@ func (s *Server) healthCheck(c *gin.Context) {
 }
 
 func (s *Server) listAudiobooks(c *gin.Context) {
-	// Parse query parameters
-	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
-	search := c.Query("search")
-	authorIDStr := c.Query("author_id")
-	seriesIDStr := c.Query("series_id")
-
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
-
-	var authorID, seriesID *int
-	if authorIDStr != "" {
-		if aid, err := strconv.Atoi(authorIDStr); err == nil {
-			authorID = &aid
-		}
-	}
-	if seriesIDStr != "" {
-		if sid, err := strconv.Atoi(seriesIDStr); err == nil {
-			seriesID = &sid
-		}
-	}
+	// Parse pagination parameters
+	params := ParsePaginationParams(c)
+	authorID := ParseQueryIntPtr(c, "author_id")
+	seriesID := ParseQueryIntPtr(c, "series_id")
 
 	// Call service
-	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), limit, offset, search, authorID, seriesID)
+	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -936,7 +916,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
-	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": limit, "offset": offset})
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": params.Limit, "offset": params.Offset})
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
@@ -954,21 +934,10 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
-	olderThanStr := c.Query("older_than_days")
+	params := ParsePaginationParams(c)
+	olderThanDays := ParseQueryIntPtr(c, "older_than_days")
 
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
-
-	var olderThanDays *int
-	if olderThanStr != "" {
-		if days, err := strconv.Atoi(olderThanStr); err == nil && days > 0 {
-			olderThanDays = &days
-		}
-	}
-
-	books, err := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), limit, offset, olderThanDays)
+	books, err := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), params.Limit, params.Offset, olderThanDays)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -978,8 +947,8 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 		"items":  books,
 		"count":  len(books),
 		"total":  len(books),
-		"limit":  limit,
-		"offset": offset,
+		"limit":  params.Limit,
+		"offset": params.Offset,
 	})
 }
 
@@ -1702,20 +1671,9 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 	}
 
 	level := c.Query("level")
-	search := c.Query("search")
-	limitStr := c.DefaultQuery("limit", "100")
-	offsetStr := c.DefaultQuery("offset", "0")
+	params := ParsePaginationParams(c)
 
-	limit := 100
-	offset := 0
-	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-		limit = l
-	}
-	if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
-		offset = o
-	}
-
-	logs, total, err := s.systemService.CollectSystemLogs(level, search, limit, offset)
+	logs, total, err := s.systemService.CollectSystemLogs(level, params.Search, params.Limit, params.Offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1723,8 +1681,8 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"logs":   logs,
-		"limit":  limit,
-		"offset": offset,
+		"limit":  params.Limit,
+		"offset": params.Offset,
 		"total":  total,
 	})
 }
