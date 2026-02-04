@@ -84,7 +84,9 @@
       "Bash(head:*)",
       "mcp__plugin_github_github__search_issues",
       "Bash(staticcheck:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(bash:*)",
+      "Bash(npx playwright:*)"
     ]
   }
 }
