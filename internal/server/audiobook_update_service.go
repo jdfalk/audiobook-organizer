@@ -19,7 +19,7 @@ func NewAudiobookUpdateService(db database.Store) *AudiobookUpdateService {
 }
 
 // ValidateRequest checks if the update request has required fields
-func (aus *AudiobookUpdateService) ValidateRequest(id string, payload map[string]interface{}) (map[string]interface{}, error) {
+func (aus *AudiobookUpdateService) ValidateRequest(id string, payload map[string]any) (map[string]any, error) {
 	if id == "" {
 		return nil, fmt.Errorf("audiobook ID is required")
 	}
@@ -30,7 +30,7 @@ func (aus *AudiobookUpdateService) ValidateRequest(id string, payload map[string
 }
 
 // ExtractStringField extracts a string value from payload
-func (aus *AudiobookUpdateService) ExtractStringField(payload map[string]interface{}, key string) (string, bool) {
+func (aus *AudiobookUpdateService) ExtractStringField(payload map[string]any, key string) (string, bool) {
 	val, ok := payload[key]
 	if !ok {
 		return "", false
@@ -40,7 +40,7 @@ func (aus *AudiobookUpdateService) ExtractStringField(payload map[string]interfa
 }
 
 // ExtractIntField extracts an int value from payload (handling JSON float64)
-func (aus *AudiobookUpdateService) ExtractIntField(payload map[string]interface{}, key string) (int, bool) {
+func (aus *AudiobookUpdateService) ExtractIntField(payload map[string]any, key string) (int, bool) {
 	val, ok := payload[key]
 	if !ok {
 		return 0, false
@@ -51,7 +51,7 @@ func (aus *AudiobookUpdateService) ExtractIntField(payload map[string]interface{
 }
 
 // ExtractBoolField extracts a bool value from payload
-func (aus *AudiobookUpdateService) ExtractBoolField(payload map[string]interface{}, key string) (bool, bool) {
+func (aus *AudiobookUpdateService) ExtractBoolField(payload map[string]any, key string) (bool, bool) {
 	val, ok := payload[key]
 	if !ok {
 		return false, false
@@ -61,13 +61,13 @@ func (aus *AudiobookUpdateService) ExtractBoolField(payload map[string]interface
 }
 
 // ExtractOverrides extracts and marshals the overrides map from payload
-func (aus *AudiobookUpdateService) ExtractOverrides(payload map[string]interface{}) (map[string]interface{}, bool) {
+func (aus *AudiobookUpdateService) ExtractOverrides(payload map[string]any) (map[string]any, bool) {
 	val, ok := payload["overrides"]
 	if !ok {
 		return nil, false
 	}
 
-	overridesMap, ok := val.(map[string]interface{})
+	overridesMap, ok := val.(map[string]any)
 	if !ok {
 		return nil, false
 	}
@@ -76,7 +76,7 @@ func (aus *AudiobookUpdateService) ExtractOverrides(payload map[string]interface
 }
 
 // ApplyUpdatesToBook applies field updates to a book struct
-func (aus *AudiobookUpdateService) ApplyUpdatesToBook(book *database.Book, updates map[string]interface{}) {
+func (aus *AudiobookUpdateService) ApplyUpdatesToBook(book *database.Book, updates map[string]any) {
 	if title, ok := aus.ExtractStringField(updates, "title"); ok {
 		book.Title = title
 	}
@@ -107,7 +107,7 @@ func (aus *AudiobookUpdateService) ApplyUpdatesToBook(book *database.Book, updat
 }
 
 // UpdateAudiobook is the main business logic method
-func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string]interface{}) (*database.Book, error) {
+func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string]any) (*database.Book, error) {
 	// Validate request
 	_, err := aus.ValidateRequest(id, payload)
 	if err != nil {
