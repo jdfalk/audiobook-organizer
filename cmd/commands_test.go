@@ -175,6 +175,7 @@ func (s *stubStore) GetAllBlockedHashes() ([]database.DoNotImport, error) {
 	return []database.DoNotImport{}, nil
 }
 func (s *stubStore) GetBlockedHashByHash(hash string) (*database.DoNotImport, error) { return nil, nil }
+func (s *stubStore) Reset() error                                                     { return nil }
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()

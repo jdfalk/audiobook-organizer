@@ -1,7 +1,8 @@
+//go:build !embed_frontend
+
 // file: internal/server/static_nonembed.go
 // version: 1.1.0
 // guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
-//go:build !embed_frontend
 
 package server
 

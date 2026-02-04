@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
