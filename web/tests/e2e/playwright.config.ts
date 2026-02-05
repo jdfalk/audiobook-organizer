@@ -54,7 +54,8 @@ export default defineConfig({
   ],
   webServer: {
     // Build full app (frontend + embedded backend) and run single Go binary
-    command: `bash -c "cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && ./audiobook-organizer serve"`,
+    // Disable TLS for testing by passing empty cert/key flags
+    command: `bash -c "cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && ./audiobook-organizer serve --tls-cert '' --tls-key '' --host 127.0.0.1"`,
     url: 'http://127.0.0.1:8080',
     timeout: 120000,
     reuseExistingServer: !process.env.CI,
