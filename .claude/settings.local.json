@@ -101,7 +101,9 @@
       "Bash(__NEW_LINE_df99226a1cd35331__ ls -lh /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer/demo_recordings/audiobook-demo.webm)",
       "Bash(npm run:*)",
       "Bash(npx tsc:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(node -c:*)",
+      "Bash(PLAYWRIGHT_VIDEO=on npm run test:e2e:*)"
     ]
   }
 }

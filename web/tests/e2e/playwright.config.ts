@@ -27,6 +27,15 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'chromium-record',
+      testMatch: ['**/interactive-*.spec.ts', '**/demo-*.spec.ts'],
+      use: {
+        ...devices['Desktop Chrome'],
+        screenshot: 'on',
+        video: 'on',
+      },
+    },
+    {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
       // We accept WebKit failures for now; main gate stays on Chromium.
