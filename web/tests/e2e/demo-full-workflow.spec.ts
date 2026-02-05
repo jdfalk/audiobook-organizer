@@ -5,7 +5,7 @@
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { setupPhase2Interactive } from './utils/setup-modes';
+import { setupPhase1ApiDriven } from './utils/setup-modes';
 
 // Consistent demo artifacts directory
 const __filename = fileURLToPath(import.meta.url);
@@ -17,15 +17,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     // Increase timeout for this recording test (video capture takes time)
     test.setTimeout(60 * 1000); // 60 seconds for full demo capture
 
-    // Setup Phase 2: Interactive mode with mocked APIs
-    // This starts with an empty library and 30 mock books
-    await setupPhase2Interactive(page, 'http://127.0.0.1:4173', {
-      books: [], // Start with empty library
-      config: {
-        root_dir: '/library',
-        auto_organize: false,
-      },
-    });
+    // Setup Phase 1: Real API-driven setup with backend
+    // This resets to factory defaults and uses real APIs
+    await setupPhase1ApiDriven(page, 'http://127.0.0.1:4173');
 
     // ==============================================
     // STEP 1: Dashboard - System Overview
@@ -55,93 +49,40 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(2000);
 
     // ==============================================
-    // STEP 3: Simulate Adding Books (update mock data)
+    // STEP 3: Show Empty Library (no books yet)
     // ==============================================
-    console.log('=== STEP 3: Books Added to Library ===');
+    console.log('=== STEP 3: Empty Library State (Real API) ===');
 
-    // Inject books into the mock API
-    await page.evaluate(() => {
-      const mockBooks = Array.from({ length: 20 }, (_, i) => ({
-        id: `book-${i + 1}`,
-        title: `The ${['Hobbit', 'Fellowship', 'Two Towers', 'Return'][i % 4]}`,
-        author_name: `J.R.R. Tolkien`,
-        series_name: `The Lord of the Rings`,
-        series_position: (i % 3) + 1,
-        library_state: i % 2 === 0 ? 'organized' : 'import',
-        marked_for_deletion: false,
-        language: 'en',
-        file_path: `/library/book-${i + 1}.m4b`,
-        file_hash: `hash-${i + 1}`,
-        original_file_hash: `orig-${i + 1}`,
-        organized_file_hash: i % 2 === 0 ? `org-${i + 1}` : null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        duration: 36000 + i * 1000,
-        file_size: 100000000 + i * 5000000,
-        publisher: 'George Allen & Unwin',
-        description: 'An epic fantasy adventure',
-      }));
+    // Navigate to library to confirm real empty state
+    await page.goto('/library', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
 
-      if (window.__apiMock?.setBooks) {
-        window.__apiMock.setBooks(mockBooks);
-      }
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2000);
-
-    // Screenshot library with books
-    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_03_library_with_books.png`, fullPage: true });
-    console.log('✓ Books now visible in library');
-    await page.waitForTimeout(2000);
+    // Screenshot library with real API (empty)
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_03_library_real_empty.png`, fullPage: true });
+    console.log('✓ Real empty library state');
+    await page.waitForTimeout(1500);
 
     // ==============================================
-    // STEP 4: Scroll Through Library
+    // STEP 4: Library Filtered/Search UI
     // ==============================================
-    console.log('=== STEP 4: Browse Books List ===');
+    console.log('=== STEP 4: Library UI Controls ===');
     await page.evaluate(() => window.scrollBy(0, 400));
     await page.waitForTimeout(1000);
 
-    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_04_library_scrolled.png`, fullPage: true });
-    console.log('✓ Showing more books in list');
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_04_library_ui.png`, fullPage: true });
+    console.log('✓ Showing library controls and empty message');
     await page.waitForTimeout(1500);
 
     // ==============================================
-    // STEP 5: Click a Book for Details
+    // STEP 5: Library Help Section
     // ==============================================
-    console.log('=== STEP 5: Book Detail View ===');
-    await page.evaluate(() => window.scrollBy(0, -400)); // Scroll back up
-    await page.waitForTimeout(500);
+    console.log('=== STEP 5: Library Help & Actions ===');
+    await page.evaluate(() => window.scrollBy(0, 300));
+    await page.waitForTimeout(800);
 
-    // Click first book to open detail
-    const bookLink = page.locator('[data-testid*="book"], a >> text=/The/').first();
-    if (await bookLink.isVisible().catch(() => false)) {
-      await bookLink.click();
-      await page.waitForURL(/.*\/books\/.*/);
-      await page.waitForTimeout(2000);
-
-      await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_05_book_detail.png`, fullPage: true });
-      console.log('✓ Book detail view displayed');
-      await page.waitForTimeout(1500);
-
-      // Scroll to show more details
-      await page.evaluate(() => window.scrollBy(0, 300));
-      await page.waitForTimeout(800);
-      await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_06_book_detail_metadata.png`, fullPage: true });
-      console.log('✓ Metadata details visible');
-      await page.waitForTimeout(1500);
-    }
-
-    // ==============================================
-    // STEP 6: Back to Library
-    // ==============================================
-    console.log('=== STEP 6: Return to Library Overview ===');
-    await page.goto('/library');
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_05_library_help.png`, fullPage: true });
+    console.log('✓ Showing import actions');
     await page.waitForTimeout(1500);
-
-    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_07_library_final.png`, fullPage: true });
-    console.log('✓ Back to organized library view');
-    await page.waitForTimeout(2000);
 
     // ==============================================
     // STEP 7: Navigate to Settings

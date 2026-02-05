@@ -1,5 +1,5 @@
 // file: tests/e2e/playwright.config.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { defineConfig, devices } from '@playwright/test';
@@ -52,9 +52,19 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: 'npm run dev -- --host --port 4173',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      // Start Go backend (required for both Phase 1 and Phase 2)
+      command: `bash -c "cd ${__dirname}/../../.. && ./audiobook-organizer serve"`,
+      url: 'http://127.0.0.1:8080/api/v1/system/status',
+      timeout: 60000,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // Start Vite frontend dev server
+      command: 'npm run dev -- --host --port 4173',
+      url: 'http://127.0.0.1:4173',
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });
