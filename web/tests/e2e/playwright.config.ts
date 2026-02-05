@@ -1,8 +1,15 @@
 // file: tests/e2e/playwright.config.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { defineConfig, devices } from '@playwright/test';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Centralized demo artifacts directory for all recordings and screenshots
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const DEMO_ARTIFACTS_DIR = join(__dirname, '../../..', 'demo_artifacts');
 
 export default defineConfig({
   testDir: '.',
@@ -29,6 +36,7 @@ export default defineConfig({
     {
       name: 'chromium-record',
       testMatch: ['**/interactive-*.spec.ts', '**/demo-*.spec.ts'],
+      outputDir: DEMO_ARTIFACTS_DIR,
       use: {
         ...devices['Desktop Chrome'],
         screenshot: 'on',
