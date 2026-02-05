@@ -22,7 +22,7 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: 'http://127.0.0.1:8080',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -52,19 +52,11 @@ export default defineConfig({
       },
     },
   ],
-  webServer: [
-    {
-      // Start Go backend (required for both Phase 1 and Phase 2)
-      command: `bash -c "cd ${__dirname}/../../.. && ./audiobook-organizer serve"`,
-      url: 'http://127.0.0.1:8080/api/v1/system/status',
-      timeout: 60000,
-      reuseExistingServer: !process.env.CI,
-    },
-    {
-      // Start Vite frontend dev server
-      command: 'npm run dev -- --host --port 4173',
-      url: 'http://127.0.0.1:4173',
-      reuseExistingServer: !process.env.CI,
-    },
-  ],
+  webServer: {
+    // Build full app (frontend + embedded backend) and run single Go binary
+    command: `bash -c "cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && ./audiobook-organizer serve"`,
+    url: 'http://127.0.0.1:8080',
+    timeout: 120000,
+    reuseExistingServer: !process.env.CI,
+  },
 });

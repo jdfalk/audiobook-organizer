@@ -19,13 +19,14 @@ test.describe('Full End-to-End Demo Workflow', () => {
 
     // Setup Phase 1: Real API-driven setup with backend
     // This resets to factory defaults and uses real APIs
-    await setupPhase1ApiDriven(page, 'http://127.0.0.1:4173');
+    // Backend is embedded in the Go server on port 8080
+    await setupPhase1ApiDriven(page, 'http://127.0.0.1:8080');
 
     // ==============================================
     // STEP 1: Dashboard - System Overview
     // ==============================================
     console.log('=== STEP 1: Dashboard Overview ===');
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(3000); // Let dashboard fully render
 
     // Take screenshot of dashboard
@@ -37,7 +38,7 @@ test.describe('Full End-to-End Demo Workflow', () => {
     // STEP 2: Navigate to Library - Show Empty State
     // ==============================================
     console.log('=== STEP 2: Library View - Empty State ===');
-    await page.goto('/library');
+    await page.goto('/library', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
     // Should show empty state message
@@ -88,7 +89,7 @@ test.describe('Full End-to-End Demo Workflow', () => {
     // STEP 7: Navigate to Settings
     // ==============================================
     console.log('=== STEP 7: Settings Configuration ===');
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
     await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/full_demo_08_settings.png`, fullPage: true });
