@@ -32,8 +32,10 @@ test.describe('Full End-to-End Demo Workflow', () => {
     console.log('✓ Welcome screen displayed');
     await page.waitForTimeout(2000);
 
-    // Look for "Get Started" button in welcome dialog
-    const getStartedButton = page.locator('button').filter({ hasText: /get started|start|next|continue/i }).first();
+    // Look for "Get Started" button or NEXT button in welcome dialog
+    const getStartedButton = page.locator('button').filter({ hasText: /get started|start/i }).first();
+    const nextButton = page.locator('button').filter({ hasText: /next/i }).first();
+
     if (await getStartedButton.isVisible().catch(() => false)) {
       await page.mouse.move(400, 300);
       await page.waitForTimeout(1000);
@@ -43,55 +45,78 @@ test.describe('Full End-to-End Demo Workflow', () => {
     }
 
     // ==============================================
-    // STEP 2: Navigate to Settings to Add Import Folder
+    // STEP 1.5: Welcome Wizard - Step 1: Library Path
     // ==============================================
-    console.log('=== STEP 2: Navigate to Settings ===');
+    console.log('=== STEP 1.5: Welcome Wizard - Set Library Path ===');
 
-    const settingsLink = page.locator('a, button').filter({ hasText: /settings|configuration|config/i }).first();
-    if (await settingsLink.isVisible().catch(() => false)) {
-      await page.mouse.move(200, 50);
-      await page.waitForTimeout(1000);
-      await settingsLink.click();
-      console.log('✓ Clicked Settings');
-      await page.waitForTimeout(3000);
-    } else {
-      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(3000);
-    }
+    // Wait for wizard to appear
+    await page.waitForTimeout(1000);
 
-    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_02_settings_page.png`, fullPage: true });
-    console.log('✓ Settings page loaded');
+    // Screenshot the wizard step 1
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_01b_wizard_step1.png`, fullPage: true });
+    console.log('✓ Welcome wizard Step 1 (Library Path) displayed');
     await page.waitForTimeout(1500);
 
-    // ==============================================
-    // STEP 3: Add Import Path - Show Adding a Folder
-    // ==============================================
-    console.log('=== STEP 3: Add Import Path ===');
-
-    // Scroll to import paths section
-    await page.mouse.move(400, 300);
-    await page.waitForTimeout(800);
-    await page.evaluate(() => window.scrollBy(0, 300));
-    await page.waitForTimeout(2000);
-
-    // Look for "Add" or "+" button for import paths
-    const addImportButton = page.locator('button').filter({ hasText: /add|create|plus|\+/i }).first();
-    if (await addImportButton.isVisible().catch(() => false)) {
-      await page.mouse.move(300, 200);
+    // Click NEXT to proceed to step 2
+    if (await nextButton.isVisible().catch(() => false)) {
+      await page.mouse.move(1047, 537); // Move to NEXT button
       await page.waitForTimeout(1000);
-      await addImportButton.click();
-      console.log('✓ Clicked Add Import Path');
+      await nextButton.click();
+      console.log('✓ Clicked NEXT button');
       await page.waitForTimeout(2000);
     }
 
-    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_03_add_import_dialog.png`, fullPage: true });
-    console.log('✓ Import path dialog shown');
+    // ==============================================
+    // STEP 1.6: Welcome Wizard - Step 2: AI Setup (Optional)
+    // ==============================================
+    console.log('=== STEP 1.6: Welcome Wizard - AI Setup (Optional) ===');
+
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_01c_wizard_step2.png`, fullPage: true });
+    console.log('✓ Welcome wizard Step 2 (AI Setup) displayed');
     await page.waitForTimeout(1500);
 
+    // Click NEXT to proceed to step 3
+    const nextButton2 = page.locator('button').filter({ hasText: /next|skip/i }).first();
+    if (await nextButton2.isVisible().catch(() => false)) {
+      await page.mouse.move(1047, 537);
+      await page.waitForTimeout(1000);
+      await nextButton2.click();
+      console.log('✓ Clicked NEXT/SKIP button');
+      await page.waitForTimeout(2000);
+    }
+
     // ==============================================
-    // STEP 4: Navigate to Library - Show Library View
+    // STEP 1.7: Welcome Wizard - Step 3: Import Folders
     // ==============================================
-    console.log('=== STEP 4: Navigate to Library ===');
+    console.log('=== STEP 1.7: Welcome Wizard - Import Folders ===');
+
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_01d_wizard_step3.png`, fullPage: true });
+    console.log('✓ Welcome wizard Step 3 (Import Folders) displayed');
+    await page.waitForTimeout(1500);
+
+    // Click FINISH/COMPLETE button to finish wizard
+    const finishButton = page.locator('button').filter({ hasText: /finish|complete|done|start/i }).first();
+    if (await finishButton.isVisible().catch(() => false)) {
+      await page.mouse.move(1047, 537);
+      await page.waitForTimeout(1000);
+      await finishButton.click();
+      console.log('✓ Clicked FINISH button - Wizard complete');
+      await page.waitForTimeout(3000);
+    }
+
+    // ==============================================
+    // STEP 2: Wizard Complete - Now on Dashboard/Library
+    // ==============================================
+    console.log('=== STEP 2: Wizard Complete - App Ready ===');
+
+    await page.screenshot({ path: `${DEMO_ARTIFACTS_DIR}/demo_02_wizard_complete.png`, fullPage: true });
+    console.log('✓ Application is now ready after onboarding');
+    await page.waitForTimeout(2000);
+
+    // ==============================================
+    // STEP 3: Navigate to Library - Show Library View
+    // ==============================================
+    console.log('=== STEP 3: Navigate to Library ===');
 
     // Scroll back up and click Library
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -114,9 +139,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(2000);
 
     // ==============================================
-    // STEP 5: Explore Library UI - Show Search/Filter
+    // STEP 4: Explore Library UI - Show Search/Filter
     // ==============================================
-    console.log('=== STEP 5: Explore Library Controls ===');
+    console.log('=== STEP 4: Explore Library Controls ===');
 
     // Scroll down to show search and filter controls
     await page.mouse.move(400, 300);
@@ -129,9 +154,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(1500);
 
     // ==============================================
-    // STEP 6: Continue Scrolling - Show Import Paths
+    // STEP 5: Continue Scrolling - Show Import Paths
     // ==============================================
-    console.log('=== STEP 6: Show Import Paths ===');
+    console.log('=== STEP 5: Show Import Paths ===');
 
     await page.evaluate(() => window.scrollBy(0, 300));
     await page.waitForTimeout(2000);
@@ -141,9 +166,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(1500);
 
     // ==============================================
-    // STEP 7: Show Scan Button
+    // STEP 6: Show Scan Button
     // ==============================================
-    console.log('=== STEP 7: Scanning Folders ===');
+    console.log('=== STEP 6: Scanning Folders ===');
 
     // Look for Scan button
     const scanButton = page.locator('button').filter({ hasText: /scan|search|import/i }).first();
@@ -156,9 +181,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(1500);
 
     // ==============================================
-    // STEP 8: Navigate to Dashboard - Show Stats
+    // STEP 7: Navigate to Dashboard - Show Stats
     // ==============================================
-    console.log('=== STEP 8: Dashboard Overview ===');
+    console.log('=== STEP 7: Dashboard Overview ===');
 
     // Scroll back to top
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -181,9 +206,9 @@ test.describe('Full End-to-End Demo Workflow', () => {
     await page.waitForTimeout(2000);
 
     // ==============================================
-    // STEP 9: Scroll Dashboard - Show Full Overview
+    // STEP 8: Scroll Dashboard - Show Full Overview
     // ==============================================
-    console.log('=== STEP 9: Dashboard Full Overview ===');
+    console.log('=== STEP 8: Dashboard Full Overview ===');
 
     await page.mouse.move(400, 300);
     await page.waitForTimeout(1000);
