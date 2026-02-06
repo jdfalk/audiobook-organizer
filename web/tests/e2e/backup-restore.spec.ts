@@ -1,13 +1,12 @@
 // file: web/tests/e2e/backup-restore.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 467b5537-3e41-4190-938c-e2f2ccb2e127
-// last-edited: 2026-02-04
+// last-edited: 2026-02-06
 
 import { test, expect, type Page } from '@playwright/test';
 import {
   mockEventSource,
-  setupMockApi,
-  setupPhase1ApiDriven,
+  setupPhase2Interactive,
 } from './utils/test-helpers';
 
 const backups = [
@@ -26,24 +25,27 @@ const backups = [
 
 const openBackupSettings = async (
   page: Page,
-  options: Parameters<typeof setupMockApi>[1]
+  backupsToUse: any[] = [],
+  failures: Record<string, any> = {}
 ) => {
-  await setupMockApi(page, options);
+  // Phase 2 setup: Reset and skip welcome wizard with mocked APIs (must be before page.goto)
+  await setupPhase2Interactive(page, undefined, { backups: backupsToUse, failures });
+  // Mock EventSource to prevent SSE connections
+  await mockEventSource(page);
+  // Now navigate to settings
   await page.goto('/settings');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 };
 
 test.describe('Backup and Restore', () => {
-  test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+  test.beforeEach(async () => {
+    // No setup in beforeEach - each test sets up its own mocks
+    // This allows each test to use different mock data
   });
 
   test('creates manual backup', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups: [] });
+    await openBackupSettings(page, []);
 
     // Act
     await page.getByRole('button', { name: 'Create Backup' }).click();
@@ -57,7 +59,7 @@ test.describe('Backup and Restore', () => {
 
   test('lists existing backups', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups });
+    await openBackupSettings(page, backups);
 
     // Act + Assert
     await expect(page.getByText('backup-2026-01-25.db.gz')).toBeVisible();
@@ -66,7 +68,7 @@ test.describe('Backup and Restore', () => {
 
   test('downloads backup file', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups });
+    await openBackupSettings(page, backups);
 
     // Act
     const downloadLink = page
@@ -82,7 +84,7 @@ test.describe('Backup and Restore', () => {
 
   test('restores from backup', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups });
+    await openBackupSettings(page, backups);
 
     // Act
     await page.getByRole('button', { name: 'Restore' }).first().click();
@@ -96,7 +98,7 @@ test.describe('Backup and Restore', () => {
 
   test('deletes backup file', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups });
+    await openBackupSettings(page, backups);
 
     // Act
     await page.getByRole('button', { name: 'Delete' }).first().click();
@@ -110,10 +112,7 @@ test.describe('Backup and Restore', () => {
 
   test('validates backup before restore', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, {
-      backups,
-      failures: { restoreBackup: 500 },
-    });
+    await openBackupSettings(page, backups, { restoreBackup: 500 });
 
     // Act
     await page.getByRole('button', { name: 'Restore' }).first().click();
@@ -125,7 +124,7 @@ test.describe('Backup and Restore', () => {
 
   test('automatic backup on schedule', async ({ page }) => {
     // Arrange
-    await openBackupSettings(page, { backups });
+    await openBackupSettings(page, backups);
 
     // Act + Assert
     await expect(page.getByText('Auto')).toBeVisible();
