@@ -103,7 +103,15 @@
       "Bash(npx tsc:*)",
       "Bash(node -e:*)",
       "Bash(node -c:*)",
-      "Bash(PLAYWRIGHT_VIDEO=on npm run test:e2e:*)"
+      "Bash(PLAYWRIGHT_VIDEO=on npm run test:e2e:*)",
+      "Bash(npm --version:*)",
+      "Bash(ffprobe:*)",
+      "Bash(unzip:*)",
+      "Bash(npm --prefix web run test:e2e -- web/tests/e2e/app.spec.ts)",
+      "Bash(npm --prefix web run test:e2e -- --list)",
+      "Bash(npm --prefix web run test:e2e -- --project=chromium-record web/tests/e2e/demo-full-workflow.spec.ts)",
+      "Bash(npm --prefix web run test:e2e -- --project=chromium web/tests/e2e/itunes-bidirectional-sync.spec.ts)",
+      "Bash(npm --prefix web run test:*)"
     ]
   }
 }
