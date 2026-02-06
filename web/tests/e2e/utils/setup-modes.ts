@@ -1,7 +1,7 @@
 // file: web/tests/e2e/utils/setup-modes.ts
-// version: 1.1.0
+// version: 2.0.0
 // guid: f1e2d3c4-b5a6-7890-cdef-a1b2c3d4e5f6
-// last-edited: 2026-02-04
+// last-edited: 2026-02-05
 
 import { Page } from '@playwright/test';
 import type { MockApiOptions } from './test-helpers';
@@ -15,12 +15,14 @@ import { skipWelcomeWizard, setupMockApi } from './test-helpers';
  * with backends that don't yet support the reset endpoint.
  *
  * @param page - Playwright test page object
- * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
+ * @param baseURL - Base URL for API calls (defaults to Playwright's configured baseURL)
  */
 export async function resetToFactoryDefaults(
   page: Page,
-  baseURL: string = 'http://127.0.0.1:4173'
+  baseURL?: string
 ): Promise<boolean> {
+  // Use Playwright's configured baseURL if not provided
+  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8080';
   try {
     const response = await page.evaluate(
       async ({ baseURL }: { baseURL: string }) => {
@@ -35,7 +37,7 @@ export async function resetToFactoryDefaults(
           return { success: false, status: 0, error: String(error) };
         }
       },
-      { baseURL }
+      { baseURL: finalBaseURL }
     );
 
     if (!response.success) {
@@ -64,13 +66,13 @@ export async function resetToFactoryDefaults(
  * Skips the welcome wizard since we're using real APIs.
  *
  * @param page - Playwright test page object
- * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
+ * @param baseURL - Base URL for API calls (defaults to Playwright's configured baseURL)
  */
 export async function setupPhase1ApiDriven(
   page: Page,
-  baseURL: string = 'http://127.0.0.1:4173'
+  baseURL?: string
 ): Promise<void> {
-  // Attempt to reset to factory defaults
+  // Attempt to reset to factory defaults (uses Playwright config baseURL if not provided)
   await resetToFactoryDefaults(page, baseURL);
 
   // Skip the welcome wizard - real API will be used
@@ -90,15 +92,15 @@ export async function setupPhase1ApiDriven(
  * The mockOptions parameter allows customizing the mock API responses.
  *
  * @param page - Playwright test page object
- * @param baseURL - Base URL for API calls (defaults to http://127.0.0.1:4173)
+ * @param baseURL - Base URL for API calls (defaults to Playwright's configured baseURL)
  * @param mockOptions - Options for mock API responses
  */
 export async function setupPhase2Interactive(
   page: Page,
-  baseURL: string = 'http://127.0.0.1:4173',
+  baseURL?: string,
   mockOptions: MockApiOptions = {}
 ): Promise<void> {
-  // Attempt to reset to factory defaults
+  // Attempt to reset to factory defaults (uses Playwright config baseURL if not provided)
   await resetToFactoryDefaults(page, baseURL);
 
   // Set up mock APIs with provided options
