@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -39,7 +39,9 @@ import {
 } from '@mui/material';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
   getBook,
   getITunesImportStatus,
@@ -97,6 +99,9 @@ export function ITunesImport() {
     useState<ITunesWriteBackResponse | null>(null);
   const [writeBackBackup, setWriteBackBackup] = useState(true);
   const [writeBackLibraryPath, setWriteBackLibraryPath] = useState('');
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [pendingConflicts] = useState<ConflictItem[]>([]);
+  const [syncingWithConflicts, setSyncingWithConflicts] = useState(false);
   const pollTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -298,6 +303,33 @@ export function ITunesImport() {
     };
 
     await poll();
+  };
+
+  const handleConflictResolve = async (resolutions: Record<string, 'itunes' | 'organizer'>) => {
+    setSyncingWithConflicts(true);
+    try {
+      // Send resolutions to backend for sync
+      const response = await fetch(`${import.meta.env.VITE_API_BASE}/itunes/resolve-conflicts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolutions }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to apply conflict resolutions');
+      }
+
+      setShowConflictDialog(false);
+      setError(null);
+      // Refresh sync status
+      if (importStatus?.operation_id) {
+        await pollImportStatus(importStatus.operation_id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Conflict resolution failed');
+    } finally {
+      setSyncingWithConflicts(false);
+    }
   };
 
   return (
@@ -519,6 +551,76 @@ export function ITunesImport() {
           </Box>
         )}
 
+        <Divider sx={{ my: 3 }} />
+
+        {/* Force Sync Buttons Section */}
+        <Box sx={{ mt: 3, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Force Sync Options
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Use these buttons for manual sync control. Choose which direction takes precedence.
+          </Typography>
+
+          <Stack direction="row" spacing={2} flexWrap="wrap">
+            <Button
+              variant="contained"
+              startIcon={<CloudDownloadIcon />}
+              onClick={async () => {
+                if (window.confirm('Force import from iTunes will overwrite organizer changes. Continue?')) {
+                  setImporting(true);
+                  try {
+                    const request: ITunesImportRequest = {
+                      library_path: settings.libraryPath,
+                      import_mode: 'import',
+                      preserve_location: settings.preserveLocation,
+                      import_playlists: settings.importPlaylists,
+                      skip_duplicates: settings.skipDuplicates,
+                    };
+                    const result = await importITunesLibrary(request);
+                    await pollImportStatus(result.operation_id);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Force import failed');
+                    setImporting(false);
+                  }
+                }
+              }}
+              disabled={!validationResult || importing}
+            >
+              Force Import from iTunes
+            </Button>
+
+            <Button
+              variant="contained"
+              startIcon={<CloudUploadIcon />}
+              onClick={async () => {
+                if (window.confirm('Force sync to iTunes will overwrite iTunes changes. Continue?')) {
+                  setWriteBackOpen(true);
+                  // Set all books for write-back (force mode)
+                  setWriteBackIds('*');
+                }
+              }}
+              disabled={importing || importStatus?.status === 'in_progress'}
+            >
+              Force Sync to iTunes
+            </Button>
+
+            <Button
+              variant="outlined"
+              onClick={() => {
+                // Retry last failed operation
+                if (importStatus?.status === 'failed') {
+                  setImporting(true);
+                  pollImportStatus(importStatus.operation_id);
+                }
+              }}
+              disabled={!importStatus || importStatus.status !== 'failed'}
+            >
+              Retry Failed Sync
+            </Button>
+          </Stack>
+        </Box>
+
         <Divider sx={{ my: 4 }} />
 
         <Stack spacing={1}>
@@ -661,6 +763,14 @@ export function ITunesImport() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ITunesConflictDialog
+          open={showConflictDialog}
+          conflicts={pendingConflicts}
+          loading={syncingWithConflicts}
+          onResolve={handleConflictResolve}
+          onCancel={() => setShowConflictDialog(false)}
+        />
       </CardContent>
     </Card>
   );
