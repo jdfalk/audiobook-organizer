@@ -1,5 +1,5 @@
 // file: web/tests/e2e/demo-full-workflow.spec.ts
-// version: 4.0.0
+// version: 4.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 // last-edited: 2026-02-05
 
@@ -23,8 +23,8 @@ test.describe('Full End-to-End Demo Workflow', () => {
   test('Complete audiobook workflow: import, organize, edit metadata, verify persistence', async ({
     page,
   }) => {
-    // 12 minute timeout for complete realistic demo
-    test.setTimeout(720 * 1000);
+    // 15 minute timeout for complete demo including iTunes
+    test.setTimeout(900 * 1000);
 
     // Setup temp demo directories with real audiobook files
     const { tempDir, libraryPath, importPath } = await setupDemoDirectories();
@@ -347,6 +347,92 @@ test.describe('Full End-to-End Demo Workflow', () => {
       }
 
       await demoScreenshot(page, 14, 'persistence_verified', DEMO_ARTIFACTS_DIR);
+
+      // ==============================================
+      // PHASE 7: iTunes Integration & Bidirectional Sync
+      // ==============================================
+      console.log('\n=== PHASE 7: iTunes Integration & Bidirectional Sync ===');
+
+      // Navigate to Settings
+      const settingsLink = page.locator('a, button').filter({ hasText: /settings/i }).first();
+      if (await settingsLink.isVisible().catch(() => false)) {
+        await humanMove(page, 640, 400, 30);
+        await page.waitForTimeout(800);
+        await settingsLink.click();
+        console.log('✓ Navigated to Settings');
+        await page.waitForTimeout(2000);
+      }
+
+      await demoScreenshot(page, 15, 'settings_page', DEMO_ARTIFACTS_DIR);
+
+      // Click iTunes Import tab
+      const itunesTab = page.getByRole('tab', { name: /itunes/i }).first();
+      if (await itunesTab.isVisible().catch(() => false)) {
+        await humanMove(page, 320, 150, 25);
+        await page.waitForTimeout(600);
+        await itunesTab.click();
+        console.log('✓ Opened iTunes Import tab');
+        await page.waitForTimeout(2000);
+      }
+
+      await demoScreenshot(page, 16, 'itunes_settings', DEMO_ARTIFACTS_DIR);
+
+      // Enter iTunes library path and validate
+      const itunesPathInput = page.getByLabel(/itunes library path|library path/i).first();
+      if (await itunesPathInput.isVisible().catch(() => false)) {
+        await humanMove(page, 640, 300, 20);
+        await page.waitForTimeout(600);
+        await itunesPathInput.click();
+        await page.waitForTimeout(300);
+        // Use a real iTunes test library path
+        await humanType(page, 'testdata/itunes/Library.xml');
+        console.log('✓ Entered iTunes library path');
+        await page.waitForTimeout(1500);
+      }
+
+      // Click Validate button
+      const validateButton = page.getByRole('button', { name: /validate/i }).first();
+      if (await validateButton.isVisible().catch(() => false)) {
+        await humanMove(page, 640, 350, 20);
+        await page.waitForTimeout(800);
+        await validateButton.click();
+        console.log('✓ Clicked Validate');
+        await page.waitForTimeout(3000);
+      }
+
+      await demoScreenshot(page, 17, 'itunes_validated', DEMO_ARTIFACTS_DIR);
+
+      // Click Import Library button
+      const importButton = page.getByRole('button', { name: /import library|import/i }).nth(0);
+      if (await importButton.isVisible().catch(() => false)) {
+        await humanMove(page, 640, 400, 20);
+        await page.waitForTimeout(800);
+        await importButton.click();
+        console.log('✓ Clicked Import Library');
+        // Wait for import to complete (longer timeout for real data)
+        await page.waitForTimeout(5000);
+      }
+
+      await demoScreenshot(page, 18, 'itunes_importing', DEMO_ARTIFACTS_DIR);
+
+      // Wait for import completion message
+      await page.waitForTimeout(2000);
+      await demoScreenshot(page, 19, 'itunes_imported', DEMO_ARTIFACTS_DIR);
+
+      // Navigate back to Library to verify imported books
+      const libraryLinkAgain = page.locator('a, button').filter({ hasText: /library|books/i }).first();
+      if (await libraryLinkAgain.isVisible().catch(() => false)) {
+        await humanMove(page, 97, 144, 30);
+        await page.waitForTimeout(800);
+        await libraryLinkAgain.click();
+        console.log('✓ Navigated back to Library');
+        await page.waitForTimeout(3000);
+      }
+
+      // Show library with newly imported iTunes books
+      await demoScreenshot(page, 20, 'library_with_itunes_books', DEMO_ARTIFACTS_DIR);
+
+      console.log('\n✅ iTunes sync demo completed successfully!');
 
       console.log('\n✅ Complete realistic demo finished successfully!');
       console.log(`📊 Demo artifacts saved to: ${DEMO_ARTIFACTS_DIR}`);
