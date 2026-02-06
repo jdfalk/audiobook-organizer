@@ -1,10 +1,10 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.7.0
+// version: 1.8.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
-// last-edited: 2026-02-04
+// last-edited: 2026-02-06
 
 import { expect, test } from '@playwright/test';
-import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
+import { mockEventSource } from './utils/test-helpers';
 
 const bookId = 'book-1';
 
@@ -41,6 +41,11 @@ const createInitialBook = (): BookState => ({
 // to avoid duplication. This file also has custom route setup below.
 
 const setupRoutes = async (page: import('@playwright/test').Page) => {
+  // Skip welcome wizard
+  await page.addInitScript(() => {
+    localStorage.setItem('welcome_wizard_completed', 'true');
+  });
+
   const initialBook = createInitialBook();
   const tags = {
     media_info: {
@@ -344,10 +349,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
 
 test.describe('Book Detail page', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections (custom setup in this file)
-    const bookId = 'book-1';
+    // No setup here - each test calls setupRoutes which includes all needed mocking
+    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
   });
 

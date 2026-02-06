@@ -100,12 +100,13 @@ export async function setupPhase2Interactive(
   baseURL?: string,
   mockOptions: MockApiOptions = {}
 ): Promise<void> {
-  // Attempt to reset to factory defaults (uses Playwright config baseURL if not provided)
-  await resetToFactoryDefaults(page, baseURL);
-
-  // Set up mock APIs with provided options
+  // IMPORTANT: Set up mocks BEFORE trying to call APIs
+  // Set up mock APIs with provided options (uses addInitScript)
   await setupMockApi(page, mockOptions);
 
-  // Skip the welcome wizard when using mocked APIs
+  // Skip the welcome wizard when using mocked APIs (uses addInitScript)
   await skipWelcomeWizard(page);
+
+  // Now attempt to reset to factory defaults (uses mocked APIs)
+  await resetToFactoryDefaults(page, baseURL);
 }
