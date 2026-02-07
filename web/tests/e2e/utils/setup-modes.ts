@@ -5,7 +5,7 @@
 
 import { Page } from '@playwright/test';
 import type { MockApiOptions } from './test-helpers';
-import { skipWelcomeWizard, setupMockApiRoutes } from './test-helpers';
+import { skipWelcomeWizard, setupMockApiRoutes, mockEventSource } from './test-helpers';
 
 /**
  * Call the factory reset endpoint to reset the app to factory defaults
@@ -100,17 +100,26 @@ export async function setupPhase2Interactive(
   baseURL?: string,
   mockOptions: MockApiOptions = {}
 ): Promise<void> {
+  console.log('[Setup] Phase 2 Interactive starting...');
+
   // IMPORTANT: Set up mocks BEFORE any page navigation
   // Setup localStorage and basic state via init script
+  console.log('[Setup] Skipping welcome wizard...');
   await skipWelcomeWizard(page);
+
+  // Mock EventSource to prevent SSE connection attempts
+  console.log('[Setup] Mocking EventSource...');
+  await mockEventSource(page);
 
   // Set up mock API routes - this MUST happen before first page load
   // and will persist across page navigations due to route handling
+  console.log('[Setup] Setting up mock API routes...');
   await setupMockApiRoutes(page, mockOptions);
 
   // Now navigate to initial page (mocks are ready before this)
   // Use context baseURL if available, otherwise default to 8080
   const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8080';
+  console.log('[Setup] Initial navigation to:', finalBaseURL);
   try {
     // First navigation - mocks are now ready
     await page.goto(`${finalBaseURL}/`, { waitUntil: 'domcontentloaded' });
@@ -120,5 +129,7 @@ export async function setupPhase2Interactive(
   }
 
   // Attempt to reset to factory defaults (uses mocked APIs)
-  await resetToFactoryDefaults(page, baseURL);
+  console.log('[Setup] Resetting to factory defaults...');
+  await resetToFactoryDefaults(page, finalBaseURL);
+  console.log('[Setup] Phase 2 Interactive complete');
 }
