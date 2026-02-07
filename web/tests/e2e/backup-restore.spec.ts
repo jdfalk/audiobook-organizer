@@ -1,7 +1,7 @@
 // file: web/tests/e2e/backup-restore.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 467b5537-3e41-4190-938c-e2f2ccb2e127
-// last-edited: 2026-02-06
+// last-edited: 2026-02-07
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -35,6 +35,8 @@ const openBackupSettings = async (
   // Now navigate to settings
   await page.goto('/settings');
   await page.waitForLoadState('domcontentloaded');
+  // Wait for the page to settle and API calls to complete
+  await page.waitForLoadState('networkidle');
 };
 
 test.describe('Backup and Restore', () => {
@@ -60,6 +62,12 @@ test.describe('Backup and Restore', () => {
   test('lists existing backups', async ({ page }) => {
     // Arrange
     await openBackupSettings(page, backups);
+
+    // Debug: Check what's on the page
+    const bodyText = await page.locator('body').textContent();
+    console.log('[TEST] Page content:', bodyText?.substring(0, 500));
+    console.log('[TEST] Page title:', await page.title());
+    console.log('[TEST] Current URL:', page.url());
 
     // Act + Assert
     await expect(page.getByText('backup-2026-01-25.db.gz')).toBeVisible();

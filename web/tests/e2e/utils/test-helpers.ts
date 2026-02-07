@@ -1,6 +1,7 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 1.6.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
+// last-edited: 2026-02-07
 
 import { Page } from '@playwright/test';
 
@@ -281,6 +282,197 @@ export async function mockEventSource(page: Page) {
 export async function skipWelcomeWizard(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('welcome_wizard_completed', 'true');
+  });
+}
+
+/**
+ * Setup mock API routes using page.route() for reliable interception
+ * This approach works across page navigations, unlike addInitScript()
+ * Use this INSTEAD of setupMockApi for Phase 2 tests
+ *
+ * @param page - Playwright test page object
+ * @param options - Mock API options
+ */
+export async function setupMockApiRoutes(
+  page: Page,
+  options: MockApiOptions = {}
+) {
+  // Store mock state in page context so it persists
+  const mockState = {
+    books: options.books || [],
+    config: buildConfig(options.config),
+    systemStatus: buildSystemStatus(options.systemStatus),
+    importPaths: options.importPaths || [],
+    backups: options.backups || [],
+    blockedHashes: options.blockedHashes || [],
+    filesystem: options.filesystem || {},
+    homeDirectory: options.homeDirectory || '/',
+    operations: options.operations || {},
+    itunes: options.itunes || {},
+    failures: options.failures || {},
+  };
+
+  // Use addInitScript to set localStorage and basic state
+  // This is lightweight and runs before page navigation
+  await page.addInitScript(() => {
+    localStorage.setItem('welcome_wizard_completed', 'true');
+  });
+
+  // Set up route-based interception for ALL API calls
+  // This persists across page navigations
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const pathname = url.pathname;
+    const method = request.method();
+    console.log(`[Mock API] ${method} ${pathname}`);
+
+    const jsonResponse = (body: unknown, status = 200) => ({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+
+    // Health check
+    if (pathname === '/api/v1/health') {
+      return route.fulfill(jsonResponse({ status: 'ok' }));
+    }
+
+    // System reset
+    if (pathname === '/api/v1/system/reset' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Reset complete' }));
+    }
+
+    // System status
+    if (pathname === '/api/v1/system/status') {
+      const librarySize = mockState.books.reduce(
+        (sum, book) => sum + (book.file_size || 0),
+        0
+      );
+      const totalBooks = mockState.books.length;
+      const diskTotal =
+        (mockState.systemStatus as { disk_total_bytes?: number })
+          .disk_total_bytes || 500 * 1024 * 1024 * 1024;
+
+      return route.fulfill(
+        jsonResponse({
+          ...mockState.systemStatus,
+          status: 'ok',
+          library: {
+            book_count: totalBooks,
+            folder_count: 1,
+            total_size: librarySize,
+          },
+          import_paths: {
+            folder_count: mockState.importPaths.length,
+            book_count: 0,
+          },
+          operations: { recent: [] },
+          library_book_count: totalBooks,
+          total_book_count: totalBooks,
+          library_size_bytes: librarySize,
+          total_size_bytes: librarySize,
+          disk_used_bytes: librarySize,
+          disk_free_bytes: Math.max(0, diskTotal - librarySize),
+        })
+      );
+    }
+
+    // Config endpoint
+    if (pathname === '/api/v1/config') {
+      if (method === 'GET') {
+        const maskedConfig = { ...mockState.config };
+        return route.fulfill(jsonResponse({ config: maskedConfig }));
+      }
+    }
+
+    // Backup endpoints - CRITICAL for backup-restore tests
+    if (pathname === '/api/v1/backup/list') {
+      return route.fulfill(
+        jsonResponse({
+          backups: mockState.backups,
+          count: mockState.backups.length,
+        })
+      );
+    }
+
+    if (pathname === '/api/v1/backup/create' && method === 'POST') {
+      const filename = `backup-${Date.now()}.db.gz`;
+      const created = {
+        filename,
+        size: 25 * 1024 * 1024,
+        created_at: new Date().toISOString(),
+        auto: false,
+      };
+      mockState.backups.unshift(created);
+      return route.fulfill(jsonResponse({ backup: created }));
+    }
+
+    if (pathname === '/api/v1/backup/restore' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Restored' }));
+    }
+
+    if (pathname.startsWith('/api/v1/backup/') && method === 'DELETE') {
+      const filename = pathname.split('/').pop() || '';
+      mockState.backups = mockState.backups.filter(
+        (item) => item.filename !== filename
+      );
+      return route.fulfill(jsonResponse({ message: 'Deleted' }));
+    }
+
+    // Import paths
+    if (pathname === '/api/v1/import-paths' && method === 'GET') {
+      return route.fulfill(
+        jsonResponse({ importPaths: mockState.importPaths })
+      );
+    }
+
+    if (pathname === '/api/v1/import-paths' && method === 'POST') {
+      const nextId =
+        mockState.importPaths.reduce((max, item) => Math.max(max, item.id), 0) +
+        1;
+      const newPath = {
+        id: nextId,
+        path: '/unknown',
+        book_count: 0,
+      };
+      mockState.importPaths.push(newPath);
+      return route.fulfill(jsonResponse(newPath, 201));
+    }
+
+    // Books endpoints
+    if (pathname === '/api/v1/audiobooks' && method === 'GET') {
+      const pageNum = parseInt(url.searchParams.get('page') || '1', 10);
+      const limit = parseInt(url.searchParams.get('limit') || '12', 10);
+      const start = (pageNum - 1) * limit;
+      const paginatedBooks = mockState.books.slice(start, start + limit);
+      return route.fulfill(
+        jsonResponse({
+          books: paginatedBooks,
+          total: mockState.books.length,
+          page: pageNum,
+          limit,
+        })
+      );
+    }
+
+    if (pathname === '/api/v1/audiobooks/count') {
+      return route.fulfill(jsonResponse({ count: mockState.books.length }));
+    }
+
+    if (pathname.startsWith('/api/v1/audiobooks/') && method === 'GET') {
+      const bookId = pathname.split('/').pop() || '';
+      const book = mockState.books.find((b) => b.id === bookId);
+      if (book) {
+        return route.fulfill(jsonResponse(book));
+      }
+      return route.fulfill(jsonResponse({ error: 'Not found' }, 404));
+    }
+
+    // Default: 404 for unhandled endpoints
+    return route.fulfill(
+      jsonResponse({ error: `Endpoint not mocked: ${pathname}` }, 404)
+    );
   });
 }
 

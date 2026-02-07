@@ -1,11 +1,11 @@
 // file: web/tests/e2e/utils/setup-modes.ts
-// version: 2.0.0
+// version: 3.0.0
 // guid: f1e2d3c4-b5a6-7890-cdef-a1b2c3d4e5f6
-// last-edited: 2026-02-05
+// last-edited: 2026-02-07
 
 import { Page } from '@playwright/test';
 import type { MockApiOptions } from './test-helpers';
-import { skipWelcomeWizard, setupMockApi } from './test-helpers';
+import { skipWelcomeWizard, setupMockApiRoutes } from './test-helpers';
 
 /**
  * Call the factory reset endpoint to reset the app to factory defaults
@@ -100,13 +100,25 @@ export async function setupPhase2Interactive(
   baseURL?: string,
   mockOptions: MockApiOptions = {}
 ): Promise<void> {
-  // IMPORTANT: Set up mocks BEFORE trying to call APIs
-  // Set up mock APIs with provided options (uses addInitScript)
-  await setupMockApi(page, mockOptions);
-
-  // Skip the welcome wizard when using mocked APIs (uses addInitScript)
+  // IMPORTANT: Set up mocks BEFORE any page navigation
+  // Setup localStorage and basic state via init script
   await skipWelcomeWizard(page);
 
-  // Now attempt to reset to factory defaults (uses mocked APIs)
+  // Set up mock API routes - this MUST happen before first page load
+  // and will persist across page navigations due to route handling
+  await setupMockApiRoutes(page, mockOptions);
+
+  // Now navigate to initial page (mocks are ready before this)
+  // Use context baseURL if available, otherwise default to 8080
+  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8080';
+  try {
+    // First navigation - mocks are now ready
+    await page.goto(`${finalBaseURL}/`, { waitUntil: 'domcontentloaded' });
+  } catch (error) {
+    // Navigation may fail if app not running, but mocks are in place for later navigations
+    console.warn(`Initial navigation failed: ${String(error)}`);
+  }
+
+  // Attempt to reset to factory defaults (uses mocked APIs)
   await resetToFactoryDefaults(page, baseURL);
 }
