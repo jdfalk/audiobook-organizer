@@ -5,7 +5,6 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  mockEventSource,
   setupPhase2Interactive,
   generateTestBooks,
   generateTestBook,
@@ -33,11 +32,9 @@ import {
 
 test.describe('Phase 2: Interactive Import Workflow', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock EventSource to prevent SSE connection errors during tests
-    await mockEventSource(page);
-
     // Setup Phase 2: Mocked APIs with empty library state
     // No real backend calls are made - all responses are simulated
+    // This also mocks EventSource to prevent SSE connection errors
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
       books: [],
       config: {
@@ -89,8 +86,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: Library has 30 mock audiobooks
     const books = generateTestBooks(30);
 
-    // Setup Phase 2 with pre-populated mock books
-    await mockEventSource(page);
+    // Setup Phase 2 with pre-populated mock books (includes EventSource mocking)
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
       books,
       config: {
@@ -143,7 +139,6 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
       },
     ];
 
-    await mockEventSource(page);
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
 
     // WHEN: User navigates to the library
@@ -174,7 +169,6 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: System has populated mock configuration
     const books = generateTestBooks(5);
 
-    await mockEventSource(page);
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
       books,
       systemStatus: {
@@ -207,7 +201,6 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: Library has a single book
     const books = [generateTestBook()];
 
-    await mockEventSource(page);
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
 
     // WHEN: User navigates to the library
@@ -243,7 +236,6 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: Library has 50 books
     const books = generateTestBooks(50);
 
-    await mockEventSource(page);
     await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
 
     // WHEN: User navigates to the library

@@ -4,17 +4,12 @@
 // last-edited: 2026-02-06
 
 import { test, expect } from '@playwright/test';
-import {
-  mockEventSource,
-  setupPhase2Interactive,
-} from './utils/test-helpers';
+import { setupPhase2Interactive } from './utils/test-helpers';
 
 test.describe('App smoke', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 2 setup: Reset with mocked APIs
+    // Phase 2 setup: Reset with mocked APIs (includes EventSource mocking)
     await setupPhase2Interactive(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
   });
 
   test('loads dashboard and shows title', async ({ page }) => {
