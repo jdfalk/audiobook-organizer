@@ -5,7 +5,6 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  mockEventSource,
   setupPhase2Interactive,
   generateTestBooks,
   setupLibraryWithBooks,
@@ -13,9 +12,8 @@ import {
 
 test.describe('Core Functionality', () => {
   test('app dashboard loads successfully', async ({ page }) => {
-    // Setup with mocked APIs
+    // Setup with mocked APIs (includes EventSource mocking)
     await setupPhase2Interactive(page);
-    await mockEventSource(page);
 
     // Dashboard loads
     await page.goto('/');
@@ -24,9 +22,8 @@ test.describe('Core Functionality', () => {
   });
 
   test('app initializes without errors', async ({ page }) => {
-    // Setup and navigate
+    // Setup and navigate (includes EventSource mocking)
     await setupPhase2Interactive(page);
-    await mockEventSource(page);
 
     // Load dashboard
     await page.goto('/');
