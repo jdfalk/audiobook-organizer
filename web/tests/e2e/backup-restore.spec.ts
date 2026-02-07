@@ -4,10 +4,7 @@
 // last-edited: 2026-02-07
 
 import { test, expect, type Page } from '@playwright/test';
-import {
-  mockEventSource,
-  setupPhase2Interactive,
-} from './utils/test-helpers';
+import { setupPhase2Interactive } from './utils/test-helpers';
 
 const backups = [
   {
@@ -29,9 +26,8 @@ const openBackupSettings = async (
   failures: Record<string, any> = {}
 ) => {
   // Phase 2 setup: Reset and skip welcome wizard with mocked APIs (must be before page.goto)
+  // This also mocks EventSource to prevent SSE connections
   await setupPhase2Interactive(page, undefined, { backups: backupsToUse, failures });
-  // Mock EventSource to prevent SSE connections
-  await mockEventSource(page);
   // Now navigate to settings
   await page.goto('/settings');
   await page.waitForLoadState('domcontentloaded');
@@ -61,6 +57,12 @@ test.describe('Backup and Restore', () => {
 
   test('lists existing backups', async ({ page }) => {
     // Arrange
+    // Capture console messages for debugging
+    const consoleLogs: string[] = [];
+    page.on('console', (msg) => {
+      consoleLogs.push(`${msg.type()}: ${msg.text()}`);
+    });
+
     await openBackupSettings(page, backups);
 
     // Debug: Check what's on the page
@@ -68,6 +70,7 @@ test.describe('Backup and Restore', () => {
     console.log('[TEST] Page content:', bodyText?.substring(0, 500));
     console.log('[TEST] Page title:', await page.title());
     console.log('[TEST] Current URL:', page.url());
+    console.log('[TEST] Console logs:', consoleLogs);
 
     // Act + Assert
     await expect(page.getByText('backup-2026-01-25.db.gz')).toBeVisible();
