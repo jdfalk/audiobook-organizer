@@ -1,13 +1,11 @@
 // file: web/tests/e2e/operation-monitoring.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9845a5f8-e3e4-472f-ae99-2723b6163aae
 // last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
-  mockEventSource,
   setupMockApi,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 type OperationSeed = {
@@ -130,10 +128,7 @@ const openOperations = async (page: Page, seed?: Partial<OperationSeed>) => {
 
 test.describe('Operation Monitoring', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Setup handled by openOperations() which calls setupMockApi()
   });
 
   test('views active operations list', async ({ page }) => {

@@ -1,5 +1,5 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.8.0
+// version: 1.9.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 // last-edited: 2026-02-06
 
@@ -41,6 +41,9 @@ const createInitialBook = (): BookState => ({
 // to avoid duplication. This file also has custom route setup below.
 
 const setupRoutes = async (page: import('@playwright/test').Page) => {
+  // Mock EventSource FIRST to prevent SSE connection attempts
+  await mockEventSource(page);
+
   // Skip welcome wizard
   await page.addInitScript(() => {
     localStorage.setItem('welcome_wizard_completed', 'true');
@@ -349,9 +352,8 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
 
 test.describe('Book Detail page', () => {
   test.beforeEach(async ({ page }) => {
-    // No setup here - each test calls setupRoutes which includes all needed mocking
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Each test calls setupRoutes which handles all setup including EventSource mocking
+    // No setup needed here to avoid conflicts
   });
 
   test('renders info, files, and versions tabs', async ({ page }) => {
