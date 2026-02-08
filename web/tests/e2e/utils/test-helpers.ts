@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 // last-edited: 2026-02-07
 
@@ -706,6 +706,21 @@ export function generateTestBook(overrides: Record<string, unknown> = {}) {
  * Setup shared mock API responses and state for tests
  */
 export async function setupMockApi(
+  page: Page,
+  options: MockApiOptions = {}
+) {
+  // New approach: Use the page.route() based mocking for persistence across navigations
+  // This replaces the old addInitScript approach
+  await skipWelcomeWizard(page);
+  await mockEventSource(page);
+  await setupMockApiRoutes(page, options);
+}
+
+/**
+ * @deprecated Use setupPhase2Interactive or setupMockApiRoutes instead
+ * This function is kept for backward compatibility but internally delegates to new setup
+ */
+export async function setupMockApiLegacy(
   page: Page,
   options: MockApiOptions = {}
 ) {
