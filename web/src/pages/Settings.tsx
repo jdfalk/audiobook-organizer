@@ -1,9 +1,10 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.26.0
+// version: 1.27.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
-import { useNavigate, useBlocker } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useUnsavedChangesBlocker } from '../hooks/useUnsavedChangesBlocker';
 import {
   Box,
   Typography,
@@ -285,7 +286,7 @@ export function Settings() {
   );
   const hasUnsavedChanges =
     savedSnapshot !== '' && settingsSnapshot !== savedSnapshot;
-  const blocker = useBlocker(hasUnsavedChanges);
+  const blocker = useUnsavedChangesBlocker(hasUnsavedChanges);
   const savedSettings = useMemo(() => {
     if (!savedSnapshot) return null;
     try {

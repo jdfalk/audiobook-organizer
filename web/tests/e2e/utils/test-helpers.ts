@@ -442,15 +442,14 @@ export async function setupMockApiRoutes(
 
     // Books endpoints
     if (pathname === '/api/v1/audiobooks' && method === 'GET') {
-      const pageNum = parseInt(url.searchParams.get('page') || '1', 10);
+      const offset = parseInt(url.searchParams.get('offset') || '0', 10);
       const limit = parseInt(url.searchParams.get('limit') || '12', 10);
-      const start = (pageNum - 1) * limit;
-      const paginatedBooks = mockState.books.slice(start, start + limit);
+      const paginatedBooks = mockState.books.slice(offset, offset + limit);
       return route.fulfill(
         jsonResponse({
-          books: paginatedBooks,
-          total: mockState.books.length,
-          page: pageNum,
+          items: paginatedBooks,
+          count: mockState.books.length,
+          offset,
           limit,
         })
       );
@@ -458,6 +457,36 @@ export async function setupMockApiRoutes(
 
     if (pathname === '/api/v1/audiobooks/count') {
       return route.fulfill(jsonResponse({ count: mockState.books.length }));
+    }
+
+    if (pathname === '/api/v1/audiobooks/soft-deleted' && method === 'GET') {
+      const deleted = mockState.books.filter((b: Record<string, unknown>) => b.marked_for_deletion);
+      return route.fulfill(jsonResponse({
+        items: deleted,
+        count: deleted.length,
+        total: deleted.length,
+        offset: 0,
+        limit: 100,
+      }));
+    }
+
+    if (pathname === '/api/v1/audiobooks/search' && method === 'GET') {
+      const query = (url.searchParams.get('q') || url.searchParams.get('search') || '').toLowerCase();
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+      const filtered = mockState.books.filter((b: Record<string, unknown>) => {
+        const title = String(b.title || '').toLowerCase();
+        const author = String(b.author_name || '').toLowerCase();
+        const series = String(b.series_name || '').toLowerCase();
+        return title.includes(query) || author.includes(query) || series.includes(query);
+      });
+      return route.fulfill(jsonResponse({
+        items: filtered.slice(0, limit),
+        total: filtered.length,
+      }));
+    }
+
+    if (pathname === '/api/v1/audiobooks/duplicates' && method === 'GET') {
+      return route.fulfill(jsonResponse({ items: [], count: 0 }));
     }
 
     if (pathname.startsWith('/api/v1/audiobooks/') && method === 'GET') {
@@ -469,10 +498,146 @@ export async function setupMockApiRoutes(
       return route.fulfill(jsonResponse({ error: 'Not found' }, 404));
     }
 
-    // Default: 404 for unhandled endpoints
-    return route.fulfill(
-      jsonResponse({ error: `Endpoint not mocked: ${pathname}` }, 404)
-    );
+    // Operations endpoints
+    if (pathname === '/api/v1/operations/active' && method === 'GET') {
+      return route.fulfill(jsonResponse({ operations: [] }));
+    }
+
+    if (pathname.match(/\/api\/v1\/operations\/[^/]+\/status/) && method === 'GET') {
+      return route.fulfill(jsonResponse({
+        id: pathname.split('/')[4],
+        status: 'completed',
+        progress: 100,
+        type: 'scan',
+      }));
+    }
+
+    if (pathname.match(/\/api\/v1\/operations\/[^/]+\/logs/) && method === 'GET') {
+      return route.fulfill(jsonResponse({ logs: [] }));
+    }
+
+    if (pathname === '/api/v1/operations/scan' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'op-scan-1', status: 'running', type: 'scan', progress: 0 }, 201));
+    }
+
+    if (pathname === '/api/v1/operations/organize' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'op-org-1', status: 'running', type: 'organize', progress: 0 }, 201));
+    }
+
+    if (pathname.match(/\/api\/v1\/operations\/[^/]+$/) && method === 'DELETE') {
+      return route.fulfill(jsonResponse({ message: 'Cancelled' }));
+    }
+
+    // Dashboard endpoint
+    if (pathname === '/api/v1/dashboard') {
+      return route.fulfill(jsonResponse({
+        library_count: mockState.books.length,
+        import_path_count: mockState.importPaths.length,
+        recent_operations: [],
+        storage: {
+          library_size_bytes: mockState.books.reduce((sum: number, b: Record<string, unknown>) => sum + (Number(b.file_size) || 0), 0),
+          total_size_bytes: 0,
+          disk_free_bytes: 500 * 1024 * 1024 * 1024,
+        },
+      }));
+    }
+
+    // Authors and Series
+    if (pathname === '/api/v1/authors' && method === 'GET') {
+      const authors = [...new Set(mockState.books.map((b: Record<string, unknown>) => b.author_name).filter(Boolean))];
+      return route.fulfill(jsonResponse({ authors: authors.map((name, i) => ({ id: `author-${i}`, name })) }));
+    }
+
+    if (pathname === '/api/v1/series' && method === 'GET') {
+      const series = [...new Set(mockState.books.map((b: Record<string, unknown>) => b.series_name).filter(Boolean))];
+      return route.fulfill(jsonResponse({ series: series.map((name, i) => ({ id: `series-${i}`, name })) }));
+    }
+
+    // Filesystem endpoints
+    if (pathname === '/api/v1/filesystem/home') {
+      return route.fulfill(jsonResponse({ home: mockState.homeDirectory }));
+    }
+
+    if (pathname === '/api/v1/filesystem/browse') {
+      const browsePath = url.searchParams.get('path') || '/';
+      const fsData = mockState.filesystem[browsePath] || { path: browsePath, items: [] };
+      return route.fulfill(jsonResponse(fsData));
+    }
+
+    // Blocked hashes
+    if (pathname === '/api/v1/blocked-hashes' && method === 'GET') {
+      return route.fulfill(jsonResponse({ hashes: mockState.blockedHashes }));
+    }
+
+    if (pathname === '/api/v1/blocked-hashes' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Added' }, 201));
+    }
+
+    if (pathname.startsWith('/api/v1/blocked-hashes/') && method === 'DELETE') {
+      return route.fulfill(jsonResponse({ message: 'Removed' }));
+    }
+
+    // Book update/delete
+    if (pathname.startsWith('/api/v1/audiobooks/') && method === 'PUT') {
+      const bookId = pathname.split('/')[3];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book) {
+        return route.fulfill(jsonResponse(book));
+      }
+      return route.fulfill(jsonResponse({ error: 'Not found' }, 404));
+    }
+
+    if (pathname.startsWith('/api/v1/audiobooks/') && method === 'DELETE') {
+      return route.fulfill(jsonResponse({ message: 'Deleted' }));
+    }
+
+    if (pathname.startsWith('/api/v1/audiobooks/') && method === 'POST') {
+      // Handle various POST sub-endpoints (fetch-metadata, parse-with-ai, versions, restore)
+      return route.fulfill(jsonResponse({ message: 'OK', book: mockState.books[0] || {} }));
+    }
+
+    // Batch operations
+    if (pathname === '/api/v1/audiobooks/batch' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Batch update complete', updated: 0 }));
+    }
+
+    // Metadata endpoints
+    if (pathname === '/api/v1/metadata/bulk-fetch' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Bulk fetch started', operation_id: 'op-bulk-1' }));
+    }
+
+    if (pathname.startsWith('/api/v1/metadata/')) {
+      return route.fulfill(jsonResponse({ message: 'OK' }));
+    }
+
+    // AI endpoints
+    if (pathname.startsWith('/api/v1/ai/')) {
+      return route.fulfill(jsonResponse({ message: 'OK' }));
+    }
+
+    // Version management
+    if (pathname.startsWith('/api/v1/version-groups/')) {
+      return route.fulfill(jsonResponse({ id: 'vg-1', books: [] }));
+    }
+
+    // Works endpoints
+    if (pathname.startsWith('/api/v1/works')) {
+      return route.fulfill(jsonResponse({ works: [], items: [] }));
+    }
+
+    // System logs
+    if (pathname === '/api/v1/system/logs') {
+      return route.fulfill(jsonResponse({ logs: [] }));
+    }
+
+    // Import file
+    if (pathname === '/api/v1/import/file' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'File imported' }, 201));
+    }
+
+    // Default: pass through to real server (don't 404 - let it fail naturally)
+    console.log(`[Mock API] WARNING: Unhandled endpoint ${method} ${pathname}`);
+    return route.continue();
   });
 }
 
