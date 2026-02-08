@@ -5,9 +5,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import {
-  mockEventSource,
   setupMockApi,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const BLOCKED_HASH = 'a'.repeat(64);

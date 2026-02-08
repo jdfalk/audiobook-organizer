@@ -1,13 +1,11 @@
 // file: web/tests/e2e/file-browser.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: bbd8bdb0-5dc1-448f-a520-def03ae76825
 // last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
-  mockEventSource,
   setupMockApi,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const filesystem = {
@@ -100,10 +98,7 @@ const openImportFileBrowser = async (page: Page) => {
 
 test.describe('File Browser', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 
   test('browses root filesystem', async ({ page }) => {

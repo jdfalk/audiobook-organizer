@@ -1,14 +1,12 @@
 // file: web/tests/e2e/error-handling.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2f4f5afa-c734-4a00-8a72-d288bcea714f
 // last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
   generateTestBooks,
-  mockEventSource,
   setupMockApi,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const openLibrary = async (
@@ -22,10 +20,7 @@ const openLibrary = async (
 
 test.describe('Error Handling', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Setup handled by openLibrary() which calls setupMockApi()
   });
 
   test('handles network timeout gracefully', async ({ page }) => {

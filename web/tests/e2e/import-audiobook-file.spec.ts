@@ -1,13 +1,11 @@
 // file: web/tests/e2e/import-audiobook-file.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-02-04
 
 import { test, expect, type Page } from '@playwright/test';
 import {
-  mockEventSource,
   setupMockApi,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 const filesystem = {
@@ -119,10 +117,7 @@ const openImportFileBrowser = async (page: Page) => {
 
 test.describe('Import Audiobook File - Interactive Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 
   test('navigates to home directory when home icon is clicked', async ({
@@ -368,10 +363,7 @@ test.describe('Import Audiobook File - Interactive Navigation', () => {
 
 test.describe('Import Audiobook File - Error Handling', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 
   test('handles invalid path entry gracefully', async ({ page }) => {
