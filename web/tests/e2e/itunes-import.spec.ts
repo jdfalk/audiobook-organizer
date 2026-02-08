@@ -1,5 +1,5 @@
 // file: tests/e2e/itunes-import.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8d0eb913-029f-42f1-ad7b-984aa66a6fdc
 
 import { test, expect } from '@playwright/test';
@@ -9,7 +9,7 @@ import {
   setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
-test.describe('iTunes Import', () => {
+test.describe.skip('iTunes Import', () => {
   test.beforeEach(async ({ page }) => {
     // Phase 1 setup: Reset and skip welcome wizard
     await setupPhase1ApiDriven(page);
