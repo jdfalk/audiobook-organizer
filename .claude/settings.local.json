@@ -117,7 +117,8 @@
       "Bash(do grep -c \"mockEventSource\" \"$f\")",
       "Bash(if [ -f /tmp/e2e_test_results_fixed.txt ])",
       "Bash(then wc -l /tmp/e2e_test_results_fixed.txt)",
-      "Bash(else echo \"File not ready yet\")"
+      "Bash(else echo \"File not ready yet\")",
+      "Bash(do grep -l \"setupMockApi\" \"$f\")"
     ]
   }
 }
