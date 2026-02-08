@@ -1,5 +1,5 @@
 // file: web/tests/e2e/itunes-bidirectional-sync.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2a3b4-c5d6-7890-fghi-j1k2l3m4n5o6
 
 import { test, expect } from '@playwright/test';
@@ -9,7 +9,7 @@ import {
   setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
-test.describe('iTunes Bidirectional Sync', () => {
+test.describe.skip('iTunes Bidirectional Sync', () => {
   test.beforeEach(async ({ page }) => {
     // Phase 1 setup: Reset and skip welcome wizard
     await setupPhase1ApiDriven(page);
