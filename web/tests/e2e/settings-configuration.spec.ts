@@ -62,10 +62,9 @@ const openSettings = async (
 
 test.describe('Settings Configuration', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Note: beforeEach doesn't do setup here
+    // Each test calls openSettings() which handles all mock setup
+    // This prevents conflicts between Phase 1 (real API) and Phase 2 (mocked API)
   });
 
   test('loads settings page with all sections', async ({ page }) => {
