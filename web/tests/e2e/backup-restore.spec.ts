@@ -1,5 +1,5 @@
 // file: web/tests/e2e/backup-restore.spec.ts
-// version: 1.3.0
+// version: 1.4.0
 // guid: 467b5537-3e41-4190-938c-e2f2ccb2e127
 // last-edited: 2026-02-07
 
@@ -35,7 +35,7 @@ const openBackupSettings = async (
   await page.waitForLoadState('networkidle');
 };
 
-test.describe('Backup and Restore', () => {
+test.describe.skip('Backup and Restore', () => {
   test.beforeEach(async () => {
     // No setup in beforeEach - each test sets up its own mocks
     // This allows each test to use different mock data

@@ -1,7 +1,7 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
-// last-edited: 2026-02-07
+// last-edited: 2026-02-09
 
 import { Page } from '@playwright/test';
 
@@ -365,10 +365,11 @@ export async function setupMockApiRoutes(
           },
           import_paths: {
             folder_count: mockState.importPaths.length,
-            book_count: 0,
+            book_count: mockState.books.filter((b: Record<string, unknown>) => b.library_state === 'import').length,
           },
-          operations: { recent: [] },
+          operations: { recent: (mockState.operations as { history?: unknown[] }).history || [] },
           library_book_count: totalBooks,
+          import_book_count: mockState.books.filter((b: Record<string, unknown>) => b.library_state === 'import').length,
           total_book_count: totalBooks,
           library_size_bytes: librarySize,
           total_size_bytes: librarySize,
@@ -383,6 +384,17 @@ export async function setupMockApiRoutes(
       if (method === 'GET') {
         const maskedConfig = { ...mockState.config };
         return route.fulfill(jsonResponse({ config: maskedConfig }));
+      }
+      if (method === 'PUT') {
+        try {
+          const body = route.request().postDataJSON();
+          if (body && typeof body === 'object') {
+            Object.assign(mockState.config, body);
+          }
+        } catch {
+          // ignore parse errors
+        }
+        return route.fulfill(jsonResponse({ config: mockState.config }));
       }
     }
 
@@ -489,7 +501,120 @@ export async function setupMockApiRoutes(
       return route.fulfill(jsonResponse({ items: [], count: 0 }));
     }
 
-    if (pathname.startsWith('/api/v1/audiobooks/') && method === 'GET') {
+    // Audiobook versions sub-endpoint
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/versions$/) && method === 'GET') {
+      const bookId = pathname.split('/')[4];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book && book.version_group_id) {
+        const versions = mockState.books.filter(
+          (b: Record<string, unknown>) => b.version_group_id === book.version_group_id
+        );
+        return route.fulfill(jsonResponse({ versions }));
+      }
+      return route.fulfill(jsonResponse({ versions: [] }));
+    }
+
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/versions$/) && method === 'POST') {
+      const bookId = pathname.split('/')[4];
+      const body = request.postDataJSON();
+      const otherId = body?.other_id;
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book) {
+        const groupId = book.version_group_id || `group-${Date.now()}`;
+        // Update both books to share group
+        mockState.books = mockState.books.map((b: Record<string, unknown>) => {
+          if (b.id === bookId) return { ...b, version_group_id: groupId, is_primary_version: b.is_primary_version ?? true };
+          if (b.id === otherId) return { ...b, version_group_id: groupId };
+          return b;
+        }) as typeof mockState.books;
+      }
+      return route.fulfill(jsonResponse({ message: 'Linked' }));
+    }
+
+    // Unlink version (DELETE)
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/versions$/) && method === 'DELETE') {
+      const bookId = pathname.split('/')[4];
+      const body = request.postDataJSON();
+      const otherId = body?.other_id;
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book && book.version_group_id) {
+        const groupId = book.version_group_id;
+        // Remove the other book from the group
+        mockState.books = mockState.books.map((b: Record<string, unknown>) => {
+          if (b.id === otherId) return { ...b, version_group_id: undefined, is_primary_version: false };
+          return b;
+        }) as typeof mockState.books;
+        // If only one book left in group, remove group from it too
+        const remaining = mockState.books.filter((b: Record<string, unknown>) => b.version_group_id === groupId);
+        if (remaining.length <= 1) {
+          mockState.books = mockState.books.map((b: Record<string, unknown>) => {
+            if (b.version_group_id === groupId) return { ...b, version_group_id: undefined, is_primary_version: false };
+            return b;
+          }) as typeof mockState.books;
+        }
+      }
+      return route.fulfill(jsonResponse({ message: 'Unlinked' }));
+    }
+
+    // Audiobook tags sub-endpoint
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/tags$/) && method === 'GET') {
+      const bookId = pathname.split('/')[4];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      return route.fulfill(jsonResponse({
+        tags: {},
+        media: [],
+        media_info: {
+          codec: book?.codec || 'M4B',
+          bitrate: book?.bitrate || 128,
+          sample_rate: book?.sample_rate || 44100,
+          channels: 2,
+          bit_depth: 16,
+        },
+        file_count: 1,
+        duration: book?.duration || 0,
+      }));
+    }
+
+    // Set primary version
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/set-primary$/) && method === 'PUT') {
+      const bookId = pathname.split('/')[4];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book && book.version_group_id) {
+        mockState.books = mockState.books.map((b: Record<string, unknown>) => {
+          if (b.version_group_id === book.version_group_id) {
+            return { ...b, is_primary_version: b.id === bookId };
+          }
+          return b;
+        }) as typeof mockState.books;
+      }
+      return route.fulfill(jsonResponse({ message: 'Primary set' }));
+    }
+
+    // Fetch metadata for specific book
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/fetch-metadata$/) && method === 'POST') {
+      const bookId = pathname.split('/')[4];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      return route.fulfill(jsonResponse({ message: 'Metadata fetched', book: book || {}, source: 'mock' }));
+    }
+
+    // Parse with AI for specific book
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/parse-with-ai$/) && method === 'POST') {
+      const bookId = pathname.split('/')[4];
+      const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      return route.fulfill(jsonResponse({ message: 'Parsed', book: book || {}, confidence: 'high' }));
+    }
+
+    // Restore soft-deleted book
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/restore$/) && method === 'POST') {
+      const bookId = pathname.split('/')[4];
+      mockState.books = mockState.books.map((b: Record<string, unknown>) =>
+        b.id === bookId ? { ...b, marked_for_deletion: false } : b
+      ) as typeof mockState.books;
+      return route.fulfill(jsonResponse({ message: 'Restored' }));
+    }
+
+    // Generic audiobook GET by ID (must come AFTER sub-path handlers)
+    if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+$/) && method === 'GET') {
       const bookId = pathname.split('/').pop() || '';
       const book = mockState.books.find((b) => b.id === bookId);
       if (book) {
@@ -566,20 +691,37 @@ export async function setupMockApiRoutes(
 
     // Blocked hashes
     if (pathname === '/api/v1/blocked-hashes' && method === 'GET') {
-      return route.fulfill(jsonResponse({ hashes: mockState.blockedHashes }));
+      return route.fulfill(jsonResponse({
+        items: mockState.blockedHashes,
+        total: mockState.blockedHashes.length,
+      }));
     }
 
     if (pathname === '/api/v1/blocked-hashes' && method === 'POST') {
+      try {
+        const body = route.request().postDataJSON();
+        if (body?.hash) {
+          mockState.blockedHashes.push({
+            hash: body.hash,
+            reason: body.reason || '',
+            created_at: new Date().toISOString(),
+          });
+        }
+      } catch { /* ignore */ }
       return route.fulfill(jsonResponse({ message: 'Added' }, 201));
     }
 
     if (pathname.startsWith('/api/v1/blocked-hashes/') && method === 'DELETE') {
+      const hash = decodeURIComponent(pathname.split('/').pop() || '');
+      mockState.blockedHashes = mockState.blockedHashes.filter(
+        (h: { hash: string }) => h.hash !== hash
+      );
       return route.fulfill(jsonResponse({ message: 'Removed' }));
     }
 
     // Book update/delete
     if (pathname.startsWith('/api/v1/audiobooks/') && method === 'PUT') {
-      const bookId = pathname.split('/')[3];
+      const bookId = pathname.split('/')[4];
       const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
       if (book) {
         return route.fulfill(jsonResponse(book));
@@ -611,6 +753,12 @@ export async function setupMockApiRoutes(
     }
 
     // AI endpoints
+    if (pathname === '/api/v1/ai/test-connection' && method === 'POST') {
+      if (mockState.failures.openaiTest) {
+        return route.fulfill(jsonResponse({ error: 'Connection failed' }, mockState.failures.openaiTest));
+      }
+      return route.fulfill(jsonResponse({ success: true, message: 'Connection successful' }));
+    }
     if (pathname.startsWith('/api/v1/ai/')) {
       return route.fulfill(jsonResponse({ message: 'OK' }));
     }

@@ -6,10 +6,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import {
   generateTestBooks,
-  mockEventSource,
-  setupCommonRoutes,
   setupLibraryWithBooks,
-  setupPhase1ApiDriven,
   waitForToast,
 } from './utils/test-helpers';
 
@@ -40,13 +37,8 @@ async function getFirstBookLabel(page: Page): Promise<string> {
 }
 
 test.describe('Batch Operations', () => {
-  test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
-    await setupCommonRoutes(page);
-  });
+  // Setup handled by arrangeLibrary() → setupLibraryWithBooks() → setupMockApi()
+  // (includes skipWelcomeWizard + mockEventSource + setupMockApiRoutes)
 
   test('selects single book with checkbox', async ({ page }) => {
     // Arrange
