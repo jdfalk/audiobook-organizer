@@ -1,7 +1,7 @@
 // file: web/tests/e2e/version-management.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 570ee522-c0f2-4d0c-ba5c-b5399cede9a9
-// last-edited: 2026-02-04
+// last-edited: 2026-02-09
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -50,7 +50,7 @@ test.describe('Version Management', () => {
 
     // Assert
     await expect(page.getByText('The Way of Kings (MP3)')).toBeVisible();
-    await page.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('button', { name: 'Close' }).first().click();
     await page.getByRole('tab', { name: /Versions/ }).click();
     await expect(
       page.getByText('Part of version group with 2 books.')
@@ -222,7 +222,7 @@ test.describe('Version Management', () => {
     await page.getByRole('button', { name: 'Manage Versions' }).click();
     await page.getByRole('button', { name: 'Link Another Version' }).click();
     await page.getByLabel('Search by title or author').fill('FLAC');
-    await page.getByText('The Way of Kings (FLAC)').click();
+    await page.locator('[role="button"]').filter({ hasText: 'The Way of Kings (FLAC)' }).click();
     await page.getByRole('button', { name: 'Link Version' }).click();
 
     // Assert

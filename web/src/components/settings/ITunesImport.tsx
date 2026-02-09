@@ -37,10 +37,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload.js';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
   getBook,

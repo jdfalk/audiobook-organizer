@@ -160,10 +160,9 @@ const setupScanWorkflow = async (page: Page, options: ScanMockOptions) => {
 };
 
 test.describe('Scan/Import/Organize Workflow', () => {
+  // Setup handled per-test by setupScanWorkflow() or setupLibraryWithBooks()
+  // setupLibraryWithBooks() calls setupMockApi() which includes skipWelcomeWizard + mockEventSource
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
     await mockEventSource(page);
     await setupCommonRoutes(page);
   });

@@ -82,8 +82,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
         <Stack spacing={3}>
           <FormControl fullWidth>
-            <InputLabel>Library State</InputLabel>
+            <InputLabel id="filter-library-state-label">Library State</InputLabel>
             <Select
+              labelId="filter-library-state-label"
               value={filters.libraryState || ''}
               onChange={(e) =>
                 handleFilterChange('libraryState', e.target.value)
@@ -100,8 +101,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
           </FormControl>
 
           <FormControl fullWidth>
-            <InputLabel>Author</InputLabel>
+            <InputLabel id="filter-author-label">Author</InputLabel>
             <Select
+              labelId="filter-author-label"
               value={filters.author || ''}
               onChange={(e) => handleFilterChange('author', e.target.value)}
               label="Author"
@@ -118,8 +120,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
           </FormControl>
 
           <FormControl fullWidth>
-            <InputLabel>Series</InputLabel>
+            <InputLabel id="filter-series-label">Series</InputLabel>
             <Select
+              labelId="filter-series-label"
               value={filters.series || ''}
               onChange={(e) => handleFilterChange('series', e.target.value)}
               label="Series"
@@ -136,8 +139,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
           </FormControl>
 
           <FormControl fullWidth>
-            <InputLabel>Genre</InputLabel>
+            <InputLabel id="filter-genre-label">Genre</InputLabel>
             <Select
+              labelId="filter-genre-label"
               value={filters.genre || ''}
               onChange={(e) => handleFilterChange('genre', e.target.value)}
               label="Genre"
@@ -154,8 +158,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
           </FormControl>
 
           <FormControl fullWidth>
-            <InputLabel>Language</InputLabel>
+            <InputLabel id="filter-language-label">Language</InputLabel>
             <Select
+              labelId="filter-language-label"
               value={filters.language || ''}
               onChange={(e) => handleFilterChange('language', e.target.value)}
               label="Language"

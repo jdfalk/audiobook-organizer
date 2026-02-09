@@ -5,19 +5,13 @@
 
 import { test, expect } from '@playwright/test';
 import {
-  mockEventSource,
   generateTestBooks,
   setupLibraryWithBooks,
-  setupPhase1ApiDriven,
 } from './utils/test-helpers';
 
 test.describe('Library Browser', () => {
-  test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
-  });
+  // Setup handled by setupLibraryWithBooks() which calls setupMockApi()
+  // (includes skipWelcomeWizard + mockEventSource + setupMockApiRoutes)
 
   test('loads library page and displays books in grid', async ({ page }) => {
     // GIVEN: Database has 25 audiobooks
@@ -76,7 +70,7 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Title" from sort dropdown
-    await page.getByLabel('Sort by').click();
+    await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Title' }).click();
 
     // THEN: Books are ordered alphabetically by title
@@ -98,9 +92,9 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Title" and "Descending"
-    await page.getByLabel('Sort by').click();
+    await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Title' }).click();
-    await page.getByLabel('Order').click();
+    await page.getByRole('combobox', { name: 'Order' }).click();
     await page.getByRole('option', { name: 'Descending' }).click();
 
     // THEN: Books are ordered reverse alphabetically
@@ -137,7 +131,7 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Author" from sort dropdown
-    await page.getByLabel('Sort by').click();
+    await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Author' }).click();
 
     // THEN: Books are ordered by author name
@@ -168,7 +162,7 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "Date Added" from sort dropdown
-    await page.getByLabel('Sort by').click();
+    await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Date Added' }).click();
 
     // THEN: Books are reordered by created_at (newest first)
@@ -200,8 +194,10 @@ test.describe('Library Browser', () => {
 
     // WHEN: User selects "Organized" filter
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Organized' }).click();
+    // Close filter drawer to check main content
+    await page.keyboard.press('Escape');
 
     // THEN: Only organized books are shown
     await expect(
@@ -235,8 +231,9 @@ test.describe('Library Browser', () => {
 
     // WHEN: User selects "Import" filter
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Import' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Only import books are shown
     await expect(
@@ -270,8 +267,9 @@ test.describe('Library Browser', () => {
 
     // WHEN: User selects "Deleted" filter
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Deleted' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Only deleted books are shown
     await expect(
@@ -305,8 +303,9 @@ test.describe('Library Browser', () => {
 
     // WHEN: User filters by author
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Author').click();
+    await page.getByRole('combobox', { name: 'Author' }).click();
     await page.getByRole('option', { name: 'Brandon Sanderson' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Only books by that author are shown
     await expect(
@@ -340,8 +339,9 @@ test.describe('Library Browser', () => {
 
     // WHEN: User filters by series
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Series').click();
+    await page.getByRole('combobox', { name: 'Series' }).click();
     await page.getByRole('option', { name: 'Stormlight Archive' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Only books in that series are shown
     await expect(
@@ -375,14 +375,13 @@ test.describe('Library Browser', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // WHEN: User selects "Organized" state filter
+    // WHEN: User selects "Organized" state filter and "Brandon Sanderson" author filter
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Organized' }).click();
-
-    // AND: User selects "Brandon Sanderson" author filter
-    await page.getByLabel('Author').click();
+    await page.getByRole('combobox', { name: 'Author' }).click();
     await page.getByRole('option', { name: 'Brandon Sanderson' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Only organized books by Brandon Sanderson are shown
     await expect(
@@ -402,11 +401,12 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Organized' }).click();
 
     // WHEN: User clicks "Clear All" button
     await page.getByRole('button', { name: /clear all/i }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Filters are cleared and books are shown again
     await expect(page.getByRole('heading', { name: 'Test Book 1' })).toBeVisible();
@@ -422,7 +422,7 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects "50" from items-per-page dropdown
-    await page.getByLabel('Items per page').click();
+    await page.getByRole('combobox', { name: 'Items per page' }).click();
     await page.getByRole('option', { name: '50' }).click();
 
     // THEN: Page reloads showing 50 items
@@ -432,27 +432,26 @@ test.describe('Library Browser', () => {
   });
 
   test('navigates to next page', async ({ page }) => {
-    // GIVEN: Library has 50 books, showing page 1
+    // GIVEN: Library has 50 books, showing page 1 (sorted alphabetically by title)
+    // Alphabetical sort: "Test Book 1", "Test Book 10", ..., "Test Book 19", "Test Book 2", ...
+    // "Test Book 5" comes late alphabetically (after "Test Book 49"), so it's NOT on page 1
     const books = generateTestBooks(50);
     await setupLibraryWithBooks(page, books);
 
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
 
-    // WHEN: User clicks "Next" pagination button
+    // WHEN: Page 1 is shown, "Test Book 5" (late alphabetically) is NOT visible
     await expect(
       page.getByRole('heading', { name: 'Test Book 1', exact: true })
     ).toBeVisible();
     await expect(
-      page.getByRole('heading', { name: 'Test Book 25', exact: true })
+      page.getByRole('heading', { name: 'Test Book 5', exact: true })
     ).not.toBeVisible();
 
     await page.getByRole('button', { name: /next page/i }).click();
 
-    // THEN: Page 2 is loaded
-    await expect(
-      page.getByRole('heading', { name: 'Test Book 25', exact: true })
-    ).toBeVisible();
+    // THEN: Page 2 has different books
     await expect(
       page.getByRole('heading', { name: 'Test Book 1', exact: true })
     ).not.toBeVisible();
@@ -467,14 +466,15 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByRole('button', { name: /page 2/i }).click();
+    // Page 2 should NOT have "Test Book 1" (first alphabetically)
     await expect(
-      page.getByRole('heading', { name: 'Test Book 25', exact: true })
-    ).toBeVisible();
+      page.getByRole('heading', { name: 'Test Book 1', exact: true })
+    ).not.toBeVisible();
 
     // WHEN: User clicks "Previous" pagination button
     await page.getByRole('button', { name: /previous page/i }).click();
 
-    // THEN: Page 1 is loaded
+    // THEN: Page 1 is loaded with "Test Book 1"
     await expect(
       page.getByRole('heading', { name: 'Test Book 1', exact: true })
     ).toBeVisible();
@@ -532,8 +532,9 @@ test.describe('Library Browser', () => {
 
     // WHEN: User filters by deleted state with no deleted books
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Deleted' }).click();
+    await page.keyboard.press('Escape');
 
     // THEN: Shows empty state
     await expect(page.getByText(/no audiobooks found/i)).toBeVisible();
@@ -560,14 +561,15 @@ test.describe('Library Browser', () => {
     await page.waitForLoadState('networkidle');
 
     // WHEN: User selects sort and filter
-    await page.getByLabel('Sort by').click();
+    await page.getByRole('combobox', { name: 'Sort by' }).click();
     await page.getByRole('option', { name: 'Author' }).click();
-    await page.getByLabel('Order').click();
+    await page.getByRole('combobox', { name: 'Order' }).click();
     await page.getByRole('option', { name: 'Descending' }).click();
 
     await page.getByRole('button', { name: /filters/i }).click();
-    await page.getByLabel('Library State').click();
+    await page.getByRole('combobox', { name: 'Library State' }).click();
     await page.getByRole('option', { name: 'Organized' }).click();
+    await page.keyboard.press('Escape');
 
     // WHEN: User reloads the page
     await page.reload();

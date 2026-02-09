@@ -4,15 +4,10 @@
 // last-edited: 2026-02-04
 
 import { test, expect } from '@playwright/test';
-import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
+import { setupMockApi } from './utils/test-helpers';
 
 test.describe('Import paths workflows', () => {
-  test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
-  });
+  // Setup handled per-test; setupMockApi provides base routes
 
   test('add and remove import path via Settings page (mocked API)', async ({
     page,
@@ -27,6 +22,10 @@ test.describe('Import paths workflows', () => {
     }> = [];
     let nextId = 1;
 
+    // Set up base mock routes (config, audiobooks, etc.)
+    await setupMockApi(page);
+
+    // Override import-paths with test-specific stateful mock
     await page.route('**/api/v1/import-paths', (route) => {
       if (route.request().method() === 'GET') {
         return route.fulfill({

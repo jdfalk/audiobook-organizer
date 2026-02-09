@@ -9,16 +9,14 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
-import { setupPhase1ApiDriven, mockEventSource } from './utils/test-helpers';
+import { setupMockApi } from './utils/test-helpers';
 
 test.describe('Dynamic UI - BookDetail Page', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    // Set up base mock routes
+    await setupMockApi(page);
 
-    // Mock API responses
+    // Override audiobook routes with test-specific mocks
     await page.route('**/api/v1/audiobooks/*', async (route) => {
       const url = route.request().url();
 
