@@ -118,7 +118,13 @@
       "Bash(if [ -f /tmp/e2e_test_results_fixed.txt ])",
       "Bash(then wc -l /tmp/e2e_test_results_fixed.txt)",
       "Bash(else echo \"File not ready yet\")",
-      "Bash(do grep -l \"setupMockApi\" \"$f\")"
+      "Bash(do grep -l \"setupMockApi\" \"$f\")",
+      "Bash(npm ls:*)",
+      "Bash(python3:*)",
+      "Bash(npx source-map-resolve:*)",
+      "Bash(for f in tests/e2e/library-browser.spec.ts tests/e2e/batch-operations.spec.ts tests/e2e/settings-configuration.spec.ts tests/e2e/search-and-filter.spec.ts)",
+      "Bash(do)",
+      "Bash(kill:*)"
     ]
   }
 }

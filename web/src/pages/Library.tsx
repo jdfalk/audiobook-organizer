@@ -559,6 +559,7 @@ export const Library = () => {
         marked_for_deletion_at: book.marked_for_deletion_at,
         original_file_hash: book.original_file_hash,
         organized_file_hash: book.organized_file_hash,
+        organize_error: book.organize_error,
       }));
 
       const uniqueAuthors = Array.from(
