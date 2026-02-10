@@ -1,5 +1,5 @@
 // file: web/tests/e2e/backup-restore.spec.ts
-// version: 1.4.0
+// version: 1.5.0
 // guid: 467b5537-3e41-4190-938c-e2f2ccb2e127
 // last-edited: 2026-02-07
 
@@ -35,7 +35,7 @@ const openBackupSettings = async (
   await page.waitForLoadState('networkidle');
 };
 
-test.describe.skip('Backup and Restore', () => {
+test.describe('Backup and Restore', () => {
   test.beforeEach(async () => {
     // No setup in beforeEach - each test sets up its own mocks
     // This allows each test to use different mock data
@@ -57,20 +57,7 @@ test.describe.skip('Backup and Restore', () => {
 
   test('lists existing backups', async ({ page }) => {
     // Arrange
-    // Capture console messages for debugging
-    const consoleLogs: string[] = [];
-    page.on('console', (msg) => {
-      consoleLogs.push(`${msg.type()}: ${msg.text()}`);
-    });
-
     await openBackupSettings(page, backups);
-
-    // Debug: Check what's on the page
-    const bodyText = await page.locator('body').textContent();
-    console.log('[TEST] Page content:', bodyText?.substring(0, 500));
-    console.log('[TEST] Page title:', await page.title());
-    console.log('[TEST] Current URL:', page.url());
-    console.log('[TEST] Console logs:', consoleLogs);
 
     // Act + Assert
     await expect(page.getByText('backup-2026-01-25.db.gz')).toBeVisible();
@@ -104,7 +91,7 @@ test.describe.skip('Backup and Restore', () => {
 
     // Assert
     await page.waitForLoadState('load');
-    await expect(page.getByText('Backups')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Backups' })).toBeVisible();
   });
 
   test('deletes backup file', async ({ page }) => {
@@ -138,6 +125,6 @@ test.describe.skip('Backup and Restore', () => {
     await openBackupSettings(page, backups);
 
     // Act + Assert
-    await expect(page.getByText('Auto')).toBeVisible();
+    await expect(page.getByText('Auto', { exact: true })).toBeVisible();
   });
 });

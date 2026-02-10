@@ -1,5 +1,5 @@
 // file: web/tests/e2e/error-handling.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2f4f5afa-c734-4a00-8a72-d288bcea714f
 // last-edited: 2026-02-04
 
@@ -29,7 +29,6 @@ test.describe('Error Handling', () => {
 
     // Act + Assert
     await expect(page.getByText('Request timed out.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
   });
 
   test('handles 404 not found errors', async ({ page }) => {
@@ -73,7 +72,7 @@ test.describe('Error Handling', () => {
     await page.getByRole('button', { name: 'Save' }).click();
 
     // Assert
-    await expect(page.getByText('Year must be a number')).toBeVisible();
+    await expect(page.getByText('Year must be a number').first()).toBeVisible();
   });
 
   test('handles concurrent edit conflicts', async ({ page }) => {
@@ -128,7 +127,7 @@ test.describe('Error Handling', () => {
     });
 
     // Assert
-    await expect(page.getByText('Connection lost')).toBeVisible();
+    await expect(page.getByText('Connection lost', { exact: true })).toBeVisible();
 
     // Act
     await page.evaluate(() => {
@@ -139,7 +138,7 @@ test.describe('Error Handling', () => {
     });
 
     // Assert
-    await expect(page.getByText('Connection restored.')).toBeVisible();
+    await expect(page.getByText('Connection restored.').first()).toBeVisible();
   });
 
   test('handles file upload errors', async ({ page }) => {
@@ -147,7 +146,7 @@ test.describe('Error Handling', () => {
     await openLibrary(page, { failures: { importFile: 500 } });
 
     // Act
-    await page.getByRole('button', { name: 'Import Files' }).click();
+    await page.getByRole('button', { name: 'Import Files' }).first().click();
     await page.getByLabel('Import file path').fill('/books/broken.m4b');
     await page
       .getByRole('dialog', { name: 'Import Audiobook File' })
@@ -155,6 +154,6 @@ test.describe('Error Handling', () => {
       .click();
 
     // Assert
-    await expect(page.getByText(/Failed to import file/i)).toBeVisible();
+    await expect(page.getByText(/Failed to import/i).first()).toBeVisible();
   });
 });

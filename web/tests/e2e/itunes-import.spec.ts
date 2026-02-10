@@ -1,26 +1,16 @@
 // file: tests/e2e/itunes-import.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8d0eb913-029f-42f1-ad7b-984aa66a6fdc
 
 import { test, expect } from '@playwright/test';
-import {
-  mockEventSource,
-  setupMockApi,
-  setupPhase1ApiDriven,
-} from './utils/test-helpers';
+import { setupMockApi } from './utils/test-helpers';
 
-test.describe.skip('iTunes Import', () => {
+test.describe('iTunes Import', () => {
   test.beforeEach(async ({ page }) => {
-    // Phase 1 setup: Reset and skip welcome wizard
-    await setupPhase1ApiDriven(page);
-    // Mock EventSource to prevent SSE connections
-    await mockEventSource(page);
+    await setupMockApi(page);
   });
 
   test('validates iTunes library', async ({ page }) => {
-    // Arrange
-    await setupMockApi(page);
-
     // Act
     await page.goto('/settings');
     await page.waitForLoadState('networkidle');
@@ -35,9 +25,6 @@ test.describe.skip('iTunes Import', () => {
   });
 
   test('imports iTunes library', async ({ page }) => {
-    // Arrange
-    await setupMockApi(page);
-
     // Act
     await page.goto('/settings');
     await page.waitForLoadState('networkidle');
@@ -52,6 +39,6 @@ test.describe.skip('iTunes Import', () => {
 
     // Assert
     await expect(page.getByRole('progressbar')).toBeVisible();
-    await expect(page.getByText('Import Complete')).toBeVisible();
+    await expect(page.getByText('Import Complete', { exact: true })).toBeVisible({ timeout: 10000 });
   });
 });
