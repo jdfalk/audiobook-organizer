@@ -33,7 +33,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     .
 
 # Stage 2: Build frontend
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:25-alpine AS frontend-builder
 
 WORKDIR /build/web
 
@@ -48,7 +48,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 3: Final production image
-FROM alpine:3.20
+FROM alpine:3.23
 
 # Install runtime dependencies (disable maintainer scripts to avoid QEMU trigger issues)
 RUN apk add --no-cache --no-scripts \
