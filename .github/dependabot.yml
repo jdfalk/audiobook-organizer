@@ -1,81 +1,60 @@
-# file: .github/dependabot.yml
+# Dependabot Configuration
 # version: 1.0.0
-# guid: b9694b1e-0b81-4642-84a6-4fecb2d9099d
-
-# Smart Dependabot configuration for audiobook-organizer
-# Supports: github-actions, go, python-scripts
+# guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: wednesday
-      time: '10:00'
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: ci
-      include: scope
-    labels:
-      - dependencies
-      - github-actions
-      - ci-cd
-    groups:
-      ci-dependencies:
-        patterns:
-          - actions/*
-          - github/*
-        update-types:
-          - minor
-          - patch
-      external-actions:
-        patterns:
-          - '*'
-        exclude-patterns:
-          - actions/*
-          - github/*
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: gomod
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: 09:00
-      timezone: America/New_York
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: go
-      include: scope
-    labels:
-      - dependencies
-      - tech:go
-    allow:
-      - dependency-type: direct
-    ignore:
-      - dependency-name: '*'
-        update-types:
-          - version-update:semver-major
-  - package-ecosystem: pip
-    directory: /scripts
+
+multi-ecosystem-groups:
+  dependencies:
     schedule:
       interval: weekly
       day: tuesday
-      time: '12:00'
+      time: "10:00"
       timezone: America/New_York
-    open-pull-requests-limit: 3
-    commit-message:
-      prefix: python
-      include: scope
     labels:
       - dependencies
-      - tech:python
-    allow:
-      - dependency-type: direct
+      - dependabot
+    commit-message:
+      prefix: deps
+      include: scope
+
+updates:
+  # Docker
+  - package-ecosystem: docker
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    labels:
+      - containers
+    schedule:
+      interval: monthly
+
+  # Github Actions
+  - package-ecosystem: github-actions
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    labels:
+      - github-actions
+      - ci-cd
+
+  # Gomod
+  - package-ecosystem: gomod
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    labels:
+      - tech:go
+
+  # Npm
+  - package-ecosystem: npm
+    directory: /
+    patterns: ["*"]
+    multi-ecosystem-group: dependencies
+    labels:
+      - tech:nodejs
     ignore:
-      - dependency-name: '*'
+      - dependency-name: "*"
         update-types:
           - version-update:semver-major
+
