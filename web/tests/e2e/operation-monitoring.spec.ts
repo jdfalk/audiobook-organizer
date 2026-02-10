@@ -1,5 +1,5 @@
 // file: web/tests/e2e/operation-monitoring.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9845a5f8-e3e4-472f-ae99-2723b6163aae
 // last-edited: 2026-02-04
 
@@ -136,8 +136,8 @@ test.describe('Operation Monitoring', () => {
     await openOperations(page);
 
     // Act + Assert
-    await expect(page.getByText('scan • running')).toBeVisible();
-    await expect(page.getByText('organize • running')).toBeVisible();
+    await expect(page.getByText('scan • running').first()).toBeVisible();
+    await expect(page.getByText('organize • running').first()).toBeVisible();
     await expect(page.getByText('20/100')).toBeVisible();
   });
 
@@ -145,23 +145,28 @@ test.describe('Operation Monitoring', () => {
     // Arrange
     await openOperations(page);
 
-    // Act
-    await page.evaluate(() => {
-      const apiMock = (window as unknown as { __apiMock?: {
-        setActiveOperations?: (ops: Array<Record<string, unknown>>) => void;
-      } }).__apiMock;
-      apiMock?.setActiveOperations?.([
-        {
-          id: 'scan-1',
-          type: 'scan',
-          status: 'running',
-          progress: 25,
-          total: 100,
-          message: 'Scanning',
-          folder_path: '/imports',
-        },
-      ]);
+    // Override the active operations route to return updated progress
+    await page.route('**/api/v1/operations/active', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          operations: [
+            {
+              id: 'scan-1',
+              type: 'scan',
+              status: 'running',
+              progress: 25,
+              total: 100,
+              message: 'Scanning',
+              folder_path: '/imports',
+            },
+          ],
+        }),
+      });
     });
+
+    // Act
     await page.getByRole('button', { name: 'Refresh' }).click();
 
     // Assert
@@ -301,6 +306,6 @@ test.describe('Operation Monitoring', () => {
     await page.getByRole('button', { name: '2' }).click();
 
     // Assert
-    await expect(page.getByText('organize • completed')).toBeVisible();
+    await expect(page.getByText('organize • completed').first()).toBeVisible();
   });
 });

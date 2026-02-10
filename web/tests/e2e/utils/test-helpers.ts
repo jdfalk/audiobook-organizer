@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.2.0
+// version: 2.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 // last-edited: 2026-02-09
 
@@ -333,6 +333,20 @@ export async function setupMockApiRoutes(
       body: JSON.stringify(body),
     });
 
+    // Failure injection helpers
+    const maybeTimeout = (failure: number | string | undefined) => {
+      if (failure === 'timeout') {
+        return route.fulfill(jsonResponse({ error: 'Request timeout' }, 504));
+      }
+      return null;
+    };
+    const maybeFailStatus = (failure: number | string | undefined, message: string) => {
+      if (typeof failure === 'number') {
+        return route.fulfill(jsonResponse({ error: message }, failure));
+      }
+      return null;
+    };
+
     // Health check
     if (pathname === '/api/v1/health') {
       return route.fulfill(jsonResponse({ status: 'ok' }));
@@ -382,10 +396,14 @@ export async function setupMockApiRoutes(
     // Config endpoint
     if (pathname === '/api/v1/config') {
       if (method === 'GET') {
+        const t = maybeTimeout(mockState.failures.getConfig); if (t) return t;
+        const f = maybeFailStatus(mockState.failures.getConfig, 'Failed to fetch config'); if (f) return f;
         const maskedConfig = { ...mockState.config };
         return route.fulfill(jsonResponse({ config: maskedConfig }));
       }
       if (method === 'PUT') {
+        const t = maybeTimeout(mockState.failures.updateConfig); if (t) return t;
+        const f = maybeFailStatus(mockState.failures.updateConfig, 'Failed to update config'); if (f) return f;
         try {
           const body = route.request().postDataJSON();
           if (body && typeof body === 'object') {
@@ -400,6 +418,7 @@ export async function setupMockApiRoutes(
 
     // Backup endpoints - CRITICAL for backup-restore tests
     if (pathname === '/api/v1/backup/list') {
+      const f = maybeFailStatus(mockState.failures.listBackups, 'Failed to list backups'); if (f) return f;
       return route.fulfill(
         jsonResponse({
           backups: mockState.backups,
@@ -409,6 +428,7 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/backup/create' && method === 'POST') {
+      const f = maybeFailStatus(mockState.failures.createBackup, 'Failed to create backup'); if (f) return f;
       const filename = `backup-${Date.now()}.db.gz`;
       const created = {
         filename,
@@ -421,10 +441,14 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/backup/restore' && method === 'POST') {
+      if (mockState.failures.restoreBackup) {
+        return route.fulfill(jsonResponse({ error: 'Backup file is corrupt.' }, mockState.failures.restoreBackup as number));
+      }
       return route.fulfill(jsonResponse({ message: 'Restored' }));
     }
 
     if (pathname.startsWith('/api/v1/backup/') && method === 'DELETE') {
+      const f = maybeFailStatus(mockState.failures.deleteBackup, 'Failed to delete backup'); if (f) return f;
       const filename = pathname.split('/').pop() || '';
       mockState.backups = mockState.backups.filter(
         (item) => item.filename !== filename
@@ -454,6 +478,8 @@ export async function setupMockApiRoutes(
 
     // Books endpoints
     if (pathname === '/api/v1/audiobooks' && method === 'GET') {
+      const t = maybeTimeout(mockState.failures.getBooks); if (t) return t;
+      const f = maybeFailStatus(mockState.failures.getBooks, 'Server error occurred.'); if (f) return f;
       const offset = parseInt(url.searchParams.get('offset') || '0', 10);
       const limit = parseInt(url.searchParams.get('limit') || '12', 10);
       const paginatedBooks = mockState.books.slice(offset, offset + limit);
@@ -483,6 +509,8 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/audiobooks/search' && method === 'GET') {
+      const t = maybeTimeout(mockState.failures.searchBooks); if (t) return t;
+      const f = maybeFailStatus(mockState.failures.searchBooks, 'Failed to search books'); if (f) return f;
       const query = (url.searchParams.get('q') || url.searchParams.get('search') || '').toLowerCase();
       const limit = parseInt(url.searchParams.get('limit') || '50', 10);
       const filtered = mockState.books.filter((b: Record<string, unknown>) => {
@@ -594,6 +622,19 @@ export async function setupMockApiRoutes(
     if (pathname.match(/\/api\/v1\/audiobooks\/[^/]+\/fetch-metadata$/) && method === 'POST') {
       const bookId = pathname.split('/')[4];
       const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
+      if (book?.fetch_metadata_error) {
+        const delayMs = (book as Record<string, unknown>).fetch_metadata_delay_ms as number || 0;
+        if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+        return route.fulfill(jsonResponse({ error: 'Metadata fetch failed' }, 500));
+      }
+      const delayMs = (book as Record<string, unknown>)?.fetch_metadata_delay_ms as number || 0;
+      if (delayMs > 0) await new Promise(resolve => setTimeout(resolve, delayMs));
+      if (book) {
+        Object.assign(book, {
+          publisher: book.publisher || 'Test Publisher',
+          description: book.description || 'Updated metadata',
+        });
+      }
       return route.fulfill(jsonResponse({ message: 'Metadata fetched', book: book || {}, source: 'mock' }));
     }
 
@@ -625,12 +666,29 @@ export async function setupMockApiRoutes(
 
     // Operations endpoints
     if (pathname === '/api/v1/operations/active' && method === 'GET') {
-      return route.fulfill(jsonResponse({ operations: [] }));
+      const f = maybeFailStatus(mockState.failures.operationsActive, 'Failed to fetch operations'); if (f) return f;
+      const active = (mockState.operations as { active?: unknown[] }).active || [];
+      return route.fulfill(jsonResponse({ operations: active }));
+    }
+
+    if (pathname === '/api/v1/operations/history' && method === 'GET') {
+      const history = (mockState.operations as { history?: unknown[] }).history || [];
+      const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+      const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+      return route.fulfill(jsonResponse({
+        operations: history.slice(offset, offset + limit),
+        total: history.length,
+      }));
     }
 
     if (pathname.match(/\/api\/v1\/operations\/[^/]+\/status/) && method === 'GET') {
+      const opId = pathname.split('/')[4];
+      const active = (mockState.operations as { active?: Array<Record<string, unknown>> }).active || [];
+      const history = (mockState.operations as { history?: Array<Record<string, unknown>> }).history || [];
+      const op = [...active, ...history].find((o) => o.id === opId);
+      if (op) return route.fulfill(jsonResponse(op));
       return route.fulfill(jsonResponse({
-        id: pathname.split('/')[4],
+        id: opId,
         status: 'completed',
         progress: 100,
         type: 'scan',
@@ -638,7 +696,10 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname.match(/\/api\/v1\/operations\/[^/]+\/logs/) && method === 'GET') {
-      return route.fulfill(jsonResponse({ logs: [] }));
+      const f = maybeFailStatus(mockState.failures.operationLogs, 'Failed to fetch operation logs'); if (f) return f;
+      const opId = pathname.split('/')[4];
+      const logs = (mockState.operations as { logs?: Record<string, unknown[]> }).logs || {};
+      return route.fulfill(jsonResponse({ logs: logs[opId] || [], items: logs[opId] || [] }));
     }
 
     if (pathname === '/api/v1/operations/scan' && method === 'POST') {
@@ -646,7 +707,36 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/operations/organize' && method === 'POST') {
-      return route.fulfill(jsonResponse({ id: 'op-org-1', status: 'running', type: 'organize', progress: 0 }, 201));
+      let body: Record<string, unknown> = {};
+      try { body = request.postDataJSON() || {}; } catch { /* ignore */ }
+      const bookIds = Array.isArray(body.book_ids) ? body.book_ids as string[] : [];
+      let errorBook: Record<string, unknown> | null = null;
+      const rootDir = (mockState.config.root_dir || '/library').replace(/\/+$/, '');
+      mockState.books = mockState.books.map((b) => {
+        if (bookIds.length === 0 || bookIds.includes(b.id)) {
+          if (b.organize_error) {
+            errorBook = b as Record<string, unknown>;
+            return b;
+          }
+          const fileName = b.file_path ? b.file_path.split('/').pop() : `${b.id}.m4b`;
+          return {
+            ...b,
+            library_state: 'organized',
+            organized_file_hash: `hash-org-${b.id}`,
+            file_path: `${rootDir}/${fileName}`,
+          };
+        }
+        return b;
+      }) as typeof mockState.books;
+      if (errorBook) {
+        return route.fulfill(jsonResponse({
+          id: 'op-org-1', status: 'error', type: 'organize',
+          error_message: (errorBook as Record<string, unknown>).organize_error,
+          progress: bookIds.indexOf((errorBook as Record<string, unknown>).id as string),
+          total: bookIds.length,
+        }, 200));
+      }
+      return route.fulfill(jsonResponse({ id: 'op-org-1', status: 'completed', type: 'organize', progress: bookIds.length || mockState.books.length, total: bookIds.length || mockState.books.length }, 201));
     }
 
     if (pathname.match(/\/api\/v1\/operations\/[^/]+$/) && method === 'DELETE') {
@@ -684,6 +774,7 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/filesystem/browse') {
+      const f = maybeFailStatus(mockState.failures.filesystem, 'Directory does not exist.'); if (f) return f;
       const browsePath = url.searchParams.get('path') || '/';
       const fsData = mockState.filesystem[browsePath] || { path: browsePath, items: [] };
       return route.fulfill(jsonResponse(fsData));
@@ -691,6 +782,7 @@ export async function setupMockApiRoutes(
 
     // Blocked hashes
     if (pathname === '/api/v1/blocked-hashes' && method === 'GET') {
+      const f = maybeFailStatus(mockState.failures.blockedHashes, 'Failed to load blocked hashes'); if (f) return f;
       return route.fulfill(jsonResponse({
         items: mockState.blockedHashes,
         total: mockState.blockedHashes.length,
@@ -724,6 +816,12 @@ export async function setupMockApiRoutes(
       const bookId = pathname.split('/')[4];
       const book = mockState.books.find((b: Record<string, unknown>) => b.id === bookId);
       if (book) {
+        let body: Record<string, unknown> = {};
+        try { body = request.postDataJSON() || {}; } catch { /* ignore */ }
+        if (book.force_update_required && !body.force_update) {
+          return route.fulfill(jsonResponse({ error: 'Conflict' }, 409));
+        }
+        Object.assign(book, body);
         return route.fulfill(jsonResponse(book));
       }
       return route.fulfill(jsonResponse({ error: 'Not found' }, 404));
@@ -763,6 +861,63 @@ export async function setupMockApiRoutes(
       return route.fulfill(jsonResponse({ message: 'OK' }));
     }
 
+    // iTunes endpoints
+    if (pathname === '/api/v1/itunes/validate' && method === 'POST') {
+      const body = request.postDataJSON?.() || {};
+      const path = body?.library_path || '';
+      if (!path || path.includes('nonexistent') || path.includes('invalid')) {
+        return route.fulfill(jsonResponse({ error: 'iTunes library file not found' }, 400));
+      }
+      const itunesValidation = (mockState.itunes as MockITunesState).validation || {
+        total_tracks: 120,
+        audiobook_tracks: 12,
+        files_found: 12,
+        files_missing: 0,
+        missing_paths: [],
+        duplicate_count: 1,
+        estimated_import_time: '12 seconds',
+      };
+      return route.fulfill(jsonResponse(itunesValidation));
+    }
+
+    if (pathname === '/api/v1/itunes/import' && method === 'POST') {
+      const opId = `op-itunes-${Date.now()}`;
+      return route.fulfill(jsonResponse({
+        operation_id: opId,
+        status: 'queued',
+        message: 'iTunes import queued',
+      }));
+    }
+
+    if (pathname.startsWith('/api/v1/itunes/import-status/') && method === 'GET') {
+      const itunesImportStatus = (mockState.itunes as MockITunesState).importStatus || {
+        operation_id: 'op-itunes-default',
+        status: 'completed',
+        progress: 100,
+        message: 'Import completed',
+        total_books: 12,
+        processed: 12,
+        imported: 11,
+        skipped: 1,
+        failed: 0,
+        errors: [],
+      };
+      const opId = pathname.split('/').pop() || itunesImportStatus.operation_id;
+      return route.fulfill(jsonResponse({ ...itunesImportStatus, operation_id: opId }));
+    }
+
+    if (pathname === '/api/v1/itunes/write-back' && method === 'POST') {
+      return route.fulfill(jsonResponse({
+        success: true,
+        updated_count: 0,
+        message: 'Write-back completed',
+      }));
+    }
+
+    if (pathname === '/api/v1/itunes/resolve-conflicts' && method === 'POST') {
+      return route.fulfill(jsonResponse({ success: true, message: 'Conflicts resolved' }));
+    }
+
     // Version management
     if (pathname.startsWith('/api/v1/version-groups/')) {
       return route.fulfill(jsonResponse({ id: 'vg-1', books: [] }));
@@ -780,6 +935,8 @@ export async function setupMockApiRoutes(
 
     // Import file
     if (pathname === '/api/v1/import/file' && method === 'POST') {
+      const t = maybeTimeout(mockState.failures.importFile); if (t) return t;
+      const f = maybeFailStatus(mockState.failures.importFile, 'Failed to import file'); if (f) return f;
       return route.fulfill(jsonResponse({ message: 'File imported' }, 201));
     }
 
@@ -1576,6 +1733,11 @@ export async function setupMockApiLegacy(
         }
 
         if (pathname === '/api/v1/itunes/validate' && method === 'POST') {
+          const body = parseJsonBody(init);
+          const path = body?.library_path || '';
+          if (!path || path.includes('nonexistent') || path.includes('invalid')) {
+            return Promise.resolve(jsonResponse({ error: 'iTunes library file not found' }, 400));
+          }
           return Promise.resolve(jsonResponse(itunesValidation));
         }
         if (pathname === '/api/v1/itunes/import' && method === 'POST') {
@@ -1609,6 +1771,9 @@ export async function setupMockApiLegacy(
               message: 'Write-back completed',
             })
           );
+        }
+        if (pathname === '/api/v1/itunes/resolve-conflicts' && method === 'POST') {
+          return Promise.resolve(jsonResponse({ success: true, message: 'Conflicts resolved' }));
         }
 
         if (pathname === '/api/v1/operations/active' && method === 'GET') {

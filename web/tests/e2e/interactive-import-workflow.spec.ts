@@ -1,5 +1,5 @@
 // file: web/tests/e2e/interactive-import-workflow.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: c5d6e7f8-a9b0-1c2d-3e4f-5a6b7c8d9e0f
 // last-edited: 2026-02-04
 
@@ -35,7 +35,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // Setup Phase 2: Mocked APIs with empty library state
     // No real backend calls are made - all responses are simulated
     // This also mocks EventSource to prevent SSE connection errors
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
+    await setupPhase2Interactive(page, undefined, {
       books: [],
       config: {
         auto_organize: false, // Disabled for this test
@@ -87,7 +87,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     const books = generateTestBooks(30);
 
     // Setup Phase 2 with pre-populated mock books (includes EventSource mocking)
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
+    await setupPhase2Interactive(page, undefined, {
       books,
       config: {
         auto_organize: false,
@@ -139,7 +139,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
       },
     ];
 
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
+    await setupPhase2Interactive(page, undefined, { books });
 
     // WHEN: User navigates to the library
     await page.goto('/library');
@@ -169,7 +169,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: System has populated mock configuration
     const books = generateTestBooks(5);
 
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', {
+    await setupPhase2Interactive(page, undefined, {
       books,
       systemStatus: {
         status: 'ok',
@@ -201,7 +201,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: Library has a single book
     const books = [generateTestBook()];
 
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
+    await setupPhase2Interactive(page, undefined, { books });
 
     // WHEN: User navigates to the library
     await page.goto('/library');
@@ -236,7 +236,7 @@ test.describe('Phase 2: Interactive Import Workflow', () => {
     // GIVEN: Library has 50 books
     const books = generateTestBooks(50);
 
-    await setupPhase2Interactive(page, 'http://127.0.0.1:5173', { books });
+    await setupPhase2Interactive(page, undefined, { books });
 
     // WHEN: User navigates to the library
     await page.goto('/library');
