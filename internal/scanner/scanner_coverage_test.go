@@ -683,3 +683,102 @@ func TestScanDirectoryParallelMultipleWorkers(t *testing.T) {
 		})
 	}
 }
+
+// TestIsExcludedPath tests path exclusion logic
+func TestIsExcludedPath(t *testing.T) {
+	oldPatterns := config.AppConfig.ExcludePatterns
+	t.Cleanup(func() { config.AppConfig.ExcludePatterns = oldPatterns })
+
+	tests := []struct {
+		name     string
+		patterns []string
+		path     string
+		want     bool
+	}{
+		{"no patterns", nil, "/some/file.m4b", false},
+		{"empty pattern skipped", []string{""}, "/some/file.m4b", false},
+		{"matching basename glob", []string{"*.tmp"}, "/some/path/file.tmp", true},
+		{"non-matching basename", []string{"*.tmp"}, "/some/path/file.m4b", false},
+		{"matching full path", []string{"/excluded/*"}, "/excluded/file.m4b", true},
+		{"hidden files", []string{".*"}, "/path/.hidden", true},
+		{"cache dir", []string{"__MACOSX"}, "/path/__MACOSX", true},
+		{"multiple patterns first match", []string{"*.bak", "*.tmp"}, "/path/file.bak", true},
+		{"multiple patterns second match", []string{"*.bak", "*.tmp"}, "/path/file.tmp", true},
+		{"multiple patterns no match", []string{"*.bak", "*.tmp"}, "/path/file.m4b", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config.AppConfig.ExcludePatterns = tt.patterns
+			got := isExcludedPath(tt.path)
+			if got != tt.want {
+				t.Errorf("isExcludedPath(%q) with patterns %v = %v, want %v", tt.path, tt.patterns, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestScanDirectoryGlobalScanner tests that ScanDirectory uses GlobalScanner when set
+func TestScanDirectoryGlobalScanner(t *testing.T) {
+	oldScanner := GlobalScanner
+	t.Cleanup(func() { GlobalScanner = oldScanner })
+
+	// Set a mock scanner
+	GlobalScanner = &fullMockScanner{
+		books: []Book{{FilePath: "/mock/book.m4b", Title: "Mock Book"}},
+	}
+
+	books, err := ScanDirectory("/any/dir")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(books) != 1 || books[0].Title != "Mock Book" {
+		t.Errorf("expected mock book, got %v", books)
+	}
+}
+
+type fullMockScanner struct {
+	books []Book
+}
+
+func (m *fullMockScanner) ScanDirectory(rootDir string) ([]Book, error) {
+	return m.books, nil
+}
+
+func (m *fullMockScanner) ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
+	return m.books, nil
+}
+
+func (m *fullMockScanner) ProcessBooks(books []Book) error {
+	return nil
+}
+
+func (m *fullMockScanner) ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(int, int, string)) error {
+	return nil
+}
+
+func (m *fullMockScanner) ComputeFileHash(filePath string) (string, error) {
+	return "mockhash", nil
+}
+
+// TestProcessBooksDefault tests ProcessBooks without GlobalScanner
+func TestProcessBooksDefault(t *testing.T) {
+	oldScanner := GlobalScanner
+	t.Cleanup(func() { GlobalScanner = oldScanner })
+	GlobalScanner = nil
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	books := withTempBooks(t, []string{"test.m4b"})
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	err := ProcessBooks(books)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
