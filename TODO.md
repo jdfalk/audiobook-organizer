@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-02-13 -->
 
 # Project TODO
 
@@ -10,11 +10,11 @@
 
 ---
 
-## 🎯 MVP Status — January 31, 2026
+## 🎯 MVP Status — February 13, 2026
 
-**~85% complete** · Backend ~95% · Frontend ~80% · All tests passing
+**~90% complete** · Backend ~95% (73.8% coverage) · Frontend ~80% · All E2E tests passing (134/134)
 
-**Primary blocker**: iTunes integration (Phases 2–4, currently 40% done)
+**Remaining for MVP**: test coverage (73.8% → 80%), manual QA, release pipeline
 
 ---
 
@@ -22,11 +22,11 @@
 
 | Item | Plan |
 | --- | --- |
-| iTunes Library Import — Phases 2–4 (API, UI, tests) | [iTunes Integration](docs/plans/itunes-integration.md) |
+| ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | Release pipeline fixes (token permissions, GoReleaser, changelog) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| Raise Go test coverage from ~25% to 60% | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
-| Expand Playwright E2E to critical workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
+| Raise Go test coverage from 73.8% to 80% | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
+| ~~Expand Playwright E2E to critical workflows~~ ✅ 134/134 passing | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 
 ---
 
@@ -64,10 +64,12 @@
 
 ## 🐛 Active Bugs
 
-| Bug | Plan |
-| --- | --- |
-| Import path `total_size` returning negative values | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| Corrupted organize paths with unresolved placeholders (`{series}`, `Unknown Author`) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
+No active bugs. Previously fixed:
+
+| Bug | Status | Plan |
+| --- | --- | --- |
+| ~~Import path `total_size` returning negative values~~ | ✅ Fixed 2026-02-01 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
+| ~~Corrupted organize paths with unresolved placeholders~~ | ✅ Fixed 2026-02-01 | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
 
 ---
 
