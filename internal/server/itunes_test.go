@@ -237,6 +237,242 @@ func TestBuildBookFromTrack_MinimalTrack(t *testing.T) {
 	}
 }
 
+// TestExtractSeriesName tests series name extraction from album strings
+func TestExtractSeriesName(t *testing.T) {
+	tests := []struct {
+		album string
+		want  string
+	}{
+		{"", ""},
+		{"Simple Album", "Simple Album"},
+		{"Series, Book 1", "Series"},
+		{"Series - Part 2", "Series"},
+		{"Series: Volume 3", "Series"},
+		{"  Padded , Book  ", "Padded"},
+		{"No Separator Here", "No Separator Here"},
+		{"A,B,C", "A,B,C"}, // more than 2 parts, not split on comma
+	}
+	for _, tt := range tests {
+		t.Run(tt.album, func(t *testing.T) {
+			got := extractSeriesName(tt.album)
+			if got != tt.want {
+				t.Errorf("extractSeriesName(%q) = %q, want %q", tt.album, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestImportLibraryState tests import mode to library state mapping
+func TestImportLibraryState(t *testing.T) {
+	tests := []struct {
+		mode itunes.ImportMode
+		want string
+	}{
+		{itunes.ImportModeOrganized, "organized"},
+		{itunes.ImportModeImport, "imported"},
+		{itunes.ImportModeOrganize, "imported"},
+	}
+	for _, tt := range tests {
+		got := importLibraryState(tt.mode)
+		if got != tt.want {
+			t.Errorf("importLibraryState(%q) = %q, want %q", tt.mode, got, tt.want)
+		}
+	}
+}
+
+// TestResolveITunesImportMode tests import mode string resolution
+func TestResolveITunesImportMode(t *testing.T) {
+	tests := []struct {
+		input string
+		want  itunes.ImportMode
+	}{
+		{"organized", itunes.ImportModeOrganized},
+		{"organize", itunes.ImportModeOrganize},
+		{"import", itunes.ImportModeImport},
+		{"unknown", itunes.ImportModeImport},
+		{"", itunes.ImportModeImport},
+	}
+	for _, tt := range tests {
+		got := resolveITunesImportMode(tt.input)
+		if got != tt.want {
+			t.Errorf("resolveITunesImportMode(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+// TestCalculatePercent tests percentage calculation
+func TestCalculatePercent(t *testing.T) {
+	tests := []struct {
+		current, total, want int
+	}{
+		{0, 0, 0},
+		{0, 100, 0},
+		{50, 100, 50},
+		{100, 100, 100},
+		{200, 100, 100}, // capped at 100
+		{-1, 100, 0},    // negative capped at 0
+		{5, 0, 0},       // zero total
+	}
+	for _, tt := range tests {
+		got := calculatePercent(tt.current, tt.total)
+		if got != tt.want {
+			t.Errorf("calculatePercent(%d, %d) = %d, want %d", tt.current, tt.total, got, tt.want)
+		}
+	}
+}
+
+// TestITunesImportStatusHelpers tests the status tracking functions
+func TestITunesImportStatusHelpers(t *testing.T) {
+	t.Run("loadITunesImportStatus", func(t *testing.T) {
+		opID := "test-load-" + t.Name()
+		status := loadITunesImportStatus(opID)
+		if status == nil {
+			t.Fatal("expected non-nil status")
+		}
+		if status.Total != 0 || status.Processed != 0 {
+			t.Error("expected zeroed status")
+		}
+
+		// Loading again should return same status
+		status2 := loadITunesImportStatus(opID)
+		if status2 != status {
+			t.Error("expected same status instance")
+		}
+		// Cleanup
+		itunesImportStatuses.Delete(opID)
+	})
+
+	t.Run("setITunesImportTotal", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		setITunesImportTotal(status, 42)
+		if status.Total != 42 {
+			t.Errorf("expected Total=42, got %d", status.Total)
+		}
+	})
+
+	t.Run("updateITunesProcessed", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		updateITunesProcessed(status, 10)
+		if status.Processed != 10 {
+			t.Errorf("expected Processed=10, got %d", status.Processed)
+		}
+	})
+
+	t.Run("updateITunesImported", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		updateITunesImported(status)
+		updateITunesImported(status)
+		if status.Imported != 2 {
+			t.Errorf("expected Imported=2, got %d", status.Imported)
+		}
+	})
+
+	t.Run("updateITunesSkipped", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		updateITunesSkipped(status)
+		if status.Skipped != 1 {
+			t.Errorf("expected Skipped=1, got %d", status.Skipped)
+		}
+	})
+
+	t.Run("recordITunesFailure", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		recordITunesFailure(status, "error1")
+		recordITunesFailure(status, "error2")
+		if status.Failed != 2 {
+			t.Errorf("expected Failed=2, got %d", status.Failed)
+		}
+		if len(status.Errors) != 2 {
+			t.Errorf("expected 2 errors, got %d", len(status.Errors))
+		}
+	})
+
+	t.Run("recordITunesFailure respects limit", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		for i := 0; i < itunesImportErrorLimit+10; i++ {
+			recordITunesFailure(status, "err")
+		}
+		if len(status.Errors) != itunesImportErrorLimit {
+			t.Errorf("expected %d errors, got %d", itunesImportErrorLimit, len(status.Errors))
+		}
+	})
+
+	t.Run("recordITunesImportError", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		recordITunesImportError(status, "import error")
+		if len(status.Errors) != 1 || status.Errors[0] != "import error" {
+			t.Errorf("unexpected errors: %v", status.Errors)
+		}
+	})
+
+	t.Run("recordITunesImportError respects limit", func(t *testing.T) {
+		status := &itunesImportStatus{}
+		for i := 0; i < itunesImportErrorLimit+5; i++ {
+			recordITunesImportError(status, "err")
+		}
+		if len(status.Errors) != itunesImportErrorLimit {
+			t.Errorf("expected %d errors, got %d", itunesImportErrorLimit, len(status.Errors))
+		}
+	})
+}
+
+// TestSnapshotITunesImportStatus tests status snapshotting
+func TestSnapshotITunesImportStatus(t *testing.T) {
+	opID := "test-snapshot-" + t.Name()
+	defer itunesImportStatuses.Delete(opID)
+
+	status := loadITunesImportStatus(opID)
+	setITunesImportTotal(status, 100)
+	updateITunesProcessed(status, 50)
+	updateITunesImported(status)
+	updateITunesSkipped(status)
+	recordITunesFailure(status, "test error")
+
+	snapshot := snapshotITunesImportStatus(opID)
+
+	if snapshot.Total != 100 || snapshot.Processed != 50 || snapshot.Imported != 1 || snapshot.Skipped != 1 || snapshot.Failed != 1 {
+		t.Errorf("snapshot mismatch: %+v", snapshot)
+	}
+	if len(snapshot.Errors) != 1 || snapshot.Errors[0] != "test error" {
+		t.Errorf("snapshot errors mismatch: %v", snapshot.Errors)
+	}
+
+	// Modifying snapshot should not affect original
+	snapshot.Total = 999
+	if status.Total != 100 {
+		t.Error("snapshot modification affected original")
+	}
+}
+
+// TestBuildITunesSummary tests summary string generation
+func TestBuildITunesSummary(t *testing.T) {
+	status := &itunesImportStatus{
+		Imported: 10,
+		Skipped:  3,
+		Failed:   2,
+	}
+	summary := buildITunesSummary(status)
+	if !strings.Contains(summary, "10 imported") || !strings.Contains(summary, "3 skipped") || !strings.Contains(summary, "2 failed") {
+		t.Errorf("unexpected summary: %q", summary)
+	}
+}
+
+// TestIntPtr tests int pointer helper
+func TestIntPtr(t *testing.T) {
+	p := intPtr(42)
+	if p == nil || *p != 42 {
+		t.Errorf("expected *42, got %v", p)
+	}
+}
+
+// TestInt64Ptr tests int64 pointer helper
+func TestInt64Ptr(t *testing.T) {
+	p := int64Ptr(99)
+	if p == nil || *p != 99 {
+		t.Errorf("expected *99, got %v", p)
+	}
+}
+
 // Helper functions
 func marshal(t *testing.T, v interface{}) []byte {
 	b, err := json.Marshal(v)

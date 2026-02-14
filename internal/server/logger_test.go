@@ -1,10 +1,11 @@
 // file: internal/server/logger_test.go
-// version: 1.0.0
+// version: 1.1.1
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 package server
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -130,4 +131,118 @@ func TestOperationLogger_TimingAccuracy(t *testing.T) {
 	if elapsed > 100*time.Millisecond {
 		t.Errorf("expected elapsed < 100ms, got %v", elapsed)
 	}
+}
+
+// TestOperationLogger_LogStart tests that LogStart doesn't panic
+func TestOperationLogger_LogStart(t *testing.T) {
+	logger := NewOperationLogger("testHandler", "GET", "/api/test", "req-123")
+	logger.LogStart() // Should not panic
+
+	logger.SetResourceID("res-456")
+	logger.LogStart() // Should not panic with resource ID
+}
+
+// TestOperationLogger_LogSuccess tests that LogSuccess doesn't panic
+func TestOperationLogger_LogSuccess(t *testing.T) {
+	logger := NewOperationLogger("testHandler", "GET", "/api/test", "req-123")
+	logger.LogSuccess(200) // Should not panic
+
+	logger.SetResourceID("res-456")
+	logger.LogSuccess(201) // Should not panic with resource ID
+}
+
+// TestOperationLogger_LogError tests that LogError doesn't panic
+func TestOperationLogger_LogError(t *testing.T) {
+	logger := NewOperationLogger("testHandler", "GET", "/api/test", "req-123")
+	logger.LogError(500, errors.New("test error")) // Should not panic
+
+	logger.SetResourceID("res-456")
+	logger.LogError(404, errors.New("not found")) // Should not panic with resource ID
+}
+
+// TestOperationLogger_LogDebug tests that LogDebug doesn't panic
+func TestOperationLogger_LogDebug(t *testing.T) {
+	logger := NewOperationLogger("testHandler", "GET", "/api/test", "req-123")
+	logger.LogDebug("debug message") // Should not panic
+}
+
+// TestOperationLogger_LogWarning tests that LogWarning doesn't panic
+func TestOperationLogger_LogWarning(t *testing.T) {
+	logger := NewOperationLogger("testHandler", "GET", "/api/test", "req-123")
+	logger.LogWarning("warning message") // Should not panic
+}
+
+// TestServiceLogger_LogOperation tests that LogOperation doesn't panic
+func TestServiceLogger_LogOperation(t *testing.T) {
+	logger := NewServiceLogger("TestService", "req-123")
+	logger.LogOperation("testOp", nil) // Should not panic without details
+
+	details := map[string]any{"key": "value", "count": 42}
+	logger.LogOperation("testOp", details) // Should not panic with details
+}
+
+// TestServiceLogger_LogError tests that LogError doesn't panic
+func TestServiceLogger_LogError(t *testing.T) {
+	logger := NewServiceLogger("TestService", "req-123")
+	logger.LogError("testOp", errors.New("test error")) // Should not panic
+}
+
+// TestServiceLogger_LogDebug tests that LogDebug doesn't panic
+func TestServiceLogger_LogDebug(t *testing.T) {
+	logger := NewServiceLogger("TestService", "req-123")
+	logger.LogDebug("testOp", "debug message") // Should not panic
+}
+
+// TestRequestLogger_LogRequest tests that LogRequest doesn't panic
+func TestRequestLogger_LogRequest(t *testing.T) {
+	logger := NewRequestLogger("req-123", "192.168.1.1", "Mozilla/5.0", "GET", "/api/test")
+	logger.LogRequest() // Should not panic
+}
+
+// TestRequestLogger_LogResponse tests that LogResponse doesn't panic
+func TestRequestLogger_LogResponse(t *testing.T) {
+	logger := NewRequestLogger("req-123", "192.168.1.1", "Mozilla/5.0", "GET", "/api/test")
+	logger.LogResponse(200, 1024) // Should not panic
+}
+
+// TestLogMetric tests that LogMetric doesn't panic
+func TestLogMetric(t *testing.T) {
+	LogMetric("test_metric", 123.45, "ms") // Should not panic
+}
+
+// TestLogDatabaseOperation tests that LogDatabaseOperation doesn't panic
+func TestLogDatabaseOperation(t *testing.T) {
+	LogDatabaseOperation("SELECT", "audiobooks", time.Millisecond*10, 5, nil) // Should not panic
+	LogDatabaseOperation("INSERT", "audiobooks", time.Millisecond*5, 0, errors.New("test error")) // Should not panic
+}
+
+// TestLogServiceCacheHit tests that LogServiceCacheHit doesn't panic
+func TestLogServiceCacheHit(t *testing.T) {
+	LogServiceCacheHit("TestService", "test-key") // Should not panic
+}
+
+// TestLogServiceCacheMiss tests that LogServiceCacheMiss doesn't panic
+func TestLogServiceCacheMiss(t *testing.T) {
+	LogServiceCacheMiss("TestService", "test-key") // Should not panic
+}
+
+// TestLogSlowQuery tests that LogSlowQuery doesn't panic
+func TestLogSlowQuery(t *testing.T) {
+	LogSlowQuery("SELECT * FROM audiobooks", time.Millisecond*10, time.Second) // Below threshold
+	LogSlowQuery("SELECT * FROM audiobooks", time.Second*2, time.Second) // Above threshold
+}
+
+// TestLogValidationError tests that LogValidationError doesn't panic
+func TestLogValidationError(t *testing.T) {
+	LogValidationError("TestHandler", "email", "invalid format", "req-123") // Should not panic
+}
+
+// TestLogAuthorizationFailure tests that LogAuthorizationFailure doesn't panic
+func TestLogAuthorizationFailure(t *testing.T) {
+	LogAuthorizationFailure("user-123", "audiobook-456", "delete", "req-789") // Should not panic
+}
+
+// TestLogAuditEvent tests that LogAuditEvent doesn't panic
+func TestLogAuditEvent(t *testing.T) {
+	LogAuditEvent("DELETE", "user-123", "audiobook-456", "delete", "test details") // Should not panic
 }

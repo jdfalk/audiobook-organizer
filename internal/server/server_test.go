@@ -1366,3 +1366,423 @@ func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 		assert.True(t, state["author_name"].OverrideLocked)
 	}
 }
+
+// TestAddImportPath tests creating an import path
+func TestAddImportPath(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{
+		"path": "/some/import/path",
+		"name": "Test Import",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import-paths", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// Verify it shows up in the list
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)
+	w2 := httptest.NewRecorder()
+	server.router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Contains(t, w2.Body.String(), "/some/import/path")
+}
+
+// TestAddImportPathEmptyPath tests validation for empty import path
+func TestAddImportPathEmptyPath(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{
+		"path": "",
+		"name": "Empty Path",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import-paths", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestUpdateConfig tests the config update endpoint
+func TestUpdateConfig(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{
+		"root_dir":              "/new/root",
+		"auto_organize":         true,
+		"scan_on_startup":       false,
+		"folder_naming_pattern": "{author}/{title}",
+		"file_naming_pattern":   "{title}",
+		"log_level":             "debug",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "/new/root", resp["root_dir"])
+	assert.Equal(t, true, resp["auto_organize"])
+}
+
+// TestUpdateConfigRejectsDatabaseType tests that database_type changes are rejected
+func TestUpdateConfigRejectsDatabaseType(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{
+		"database_type": "postgres",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestSoftDeleteAudiobook tests soft deletion
+func TestSoftDeleteAudiobook(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "softdelete.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "To Soft Delete",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodDelete,
+		fmt.Sprintf("/api/v1/audiobooks/%s?soft_delete=true", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "soft deleted")
+}
+
+// TestGetOperationLogs tests the operation logs endpoint
+func TestGetOperationLogs(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/logs", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetOperationLogsWithPagination tests logs with pagination
+func TestGetOperationLogsWithPagination(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/logs?page=1&page_size=10&search=scan", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestListAudiobookVersions tests the version listing endpoint
+func TestListAudiobookVersions(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "version.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Version Test",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet,
+		fmt.Sprintf("/api/v1/audiobooks/%s/versions", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetDuplicates tests the duplicates endpoint
+func TestGetDuplicates(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/duplicates", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetSoftDeletedBooks tests the soft-deleted books endpoint
+func TestGetSoftDeletedBooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/soft-deleted", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestCountAudiobooks tests the count endpoint
+func TestCountAudiobooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/count", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestCreateAndListWorks tests work creation and listing
+func TestCreateAndListWorks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create a work
+	payload := map[string]any{
+		"title":       "Test Work",
+		"description": "A test work item",
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/works", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// List works
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/works", nil)
+	w2 := httptest.NewRecorder()
+	server.router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+// TestRestoreAudiobook tests restoring a soft-deleted audiobook
+func TestRestoreAudiobook(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "restore.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "To Restore",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	// Soft delete first
+	req := httptest.NewRequest(http.MethodDelete,
+		fmt.Sprintf("/api/v1/audiobooks/%s?soft_delete=true", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Now restore
+	req2 := httptest.NewRequest(http.MethodPost,
+		fmt.Sprintf("/api/v1/audiobooks/%s/restore", book.ID), nil)
+	w2 := httptest.NewRecorder()
+	server.router.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+// TestPurgeSoftDeletedBooks tests purging soft-deleted books
+func TestPurgeSoftDeletedBooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/audiobooks/purge-soft-deleted", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestLinkAudiobookVersion tests linking two audiobooks as versions
+func TestLinkAudiobookVersion(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+
+	// Create two books
+	filePath1 := filepath.Join(tempDir, "v1.m4b")
+	filePath2 := filepath.Join(tempDir, "v2.m4b")
+	require.NoError(t, os.WriteFile(filePath1, []byte("v1"), 0o644))
+	require.NoError(t, os.WriteFile(filePath2, []byte("v2"), 0o644))
+
+	book1, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book V1", FilePath: filePath1})
+	require.NoError(t, err)
+	book2, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book V2", FilePath: filePath2})
+	require.NoError(t, err)
+
+	payload := map[string]any{
+		"other_id": book2.ID,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost,
+		fmt.Sprintf("/api/v1/audiobooks/%s/versions", book1.ID), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	// Should succeed or at least not 500
+	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusCreated,
+		"expected 200 or 201, got %d: %s", w.Code, w.Body.String())
+}
+
+// TestRemoveImportPath tests removing an import path
+func TestRemoveImportPath(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create an import path directly via DB
+	importPath, err := database.GlobalStore.CreateImportPath("/to/remove", "Remove Me")
+	require.NoError(t, err)
+
+	// Delete via API - note route uses :id suffix on import-paths
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/import-paths/%d", importPath.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusNoContent,
+		"expected 200 or 204, got %d: %s", w.Code, w.Body.String())
+}
+
+// TestCreateExclusion tests filesystem exclusion creation
+func TestCreateExclusion(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{"pattern": "*.tmp"}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/filesystem/exclude", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	// Should succeed (200/201) or error gracefully
+	assert.True(t, w.Code < 500, "unexpected server error: %d %s", w.Code, w.Body.String())
+}
+
+// TestGetHomeDirectory tests home directory endpoint
+func TestGetHomeDirectory(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/filesystem/home", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "path")
+}
+
+// TestGetAudiobookNotFound tests 404 for nonexistent audiobook
+func TestGetAudiobookNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/nonexistent-id", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestUpdateAudiobookNotFound tests 404 for updating nonexistent audiobook
+func TestUpdateAudiobookNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	payload := map[string]any{"title": "New Title"}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/audiobooks/nonexistent-id", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestDeleteAudiobookNotFound tests 404 for deleting nonexistent audiobook
+func TestDeleteAudiobookNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/audiobooks/nonexistent-id", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestListAudiobooksWithFilters tests listing audiobooks with various filters
+func TestListAudiobooksWithFilters(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create an author and audiobook
+	author, err := database.GlobalStore.CreateAuthor("Filter Author")
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "filter.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+	_, err = database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Filter Book",
+		AuthorID: &author.ID,
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"with search", "/api/v1/audiobooks?search=Filter"},
+		{"with author_id", fmt.Sprintf("/api/v1/audiobooks?author_id=%d", author.ID)},
+		{"with limit", "/api/v1/audiobooks?limit=5&offset=0"},
+		{"with all params", fmt.Sprintf("/api/v1/audiobooks?search=Filter&author_id=%d&limit=10", author.ID)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.query, nil)
+			w := httptest.NewRecorder()
+			server.router.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+		})
+	}
+}
