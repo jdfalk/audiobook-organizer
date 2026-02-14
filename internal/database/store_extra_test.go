@@ -1,5 +1,5 @@
 // file: internal/database/store_extra_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 68b2b2f9-2b8f-4f7f-9d8f-26e6306a3c8e
 
 package database
@@ -443,5 +443,129 @@ func exercisePebbleAdvanced(t *testing.T, store *PebbleStore) {
 	}
 	if _, err := store.GetUserStats(user.ID); err != nil {
 		t.Fatalf("GetUserStats failed: %v", err)
+	}
+}
+
+// TestCreateWorkWithAltTitles tests creating a work with alternative titles
+func TestCreateWorkWithAltTitles(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	author, err := store.CreateAuthor("Test Author")
+	if err != nil {
+		t.Fatalf("Failed to create author: %v", err)
+	}
+
+	series, err := store.CreateSeries("Test Series", &author.ID)
+	if err != nil {
+		t.Fatalf("Failed to create series: %v", err)
+	}
+
+	// Create work with alternative titles
+	work := &Work{
+		Title:     "Primary Title",
+		AuthorID:  &author.ID,
+		SeriesID:  &series.ID,
+		AltTitles: []string{"Alt Title 1", "Alt Title 2", "Alt Title 3"},
+	}
+
+	created, err := store.CreateWork(work)
+	if err != nil {
+		t.Fatalf("Failed to create work with alt titles: %v", err)
+	}
+
+	if created.ID == "" {
+		t.Error("Expected non-empty work ID")
+	}
+
+	// Retrieve and verify
+	retrieved, err := store.GetWorkByID(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get work: %v", err)
+	}
+
+	if len(retrieved.AltTitles) != 3 {
+		t.Errorf("Expected 3 alt titles, got %d", len(retrieved.AltTitles))
+	}
+
+	// Verify alt titles match
+	for i, title := range work.AltTitles {
+		if i >= len(retrieved.AltTitles) || retrieved.AltTitles[i] != title {
+			t.Errorf("Alt title mismatch at index %d: expected %s, got %s", i, title, retrieved.AltTitles[i])
+		}
+	}
+}
+
+// TestUpdateWorkWithAltTitles tests updating a work's alternative titles
+func TestUpdateWorkWithAltTitles(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create initial work
+	work := &Work{
+		Title:     "Original Title",
+		AltTitles: []string{"Original Alt"},
+	}
+	created, err := store.CreateWork(work)
+	if err != nil {
+		t.Fatalf("Failed to create work: %v", err)
+	}
+
+	// Update with new alt titles
+	updated := &Work{
+		Title:     "Updated Title",
+		AltTitles: []string{"New Alt 1", "New Alt 2"},
+	}
+	result, err := store.UpdateWork(created.ID, updated)
+	if err != nil {
+		t.Fatalf("Failed to update work: %v", err)
+	}
+
+	if len(result.AltTitles) != 2 {
+		t.Errorf("Expected 2 alt titles after update, got %d", len(result.AltTitles))
+	}
+}
+
+// TestMaskSecretEdgeCases tests the MaskSecret function with various inputs
+func TestMaskSecretEdgeCases(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "****"},
+		{"a", "****"},
+		{"abc", "****"},
+		{"1234567", "****"},
+		{"12345678", "123****5678"},
+		{"verylongsecret123456", "ver****3456"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := MaskSecret(tt.input)
+			if result != tt.expected {
+				t.Errorf("MaskSecret(%q) = %q, expected %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestDecryptValueErrors tests error handling in DecryptValue
+func TestDecryptValueErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	if err := InitEncryption(tempDir); err != nil {
+		t.Fatalf("InitEncryption failed: %v", err)
+	}
+
+	// Test with invalid base64
+	_, err := DecryptValue("not-valid-base64!!!")
+	if err == nil {
+		t.Error("Expected error for invalid base64")
+	}
+
+	// Test with too short ciphertext
+	_, err = DecryptValue("YWJj") // "abc" in base64, but too short
+	if err == nil {
+		t.Error("Expected error for too short ciphertext")
 	}
 }

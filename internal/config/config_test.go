@@ -1,5 +1,5 @@
 // file: internal/config/config_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package config
@@ -352,4 +352,92 @@ func TestConfigurationValidation(t *testing.T) {
 	if !isValid {
 		t.Errorf("Database type '%s' is not a valid type. Expected one of: %v", dbType, validTypes)
 	}
+}
+
+// TestResetToDefaults tests ResetToDefaults function
+func TestResetToDefaults(t *testing.T) {
+	// Arrange: Set up custom configuration
+	originalRootDir := AppConfig.RootDir
+	originalDatabasePath := AppConfig.DatabasePath
+	originalPlaylistDir := AppConfig.PlaylistDir
+
+	AppConfig.RootDir = "/custom/root"
+	AppConfig.DatabasePath = "/custom/db"
+	AppConfig.PlaylistDir = "/custom/playlists"
+	AppConfig.DatabaseType = "sqlite"
+	AppConfig.EnableSQLite = true
+	AppConfig.SetupComplete = true
+	AppConfig.OrganizationStrategy = "manual"
+	AppConfig.ScanOnStartup = true
+	AppConfig.AutoOrganize = false
+	AppConfig.FolderNamingPattern = "{title}"
+	AppConfig.FileNamingPattern = "{title}"
+	AppConfig.CreateBackups = false
+	AppConfig.EnableDiskQuota = true
+	AppConfig.DiskQuotaPercent = 50
+
+	// Act: Reset to defaults
+	ResetToDefaults()
+
+	// Assert: Verify defaults are restored while paths are preserved
+	if AppConfig.RootDir != "/custom/root" {
+		t.Errorf("expected RootDir to be preserved as '/custom/root', got %q", AppConfig.RootDir)
+	}
+	if AppConfig.DatabasePath != "/custom/db" {
+		t.Errorf("expected DatabasePath to be preserved as '/custom/db', got %q", AppConfig.DatabasePath)
+	}
+	if AppConfig.PlaylistDir != "/custom/playlists" {
+		t.Errorf("expected PlaylistDir to be preserved as '/custom/playlists', got %q", AppConfig.PlaylistDir)
+	}
+
+	// Verify database defaults
+	if AppConfig.DatabaseType != "pebble" {
+		t.Errorf("expected DatabaseType to be reset to 'pebble', got %q", AppConfig.DatabaseType)
+	}
+	if AppConfig.EnableSQLite {
+		t.Error("expected EnableSQLite to be reset to false")
+	}
+	if AppConfig.SetupComplete {
+		t.Error("expected SetupComplete to be reset to false")
+	}
+
+	// Verify organization defaults
+	if AppConfig.OrganizationStrategy != "auto" {
+		t.Errorf("expected OrganizationStrategy to be reset to 'auto', got %q", AppConfig.OrganizationStrategy)
+	}
+	if AppConfig.ScanOnStartup {
+		t.Error("expected ScanOnStartup to be reset to false")
+	}
+	if !AppConfig.AutoOrganize {
+		t.Error("expected AutoOrganize to be reset to true")
+	}
+
+	// Verify naming pattern defaults
+	expectedFolderPattern := "{author}/{series}/{title} ({print_year})"
+	if AppConfig.FolderNamingPattern != expectedFolderPattern {
+		t.Errorf("expected FolderNamingPattern to be reset to %q, got %q", expectedFolderPattern, AppConfig.FolderNamingPattern)
+	}
+
+	expectedFilePattern := "{title} - {author} - read by {narrator}"
+	if AppConfig.FileNamingPattern != expectedFilePattern {
+		t.Errorf("expected FileNamingPattern to be reset to %q, got %q", expectedFilePattern, AppConfig.FileNamingPattern)
+	}
+
+	// Verify backup defaults
+	if !AppConfig.CreateBackups {
+		t.Error("expected CreateBackups to be reset to true")
+	}
+
+	// Verify storage quota defaults
+	if AppConfig.EnableDiskQuota {
+		t.Error("expected EnableDiskQuota to be reset to false")
+	}
+	if AppConfig.DiskQuotaPercent != 80 {
+		t.Errorf("expected DiskQuotaPercent to be reset to 80, got %d", AppConfig.DiskQuotaPercent)
+	}
+
+	// Restore original values
+	AppConfig.RootDir = originalRootDir
+	AppConfig.DatabasePath = originalDatabasePath
+	AppConfig.PlaylistDir = originalPlaylistDir
 }

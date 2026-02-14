@@ -1,5 +1,5 @@
 // file: internal/download/download_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package download
 
@@ -492,4 +492,55 @@ func TestSABnzbdClientStub(t *testing.T) {
 			t.Errorf("expected nil jobs, got %v", jobs)
 		}
 	})
+}
+
+// TestTorrentStatusConstants verifies that the TorrentStatus constants are unique.
+func TestTorrentStatusConstants(t *testing.T) {
+	statuses := []TorrentStatus{
+		StatusDownloading,
+		StatusSeeding,
+		StatusPaused,
+		StatusStopped,
+		StatusNotFound,
+	}
+
+	// Check that all constants have different values
+	seen := make(map[TorrentStatus]bool)
+	for _, status := range statuses {
+		if seen[status] {
+			t.Errorf("duplicate TorrentStatus value: %d", status)
+		}
+		seen[status] = true
+	}
+
+	// Verify expected count
+	if len(statuses) != 5 {
+		t.Errorf("expected 5 TorrentStatus constants, got %d", len(statuses))
+	}
+}
+
+// TestUsenetStatusConstants verifies that the UsenetStatus constants are unique.
+func TestUsenetStatusConstants(t *testing.T) {
+	statuses := []UsenetStatus{
+		UsenetStatusQueued,
+		UsenetStatusDownloading,
+		UsenetStatusCompleted,
+		UsenetStatusPaused,
+		UsenetStatusFailed,
+		UsenetStatusNotFound,
+	}
+
+	// Check that all constants have different values
+	seen := make(map[UsenetStatus]bool)
+	for _, status := range statuses {
+		if seen[status] {
+			t.Errorf("duplicate UsenetStatus value: %d", status)
+		}
+		seen[status] = true
+	}
+
+	// Verify expected count
+	if len(statuses) != 6 {
+		t.Errorf("expected 6 UsenetStatus constants, got %d", len(statuses))
+	}
 }

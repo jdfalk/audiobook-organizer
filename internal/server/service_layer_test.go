@@ -1,15 +1,21 @@
 // file: internal/server/service_layer_test.go
-// version: 1.0.0
+// version: 1.4.0
+// guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
+// last-edited: 2026-02-14
 
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/stretchr/testify/mock"
 )
 
 // TestConfigUpdateService_MaskSecrets tests MaskSecrets method
@@ -781,5 +787,925 @@ func TestConfigUpdateService_ApplyUpdates_FieldTypes(t *testing.T) {
 	}
 	if config.AppConfig.ConcurrentScans != 8 {
 		t.Errorf("expected concurrent_scans 8, got %d", config.AppConfig.ConcurrentScans)
+	}
+}
+
+// TestMetadataStateService_UpdateFetchedMetadata tests UpdateFetchedMetadata method
+func TestMetadataStateService_UpdateFetchedMetadata(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewMetadataStateService(mockStore)
+
+	bookID := "01HXZABC123456789"
+
+	tests := []struct {
+		name      string
+		bookID    string
+		values    map[string]any
+		setupMock func()
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:   "update fetched metadata for new book",
+			bookID: bookID,
+			values: map[string]any{
+				"title":  "Test Title",
+				"author": "Test Author",
+			},
+			setupMock: func() {
+				// First call in LoadMetadataState (in UpdateFetchedMetadata)
+				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
+				// Mock GetUserPreference for legacy state check (returns nil to indicate no legacy state)
+				mockStore.On("GetUserPreference", "metadata_state_"+bookID).Return(nil, nil).Once()
+				// Second call in SaveMetadataState (in UpdateFetchedMetadata)
+				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
+				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "title")).Return(nil).Once()
+				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "author")).Return(nil).Once()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "update fetched metadata for existing book",
+			bookID: bookID,
+			values: map[string]any{
+				"narrator": "New Narrator",
+			},
+			setupMock: func() {
+				existingState := []database.MetadataFieldState{
+					{
+						BookID:       bookID,
+						Field:        "title",
+						FetchedValue: strPtr(`"Old Title"`),
+						UpdatedAt:    time.Now().Add(-24 * time.Hour),
+					},
+				}
+				// First call in LoadMetadataState
+				mockStore.On("GetMetadataFieldStates", bookID).Return(existingState, nil).Once()
+				// Second call in SaveMetadataState
+				mockStore.On("GetMetadataFieldStates", bookID).Return(existingState, nil).Once()
+				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "narrator")).Return(nil).Once()
+				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "title")).Return(nil).Once()
+			},
+			wantErr: false,
+		},
+		{
+			name:   "error loading metadata state",
+			bookID: bookID,
+			values: map[string]any{
+				"title": "Test",
+			},
+			setupMock: func() {
+				mockStore.On("GetMetadataFieldStates", bookID).Return(nil, errors.New("database error")).Once()
+			},
+			wantErr:   true,
+			errSubstr: "",
+		},
+		{
+			name:   "empty values map",
+			bookID: bookID,
+			values: map[string]any{},
+			setupMock: func() {
+				// First call in LoadMetadataState
+				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
+				mockStore.On("GetUserPreference", "metadata_state_"+bookID).Return(nil, nil).Once()
+				// Second call in SaveMetadataState
+				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setupMock != nil {
+				tt.setupMock()
+			}
+
+			err := svc.UpdateFetchedMetadata(tt.bookID, tt.values)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errSubstr != "" && !contains(err.Error(), tt.errSubstr) {
+					t.Errorf("expected error to contain %q, got %q", tt.errSubstr, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+
+			mockStore.AssertExpectations(t)
+		})
+	}
+}
+
+// matchMetadataFieldState is a helper to match MetadataFieldState in mock calls
+func matchMetadataFieldState(bookID, field string) any {
+	return mock.MatchedBy(func(state *database.MetadataFieldState) bool {
+		return state.BookID == bookID && state.Field == field
+	})
+}
+
+// strPtr returns a string pointer
+func strPtr(s string) *string {
+	return &s
+}
+
+// TestImportPathService_UpdateImportPathEnabled tests UpdateImportPathEnabled method
+func TestImportPathService_UpdateImportPathEnabled(t *testing.T) {
+	t.Run("success case", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		importPath := &database.ImportPath{
+			ID:      1,
+			Path:    "/test/path",
+			Name:    "Test Path",
+			Enabled: false,
+		}
+
+		mockStore.EXPECT().GetImportPathByID(1).Return(importPath, nil)
+		mockStore.EXPECT().UpdateImportPath(1, &database.ImportPath{
+			ID:      1,
+			Path:    "/test/path",
+			Name:    "Test Path",
+			Enabled: true,
+		}).Return(nil)
+
+		err := svc.UpdateImportPathEnabled(1, true)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("import path not found", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		mockStore.EXPECT().GetImportPathByID(999).Return(nil, nil)
+
+		err := svc.UpdateImportPathEnabled(999, true)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if !contains(err.Error(), "import path not found") {
+			t.Errorf("expected 'import path not found' error, got %v", err)
+		}
+	})
+
+	t.Run("database error on get", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		mockStore.EXPECT().GetImportPathByID(1).Return(nil, errors.New("database error"))
+
+		err := svc.UpdateImportPathEnabled(1, true)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if !contains(err.Error(), "import path not found") {
+			t.Errorf("expected 'import path not found' error, got %v", err)
+		}
+	})
+}
+
+// TestImportPathService_GetImportPath tests GetImportPath method
+func TestImportPathService_GetImportPath(t *testing.T) {
+	t.Run("success case", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		expectedPath := &database.ImportPath{
+			ID:      1,
+			Path:    "/test/path",
+			Name:    "Test Path",
+			Enabled: true,
+		}
+
+		mockStore.EXPECT().GetImportPathByID(1).Return(expectedPath, nil)
+
+		result, err := svc.GetImportPath(1)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if result.ID != expectedPath.ID {
+			t.Errorf("expected ID %d, got %d", expectedPath.ID, result.ID)
+		}
+		if result.Path != expectedPath.Path {
+			t.Errorf("expected path %q, got %q", expectedPath.Path, result.Path)
+		}
+	})
+
+	t.Run("import path not found", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		mockStore.EXPECT().GetImportPathByID(999).Return(nil, nil)
+
+		result, err := svc.GetImportPath(999)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result, got %v", result)
+		}
+		if !contains(err.Error(), "import path not found") {
+			t.Errorf("expected 'import path not found' error, got %v", err)
+		}
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		mockStore := mocks.NewMockStore(t)
+		svc := NewImportPathService(mockStore)
+
+		mockStore.EXPECT().GetImportPathByID(1).Return(nil, errors.New("database error"))
+
+		result, err := svc.GetImportPath(1)
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+		if result != nil {
+			t.Errorf("expected nil result, got %v", result)
+		}
+	})
+}
+
+// TestConfigUpdateService_UpdateConfig_AdditionalFields tests additional config fields
+func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewConfigUpdateService(mockStore)
+
+	originalPlaylistDir := config.AppConfig.PlaylistDir
+	originalDatabasePath := config.AppConfig.DatabasePath
+	originalSetupComplete := config.AppConfig.SetupComplete
+	defer func() {
+		config.AppConfig.PlaylistDir = originalPlaylistDir
+		config.AppConfig.DatabasePath = originalDatabasePath
+		config.AppConfig.SetupComplete = originalSetupComplete
+	}()
+
+	t.Run("update playlist_dir", func(t *testing.T) {
+		// Mock SetSetting calls that will happen during config persistence
+		mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		status, resp := svc.UpdateConfig(map[string]any{
+			"playlist_dir": "/new/playlist/path",
+		})
+		if status != 200 {
+			t.Errorf("expected 200, got %d", status)
+		}
+		if config.AppConfig.PlaylistDir != "/new/playlist/path" {
+			t.Errorf("expected playlist_dir '/new/playlist/path', got %q", config.AppConfig.PlaylistDir)
+		}
+		updated, ok := resp["updated"].([]string)
+		if !ok {
+			t.Error("expected updated to be []string")
+		}
+		if !contains(updated[0], "playlist_dir") {
+			t.Errorf("expected updated to contain 'playlist_dir', got %v", updated)
+		}
+	})
+
+	t.Run("update database_path", func(t *testing.T) {
+		mockStore2 := mocks.NewMockStore(t)
+		mockStore2.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		svc2 := NewConfigUpdateService(mockStore2)
+
+		status, resp := svc2.UpdateConfig(map[string]any{
+			"database_path": "/new/db/path.db",
+		})
+		if status != 200 {
+			t.Errorf("expected 200, got %d", status)
+		}
+		if config.AppConfig.DatabasePath != "/new/db/path.db" {
+			t.Errorf("expected database_path '/new/db/path.db', got %q", config.AppConfig.DatabasePath)
+		}
+		updated, ok := resp["updated"].([]string)
+		if !ok {
+			t.Error("expected updated to be []string")
+		}
+		if !contains(updated[0], "database_path") {
+			t.Errorf("expected updated to contain 'database_path', got %v", updated)
+		}
+	})
+
+	t.Run("update setup_complete directly", func(t *testing.T) {
+		mockStore3 := mocks.NewMockStore(t)
+		mockStore3.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		svc3 := NewConfigUpdateService(mockStore3)
+
+		status, resp := svc3.UpdateConfig(map[string]any{
+			"setup_complete": true,
+		})
+		if status != 200 {
+			t.Errorf("expected 200, got %d", status)
+		}
+		if !config.AppConfig.SetupComplete {
+			t.Error("expected setup_complete to be true")
+		}
+		updated, ok := resp["updated"].([]string)
+		if !ok {
+			t.Error("expected updated to be []string")
+		}
+		if !contains(updated[0], "setup_complete") {
+			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
+		}
+	})
+
+	t.Run("empty root_dir sets setup_complete to false", func(t *testing.T) {
+		mockStore4 := mocks.NewMockStore(t)
+		mockStore4.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		svc4 := NewConfigUpdateService(mockStore4)
+
+		config.AppConfig.SetupComplete = true
+		status, resp := svc4.UpdateConfig(map[string]any{
+			"root_dir": "   ",
+		})
+		if status != 200 {
+			t.Errorf("expected 200, got %d", status)
+		}
+		if config.AppConfig.SetupComplete {
+			t.Error("expected setup_complete to be false when root_dir is empty")
+		}
+		if config.AppConfig.RootDir != "" {
+			t.Errorf("expected empty root_dir, got %q", config.AppConfig.RootDir)
+		}
+		updated, ok := resp["updated"].([]string)
+		if !ok {
+			t.Error("expected updated to be []string")
+		}
+		hasSetupComplete := false
+		for _, u := range updated {
+			if u == "setup_complete" {
+				hasSetupComplete = true
+			}
+		}
+		if !hasSetupComplete {
+			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
+		}
+	})
+
+	t.Run("non-empty root_dir sets setup_complete to true", func(t *testing.T) {
+		mockStore5 := mocks.NewMockStore(t)
+		mockStore5.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		svc5 := NewConfigUpdateService(mockStore5)
+
+		config.AppConfig.SetupComplete = false
+		status, resp := svc5.UpdateConfig(map[string]any{
+			"root_dir": "/valid/path",
+		})
+		if status != 200 {
+			t.Errorf("expected 200, got %d", status)
+		}
+		if !config.AppConfig.SetupComplete {
+			t.Error("expected setup_complete to be true when root_dir is set")
+		}
+		if config.AppConfig.RootDir != "/valid/path" {
+			t.Errorf("expected root_dir '/valid/path', got %q", config.AppConfig.RootDir)
+		}
+		updated, ok := resp["updated"].([]string)
+		if !ok {
+			t.Error("expected updated to be []string")
+		}
+		hasSetupComplete := false
+		for _, u := range updated {
+			if u == "setup_complete" {
+				hasSetupComplete = true
+			}
+		}
+		if !hasSetupComplete {
+			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
+		}
+	})
+}
+
+// TestConfigUpdateService_UpdateConfig_AllFields tests all updatable fields
+func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	svc := NewConfigUpdateService(mockStore)
+
+	// Save original values
+	originalOrgStrat := config.AppConfig.OrganizationStrategy
+	originalScanOnStartup := config.AppConfig.ScanOnStartup
+	originalAutoOrg := config.AppConfig.AutoOrganize
+	originalFolderPattern := config.AppConfig.FolderNamingPattern
+	originalFilePattern := config.AppConfig.FileNamingPattern
+	originalBackups := config.AppConfig.CreateBackups
+	originalLanguage := config.AppConfig.Language
+	originalLogLevel := config.AppConfig.LogLevel
+	originalAPIKey := config.AppConfig.OpenAIAPIKey
+	originalEnableAI := config.AppConfig.EnableAIParsing
+	originalConcurrentScans := config.AppConfig.ConcurrentScans
+	defer func() {
+		config.AppConfig.OrganizationStrategy = originalOrgStrat
+		config.AppConfig.ScanOnStartup = originalScanOnStartup
+		config.AppConfig.AutoOrganize = originalAutoOrg
+		config.AppConfig.FolderNamingPattern = originalFolderPattern
+		config.AppConfig.FileNamingPattern = originalFilePattern
+		config.AppConfig.CreateBackups = originalBackups
+		config.AppConfig.Language = originalLanguage
+		config.AppConfig.LogLevel = originalLogLevel
+		config.AppConfig.OpenAIAPIKey = originalAPIKey
+		config.AppConfig.EnableAIParsing = originalEnableAI
+		config.AppConfig.ConcurrentScans = originalConcurrentScans
+	}()
+
+	payload := map[string]any{
+		"organization_strategy":  "custom",
+		"scan_on_startup":        true,
+		"auto_organize":          true,
+		"folder_naming_pattern":  "{author}/{series}",
+		"file_naming_pattern":    "{title}",
+		"create_backups":         true,
+		"language":               "en-US",
+		"log_level":              "debug",
+		"openai_api_key":         "sk-test123",
+		"enable_ai_parsing":      true,
+		"concurrent_scans":       float64(5),
+	}
+
+	status, resp := svc.UpdateConfig(payload)
+	if status != 200 {
+		t.Errorf("expected 200, got %d: %v", status, resp)
+	}
+
+	if config.AppConfig.OrganizationStrategy != "custom" {
+		t.Errorf("expected organization_strategy 'custom', got %q", config.AppConfig.OrganizationStrategy)
+	}
+	if !config.AppConfig.ScanOnStartup {
+		t.Error("expected scan_on_startup true")
+	}
+	if !config.AppConfig.AutoOrganize {
+		t.Error("expected auto_organize true")
+	}
+	if config.AppConfig.FolderNamingPattern != "{author}/{series}" {
+		t.Errorf("expected folder_naming_pattern '{author}/{series}', got %q", config.AppConfig.FolderNamingPattern)
+	}
+	if config.AppConfig.FileNamingPattern != "{title}" {
+		t.Errorf("expected file_naming_pattern '{title}', got %q", config.AppConfig.FileNamingPattern)
+	}
+	if !config.AppConfig.CreateBackups {
+		t.Error("expected create_backups true")
+	}
+	if config.AppConfig.Language != "en-US" {
+		t.Errorf("expected language 'en-US', got %q", config.AppConfig.Language)
+	}
+	if config.AppConfig.LogLevel != "debug" {
+		t.Errorf("expected log_level 'debug', got %q", config.AppConfig.LogLevel)
+	}
+	if config.AppConfig.OpenAIAPIKey != "sk-test123" {
+		t.Errorf("expected openai_api_key 'sk-test123', got %q", config.AppConfig.OpenAIAPIKey)
+	}
+	if !config.AppConfig.EnableAIParsing {
+		t.Error("expected enable_ai_parsing true")
+	}
+	if config.AppConfig.ConcurrentScans != 5 {
+		t.Errorf("expected concurrent_scans 5, got %d", config.AppConfig.ConcurrentScans)
+	}
+
+	updated, ok := resp["updated"].([]string)
+	if !ok {
+		t.Fatal("expected updated to be []string")
+	}
+	expectedUpdates := []string{
+		"organization_strategy",
+		"scan_on_startup",
+		"auto_organize",
+		"folder_naming_pattern",
+		"file_naming_pattern",
+		"create_backups",
+		"language",
+		"log_level",
+		"openai_api_key",
+		"enable_ai_parsing",
+		"concurrent_scans",
+	}
+	for _, expected := range expectedUpdates {
+		found := false
+		for _, u := range updated {
+			if u == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected updated to contain %q, got %v", expected, updated)
+		}
+	}
+}
+
+// TestConfigUpdateService_UpdateConfig_IntConcurrentScans tests int concurrent_scans
+func TestConfigUpdateService_UpdateConfig_IntConcurrentScans(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	svc := NewConfigUpdateService(mockStore)
+
+	originalConcurrentScans := config.AppConfig.ConcurrentScans
+	defer func() {
+		config.AppConfig.ConcurrentScans = originalConcurrentScans
+	}()
+
+	status, resp := svc.UpdateConfig(map[string]any{
+		"concurrent_scans": 8,
+	})
+	if status != 200 {
+		t.Errorf("expected 200, got %d: %v", status, resp)
+	}
+	if config.AppConfig.ConcurrentScans != 8 {
+		t.Errorf("expected concurrent_scans 8, got %d", config.AppConfig.ConcurrentScans)
+	}
+}
+
+// TestConfigUpdateService_UpdateConfig_APIKeys tests API keys update
+func TestConfigUpdateService_UpdateConfig_APIKeys(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	svc := NewConfigUpdateService(mockStore)
+
+	originalGoodreads := config.AppConfig.APIKeys.Goodreads
+	defer func() {
+		config.AppConfig.APIKeys.Goodreads = originalGoodreads
+	}()
+
+	status, resp := svc.UpdateConfig(map[string]any{
+		"api_keys": map[string]any{
+			"goodreads": "gr-12345",
+		},
+	})
+	if status != 200 {
+		t.Errorf("expected 200, got %d: %v", status, resp)
+	}
+	if config.AppConfig.APIKeys.Goodreads != "gr-12345" {
+		t.Errorf("expected Goodreads API key 'gr-12345', got %q", config.AppConfig.APIKeys.Goodreads)
+	}
+	updated, ok := resp["updated"].([]string)
+	if !ok {
+		t.Fatal("expected updated to be []string")
+	}
+	found := false
+	for _, u := range updated {
+		if u == "api_keys.goodreads" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected updated to contain 'api_keys.goodreads', got %v", updated)
+	}
+}
+
+// TestConfigUpdateService_ValidateUpdate tests ValidateUpdate method
+func TestConfigUpdateService_ValidateUpdate(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewConfigUpdateService(mockStore)
+
+	tests := []struct {
+		name    string
+		payload map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "valid payload with data",
+			payload: map[string]any{"root_dir": "/test"},
+			wantErr: false,
+		},
+		{
+			name:    "empty payload returns error",
+			payload: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name:    "nil payload returns error",
+			payload: nil,
+			wantErr: true, // ValidateUpdate checks len(payload)==0, nil map has len 0
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := svc.ValidateUpdate(tt.payload)
+			if tt.wantErr && err == nil {
+				t.Error("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestAudiobookService_GetSoftDeletedBooks_Error tests error path
+func TestAudiobookService_GetSoftDeletedBooks_Error(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	mockStore.EXPECT().ListSoftDeletedBooks(50, 0, (*time.Time)(nil)).Return(nil, errors.New("database error"))
+
+	books, err := svc.GetSoftDeletedBooks(context.Background(), 50, 0, nil)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if books != nil {
+		t.Errorf("expected nil books on error, got %v", books)
+	}
+	if !contains(err.Error(), "database error") {
+		t.Errorf("expected 'database error', got %v", err)
+	}
+}
+
+// TestAudiobookService_GetSoftDeletedBooks_WithDaysFilter tests olderThanDays parameter
+func TestAudiobookService_GetSoftDeletedBooks_WithDaysFilter(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	days := 30
+	mockStore.EXPECT().ListSoftDeletedBooks(50, 0, mock.MatchedBy(func(cutoff *time.Time) bool {
+		return cutoff != nil
+	})).Return([]database.Book{}, nil)
+
+	books, err := svc.GetSoftDeletedBooks(context.Background(), 50, 0, &days)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if books == nil {
+		t.Error("expected non-nil books slice")
+	}
+}
+
+// TestAudiobookService_CountAudiobooks_Error tests error path
+func TestAudiobookService_CountAudiobooks_Error(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	mockStore.EXPECT().CountBooks().Return(0, errors.New("database error"))
+
+	count, err := svc.CountAudiobooks(context.Background())
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if count != 0 {
+		t.Errorf("expected 0 count on error, got %d", count)
+	}
+	if !contains(err.Error(), "database error") {
+		t.Errorf("expected 'database error', got %v", err)
+	}
+}
+
+// TestAudiobookService_CountAudiobooks_NilDB tests nil database
+func TestAudiobookService_CountAudiobooks_NilDB(t *testing.T) {
+	svc := &AudiobookService{store: nil}
+
+	count, err := svc.CountAudiobooks(context.Background())
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if count != 0 {
+		t.Errorf("expected 0 count on error, got %d", count)
+	}
+	if !contains(err.Error(), "database not initialized") {
+		t.Errorf("expected 'database not initialized', got %v", err)
+	}
+}
+
+// TestAudiobookService_GetSoftDeletedBooks_NilDB tests nil database
+func TestAudiobookService_GetSoftDeletedBooks_NilDB(t *testing.T) {
+	svc := &AudiobookService{store: nil}
+
+	books, err := svc.GetSoftDeletedBooks(context.Background(), 50, 0, nil)
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if books != nil {
+		t.Errorf("expected nil books on error, got %v", books)
+	}
+	if !contains(err.Error(), "database not initialized") {
+		t.Errorf("expected 'database not initialized', got %v", err)
+	}
+}
+
+// TestDashboardService_GetHealthCheckResponse_Degraded tests degraded status
+func TestDashboardService_GetHealthCheckResponse_Degraded(t *testing.T) {
+	// Use nil db to trigger the error path in CollectDashboardMetrics
+	// (individual DB call errors are swallowed, only nil db returns error)
+	svc := &DashboardService{db: nil}
+
+	resp := svc.GetHealthCheckResponse("1.0.0")
+	if resp.Status != "degraded" {
+		t.Errorf("expected status 'degraded', got %q", resp.Status)
+	}
+	if resp.PartialError == "" {
+		t.Error("expected PartialError to be set")
+	}
+	if !contains(resp.PartialError, "database not initialized") {
+		t.Errorf("expected PartialError to contain 'database not initialized', got %q", resp.PartialError)
+	}
+	// Verify metrics are still returned (with default values)
+	if resp.Metrics.Books != 0 || resp.Metrics.Authors != 0 {
+		t.Error("expected zero metrics on error")
+	}
+}
+
+// TestServerHelpers_DecodeRawValue tests decodeRawValue function
+func TestServerHelpers_DecodeRawValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      json.RawMessage
+		expected any
+	}{
+		{
+			name:     "nil raw message",
+			raw:      nil,
+			expected: nil,
+		},
+		{
+			name:     "string value",
+			raw:      json.RawMessage(`"test"`),
+			expected: "test",
+		},
+		{
+			name:     "number value",
+			raw:      json.RawMessage(`42`),
+			expected: float64(42),
+		},
+		{
+			name:     "boolean value",
+			raw:      json.RawMessage(`true`),
+			expected: true,
+		},
+		{
+			name:     "invalid json returns string",
+			raw:      json.RawMessage(`{invalid`),
+			expected: "{invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := decodeRawValue(tt.raw)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestServerHelpers_StringVal tests stringVal function
+func TestServerHelpers_StringVal(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *string
+		expected any
+	}{
+		{
+			name:     "nil pointer returns nil",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "non-nil pointer returns value",
+			input:    strPtr("test"),
+			expected: "test",
+		},
+		{
+			name:     "empty string pointer returns empty string",
+			input:    strPtr(""),
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := stringVal(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestServerHelpers_IntVal tests intVal function
+func TestServerHelpers_IntVal(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *int
+		expected any
+	}{
+		{
+			name:     "nil pointer returns nil",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "non-nil pointer returns value",
+			input:    intPtr(42),
+			expected: 42,
+		},
+		{
+			name:     "zero value pointer returns zero",
+			input:    intPtr(0),
+			expected: 0,
+		},
+		{
+			name:     "negative value pointer returns negative",
+			input:    intPtr(-10),
+			expected: -10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := intVal(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestFilesystemService_CreateExclusion_EmptyPath tests empty path error
+func TestFilesystemService_CreateExclusion_EmptyPath(t *testing.T) {
+	svc := &FilesystemService{}
+
+	err := svc.CreateExclusion("")
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if !contains(err.Error(), "path is required") {
+		t.Errorf("expected 'path is required', got %v", err)
+	}
+}
+
+// TestFilesystemService_CreateExclusion_NotDirectory tests file path error
+func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
+	svc := &FilesystemService{}
+
+	err := svc.CreateExclusion("/tmp/test_file_for_exclusion.txt")
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if !contains(err.Error(), "must be a directory") {
+		t.Errorf("expected 'must be a directory', got %v", err)
+	}
+}
+
+// TestFilesystemService_RemoveExclusion_EmptyPath tests empty path error
+func TestFilesystemService_RemoveExclusion_EmptyPath(t *testing.T) {
+	svc := &FilesystemService{}
+
+	err := svc.RemoveExclusion("")
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if !contains(err.Error(), "path is required") {
+		t.Errorf("expected 'path is required', got %v", err)
+	}
+}
+
+// TestConfigUpdateService_ExtractIntField_EdgeCases tests edge cases
+func TestConfigUpdateService_ExtractIntField_EdgeCases(t *testing.T) {
+	svc := &ConfigUpdateService{}
+
+	tests := []struct {
+		name      string
+		payload   map[string]any
+		key       string
+		wantValue int
+		wantOK    bool
+	}{
+		{
+			name:      "valid int from float64",
+			payload:   map[string]any{"count": float64(42)},
+			key:       "count",
+			wantValue: 42,
+			wantOK:    true,
+		},
+		{
+			name:      "missing key",
+			payload:   map[string]any{"other": float64(10)},
+			key:       "count",
+			wantValue: 0,
+			wantOK:    false,
+		},
+		{
+			name:      "wrong type (string)",
+			payload:   map[string]any{"count": "42"},
+			key:       "count",
+			wantValue: 0,
+			wantOK:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value, ok := svc.ExtractIntField(tt.payload, tt.key)
+			if value != tt.wantValue {
+				t.Errorf("expected value %d, got %d", tt.wantValue, value)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("expected ok %v, got %v", tt.wantOK, ok)
+			}
+		})
 	}
 }

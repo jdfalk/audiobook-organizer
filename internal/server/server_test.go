@@ -1,11 +1,12 @@
 // file: internal/server/server_test.go
-// version: 1.7.0
+// version: 1.11.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
 
 import (
 	"bytes"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,6 +47,10 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	store, err := database.NewSQLiteStore(config.AppConfig.DatabasePath)
 	require.NoError(t, err)
 	database.GlobalStore = store
+
+	// Run migrations to ensure schema is up to date
+	err = database.RunMigrations(store)
+	require.NoError(t, err)
 
 	// Initialize operation queue (with 2 workers)
 	queue := operations.NewOperationQueue(store, 2)
@@ -1785,4 +1791,718 @@ func TestListAudiobooksWithFilters(t *testing.T) {
 			assert.Equal(t, http.StatusOK, w.Code)
 		})
 	}
+}
+
+// TestRemoveExclusion tests removing a directory exclusion
+func TestRemoveExclusion(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		requestBody    map[string]any
+		expectedStatus int
+		validateFunc   func(t *testing.T, body []byte)
+	}{
+		{
+			name: "missing path returns error",
+			requestBody: map[string]any{
+				// path is missing
+			},
+			expectedStatus: http.StatusBadRequest,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response["error"])
+			},
+		},
+		{
+			name: "empty path returns error",
+			requestBody: map[string]any{
+				"path": "",
+			},
+			expectedStatus: http.StatusBadRequest,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response["error"])
+			},
+		},
+		{
+			name: "nonexistent exclusion returns error",
+			requestBody: map[string]any{
+				"path": t.TempDir(),
+			},
+			expectedStatus: http.StatusBadRequest,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response["error"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := json.Marshal(tt.requestBody)
+			require.NoError(t, err)
+			req := httptest.NewRequest(http.MethodDelete, "/api/v1/filesystem/exclude", bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, w.Body.Bytes())
+			}
+		})
+	}
+}
+
+// TestListBlockedHashes tests listing blocked hashes
+func TestListBlockedHashes(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Add a blocked hash
+	err := database.GlobalStore.AddBlockedHash("abc123", "test reason")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/blocked-hashes", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]any
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.NotNil(t, response["items"])
+	assert.NotNil(t, response["total"])
+
+	items, ok := response["items"].([]any)
+	require.True(t, ok)
+	assert.Greater(t, len(items), 0)
+}
+
+// TestRemoveBlockedHash tests removing a blocked hash
+func TestRemoveBlockedHash(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		hash           string
+		setup          func()
+		expectedStatus int
+		validateFunc   func(t *testing.T, body []byte)
+	}{
+		{
+			name: "empty hash returns error",
+			hash: "",
+			setup: func() {
+				// No setup needed
+			},
+			expectedStatus: http.StatusNotFound,
+			validateFunc:   nil,
+		},
+		{
+			name: "successfully remove blocked hash",
+			hash: "def456",
+			setup: func() {
+				err := database.GlobalStore.AddBlockedHash("def456", "test reason")
+				require.NoError(t, err)
+			},
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.Equal(t, "hash unblocked successfully", response["message"])
+				assert.Equal(t, "def456", response["hash"])
+			},
+		},
+		{
+			name: "remove nonexistent hash succeeds",
+			hash: "nonexistent789",
+			setup: func() {
+				// No setup - hash doesn't exist
+			},
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.Equal(t, "hash unblocked successfully", response["message"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup()
+			}
+
+			url := "/api/v1/blocked-hashes/" + tt.hash
+			req := httptest.NewRequest(http.MethodDelete, url, nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, w.Body.Bytes())
+			}
+		})
+	}
+}
+
+// TestExportMetadataHandler tests the export metadata endpoint
+func TestExportMetadataHandler(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create a test book
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "test.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	_, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Export Test Book",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name           string
+		expectedStatus int
+		validateFunc   func(t *testing.T, body []byte)
+	}{
+		{
+			name:           "export metadata successfully",
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/metadata/export", nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, w.Body.Bytes())
+			}
+		})
+	}
+}
+
+// TestSetEmbeddedFS tests the SetEmbeddedFS function
+func TestSetEmbeddedFS(t *testing.T) {
+	// This test verifies that SetEmbeddedFS is a no-op when not embedding frontend
+	// The function should not panic and should complete successfully
+	t.Run("no-op when not embedding", func(t *testing.T) {
+		// Create an empty embed.FS (this will be empty in non-embed builds)
+		var fs embed.FS
+
+		// Should not panic
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("SetEmbeddedFS panicked: %v", r)
+			}
+		}()
+
+		SetEmbeddedFS(fs)
+	})
+}
+
+// TestGetDashboardWithData tests dashboard with actual data
+func TestGetDashboardWithData(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create some test data
+	author, err := database.GlobalStore.CreateAuthor("Test Author")
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "test.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio data for testing"), 0o644))
+
+	_, err = database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Dashboard Test Book",
+		AuthorID: &author.ID,
+		FilePath: filePath,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]any
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	// Verify dashboard response structure with data
+	assert.NotNil(t, response["totalBooks"])
+	assert.NotNil(t, response["totalSize"])
+	assert.NotNil(t, response["sizeDistribution"])
+	assert.NotNil(t, response["formatDistribution"])
+
+	totalBooks, ok := response["totalBooks"].(float64)
+	require.True(t, ok, "totalBooks should be a number")
+	assert.Equal(t, float64(1), totalBooks)
+}
+
+// TestBatchUpdateAudiobooksWithData tests batch update with actual data
+func TestBatchUpdateAudiobooksWithData(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "batch.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Batch Test",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	batchData := map[string]any{
+		"audiobooks": []map[string]any{
+			{
+				"id":    book.ID,
+				"title": "Updated Batch Title",
+			},
+		},
+	}
+	body, err := json.Marshal(batchData)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/audiobooks/batch", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	// Just verify it doesn't error
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestGetWorkStats tests the work queue stats endpoint
+func TestGetWorkStats(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/work/stats", nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.NotNil(t, response)
+}
+
+// TestDeleteAudiobookWithSoftDelete tests soft deletion behavior
+func TestDeleteAudiobookWithSoftDelete(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "softdel.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "To Be Soft Deleted",
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	// Soft delete
+	req := httptest.NewRequest(http.MethodDelete,
+		fmt.Sprintf("/api/v1/audiobooks/%s?soft_delete=true", book.ID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify soft-deleted books endpoint
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/soft-deleted", nil)
+	w2 := httptest.NewRecorder()
+	server.router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+// TestUpdateAudiobookWithMetadata tests updating audiobook with various metadata fields
+func TestUpdateAudiobookWithMetadata(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	author, err := database.GlobalStore.CreateAuthor("Original Author")
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "meta.m4b")
+	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Original Title",
+		AuthorID: &author.ID,
+		FilePath: filePath,
+	})
+	require.NoError(t, err)
+
+	publisher := "Test Publisher"
+	narrator := "Test Narrator"
+	language := "en"
+	updateData := map[string]any{
+		"title":     "Updated Title",
+		"publisher": publisher,
+		"narrator":  narrator,
+		"language":  language,
+	}
+	body, err := json.Marshal(updateData)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut,
+		fmt.Sprintf("/api/v1/audiobooks/%s", book.ID),
+		bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Verify the metadata was updated
+	updated, err := database.GlobalStore.GetBookByID(book.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Title", updated.Title)
+	require.NotNil(t, updated.Publisher)
+	assert.Equal(t, publisher, *updated.Publisher)
+	require.NotNil(t, updated.Narrator)
+	assert.Equal(t, narrator, *updated.Narrator)
+	require.NotNil(t, updated.Language)
+	assert.Equal(t, language, *updated.Language)
+}
+
+// TestListAudiobooksWithSearchAndPagination tests search and pagination
+func TestListAudiobooksWithSearchAndPagination(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	// Create multiple books
+	tempDir := t.TempDir()
+	for i := 0; i < 5; i++ {
+		filePath := filepath.Join(tempDir, fmt.Sprintf("book%d.m4b", i))
+		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+		_, err := database.GlobalStore.CreateBook(&database.Book{
+			Title:    fmt.Sprintf("Test Book %d", i),
+			FilePath: filePath,
+		})
+		require.NoError(t, err)
+	}
+
+	// Test with pagination
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/audiobooks?limit=2&offset=0", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	items, ok := response["items"].([]any)
+	require.True(t, ok)
+	assert.LessOrEqual(t, len(items), 2)
+
+	// Test with search
+	req2 := httptest.NewRequest(http.MethodGet,
+		"/api/v1/audiobooks?search=Test", nil)
+	w2 := httptest.NewRecorder()
+	server.router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+// TestHandleITunesImportStatus tests the iTunes import status endpoint
+func TestHandleITunesImportStatus(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		operationID    string
+		setup          func() string
+		expectedStatus int
+		validateFunc   func(t *testing.T, body []byte)
+	}{
+		{
+			name:        "operation not found",
+			operationID: "01HXZ999999999999999999",
+			setup:       func() string { return "01HXZ999999999999999999" },
+			expectedStatus: http.StatusNotFound,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.Contains(t, response["error"], "operation not found")
+			},
+		},
+		{
+			name: "success - queued operation",
+			setup: func() string {
+				libPath := "/fake/library.xml"
+				opID := ulid.Make().String()
+				op, err := database.GlobalStore.CreateOperation(opID, "itunes_import", &libPath)
+				require.NoError(t, err)
+				return op.ID
+			},
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.NotNil(t, response["operation_id"])
+				assert.NotNil(t, response["status"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opID := tt.operationID
+			if tt.setup != nil {
+				opID = tt.setup()
+			}
+
+			req := httptest.NewRequest(http.MethodGet,
+				fmt.Sprintf("/api/v1/itunes/import-status/%s", opID), nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, w.Body.Bytes())
+			}
+		})
+	}
+}
+
+// TestListAudiobookVersions_ErrorCases tests error cases for version listing
+func TestListAudiobookVersions_ErrorCases(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tests := []struct {
+		name           string
+		bookID         string
+		setup          func() string
+		expectedStatus int
+		validateFunc   func(t *testing.T, body []byte)
+	}{
+		{
+			name:           "book not found",
+			bookID:         "01HXZ888888888888888888",
+			expectedStatus: http.StatusNotFound,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				assert.Contains(t, response["error"], "not found")
+			},
+		},
+		{
+			name: "book with no version group",
+			setup: func() string {
+				tempDir := t.TempDir()
+				filePath := filepath.Join(tempDir, "single.m4b")
+				require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
+				book, err := database.GlobalStore.CreateBook(&database.Book{
+					Title:    "Single Version Book",
+					FilePath: filePath,
+				})
+				require.NoError(t, err)
+				return book.ID
+			},
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				versions, ok := response["versions"].([]any)
+				assert.True(t, ok)
+				assert.Equal(t, 1, len(versions))
+			},
+		},
+		{
+			name: "book with version group",
+			setup: func() string {
+				tempDir := t.TempDir()
+				filePath1 := filepath.Join(tempDir, "v1.m4b")
+				filePath2 := filepath.Join(tempDir, "v2.m4b")
+				require.NoError(t, os.WriteFile(filePath1, []byte("v1"), 0o644))
+				require.NoError(t, os.WriteFile(filePath2, []byte("v2"), 0o644))
+
+				groupID := "vg-" + ulid.Make().String()
+				book1, err := database.GlobalStore.CreateBook(&database.Book{
+					Title:          "Version 1",
+					FilePath:       filePath1,
+					VersionGroupID: &groupID,
+				})
+				require.NoError(t, err)
+				_, err = database.GlobalStore.CreateBook(&database.Book{
+					Title:          "Version 2",
+					FilePath:       filePath2,
+					VersionGroupID: &groupID,
+				})
+				require.NoError(t, err)
+				return book1.ID
+			},
+			expectedStatus: http.StatusOK,
+			validateFunc: func(t *testing.T, body []byte) {
+				var response map[string]any
+				err := json.Unmarshal(body, &response)
+				require.NoError(t, err)
+				versions, ok := response["versions"].([]any)
+				assert.True(t, ok)
+				assert.Equal(t, 2, len(versions))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bookID := tt.bookID
+			if tt.setup != nil {
+				bookID = tt.setup()
+			}
+
+			req := httptest.NewRequest(http.MethodGet,
+				fmt.Sprintf("/api/v1/audiobooks/%s/versions", bookID), nil)
+			w := httptest.NewRecorder()
+
+			server.router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, w.Body.Bytes())
+			}
+		})
+	}
+}
+
+func TestListWorks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/works", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListDuplicateAudiobooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/duplicates", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestListSoftDeletedAudiobooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/deleted", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestPurgeSoftDeletedAudiobooks(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/audiobooks/deleted?older_than_days=30", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestRestoreAudiobookNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	fakeID := ulid.Make().String()
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/restore", fakeID), nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestCreateWork(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	body := `{"title":"Test Work","author":"Test Author"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/works", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
+func TestGetWorkNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/works/nonexistent", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestAddImportPathInvalid(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import-paths", bytes.NewBufferString("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestGetOperationStatusNotFound(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/nonexistent", nil)
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	assert.Contains(t, []int{404, 500}, w.Code)
 }

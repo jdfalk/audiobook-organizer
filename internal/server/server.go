@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.54.0
+// version: 1.54.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2329,7 +2329,7 @@ func (s *Server) listAudiobookVersions(c *gin.Context) {
 	}
 
 	book, err := database.GlobalStore.GetBookByID(id)
-	if err != nil {
+	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}

@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package database
@@ -716,5 +716,307 @@ func TestRestoreSoftDeletedBook(t *testing.T) {
 	}
 	if retrieved.MarkedForDeletionAt != nil {
 		t.Error("Expected MarkedForDeletionAt to be nil after restoration")
+	}
+}
+
+// ============================================================================
+// Additional Coverage Tests - To reach 80% coverage
+// ============================================================================
+
+// TestGetBooksBySeriesID tests retrieving all books in a series
+func TestGetBooksBySeriesID(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create author and series
+	author, err := store.CreateAuthor("Test Author")
+	if err != nil {
+		t.Fatalf("Failed to create author: %v", err)
+	}
+
+	series, err := store.CreateSeries("Test Series", &author.ID)
+	if err != nil {
+		t.Fatalf("Failed to create series: %v", err)
+	}
+
+	// Create books in the series
+	for i := 1; i <= 3; i++ {
+		book := &Book{
+			Title:    "Book " + string(rune('0'+i)),
+			FilePath: "/test/book" + string(rune('0'+i)) + ".mp3",
+			SeriesID: &series.ID,
+			AuthorID: &author.ID,
+		}
+		_, err := store.CreateBook(book)
+		if err != nil {
+			t.Fatalf("Failed to create book %d: %v", i, err)
+		}
+	}
+
+	// Retrieve books by series
+	books, err := store.GetBooksBySeriesID(series.ID)
+	if err != nil {
+		t.Fatalf("Failed to get books by series: %v", err)
+	}
+
+	if len(books) != 3 {
+		t.Errorf("Expected 3 books in series, got %d", len(books))
+	}
+
+	// Verify all books belong to the series
+	for _, book := range books {
+		if book.SeriesID == nil || *book.SeriesID != series.ID {
+			t.Error("Book does not belong to the expected series")
+		}
+	}
+}
+
+// TestGetBooksByAuthorID tests retrieving all books by an author
+func TestGetBooksByAuthorID(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create author
+	author, err := store.CreateAuthor("Famous Author")
+	if err != nil {
+		t.Fatalf("Failed to create author: %v", err)
+	}
+
+	// Create books by this author
+	for i := 1; i <= 4; i++ {
+		book := &Book{
+			Title:    "Author Book " + string(rune('0'+i)),
+			FilePath: "/test/author_book" + string(rune('0'+i)) + ".mp3",
+			AuthorID: &author.ID,
+		}
+		_, err := store.CreateBook(book)
+		if err != nil {
+			t.Fatalf("Failed to create book %d: %v", i, err)
+		}
+	}
+
+	// Create a book by different author (should not be included)
+	otherAuthor, err := store.CreateAuthor("Other Author")
+	if err != nil {
+		t.Fatalf("Failed to create other author: %v", err)
+	}
+	otherBook := &Book{
+		Title:    "Other Author Book",
+		FilePath: "/test/other_author_book.mp3",
+		AuthorID: &otherAuthor.ID,
+	}
+	_, err = store.CreateBook(otherBook)
+	if err != nil {
+		t.Fatalf("Failed to create other author's book: %v", err)
+	}
+
+	// Retrieve books by author
+	books, err := store.GetBooksByAuthorID(author.ID)
+	if err != nil {
+		t.Fatalf("Failed to get books by author: %v", err)
+	}
+
+	if len(books) != 4 {
+		t.Errorf("Expected 4 books by author, got %d", len(books))
+	}
+
+	// Verify all books belong to the author
+	for _, book := range books {
+		if book.AuthorID == nil || *book.AuthorID != author.ID {
+			t.Error("Book does not belong to the expected author")
+		}
+	}
+}
+
+// TestGetSeriesByName_NotFound tests series name lookup when not found
+func TestGetSeriesByName_NotFound(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	author, err := store.CreateAuthor("Test Author")
+	if err != nil {
+		t.Fatalf("Failed to create author: %v", err)
+	}
+
+	// Try to get non-existent series
+	series, err := store.GetSeriesByName("NonExistent Series", &author.ID)
+	if err != nil {
+		t.Fatalf("Expected nil for non-existent series, got error: %v", err)
+	}
+	if series != nil {
+		t.Error("Expected nil result for non-existent series")
+	}
+}
+
+// TestGetWorkByID_NotFound tests work lookup when not found
+func TestGetWorkByID_NotFound(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Try to get non-existent work
+	work, err := store.GetWorkByID("nonexistent-work-id")
+	if err != nil {
+		t.Fatalf("Expected nil for non-existent work, got error: %v", err)
+	}
+	if work != nil {
+		t.Error("Expected nil result for non-existent work")
+	}
+}
+
+// TestUpsertMetadataFieldState_Insert tests inserting new metadata field state
+func TestUpsertMetadataFieldState_Insert(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create a book
+	book := &Book{
+		Title:    "Test Book for Metadata",
+		FilePath: "/test/metadata.mp3",
+	}
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	// Insert metadata field state
+	state := &MetadataFieldState{
+		BookID:         created.ID,
+		Field:          "title",
+		OverrideLocked: true,
+		UpdatedAt:      time.Now(),
+	}
+	err = store.UpsertMetadataFieldState(state)
+	if err != nil {
+		t.Fatalf("Failed to upsert metadata field state: %v", err)
+	}
+
+	// Retrieve and verify
+	states, err := store.GetMetadataFieldStates(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get metadata field states: %v", err)
+	}
+
+	found := false
+	for _, s := range states {
+		if s.Field == "title" {
+			found = true
+			if !s.OverrideLocked {
+				t.Error("Expected OverrideLocked to be true")
+			}
+		}
+	}
+	if !found {
+		t.Error("Expected to find metadata field state for 'title'")
+	}
+}
+
+// TestUpsertMetadataFieldState_Update tests updating existing metadata field state
+func TestUpsertMetadataFieldState_Update(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create a book
+	book := &Book{
+		Title:    "Test Book for Metadata Update",
+		FilePath: "/test/metadata_update.mp3",
+	}
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	// Insert initial state
+	state := &MetadataFieldState{
+		BookID:         created.ID,
+		Field:          "narrator",
+		OverrideLocked: false,
+		UpdatedAt:      time.Now(),
+	}
+	err = store.UpsertMetadataFieldState(state)
+	if err != nil {
+		t.Fatalf("Failed to insert initial state: %v", err)
+	}
+
+	// Update the state
+	state.OverrideLocked = true
+	state.UpdatedAt = time.Now()
+	err = store.UpsertMetadataFieldState(state)
+	if err != nil {
+		t.Fatalf("Failed to update metadata field state: %v", err)
+	}
+
+	// Retrieve and verify
+	states, err := store.GetMetadataFieldStates(created.ID)
+	if err != nil {
+		t.Fatalf("Failed to get metadata field states: %v", err)
+	}
+
+	found := false
+	for _, s := range states {
+		if s.Field == "narrator" {
+			found = true
+			if !s.OverrideLocked {
+				t.Error("Expected OverrideLocked to be true after update")
+			}
+		}
+	}
+	if !found {
+		t.Error("Expected to find updated metadata field state")
+	}
+}
+
+// TestReset tests the Reset function that clears all data
+func TestReset(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	sqliteStore := store.(*SQLiteStore)
+
+	// Create some data
+	author, err := store.CreateAuthor("Test Author")
+	if err != nil {
+		t.Fatalf("Failed to create author: %v", err)
+	}
+
+	book := &Book{
+		Title:    "Test Book",
+		FilePath: "/test/reset.mp3",
+		AuthorID: &author.ID,
+	}
+	_, err = store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("Failed to create book: %v", err)
+	}
+
+	// Verify data exists
+	count, err := store.CountBooks()
+	if err != nil {
+		t.Fatalf("Failed to count books: %v", err)
+	}
+	if count == 0 {
+		t.Fatal("Expected at least 1 book before reset")
+	}
+
+	// Reset the database
+	err = sqliteStore.Reset()
+	if err != nil {
+		t.Fatalf("Failed to reset database: %v", err)
+	}
+
+	// Verify data is cleared
+	count, err = store.CountBooks()
+	if err != nil {
+		t.Fatalf("Failed to count books after reset: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Expected 0 books after reset, got %d", count)
+	}
+
+	authors, err := store.GetAllAuthors()
+	if err != nil {
+		t.Fatalf("Failed to get authors after reset: %v", err)
+	}
+	if len(authors) != 0 {
+		t.Errorf("Expected 0 authors after reset, got %d", len(authors))
 	}
 }

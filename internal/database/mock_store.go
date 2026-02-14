@@ -11,69 +11,69 @@ import (
 // MockStore is a simple mock implementation for testing services
 type MockStore struct {
 	// Book methods
-	GetBookByIDFunc    func(id string) (*Book, error)
-	GetBookByFilePathFunc func(path string) (*Book, error)
-	GetAllBooksFunc    func(limit, offset int) ([]Book, error)
-	GetBooksByWorkIDFunc func(workID string) ([]Book, error)
-	GetBooksBySeriesIDFunc func(seriesID int) ([]Book, error)
-	GetBooksByAuthorIDFunc func(authorID int) ([]Book, error)
-	GetBookByFileHashFunc func(hash string) (*Book, error)
-	GetBookByOriginalHashFunc func(hash string) (*Book, error)
+	GetBookByIDFunc            func(id string) (*Book, error)
+	GetBookByFilePathFunc      func(path string) (*Book, error)
+	GetAllBooksFunc            func(limit, offset int) ([]Book, error)
+	GetBooksByWorkIDFunc       func(workID string) ([]Book, error)
+	GetBooksBySeriesIDFunc     func(seriesID int) ([]Book, error)
+	GetBooksByAuthorIDFunc     func(authorID int) ([]Book, error)
+	GetBookByFileHashFunc      func(hash string) (*Book, error)
+	GetBookByOriginalHashFunc  func(hash string) (*Book, error)
 	GetBookByOrganizedHashFunc func(hash string) (*Book, error)
-	GetDuplicateBooksFunc func() ([][]Book, error)
-	CreateBookFunc     func(book *Book) (*Book, error)
-	UpdateBookFunc     func(id string, book *Book) (*Book, error)
-	DeleteBookFunc     func(id string) error
-	SearchBooksFunc    func(query string, limit, offset int) ([]Book, error)
-	CountBooksFunc     func() (int, error)
-	ListSoftDeletedBooksFunc func(limit, offset int, olderThan *time.Time) ([]Book, error)
+	GetDuplicateBooksFunc      func() ([][]Book, error)
+	CreateBookFunc             func(book *Book) (*Book, error)
+	UpdateBookFunc             func(id string, book *Book) (*Book, error)
+	DeleteBookFunc             func(id string) error
+	SearchBooksFunc            func(query string, limit, offset int) ([]Book, error)
+	CountBooksFunc             func() (int, error)
+	ListSoftDeletedBooksFunc   func(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Work methods
-	GetAllWorksFunc    func() ([]Work, error)
-	GetWorkByIDFunc    func(id string) (*Work, error)
-	CreateWorkFunc     func(work *Work) (*Work, error)
-	UpdateWorkFunc     func(id string, work *Work) (*Work, error)
-	DeleteWorkFunc     func(id string) error
+	GetAllWorksFunc func() ([]Work, error)
+	GetWorkByIDFunc func(id string) (*Work, error)
+	CreateWorkFunc  func(work *Work) (*Work, error)
+	UpdateWorkFunc  func(id string, work *Work) (*Work, error)
+	DeleteWorkFunc  func(id string) error
 
 	// Author methods
-	GetAllAuthorsFunc  func() ([]Author, error)
-	GetAuthorByIDFunc  func(id int) (*Author, error)
+	GetAllAuthorsFunc   func() ([]Author, error)
+	GetAuthorByIDFunc   func(id int) (*Author, error)
 	GetAuthorByNameFunc func(name string) (*Author, error)
-	CreateAuthorFunc   func(name string) (*Author, error)
+	CreateAuthorFunc    func(name string) (*Author, error)
 
 	// Series methods
-	GetAllSeriesFunc   func() ([]Series, error)
-	GetSeriesByIDFunc  func(id int) (*Series, error)
+	GetAllSeriesFunc    func() ([]Series, error)
+	GetSeriesByIDFunc   func(id int) (*Series, error)
 	GetSeriesByNameFunc func(name string, authorID *int) (*Series, error)
-	CreateSeriesFunc   func(name string, authorID *int) (*Series, error)
+	CreateSeriesFunc    func(name string, authorID *int) (*Series, error)
 
 	// Metadata
-	GetMetadataFieldStatesFunc func(bookID string) ([]MetadataFieldState, error)
+	GetMetadataFieldStatesFunc   func(bookID string) ([]MetadataFieldState, error)
 	UpsertMetadataFieldStateFunc func(state *MetadataFieldState) error
 	DeleteMetadataFieldStateFunc func(bookID, field string) error
 
 	// Import Paths
-	GetAllImportPathsFunc func() ([]ImportPath, error)
-	GetImportPathByIDFunc func(id int) (*ImportPath, error)
+	GetAllImportPathsFunc   func() ([]ImportPath, error)
+	GetImportPathByIDFunc   func(id int) (*ImportPath, error)
 	GetImportPathByPathFunc func(path string) (*ImportPath, error)
-	CreateImportPathFunc func(path, name string) (*ImportPath, error)
-	UpdateImportPathFunc func(id int, importPath *ImportPath) error
-	DeleteImportPathFunc func(id int) error
+	CreateImportPathFunc    func(path, name string) (*ImportPath, error)
+	UpdateImportPathFunc    func(id int, importPath *ImportPath) error
+	DeleteImportPathFunc    func(id int) error
 
 	// Operations
-	CreateOperationFunc func(id, opType string, folderPath *string) (*Operation, error)
-	GetOperationByIDFunc func(id string) (*Operation, error)
-	GetRecentOperationsFunc func(limit int) ([]Operation, error)
+	CreateOperationFunc       func(id, opType string, folderPath *string) (*Operation, error)
+	GetOperationByIDFunc      func(id string) (*Operation, error)
+	GetRecentOperationsFunc   func(limit int) ([]Operation, error)
 	UpdateOperationStatusFunc func(id, status string, progress, total int, message string) error
-	UpdateOperationErrorFunc func(id, errorMessage string) error
+	UpdateOperationErrorFunc  func(id, errorMessage string) error
 
 	// Operation Logs
-	AddOperationLogFunc func(operationID, level, message string, details *string) error
+	AddOperationLogFunc  func(operationID, level, message string, details *string) error
 	GetOperationLogsFunc func(operationID string) ([]OperationLog, error)
 
 	// User Preferences
-	GetUserPreferenceFunc func(key string) (*UserPreference, error)
-	SetUserPreferenceFunc func(key, value string) error
+	GetUserPreferenceFunc     func(key string) (*UserPreference, error)
+	SetUserPreferenceFunc     func(key, value string) error
 	GetAllUserPreferencesFunc func() ([]UserPreference, error)
 
 	// Settings
@@ -83,23 +83,23 @@ type MockStore struct {
 	DeleteSettingFunc  func(key string) error
 
 	// Playlists
-	CreatePlaylistFunc func(name string, seriesID *int, filePath string) (*Playlist, error)
-	GetPlaylistByIDFunc func(id int) (*Playlist, error)
+	CreatePlaylistFunc        func(name string, seriesID *int, filePath string) (*Playlist, error)
+	GetPlaylistByIDFunc       func(id int) (*Playlist, error)
 	GetPlaylistBySeriesIDFunc func(seriesID int) (*Playlist, error)
-	AddPlaylistItemFunc func(playlistID, bookID, position int) error
-	GetPlaylistItemsFunc func(playlistID int) ([]PlaylistItem, error)
+	AddPlaylistItemFunc       func(playlistID, bookID, position int) error
+	GetPlaylistItemsFunc      func(playlistID int) ([]PlaylistItem, error)
 
 	// Users
-	CreateUserFunc     func(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error)
-	GetUserByIDFunc    func(id string) (*User, error)
+	CreateUserFunc        func(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error)
+	GetUserByIDFunc       func(id string) (*User, error)
 	GetUserByUsernameFunc func(username string) (*User, error)
-	GetUserByEmailFunc func(email string) (*User, error)
-	UpdateUserFunc     func(user *User) error
+	GetUserByEmailFunc    func(email string) (*User, error)
+	UpdateUserFunc        func(user *User) error
 
 	// Sessions
-	CreateSessionFunc  func(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
-	GetSessionFunc     func(id string) (*Session, error)
-	RevokeSessionFunc  func(id string) error
+	CreateSessionFunc    func(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
+	GetSessionFunc       func(id string) (*Session, error)
+	RevokeSessionFunc    func(id string) error
 	ListUserSessionsFunc func(userID string) ([]Session, error)
 
 	// Per-user preferences
@@ -109,26 +109,26 @@ type MockStore struct {
 
 	// Book segments
 	CreateBookSegmentFunc func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
-	ListBookSegmentsFunc func(bookNumericID int) ([]BookSegment, error)
+	ListBookSegmentsFunc  func(bookNumericID int) ([]BookSegment, error)
 	MergeBookSegmentsFunc func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
 
 	// Playback events
-	AddPlaybackEventFunc func(event *PlaybackEvent) error
-	ListPlaybackEventsFunc func(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error)
+	AddPlaybackEventFunc       func(event *PlaybackEvent) error
+	ListPlaybackEventsFunc     func(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error)
 	UpdatePlaybackProgressFunc func(progress *PlaybackProgress) error
-	GetPlaybackProgressFunc func(userID string, bookNumericID int) (*PlaybackProgress, error)
+	GetPlaybackProgressFunc    func(userID string, bookNumericID int) (*PlaybackProgress, error)
 
 	// Stats
-	IncrementBookPlayStatsFunc func(bookNumericID int, seconds int) error
-	GetBookStatsFunc func(bookNumericID int) (*BookStats, error)
+	IncrementBookPlayStatsFunc   func(bookNumericID int, seconds int) error
+	GetBookStatsFunc             func(bookNumericID int) (*BookStats, error)
 	IncrementUserListenStatsFunc func(userID string, seconds int) error
-	GetUserStatsFunc func(userID string) (*UserStats, error)
+	GetUserStatsFunc             func(userID string) (*UserStats, error)
 
 	// Hash blocklist
-	IsHashBlockedFunc func(hash string) (bool, error)
-	AddBlockedHashFunc func(hash, reason string) error
-	RemoveBlockedHashFunc func(hash string) error
-	GetAllBlockedHashesFunc func() ([]DoNotImport, error)
+	IsHashBlockedFunc        func(hash string) (bool, error)
+	AddBlockedHashFunc       func(hash, reason string) error
+	RemoveBlockedHashFunc    func(hash string) error
+	GetAllBlockedHashesFunc  func() ([]DoNotImport, error)
 	GetBlockedHashByHashFunc func(hash string) (*DoNotImport, error)
 
 	// Version Management

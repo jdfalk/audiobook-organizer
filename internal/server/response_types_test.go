@@ -1,5 +1,5 @@
 // file: internal/server/response_types_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package server
@@ -141,4 +141,45 @@ func TestDuplicatesResponse(t *testing.T) {
 	if resp.DuplicateCount != 2 {
 		t.Errorf("expected duplicate count 2, got %d", resp.DuplicateCount)
 	}
+}
+
+func TestNewStatusResponse(t *testing.T) {
+	t.Run("ok status with nil data", func(t *testing.T) {
+		resp := NewStatusResponse("ok", nil)
+
+		if resp.Status != "ok" {
+			t.Errorf("expected status %q, got %q", "ok", resp.Status)
+		}
+		if resp.Data != nil {
+			t.Errorf("expected data nil, got %v", resp.Data)
+		}
+	})
+
+	t.Run("error status with string data", func(t *testing.T) {
+		resp := NewStatusResponse("error", "something went wrong")
+
+		if resp.Status != "error" {
+			t.Errorf("expected status %q, got %q", "error", resp.Status)
+		}
+		if resp.Data != "something went wrong" {
+			t.Errorf("expected data %q, got %v", "something went wrong", resp.Data)
+		}
+	})
+
+	t.Run("degraded status with map data", func(t *testing.T) {
+		data := map[string]any{"service": "database", "latency": 500}
+		resp := NewStatusResponse("degraded", data)
+
+		if resp.Status != "degraded" {
+			t.Errorf("expected status %q, got %q", "degraded", resp.Status)
+		}
+		// Verify the data is not nil (can't directly compare maps)
+		if resp.Data == nil {
+			t.Error("expected data to be set, got nil")
+		}
+		// Type assert to verify it's a map
+		if _, ok := resp.Data.(map[string]any); !ok {
+			t.Errorf("expected data to be map[string]any, got %T", resp.Data)
+		}
+	})
 }
