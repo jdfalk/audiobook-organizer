@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Major Version</key><integer>1</integer>
+	<key>Minor Version</key><integer>1</integer>
+	<key>Application Version</key><string>12.9.5.5</string>
+	<key>Music Folder</key><string>file://localhost/Users/testuser/Music/iTunes/iTunes%20Media/</string>
+	<key>Tracks</key>
+	<dict>
+		<key>100</key>
+		<dict>
+			<key>Track ID</key><integer>100</integer>
+			<key>Persistent ID</key><string>ABCD1234EFGH5678</string>
+			<key>Name</key><string>The Hobbit</string>
+			<key>Artist</key><string>J.R.R. Tolkien</string>
+			<key>Album Artist</key><string>Rob Inglis</string>
+			<key>Album</key><string>Middle-earth, Book 1</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>1997</integer>
+			<key>Comments</key><string>Unabridged Edition</string>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/The%20Hobbit.m4b</string>
+			<key>Size</key><integer>524288000</integer>
+			<key>Total Time</key><integer>39600000</integer>
+			<key>Date Added</key><date>2020-01-15T10:30:00Z</date>
+			<key>Play Count</key><integer>3</integer>
+			<key>Play Date</key><integer>1700000000</integer>
+			<key>Play Date UTC</key><date>2023-11-14T22:13:20Z</date>
+			<key>Rating</key><integer>80</integer>
+			<key>Bookmark</key><integer>1200000</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>200</key>
+		<dict>
+			<key>Track ID</key><integer>200</integer>
+			<key>Persistent ID</key><string>WXYZ9876LMNO5432</string>
+			<key>Name</key><string>Dune</string>
+			<key>Artist</key><string>Frank Herbert</string>
+			<key>Album Artist</key><string></string>
+			<key>Album</key><string>Dune Chronicles</string>
+			<key>Genre</key><string>Audiobooks</string>
+			<key>Kind</key><string>MPEG audio file</string>
+			<key>Year</key><integer>2007</integer>
+			<key>Comments</key><string></string>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Dune.mp3</string>
+			<key>Size</key><integer>262144000</integer>
+			<key>Total Time</key><integer>79200000</integer>
+			<key>Date Added</key><date>2021-06-20T14:00:00Z</date>
+			<key>Play Count</key><integer>1</integer>
+			<key>Play Date</key><integer>0</integer>
+			<key>Rating</key><integer>100</integer>
+			<key>Bookmark</key><integer>0</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>300</key>
+		<dict>
+			<key>Track ID</key><integer>300</integer>
+			<key>Persistent ID</key><string>MUSIC123TRACK456</string>
+			<key>Name</key><string>Bohemian Rhapsody</string>
+			<key>Artist</key><string>Queen</string>
+			<key>Album</key><string>A Night at the Opera</string>
+			<key>Genre</key><string>Rock</string>
+			<key>Kind</key><string>MPEG audio file</string>
+			<key>Year</key><integer>1975</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Music/Queen/Bohemian%20Rhapsody.mp3</string>
+			<key>Size</key><integer>12000000</integer>
+			<key>Total Time</key><integer>355000</integer>
+			<key>Date Added</key><date>2019-03-10T08:00:00Z</date>
+			<key>Play Count</key><integer>50</integer>
+			<key>Rating</key><integer>100</integer>
+		</dict>
+		<key>400</key>
+		<dict>
+			<key>Track ID</key><integer>400</integer>
+			<key>Persistent ID</key><string>SPKN4567WORD8901</string>
+			<key>Name</key><string>The Art of War</string>
+			<key>Artist</key><string>Sun Tzu</string>
+			<key>Album</key><string></string>
+			<key>Genre</key><string>Philosophy</string>
+			<key>Kind</key><string>Spoken Word</string>
+			<key>Year</key><integer>2010</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Art%20of%20War.m4b</string>
+			<key>Size</key><integer>50000000</integer>
+			<key>Total Time</key><integer>7200000</integer>
+			<key>Date Added</key><date>2022-08-01T16:30:00Z</date>
+			<key>Play Count</key><integer>0</integer>
+			<key>Rating</key><integer>0</integer>
+			<key>Bookmark</key><integer>3600000</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+	</dict>
+	<key>Playlists</key>
+	<array>
+		<dict>
+			<key>Name</key><string>Music</string>
+			<key>Playlist ID</key><integer>1</integer>
+			<key>Playlist Items</key>
+			<array>
+				<dict><key>Track ID</key><integer>300</integer></dict>
+			</array>
+		</dict>
+		<dict>
+			<key>Name</key><string>Audiobooks</string>
+			<key>Playlist ID</key><integer>2</integer>
+			<key>Playlist Items</key>
+			<array>
+				<dict><key>Track ID</key><integer>100</integer></dict>
+				<dict><key>Track ID</key><integer>200</integer></dict>
+				<dict><key>Track ID</key><integer>400</integer></dict>
+			</array>
+		</dict>
+		<dict>
+			<key>Name</key><string>Sci-Fi Favorites</string>
+			<key>Playlist ID</key><integer>3</integer>
+			<key>Playlist Items</key>
+			<array>
+				<dict><key>Track ID</key><integer>100</integer></dict>
+				<dict><key>Track ID</key><integer>200</integer></dict>
+			</array>
+		</dict>
+		<dict>
+			<key>Name</key><string>Recently Added</string>
+			<key>Playlist ID</key><integer>4</integer>
+			<key>Playlist Items</key>
+			<array>
+				<dict><key>Track ID</key><integer>400</integer></dict>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
