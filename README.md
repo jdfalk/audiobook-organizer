@@ -250,6 +250,8 @@ api_keys:
   goodreads: 'your-api-key-if-available'
 ```
 
+See `docs/configuration.md` for the full CLI/env/config reference.
+
 ## Documentation
 
 For more detailed information, see the
@@ -260,6 +262,7 @@ layout and persistence model.
 Additional operational docs:
 
 - [Architecture](docs/architecture.md)
+- [Configuration](docs/configuration.md)
 - [QA Checklist](docs/qa-checklist.md)
 - [Roadmap to 100%](docs/roadmap-to-100-percent.md)
 
