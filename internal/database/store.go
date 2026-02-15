@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.15.0
+// version: 2.16.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -26,6 +26,11 @@ type Store interface {
 	GetAuthorByID(id int) (*Author, error)
 	GetAuthorByName(name string) (*Author, error)
 	CreateAuthor(name string) (*Author, error)
+
+	// Book-Author relationships
+	GetBookAuthors(bookID string) ([]BookAuthor, error)
+	SetBookAuthors(bookID string, authors []BookAuthor) error
+	GetBooksByAuthorIDWithRole(authorID int) ([]Book, error)
 
 	// Series
 	GetAllSeries() ([]Series, error)
@@ -151,6 +156,14 @@ type Author struct {
 	Name string `json:"name"`
 }
 
+// BookAuthor represents the many-to-many relationship between books and authors
+type BookAuthor struct {
+	BookID   string `json:"book_id"`
+	AuthorID int    `json:"author_id"`
+	Role     string `json:"role"`     // author, co-author, editor
+	Position int    `json:"position"` // 0 = primary
+}
+
 // Series represents an audiobook series
 type Series struct {
 	ID       int    `json:"id"`
@@ -210,8 +223,13 @@ type Book struct {
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
 	CreatedAt           *time.Time `json:"created_at,omitempty"`
 	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
+	// Cover art
+	CoverURL *string `json:"cover_url,omitempty"`
+	// Narrators as JSON array
+	NarratorsJSON *string `json:"narrators_json,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
 	Author               *Author                            `json:"author,omitempty" db:"-"`
+	Authors              []BookAuthor                       `json:"authors,omitempty" db:"-"`
 	Series               *Series                            `json:"series,omitempty" db:"-"`
 	MetadataProvenance   map[string]MetadataProvenanceEntry `json:"metadata_provenance,omitempty" db:"-"`
 	MetadataProvenanceAt *time.Time                         `json:"metadata_provenance_at,omitempty" db:"-"`

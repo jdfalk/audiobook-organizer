@@ -330,6 +330,18 @@ func (m *MockStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	return nil, nil
 }
 
+func (m *MockStore) GetBookAuthors(bookID string) ([]BookAuthor, error) {
+	return nil, nil
+}
+
+func (m *MockStore) SetBookAuthors(bookID string, authors []BookAuthor) error {
+	return nil
+}
+
+func (m *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
+	return m.GetBooksByAuthorID(authorID)
+}
+
 func (m *MockStore) CreateBook(book *Book) (*Book, error) {
 	if m.CreateBookFunc != nil {
 		return m.CreateBookFunc(book)

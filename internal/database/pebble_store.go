@@ -795,6 +795,38 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	return books, nil
 }
 
+func (p *PebbleStore) GetBookAuthors(bookID string) ([]BookAuthor, error) {
+	key := []byte(fmt.Sprintf("book_authors:%s", bookID))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var authors []BookAuthor
+	if err := json.Unmarshal(val, &authors); err != nil {
+		return nil, err
+	}
+	return authors, nil
+}
+
+func (p *PebbleStore) SetBookAuthors(bookID string, authors []BookAuthor) error {
+	key := []byte(fmt.Sprintf("book_authors:%s", bookID))
+	data, err := json.Marshal(authors)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(key, data, pebble.Sync)
+}
+
+func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
+	// For Pebble, fall back to the same logic as GetBooksByAuthorID
+	return p.GetBooksByAuthorID(authorID)
+}
+
 func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	// Generate ULID if not provided
 	if book.ID == "" {

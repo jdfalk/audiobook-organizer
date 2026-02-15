@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -27,7 +27,8 @@ const bookSelectColumns = `
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
 	original_file_hash, organized_file_hash, library_state, quantity,
-	marked_for_deletion, marked_for_deletion_at, created_at, updated_at
+	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
+	cover_url, narrators_json
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -43,6 +44,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		isbn10, isbn13, fileHash, quality, codec                             sql.NullString
 		originalFileHash, organizedFileHash                                  sql.NullString
 		versionGroupID, versionNotes                                         sql.NullString
+		coverURL, narratorsJSON                                              sql.NullString
 		isPrimaryVersion                                                     sql.NullBool
 		libraryState                                                         sql.NullString
 		markedForDeletion                                                    sql.NullBool
@@ -60,6 +62,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
 		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
+		&coverURL, &narratorsJSON,
 	); err != nil {
 		return err
 	}
@@ -129,6 +132,8 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if updatedAt.Valid {
 		book.UpdatedAt = &updatedAt.Time
 	}
+	book.CoverURL = nullableString(coverURL)
+	book.NarratorsJSON = nullableString(narratorsJSON)
 	return nil
 }
 
@@ -254,9 +259,22 @@ func (s *SQLiteStore) createTables() error {
 		marked_for_deletion_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME,
+		cover_url TEXT,
+		narrators_json TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
+
+	CREATE TABLE IF NOT EXISTS book_authors (
+		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+		author_id INTEGER NOT NULL REFERENCES authors(id),
+		role TEXT NOT NULL DEFAULT 'author',
+		position INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (book_id, author_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_book_authors_book ON book_authors(book_id);
+	CREATE INDEX IF NOT EXISTS idx_book_authors_author ON book_authors(author_id);
 
 	CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
 	CREATE INDEX IF NOT EXISTS idx_books_author ON books(author_id);
@@ -399,6 +417,8 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"marked_for_deletion_at": "DATETIME",
 		"created_at":             "DATETIME DEFAULT CURRENT_TIMESTAMP",
 		"updated_at":             "DATETIME",
+		"cover_url":              "TEXT",
+		"narrators_json":         "TEXT",
 	}
 
 	// Fetch existing columns
@@ -948,6 +968,68 @@ func (s *SQLiteStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	return books, rows.Err()
 }
 
+func (s *SQLiteStore) GetBookAuthors(bookID string) ([]BookAuthor, error) {
+	rows, err := s.db.Query(`SELECT book_id, author_id, role, position FROM book_authors WHERE book_id = ? ORDER BY position`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var authors []BookAuthor
+	for rows.Next() {
+		var ba BookAuthor
+		if err := rows.Scan(&ba.BookID, &ba.AuthorID, &ba.Role, &ba.Position); err != nil {
+			return nil, err
+		}
+		authors = append(authors, ba)
+	}
+	return authors, rows.Err()
+}
+
+func (s *SQLiteStore) SetBookAuthors(bookID string, authors []BookAuthor) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM book_authors WHERE book_id = ?`, bookID); err != nil {
+		return err
+	}
+
+	for _, ba := range authors {
+		if _, err := tx.Exec(
+			`INSERT INTO book_authors (book_id, author_id, role, position) VALUES (?, ?, ?, ?)`,
+			bookID, ba.AuthorID, ba.Role, ba.Position,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *SQLiteStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE id IN (
+		SELECT book_id FROM book_authors WHERE author_id = ?
+	) AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title`, bookSelectColumns)
+	rows, err := s.db.Query(query, authorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
+}
+
 func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	// Generate ULID if not provided
 	if book.ID == "" {
@@ -972,8 +1054,8 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
-		created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		created_at, updated_at, cover_url, narrators_json
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
@@ -983,7 +1065,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
-		book.CreatedAt, book.UpdatedAt,
+		book.CreatedAt, book.UpdatedAt, book.CoverURL, book.NarratorsJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -1006,7 +1088,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
-		marked_for_deletion = ?, marked_for_deletion_at = ?, updated_at = ?
+		marked_for_deletion = ?, marked_for_deletion_at = ?, updated_at = ?,
+		cover_url = ?, narrators_json = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -1018,7 +1101,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
-		book.MarkedForDeletion, book.MarkedForDeletionAt, book.UpdatedAt, id,
+		book.MarkedForDeletion, book.MarkedForDeletionAt, book.UpdatedAt,
+		book.CoverURL, book.NarratorsJSON, id,
 	)
 	if err != nil {
 		return nil, err
