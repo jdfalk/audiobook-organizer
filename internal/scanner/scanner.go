@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -503,6 +503,7 @@ func extractAuthorFromDirectory(filePath string) string {
 	skipDirs := map[string]bool{
 		"books": true, "audiobooks": true, "newbooks": true, "downloads": true,
 		"media": true, "audio": true, "library": true, "collection": true,
+		"import": true, "imports": true, "organized": true,
 		"bt": true, "incomplete": true, "data": true,
 	}
 
@@ -666,43 +667,21 @@ func isInitialToken(word string) bool {
 func saveBookToDatabase(book *Book) error {
 	// Prefer using the unified Store API when available
 	if database.GlobalStore != nil {
-		// Resolve author (create if missing)
-		var authorID *int
-		if book.Author != "" {
-			author, err := database.GlobalStore.GetAuthorByName(book.Author)
-			if err != nil {
-				return fmt.Errorf("author lookup failed: %w", err)
-			}
-			if author == nil {
-				author, err = database.GlobalStore.CreateAuthor(book.Author)
-				if err != nil {
-					return fmt.Errorf("author create failed: %w", err)
-				}
-			}
-			authorID = &author.ID
+		// Resolve author/series with conflict-aware get-or-create semantics.
+		authorID, err := resolveAuthorID(book.Author)
+		if err != nil {
+			return err
 		}
-
-		// Resolve series (create if missing)
-		var seriesID *int
-		if book.Series != "" {
-			series, err := database.GlobalStore.GetSeriesByName(book.Series, authorID)
-			if err != nil {
-				return fmt.Errorf("series lookup failed: %w", err)
-			}
-			if series == nil {
-				series, err = database.GlobalStore.CreateSeries(book.Series, authorID)
-				if err != nil {
-					return fmt.Errorf("series create failed: %w", err)
-				}
-			}
-			seriesID = &series.ID
+		seriesID, err := resolveSeriesID(book.Series, authorID)
+		if err != nil {
+			return err
 		}
 
 		// Attempt Work association (normalize title + author)
 		var workID *string
 		if book.Title != "" {
 			canonical := strings.ToLower(strings.TrimSpace(book.Title))
-			// Simple heuristic: try existing works then create new
+			// Simple heuristic: try existing works then create new.
 			works, err := database.GlobalStore.GetAllWorks()
 			if err == nil { // non-critical
 				for _, w := range works {
@@ -719,6 +698,20 @@ func saveBookToDatabase(book *Book) error {
 				if err == nil {
 					wid := created.ID
 					workID = &wid
+				} else if isUniqueConstraintError(err) {
+					// A parallel worker likely created the same work; resolve it.
+					works, lookupErr := database.GlobalStore.GetAllWorks()
+					if lookupErr == nil {
+						for _, w := range works {
+							if strings.ToLower(strings.TrimSpace(w.Title)) == canonical &&
+								((authorID == nil && w.AuthorID == nil) ||
+									(authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
+								wid := w.ID
+								workID = &wid
+								break
+							}
+						}
+					}
 				}
 			}
 		}
@@ -971,6 +964,77 @@ func nullablePtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+func resolveAuthorID(authorName string) (*int, error) {
+	trimmed := strings.TrimSpace(authorName)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	author, err := database.GlobalStore.GetAuthorByName(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("author lookup failed: %w", err)
+	}
+	if author != nil {
+		return &author.ID, nil
+	}
+
+	author, err = database.GlobalStore.CreateAuthor(trimmed)
+	if err != nil {
+		if !isUniqueConstraintError(err) {
+			return nil, fmt.Errorf("author create failed: %w", err)
+		}
+		// Concurrent create: re-fetch existing record.
+		author, err = database.GlobalStore.GetAuthorByName(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("author lookup after conflict failed: %w", err)
+		}
+		if author == nil {
+			return nil, fmt.Errorf("author conflict detected but author not found: %s", trimmed)
+		}
+	}
+	return &author.ID, nil
+}
+
+func resolveSeriesID(seriesName string, authorID *int) (*int, error) {
+	trimmed := strings.TrimSpace(seriesName)
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	series, err := database.GlobalStore.GetSeriesByName(trimmed, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("series lookup failed: %w", err)
+	}
+	if series != nil {
+		return &series.ID, nil
+	}
+
+	series, err = database.GlobalStore.CreateSeries(trimmed, authorID)
+	if err != nil {
+		if !isUniqueConstraintError(err) {
+			return nil, fmt.Errorf("series create failed: %w", err)
+		}
+		// Concurrent create: re-fetch existing record.
+		series, err = database.GlobalStore.GetSeriesByName(trimmed, authorID)
+		if err != nil {
+			return nil, fmt.Errorf("series lookup after conflict failed: %w", err)
+		}
+		if series == nil {
+			return nil, fmt.Errorf("series conflict detected but series not found: %s", trimmed)
+		}
+	}
+	return &series.ID, nil
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "unique constraint") ||
+		strings.Contains(lower, "duplicate key")
 }
 
 // identifySeriesUsingExternalAPIs tries to match books to series using external APIs

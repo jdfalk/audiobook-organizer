@@ -1,7 +1,7 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.4.0
+// version: 2.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
-// last-edited: 2026-02-09
+// last-edited: 2026-02-15
 
 import { Page } from '@playwright/test';
 
@@ -157,6 +157,48 @@ interface MockITunesState {
   importStatus?: MockITunesImportStatus;
 }
 
+export interface MockAuthUser {
+  id: string;
+  username: string;
+  email: string;
+  roles: string[];
+  status: string;
+  created_at: string;
+}
+
+interface MockAuthSession {
+  id: string;
+  user_id: string;
+  expires_at: string;
+  ip_address?: string;
+  user_agent?: string;
+  revoked?: boolean;
+  created_at: string;
+  current?: boolean;
+}
+
+export interface MockAuthState {
+  auth_enabled?: boolean;
+  has_users?: boolean;
+  requires_auth?: boolean;
+  bootstrap_ready?: boolean;
+  login_username?: string;
+  login_password?: string;
+  currentUser?: MockAuthUser | null;
+  sessions?: MockAuthSession[];
+}
+
+interface ResolvedMockAuthState {
+  auth_enabled: boolean;
+  has_users: boolean;
+  requires_auth: boolean;
+  bootstrap_ready: boolean;
+  login_username: string;
+  login_password: string;
+  currentUser: MockAuthUser | null;
+  sessions: MockAuthSession[];
+}
+
 interface MockFailures {
   getBooks?: number | 'timeout';
   searchBooks?: number | 'timeout';
@@ -188,6 +230,7 @@ export interface MockApiOptions {
     logs?: Record<string, MockOperationLog[]>;
   };
   itunes?: MockITunesState;
+  auth?: MockAuthState;
   failures?: MockFailures;
   systemStatus?: Record<string, unknown>;
 }
@@ -309,6 +352,7 @@ export async function setupMockApiRoutes(
     homeDirectory: options.homeDirectory || '/',
     operations: options.operations || {},
     itunes: options.itunes || {},
+    auth: buildAuthState(options.auth),
     failures: options.failures || {},
   };
 
@@ -350,6 +394,161 @@ export async function setupMockApiRoutes(
     // Health check
     if (pathname === '/api/v1/health') {
       return route.fulfill(jsonResponse({ status: 'ok' }));
+    }
+
+    // Auth endpoints
+    if (pathname === '/api/v1/auth/status' && method === 'GET') {
+      return route.fulfill(
+        jsonResponse({
+          has_users: mockState.auth.has_users,
+          auth_enabled: mockState.auth.auth_enabled,
+          requires_auth: mockState.auth.requires_auth,
+          bootstrap_ready: mockState.auth.bootstrap_ready,
+        })
+      );
+    }
+
+    if (pathname === '/api/v1/auth/setup' && method === 'POST') {
+      if (mockState.auth.has_users) {
+        return route.fulfill(
+          jsonResponse({ error: 'initial setup already completed' }, 409)
+        );
+      }
+
+      const body =
+        (request.postDataJSON() as {
+          username?: string;
+          email?: string;
+          password?: string;
+        }) || {};
+      const username = (body.username || '').trim();
+      const password = body.password || '';
+      if (!username || password.length < 8) {
+        return route.fulfill(
+          jsonResponse(
+            { error: 'username and password (min 8 chars) are required' },
+            400
+          )
+        );
+      }
+
+      const now = new Date().toISOString();
+      mockState.auth.currentUser = {
+        id: 'user-admin',
+        username,
+        email: (body.email || `${username}@local`).trim(),
+        roles: ['admin'],
+        status: 'active',
+        created_at: now,
+      };
+      mockState.auth.login_username = username;
+      mockState.auth.login_password = password;
+      mockState.auth.has_users = true;
+      mockState.auth.requires_auth = true;
+      mockState.auth.bootstrap_ready = false;
+
+      return route.fulfill(
+        jsonResponse({
+          message: 'admin user created',
+          user: mockState.auth.currentUser,
+        }, 201)
+      );
+    }
+
+    if (pathname === '/api/v1/auth/login' && method === 'POST') {
+      const body =
+        (request.postDataJSON() as { username?: string; password?: string }) ||
+        {};
+      const username = (body.username || '').trim();
+      const password = body.password || '';
+      if (!username || !password) {
+        return route.fulfill(
+          jsonResponse({ error: 'username and password are required' }, 400)
+        );
+      }
+      if (
+        username !== mockState.auth.login_username ||
+        password !== mockState.auth.login_password
+      ) {
+        return route.fulfill(
+          jsonResponse({ error: 'invalid credentials' }, 401)
+        );
+      }
+
+      if (!mockState.auth.currentUser) {
+        mockState.auth.currentUser = {
+          id: 'user-admin',
+          username,
+          email: `${username}@local`,
+          roles: ['admin'],
+          status: 'active',
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      const sessionId = `session-${Date.now()}`;
+      const session = {
+        id: sessionId,
+        user_id: mockState.auth.currentUser.id,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        ip_address: '127.0.0.1',
+        user_agent: 'playwright',
+        revoked: false,
+        created_at: new Date().toISOString(),
+        current: true,
+      };
+      mockState.auth.sessions = [
+        session,
+        ...mockState.auth.sessions.map((existing) => ({
+          ...existing,
+          current: false,
+        })),
+      ];
+      mockState.auth.has_users = true;
+      mockState.auth.requires_auth = true;
+      mockState.auth.bootstrap_ready = false;
+
+      return route.fulfill(
+        jsonResponse({
+          user: mockState.auth.currentUser,
+          session,
+        })
+      );
+    }
+
+    if (pathname === '/api/v1/auth/me' && method === 'GET') {
+      if (!mockState.auth.requires_auth || mockState.auth.currentUser) {
+        return route.fulfill(jsonResponse({ user: mockState.auth.currentUser }));
+      }
+      return route.fulfill(jsonResponse({ error: 'not authenticated' }, 401));
+    }
+
+    if (pathname === '/api/v1/auth/logout' && method === 'POST') {
+      mockState.auth.currentUser = null;
+      mockState.auth.sessions = [];
+      return route.fulfill(jsonResponse({ message: 'logged out' }));
+    }
+
+    if (pathname === '/api/v1/auth/sessions' && method === 'GET') {
+      if (!mockState.auth.currentUser) {
+        return route.fulfill(jsonResponse({ error: 'not authenticated' }, 401));
+      }
+      return route.fulfill(
+        jsonResponse({
+          sessions: mockState.auth.sessions,
+        })
+      );
+    }
+
+    if (pathname.match(/\/api\/v1\/auth\/sessions\/[^/]+$/) && method === 'DELETE') {
+      if (!mockState.auth.currentUser) {
+        return route.fulfill(jsonResponse({ error: 'not authenticated' }, 401));
+      }
+      const sessionId = pathname.split('/').pop() || '';
+      mockState.auth.sessions = mockState.auth.sessions.filter(
+        (session) => session.id !== sessionId
+      );
+      return route.fulfill(jsonResponse({}, 204));
     }
 
     // System reset
@@ -770,7 +969,9 @@ export async function setupMockApiRoutes(
 
     // Filesystem endpoints
     if (pathname === '/api/v1/filesystem/home') {
-      return route.fulfill(jsonResponse({ home: mockState.homeDirectory }));
+      return route.fulfill(
+        jsonResponse({ path: mockState.homeDirectory, home: mockState.homeDirectory })
+      );
     }
 
     if (pathname === '/api/v1/filesystem/browse') {
@@ -1098,6 +1299,25 @@ const buildSystemStatus = (
   ...DEFAULT_SYSTEM_STATUS,
   ...(overrides || {}),
 });
+
+const buildAuthState = (
+  overrides?: MockAuthState
+): ResolvedMockAuthState => {
+  const hasUsers = overrides?.has_users ?? false;
+  const authEnabled = overrides?.auth_enabled ?? true;
+  const requiresAuth = overrides?.requires_auth ?? (authEnabled && hasUsers);
+  const bootstrapReady = overrides?.bootstrap_ready ?? (authEnabled && !hasUsers);
+  return {
+    auth_enabled: authEnabled,
+    has_users: hasUsers,
+    requires_auth: requiresAuth,
+    bootstrap_ready: bootstrapReady,
+    login_username: overrides?.login_username || 'admin',
+    login_password: overrides?.login_password || 'password123',
+    currentUser: overrides?.currentUser ?? null,
+    sessions: overrides?.sessions || [],
+  };
+};
 
 /**
  * Generate test audiobooks

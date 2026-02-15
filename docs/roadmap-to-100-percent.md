@@ -1,6 +1,7 @@
 <!-- file: docs/roadmap-to-100-percent.md -->
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 <!-- guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890 -->
+<!-- last-edited: 2026-02-15 -->
 
 # Roadmap to 100% — Everything Needed for Production Release
 
@@ -26,6 +27,12 @@ Implemented in this pass:
 - Build/deploy alignment updates (`Dockerfile`, `Dockerfile.test`, coverage thresholds)
 - New deployment artifacts (`docker-compose.yml`, `.env.example`, launchd plist, `install.sh`)
 - New docs (`docs/qa-checklist.md`, `docs/architecture.md`)
+- Middleware unit tests added for auth, rate limiting, and request size limits
+- Scanner persistence race hardening for concurrent scans (conflict-aware get-or-create)
+- Auth E2E flow coverage added (bootstrap setup, login redirect, invalid credentials)
+- Works page replaced with live data view backed by `/api/v1/works`
+- New configuration reference (`docs/configuration.md`)
+- New CI binary smoke workflow (`.github/workflows/binary-smoke.yml`)
 
 Still pending for full roadmap completion:
 
