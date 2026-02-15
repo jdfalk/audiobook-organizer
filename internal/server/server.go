@@ -784,6 +784,9 @@ func (s *Server) setupRoutes() {
 			itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
 		}
 
+		// Cover art proxy
+		api.GET("/covers/proxy", s.handleCoverProxy)
+
 		// System routes
 		api.GET("/system/status", s.getSystemStatus)
 		api.GET("/system/logs", s.getSystemLogs)

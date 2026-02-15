@@ -24,6 +24,8 @@ export interface Audiobook {
   file_path: string;
   original_filename?: string;
   cover_path?: string;
+  cover_url?: string;
+  narrators_json?: string;
   file_size_bytes?: number;
   format?: string;
   bitrate_kbps?: number;

@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -108,6 +108,9 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	if meta.PublishYear != 0 {
 		book.AudiobookReleaseYear = intPtrHelper(meta.PublishYear)
 	}
+	if meta.CoverURL != "" {
+		book.CoverURL = stringPtr(meta.CoverURL)
+	}
 }
 
 func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
@@ -123,6 +126,9 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 	}
 	if meta.PublishYear != 0 {
 		fetchedValues["audiobook_release_year"] = meta.PublishYear
+	}
+	if meta.CoverURL != "" {
+		fetchedValues["cover_url"] = meta.CoverURL
 	}
 	if meta.Author != "" {
 		fetchedValues["author_name"] = meta.Author
