@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- file: deploy/com.audiobook-organizer.plist -->
+<!-- version: 1.0.0 -->
+<!-- guid: 1f2e3d4c-5b6a-4789-90ab-cdef12345678 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.audiobook-organizer</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/audiobook-organizer</string>
+        <string>serve</string>
+        <string>--dir</string>
+        <string>/Users/USERNAME/Audiobooks</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/audiobook-organizer.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/audiobook-organizer.err</string>
+</dict>
+</plist>

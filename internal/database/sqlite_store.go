@@ -172,6 +172,27 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to ping SQLite database: %w", err)
 	}
 
+	// Improve concurrency and durability defaults for SQLite.
+	pragmaStatements := []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA synchronous=NORMAL",
+		"PRAGMA busy_timeout=5000",
+	}
+	for _, stmt := range pragmaStatements {
+		if _, err := db.Exec(stmt); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("failed to apply sqlite pragma %q: %w", stmt, err)
+		}
+	}
+
+	if strings.Contains(path, ":memory:") {
+		db.SetMaxOpenConns(1)
+	} else {
+		db.SetMaxOpenConns(10)
+	}
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
 	store := &SQLiteStore{db: db}
 
 	// Create tables
@@ -683,6 +704,26 @@ func (s *SQLiteStore) ListUserSessions(userID string) ([]Session, error) {
 	return sessions, rows.Err()
 }
 
+func (s *SQLiteStore) DeleteExpiredSessions(now time.Time) (int, error) {
+	result, err := s.db.Exec(`DELETE FROM sessions WHERE revoked = 1 OR expires_at <= ?`, now)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(rows), nil
+}
+
+func (s *SQLiteStore) CountUsers() (int, error) {
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // ---- Per-User Preferences ----
 
 func (s *SQLiteStore) SetUserPreferenceForUser(userID, key, value string) error {
@@ -755,7 +796,12 @@ func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, superseded_by, created_at, updated_at, version)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		segment.ID, bookNumericID, segment.FilePath, segment.Format, segment.SizeBytes, segment.DurationSec,
-		segment.TrackNumber, segment.TotalTracks, func() int { if segment.Active { return 1 }; return 0 }(), segment.SupersededBy,
+		segment.TrackNumber, segment.TotalTracks, func() int {
+			if segment.Active {
+				return 1
+			}
+			return 0
+		}(), segment.SupersededBy,
 		segment.CreatedAt, segment.UpdatedAt, segment.Version,
 	)
 	if err != nil {

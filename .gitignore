@@ -170,6 +170,7 @@ $RECYCLE.BIN/
 # Environment and config files
 .env
 .env.*
+!.env.example
 *.local
 local.env
 
