@@ -139,11 +139,11 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
             }}
           />
         )}
-        {audiobook.cover_path ? (
+        {(audiobook.cover_path || audiobook.cover_url) ? (
           <CardMedia
             component="img"
             height="240"
-            image={audiobook.cover_path}
+            image={audiobook.cover_path || (audiobook.cover_url ? `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}` : '')}
             alt={audiobook.title || 'Audiobook cover'}
             sx={{ objectFit: 'cover' }}
           />
