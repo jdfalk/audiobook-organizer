@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.8.1
+// version: 1.9.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -25,14 +25,25 @@ import { Operations } from './pages/Operations';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
+import { useAuth } from './contexts/AuthContext';
 
 function App() {
+  const auth = useAuth();
   const [showWizard, setShowWizard] = useState(false);
   const [wizardCheckComplete, setWizardCheckComplete] = useState(false);
   const [serverShutdown, setServerShutdown] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   useEffect(() => {
+    if (!auth.initialized) {
+      return;
+    }
+    if (auth.requiresAuth && !auth.isAuthenticated) {
+      setShowWizard(false);
+      setWizardCheckComplete(true);
+      return;
+    }
+
     let cancelled = false;
     const checkWizardStatus = async () => {
       try {
@@ -65,7 +76,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [auth.initialized, auth.isAuthenticated, auth.requiresAuth]);
 
   // Listen for server shutdown events and handle reconnection
   useEffect(() => {
@@ -103,10 +114,11 @@ function App() {
     setShowWizard(false);
   };
 
-  // Don't render anything until we've checked wizard status
-  if (!wizardCheckComplete) {
+  if (!auth.initialized || !wizardCheckComplete) {
     return null;
   }
+
+  const requiresLogin = auth.requiresAuth && !auth.isAuthenticated;
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -129,22 +141,31 @@ function App() {
         </Stack>
       </Backdrop>
 
-      <WelcomeWizard open={showWizard} onComplete={handleWizardComplete} />
+      {!requiresLogin && (
+        <WelcomeWizard open={showWizard} onComplete={handleWizardComplete} />
+      )}
 
-      <MainLayout>
+      {requiresLogin ? (
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/library" element={<Library />} />
-          <Route path="/library/:id" element={<BookDetail />} />
-          <Route path="/works" element={<Works />} />
-          <Route path="/system" element={<System />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/files" element={<FileBrowser />} />
-          <Route path="/operations" element={<Operations />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </MainLayout>
+      ) : (
+        <MainLayout>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/library/:id" element={<BookDetail />} />
+            <Route path="/works" element={<Works />} />
+            <Route path="/system" element={<System />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/files" element={<FileBrowser />} />
+            <Route path="/operations" element={<Operations />} />
+          </Routes>
+        </MainLayout>
+      )}
     </Box>
   );
 }

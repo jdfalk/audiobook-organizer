@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -96,12 +97,49 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 
 	// Collect all directories first
 	var dirs []string
+	visitedInodes := make(map[uint64]struct{})
+	var visitedMu sync.Mutex
+
+	registerDirectory := func(path string, info os.FileInfo) bool {
+		if info == nil {
+			return false
+		}
+		statInfo, err := os.Stat(path)
+		if err != nil || !statInfo.IsDir() {
+			return false
+		}
+		sys, ok := statInfo.Sys().(*syscall.Stat_t)
+		if !ok {
+			dirs = append(dirs, path)
+			return true
+		}
+		inode := uint64(sys.Ino)
+		visitedMu.Lock()
+		defer visitedMu.Unlock()
+		if _, seen := visitedInodes[inode]; seen {
+			log.Printf("[WARN] scanner: potential symlink loop detected, skipping already visited directory: %s", path)
+			return false
+		}
+		visitedInodes[inode] = struct{}{}
+		dirs = append(dirs, path)
+		return true
+	}
+
 	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			if path == rootDir {
+				return err
+			}
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			_ = registerDirectory(path, info)
+			return nil
 		}
 		if info.IsDir() {
-			dirs = append(dirs, path)
+			if !registerDirectory(path, info) {
+				return filepath.SkipDir
+			}
 		}
 		return nil
 	})

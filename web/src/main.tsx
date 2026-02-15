@@ -1,5 +1,5 @@
 // file: web/src/main.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import React, { useMemo } from 'react';
@@ -11,6 +11,7 @@ import { createAppTheme } from './theme';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/toast/ToastProvider';
 import { useAppStore } from './stores/useAppStore';
+import { AuthProvider } from './contexts/AuthContext';
 
 function AppRoot() {
   const themeMode = useAppStore((state) => state.themeMode);
@@ -23,9 +24,11 @@ function AppRoot() {
       >
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <ToastProvider>
-            <App />
-          </ToastProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
     </ErrorBoundary>

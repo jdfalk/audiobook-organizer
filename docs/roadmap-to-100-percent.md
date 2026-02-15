@@ -1,5 +1,5 @@
 <!-- file: docs/roadmap-to-100-percent.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890 -->
 
 # Roadmap to 100% — Everything Needed for Production Release
@@ -7,6 +7,32 @@
 **Date**: February 15, 2026
 **Current state**: ~97% MVP complete, 81.3% Go test coverage, all core features implemented
 **Goal**: Production-ready, publicly releasable, rock-solid audiobook organizer
+
+## Progress Update (February 15, 2026)
+
+Implemented in this pass:
+
+- Auth middleware, auth endpoints (`status/setup/login/me/logout/sessions`), and session cleanup wiring
+- API and auth rate limiting middleware with configurable limits
+- Request body size limits for JSON and upload endpoints
+- Config validation and runtime config update hardening with persistence
+- HTTPS startup degradation to HTTP-only when TLS files are missing
+- Organizer temp-file writes with cleanup on startup and failures
+- Scanner inode tracking to prevent symlink loop traversal
+- Stale operation detection endpoint and timeout-based failure handling
+- Storage usage endpoint (`GET /api/v1/system/storage`) and frontend quota data integration
+- Login UI implementation with bootstrap admin setup and authenticated route gating
+- Top bar search routing integration and user logout action
+- Build/deploy alignment updates (`Dockerfile`, `Dockerfile.test`, coverage thresholds)
+- New deployment artifacts (`docker-compose.yml`, `.env.example`, launchd plist, `install.sh`)
+- New docs (`docs/qa-checklist.md`, `docs/architecture.md`)
+
+Still pending for full roadmap completion:
+
+- Git history scrubbing for previously committed secrets
+- Full OpenAPI completion for all endpoints
+- Expanded frontend/E2E coverage goals and full manual QA execution
+- Remaining polish/performance optional items (FTS, cache, shortcut system, etc.)
 
 This document covers EVERY remaining task needed to make this application perfect. An AI agent or developer should be able to use this document alone to bring the project to completion.
 

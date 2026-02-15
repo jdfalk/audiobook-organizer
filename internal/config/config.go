@@ -1,10 +1,16 @@
 // file: internal/config/config.go
-// version: 1.10.0
+// version: 1.10.1
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -73,14 +79,14 @@ type Config struct {
 	SetupComplete bool   `json:"setup_complete"`
 
 	// Library organization
-	OrganizationStrategy string `json:"organization_strategy"` // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
-	ScanOnStartup        bool   `json:"scan_on_startup"`
-	AutoOrganize             bool `json:"auto_organize"`
-	AutoScanEnabled          bool `json:"auto_scan_enabled"`
-	AutoScanDebounceSeconds  int  `json:"auto_scan_debounce_seconds"`
-	FolderNamingPattern  string `json:"folder_naming_pattern"`
-	FileNamingPattern    string `json:"file_naming_pattern"`
-	CreateBackups        bool   `json:"create_backups"`
+	OrganizationStrategy    string `json:"organization_strategy"` // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
+	ScanOnStartup           bool   `json:"scan_on_startup"`
+	AutoOrganize            bool   `json:"auto_organize"`
+	AutoScanEnabled         bool   `json:"auto_scan_enabled"`
+	AutoScanDebounceSeconds int    `json:"auto_scan_debounce_seconds"`
+	FolderNamingPattern     string `json:"folder_naming_pattern"`
+	FileNamingPattern       string `json:"file_naming_pattern"`
+	CreateBackups           bool   `json:"create_backups"`
 
 	// Storage quotas
 	EnableDiskQuota    bool `json:"enable_disk_quota"`
@@ -99,6 +105,15 @@ type Config struct {
 
 	// Performance
 	ConcurrentScans int `json:"concurrent_scans"`
+	// Background operation timeout in minutes (0 disables timeout)
+	OperationTimeoutMinutes int `json:"operation_timeout_minutes"`
+
+	// API limits
+	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
+	AuthRateLimitPerMinute int  `json:"auth_rate_limit_per_minute"`
+	JSONBodyLimitMB        int  `json:"json_body_limit_mb"`
+	UploadBodyLimitMB      int  `json:"upload_body_limit_mb"`
+	EnableAuth             bool `json:"enable_auth"`
 
 	// Memory management
 	MemoryLimitType    string `json:"memory_limit_type"`    // 'items', 'percent', 'absolute'
@@ -162,6 +177,14 @@ func InitConfig() {
 
 	// Set performance defaults
 	viper.SetDefault("concurrent_scans", 4)
+	viper.SetDefault("operation_timeout_minutes", 30)
+
+	// API security/runtime limits
+	viper.SetDefault("api_rate_limit_per_minute", 100)
+	viper.SetDefault("auth_rate_limit_per_minute", 10)
+	viper.SetDefault("json_body_limit_mb", 1)
+	viper.SetDefault("upload_body_limit_mb", 10)
+	viper.SetDefault("enable_auth", true)
 
 	// Set memory management defaults
 	viper.SetDefault("memory_limit_type", "items")
@@ -217,12 +240,14 @@ func InitConfig() {
 		SetupComplete: viper.GetBool("setup_complete"),
 
 		// Library organization
-		OrganizationStrategy: viper.GetString("organization_strategy"),
-		ScanOnStartup:        viper.GetBool("scan_on_startup"),
-		AutoOrganize:         viper.GetBool("auto_organize"),
-		FolderNamingPattern:  viper.GetString("folder_naming_pattern"),
-		FileNamingPattern:    viper.GetString("file_naming_pattern"),
-		CreateBackups:        viper.GetBool("create_backups"),
+		OrganizationStrategy:    viper.GetString("organization_strategy"),
+		ScanOnStartup:           viper.GetBool("scan_on_startup"),
+		AutoOrganize:            viper.GetBool("auto_organize"),
+		AutoScanEnabled:         viper.GetBool("auto_scan_enabled"),
+		AutoScanDebounceSeconds: viper.GetInt("auto_scan_debounce_seconds"),
+		FolderNamingPattern:     viper.GetString("folder_naming_pattern"),
+		FileNamingPattern:       viper.GetString("file_naming_pattern"),
+		CreateBackups:           viper.GetBool("create_backups"),
 
 		// Storage quotas
 		EnableDiskQuota:    viper.GetBool("enable_disk_quota"),
@@ -239,7 +264,13 @@ func InitConfig() {
 		OpenAIAPIKey:    viper.GetString("openai_api_key"),
 
 		// Performance
-		ConcurrentScans: viper.GetInt("concurrent_scans"),
+		ConcurrentScans:         viper.GetInt("concurrent_scans"),
+		OperationTimeoutMinutes: viper.GetInt("operation_timeout_minutes"),
+		APIRateLimitPerMinute:   viper.GetInt("api_rate_limit_per_minute"),
+		AuthRateLimitPerMinute:  viper.GetInt("auth_rate_limit_per_minute"),
+		JSONBodyLimitMB:         viper.GetInt("json_body_limit_mb"),
+		UploadBodyLimitMB:       viper.GetInt("upload_body_limit_mb"),
+		EnableAuth:              viper.GetBool("enable_auth"),
 
 		// Memory management
 		MemoryLimitType:    viper.GetString("memory_limit_type"),
@@ -349,24 +380,161 @@ func InitConfig() {
 	}
 }
 
+var validPatternPlaceholder = regexp.MustCompile(`\{[A-Za-z0-9_]+\}`)
+
+func hasBalancedBraces(value string) bool {
+	return strings.Count(value, "{") == strings.Count(value, "}")
+}
+
+func validateNamingPattern(value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fmt.Errorf("pattern cannot be empty")
+	}
+	if !hasBalancedBraces(trimmed) {
+		return fmt.Errorf("unbalanced braces in pattern")
+	}
+	withoutPlaceholders := validPatternPlaceholder.ReplaceAllString(trimmed, "")
+	if strings.Contains(withoutPlaceholders, "{") || strings.Contains(withoutPlaceholders, "}") {
+		return fmt.Errorf("invalid placeholder format in pattern")
+	}
+	return nil
+}
+
+func validateParentDirExists(path string, field string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	parent := filepath.Dir(path)
+	info, err := os.Stat(parent)
+	if err != nil {
+		return fmt.Errorf("%s parent directory %q does not exist", field, parent)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s parent path %q is not a directory", field, parent)
+	}
+	return nil
+}
+
+func validateParentDirWritable(path string, field string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	parent := filepath.Dir(path)
+	testFile, err := os.CreateTemp(parent, ".ao-write-test-*")
+	if err != nil {
+		return fmt.Errorf("%s parent directory %q is not writable", field, parent)
+	}
+	testFile.Close()
+	_ = os.Remove(testFile.Name())
+	return nil
+}
+
+// Validate performs structural checks on runtime configuration values.
+func (c *Config) Validate() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+
+	var errs []string
+
+	switch c.DatabaseType {
+	case "pebble", "sqlite":
+	default:
+		errs = append(errs, "database_type must be 'pebble' or 'sqlite'")
+	}
+
+	if err := validateParentDirExists(c.DatabasePath, "database_path"); err != nil {
+		errs = append(errs, err.Error())
+	} else if err := validateParentDirWritable(c.DatabasePath, "database_path"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if err := validateParentDirExists(c.PlaylistDir, "playlist_dir"); err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if c.ConcurrentScans < 0 {
+		errs = append(errs, "concurrent_scans must be >= 0")
+	}
+	if c.AutoScanDebounceSeconds < 0 {
+		errs = append(errs, "auto_scan_debounce_seconds must be >= 0")
+	}
+	if c.OperationTimeoutMinutes < 0 {
+		errs = append(errs, "operation_timeout_minutes must be >= 0")
+	}
+	if c.APIRateLimitPerMinute < 0 {
+		errs = append(errs, "api_rate_limit_per_minute must be >= 0")
+	}
+	if c.AuthRateLimitPerMinute < 0 {
+		errs = append(errs, "auth_rate_limit_per_minute must be >= 0")
+	}
+	if c.JSONBodyLimitMB < 0 {
+		errs = append(errs, "json_body_limit_mb must be >= 0")
+	}
+	if c.UploadBodyLimitMB < 0 {
+		errs = append(errs, "upload_body_limit_mb must be >= 0")
+	}
+	if c.EnableDiskQuota && (c.DiskQuotaPercent < 1 || c.DiskQuotaPercent > 100) {
+		errs = append(errs, "disk_quota_percent must be between 1 and 100")
+	}
+
+	validStrategies := map[string]struct{}{
+		"auto": {}, "copy": {}, "hardlink": {}, "reflink": {}, "symlink": {},
+	}
+	if c.OrganizationStrategy != "" {
+		if _, ok := validStrategies[c.OrganizationStrategy]; !ok {
+			errs = append(errs, "organization_strategy must be one of: auto, copy, hardlink, reflink, symlink")
+		}
+	}
+
+	if strings.TrimSpace(c.FolderNamingPattern) != "" {
+		if err := validateNamingPattern(c.FolderNamingPattern); err != nil {
+			errs = append(errs, "folder_naming_pattern "+err.Error())
+		}
+	}
+	if strings.TrimSpace(c.FileNamingPattern) != "" {
+		if err := validateNamingPattern(c.FileNamingPattern); err != nil {
+			errs = append(errs, "file_naming_pattern "+err.Error())
+		}
+	}
+
+	for _, ext := range c.SupportedExtensions {
+		if ext == "" {
+			continue
+		}
+		if !strings.HasPrefix(ext, ".") {
+			errs = append(errs, fmt.Sprintf("supported extension %q must start with '.'", ext))
+			break
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid configuration: %s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
 // ResetToDefaults resets the AppConfig to factory defaults
 func ResetToDefaults() {
 	AppConfig = Config{
 		// Core paths
-		RootDir:       AppConfig.RootDir,       // Keep existing paths
-		DatabasePath:  AppConfig.DatabasePath,  // Keep existing paths
+		RootDir:       AppConfig.RootDir,      // Keep existing paths
+		DatabasePath:  AppConfig.DatabasePath, // Keep existing paths
 		DatabaseType:  "pebble",
 		EnableSQLite:  false,
-		PlaylistDir:   AppConfig.PlaylistDir,   // Keep existing paths
+		PlaylistDir:   AppConfig.PlaylistDir, // Keep existing paths
 		SetupComplete: false,
 
 		// Library organization
-		OrganizationStrategy: "auto",
-		ScanOnStartup:        false,
-		AutoOrganize:         true,
-		FolderNamingPattern:  "{author}/{series}/{title} ({print_year})",
-		FileNamingPattern:    "{title} - {author} - read by {narrator}",
-		CreateBackups:        true,
+		OrganizationStrategy:    "auto",
+		ScanOnStartup:           false,
+		AutoOrganize:            true,
+		AutoScanEnabled:         false,
+		AutoScanDebounceSeconds: 30,
+		FolderNamingPattern:     "{author}/{series}/{title} ({print_year})",
+		FileNamingPattern:       "{title} - {author} - read by {narrator}",
+		CreateBackups:           true,
 
 		// Storage quotas
 		EnableDiskQuota:    false,
@@ -383,7 +551,13 @@ func ResetToDefaults() {
 		OpenAIAPIKey:    "",
 
 		// Performance
-		ConcurrentScans: 4,
+		ConcurrentScans:         4,
+		OperationTimeoutMinutes: 30,
+		APIRateLimitPerMinute:   100,
+		AuthRateLimitPerMinute:  10,
+		JSONBodyLimitMB:         1,
+		UploadBodyLimitMB:       10,
+		EnableAuth:              true,
 
 		// Memory management
 		MemoryLimitType:    "items",

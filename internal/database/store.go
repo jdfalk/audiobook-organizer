@@ -116,6 +116,10 @@ type Store interface {
 	GetSession(id string) (*Session, error)
 	RevokeSession(id string) error
 	ListUserSessions(userID string) ([]Session, error)
+	DeleteExpiredSessions(now time.Time) (int, error)
+
+	// Auth bootstrap helpers
+	CountUsers() (int, error)
 
 	// Per-user preferences
 	SetUserPreferenceForUser(userID, key, value string) error

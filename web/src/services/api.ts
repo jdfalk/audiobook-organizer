@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.14.0
+// version: 1.15.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -274,6 +274,17 @@ export interface SystemStatus {
   };
 }
 
+export interface SystemStorage {
+  path: string;
+  total_bytes: number;
+  used_bytes: number;
+  free_bytes: number;
+  percent_used: number;
+  quota_enabled: boolean;
+  quota_percent: number;
+  user_quotas_enabled: boolean;
+}
+
 export interface SystemLogs {
   logs: Array<{
     operation_id: string;
@@ -354,6 +365,33 @@ export interface Config {
   api_keys: {
     goodreads: string;
   };
+}
+
+export interface AuthStatus {
+  has_users: boolean;
+  auth_enabled?: boolean;
+  requires_auth: boolean;
+  bootstrap_ready: boolean;
+}
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+  roles: string[];
+  status: string;
+  created_at: string;
+}
+
+export interface AuthSession {
+  id: string;
+  user_id: string;
+  expires_at: string;
+  ip_address?: string;
+  user_agent?: string;
+  revoked?: boolean;
+  created_at: string;
+  current?: boolean;
 }
 
 // API functions
@@ -691,6 +729,14 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   return response.json();
 }
 
+export async function getSystemStorage(): Promise<SystemStorage> {
+  const response = await fetch(`${API_BASE}/system/storage`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch system storage');
+  }
+  return response.json();
+}
+
 // Organize operation
 export async function startOrganize(
   folderPath?: string,
@@ -752,6 +798,92 @@ export async function updateConfig(updates: Partial<Config>): Promise<Config> {
   }
   const data = await response.json();
   return data.config;
+}
+
+// Auth
+export async function getAuthStatus(): Promise<AuthStatus> {
+  const response = await fetch(`${API_BASE}/auth/status`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch auth status');
+  }
+  return response.json();
+}
+
+export async function setupAdmin(payload: {
+  username: string;
+  password: string;
+  email?: string;
+}): Promise<{ message: string; user: AuthUser }> {
+  const response = await fetch(`${API_BASE}/auth/setup`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to create admin account');
+  }
+  return response.json();
+}
+
+export async function login(payload: {
+  username: string;
+  password: string;
+}): Promise<{ user: AuthUser; session: AuthSession }> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to login');
+  }
+  return response.json();
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE}/auth/me`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch current user');
+  }
+  const data = await response.json();
+  return data.user;
+}
+
+export async function logout(): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to logout');
+  }
+}
+
+export async function listSessions(): Promise<AuthSession[]> {
+  const response = await fetch(`${API_BASE}/auth/sessions`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list sessions');
+  }
+  const data = await response.json();
+  return data.sessions || [];
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/sessions/${sessionId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to revoke session');
+  }
 }
 
 // Version Management

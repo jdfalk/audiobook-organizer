@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.54.1
+// version: 1.54.2
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -33,6 +33,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -424,23 +425,23 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 
 // Server represents the HTTP server
 type Server struct {
-	httpServer               *http.Server
-	router                   *gin.Engine
-	audiobookService         *AudiobookService
-	audiobookUpdateService   *AudiobookUpdateService
-	batchService             *BatchService
-	workService              *WorkService
-	authorSeriesService      *AuthorSeriesService
-	filesystemService        *FilesystemService
-	importPathService        *ImportPathService
-	importService            *ImportService
-	scanService              *ScanService
-	organizeService          *OrganizeService
-	metadataFetchService     *MetadataFetchService
-	configUpdateService      *ConfigUpdateService
-	systemService            *SystemService
-	metadataStateService     *MetadataStateService
-	dashboardService         *DashboardService
+	httpServer             *http.Server
+	router                 *gin.Engine
+	audiobookService       *AudiobookService
+	audiobookUpdateService *AudiobookUpdateService
+	batchService           *BatchService
+	workService            *WorkService
+	authorSeriesService    *AuthorSeriesService
+	filesystemService      *FilesystemService
+	importPathService      *ImportPathService
+	importService          *ImportService
+	scanService            *ScanService
+	organizeService        *OrganizeService
+	metadataFetchService   *MetadataFetchService
+	configUpdateService    *ConfigUpdateService
+	systemService          *SystemService
+	metadataStateService   *MetadataStateService
+	dashboardService       *DashboardService
 }
 
 // ServerConfig holds server configuration
@@ -468,22 +469,22 @@ func NewServer() *Server {
 	metrics.Register()
 
 	server := &Server{
-		router:                   router,
-		audiobookService:         NewAudiobookService(database.GlobalStore),
-		audiobookUpdateService:   NewAudiobookUpdateService(database.GlobalStore),
-		batchService:             NewBatchService(database.GlobalStore),
-		workService:              NewWorkService(database.GlobalStore),
-		authorSeriesService:      NewAuthorSeriesService(database.GlobalStore),
-		filesystemService:        NewFilesystemService(),
-		importPathService:        NewImportPathService(database.GlobalStore),
-		importService:            NewImportService(database.GlobalStore),
-		scanService:              NewScanService(database.GlobalStore),
-		organizeService:          NewOrganizeService(database.GlobalStore),
-		metadataFetchService:     NewMetadataFetchService(database.GlobalStore),
-		configUpdateService:      NewConfigUpdateService(database.GlobalStore),
-		systemService:            NewSystemService(database.GlobalStore),
-		metadataStateService:     NewMetadataStateService(database.GlobalStore),
-		dashboardService:         NewDashboardService(database.GlobalStore),
+		router:                 router,
+		audiobookService:       NewAudiobookService(database.GlobalStore),
+		audiobookUpdateService: NewAudiobookUpdateService(database.GlobalStore),
+		batchService:           NewBatchService(database.GlobalStore),
+		workService:            NewWorkService(database.GlobalStore),
+		authorSeriesService:    NewAuthorSeriesService(database.GlobalStore),
+		filesystemService:      NewFilesystemService(),
+		importPathService:      NewImportPathService(database.GlobalStore),
+		importService:          NewImportService(database.GlobalStore),
+		scanService:            NewScanService(database.GlobalStore),
+		organizeService:        NewOrganizeService(database.GlobalStore),
+		metadataFetchService:   NewMetadataFetchService(database.GlobalStore),
+		configUpdateService:    NewConfigUpdateService(database.GlobalStore),
+		systemService:          NewSystemService(database.GlobalStore),
+		metadataStateService:   NewMetadataStateService(database.GlobalStore),
+		dashboardService:       NewDashboardService(database.GlobalStore),
 	}
 
 	server.setupRoutes()
@@ -500,6 +501,20 @@ func (s *Server) Start(cfg ServerConfig) error {
 		WriteTimeout:   cfg.WriteTimeout,
 		IdleTimeout:    cfg.IdleTimeout,
 		MaxHeaderBytes: 1 << 20, // 1MB
+	}
+
+	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+		if _, err := os.Stat(cfg.TLSCertFile); err != nil {
+			log.Printf("[WARN] TLS certificate not available (%s): %v. Falling back to HTTP-only mode.", cfg.TLSCertFile, err)
+			cfg.TLSCertFile = ""
+			cfg.TLSKeyFile = ""
+			cfg.HTTP3Port = ""
+		} else if _, err := os.Stat(cfg.TLSKeyFile); err != nil {
+			log.Printf("[WARN] TLS key not available (%s): %v. Falling back to HTTP-only mode.", cfg.TLSKeyFile, err)
+			cfg.TLSCertFile = ""
+			cfg.TLSKeyFile = ""
+			cfg.HTTP3Port = ""
+		}
 	}
 
 	// Enable HTTP/2 if TLS is configured
@@ -537,7 +552,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 			}
 			log.Printf("Starting %s server on %s", protocols, s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Failed to start HTTPS server: %v", err)
+				log.Printf("Failed to start HTTPS server: %v", err)
 			}
 		}()
 
@@ -551,7 +566,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 				}
 				log.Printf("Starting HTTP/3 (QUIC) server on UDP %s:%s", cfg.Host, cfg.HTTP3Port)
 				if err := http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
-					log.Fatalf("Failed to start HTTP/3 server: %v", err)
+					log.Printf("Failed to start HTTP/3 server: %v", err)
 				}
 			}()
 		}
@@ -592,7 +607,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 		go func() {
 			log.Printf("Starting HTTP/1.1 server on %s (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Failed to start server: %v", err)
+				log.Printf("Failed to start server: %v", err)
 			}
 		}()
 	}
@@ -724,6 +739,47 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
+	// Periodic cleanup of expired/revoked auth sessions.
+	if database.GlobalStore != nil {
+		sessionCleanupTicker := time.NewTicker(10 * time.Minute)
+		backgroundWG.Add(1)
+		go func() {
+			defer backgroundWG.Done()
+			defer sessionCleanupTicker.Stop()
+			for {
+				select {
+				case <-sessionCleanupTicker.C:
+					if deleted, err := database.GlobalStore.DeleteExpiredSessions(time.Now()); err != nil {
+						log.Printf("[WARN] failed to clean up expired sessions: %v", err)
+					} else if deleted > 0 {
+						log.Printf("[INFO] cleaned up %d expired/revoked sessions", deleted)
+					}
+				case <-shutdown:
+					return
+				}
+			}
+		}()
+	}
+
+	// Periodically mark stale operations as failed.
+	if database.GlobalStore != nil && config.AppConfig.OperationTimeoutMinutes > 0 {
+		staleTimeout := time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute
+		staleTicker := time.NewTicker(1 * time.Minute)
+		backgroundWG.Add(1)
+		go func() {
+			defer backgroundWG.Done()
+			defer staleTicker.Stop()
+			for {
+				select {
+				case <-staleTicker.C:
+					s.failStaleOperations(staleTimeout)
+				case <-shutdown:
+					return
+				}
+			}
+		}()
+	}
+
 	// Wait for interrupt signal to gracefully shutdown the server
 	<-quit
 	close(shutdown)
@@ -770,6 +826,7 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Health check endpoint (both paths for compatibility)
+	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/api/health", s.healthCheck)
 	s.router.GET("/api/v1/health", s.healthCheck)
 
@@ -794,111 +851,165 @@ func (s *Server) setupRoutes() {
 		c.Next()
 	})
 
-	// API routes
+	apiRatePerMinute := config.AppConfig.APIRateLimitPerMinute
+	if apiRatePerMinute <= 0 {
+		apiRatePerMinute = 100
+	}
+	authRatePerMinute := config.AppConfig.AuthRateLimitPerMinute
+	if authRatePerMinute <= 0 {
+		authRatePerMinute = 10
+	}
+
+	apiBurst := apiRatePerMinute / 10
+	if apiBurst < 1 {
+		apiBurst = 1
+	}
+	authBurst := authRatePerMinute / 10
+	if authBurst < 1 {
+		authBurst = 1
+	}
+	jsonLimitBytes := int64(config.AppConfig.JSONBodyLimitMB) * 1024 * 1024
+	uploadLimitBytes := int64(config.AppConfig.UploadBodyLimitMB) * 1024 * 1024
+	apiRateLimiter := servermiddleware.NewIPRateLimiter(apiRatePerMinute, apiBurst).Middleware()
+	authRateLimiter := servermiddleware.NewIPRateLimiter(authRatePerMinute, authBurst).Middleware()
+	bodyLimitMiddleware := servermiddleware.MaxRequestBodySize(jsonLimitBytes, uploadLimitBytes)
+	authMiddleware := gin.HandlerFunc(func(c *gin.Context) {
+		c.Next()
+	})
+	if config.AppConfig.EnableAuth {
+		authMiddleware = servermiddleware.RequireAuth(database.GlobalStore)
+	}
+
+	// API routes (auth + rate limits + request-size limits)
 	api := s.router.Group("/api/v1")
+	api.Use(apiRateLimiter, bodyLimitMiddleware)
 	{
-		// Audiobook routes
-		api.GET("/audiobooks", s.listAudiobooks)
-		api.GET("/audiobooks/count", s.countAudiobooks)
-		api.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
-		api.GET("/audiobooks/soft-deleted", s.listSoftDeletedAudiobooks)
-		api.DELETE("/audiobooks/purge-soft-deleted", s.purgeSoftDeletedAudiobooks)
-		api.POST("/audiobooks/:id/restore", s.restoreAudiobook)
-		api.GET("/audiobooks/:id", s.getAudiobook)
-		api.GET("/audiobooks/:id/tags", s.getAudiobookTags)
-		api.PUT("/audiobooks/:id", s.updateAudiobook)
-		api.DELETE("/audiobooks/:id", s.deleteAudiobook)
-		api.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
-
-		// Author and series routes
-		api.GET("/authors", s.listAuthors)
-		api.GET("/series", s.listSeries)
-
-		// File system routes
-		api.GET("/filesystem/home", s.getHomeDirectory)
-		api.GET("/filesystem/browse", s.browseFilesystem)
-		api.POST("/filesystem/exclude", s.createExclusion)
-		api.DELETE("/filesystem/exclude", s.removeExclusion)
-
-		// Import path routes
-		api.GET("/import-paths", s.listImportPaths)
-		api.POST("/import-paths", s.addImportPath)
-		api.DELETE("/import-paths/:id", s.removeImportPath)
-
-		// Operation routes
-		api.POST("/operations/scan", s.startScan)
-		api.POST("/operations/organize", s.startOrganize)
-		api.GET("/operations/:id/status", s.getOperationStatus)
-		api.GET("/operations/:id/logs", s.getOperationLogs)
-		api.DELETE("/operations/:id", s.cancelOperation)
-		api.GET("/operations/active", s.listActiveOperations)
-
-		// Import routes
-		api.POST("/import/file", s.importFile)
-
-		// iTunes import routes
-		itunesGroup := api.Group("/itunes")
+		authGroup := api.Group("/auth")
+		authGroup.Use(authRateLimiter)
 		{
-			itunesGroup.POST("/validate", s.handleITunesValidate)
-			itunesGroup.POST("/import", s.handleITunesImport)
-			itunesGroup.POST("/write-back", s.handleITunesWriteBack)
-			itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
+			authGroup.GET("/status", s.getAuthStatus)
+			authGroup.POST("/setup", s.setupInitialAdmin)
+			authGroup.POST("/login", s.login)
 		}
 
-		// Cover art proxy
-		api.GET("/covers/proxy", s.handleCoverProxy)
+		authProtected := authGroup.Group("")
+		authProtected.Use(authMiddleware)
+		{
+			authProtected.GET("/me", s.me)
+			authProtected.POST("/logout", s.logout)
+			authProtected.GET("/sessions", s.listMySessions)
+			authProtected.DELETE("/sessions/:id", s.revokeMySession)
+		}
 
-		// System routes
-		api.GET("/system/status", s.getSystemStatus)
-		api.GET("/system/logs", s.getSystemLogs)
-		api.POST("/system/reset", s.resetSystem)
-		api.GET("/config", s.getConfig)
-		api.PUT("/config", s.updateConfig)
-		api.GET("/dashboard", s.getDashboard)
+		protected := api.Group("")
+		protected.Use(authMiddleware)
+		{
+			// Audiobook routes
+			protected.GET("/audiobooks", s.listAudiobooks)
+			protected.GET("/audiobooks/search", s.searchAudiobooks)
+			protected.GET("/audiobooks/count", s.countAudiobooks)
+			protected.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
+			protected.GET("/audiobooks/soft-deleted", s.listSoftDeletedAudiobooks)
+			protected.DELETE("/audiobooks/purge-soft-deleted", s.purgeSoftDeletedAudiobooks)
+			protected.POST("/audiobooks/:id/restore", s.restoreAudiobook)
+			protected.GET("/audiobooks/:id", s.getAudiobook)
+			protected.GET("/audiobooks/:id/tags", s.getAudiobookTags)
+			protected.PUT("/audiobooks/:id", s.updateAudiobook)
+			protected.DELETE("/audiobooks/:id", s.deleteAudiobook)
+			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
-		// Backup routes
-		api.POST("/backup/create", s.createBackup)
-		api.GET("/backup/list", s.listBackups)
-		api.POST("/backup/restore", s.restoreBackup)
-		api.DELETE("/backup/:filename", s.deleteBackup)
+			// Author and series routes
+			protected.GET("/authors", s.listAuthors)
+			protected.GET("/series", s.listSeries)
 
-		// Enhanced metadata routes
-		api.POST("/metadata/batch-update", s.batchUpdateMetadata)
-		api.POST("/metadata/validate", s.validateMetadata)
-		api.GET("/metadata/export", s.exportMetadata)
-		api.POST("/metadata/import", s.importMetadata)
-		api.GET("/metadata/search", s.searchMetadata)
-		api.GET("/metadata/fields", s.getMetadataFields)
-		api.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
-		api.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
+			// File system routes
+			protected.GET("/filesystem/home", s.getHomeDirectory)
+			protected.GET("/filesystem/browse", s.browseFilesystem)
+			protected.POST("/filesystem/exclude", s.createExclusion)
+			protected.DELETE("/filesystem/exclude", s.removeExclusion)
 
-		// AI-powered parsing routes
-		api.POST("/ai/parse-filename", s.parseFilenameWithAI)
-		api.POST("/ai/test-connection", s.testAIConnection)
-		api.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
+			// Import path routes
+			protected.GET("/import-paths", s.listImportPaths)
+			protected.POST("/import-paths", s.addImportPath)
+			protected.DELETE("/import-paths/:id", s.removeImportPath)
 
-		// Work routes (logical title-level grouping)
-		api.GET("/works", s.listWorks)
-		api.POST("/works", s.createWork)
-		api.GET("/works/:id", s.getWork)
-		api.PUT("/works/:id", s.updateWork)
-		api.DELETE("/works/:id", s.deleteWork)
-		api.GET("/works/:id/books", s.listWorkBooks)
+			// Operation routes
+			protected.GET("/operations/active", s.listActiveOperations)
+			protected.GET("/operations/stale", s.listStaleOperations)
+			protected.POST("/operations/scan", s.startScan)
+			protected.POST("/operations/organize", s.startOrganize)
+			protected.GET("/operations/:id/status", s.getOperationStatus)
+			protected.GET("/operations/:id/logs", s.getOperationLogs)
+			protected.DELETE("/operations/:id", s.cancelOperation)
 
-		// Version management routes
-		api.GET("/audiobooks/:id/versions", s.listAudiobookVersions)
-		api.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
-		api.PUT("/audiobooks/:id/set-primary", s.setAudiobookPrimary)
-		api.GET("/version-groups/:id", s.getVersionGroup)
+			// Import routes
+			protected.POST("/import/file", s.importFile)
 
-		// Work queue routes (alternative singular form for compatibility)
-		api.GET("/work", s.listWork)
-		api.GET("/work/stats", s.getWorkStats)
+			// iTunes import routes
+			itunesGroup := protected.Group("/itunes")
+			{
+				itunesGroup.POST("/validate", s.handleITunesValidate)
+				itunesGroup.POST("/import", s.handleITunesImport)
+				itunesGroup.POST("/write-back", s.handleITunesWriteBack)
+				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
+			}
 
-		// Blocked hashes management routes
-		api.GET("/blocked-hashes", s.listBlockedHashes)
-		api.POST("/blocked-hashes", s.addBlockedHash)
-		api.DELETE("/blocked-hashes/:hash", s.removeBlockedHash)
+			// Cover art proxy
+			protected.GET("/covers/proxy", s.handleCoverProxy)
+
+			// System routes
+			protected.GET("/system/status", s.getSystemStatus)
+			protected.GET("/system/storage", s.getSystemStorage)
+			protected.GET("/system/logs", s.getSystemLogs)
+			protected.POST("/system/reset", s.resetSystem)
+			protected.GET("/config", s.getConfig)
+			protected.PUT("/config", s.updateConfig)
+			protected.GET("/dashboard", s.getDashboard)
+
+			// Backup routes
+			protected.POST("/backup/create", s.createBackup)
+			protected.GET("/backup/list", s.listBackups)
+			protected.POST("/backup/restore", s.restoreBackup)
+			protected.DELETE("/backup/:filename", s.deleteBackup)
+
+			// Enhanced metadata routes
+			protected.POST("/metadata/batch-update", s.batchUpdateMetadata)
+			protected.POST("/metadata/validate", s.validateMetadata)
+			protected.GET("/metadata/export", s.exportMetadata)
+			protected.POST("/metadata/import", s.importMetadata)
+			protected.GET("/metadata/search", s.searchMetadata)
+			protected.GET("/metadata/fields", s.getMetadataFields)
+			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
+			protected.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
+
+			// AI-powered parsing routes
+			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
+			protected.POST("/ai/test-connection", s.testAIConnection)
+			protected.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
+
+			// Work routes (logical title-level grouping)
+			protected.GET("/works", s.listWorks)
+			protected.POST("/works", s.createWork)
+			protected.GET("/works/:id", s.getWork)
+			protected.PUT("/works/:id", s.updateWork)
+			protected.DELETE("/works/:id", s.deleteWork)
+			protected.GET("/works/:id/books", s.listWorkBooks)
+
+			// Version management routes
+			protected.GET("/audiobooks/:id/versions", s.listAudiobookVersions)
+			protected.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
+			protected.PUT("/audiobooks/:id/set-primary", s.setAudiobookPrimary)
+			protected.GET("/version-groups/:id", s.getVersionGroup)
+
+			// Work queue routes (alternative singular form for compatibility)
+			protected.GET("/work", s.listWork)
+			protected.GET("/work/stats", s.getWorkStats)
+
+			// Blocked hashes management routes
+			protected.GET("/blocked-hashes", s.listBlockedHashes)
+			protected.POST("/blocked-hashes", s.addBlockedHash)
+			protected.DELETE("/blocked-hashes/:hash", s.removeBlockedHash)
+		}
 	}
 
 	// Serve static files (React frontend)
@@ -906,16 +1017,42 @@ func (s *Server) setupRoutes() {
 	s.setupStaticFiles()
 }
 
-// corsMiddleware adds CORS headers
+// corsMiddleware adds restrictive CORS headers.
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		origin := strings.TrimSpace(c.GetHeader("Origin"))
+		allowedOrigin := ""
+		isDevMode := gin.Mode() == gin.DebugMode
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+		if origin != "" {
+			// Dev-mode CORS: allow Vite dev server only.
+			if isDevMode && (origin == "http://localhost:5173" || origin == "https://localhost:5173") {
+				allowedOrigin = origin
+			}
+
+			// Always allow same-origin requests.
+			host := strings.TrimSpace(c.Request.Host)
+			if host != "" {
+				if origin == "http://"+host || origin == "https://"+host {
+					allowedOrigin = origin
+				}
+			}
+		}
+
+		if allowedOrigin != "" {
+			c.Header("Access-Control-Allow-Origin", allowedOrigin)
+			c.Header("Vary", "Origin")
+			c.Header("Access-Control-Allow-Credentials", "true")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, Authorization, Cache-Control, X-Requested-With")
+			c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+		}
+
+		if c.Request.Method == http.MethodOptions {
+			if origin != "" && allowedOrigin == "" {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -980,6 +1117,18 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 
 	// Enrich with author and series names
+	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": params.Limit, "offset": params.Offset})
+}
+
+func (s *Server) searchAudiobooks(c *gin.Context) {
+	params := ParsePaginationParams(c)
+	search := strings.TrimSpace(c.Query("q"))
+	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, search, nil, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
 	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": params.Limit, "offset": params.Offset})
 }
@@ -1061,6 +1210,74 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 				log.Printf("[WARN] Auto-purge error: %s", e)
 			}
 		}
+	}
+}
+
+func isStaleOperationStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "running", "queued", "in_progress":
+		return true
+	default:
+		return false
+	}
+}
+
+func operationStartedOrCreatedAt(op database.Operation) time.Time {
+	if op.StartedAt != nil && !op.StartedAt.IsZero() {
+		return *op.StartedAt
+	}
+	return op.CreatedAt
+}
+
+func (s *Server) collectStaleOperations(timeout time.Duration) ([]database.Operation, error) {
+	if timeout <= 0 {
+		return []database.Operation{}, nil
+	}
+	if database.GlobalStore == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	ops, err := database.GlobalStore.GetRecentOperations(500)
+	if err != nil {
+		return nil, err
+	}
+	threshold := time.Now().Add(-timeout)
+	stale := make([]database.Operation, 0)
+	for _, op := range ops {
+		if !isStaleOperationStatus(op.Status) {
+			continue
+		}
+		started := operationStartedOrCreatedAt(op)
+		if started.IsZero() || started.After(threshold) {
+			continue
+		}
+		stale = append(stale, op)
+	}
+	return stale, nil
+}
+
+func (s *Server) failStaleOperations(timeout time.Duration) {
+	stale, err := s.collectStaleOperations(timeout)
+	if err != nil {
+		log.Printf("[WARN] stale operation check failed: %v", err)
+		return
+	}
+	if len(stale) == 0 {
+		return
+	}
+
+	for _, op := range stale {
+		msg := fmt.Sprintf("operation timed out after %s", timeout)
+		if err := database.GlobalStore.UpdateOperationError(op.ID, msg); err != nil {
+			log.Printf("[WARN] failed to mark stale operation %s as failed: %v", op.ID, err)
+			continue
+		}
+		if hub := realtime.GetGlobalHub(); hub != nil {
+			hub.SendOperationStatus(op.ID, "failed", map[string]any{
+				"error": msg,
+			})
+		}
+		log.Printf("[WARN] marked stale operation as failed: id=%s type=%s", op.ID, op.Type)
 	}
 }
 
@@ -1703,6 +1920,29 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"operations": results})
 }
 
+func (s *Server) listStaleOperations(c *gin.Context) {
+	timeoutMinutes := config.AppConfig.OperationTimeoutMinutes
+	if timeoutMinutes <= 0 {
+		timeoutMinutes = 30
+	}
+	if raw := strings.TrimSpace(c.Query("timeout_minutes")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			timeoutMinutes = parsed
+		}
+	}
+
+	stale, err := s.collectStaleOperations(time.Duration(timeoutMinutes) * time.Minute)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list stale operations"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"timeout_minutes": timeoutMinutes,
+		"count":           len(stale),
+		"operations":      stale,
+	})
+}
+
 func (s *Server) importFile(c *gin.Context) {
 	var req ImportFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1726,6 +1966,40 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, status)
+}
+
+func (s *Server) getSystemStorage(c *gin.Context) {
+	rootDir := strings.TrimSpace(config.AppConfig.RootDir)
+	if rootDir == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir is not configured"})
+		return
+	}
+
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(rootDir, &stat); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read filesystem stats"})
+		return
+	}
+
+	blockSize := uint64(stat.Bsize)
+	totalBytes := stat.Blocks * blockSize
+	freeBytes := stat.Bavail * blockSize
+	usedBytes := totalBytes - freeBytes
+	percentUsed := 0.0
+	if totalBytes > 0 {
+		percentUsed = (float64(usedBytes) / float64(totalBytes)) * 100.0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"path":                rootDir,
+		"total_bytes":         totalBytes,
+		"used_bytes":          usedBytes,
+		"free_bytes":          freeBytes,
+		"percent_used":        percentUsed,
+		"quota_enabled":       config.AppConfig.EnableDiskQuota,
+		"quota_percent":       config.AppConfig.DiskQuotaPercent,
+		"user_quotas_enabled": config.AppConfig.EnableUserQuotas,
+	})
 }
 
 func (s *Server) getSystemLogs(c *gin.Context) {
@@ -1787,13 +2061,35 @@ func (s *Server) updateConfig(c *gin.Context) {
 		return
 	}
 
+	previousConfig := config.AppConfig
 	if err := s.configUpdateService.ApplyUpdates(payload); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if err := config.AppConfig.Validate(); err != nil {
+		config.AppConfig = previousConfig
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if database.GlobalStore != nil {
+		if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+			config.AppConfig = previousConfig
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist configuration"})
+			return
+		}
+	}
 
 	maskedConfig := s.configUpdateService.MaskSecrets(config.AppConfig)
-	c.JSON(http.StatusOK, maskedConfig)
+	response := gin.H{"config": maskedConfig}
+	if raw, err := json.Marshal(maskedConfig); err == nil {
+		var flat map[string]any
+		if err := json.Unmarshal(raw, &flat); err == nil {
+			for k, v := range flat {
+				response[k] = v
+			}
+		}
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // getOperationLogs returns logs for a given operation
@@ -2025,7 +2321,7 @@ func (s *Server) importMetadata(c *gin.Context) {
 
 	var req struct {
 		Data     map[string]any `json:"data" binding:"required"`
-		Validate bool                   `json:"validate"`
+		Validate bool           `json:"validate"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

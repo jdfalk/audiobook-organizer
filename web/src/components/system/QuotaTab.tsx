@@ -1,123 +1,120 @@
 // file: web/src/components/system/QuotaTab.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0f1a2b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
-  Typography,
-  Paper,
-  Stack,
-  LinearProgress,
-  Grid,
+  Button,
   Card,
   CardContent,
-  Alert,
-  Button,
   Chip,
+  CircularProgress,
+  Grid,
+  LinearProgress,
+  Stack,
+  Typography,
 } from '@mui/material';
 import {
-  Warning as WarningIcon,
   CheckCircle as CheckIcon,
-  Error as ErrorIcon,
   Refresh as RefreshIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
+import * as api from '../../services/api';
 
 interface QuotaInfo {
+  path: string;
   systemQuotaEnabled: boolean;
   systemQuotaPercent: number;
   systemQuotaUsed: number;
   systemQuotaLimit: number;
   userQuotasEnabled: boolean;
-  userQuotas: {
-    username: string;
-    used: number;
-    limit: number;
-    status: 'ok' | 'warning' | 'exceeded';
-  }[];
 }
 
 export function QuotaTab() {
-  const [quota] = useState<QuotaInfo>({
-    systemQuotaEnabled: true,
-    systemQuotaPercent: 80,
-    systemQuotaUsed: 670 * 1024 * 1024 * 1024, // 670GB
-    systemQuotaLimit: 800 * 1024 * 1024 * 1024, // 800GB (80% of 1TB)
-    userQuotasEnabled: false,
-    userQuotas: [
-      {
-        username: 'admin',
-        used: 350 * 1024 * 1024 * 1024,
-        limit: 500 * 1024 * 1024 * 1024,
-        status: 'ok',
-      },
-      {
-        username: 'user1',
-        used: 240 * 1024 * 1024 * 1024,
-        limit: 250 * 1024 * 1024 * 1024,
-        status: 'warning',
-      },
-      {
-        username: 'user2',
-        used: 80 * 1024 * 1024 * 1024,
-        limit: 100 * 1024 * 1024 * 1024,
-        status: 'ok',
-      },
-    ],
-  });
-
-  useEffect(() => {
-    fetchQuotaInfo();
-  }, []);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchQuotaInfo = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/v1/system/quotas');
-      // const data = await response.json();
-      // setQuota(data);
-    } catch (error) {
-      console.error('Failed to fetch quota info:', error);
+      const [storage, config] = await Promise.all([
+        api.getSystemStorage(),
+        api.getConfig(),
+      ]);
+
+      const enabled = Boolean(config.enable_disk_quota);
+      const quotaPercent = config.disk_quota_percent || 80;
+      const quotaLimit = enabled
+        ? Math.floor(storage.total_bytes * (quotaPercent / 100))
+        : storage.total_bytes;
+
+      setQuota({
+        path: storage.path,
+        systemQuotaEnabled: enabled,
+        systemQuotaPercent: quotaPercent,
+        systemQuotaUsed: storage.used_bytes,
+        systemQuotaLimit: quotaLimit,
+        userQuotasEnabled: Boolean(config.enable_user_quotas),
+      });
+    } catch (fetchError) {
+      setError(
+        fetchError instanceof Error
+          ? fetchError.message
+          : 'Failed to fetch quota info'
+      );
+    } finally {
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    void fetchQuotaInfo();
+  }, []);
 
   const formatBytes = (bytes: number): string => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    if (bytes === 0) return '0 Bytes';
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+    if (!bytes) return '0 Bytes';
+    const index = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, index);
+    return `${value.toFixed(2)} ${sizes[index]}`;
   };
 
-  const getPercentage = (used: number, limit: number): number => {
-    return (used / limit) * 100;
-  };
+  if (loading) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="320px"
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'exceeded':
-        return <ErrorIcon color="error" />;
-      case 'warning':
-        return <WarningIcon color="warning" />;
-      default:
-        return <CheckIcon color="success" />;
-    }
-  };
+  if (error) {
+    return (
+      <Box>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
 
-  const getStatusColor = (status: string): 'error' | 'warning' | 'success' => {
-    switch (status) {
-      case 'exceeded':
-        return 'error';
-      case 'warning':
-        return 'warning';
-      default:
-        return 'success';
-    }
-  };
+  if (!quota) {
+    return null;
+  }
 
-  const systemPercentage = getPercentage(
-    quota.systemQuotaUsed,
-    quota.systemQuotaLimit
-  );
+  const percentage =
+    quota.systemQuotaLimit > 0
+      ? (quota.systemQuotaUsed / quota.systemQuotaLimit) * 100
+      : 0;
+
+  const progressColor: 'primary' | 'warning' | 'error' =
+    percentage >= 100 ? 'error' : percentage >= 85 ? 'warning' : 'primary';
 
   return (
     <Box>
@@ -131,14 +128,16 @@ export function QuotaTab() {
         <Button
           variant="outlined"
           startIcon={<RefreshIcon />}
-          onClick={fetchQuotaInfo}
+          onClick={() => {
+            void fetchQuotaInfo();
+          }}
+          disabled={loading}
         >
           Refresh
         </Button>
       </Stack>
 
       <Grid container spacing={3}>
-        {/* System-wide Quota */}
         <Grid item xs={12}>
           <Card>
             <CardContent>
@@ -156,155 +155,69 @@ export function QuotaTab() {
                 />
               </Stack>
 
-              {quota.systemQuotaEnabled && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Path: {quota.path}
+              </Typography>
+
+              {quota.systemQuotaEnabled ? (
                 <>
-                  {systemPercentage > 90 && (
+                  {percentage >= 100 && (
                     <Alert severity="error" sx={{ mb: 2 }}>
-                      System quota exceeded! Storage usage is above the
-                      configured limit of {quota.systemQuotaPercent}% (
-                      {formatBytes(quota.systemQuotaLimit)}).
+                      Storage exceeds configured quota limit.
                     </Alert>
                   )}
-                  {systemPercentage > 75 && systemPercentage <= 90 && (
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                      Approaching system quota limit. Currently at{' '}
-                      {systemPercentage.toFixed(1)}% of{' '}
-                      {quota.systemQuotaPercent}% limit.
+                  {percentage >= 85 && percentage < 100 && (
+                    <Alert icon={<WarningIcon />} severity="warning" sx={{ mb: 2 }}>
+                      Approaching configured quota limit.
                     </Alert>
                   )}
 
-                  <Box sx={{ mb: 2 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      mb={1}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        {formatBytes(quota.systemQuotaUsed)} used of{' '}
-                        {formatBytes(quota.systemQuotaLimit)} limit
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {systemPercentage.toFixed(1)}%
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(systemPercentage, 100)}
-                      sx={{ height: 10, borderRadius: 1 }}
-                      color={
-                        systemPercentage > 90
-                          ? 'error'
-                          : systemPercentage > 75
-                            ? 'warning'
-                            : 'primary'
-                      }
-                    />
-                  </Box>
-
+                  <Stack direction="row" justifyContent="space-between" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatBytes(quota.systemQuotaUsed)} used of{' '}
+                      {formatBytes(quota.systemQuotaLimit)}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {percentage.toFixed(1)}%
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(percentage, 100)}
+                    color={progressColor}
+                    sx={{ height: 10, borderRadius: 1, mb: 2 }}
+                  />
                   <Typography variant="body2" color="text.secondary">
                     Maximum disk usage is limited to {quota.systemQuotaPercent}%
-                    of total available space
+                    of total available space.
                   </Typography>
                 </>
-              )}
-
-              {!quota.systemQuotaEnabled && (
-                <Typography variant="body2" color="text.secondary">
-                  No system-wide quota is currently configured. The application
-                  can use all available disk space.
-                </Typography>
+              ) : (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CheckIcon color="success" />
+                  <Typography variant="body2" color="text.secondary">
+                    Disk quota is disabled. Available storage is unrestricted.
+                  </Typography>
+                </Stack>
               )}
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Per-User Quotas */}
-        {quota.userQuotasEnabled && (
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  mb={2}
-                >
-                  <Typography variant="h6">Per-User Quotas</Typography>
-                  <Chip label="Multi-User Mode" color="primary" size="small" />
-                </Stack>
-
-                <Stack spacing={3}>
-                  {quota.userQuotas.map((user) => {
-                    const percentage = getPercentage(user.used, user.limit);
-                    return (
-                      <Paper key={user.username} sx={{ p: 2 }}>
-                        <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          mb={1}
-                        >
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                          >
-                            {getStatusIcon(user.status)}
-                            <Typography variant="subtitle1">
-                              {user.username}
-                            </Typography>
-                          </Stack>
-                          <Chip
-                            label={user.status.toUpperCase()}
-                            size="small"
-                            color={getStatusColor(user.status)}
-                          />
-                        </Stack>
-
-                        <Box sx={{ mb: 1 }}>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            mb={0.5}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              {formatBytes(user.used)} used of{' '}
-                              {formatBytes(user.limit)} limit
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {percentage.toFixed(1)}%
-                            </Typography>
-                          </Stack>
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(percentage, 100)}
-                            sx={{ height: 8, borderRadius: 1 }}
-                            color={
-                              percentage > 100
-                                ? 'error'
-                                : percentage > 90
-                                  ? 'warning'
-                                  : 'primary'
-                            }
-                          />
-                        </Box>
-                      </Paper>
-                    );
-                  })}
-                </Stack>
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
-
-        {!quota.userQuotasEnabled && (
-          <Grid item xs={12}>
-            <Alert severity="info">
-              Per-user quotas are not enabled. Enable multi-user mode in
-              Settings to configure individual user storage limits.
-            </Alert>
-          </Grid>
-        )}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Per-user Quotas
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {quota.userQuotasEnabled
+                  ? 'Per-user quotas are enabled. Detailed per-user usage reporting is not yet available in this view.'
+                  : 'Per-user quotas are disabled.'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
     </Box>
   );

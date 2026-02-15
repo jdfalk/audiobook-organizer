@@ -97,10 +97,12 @@ type MockStore struct {
 	UpdateUserFunc        func(user *User) error
 
 	// Sessions
-	CreateSessionFunc    func(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
-	GetSessionFunc       func(id string) (*Session, error)
-	RevokeSessionFunc    func(id string) error
-	ListUserSessionsFunc func(userID string) ([]Session, error)
+	CreateSessionFunc         func(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
+	GetSessionFunc            func(id string) (*Session, error)
+	RevokeSessionFunc         func(id string) error
+	ListUserSessionsFunc      func(userID string) ([]Session, error)
+	DeleteExpiredSessionsFunc func(now time.Time) (int, error)
+	CountUsersFunc            func() (int, error)
 
 	// Per-user preferences
 	SetUserPreferenceForUserFunc func(userID, key, value string) error
@@ -627,6 +629,20 @@ func (m *MockStore) ListUserSessions(userID string) ([]Session, error) {
 		return m.ListUserSessionsFunc(userID)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) DeleteExpiredSessions(now time.Time) (int, error) {
+	if m.DeleteExpiredSessionsFunc != nil {
+		return m.DeleteExpiredSessionsFunc(now)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) CountUsers() (int, error) {
+	if m.CountUsersFunc != nil {
+		return m.CountUsersFunc()
+	}
+	return 0, nil
 }
 
 func (m *MockStore) SetUserPreferenceForUser(userID, key, value string) error {

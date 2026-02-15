@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.11.0
+// version: 1.11.1
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -749,8 +749,7 @@ func TestCORSMiddleware(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.NotEmpty(t, w.Header().Get("Access-Control-Allow-Methods"))
+	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
 }
 
 // TestRouteNotFound tests 404 handling

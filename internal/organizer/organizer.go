@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -24,18 +25,28 @@ type Organizer struct {
 const (
 	defaultTitle    = "Unknown Title"
 	defaultNarrator = "narrator"
+	tempFileSuffix  = ".tmp"
 )
 
 var (
 	leftoverPlaceholderRegex  = regexp.MustCompile(`\{[^}]+\}`)
 	placeholderNormalizeRegex = regexp.MustCompile(`\{[A-Za-z_]+\}`)
+	tempCleanupOnce           sync.Once
 )
 
 // NewOrganizer creates a new organizer instance
 func NewOrganizer(cfg *config.Config) *Organizer {
-	return &Organizer{
+	organizer := &Organizer{
 		config: cfg,
 	}
+	if cfg != nil && strings.TrimSpace(cfg.RootDir) != "" {
+		tempCleanupOnce.Do(func() {
+			if err := organizer.cleanupTempFiles(); err != nil {
+				fmt.Printf("Warning: failed to clean temporary organizer files: %v\n", err)
+			}
+		})
+	}
+	return organizer
 }
 
 // OrganizeBook organizes a book file according to the configured patterns
@@ -295,21 +306,53 @@ func (o *Organizer) copyFile(src, dst string) error {
 	}
 	defer sourceFile.Close()
 
-	destFile, err := os.Create(dst)
+	tempPath := dst + tempFileSuffix
+	_ = os.Remove(tempPath)
+
+	destFile, err := os.Create(tempPath)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() {
+		_ = destFile.Close()
+	}()
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
 	if err := destFile.Sync(); err != nil {
+		_ = os.Remove(tempPath)
 		return fmt.Errorf("failed to sync destination file: %w", err)
 	}
 
+	if err := destFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed to close destination file: %w", err)
+	}
+	if err := os.Rename(tempPath, dst); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("failed to finalize destination file: %w", err)
+	}
+
 	return nil
+}
+
+func (o *Organizer) cleanupTempFiles() error {
+	if o == nil || o.config == nil || strings.TrimSpace(o.config.RootDir) == "" {
+		return nil
+	}
+
+	return filepath.Walk(o.config.RootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(info.Name(), tempFileSuffix) {
+			_ = os.Remove(path)
+		}
+		return nil
+	})
 }
 
 // hardlinkFile creates a hard link from src to dst

@@ -1,5 +1,5 @@
 # file: .github/repository-config.yml
-# version: 1.2.0
+# version: 1.2.1
 # guid: audiobook-organizer-repo-config-001
 
 # Repository Metadata
@@ -95,7 +95,7 @@ testing:
   enabled: true
   coverage:
     enabled: true
-    threshold: 60
+    threshold: 80
     reports: ['html', 'json']
 
   unit:

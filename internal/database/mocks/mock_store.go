@@ -322,50 +322,6 @@ func (_c *MockStore_Close_Call) RunAndReturn(run func() error) *MockStore_Close_
 	return _c
 }
 
-// Reset provides a mock function for the type MockStore
-func (_mock *MockStore) Reset() error {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for Reset")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockStore_Reset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reset'
-type MockStore_Reset_Call struct {
-	*mock.Call
-}
-
-// Reset is a helper method to define mock.On call
-func (_e *MockStore_Expecter) Reset() *MockStore_Reset_Call {
-	return &MockStore_Reset_Call{Call: _e.mock.On("Reset")}
-}
-
-func (_c *MockStore_Reset_Call) Run(run func()) *MockStore_Reset_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockStore_Reset_Call) Return(err error) *MockStore_Reset_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_Reset_Call) RunAndReturn(run func() error) *MockStore_Reset_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // CountBooks provides a mock function for the type MockStore
 func (_mock *MockStore) CountBooks() (int, error) {
 	ret := _mock.Called()
@@ -415,6 +371,59 @@ func (_c *MockStore_CountBooks_Call) Return(n int, err error) *MockStore_CountBo
 }
 
 func (_c *MockStore_CountBooks_Call) RunAndReturn(run func() (int, error)) *MockStore_CountBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountUsers provides a mock function for the type MockStore
+func (_mock *MockStore) CountUsers() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountUsers")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (int, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() int); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountUsers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountUsers'
+type MockStore_CountUsers_Call struct {
+	*mock.Call
+}
+
+// CountUsers is a helper method to define mock.On call
+func (_e *MockStore_Expecter) CountUsers() *MockStore_CountUsers_Call {
+	return &MockStore_CountUsers_Call{Call: _e.mock.On("CountUsers")}
+}
+
+func (_c *MockStore_CountUsers_Call) Run(run func()) *MockStore_CountUsers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_CountUsers_Call) Return(n int, err error) *MockStore_CountUsers_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountUsers_Call) RunAndReturn(run func() (int, error)) *MockStore_CountUsers_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1176,6 +1185,66 @@ func (_c *MockStore_DeleteBook_Call) Return(err error) *MockStore_DeleteBook_Cal
 }
 
 func (_c *MockStore_DeleteBook_Call) RunAndReturn(run func(id string) error) *MockStore_DeleteBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteExpiredSessions provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteExpiredSessions(now time.Time) (int, error) {
+	ret := _mock.Called(now)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteExpiredSessions")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(time.Time) (int, error)); ok {
+		return returnFunc(now)
+	}
+	if returnFunc, ok := ret.Get(0).(func(time.Time) int); ok {
+		r0 = returnFunc(now)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(time.Time) error); ok {
+		r1 = returnFunc(now)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_DeleteExpiredSessions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteExpiredSessions'
+type MockStore_DeleteExpiredSessions_Call struct {
+	*mock.Call
+}
+
+// DeleteExpiredSessions is a helper method to define mock.On call
+//   - now time.Time
+func (_e *MockStore_Expecter) DeleteExpiredSessions(now interface{}) *MockStore_DeleteExpiredSessions_Call {
+	return &MockStore_DeleteExpiredSessions_Call{Call: _e.mock.On("DeleteExpiredSessions", now)}
+}
+
+func (_c *MockStore_DeleteExpiredSessions_Call) Run(run func(now time.Time)) *MockStore_DeleteExpiredSessions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 time.Time
+		if args[0] != nil {
+			arg0 = args[0].(time.Time)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteExpiredSessions_Call) Return(n int, err error) *MockStore_DeleteExpiredSessions_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_DeleteExpiredSessions_Call) RunAndReturn(run func(now time.Time) (int, error)) *MockStore_DeleteExpiredSessions_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2091,6 +2160,68 @@ func (_c *MockStore_GetBlockedHashByHash_Call) RunAndReturn(run func(hash string
 	return _c
 }
 
+// GetBookAuthors provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error) {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookAuthors")
+	}
+
+	var r0 []database.BookAuthor
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.BookAuthor, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.BookAuthor); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookAuthor)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetBookAuthors_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookAuthors'
+type MockStore_GetBookAuthors_Call struct {
+	*mock.Call
+}
+
+// GetBookAuthors is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) GetBookAuthors(bookID interface{}) *MockStore_GetBookAuthors_Call {
+	return &MockStore_GetBookAuthors_Call{Call: _e.mock.On("GetBookAuthors", bookID)}
+}
+
+func (_c *MockStore_GetBookAuthors_Call) Run(run func(bookID string)) *MockStore_GetBookAuthors_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookAuthors_Call) Return(bookAuthors []database.BookAuthor, err error) *MockStore_GetBookAuthors_Call {
+	_c.Call.Return(bookAuthors, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookAuthors_Call) RunAndReturn(run func(bookID string) ([]database.BookAuthor, error)) *MockStore_GetBookAuthors_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookByFileHash provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookByFileHash(hash string) (*database.Book, error) {
 	ret := _mock.Called(hash)
@@ -2463,139 +2594,6 @@ func (_c *MockStore_GetBookStats_Call) RunAndReturn(run func(bookNumericID int) 
 	return _c
 }
 
-// GetBookAuthors provides a mock function for the type MockStore
-func (_mock *MockStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error) {
-	ret := _mock.Called(bookID)
-	if len(ret) == 0 {
-		panic("no return value specified for GetBookAuthors")
-	}
-	var r0 []database.BookAuthor
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) ([]database.BookAuthor, error)); ok {
-		return returnFunc(bookID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) []database.BookAuthor); ok {
-		r0 = returnFunc(bookID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]database.BookAuthor)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(bookID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-type MockStore_GetBookAuthors_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) GetBookAuthors(bookID interface{}) *MockStore_GetBookAuthors_Call {
-	return &MockStore_GetBookAuthors_Call{Call: _e.mock.On("GetBookAuthors", bookID)}
-}
-
-func (_c *MockStore_GetBookAuthors_Call) Run(run func(bookID string)) *MockStore_GetBookAuthors_Call {
-	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
-	return _c
-}
-
-func (_c *MockStore_GetBookAuthors_Call) Return(authors []database.BookAuthor, err error) *MockStore_GetBookAuthors_Call {
-	_c.Call.Return(authors, err)
-	return _c
-}
-
-func (_c *MockStore_GetBookAuthors_Call) RunAndReturn(run func(string) ([]database.BookAuthor, error)) *MockStore_GetBookAuthors_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// SetBookAuthors provides a mock function for the type MockStore
-func (_mock *MockStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error {
-	ret := _mock.Called(bookID, authors)
-	if len(ret) == 0 {
-		panic("no return value specified for SetBookAuthors")
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, []database.BookAuthor) error); ok {
-		return returnFunc(bookID, authors)
-	}
-	return ret.Error(0)
-}
-
-type MockStore_SetBookAuthors_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) SetBookAuthors(bookID interface{}, authors interface{}) *MockStore_SetBookAuthors_Call {
-	return &MockStore_SetBookAuthors_Call{Call: _e.mock.On("SetBookAuthors", bookID, authors)}
-}
-
-func (_c *MockStore_SetBookAuthors_Call) Run(run func(bookID string, authors []database.BookAuthor)) *MockStore_SetBookAuthors_Call {
-	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].([]database.BookAuthor)) })
-	return _c
-}
-
-func (_c *MockStore_SetBookAuthors_Call) Return(err error) *MockStore_SetBookAuthors_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_SetBookAuthors_Call) RunAndReturn(run func(string, []database.BookAuthor) error) *MockStore_SetBookAuthors_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetBooksByAuthorIDWithRole provides a mock function for the type MockStore
-func (_mock *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
-	ret := _mock.Called(authorID)
-	if len(ret) == 0 {
-		panic("no return value specified for GetBooksByAuthorIDWithRole")
-	}
-	var r0 []database.Book
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(int) ([]database.Book, error)); ok {
-		return returnFunc(authorID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(int) []database.Book); ok {
-		r0 = returnFunc(authorID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]database.Book)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
-		r1 = returnFunc(authorID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-type MockStore_GetBooksByAuthorIDWithRole_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) GetBooksByAuthorIDWithRole(authorID interface{}) *MockStore_GetBooksByAuthorIDWithRole_Call {
-	return &MockStore_GetBooksByAuthorIDWithRole_Call{Call: _e.mock.On("GetBooksByAuthorIDWithRole", authorID)}
-}
-
-func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) Run(run func(authorID int)) *MockStore_GetBooksByAuthorIDWithRole_Call {
-	_c.Call.Run(func(args mock.Arguments) { run(args[0].(int)) })
-	return _c
-}
-
-func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) Return(books []database.Book, err error) *MockStore_GetBooksByAuthorIDWithRole_Call {
-	_c.Call.Return(books, err)
-	return _c
-}
-
-func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) RunAndReturn(run func(int) ([]database.Book, error)) *MockStore_GetBooksByAuthorIDWithRole_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // GetBooksByAuthorID provides a mock function for the type MockStore
 func (_mock *MockStore) GetBooksByAuthorID(authorID int) ([]database.Book, error) {
 	ret := _mock.Called(authorID)
@@ -2654,6 +2652,68 @@ func (_c *MockStore_GetBooksByAuthorID_Call) Return(books []database.Book, err e
 }
 
 func (_c *MockStore_GetBooksByAuthorID_Call) RunAndReturn(run func(authorID int) ([]database.Book, error)) *MockStore_GetBooksByAuthorID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBooksByAuthorIDWithRole provides a mock function for the type MockStore
+func (_mock *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
+	ret := _mock.Called(authorID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBooksByAuthorIDWithRole")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) ([]database.Book, error)); ok {
+		return returnFunc(authorID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) []database.Book); ok {
+		r0 = returnFunc(authorID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(authorID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetBooksByAuthorIDWithRole_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByAuthorIDWithRole'
+type MockStore_GetBooksByAuthorIDWithRole_Call struct {
+	*mock.Call
+}
+
+// GetBooksByAuthorIDWithRole is a helper method to define mock.On call
+//   - authorID int
+func (_e *MockStore_Expecter) GetBooksByAuthorIDWithRole(authorID interface{}) *MockStore_GetBooksByAuthorIDWithRole_Call {
+	return &MockStore_GetBooksByAuthorIDWithRole_Call{Call: _e.mock.On("GetBooksByAuthorIDWithRole", authorID)}
+}
+
+func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) Run(run func(authorID int)) *MockStore_GetBooksByAuthorIDWithRole_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) Return(books []database.Book, err error) *MockStore_GetBooksByAuthorIDWithRole_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) RunAndReturn(run func(authorID int) ([]database.Book, error)) *MockStore_GetBooksByAuthorIDWithRole_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4779,6 +4839,50 @@ func (_c *MockStore_RemoveBlockedHash_Call) RunAndReturn(run func(hash string) e
 	return _c
 }
 
+// Reset provides a mock function for the type MockStore
+func (_mock *MockStore) Reset() error {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Reset")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func() error); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_Reset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reset'
+type MockStore_Reset_Call struct {
+	*mock.Call
+}
+
+// Reset is a helper method to define mock.On call
+func (_e *MockStore_Expecter) Reset() *MockStore_Reset_Call {
+	return &MockStore_Reset_Call{Call: _e.mock.On("Reset")}
+}
+
+func (_c *MockStore_Reset_Call) Run(run func()) *MockStore_Reset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_Reset_Call) Return(err error) *MockStore_Reset_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_Reset_Call) RunAndReturn(run func() error) *MockStore_Reset_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeSession provides a mock function for the type MockStore
 func (_mock *MockStore) RevokeSession(id string) error {
 	ret := _mock.Called(id)
@@ -4900,6 +5004,63 @@ func (_c *MockStore_SearchBooks_Call) Return(books []database.Book, err error) *
 }
 
 func (_c *MockStore_SearchBooks_Call) RunAndReturn(run func(query string, limit int, offset int) ([]database.Book, error)) *MockStore_SearchBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetBookAuthors provides a mock function for the type MockStore
+func (_mock *MockStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error {
+	ret := _mock.Called(bookID, authors)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBookAuthors")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []database.BookAuthor) error); ok {
+		r0 = returnFunc(bookID, authors)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetBookAuthors_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetBookAuthors'
+type MockStore_SetBookAuthors_Call struct {
+	*mock.Call
+}
+
+// SetBookAuthors is a helper method to define mock.On call
+//   - bookID string
+//   - authors []database.BookAuthor
+func (_e *MockStore_Expecter) SetBookAuthors(bookID interface{}, authors interface{}) *MockStore_SetBookAuthors_Call {
+	return &MockStore_SetBookAuthors_Call{Call: _e.mock.On("SetBookAuthors", bookID, authors)}
+}
+
+func (_c *MockStore_SetBookAuthors_Call) Run(run func(bookID string, authors []database.BookAuthor)) *MockStore_SetBookAuthors_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []database.BookAuthor
+		if args[1] != nil {
+			arg1 = args[1].([]database.BookAuthor)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetBookAuthors_Call) Return(err error) *MockStore_SetBookAuthors_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetBookAuthors_Call) RunAndReturn(run func(bookID string, authors []database.BookAuthor) error) *MockStore_SetBookAuthors_Call {
 	_c.Call.Return(run)
 	return _c
 }

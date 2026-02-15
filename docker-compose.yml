@@ -1,0 +1,21 @@
+# file: docker-compose.yml
+# version: 1.0.0
+# guid: 08a9b7c6-d5e4-4f3a-b2c1-0d9e8f7a6b5c
+
+services:
+  audiobook-organizer:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - /path/to/audiobooks:/audiobooks
+    environment:
+      - AO_DIR=/audiobooks
+      - AO_DB=/data/audiobook-organizer.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

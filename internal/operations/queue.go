@@ -6,6 +6,7 @@ package operations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -58,6 +59,7 @@ type OperationQueue struct {
 	pending    chan *QueuedOperation
 	workers    int
 	store      database.Store
+	timeout    time.Duration
 	wg         sync.WaitGroup
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -87,6 +89,7 @@ func NewOperationQueue(store database.Store, workers int) *OperationQueue {
 		pending:    make(chan *QueuedOperation, 100),
 		workers:    workers,
 		store:      store,
+		timeout:    30 * time.Minute,
 		ctx:        ctx,
 		cancel:     cancel,
 		listeners:  make(map[string][]ProgressListener),
@@ -232,8 +235,17 @@ func (q *OperationQueue) worker(id int) {
 				queue:       q,
 			}
 
-			// Execute the operation
-			err := op.Func(op.Context, reporter)
+			// Execute the operation with timeout protection.
+			runCtx := op.Context
+			cancelTimeout := func() {}
+			if q.timeout > 0 {
+				runCtx, cancelTimeout = context.WithTimeout(op.Context, q.timeout)
+			}
+			err := op.Func(runCtx, reporter)
+			cancelTimeout()
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+				err = fmt.Errorf("operation timed out")
+			}
 
 			// Update final status
 			if err != nil {
@@ -406,6 +418,15 @@ func (q *OperationQueue) SetStore(store database.Store) {
 	log.Println("Operation queue store attached")
 }
 
+// SetOperationTimeout sets the maximum operation execution duration.
+// A zero or negative value disables timeout enforcement.
+func (q *OperationQueue) SetOperationTimeout(timeout time.Duration) {
+	if q == nil {
+		return
+	}
+	q.timeout = timeout
+}
+
 // ActiveOperation represents lightweight info about an in-flight operation.
 type ActiveOperation struct {
 	ID   string `json:"id"`
@@ -432,4 +453,11 @@ func ShutdownQueue(timeout time.Duration) error {
 		return nil
 	}
 	return GlobalQueue.Shutdown(timeout)
+}
+
+// SetGlobalOperationTimeout updates timeout for the initialized global queue, if available.
+func SetGlobalOperationTimeout(timeout time.Duration) {
+	if oq, ok := GlobalQueue.(*OperationQueue); ok {
+		oq.SetOperationTimeout(timeout)
+	}
 }
