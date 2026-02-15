@@ -82,6 +82,39 @@ func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
 	if concurrentScans, ok := cus.ExtractIntField(payload, "concurrent_scans"); ok {
 		config.AppConfig.ConcurrentScans = concurrentScans
 	}
+	if autoScanEnabled, ok := cus.ExtractBoolField(payload, "auto_scan_enabled"); ok {
+		config.AppConfig.AutoScanEnabled = autoScanEnabled
+	}
+	if autoScanDebounceSeconds, ok := cus.ExtractIntField(payload, "auto_scan_debounce_seconds"); ok {
+		config.AppConfig.AutoScanDebounceSeconds = autoScanDebounceSeconds
+	}
+	if operationTimeoutMinutes, ok := cus.ExtractIntField(payload, "operation_timeout_minutes"); ok {
+		config.AppConfig.OperationTimeoutMinutes = operationTimeoutMinutes
+	}
+	if apiRate, ok := cus.ExtractIntField(payload, "api_rate_limit_per_minute"); ok {
+		config.AppConfig.APIRateLimitPerMinute = apiRate
+	}
+	if authRate, ok := cus.ExtractIntField(payload, "auth_rate_limit_per_minute"); ok {
+		config.AppConfig.AuthRateLimitPerMinute = authRate
+	}
+	if jsonBodyLimit, ok := cus.ExtractIntField(payload, "json_body_limit_mb"); ok {
+		config.AppConfig.JSONBodyLimitMB = jsonBodyLimit
+	}
+	if uploadBodyLimit, ok := cus.ExtractIntField(payload, "upload_body_limit_mb"); ok {
+		config.AppConfig.UploadBodyLimitMB = uploadBodyLimit
+	}
+	if enableDiskQuota, ok := cus.ExtractBoolField(payload, "enable_disk_quota"); ok {
+		config.AppConfig.EnableDiskQuota = enableDiskQuota
+	}
+	if diskQuotaPercent, ok := cus.ExtractIntField(payload, "disk_quota_percent"); ok {
+		config.AppConfig.DiskQuotaPercent = diskQuotaPercent
+	}
+	if enableUserQuotas, ok := cus.ExtractBoolField(payload, "enable_user_quotas"); ok {
+		config.AppConfig.EnableUserQuotas = enableUserQuotas
+	}
+	if defaultUserQuotaGB, ok := cus.ExtractIntField(payload, "default_user_quota_gb"); ok {
+		config.AppConfig.DefaultUserQuotaGB = defaultUserQuotaGB
+	}
 
 	if excludePatterns, ok := payload["exclude_patterns"].([]any); ok {
 		patterns := make([]string, len(excludePatterns))

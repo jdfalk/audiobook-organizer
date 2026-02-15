@@ -36,20 +36,20 @@ var playlistDir string
 var metadataInspectFile string
 
 var (
-	initializeStore       = database.InitializeStore
-	closeStore            = database.CloseStore
-	scanDirectory         = scanner.ScanDirectory
-	processBooks          = scanner.ProcessBooks
-	generatePlaylists     = playlist.GeneratePlaylistsForSeries
-	updateSeriesTags      = tagger.UpdateSeriesTags
-	initEncryption        = database.InitEncryption
-	loadConfigFromDB      = config.LoadConfigFromDatabase
-	syncConfigFromEnv     = config.SyncConfigFromEnv
-	initializeQueue       = operations.InitializeQueue
-	shutdownQueue         = operations.ShutdownQueue
-	newServer             = server.NewServer
+	initializeStore        = database.InitializeStore
+	closeStore             = database.CloseStore
+	scanDirectory          = scanner.ScanDirectory
+	processBooks           = scanner.ProcessBooks
+	generatePlaylists      = playlist.GeneratePlaylistsForSeries
+	updateSeriesTags       = tagger.UpdateSeriesTags
+	initEncryption         = database.InitEncryption
+	loadConfigFromDB       = config.LoadConfigFromDatabase
+	syncConfigFromEnv      = config.SyncConfigFromEnv
+	initializeQueue        = operations.InitializeQueue
+	shutdownQueue          = operations.ShutdownQueue
+	newServer              = server.NewServer
 	getDefaultServerConfig = server.GetDefaultServerConfig
-	startServer           = func(srv *server.Server, cfg server.ServerConfig) error {
+	startServer            = func(srv *server.Server, cfg server.ServerConfig) error {
 		return srv.Start(cfg)
 	}
 )
@@ -263,6 +263,10 @@ var serveCmd = &cobra.Command{
 		// Apply env var overrides (command line takes precedence over DB)
 		syncConfigFromEnv()
 
+		if err := config.AppConfig.Validate(); err != nil {
+			return fmt.Errorf("invalid configuration: %w", err)
+		}
+
 		// Log import path count
 		if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
 			fmt.Printf("  - Import paths (scan paths): %d configured\n", len(folders))
@@ -283,6 +287,9 @@ var serveCmd = &cobra.Command{
 			fmt.Sscanf(w, "%d", &workers)
 		}
 		initializeQueue(database.GlobalStore, workers)
+		if config.AppConfig.OperationTimeoutMinutes > 0 {
+			operations.SetGlobalOperationTimeout(time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute)
+		}
 		defer func() {
 			fmt.Println("Shutting down operation queue...")
 			if err := shutdownQueue(30 * time.Second); err != nil {
@@ -462,6 +469,9 @@ func initConfig() {
 	}
 
 	config.InitConfig()
+	if err := config.AppConfig.Validate(); err != nil {
+		fmt.Printf("Warning: configuration validation failed: %v\n", err)
+	}
 }
 
 func printMetadataField(label, value string) {

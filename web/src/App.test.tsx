@@ -1,5 +1,5 @@
 // file: web/src/App.test.tsx
-// version: 1.0.4
+// version: 1.0.5
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -8,11 +8,21 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material';
 import App from './App';
 import { createAppTheme } from './theme';
+import { AuthProvider } from './contexts/AuthContext';
 
 const theme = createAppTheme('dark');
 
 // Mock API
 vi.mock('./services/api', () => ({
+  getAuthStatus: vi.fn().mockResolvedValue({
+    has_users: false,
+    requires_auth: false,
+    bootstrap_ready: false,
+  }),
+  getMe: vi.fn().mockResolvedValue(null),
+  login: vi.fn(),
+  logout: vi.fn(),
+  setupAdmin: vi.fn(),
   getConfig: vi.fn().mockResolvedValue({
     root_dir: '/tmp/library',
     setup_complete: true,
@@ -47,7 +57,9 @@ describe('App', () => {
     render(
       <BrowserRouter>
         <ThemeProvider theme={theme}>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
     );
@@ -59,7 +71,9 @@ describe('App', () => {
     render(
       <BrowserRouter>
         <ThemeProvider theme={theme}>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>
     );

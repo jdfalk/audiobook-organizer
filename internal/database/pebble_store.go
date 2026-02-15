@@ -2057,6 +2057,69 @@ func (p *PebbleStore) ListUserSessions(userID string) ([]Session, error) {
 	return res, nil
 }
 
+func (p *PebbleStore) DeleteExpiredSessions(now time.Time) (int, error) {
+	prefix := []byte("sess:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	deleted := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := append([]byte(nil), iter.Key()...)
+		value := append([]byte(nil), iter.Value()...)
+
+		var sess Session
+		if err := json.Unmarshal(value, &sess); err != nil {
+			continue
+		}
+		if !sess.Revoked && sess.ExpiresAt.After(now) {
+			continue
+		}
+
+		if err := batch.Delete(key, nil); err != nil {
+			return deleted, err
+		}
+		if err := batch.Delete([]byte("idx:sess:user:"+sess.UserID+":"+sess.ID), nil); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+
+	if deleted == 0 {
+		return 0, nil
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return deleted, err
+	}
+	return deleted, nil
+}
+
+func (p *PebbleStore) CountUsers() (int, error) {
+	prefix := []byte("u:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+	return count, nil
+}
+
 // Per-user preferences
 func (p *PebbleStore) SetUserPreferenceForUser(userID, key, value string) error {
 	kv := &UserPreferenceKV{UserID: userID, Key: key, Value: value, UpdatedAt: time.Now(), Version: 1}

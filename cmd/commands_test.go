@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -140,6 +140,10 @@ func (s *stubStore) RevokeSession(id string) error                   { return ni
 func (s *stubStore) ListUserSessions(userID string) ([]database.Session, error) {
 	return []database.Session{}, nil
 }
+func (s *stubStore) CountUsers() (int, error) { return 0, nil }
+func (s *stubStore) DeleteExpiredSessions(now time.Time) (int, error) {
+	return 0, nil
+}
 func (s *stubStore) SetUserPreferenceForUser(userID, key, value string) error { return nil }
 func (s *stubStore) GetUserPreferenceForUser(userID, key string) (*database.UserPreferenceKV, error) {
 	return nil, nil
@@ -174,9 +178,9 @@ func (s *stubStore) RemoveBlockedHash(hash string) error                        
 func (s *stubStore) GetAllBlockedHashes() ([]database.DoNotImport, error) {
 	return []database.DoNotImport{}, nil
 }
-func (s *stubStore) GetBlockedHashByHash(hash string) (*database.DoNotImport, error) { return nil, nil }
-func (s *stubStore) Reset() error                                                     { return nil }
-func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)      { return nil, nil }
+func (s *stubStore) GetBlockedHashByHash(hash string) (*database.DoNotImport, error)   { return nil, nil }
+func (s *stubStore) Reset() error                                                      { return nil }
+func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)       { return nil, nil }
 func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error { return nil }
 func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
 	return nil, nil

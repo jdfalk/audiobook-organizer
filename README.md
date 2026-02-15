@@ -145,6 +145,28 @@ cd audiobook-organizer
 go build -o audiobook-organizer
 ```
 
+## Production Quick Start
+
+### Docker Compose
+
+1. Copy `.env.example` to `.env` and fill in values as needed.
+2. Update `docker-compose.yml` volume paths for your audiobook library.
+3. Run:
+
+```bash
+docker compose up -d --build
+```
+
+The app will be available at `http://localhost:8080`.
+
+### Binary
+
+```bash
+./audiobook-organizer serve --dir /path/to/audiobooks --host 0.0.0.0
+```
+
+On first run with auth enabled, create the initial admin account from the login screen.
+
 ### Metadata Writing
 
 The application uses **native TagLib** (pure Go with bundled Wasm) for metadata
@@ -234,6 +256,12 @@ For more detailed information, see the
 [Technical Design Document](docs/technical_design.md) and the
 [PebbleDB Keyspace Schema](docs/database-pebble-schema.md) for the database
 layout and persistence model.
+
+Additional operational docs:
+
+- [Architecture](docs/architecture.md)
+- [QA Checklist](docs/qa-checklist.md)
+- [Roadmap to 100%](docs/roadmap-to-100-percent.md)
 
 ## License
 
