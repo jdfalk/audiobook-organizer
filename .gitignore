@@ -227,3 +227,6 @@ summary_report_*.md
 failure_analyses_*.json
 test_results.txt
 test-results.txt
+
+# Git worktrees
+.worktrees/
