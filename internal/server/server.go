@@ -33,6 +33,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
@@ -669,12 +670,72 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}()
 	}
 
+	// Start auto-scan file watcher if enabled
+	var fileWatcher *watcher.Watcher
+	if config.AppConfig.AutoScanEnabled && database.GlobalStore != nil {
+		importPaths, err := database.GlobalStore.GetAllImportPaths()
+		if err == nil && len(importPaths) > 0 {
+			var watchPaths []string
+			for _, ip := range importPaths {
+				if ip.Enabled {
+					watchPaths = append(watchPaths, ip.Path)
+				}
+			}
+			if len(watchPaths) > 0 {
+				fileWatcher, err = watcher.New(watchPaths, config.AppConfig.AutoScanDebounceSeconds, func(path string) {
+					log.Printf("[INFO] Auto-scan triggered for: %s", path)
+					if hub := realtime.GetGlobalHub(); hub != nil {
+						hub.Broadcast(&realtime.Event{
+							Type: "scan.auto_triggered",
+							Data: map[string]any{"path": path},
+						})
+					}
+					// Enqueue a scan operation via the operations queue
+					if s.scanService != nil && operations.GlobalQueue != nil {
+						go func() {
+							scanPath := path
+							id := ulid.Make().String()
+							op, opErr := database.GlobalStore.CreateOperation(id, "scan", &scanPath)
+							if opErr != nil {
+								log.Printf("[ERROR] Auto-scan: failed to create operation: %v", opErr)
+								return
+							}
+							scanReq := &ScanRequest{FolderPath: &scanPath}
+							opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+								return s.scanService.PerformScan(ctx, scanReq, progress)
+							}
+							if enqueueErr := operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
+								log.Printf("[ERROR] Auto-scan: failed to enqueue: %v", enqueueErr)
+							}
+						}()
+					}
+				})
+				if err != nil {
+					log.Printf("[WARN] Failed to start file watcher: %v", err)
+				} else {
+					if startErr := fileWatcher.Start(); startErr != nil {
+						log.Printf("[WARN] Failed to start file watcher: %v", startErr)
+						fileWatcher = nil
+					} else {
+						log.Println("[INFO] Auto-scan file watcher started")
+					}
+				}
+			}
+		}
+	}
+
 	// Wait for interrupt signal to gracefully shutdown the server
 	<-quit
 	close(shutdown)
 	signal.Stop(quit)
 
 	log.Println("Shutting down server...")
+
+	// Stop file watcher
+	if fileWatcher != nil {
+		fileWatcher.Stop()
+		log.Println("[INFO] File watcher stopped")
+	}
 
 	// Broadcast shutdown event to all connected clients
 	if hub := realtime.GetGlobalHub(); hub != nil {

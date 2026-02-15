@@ -1,0 +1,15 @@
+[Unit]
+Description=Audiobook Organizer
+After=network.target
+
+[Service]
+Type=simple
+User=audiobook
+ExecStart=/usr/local/bin/audiobook-organizer serve --host 0.0.0.0
+Restart=on-failure
+RestartSec=5
+Environment=HOME=/var/lib/audiobook-organizer
+WorkingDirectory=/var/lib/audiobook-organizer
+
+[Install]
+WantedBy=multi-user.target

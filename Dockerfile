@@ -1,5 +1,5 @@
 # file: Dockerfile
-# version: 1.2.2
+# version: 1.3.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
@@ -70,8 +70,8 @@ COPY --from=frontend-builder --chown=audiobook:audiobook /build/web/dist /app/we
 # Switch to non-root user
 USER audiobook
 
-# Expose the application port
-EXPOSE 8080
+# Expose ports (HTTP, optional HTTPS, optional HTTP/3 UDP)
+EXPOSE 8080 8443 8443/udp
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -79,4 +79,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Run the application
 ENTRYPOINT ["/app/audiobook-organizer"]
-CMD ["--help"]
+CMD ["serve", "--host", "0.0.0.0"]

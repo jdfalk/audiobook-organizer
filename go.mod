@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/cockroachdb/pebble v1.1.5
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/lithammer/fuzzysearch v1.1.8
 	github.com/mattn/go-sqlite3 v1.14.34
@@ -35,7 +36,6 @@ require (
 	github.com/cockroachdb/redact v1.1.6 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/getsentry/sentry-go v0.40.0 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect

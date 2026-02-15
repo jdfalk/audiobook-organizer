@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -75,7 +75,9 @@ type Config struct {
 	// Library organization
 	OrganizationStrategy string `json:"organization_strategy"` // 'auto', 'copy', 'hardlink', 'reflink', 'symlink'
 	ScanOnStartup        bool   `json:"scan_on_startup"`
-	AutoOrganize         bool   `json:"auto_organize"`
+	AutoOrganize             bool `json:"auto_organize"`
+	AutoScanEnabled          bool `json:"auto_scan_enabled"`
+	AutoScanDebounceSeconds  int  `json:"auto_scan_debounce_seconds"`
 	FolderNamingPattern  string `json:"folder_naming_pattern"`
 	FileNamingPattern    string `json:"file_naming_pattern"`
 	CreateBackups        bool   `json:"create_backups"`
@@ -138,6 +140,8 @@ func InitConfig() {
 	viper.SetDefault("organization_strategy", "auto")
 	viper.SetDefault("scan_on_startup", false)
 	viper.SetDefault("auto_organize", true)
+	viper.SetDefault("auto_scan_enabled", false)
+	viper.SetDefault("auto_scan_debounce_seconds", 30)
 	viper.SetDefault("folder_naming_pattern", "{author}/{series}/{title} ({print_year})")
 	viper.SetDefault("file_naming_pattern", "{title} - {author} - read by {narrator}")
 	viper.SetDefault("create_backups", true)
