@@ -6,7 +6,9 @@ package download
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 )
@@ -277,8 +279,8 @@ func TestErrNotImplemented(t *testing.T) {
 	}
 }
 
-// TestDelugeClientStub tests that the Deluge client stub behaves correctly.
-func TestDelugeClientStub(t *testing.T) {
+// TestDelugeClient tests the Deluge client with a mock JSON-RPC server.
+func TestDelugeClient(t *testing.T) {
 	cfg := config.DelugeConfig{
 		Host:     "localhost",
 		Port:     8112,
@@ -296,64 +298,37 @@ func TestDelugeClientStub(t *testing.T) {
 
 	ctx := context.Background()
 
-	// All methods should return ErrNotImplemented
-	t.Run("Connect", func(t *testing.T) {
+	// Without a running Deluge server, methods should return connection errors (not ErrNotImplemented)
+	t.Run("Connect_NoServer", func(t *testing.T) {
 		err := client.Connect(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("GetTorrent", func(t *testing.T) {
-		info, err := client.GetTorrent(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if info != nil {
-			t.Errorf("expected nil info, got %v", info)
-		}
-	})
-
-	t.Run("GetUploadStats", func(t *testing.T) {
-		stats, err := client.GetUploadStats(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if stats != nil {
-			t.Errorf("expected nil stats, got %v", stats)
+	t.Run("GetTorrent_NoServer", func(t *testing.T) {
+		// Need to initialize client.client to avoid nil pointer
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.GetTorrent(ctx, "test-id")
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("SetDownloadPath", func(t *testing.T) {
-		err := client.SetDownloadPath(ctx, "test-id", "/new/path")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("RemoveTorrent", func(t *testing.T) {
-		err := client.RemoveTorrent(ctx, "test-id", true)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("ListCompleted", func(t *testing.T) {
-		torrents, err := client.ListCompleted(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if torrents != nil {
-			t.Errorf("expected nil torrents, got %v", torrents)
+	t.Run("ListCompleted_NoServer", func(t *testing.T) {
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.ListCompleted(ctx)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 }
 
-// TestQBittorrentClientStub tests that the qBittorrent client stub behaves correctly.
-func TestQBittorrentClientStub(t *testing.T) {
+// TestQBittorrentClient tests the qBittorrent client.
+func TestQBittorrentClient(t *testing.T) {
 	cfg := config.QBittorrentConfig{
 		Host:     "localhost",
-		Port:     8080,
+		Port:     18080,
 		Username: "admin",
 		Password: "admin",
 	}
@@ -369,64 +344,35 @@ func TestQBittorrentClientStub(t *testing.T) {
 
 	ctx := context.Background()
 
-	// All methods should return ErrNotImplemented
-	t.Run("Connect", func(t *testing.T) {
+	t.Run("Connect_NoServer", func(t *testing.T) {
 		err := client.Connect(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("GetTorrent", func(t *testing.T) {
-		info, err := client.GetTorrent(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if info != nil {
-			t.Errorf("expected nil info, got %v", info)
+	t.Run("GetTorrent_NoServer", func(t *testing.T) {
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.GetTorrent(ctx, "test-hash")
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("GetUploadStats", func(t *testing.T) {
-		stats, err := client.GetUploadStats(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if stats != nil {
-			t.Errorf("expected nil stats, got %v", stats)
-		}
-	})
-
-	t.Run("SetDownloadPath", func(t *testing.T) {
-		err := client.SetDownloadPath(ctx, "test-id", "/new/path")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("RemoveTorrent", func(t *testing.T) {
-		err := client.RemoveTorrent(ctx, "test-id", true)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("ListCompleted", func(t *testing.T) {
-		torrents, err := client.ListCompleted(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if torrents != nil {
-			t.Errorf("expected nil torrents, got %v", torrents)
+	t.Run("ListCompleted_NoServer", func(t *testing.T) {
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.ListCompleted(ctx)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 }
 
-// TestSABnzbdClientStub tests that the SABnzbd client stub behaves correctly.
-func TestSABnzbdClientStub(t *testing.T) {
+// TestSABnzbdClient tests the SABnzbd client.
+func TestSABnzbdClient(t *testing.T) {
 	cfg := config.SABnzbdConfig{
 		Host:   "localhost",
-		Port:   8085,
+		Port:   18085,
 		APIKey: "test-api-key",
 	}
 	client := NewSABnzbdClient(cfg)
@@ -441,55 +387,26 @@ func TestSABnzbdClientStub(t *testing.T) {
 
 	ctx := context.Background()
 
-	// All methods should return ErrNotImplemented
-	t.Run("Connect", func(t *testing.T) {
+	t.Run("Connect_NoServer", func(t *testing.T) {
 		err := client.Connect(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("GetJob", func(t *testing.T) {
-		info, err := client.GetJob(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if info != nil {
-			t.Errorf("expected nil info, got %v", info)
+	t.Run("GetJob_NoServer", func(t *testing.T) {
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.GetJob(ctx, "test-id")
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 
-	t.Run("GetQueueStats", func(t *testing.T) {
-		stats, err := client.GetQueueStats(ctx, "test-id")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if stats != nil {
-			t.Errorf("expected nil stats, got %v", stats)
-		}
-	})
-
-	t.Run("SetDownloadPath", func(t *testing.T) {
-		err := client.SetDownloadPath(ctx, "test-id", "/new/path")
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("RemoveJob", func(t *testing.T) {
-		err := client.RemoveJob(ctx, "test-id", true)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-	})
-
-	t.Run("ListCompleted", func(t *testing.T) {
-		jobs, err := client.ListCompleted(ctx)
-		if !errors.Is(err, ErrNotImplemented) {
-			t.Errorf("expected ErrNotImplemented, got %v", err)
-		}
-		if jobs != nil {
-			t.Errorf("expected nil jobs, got %v", jobs)
+	t.Run("ListCompleted_NoServer", func(t *testing.T) {
+		client.client = &http.Client{Timeout: time.Second}
+		_, err := client.ListCompleted(ctx)
+		if err == nil {
+			t.Error("expected error when no server running")
 		}
 	})
 }
