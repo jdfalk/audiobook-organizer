@@ -176,6 +176,11 @@ func (s *stubStore) GetAllBlockedHashes() ([]database.DoNotImport, error) {
 }
 func (s *stubStore) GetBlockedHashByHash(hash string) (*database.DoNotImport, error) { return nil, nil }
 func (s *stubStore) Reset() error                                                     { return nil }
+func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)      { return nil, nil }
+func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error { return nil }
+func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
+	return nil, nil
+}
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
