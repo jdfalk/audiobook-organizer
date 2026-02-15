@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -127,6 +127,12 @@ var migrations = []Migration{
 		Version:     15,
 		Description: "Add book_authors junction table, cover_url, and narrators_json",
 		Up:          migration015Up,
+		Down:        nil,
+	},
+	{
+		Version:     16,
+		Description: "Add users, sessions, book_segments, playback tables",
+		Up:          migration016Up,
 		Down:        nil,
 	},
 }
@@ -787,6 +793,102 @@ func migration015Up(store Store) error {
 	}
 
 	log.Println("  - book_authors, cover_url, and narrators_json added successfully")
+	return nil
+}
+
+// migration016Up creates users, sessions, book_segments, and playback tracking tables
+func migration016Up(store Store) error {
+	log.Println("  - Adding users, sessions, book_segments, and playback tables")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	tables := []string{
+		`CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			username TEXT UNIQUE NOT NULL,
+			email TEXT UNIQUE NOT NULL,
+			password_hash_algo TEXT NOT NULL DEFAULT 'bcrypt',
+			password_hash TEXT NOT NULL,
+			roles TEXT NOT NULL DEFAULT '["user"]',
+			status TEXT NOT NULL DEFAULT 'active',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			ip TEXT NOT NULL DEFAULT '',
+			user_agent TEXT NOT NULL DEFAULT '',
+			revoked INTEGER NOT NULL DEFAULT 0,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`,
+		`CREATE TABLE IF NOT EXISTS book_segments (
+			id TEXT PRIMARY KEY,
+			book_id INTEGER NOT NULL,
+			file_path TEXT NOT NULL,
+			format TEXT NOT NULL DEFAULT '',
+			size_bytes INTEGER NOT NULL DEFAULT 0,
+			duration_seconds INTEGER NOT NULL DEFAULT 0,
+			track_number INTEGER,
+			total_tracks INTEGER,
+			active INTEGER NOT NULL DEFAULT 1,
+			superseded_by TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_segments_book ON book_segments(book_id)`,
+		`CREATE TABLE IF NOT EXISTS playback_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL,
+			book_id INTEGER NOT NULL,
+			segment_id TEXT NOT NULL DEFAULT '',
+			position_seconds INTEGER NOT NULL DEFAULT 0,
+			event_type TEXT NOT NULL DEFAULT 'progress',
+			play_speed REAL NOT NULL DEFAULT 1.0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_playback_events_user_book ON playback_events(user_id, book_id)`,
+		`CREATE TABLE IF NOT EXISTS playback_progress (
+			user_id TEXT NOT NULL,
+			book_id INTEGER NOT NULL,
+			segment_id TEXT NOT NULL DEFAULT '',
+			position_seconds INTEGER NOT NULL DEFAULT 0,
+			percent_complete REAL NOT NULL DEFAULT 0,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			version INTEGER NOT NULL DEFAULT 1,
+			PRIMARY KEY (user_id, book_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS book_stats (
+			book_id INTEGER PRIMARY KEY,
+			play_count INTEGER NOT NULL DEFAULT 0,
+			listen_seconds INTEGER NOT NULL DEFAULT 0,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_stats (
+			user_id TEXT PRIMARY KEY,
+			listen_seconds INTEGER NOT NULL DEFAULT 0,
+			version INTEGER NOT NULL DEFAULT 1
+		)`,
+	}
+
+	for _, sql := range tables {
+		if _, err := sqliteStore.db.Exec(sql); err != nil {
+			return fmt.Errorf("failed to execute migration 16: %w", err)
+		}
+	}
+
+	log.Println("  - Users, sessions, book_segments, and playback tables created")
 	return nil
 }
 

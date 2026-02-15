@@ -1,16 +1,18 @@
 // file: internal/database/sqlite_store.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	ulid "github.com/oklog/ulid/v2"
 )
 
 type rowScanner interface {
@@ -377,6 +379,86 @@ func (s *SQLiteStore) createTables() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_metadata_states_book ON metadata_states(book_id);
+
+	CREATE TABLE IF NOT EXISTS users (
+		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE NOT NULL,
+		email TEXT UNIQUE NOT NULL,
+		password_hash_algo TEXT NOT NULL DEFAULT 'bcrypt',
+		password_hash TEXT NOT NULL,
+		roles TEXT NOT NULL DEFAULT '["user"]',
+		status TEXT NOT NULL DEFAULT 'active',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		version INTEGER NOT NULL DEFAULT 1
+	);
+
+	CREATE TABLE IF NOT EXISTS sessions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at DATETIME NOT NULL,
+		ip TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		revoked INTEGER NOT NULL DEFAULT 0,
+		version INTEGER NOT NULL DEFAULT 1
+	);
+	CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+	CREATE TABLE IF NOT EXISTS book_segments (
+		id TEXT PRIMARY KEY,
+		book_id INTEGER NOT NULL,
+		file_path TEXT NOT NULL,
+		format TEXT NOT NULL DEFAULT '',
+		size_bytes INTEGER NOT NULL DEFAULT 0,
+		duration_seconds INTEGER NOT NULL DEFAULT 0,
+		track_number INTEGER,
+		total_tracks INTEGER,
+		active INTEGER NOT NULL DEFAULT 1,
+		superseded_by TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		version INTEGER NOT NULL DEFAULT 1
+	);
+	CREATE INDEX IF NOT EXISTS idx_book_segments_book ON book_segments(book_id);
+
+	CREATE TABLE IF NOT EXISTS playback_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT NOT NULL,
+		book_id INTEGER NOT NULL,
+		segment_id TEXT NOT NULL DEFAULT '',
+		position_seconds INTEGER NOT NULL DEFAULT 0,
+		event_type TEXT NOT NULL DEFAULT 'progress',
+		play_speed REAL NOT NULL DEFAULT 1.0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		version INTEGER NOT NULL DEFAULT 1
+	);
+	CREATE INDEX IF NOT EXISTS idx_playback_events_user_book ON playback_events(user_id, book_id);
+
+	CREATE TABLE IF NOT EXISTS playback_progress (
+		user_id TEXT NOT NULL,
+		book_id INTEGER NOT NULL,
+		segment_id TEXT NOT NULL DEFAULT '',
+		position_seconds INTEGER NOT NULL DEFAULT 0,
+		percent_complete REAL NOT NULL DEFAULT 0,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		version INTEGER NOT NULL DEFAULT 1,
+		PRIMARY KEY (user_id, book_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS book_stats (
+		book_id INTEGER PRIMARY KEY,
+		play_count INTEGER NOT NULL DEFAULT 0,
+		listen_seconds INTEGER NOT NULL DEFAULT 0,
+		version INTEGER NOT NULL DEFAULT 1
+	);
+
+	CREATE TABLE IF NOT EXISTS user_stats (
+		user_id TEXT PRIMARY KEY,
+		listen_seconds INTEGER NOT NULL DEFAULT 0,
+		version INTEGER NOT NULL DEFAULT 1
+	);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
@@ -474,61 +556,380 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-// ---- Extended interface no-op / minimal implementations for SQLite ----
-// These satisfy the expanded Store interface but SQLite mode does not yet
-// implement advanced features. They return informative errors or empty values.
+// ---- User Management ----
 
 func (s *SQLiteStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error) {
-	return nil, fmt.Errorf("advanced user management not supported in SQLite mode")
+	id := ulid.Make().String()
+	now := time.Now()
+	rolesJSON, err := json.Marshal(roles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal roles: %w", err)
+	}
+	_, err = s.db.Exec(
+		`INSERT INTO users (id, username, email, password_hash_algo, password_hash, roles, status, created_at, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+		id, username, email, passwordHashAlgo, passwordHash, string(rolesJSON), status, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &User{
+		ID: id, Username: username, Email: email,
+		PasswordHashAlgo: passwordHashAlgo, PasswordHash: passwordHash,
+		Roles: roles, Status: status, CreatedAt: now, UpdatedAt: now, Version: 1,
+	}, nil
 }
-func (s *SQLiteStore) GetUserByID(id string) (*User, error)             { return nil, nil }
-func (s *SQLiteStore) GetUserByUsername(username string) (*User, error) { return nil, nil }
-func (s *SQLiteStore) GetUserByEmail(email string) (*User, error)       { return nil, nil }
-func (s *SQLiteStore) UpdateUser(user *User) error                      { return fmt.Errorf("not supported") }
+
+func (s *SQLiteStore) scanUser(row rowScanner) (*User, error) {
+	var u User
+	var rolesJSON string
+	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHashAlgo, &u.PasswordHash,
+		&rolesJSON, &u.Status, &u.CreatedAt, &u.UpdatedAt, &u.Version)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal([]byte(rolesJSON), &u.Roles)
+	return &u, nil
+}
+
+func (s *SQLiteStore) GetUserByID(id string) (*User, error) {
+	return s.scanUser(s.db.QueryRow(
+		`SELECT id, username, email, password_hash_algo, password_hash, roles, status, created_at, updated_at, version FROM users WHERE id = ?`, id))
+}
+
+func (s *SQLiteStore) GetUserByUsername(username string) (*User, error) {
+	return s.scanUser(s.db.QueryRow(
+		`SELECT id, username, email, password_hash_algo, password_hash, roles, status, created_at, updated_at, version FROM users WHERE username = ?`, username))
+}
+
+func (s *SQLiteStore) GetUserByEmail(email string) (*User, error) {
+	return s.scanUser(s.db.QueryRow(
+		`SELECT id, username, email, password_hash_algo, password_hash, roles, status, created_at, updated_at, version FROM users WHERE email = ?`, email))
+}
+
+func (s *SQLiteStore) UpdateUser(user *User) error {
+	rolesJSON, _ := json.Marshal(user.Roles)
+	user.UpdatedAt = time.Now()
+	user.Version++
+	_, err := s.db.Exec(
+		`UPDATE users SET username=?, email=?, password_hash_algo=?, password_hash=?, roles=?, status=?, updated_at=?, version=? WHERE id=?`,
+		user.Username, user.Email, user.PasswordHashAlgo, user.PasswordHash,
+		string(rolesJSON), user.Status, user.UpdatedAt, user.Version, user.ID,
+	)
+	return err
+}
+
+// ---- Sessions ----
+
 func (s *SQLiteStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) {
-	return nil, fmt.Errorf("not supported")
+	id := ulid.Make().String()
+	now := time.Now()
+	expiresAt := now.Add(ttl)
+	_, err := s.db.Exec(
+		`INSERT INTO sessions (id, user_id, created_at, expires_at, ip, user_agent, revoked, version) VALUES (?, ?, ?, ?, ?, ?, 0, 1)`,
+		id, userID, now, expiresAt, ip, userAgent,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+	return &Session{
+		ID: id, UserID: userID, CreatedAt: now, ExpiresAt: expiresAt,
+		IP: ip, UserAgent: userAgent, Revoked: false, Version: 1,
+	}, nil
 }
-func (s *SQLiteStore) GetSession(id string) (*Session, error)            { return nil, nil }
-func (s *SQLiteStore) RevokeSession(id string) error                     { return fmt.Errorf("not supported") }
-func (s *SQLiteStore) ListUserSessions(userID string) ([]Session, error) { return []Session{}, nil }
+
+func (s *SQLiteStore) GetSession(id string) (*Session, error) {
+	var sess Session
+	var revoked int
+	err := s.db.QueryRow(
+		`SELECT id, user_id, created_at, expires_at, ip, user_agent, revoked, version FROM sessions WHERE id = ?`, id,
+	).Scan(&sess.ID, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt, &sess.IP, &sess.UserAgent, &revoked, &sess.Version)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sess.Revoked = revoked != 0
+	return &sess, nil
+}
+
+func (s *SQLiteStore) RevokeSession(id string) error {
+	_, err := s.db.Exec(`UPDATE sessions SET revoked = 1 WHERE id = ?`, id)
+	return err
+}
+
+func (s *SQLiteStore) ListUserSessions(userID string) ([]Session, error) {
+	rows, err := s.db.Query(
+		`SELECT id, user_id, created_at, expires_at, ip, user_agent, revoked, version FROM sessions WHERE user_id = ? ORDER BY created_at DESC`, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sessions []Session
+	for rows.Next() {
+		var sess Session
+		var revoked int
+		if err := rows.Scan(&sess.ID, &sess.UserID, &sess.CreatedAt, &sess.ExpiresAt, &sess.IP, &sess.UserAgent, &revoked, &sess.Version); err != nil {
+			return nil, err
+		}
+		sess.Revoked = revoked != 0
+		sessions = append(sessions, sess)
+	}
+	return sessions, rows.Err()
+}
+
+// ---- Per-User Preferences ----
+
 func (s *SQLiteStore) SetUserPreferenceForUser(userID, key, value string) error {
-	return fmt.Errorf("not supported")
+	_, err := s.db.Exec(
+		`INSERT INTO user_preferences (key, value, updated_at) VALUES (?, ?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+		fmt.Sprintf("user:%s:%s", userID, key), value, time.Now(),
+	)
+	return err
 }
+
 func (s *SQLiteStore) GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error) {
-	return nil, nil
+	var pref UserPreferenceKV
+	var rawValue sql.NullString
+	err := s.db.QueryRow(
+		`SELECT value, updated_at FROM user_preferences WHERE key = ?`,
+		fmt.Sprintf("user:%s:%s", userID, key),
+	).Scan(&rawValue, &pref.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	pref.UserID = userID
+	pref.Key = key
+	if rawValue.Valid {
+		pref.Value = rawValue.String
+	}
+	return &pref, nil
 }
+
 func (s *SQLiteStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) {
-	return []UserPreferenceKV{}, nil
+	prefix := fmt.Sprintf("user:%s:", userID)
+	rows, err := s.db.Query(`SELECT key, value, updated_at FROM user_preferences WHERE key LIKE ?`, prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var prefs []UserPreferenceKV
+	for rows.Next() {
+		var fullKey string
+		var rawValue sql.NullString
+		var pref UserPreferenceKV
+		if err := rows.Scan(&fullKey, &rawValue, &pref.UpdatedAt); err != nil {
+			return nil, err
+		}
+		pref.UserID = userID
+		pref.Key = strings.TrimPrefix(fullKey, prefix)
+		if rawValue.Valid {
+			pref.Value = rawValue.String
+		}
+		prefs = append(prefs, pref)
+	}
+	return prefs, rows.Err()
 }
+
+// ---- Book Segments ----
+
 func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error) {
-	return nil, fmt.Errorf("not supported")
+	if segment.ID == "" {
+		segment.ID = ulid.Make().String()
+	}
+	now := time.Now()
+	segment.BookID = bookNumericID
+	segment.CreatedAt = now
+	segment.UpdatedAt = now
+	segment.Version = 1
+	_, err := s.db.Exec(
+		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, superseded_by, created_at, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		segment.ID, bookNumericID, segment.FilePath, segment.Format, segment.SizeBytes, segment.DurationSec,
+		segment.TrackNumber, segment.TotalTracks, func() int { if segment.Active { return 1 }; return 0 }(), segment.SupersededBy,
+		segment.CreatedAt, segment.UpdatedAt, segment.Version,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create book segment: %w", err)
+	}
+	return segment, nil
 }
+
 func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
-	return []BookSegment{}, nil
+	rows, err := s.db.Query(
+		`SELECT id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, superseded_by, created_at, updated_at, version
+		 FROM book_segments WHERE book_id = ? ORDER BY track_number ASC, created_at ASC`, bookNumericID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var segments []BookSegment
+	for rows.Next() {
+		var seg BookSegment
+		var active int
+		if err := rows.Scan(&seg.ID, &seg.BookID, &seg.FilePath, &seg.Format, &seg.SizeBytes, &seg.DurationSec,
+			&seg.TrackNumber, &seg.TotalTracks, &active, &seg.SupersededBy, &seg.CreatedAt, &seg.UpdatedAt, &seg.Version); err != nil {
+			return nil, err
+		}
+		seg.Active = active != 0
+		segments = append(segments, seg)
+	}
+	return segments, rows.Err()
 }
+
 func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error {
-	return fmt.Errorf("not supported")
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Mark old segments as superseded
+	for _, oldID := range supersedeIDs {
+		if _, err := tx.Exec(
+			`UPDATE book_segments SET active = 0, superseded_by = ?, updated_at = ? WHERE id = ? AND book_id = ?`,
+			newSegment.ID, time.Now(), oldID, bookNumericID,
+		); err != nil {
+			return fmt.Errorf("failed to supersede segment %s: %w", oldID, err)
+		}
+	}
+
+	// Insert the new merged segment
+	if newSegment.ID == "" {
+		newSegment.ID = ulid.Make().String()
+	}
+	now := time.Now()
+	if _, err := tx.Exec(
+		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, created_at, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 1)`,
+		newSegment.ID, bookNumericID, newSegment.FilePath, newSegment.Format, newSegment.SizeBytes, newSegment.DurationSec,
+		newSegment.TrackNumber, newSegment.TotalTracks, now, now,
+	); err != nil {
+		return fmt.Errorf("failed to insert merged segment: %w", err)
+	}
+
+	return tx.Commit()
 }
+
+// ---- Playback Tracking ----
+
 func (s *SQLiteStore) AddPlaybackEvent(event *PlaybackEvent) error {
-	return fmt.Errorf("not supported")
+	event.CreatedAt = time.Now()
+	event.Version = 1
+	_, err := s.db.Exec(
+		`INSERT INTO playback_events (user_id, book_id, segment_id, position_seconds, event_type, play_speed, created_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		event.UserID, event.BookID, event.SegmentID, event.PositionSec, event.EventType, event.PlaySpeed, event.CreatedAt, event.Version,
+	)
+	return err
 }
+
 func (s *SQLiteStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error) {
-	return []PlaybackEvent{}, nil
+	rows, err := s.db.Query(
+		`SELECT user_id, book_id, segment_id, position_seconds, event_type, play_speed, created_at, version
+		 FROM playback_events WHERE user_id = ? AND book_id = ? ORDER BY created_at DESC LIMIT ?`,
+		userID, bookNumericID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []PlaybackEvent
+	for rows.Next() {
+		var e PlaybackEvent
+		if err := rows.Scan(&e.UserID, &e.BookID, &e.SegmentID, &e.PositionSec, &e.EventType, &e.PlaySpeed, &e.CreatedAt, &e.Version); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
 }
+
 func (s *SQLiteStore) UpdatePlaybackProgress(progress *PlaybackProgress) error {
-	return fmt.Errorf("not supported")
+	progress.UpdatedAt = time.Now()
+	progress.Version++
+	_, err := s.db.Exec(
+		`INSERT INTO playback_progress (user_id, book_id, segment_id, position_seconds, percent_complete, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(user_id, book_id) DO UPDATE SET segment_id=excluded.segment_id, position_seconds=excluded.position_seconds,
+		 percent_complete=excluded.percent_complete, updated_at=excluded.updated_at, version=excluded.version`,
+		progress.UserID, progress.BookID, progress.SegmentID, progress.PositionSec, progress.Percent, progress.UpdatedAt, progress.Version,
+	)
+	return err
 }
+
 func (s *SQLiteStore) GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error) {
-	return nil, nil
+	var p PlaybackProgress
+	err := s.db.QueryRow(
+		`SELECT user_id, book_id, segment_id, position_seconds, percent_complete, updated_at, version
+		 FROM playback_progress WHERE user_id = ? AND book_id = ?`, userID, bookNumericID,
+	).Scan(&p.UserID, &p.BookID, &p.SegmentID, &p.PositionSec, &p.Percent, &p.UpdatedAt, &p.Version)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
 }
+
+// ---- Stats ----
+
 func (s *SQLiteStore) IncrementBookPlayStats(bookNumericID int, seconds int) error {
-	return fmt.Errorf("not supported")
+	_, err := s.db.Exec(
+		`INSERT INTO book_stats (book_id, play_count, listen_seconds, version) VALUES (?, 1, ?, 1)
+		 ON CONFLICT(book_id) DO UPDATE SET play_count = play_count + 1, listen_seconds = listen_seconds + ?, version = version + 1`,
+		bookNumericID, seconds, seconds,
+	)
+	return err
 }
-func (s *SQLiteStore) GetBookStats(bookNumericID int) (*BookStats, error) { return nil, nil }
+
+func (s *SQLiteStore) GetBookStats(bookNumericID int) (*BookStats, error) {
+	var bs BookStats
+	err := s.db.QueryRow(
+		`SELECT book_id, play_count, listen_seconds, version FROM book_stats WHERE book_id = ?`, bookNumericID,
+	).Scan(&bs.BookID, &bs.PlayCount, &bs.ListenSeconds, &bs.Version)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &bs, nil
+}
+
 func (s *SQLiteStore) IncrementUserListenStats(userID string, seconds int) error {
-	return fmt.Errorf("not supported")
+	_, err := s.db.Exec(
+		`INSERT INTO user_stats (user_id, listen_seconds, version) VALUES (?, ?, 1)
+		 ON CONFLICT(user_id) DO UPDATE SET listen_seconds = listen_seconds + ?, version = version + 1`,
+		userID, seconds, seconds,
+	)
+	return err
 }
-func (s *SQLiteStore) GetUserStats(userID string) (*UserStats, error) { return nil, nil }
+
+func (s *SQLiteStore) GetUserStats(userID string) (*UserStats, error) {
+	var us UserStats
+	err := s.db.QueryRow(
+		`SELECT user_id, listen_seconds, version FROM user_stats WHERE user_id = ?`, userID,
+	).Scan(&us.UserID, &us.ListenSeconds, &us.Version)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &us, nil
+}
 
 // Author operations
 

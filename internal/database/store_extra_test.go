@@ -29,83 +29,207 @@ func TestStoreAdditionalCoveragePebble(t *testing.T) {
 	exercisePebbleAdvanced(t, store.(*PebbleStore))
 }
 
-func TestSQLiteUnsupportedFeatures(t *testing.T) {
+func TestSQLiteExtendedFeatures(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
 	sqliteStore := store.(*SQLiteStore)
 
-	if user, err := sqliteStore.CreateUser("user", "user@example.com", "algo", "hash", []string{"user"}, "active"); err == nil || user != nil {
-		t.Fatal("expected CreateUser to be unsupported")
+	// ---- User Management ----
+	user, err := sqliteStore.CreateUser("testuser", "test@example.com", "bcrypt", "hashvalue", []string{"user", "admin"}, "active")
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
 	}
-	if user, err := sqliteStore.GetUserByID("missing"); err != nil || user != nil {
-		t.Fatal("expected GetUserByID to return nil without error")
-	}
-	if user, err := sqliteStore.GetUserByUsername("missing"); err != nil || user != nil {
-		t.Fatal("expected GetUserByUsername to return nil without error")
-	}
-	if user, err := sqliteStore.GetUserByEmail("missing@example.com"); err != nil || user != nil {
-		t.Fatal("expected GetUserByEmail to return nil without error")
-	}
-	if err := sqliteStore.UpdateUser(&User{ID: "id"}); err == nil {
-		t.Fatal("expected UpdateUser to be unsupported")
+	if user.Username != "testuser" || user.Email != "test@example.com" {
+		t.Fatalf("CreateUser returned wrong data: %+v", user)
 	}
 
-	if sess, err := sqliteStore.CreateSession("user", "127.0.0.1", "agent", time.Minute); err == nil || sess != nil {
-		t.Fatal("expected CreateSession to be unsupported")
+	fetched, err := sqliteStore.GetUserByID(user.ID)
+	if err != nil || fetched == nil || fetched.Username != "testuser" {
+		t.Fatalf("GetUserByID failed: err=%v user=%+v", err, fetched)
 	}
-	if sess, err := sqliteStore.GetSession("missing"); err != nil || sess != nil {
-		t.Fatal("expected GetSession to return nil without error")
+	fetched, err = sqliteStore.GetUserByUsername("testuser")
+	if err != nil || fetched == nil || fetched.Email != "test@example.com" {
+		t.Fatalf("GetUserByUsername failed: err=%v user=%+v", err, fetched)
 	}
-	if err := sqliteStore.RevokeSession("missing"); err == nil {
-		t.Fatal("expected RevokeSession to be unsupported")
-	}
-	if sessions, err := sqliteStore.ListUserSessions("user"); err != nil || len(sessions) != 0 {
-		t.Fatal("expected ListUserSessions to return empty slice")
-	}
-
-	if err := sqliteStore.SetUserPreferenceForUser("user", "theme", "dark"); err == nil {
-		t.Fatal("expected SetUserPreferenceForUser to be unsupported")
-	}
-	if pref, err := sqliteStore.GetUserPreferenceForUser("user", "theme"); err != nil || pref != nil {
-		t.Fatal("expected GetUserPreferenceForUser to return nil without error")
-	}
-	if prefs, err := sqliteStore.GetAllPreferencesForUser("user"); err != nil || len(prefs) != 0 {
-		t.Fatal("expected GetAllPreferencesForUser to return empty slice")
+	fetched, err = sqliteStore.GetUserByEmail("test@example.com")
+	if err != nil || fetched == nil || fetched.ID != user.ID {
+		t.Fatalf("GetUserByEmail failed: err=%v user=%+v", err, fetched)
 	}
 
-	if seg, err := sqliteStore.CreateBookSegment(1, &BookSegment{FilePath: "/tmp/seg.mp3"}); err == nil || seg != nil {
-		t.Fatal("expected CreateBookSegment to be unsupported")
-	}
-	if segs, err := sqliteStore.ListBookSegments(1); err != nil || len(segs) != 0 {
-		t.Fatal("expected ListBookSegments to return empty slice")
-	}
-	if err := sqliteStore.MergeBookSegments(1, &BookSegment{FilePath: "/tmp/seg.mp3"}, []string{"seg"}); err == nil {
-		t.Fatal("expected MergeBookSegments to be unsupported")
+	// Missing user returns nil, nil
+	missing, err := sqliteStore.GetUserByID("nonexistent")
+	if err != nil || missing != nil {
+		t.Fatalf("GetUserByID(missing) should return nil,nil: err=%v user=%+v", err, missing)
 	}
 
-	if err := sqliteStore.AddPlaybackEvent(&PlaybackEvent{UserID: "user"}); err == nil {
-		t.Fatal("expected AddPlaybackEvent to be unsupported")
+	fetched.Status = "disabled"
+	if err := sqliteStore.UpdateUser(fetched); err != nil {
+		t.Fatalf("UpdateUser failed: %v", err)
 	}
-	if events, err := sqliteStore.ListPlaybackEvents("user", 1, 10); err != nil || len(events) != 0 {
-		t.Fatal("expected ListPlaybackEvents to return empty slice")
+	updated, _ := sqliteStore.GetUserByID(fetched.ID)
+	if updated.Status != "disabled" {
+		t.Fatalf("UpdateUser didn't persist: status=%s", updated.Status)
 	}
-	if err := sqliteStore.UpdatePlaybackProgress(&PlaybackProgress{UserID: "user"}); err == nil {
-		t.Fatal("expected UpdatePlaybackProgress to be unsupported")
+
+	// ---- Sessions ----
+	sess, err := sqliteStore.CreateSession(user.ID, "127.0.0.1", "TestAgent/1.0", time.Hour)
+	if err != nil || sess == nil {
+		t.Fatalf("CreateSession failed: %v", err)
 	}
-	if progress, err := sqliteStore.GetPlaybackProgress("user", 1); err != nil || progress != nil {
-		t.Fatal("expected GetPlaybackProgress to return nil without error")
+	if sess.UserID != user.ID || sess.IP != "127.0.0.1" {
+		t.Fatalf("CreateSession wrong data: %+v", sess)
 	}
-	if err := sqliteStore.IncrementBookPlayStats(1, 10); err == nil {
-		t.Fatal("expected IncrementBookPlayStats to be unsupported")
+
+	gotSess, err := sqliteStore.GetSession(sess.ID)
+	if err != nil || gotSess == nil || gotSess.Revoked {
+		t.Fatalf("GetSession failed: err=%v sess=%+v", err, gotSess)
 	}
-	if stats, err := sqliteStore.GetBookStats(1); err != nil || stats != nil {
-		t.Fatal("expected GetBookStats to return nil without error")
+
+	missingSess, err := sqliteStore.GetSession("nonexistent")
+	if err != nil || missingSess != nil {
+		t.Fatalf("GetSession(missing) should return nil,nil")
 	}
-	if err := sqliteStore.IncrementUserListenStats("user", 10); err == nil {
-		t.Fatal("expected IncrementUserListenStats to be unsupported")
+
+	sessions, err := sqliteStore.ListUserSessions(user.ID)
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("ListUserSessions: expected 1, got %d", len(sessions))
 	}
-	if stats, err := sqliteStore.GetUserStats("user"); err != nil || stats != nil {
-		t.Fatal("expected GetUserStats to return nil without error")
+
+	if err := sqliteStore.RevokeSession(sess.ID); err != nil {
+		t.Fatalf("RevokeSession failed: %v", err)
+	}
+	revoked, _ := sqliteStore.GetSession(sess.ID)
+	if !revoked.Revoked {
+		t.Fatal("RevokeSession didn't set revoked flag")
+	}
+
+	// ---- Per-User Preferences ----
+	if err := sqliteStore.SetUserPreferenceForUser(user.ID, "theme", "dark"); err != nil {
+		t.Fatalf("SetUserPreferenceForUser failed: %v", err)
+	}
+	pref, err := sqliteStore.GetUserPreferenceForUser(user.ID, "theme")
+	if err != nil || pref == nil || pref.Value != "dark" {
+		t.Fatalf("GetUserPreferenceForUser failed: err=%v pref=%+v", err, pref)
+	}
+	missingPref, err := sqliteStore.GetUserPreferenceForUser(user.ID, "nonexistent")
+	if err != nil || missingPref != nil {
+		t.Fatalf("GetUserPreferenceForUser(missing) should return nil,nil")
+	}
+
+	if err := sqliteStore.SetUserPreferenceForUser(user.ID, "lang", "en"); err != nil {
+		t.Fatalf("SetUserPreferenceForUser(lang) failed: %v", err)
+	}
+	allPrefs, err := sqliteStore.GetAllPreferencesForUser(user.ID)
+	if err != nil || len(allPrefs) != 2 {
+		t.Fatalf("GetAllPreferencesForUser: expected 2, got %d", len(allPrefs))
+	}
+
+	// ---- Book Segments ----
+	seg, err := sqliteStore.CreateBookSegment(1, &BookSegment{FilePath: "/tmp/ch1.mp3", Format: "mp3", SizeBytes: 1024, DurationSec: 300, Active: true})
+	if err != nil || seg == nil {
+		t.Fatalf("CreateBookSegment failed: %v", err)
+	}
+	seg2, err := sqliteStore.CreateBookSegment(1, &BookSegment{FilePath: "/tmp/ch2.mp3", Format: "mp3", Active: true})
+	if err != nil {
+		t.Fatalf("CreateBookSegment(2) failed: %v", err)
+	}
+
+	segs, err := sqliteStore.ListBookSegments(1)
+	if err != nil || len(segs) != 2 {
+		t.Fatalf("ListBookSegments: expected 2, got %d", len(segs))
+	}
+
+	emptySegs, err := sqliteStore.ListBookSegments(999)
+	if err != nil {
+		t.Fatalf("ListBookSegments(empty) failed: %v", err)
+	}
+	if len(emptySegs) != 0 {
+		t.Fatalf("ListBookSegments(empty): expected 0, got %d", len(emptySegs))
+	}
+
+	merged := &BookSegment{FilePath: "/tmp/merged.m4b", Format: "m4b", SizeBytes: 2048, DurationSec: 600, Active: true}
+	if err := sqliteStore.MergeBookSegments(1, merged, []string{seg.ID, seg2.ID}); err != nil {
+		t.Fatalf("MergeBookSegments failed: %v", err)
+	}
+	segsAfter, _ := sqliteStore.ListBookSegments(1)
+	activeCount := 0
+	for _, s := range segsAfter {
+		if s.Active {
+			activeCount++
+		}
+	}
+	if activeCount != 1 {
+		t.Fatalf("MergeBookSegments: expected 1 active segment, got %d", activeCount)
+	}
+
+	// ---- Playback ----
+	if err := sqliteStore.AddPlaybackEvent(&PlaybackEvent{UserID: "u1", BookID: 1, SegmentID: "s1", PositionSec: 120, EventType: "progress", PlaySpeed: 1.0}); err != nil {
+		t.Fatalf("AddPlaybackEvent failed: %v", err)
+	}
+	events, err := sqliteStore.ListPlaybackEvents("u1", 1, 10)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("ListPlaybackEvents: expected 1, got %d (err=%v)", len(events), err)
+	}
+	emptyEvents, err := sqliteStore.ListPlaybackEvents("u1", 999, 10)
+	if err != nil || len(emptyEvents) != 0 {
+		t.Fatalf("ListPlaybackEvents(empty): expected 0, got %d", len(emptyEvents))
+	}
+
+	if err := sqliteStore.UpdatePlaybackProgress(&PlaybackProgress{UserID: "u1", BookID: 1, SegmentID: "s1", PositionSec: 120, Percent: 0.5}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress failed: %v", err)
+	}
+	progress, err := sqliteStore.GetPlaybackProgress("u1", 1)
+	if err != nil || progress == nil || progress.PositionSec != 120 {
+		t.Fatalf("GetPlaybackProgress failed: err=%v progress=%+v", err, progress)
+	}
+	missingProgress, err := sqliteStore.GetPlaybackProgress("u1", 999)
+	if err != nil || missingProgress != nil {
+		t.Fatalf("GetPlaybackProgress(missing) should return nil,nil")
+	}
+
+	// Upsert progress
+	if err := sqliteStore.UpdatePlaybackProgress(&PlaybackProgress{UserID: "u1", BookID: 1, SegmentID: "s1", PositionSec: 240, Percent: 0.8}); err != nil {
+		t.Fatalf("UpdatePlaybackProgress(upsert) failed: %v", err)
+	}
+	updated2, _ := sqliteStore.GetPlaybackProgress("u1", 1)
+	if updated2.PositionSec != 240 {
+		t.Fatalf("UpdatePlaybackProgress upsert didn't update: got %d", updated2.PositionSec)
+	}
+
+	// ---- Stats ----
+	if err := sqliteStore.IncrementBookPlayStats(1, 300); err != nil {
+		t.Fatalf("IncrementBookPlayStats failed: %v", err)
+	}
+	bookStats, err := sqliteStore.GetBookStats(1)
+	if err != nil || bookStats == nil || bookStats.PlayCount != 1 || bookStats.ListenSeconds != 300 {
+		t.Fatalf("GetBookStats failed: err=%v stats=%+v", err, bookStats)
+	}
+	// Increment again
+	sqliteStore.IncrementBookPlayStats(1, 100)
+	bookStats, _ = sqliteStore.GetBookStats(1)
+	if bookStats.PlayCount != 2 || bookStats.ListenSeconds != 400 {
+		t.Fatalf("IncrementBookPlayStats(2nd): expected 2/400, got %d/%d", bookStats.PlayCount, bookStats.ListenSeconds)
+	}
+	missingStats, err := sqliteStore.GetBookStats(999)
+	if err != nil || missingStats != nil {
+		t.Fatalf("GetBookStats(missing) should return nil,nil")
+	}
+
+	if err := sqliteStore.IncrementUserListenStats("u1", 300); err != nil {
+		t.Fatalf("IncrementUserListenStats failed: %v", err)
+	}
+	userStats, err := sqliteStore.GetUserStats("u1")
+	if err != nil || userStats == nil || userStats.ListenSeconds != 300 {
+		t.Fatalf("GetUserStats failed: err=%v stats=%+v", err, userStats)
+	}
+	sqliteStore.IncrementUserListenStats("u1", 100)
+	userStats, _ = sqliteStore.GetUserStats("u1")
+	if userStats.ListenSeconds != 400 {
+		t.Fatalf("IncrementUserListenStats(2nd): expected 400, got %d", userStats.ListenSeconds)
+	}
+	missingUserStats, err := sqliteStore.GetUserStats("missing")
+	if err != nil || missingUserStats != nil {
+		t.Fatalf("GetUserStats(missing) should return nil,nil")
 	}
 }
 
