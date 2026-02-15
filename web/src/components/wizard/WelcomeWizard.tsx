@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.0.3
+// version: 1.1.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -23,6 +23,7 @@ import {
   Folder as FolderIcon,
   Settings as SettingsIcon,
   CheckCircle as CheckCircleIcon,
+  LibraryMusic as LibraryMusicIcon,
 } from '@mui/icons-material';
 import { ServerFileBrowser } from '../common/ServerFileBrowser';
 import * as api from '../../services/api';
@@ -55,8 +56,24 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   const [importFolderSelection, setImportFolderSelection] = useState('');
   const [showImportBrowser, setShowImportBrowser] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [iTunesPath, setITunesPath] = useState('');
+  const [iTunesPathSelection, setITunesPathSelection] = useState('');
+  const [showITunesBrowser, setShowITunesBrowser] = useState(false);
+  const [iTunesValidating, setITunesValidating] = useState(false);
+  const [iTunesValidation, setITunesValidation] = useState<{
+    valid: boolean;
+    audiobook_count?: number;
+    author_count?: number;
+    error?: string;
+  } | null>(null);
+  const [iTunesEnabled, setITunesEnabled] = useState(false);
 
-  const steps = ['Library Path', 'AI Setup (Optional)', 'Import Folders'];
+  const steps = [
+    'Library Path',
+    'AI Setup (Optional)',
+    'iTunes Library',
+    'Import Folders',
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -159,6 +176,42 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     setImportFolders(importFolders.filter((_, i) => i !== index));
   };
 
+  const handleOpenITunesBrowser = () => {
+    setITunesPathSelection(iTunesPath || homePath || '/');
+    setShowITunesBrowser(true);
+  };
+
+  const handleITunesPathSelect = (path: string) => {
+    setITunesPathSelection(path);
+  };
+
+  const handleConfirmITunesPath = async () => {
+    const trimmed = (iTunesPathSelection || '').trim();
+    if (!trimmed) return;
+    setITunesPath(trimmed);
+    setShowITunesBrowser(false);
+
+    // Validate the iTunes library
+    setITunesValidating(true);
+    setITunesValidation(null);
+    try {
+      const result = await api.validateITunesLibrary({ library_path: trimmed });
+      setITunesValidation({
+        valid: true,
+        audiobook_count: result.audiobook_tracks,
+        author_count: result.files_found,
+      });
+      setITunesEnabled(true);
+    } catch (error) {
+      setITunesValidation({
+        valid: false,
+        error: error instanceof Error ? error.message : 'Validation failed',
+      });
+    } finally {
+      setITunesValidating(false);
+    }
+  };
+
   const handleComplete = async () => {
     setSaving(true);
 
@@ -187,6 +240,21 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         }
       }
 
+      // Step 4: Trigger iTunes import if configured
+      if (iTunesEnabled && iTunesPath) {
+        try {
+          await api.importITunesLibrary({
+            library_path: iTunesPath,
+            import_mode: 'organized',
+            preserve_location: false,
+            import_playlists: true,
+            skip_duplicates: true,
+          });
+        } catch (error) {
+          console.error('Failed to start iTunes import:', error);
+        }
+      }
+
       // Mark wizard as completed (store in localStorage for now)
       localStorage.setItem('welcome_wizard_completed', 'true');
 
@@ -206,6 +274,8 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       case 1:
         return true; // Optional step
       case 2:
+        return true; // iTunes is optional
+      case 3:
         return true; // Import folders are optional
       default:
         return false;
@@ -324,8 +394,86 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
             </Box>
           )}
 
-          {/* Step 3: Import Folders */}
+          {/* Step 3: iTunes Library */}
           {activeStep === 2 && (
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Import from iTunes Library
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                If you have audiobooks in iTunes/Apple Books, you can import them
+                automatically. Point to your iTunes Library.xml file to get
+                started.
+              </Typography>
+
+              {!iTunesPath ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<LibraryMusicIcon />}
+                  onClick={handleOpenITunesBrowser}
+                  sx={{ mb: 2 }}
+                >
+                  Browse for iTunes Library.xml
+                </Button>
+              ) : (
+                <Box sx={{ mb: 2 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      mb: 1,
+                      bgcolor: 'action.hover',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography variant="body2">{iTunesPath}</Typography>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => {
+                        setITunesPath('');
+                        setITunesValidation(null);
+                        setITunesEnabled(false);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+
+              {iTunesValidating && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CircularProgress size={16} />
+                  <Typography variant="body2">Validating iTunes library...</Typography>
+                </Box>
+              )}
+
+              {iTunesValidation?.valid && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Found {iTunesValidation.audiobook_count} audiobook tracks
+                  ({iTunesValidation.author_count} files found). These will be
+                  imported and organized when you complete setup.
+                </Alert>
+              )}
+
+              {iTunesValidation && !iTunesValidation.valid && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {iTunesValidation.error || 'Invalid iTunes library file.'}
+                </Alert>
+              )}
+
+              <Alert severity="info">
+                This step is optional. You can skip it and import from iTunes
+                later via the Library page.
+              </Alert>
+            </Box>
+          )}
+
+          {/* Step 4: Import Folders */}
+          {activeStep === 3 && (
             <Box>
               <Typography variant="h6" gutterBottom>
                 Add Import Folders
@@ -446,6 +594,42 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
             disabled={!(libraryPathSelection || '').trim()}
           >
             Select Folder
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* iTunes Library Browser Dialog */}
+      <Dialog
+        open={showITunesBrowser}
+        onClose={() => setShowITunesBrowser(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Select iTunes Library.xml</DialogTitle>
+        <DialogContent>
+          <ServerFileBrowser
+            onSelect={handleITunesPathSelect}
+            initialPath={iTunesPathSelection || homePath || '/'}
+            showFiles={true}
+            allowDirSelect={false}
+            allowFileSelect={true}
+          />
+          {iTunesPathSelection && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Selected:</strong> {iTunesPathSelection}
+              </Typography>
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowITunesBrowser(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmITunesPath}
+            disabled={!(iTunesPathSelection || '').trim() || iTunesValidating}
+          >
+            Select File
           </Button>
         </DialogActions>
       </Dialog>
