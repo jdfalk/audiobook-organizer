@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.7.1
+// version: 1.8.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -121,6 +121,12 @@ var migrations = []Migration{
 		Version:     14,
 		Description: "Flag books with corrupted organize paths for review",
 		Up:          migration014Up,
+		Down:        nil,
+	},
+	{
+		Version:     15,
+		Description: "Add book_authors junction table, cover_url, and narrators_json",
+		Up:          migration015Up,
 		Down:        nil,
 	},
 }
@@ -719,6 +725,68 @@ func migration014UpPebble(store Store) error {
 		flagged++
 	}
 	log.Printf("    - Flagged %d books with corrupted organize paths for review (PebbleDB)", flagged)
+	return nil
+}
+
+// migration015Up adds book_authors junction table, cover_url, and narrators_json
+func migration015Up(store Store) error {
+	log.Println("  - Adding book_authors junction table, cover_url, and narrators_json")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// Create book_authors junction table
+	createTableSQL := `CREATE TABLE IF NOT EXISTS book_authors (
+		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+		author_id INTEGER NOT NULL REFERENCES authors(id),
+		role TEXT NOT NULL DEFAULT 'author',
+		position INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (book_id, author_id)
+	)`
+	if _, err := sqliteStore.db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("failed to create book_authors table: %w", err)
+	}
+
+	// Create indices
+	indices := []string{
+		"CREATE INDEX IF NOT EXISTS idx_book_authors_book ON book_authors(book_id)",
+		"CREATE INDEX IF NOT EXISTS idx_book_authors_author ON book_authors(author_id)",
+	}
+	for _, idx := range indices {
+		if _, err := sqliteStore.db.Exec(idx); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	// Migrate existing author_id data into junction table
+	migrateSQL := `INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position)
+		SELECT id, author_id, 'author', 0 FROM books WHERE author_id IS NOT NULL`
+	result, err := sqliteStore.db.Exec(migrateSQL)
+	if err != nil {
+		return fmt.Errorf("failed to migrate existing author data: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("    - Migrated %d existing book-author relationships", rowsAffected)
+
+	// Add cover_url and narrators_json columns to books
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN cover_url TEXT",
+		"ALTER TABLE books ADD COLUMN narrators_json TEXT",
+	}
+	for _, stmt := range alterStatements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping: %s", stmt)
+				continue
+			}
+			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+		}
+	}
+
+	log.Println("  - book_authors, cover_url, and narrators_json added successfully")
 	return nil
 }
 
