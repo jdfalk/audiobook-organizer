@@ -1,5 +1,7 @@
 # Session 9: Go Backend Test Coverage Push (Feb 14, 2026)
 
+> **Next:** See `SESSION_10_INTEGRATION_TEST_PLAN.md` for the integration test implementation plan.
+
 ## Goal
 Push Go backend test coverage from ~76% to 80% (`make ci` threshold).
 

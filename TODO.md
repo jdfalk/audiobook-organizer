@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 2.1.0 -->
+<!-- version: 2.2.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-02-13 -->
+<!-- last-edited: 2026-02-15 -->
 
 # Project TODO
 
@@ -10,11 +10,11 @@
 
 ---
 
-## 🎯 MVP Status — February 13, 2026
+## 🎯 MVP Status — February 15, 2026
 
-**~90% complete** · Backend ~95% (73.8% coverage) · Frontend ~80% · All E2E tests passing (134/134)
+**~93% complete** · Backend ~95% (81.3% coverage ✅) · Frontend ~80% · All E2E tests passing (134/134)
 
-**Remaining for MVP**: test coverage (73.8% → 80%), manual QA, release pipeline
+**Remaining for MVP**: manual QA, release pipeline
 
 ---
 
@@ -25,7 +25,7 @@
 | ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | Release pipeline fixes (token permissions, GoReleaser, changelog) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| Raise Go test coverage from 73.8% to 80% | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
+| ~~Raise Go test coverage from 73.8% to 80%~~ ✅ 81.3% (38 integration tests) | [Session 10 Plan](docs/archive/SESSION_10_INTEGRATION_TEST_PLAN.md) |
 | ~~Expand Playwright E2E to critical workflows~~ ✅ 134/134 passing | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 
 ---

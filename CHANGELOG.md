@@ -1,13 +1,47 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.4.0 -->
+<!-- version: 1.5.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-02-05 -->
+<!-- last-edited: 2026-02-15 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### February 15, 2026 — Integration Tests & Coverage Push (v1.5.0)
+
+Go backend test coverage pushed from 73.8% to 81.3%, exceeding the 80% CI threshold.
+Two sessions of work: unit test gap-filling (session 9) and comprehensive integration tests (session 10).
+
+##### Session 9: Unit Test Coverage Push (73.8% → 79.8%)
+[Session 9 details](docs/archive/SESSION_9_COVERAGE_PUSH.md)
+
+- Server package: 70.6% → 73.6% (iTunes status helpers, error handler, response types, validators, logger)
+- Database package: 70.4% → 81.2% (SQLite store edge cases, migration paths)
+- Download package: 0% → 100% (torrent/usenet client interfaces)
+- Config package: 85% → 90.1% (service layer field combos)
+- MockStore: 0% → 100% (all 89 interface methods verified)
+- Bug fix: nil pointer in `listAudiobookVersions` (server.go)
+
+##### Session 10: Integration Tests (79.8% → 81.3%)
+[Session 10 plan](docs/archive/SESSION_10_INTEGRATION_TEST_PLAN.md)
+
+**Shared test infrastructure** (`internal/testutil/`):
+- `integration.go` — `SetupIntegration(t)` with real SQLite, temp dirs, global state management
+- `itunes_helpers.go` — iTunes XML generation with proper plist format and URL encoding
+- `mock_openlibrary.go` — Mock HTTP server for metadata fetch tests
+
+**38 new integration and edge-case tests across 9 files:**
+- `organizer_integration_test.go` — copy/hardlink strategies, complex naming patterns
+- `itunes_integration_test.go` — full import workflow, organize mode, skip duplicates, writeback, validate
+- `itunes_error_test.go` — corrupt XML, nonexistent files, empty XML, partial missing files, invalid modes, missing fields, writeback errors
+- `scan_integration_test.go` — real files, auto-organize, multiple folders
+- `scan_edge_cases_test.go` — empty dirs, deep nesting, special chars, unsupported extensions, rescan dedup, orphan books, multi-chapter, long paths, real librivox files
+- `metadata_integration_test.go` — mock OpenLibrary API, fallback search, not found
+- `real_audio_test.go` — real librivox MP3/M4B/M4A metadata extraction, corrupt/empty/readonly files
+- `organize_integration_test.go` — organize via HTTP endpoint
+- `e2e_workflow_test.go` — iTunes import→organize→verify, scan→metadata fetch→verify
 
 #### February 5, 2026 - Phase 3 Service Integration & Optimization Layer (v1.4.0)
 

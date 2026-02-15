@@ -2443,7 +2443,7 @@ func TestListDuplicateAudiobooks(t *testing.T) {
 func TestListSoftDeletedAudiobooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/deleted", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/soft-deleted", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -2452,7 +2452,7 @@ func TestListSoftDeletedAudiobooks(t *testing.T) {
 func TestPurgeSoftDeletedAudiobooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/audiobooks/deleted?older_than_days=30", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/audiobooks/purge-soft-deleted?older_than_days=30", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
