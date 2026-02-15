@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.15.0
+// version: 1.16.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -102,11 +102,14 @@ export interface Series {
 export interface Work {
   id: string;
   title: string;
+  author_id?: number;
+  series_id?: number;
   author_names?: string;
+  alt_titles?: string[];
   description?: string;
   original_publish_year?: number;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TagSourceValues {
@@ -579,7 +582,7 @@ export async function getWorks(): Promise<Work[]> {
     throw await buildApiError(response, 'Failed to fetch works');
   }
   const data = await response.json();
-  return data.works || [];
+  return data.items || data.works || [];
 }
 
 // Import Paths
