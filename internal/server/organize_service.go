@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -28,8 +28,9 @@ func NewOrganizeService(db database.Store) *OrganizeService {
 }
 
 type OrganizeRequest struct {
-	FolderPath *string
-	Priority   *int
+	FolderPath         *string
+	Priority           *int
+	FetchMetadataFirst bool
 }
 
 type OrganizeStats struct {
@@ -53,6 +54,29 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	logMsg := fmt.Sprintf("Fetched %d total books from database", len(allBooks))
 	_ = progress.Log("info", logMsg, nil)
 	log.Printf("[DEBUG] Organize: %s", logMsg)
+
+	// Optional: fetch metadata before organizing to normalize author names
+	if req.FetchMetadataFirst {
+		_ = progress.Log("info", "Fetching metadata before organizing...", nil)
+		mfs := NewMetadataFetchService(orgSvc.db)
+		enriched := 0
+		for i := range allBooks {
+			book := &allBooks[i]
+			if book.CoverURL != nil {
+				continue // already enriched
+			}
+			if _, err := mfs.FetchMetadataForBook(book.ID); err == nil {
+				enriched++
+			}
+		}
+		_ = progress.Log("info", fmt.Sprintf("Metadata enriched for %d books", enriched), nil)
+
+		// Re-fetch books since metadata may have changed
+		allBooks, err = orgSvc.db.GetAllBooks(1000, 0)
+		if err != nil {
+			return fmt.Errorf("failed to re-fetch books after metadata: %w", err)
+		}
+	}
 
 	// Filter books that need organizing
 	booksToOrganize := orgSvc.filterBooksNeedingOrganization(allBooks, progress)

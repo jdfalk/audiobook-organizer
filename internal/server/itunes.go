@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -47,11 +47,12 @@ type ITunesValidateResponse struct {
 
 // ITunesImportRequest represents a request to import an iTunes library.
 type ITunesImportRequest struct {
-	LibraryPath      string `json:"library_path" binding:"required"`
-	ImportMode       string `json:"import_mode" binding:"required,oneof=organized import organize"`
-	PreserveLocation bool   `json:"preserve_location"`
-	ImportPlaylists  bool   `json:"import_playlists"`
-	SkipDuplicates   bool   `json:"skip_duplicates"`
+	LibraryPath        string `json:"library_path" binding:"required"`
+	ImportMode         string `json:"import_mode" binding:"required,oneof=organized import organize"`
+	PreserveLocation   bool   `json:"preserve_location"`
+	ImportPlaylists    bool   `json:"import_playlists"`
+	SkipDuplicates     bool   `json:"skip_duplicates"`
+	FetchMetadata      bool   `json:"fetch_metadata"`
 }
 
 // ITunesImportResponse acknowledges an iTunes import operation.
@@ -391,6 +392,13 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 
 		updateITunesImported(status)
 
+		// Populate book_authors junction table
+		if created.AuthorID != nil {
+			_ = database.GlobalStore.SetBookAuthors(created.ID, []database.BookAuthor{
+				{BookID: created.ID, AuthorID: *created.AuthorID, Role: "author", Position: 0},
+			})
+		}
+
 		if req.ImportPlaylists {
 			tags := itunes.ExtractPlaylistTags(track.TrackID, library.Playlists)
 			if len(tags) > 0 {
@@ -413,11 +421,56 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		updateITunesProgress(progress, status, processed, totalBooks)
 	}
 
+	// Phase 2: Metadata enrichment (if requested)
+	if req.FetchMetadata {
+		_ = progress.Log("info", "Starting metadata enrichment phase...", nil)
+		enrichITunesImportedBooks(progress, status)
+	}
+
 	summary := buildITunesSummary(status)
 	_ = progress.UpdateProgress(totalBooks, totalBooks, summary)
 	_ = progress.Log("info", summary, nil)
 	_ = ctx
 	return nil
+}
+
+// enrichITunesImportedBooks fetches metadata for recently imported books
+// to normalize author names and get cover art before organizing.
+func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itunesImportStatus) {
+	mfs := NewMetadataFetchService(database.GlobalStore)
+
+	// Get all imported books (library_state = 'imported')
+	books, err := database.GlobalStore.GetAllBooks(10000, 0)
+	if err != nil {
+		_ = progress.Log("error", fmt.Sprintf("Failed to list books for enrichment: %v", err), nil)
+		return
+	}
+
+	enriched := 0
+	for _, book := range books {
+		if book.LibraryState == nil || *book.LibraryState != "imported" {
+			continue
+		}
+		if book.ITunesImportSource == nil {
+			continue
+		}
+
+		resp, err := mfs.FetchMetadataForBook(book.ID)
+		if err != nil {
+			_ = progress.Log("debug", fmt.Sprintf("No metadata found for '%s': %v", book.Title, err), nil)
+			continue
+		}
+
+		enriched++
+		if resp.Book != nil && resp.Book.AuthorID != nil {
+			// Populate book_authors junction table
+			_ = database.GlobalStore.SetBookAuthors(book.ID, []database.BookAuthor{
+				{BookID: book.ID, AuthorID: *resp.Book.AuthorID, Role: "author", Position: 0},
+			})
+		}
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("Metadata enrichment complete: %d books enriched", enriched), nil)
 }
 
 func buildBookFromTrack(track *itunes.Track, libraryPath string) (*database.Book, error) {
