@@ -173,6 +173,9 @@ $RECYCLE.BIN/
 *.local
 local.env
 
+# Claude Code local settings (user-specific permissions)
+.claude/settings.local.json
+
 # Build output
 bin/
 dist/
