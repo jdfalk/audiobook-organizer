@@ -1,15 +1,30 @@
 <!-- file: docs/roadmap-to-100-percent.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.3.0 -->
 <!-- guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890 -->
-<!-- last-edited: 2026-02-15 -->
+<!-- last-edited: 2026-02-16 -->
 
 # Roadmap to 100% — Everything Needed for Production Release
 
-**Date**: February 15, 2026
-**Current state**: ~97% MVP complete, 81.3% Go test coverage, all core features implemented
+**Date**: February 16, 2026
+**Current state**: ~98% MVP complete, 81.3% Go test coverage, core features implemented and stabilized
 **Goal**: Production-ready, publicly releasable, rock-solid audiobook organizer
 
-## Progress Update (February 15, 2026)
+## Quick Status Snapshot (February 16, 2026)
+
+Use this section for fast status checks.
+
+- ✅ 1. Critical security scan/guardrails in place
+- ⚠️ 1.1 Secret history scrub + key rotation still pending (manual Git history operation)
+- ✅ 2. Auth/session stack implemented and tested (backend + frontend + E2E)
+- ✅ 3. Frontend critical pages implemented (`Login`, `Works`, search/nav integration, error boundaries, theme toggle)
+- ✅ 4. Backend hardening completed (config validation, request size limits, TLS fallback, stale ops, scanner loop protection)
+- ✅ 5. Build/deploy alignment completed + binary smoke workflow added
+- ⚠️ 6. Manual QA checklist execution still pending
+- ⚠️ 6. Full E2E breadth expansion still pending
+- ⚠️ 7. Full OpenAPI completion still pending
+- ⚠️ 8-10. Optional performance/polish/release automation improvements remain
+
+## Progress Update (February 16, 2026)
 
 Implemented in this pass:
 
