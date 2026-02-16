@@ -1,13 +1,37 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.5.0 -->
+<!-- version: 1.6.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-02-15 -->
+<!-- last-edited: 2026-02-16 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### February 16, 2026 — Production Readiness Completion Batch (v1.6.0)
+
+- Added middleware unit tests:
+  - `internal/server/middleware/auth_test.go`
+  - `internal/server/middleware/ratelimit_test.go`
+  - `internal/server/middleware/request_size_test.go`
+- Added auth E2E flow coverage:
+  - `web/tests/e2e/auth-flow.spec.ts`
+  - Expanded auth route mocking in `web/tests/e2e/utils/test-helpers.ts`
+- Replaced `Works` placeholder page with live data-backed implementation:
+  - `web/src/pages/Works.tsx`
+  - Added unit tests in `web/src/pages/Works.test.tsx`
+  - Updated `web/src/services/api.ts` to support current works response shape
+- Hardened scanner persistence against concurrent uniqueness races:
+  - `internal/scanner/scanner.go`
+  - Eliminates flaky `TestScanService_SpecialCharsInFilenames` failures under repeated runs
+- Added CI binary smoke coverage:
+  - `.github/workflows/binary-smoke.yml`
+- Added full runtime configuration reference:
+  - `docs/configuration.md`
+  - Linked from `README.md`
+- Updated production roadmap status with a quick done-vs-pending snapshot:
+  - `docs/roadmap-to-100-percent.md`
 
 #### February 15, 2026 — Integration Tests & Coverage Push (v1.5.0)
 
