@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 2.2.0 -->
+<!-- version: 2.3.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-02-15 -->
+<!-- last-edited: 2026-02-16 -->
 
 # Project TODO
 
@@ -10,11 +10,11 @@
 
 ---
 
-## 🎯 MVP Status — February 15, 2026
+## 🎯 MVP Status — February 16, 2026
 
-**~93% complete** · Backend ~95% (81.3% coverage ✅) · Frontend ~80% · All E2E tests passing (134/134)
+**~98% complete** · Backend hardening ✅ · Frontend core flows ✅ · Go coverage 81.3% ✅ · Auth E2E + middleware tests ✅
 
-**Remaining for MVP**: manual QA, release pipeline
+**Remaining for MVP**: secret-history scrub/key rotation, manual QA sign-off, OpenAPI completion, release pipeline finalization
 
 ---
 
@@ -22,6 +22,8 @@
 
 | Item | Plan |
 | --- | --- |
+| Rotate exposed key + scrub `.env` from git history | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
+| Complete OpenAPI coverage for all implemented endpoints | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
 | ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | Release pipeline fixes (token permissions, GoReleaser, changelog) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
@@ -48,14 +50,14 @@
 | Item | Plan |
 | --- | --- |
 | Persist operation logs + log view UX improvements | [Observability](docs/plans/observability-and-monitoring.md) |
-| SSE system status heartbeats (live metrics without polling) | [Observability](docs/plans/observability-and-monitoring.md) |
-| Parallel scanning with goroutine pool | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
+| ~~SSE system status heartbeats (live metrics without polling)~~ ✅ Complete | [Observability](docs/plans/observability-and-monitoring.md) |
+| ~~Parallel scanning with goroutine pool~~ ✅ Complete | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
 | Caching layer for frequent book queries | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
 | Debounced library size recomputation via fsnotify | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
 | Global notification/toast system | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Dark mode with persisted preference | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
+| ~~Dark mode with persisted preference~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | Keyboard shortcuts | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Welcome wizard (first-run setup) | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
+| ~~Welcome wizard (first-run setup)~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | Developer guide (architecture, data flow, deployment) | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | NPM cache fix (CRITICAL-002) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
 | ghcommon pre-release & tagging strategy (CRITICAL-004) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
