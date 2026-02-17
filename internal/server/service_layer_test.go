@@ -38,23 +38,6 @@ func TestConfigUpdateService_MaskSecrets(t *testing.T) {
 			},
 		},
 		{
-			name: "mask goodreads api key",
-			config: config.Config{
-				APIKeys: struct {
-					Goodreads string `json:"goodreads"`
-				}{
-					Goodreads: "gr-1234567890abcdef",
-				},
-			},
-			expected: config.Config{
-				APIKeys: struct {
-					Goodreads string `json:"goodreads"`
-				}{
-					Goodreads: "gr-****cdef",
-				},
-			},
-		},
-		{
 			name: "short secrets get masked to ****",
 			config: config.Config{
 				OpenAIAPIKey: "short",
@@ -79,9 +62,6 @@ func TestConfigUpdateService_MaskSecrets(t *testing.T) {
 			masked := svc.MaskSecrets(tt.config)
 			if masked.OpenAIAPIKey != tt.expected.OpenAIAPIKey {
 				t.Errorf("expected OpenAIAPIKey %q, got %q", tt.expected.OpenAIAPIKey, masked.OpenAIAPIKey)
-			}
-			if masked.APIKeys.Goodreads != tt.expected.APIKeys.Goodreads {
-				t.Errorf("expected Goodreads %q, got %q", tt.expected.APIKeys.Goodreads, masked.APIKeys.Goodreads)
 			}
 		})
 	}
@@ -1318,41 +1298,30 @@ func TestConfigUpdateService_UpdateConfig_IntConcurrentScans(t *testing.T) {
 	}
 }
 
-// TestConfigUpdateService_UpdateConfig_APIKeys tests API keys update
-func TestConfigUpdateService_UpdateConfig_APIKeys(t *testing.T) {
+// TestConfigUpdateService_ApplyUpdates_OpenAIKey tests OpenAI key saved via ApplyUpdates
+func TestConfigUpdateService_ApplyUpdates_OpenAIKey(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
-	originalGoodreads := config.AppConfig.APIKeys.Goodreads
+	originalKey := config.AppConfig.OpenAIAPIKey
+	originalAI := config.AppConfig.EnableAIParsing
 	defer func() {
-		config.AppConfig.APIKeys.Goodreads = originalGoodreads
+		config.AppConfig.OpenAIAPIKey = originalKey
+		config.AppConfig.EnableAIParsing = originalAI
 	}()
 
-	status, resp := svc.UpdateConfig(map[string]any{
-		"api_keys": map[string]any{
-			"goodreads": "gr-12345",
-		},
+	err := svc.ApplyUpdates(map[string]any{
+		"openai_api_key":   "sk-proj-test12345",
+		"enable_ai_parsing": true,
 	})
-	if status != 200 {
-		t.Errorf("expected 200, got %d: %v", status, resp)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if config.AppConfig.APIKeys.Goodreads != "gr-12345" {
-		t.Errorf("expected Goodreads API key 'gr-12345', got %q", config.AppConfig.APIKeys.Goodreads)
+	if config.AppConfig.OpenAIAPIKey != "sk-proj-test12345" {
+		t.Errorf("expected OpenAI key 'sk-proj-test12345', got %q", config.AppConfig.OpenAIAPIKey)
 	}
-	updated, ok := resp["updated"].([]string)
-	if !ok {
-		t.Fatal("expected updated to be []string")
-	}
-	found := false
-	for _, u := range updated {
-		if u == "api_keys.goodreads" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected updated to contain 'api_keys.goodreads', got %v", updated)
+	if !config.AppConfig.EnableAIParsing {
+		t.Error("expected EnableAIParsing to be true")
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.54.2
+// version: 1.56.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -48,6 +49,14 @@ var cachedSizeComputedAt time.Time
 var cacheLock sync.RWMutex
 
 const librarySizeCacheTTL = 60 * time.Second
+
+// appVersion is set at startup via SetVersion(), injected from main.version
+var appVersion = "dev"
+
+// SetVersion sets the application version string.
+func SetVersion(v string) {
+	appVersion = v
+}
 
 // resetLibrarySizeCache resets the library size cache (for testing)
 func resetLibrarySizeCache() {
@@ -365,7 +374,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 		librarySize = cachedLibrarySize
 		importSize = cachedImportSize
 		cacheLock.RUnlock()
-		log.Printf("[DEBUG] Using cached sizes: library=%d, import=%d", librarySize, importSize)
+		// cached sizes used
 		return
 	}
 	cacheLock.RUnlock()
@@ -379,7 +388,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 		return cachedLibrarySize, cachedImportSize
 	}
 
-	log.Printf("[DEBUG] Recalculating library sizes (cache expired)")
+	// Recalculating library sizes (cache expired)
 
 	// Calculate library size
 	librarySize = 0
@@ -419,7 +428,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 	cachedImportSize = importSize
 	cachedSizeComputedAt = time.Now()
 
-	log.Printf("[DEBUG] Calculated new sizes: library=%d, import=%d", librarySize, importSize)
+	// sizes recalculated
 	return
 }
 
@@ -442,6 +451,7 @@ type Server struct {
 	systemService          *SystemService
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
+	dashboardCache         *cache.Cache[gin.H]
 }
 
 // ServerConfig holds server configuration
@@ -485,6 +495,7 @@ func NewServer() *Server {
 		systemService:          NewSystemService(database.GlobalStore),
 		metadataStateService:   NewMetadataStateService(database.GlobalStore),
 		dashboardService:       NewDashboardService(database.GlobalStore),
+		dashboardCache:         cache.New[gin.H](30 * time.Second),
 	}
 
 	server.setupRoutes()
@@ -634,14 +645,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 					if database.GlobalStore != nil {
 						if bc, err := database.GlobalStore.CountBooks(); err == nil {
 							bookCount = bc
-						} else {
-							log.Printf("[DEBUG] Heartbeat: Failed to count books: %v", err)
 						}
 						if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
 							folderCount = len(folders)
-							log.Printf("[DEBUG] Heartbeat: Got %d import paths", folderCount)
-						} else {
-							log.Printf("[DEBUG] Heartbeat: Failed to get import paths: %v", err)
 						}
 					}
 
@@ -949,6 +955,7 @@ func (s *Server) setupRoutes() {
 			itunesGroup := protected.Group("/itunes")
 			{
 				itunesGroup.POST("/validate", s.handleITunesValidate)
+				itunesGroup.POST("/test-mapping", s.handleITunesTestMapping)
 				itunesGroup.POST("/import", s.handleITunesImport)
 				itunesGroup.POST("/write-back", s.handleITunesWriteBack)
 				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
@@ -1088,7 +1095,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	resp := gin.H{
 		"status":        "ok",
 		"timestamp":     time.Now().Unix(),
-		"version":       "1.1.0",
+		"version":       appVersion,
 		"database_type": config.AppConfig.DatabaseType,
 		"metrics": gin.H{
 			"books":     bookCount,
@@ -2048,9 +2055,6 @@ func (s *Server) getConfig(c *gin.Context) {
 	if maskedConfig.OpenAIAPIKey != "" {
 		maskedConfig.OpenAIAPIKey = database.MaskSecret(maskedConfig.OpenAIAPIKey)
 	}
-	if maskedConfig.APIKeys.Goodreads != "" {
-		maskedConfig.APIKeys.Goodreads = database.MaskSecret(maskedConfig.APIKeys.Goodreads)
-	}
 	c.JSON(http.StatusOK, gin.H{"config": maskedConfig})
 }
 
@@ -2981,49 +2985,19 @@ func (s *Server) getDashboard(c *gin.Context) {
 		return
 	}
 
-	// Get all books
-	allBooks, err := database.GlobalStore.GetAllBooks(100000, 0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve books"})
+	// Check cache first
+	if cached, ok := s.dashboardCache.Get("dashboard"); ok {
+		LogServiceCacheHit("Dashboard", "dashboard")
+		c.JSON(http.StatusOK, cached)
 		return
 	}
+	LogServiceCacheMiss("Dashboard", "dashboard")
 
-	// Calculate size distribution
-	sizeDistribution := map[string]int{
-		"0-100MB":   0,
-		"100-500MB": 0,
-		"500MB-1GB": 0,
-		"1GB+":      0,
-	}
-
-	// Calculate format distribution and total size
-	formatDistribution := make(map[string]int)
-	var totalSize int64 = 0
-
-	for _, book := range allBooks {
-		// Size distribution
-		if book.FileSize != nil && *book.FileSize > 0 {
-			totalSize += *book.FileSize
-			sizeMB := float64(*book.FileSize) / (1024 * 1024)
-			sizeGB := sizeMB / 1024
-
-			if sizeMB < 100 {
-				sizeDistribution["0-100MB"]++
-			} else if sizeMB < 500 {
-				sizeDistribution["100-500MB"]++
-			} else if sizeGB < 1 {
-				sizeDistribution["500MB-1GB"]++
-			} else {
-				sizeDistribution["1GB+"]++
-			}
-		}
-
-		// Format distribution
-		ext := strings.ToLower(filepath.Ext(book.FilePath))
-		if ext != "" {
-			ext = strings.TrimPrefix(ext, ".")
-			formatDistribution[ext]++
-		}
+	// Use SQL aggregation instead of loading all books
+	stats, err := database.GlobalStore.GetDashboardStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve dashboard stats"})
+		return
 	}
 
 	// Get recent operations
@@ -3032,13 +3006,17 @@ func (s *Server) getDashboard(c *gin.Context) {
 		recentOps = []database.Operation{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"sizeDistribution":   sizeDistribution,
-		"formatDistribution": formatDistribution,
+	result := gin.H{
+		"formatDistribution": stats.FormatDistribution,
+		"stateDistribution":  stats.StateDistribution,
 		"recentOperations":   recentOps,
-		"totalSize":          totalSize,
-		"totalBooks":         len(allBooks),
-	})
+		"totalSize":          stats.TotalSize,
+		"totalBooks":         stats.TotalBooks,
+		"totalDuration":      stats.TotalDuration,
+	}
+
+	s.dashboardCache.Set("dashboard", result)
+	c.JSON(http.StatusOK, result)
 }
 
 // getMetadataFields returns available metadata fields with their types and validation rules

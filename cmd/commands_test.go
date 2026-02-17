@@ -76,6 +76,9 @@ func (s *stubStore) SearchBooks(query string, limit, offset int) ([]database.Boo
 	return []database.Book{}, nil
 }
 func (s *stubStore) CountBooks() (int, error) { return 0, nil }
+func (s *stubStore) GetDashboardStats() (*database.DashboardStats, error) {
+	return &database.DashboardStats{StateDistribution: map[string]int{}, FormatDistribution: map[string]int{}}, nil
+}
 func (s *stubStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]database.Book, error) {
 	return []database.Book{}, nil
 }

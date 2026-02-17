@@ -143,7 +143,7 @@ export function Dashboard() {
       });
 
       // Convert recent operations to dashboard format
-      const recentOps = systemStatus.operations.recent
+      const recentOps = (systemStatus.operations?.recent || [])
         .slice(0, 5)
         .map((op) => ({
           id: op.id,

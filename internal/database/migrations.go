@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -133,6 +133,12 @@ var migrations = []Migration{
 		Version:     16,
 		Description: "Add users, sessions, book_segments, playback tables",
 		Up:          migration016Up,
+		Down:        nil,
+	},
+	{
+		Version:     17,
+		Description: "Add composite indexes and FTS5 full-text search",
+		Up:          migration017Up,
 		Down:        nil,
 	},
 }
@@ -889,6 +895,71 @@ func migration016Up(store Store) error {
 	}
 
 	log.Println("  - Users, sessions, book_segments, and playback tables created")
+	return nil
+}
+
+// migration017Up adds composite indexes for common queries and FTS5 full-text search
+func migration017Up(store Store) error {
+	log.Println("  - Adding composite indexes and FTS5 full-text search")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// Composite indexes for common query patterns
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_books_notdeleted_title ON books(COALESCE(marked_for_deletion, 0), title)",
+		"CREATE INDEX IF NOT EXISTS idx_books_created_at ON books(created_at)",
+		"CREATE INDEX IF NOT EXISTS idx_books_author_title ON books(author_id, title)",
+	}
+
+	for _, stmt := range indexes {
+		log.Printf("    - Creating index: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	// FTS5 virtual table for full-text search on book titles
+	ftsStatements := []string{
+		`CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(title, content=books, content_rowid=rowid)`,
+		`CREATE TRIGGER IF NOT EXISTS books_fts_insert AFTER INSERT ON books BEGIN
+			INSERT INTO books_fts(rowid, title) VALUES (new.rowid, new.title);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS books_fts_update AFTER UPDATE OF title ON books BEGIN
+			INSERT INTO books_fts(books_fts, rowid, title) VALUES('delete', old.rowid, old.title);
+			INSERT INTO books_fts(rowid, title) VALUES (new.rowid, new.title);
+		END`,
+		`CREATE TRIGGER IF NOT EXISTS books_fts_delete AFTER DELETE ON books BEGIN
+			INSERT INTO books_fts(books_fts, rowid, title) VALUES('delete', old.rowid, old.title);
+		END`,
+	}
+
+	// FTS5 may not be compiled into all SQLite builds; skip gracefully if unavailable
+	ftsAvailable := true
+	for _, stmt := range ftsStatements {
+		log.Printf("    - Executing FTS5 setup: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "no such module") {
+				log.Printf("    - FTS5 module not available, skipping full-text search setup")
+				ftsAvailable = false
+				break
+			}
+			return fmt.Errorf("failed FTS5 setup: %w", err)
+		}
+	}
+
+	// Populate FTS index from existing data
+	if ftsAvailable {
+		log.Println("    - Populating FTS5 index from existing books")
+		if _, err := sqliteStore.db.Exec(`INSERT INTO books_fts(rowid, title) SELECT rowid, title FROM books`); err != nil {
+			log.Printf("    - Warning: FTS5 population failed (may already be populated): %v", err)
+		}
+	}
+
+	log.Println("  - Composite indexes and FTS5 added successfully")
 	return nil
 }
 

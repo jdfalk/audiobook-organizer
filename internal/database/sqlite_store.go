@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1584,10 +1584,22 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	searchQuery := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
-	rows, err := s.db.Query(searchQuery, "%"+query+"%", limit, offset)
+	// Try FTS5 first for better performance and relevance ranking
+	ftsQuery := sanitizeFTS5Query(query)
+	searchSQL := fmt.Sprintf(
+		`SELECT %s FROM books
+		 JOIN books_fts ON books.rowid = books_fts.rowid
+		 WHERE books_fts MATCH ? AND COALESCE(marked_for_deletion, 0) = 0
+		 ORDER BY rank LIMIT ? OFFSET ?`, bookSelectColumns)
+
+	rows, err := s.db.Query(searchSQL, ftsQuery, limit, offset)
 	if err != nil {
-		return nil, err
+		// Fall back to LIKE if FTS5 table doesn't exist or query fails
+		likeSQL := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
+		rows, err = s.db.Query(likeSQL, "%"+query+"%", limit, offset)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer rows.Close()
 
@@ -1600,6 +1612,24 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+// sanitizeFTS5Query escapes FTS5 special characters and wraps terms for prefix matching.
+func sanitizeFTS5Query(q string) string {
+	// Remove FTS5 operators that could cause syntax errors
+	replacer := strings.NewReplacer(
+		`"`, ``,
+		`*`, ``,
+		`(`, ``,
+		`)`, ``,
+	)
+	cleaned := replacer.Replace(q)
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned == "" {
+		return `""`
+	}
+	// Quote the whole thing and add prefix matching
+	return `"` + cleaned + `"` + "*"
 }
 
 func (s *SQLiteStore) CountBooks() (int, error) {
@@ -1639,6 +1669,61 @@ func (s *SQLiteStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Ti
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+// GetDashboardStats returns aggregated dashboard statistics using SQL aggregation
+// instead of loading all books into memory.
+func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
+	stats := &DashboardStats{
+		StateDistribution:  make(map[string]int),
+		FormatDistribution: make(map[string]int),
+	}
+
+	// Aggregate counts and totals
+	err := s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+		FROM books WHERE COALESCE(marked_for_deletion, 0) = 0`).Scan(
+		&stats.TotalBooks, &stats.TotalDuration, &stats.TotalSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get book aggregates: %w", err)
+	}
+
+	// State distribution
+	rows, err := s.db.Query(`SELECT COALESCE(library_state, 'imported'), COUNT(*)
+		FROM books WHERE COALESCE(marked_for_deletion, 0) = 0
+		GROUP BY COALESCE(library_state, 'imported')`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get state distribution: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var state string
+		var count int
+		if err := rows.Scan(&state, &count); err != nil {
+			return nil, err
+		}
+		stats.StateDistribution[state] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Format distribution
+	rows2, err := s.db.Query(`SELECT COALESCE(codec, 'unknown'), COUNT(*)
+		FROM books WHERE COALESCE(marked_for_deletion, 0) = 0
+		GROUP BY COALESCE(codec, 'unknown')`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get format distribution: %w", err)
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var codec string
+		var count int
+		if err := rows2.Scan(&codec, &count); err != nil {
+			return nil, err
+		}
+		stats.FormatDistribution[codec] = count
+	}
+	return stats, rows2.Err()
 }
 
 // GetBooksByVersionGroup returns all books in a version group

@@ -274,6 +274,14 @@ func sanitizePath(path string) string {
 
 // sanitizeFilename sanitizes a filename for filesystem use
 func sanitizeFilename(name string) string {
+	// Remove control characters and non-printable bytes
+	name = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return -1
+		}
+		return r
+	}, name)
+
 	invalid := []string{"<", ">", ":", "\"", "|", "?", "*"}
 	for _, char := range invalid {
 		name = strings.ReplaceAll(name, char, "_")
@@ -283,6 +291,7 @@ func sanitizeFilename(name string) string {
 	name = re.ReplaceAllString(name, " ")
 	name = strings.TrimSpace(name)
 
+	// Limit filename length (255 byte max on most filesystems, leave room for extension + .tmp)
 	if len(name) > 200 {
 		name = name[:200]
 	}

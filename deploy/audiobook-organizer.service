@@ -1,15 +1,58 @@
+# file: deploy/audiobook-organizer.service
+# version: 3.0.0
+# guid: f1e2d3c4-b5a6-9870-8765-4321fedcba98
+#
+# systemd service for audiobook-organizer
+#
+# Setup:
+#   sudo useradd -r -s /usr/sbin/nologin -d /var/lib/audiobook-organizer audiobook
+#   sudo mkdir -p /var/lib/audiobook-organizer
+#   sudo chown audiobook:audiobook /var/lib/audiobook-organizer
+#   sudo cp audiobook-organizer /usr/local/bin/
+#   sudo chmod +x /usr/local/bin/audiobook-organizer
+#   sudo cp deploy/audiobook-organizer.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now audiobook-organizer
+#
+# The audiobook user needs read access to wherever your audiobook files live.
+# Either add the user to the appropriate group, or set filesystem ACLs:
+#   sudo usermod -aG media audiobook   # if files are group-readable
+#   # or
+#   sudo setfacl -R -m u:audiobook:rX /path/to/audiobooks
+
 [Unit]
 Description=Audiobook Organizer
-After=network.target
+Documentation=https://github.com/jdfalk/audiobook-organizer
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=audiobook
-ExecStart=/usr/local/bin/audiobook-organizer serve --host 0.0.0.0
+Group=audiobook
+
+ExecStart=/usr/local/bin/audiobook-organizer serve --host 0.0.0.0 --port 8484 --db /var/lib/audiobook-organizer/audiobooks.pebble
+
+WorkingDirectory=/var/lib/audiobook-organizer
+Environment=HOME=/var/lib/audiobook-organizer
 Restart=on-failure
 RestartSec=5
-Environment=HOME=/var/lib/audiobook-organizer
-WorkingDirectory=/var/lib/audiobook-organizer
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Hardening — kept minimal so the service can read audiobook files from
+# any mount point (NFS, external drives, etc). The service needs:
+#   - Read access to audiobook source directories (configured at runtime)
+#   - Read/write to /var/lib/audiobook-organizer (database + playlists)
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+PrivateTmp=yes
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=audiobook-organizer
 
 [Install]
 WantedBy=multi-user.target

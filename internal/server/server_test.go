@@ -906,33 +906,18 @@ func TestDashboardSizeFormat(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	// Verify sizeDistribution exists
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
-	assert.True(t, ok, "sizeDistribution should exist")
-	assert.NotNil(t, sizeDistribution)
-
 	// Verify formatDistribution exists
 	formatDistribution, ok := response["formatDistribution"].(map[string]any)
 	assert.True(t, ok, "formatDistribution should exist")
 	assert.NotNil(t, formatDistribution)
 
-	// Verify basic structure
-	t.Run("size distribution structure", func(t *testing.T) {
-		if sizeDistribution != nil {
-			// Check for common size buckets (may be empty but structure should exist)
-			_, hasSmall := sizeDistribution["0-100MB"]
-			_, hasMedium := sizeDistribution["100-500MB"]
-			_, hasLarge := sizeDistribution["500MB-1GB"]
-			_, hasXLarge := sizeDistribution["1GB+"]
-
-			assert.True(t, hasSmall || hasMedium || hasLarge || hasXLarge,
-				"Should have at least one size bucket defined")
-		}
-	})
+	// Verify stateDistribution exists
+	stateDistribution, ok := response["stateDistribution"].(map[string]any)
+	assert.True(t, ok, "stateDistribution should exist")
+	assert.NotNil(t, stateDistribution)
 
 	t.Run("format distribution structure", func(t *testing.T) {
 		if formatDistribution != nil {
-			// Check that format counts are present (may be zero)
 			for _, count := range formatDistribution {
 				_, isNumber := count.(float64)
 				assert.True(t, isNumber, "Format counts should be numbers")
@@ -993,7 +978,7 @@ func TestFormatDetection(t *testing.T) {
 	}
 }
 
-// TestSizeBucketDistribution tests size bucket distribution
+// TestSizeBucketDistribution tests state distribution in dashboard
 func TestSizeBucketDistribution(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
@@ -1009,15 +994,11 @@ func TestSizeBucketDistribution(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
-	require.True(t, ok, "sizeDistribution should exist")
-
-	// Verify all size buckets are present
-	expectedBuckets := []string{"0-100MB", "100-500MB", "500MB-1GB", "1GB+"}
-	for _, bucket := range expectedBuckets {
-		_, exists := sizeDistribution[bucket]
-		assert.True(t, exists, "Size bucket %s should exist", bucket)
-	}
+	// totalBooks and totalSize should be present
+	_, ok := response["totalBooks"]
+	assert.True(t, ok, "totalBooks should exist")
+	_, ok = response["totalSize"]
+	assert.True(t, ok, "totalSize should exist")
 }
 
 // TestEmptyDashboardSizeFormat tests dashboard with no audiobooks
@@ -1036,14 +1017,14 @@ func TestEmptyDashboardSizeFormat(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	// Even with no audiobooks, size and format distributions should exist
-	sizeDistribution, ok := response["sizeDistribution"].(map[string]any)
-	assert.True(t, ok, "sizeDistribution should exist even when empty")
-	assert.NotNil(t, sizeDistribution)
-
+	// Even with no audiobooks, distributions should exist
 	formatDistribution, ok := response["formatDistribution"].(map[string]any)
 	assert.True(t, ok, "formatDistribution should exist even when empty")
 	assert.NotNil(t, formatDistribution)
+
+	stateDistribution, ok := response["stateDistribution"].(map[string]any)
+	assert.True(t, ok, "stateDistribution should exist even when empty")
+	assert.NotNil(t, stateDistribution)
 }
 
 // =============================================================================
@@ -2065,7 +2046,7 @@ func TestGetDashboardWithData(t *testing.T) {
 	// Verify dashboard response structure with data
 	assert.NotNil(t, response["totalBooks"])
 	assert.NotNil(t, response["totalSize"])
-	assert.NotNil(t, response["sizeDistribution"])
+	assert.NotNil(t, response["stateDistribution"])
 	assert.NotNil(t, response["formatDistribution"])
 
 	totalBooks, ok := response["totalBooks"].(float64)

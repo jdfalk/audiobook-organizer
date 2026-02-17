@@ -1,5 +1,5 @@
 // file: internal/itunes/import.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: 4b58a17d-b2b4-4743-9b7e-3462e2ed55ac
 
 package itunes
@@ -8,11 +8,14 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/models"
 )
 
@@ -30,13 +33,64 @@ const (
 	ImportModeOrganize ImportMode = "organize"
 )
 
+// PathMapping defines a single from→to path prefix substitution.
+type PathMapping struct {
+	From string `json:"from"` // Original prefix (e.g. "file://localhost/W:/itunes/iTunes%20Media")
+	To   string `json:"to"`   // Local prefix (e.g. "file://localhost/mnt/bigdata/books/itunes/iTunes Media")
+}
+
 // ImportOptions configures how the iTunes import should behave
 type ImportOptions struct {
-	LibraryPath      string     // Path to iTunes Library.xml
-	ImportMode       ImportMode // How to handle file organization
-	PreserveLocation bool       // Keep files in iTunes location (don't move)
-	ImportPlaylists  bool       // Import playlists as tags
-	SkipDuplicates   bool       // Skip books already in library (by hash)
+	LibraryPath      string        // Path to iTunes Library.xml
+	ImportMode       ImportMode    // How to handle file organization
+	PreserveLocation bool          // Keep files in iTunes location (don't move)
+	ImportPlaylists  bool          // Import playlists as tags
+	SkipDuplicates   bool          // Skip books already in library (by hash)
+	PathMappings     []PathMapping // Path prefix remappings for cross-platform imports
+}
+
+// extractPathPrefixes finds distinct file:// location prefixes from raw iTunes locations.
+// Groups by the path up to the drive/root + first two directory segments.
+// Skips http/https URLs (podcast feeds).
+func extractPathPrefixes(locations []string) []string {
+	seen := make(map[string]bool)
+	var prefixes []string
+	for _, loc := range locations {
+		if !strings.HasPrefix(loc, "file://") {
+			continue
+		}
+		// Strip file://localhost/ then take drive + first directory segments
+		// e.g. "file://localhost/W:/itunes/iTunes%20Media/Audiobooks/Author/file.mp3"
+		// → prefix = "file://localhost/W:/itunes/iTunes%20Media"
+		after := strings.TrimPrefix(loc, "file://localhost/")
+		parts := strings.SplitN(after, "/", 4) // [drive, dir1, dir2, rest]
+		var prefix string
+		if len(parts) >= 3 {
+			prefix = "file://localhost/" + parts[0] + "/" + parts[1] + "/" + parts[2]
+		} else {
+			prefix = "file://localhost/" + strings.Join(parts[:len(parts)], "/")
+		}
+		if !seen[prefix] {
+			seen[prefix] = true
+			prefixes = append(prefixes, prefix)
+		}
+	}
+	return prefixes
+}
+
+// RemapPath applies all configured path mappings (first match wins).
+func (o *ImportOptions) RemapPath(p string) string {
+	if len(o.PathMappings) == 0 {
+		return p
+	}
+	normalized := strings.ReplaceAll(p, "\\", "/")
+	for _, m := range o.PathMappings {
+		from := strings.ReplaceAll(m.From, "\\", "/")
+		if from != "" && m.To != "" && strings.HasPrefix(normalized, from) {
+			return m.To + normalized[len(from):]
+		}
+	}
+	return p
 }
 
 // ValidationResult contains the results of validating an iTunes import
@@ -46,6 +100,7 @@ type ValidationResult struct {
 	FilesFound      int                 // Audiobook files that exist on disk
 	FilesMissing    int                 // Audiobook files that are missing
 	MissingPaths    []string            // List of missing file paths
+	PathPrefixes    []string            // Distinct file:// path prefixes found in library (for path mapping UI)
 	DuplicateHashes map[string][]string // hash -> list of titles
 	EstimatedTime   string              // Estimated import time
 }
@@ -57,6 +112,14 @@ type ImportResult struct {
 	Skipped        int      // Skipped (duplicates)
 	Failed         int      // Failed to import
 	Errors         []string // Error messages
+}
+
+// trackCheck holds a decoded track path for parallel stat checking.
+type trackCheck struct {
+	name     string
+	path     string
+	rawLoc   string
+	decodeOK bool
 }
 
 // ValidateImport validates an iTunes library file and checks file existence
@@ -73,41 +136,107 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 		DuplicateHashes: make(map[string][]string),
 	}
 
-	// Check each track
+	log.Printf("iTunes validate: parsed %d total tracks, filtering audiobooks...", len(library.Tracks))
+
+	// Pass 1: Filter audiobooks and decode paths (fast, single-threaded)
+	var checks []trackCheck
+	var rawLocations []string
 	for _, track := range library.Tracks {
 		if !IsAudiobook(track) {
 			continue
 		}
 		result.AudiobookTracks++
+		rawLocations = append(rawLocations, track.Location)
 
-		// Decode the location
-		path, err := DecodeLocation(track.Location)
+		location := opts.RemapPath(track.Location)
+		path, err := DecodeLocation(location)
 		if err != nil {
-			result.MissingPaths = append(result.MissingPaths, track.Location)
-			result.FilesMissing++
-			continue
-		}
-
-		// Check if file exists
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			result.FilesMissing++
-			result.MissingPaths = append(result.MissingPaths, path)
+			checks = append(checks, trackCheck{name: track.Name, rawLoc: track.Location, decodeOK: false})
 		} else {
-			result.FilesFound++
-
-			// Check for duplicates by hash
-			if opts.SkipDuplicates {
-				hash, err := computeFileHash(path)
-				if err == nil {
-					if existing, ok := result.DuplicateHashes[hash]; ok {
-						result.DuplicateHashes[hash] = append(existing, track.Name)
-					} else {
-						result.DuplicateHashes[hash] = []string{track.Name}
-					}
-				}
-			}
+			checks = append(checks, trackCheck{name: track.Name, path: path, rawLoc: track.Location, decodeOK: true})
 		}
 	}
+
+	debugLog := config.AppConfig.LogLevel == "debug"
+	log.Printf("iTunes validate: %d audiobooks found, checking file existence with 32 workers (debug=%v)...", len(checks), debugLog)
+
+	// Pass 2: Parallel os.Stat checks
+	type statResult struct {
+		idx   int
+		found bool
+	}
+
+	const numWorkers = 32
+	jobs := make(chan int, len(checks))
+	results := make(chan statResult, len(checks))
+
+	// Start workers
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				tc := checks[idx]
+				if !tc.decodeOK {
+					if debugLog {
+						log.Printf("  [%d] DECODE_ERR: %q (raw: %s)", idx, tc.name, tc.rawLoc)
+					}
+					results <- statResult{idx: idx, found: false}
+					continue
+				}
+				_, err := os.Stat(tc.path)
+				found := err == nil
+				if debugLog {
+					if found {
+						log.Printf("  [%d] FOUND: %q → %s", idx, tc.name, tc.path)
+					} else {
+						log.Printf("  [%d] MISSING: %q → %s", idx, tc.name, tc.path)
+					}
+				}
+				results <- statResult{idx: idx, found: found}
+			}
+		}()
+	}
+
+	// Send jobs
+	for i := range checks {
+		jobs <- i
+	}
+	close(jobs)
+
+	// Collect results in background
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	firstFound := true
+	processed := 0
+	for sr := range results {
+		processed++
+		if processed%10000 == 0 {
+			log.Printf("iTunes validate: checked %d/%d audiobooks (%d found, %d missing)...",
+				processed, len(checks), result.FilesFound, result.FilesMissing)
+		}
+		tc := checks[sr.idx]
+		if !tc.decodeOK {
+			result.FilesMissing++
+			result.MissingPaths = append(result.MissingPaths, tc.rawLoc)
+		} else if sr.found {
+			result.FilesFound++
+			if firstFound {
+				log.Printf("iTunes validate: first file found: %q (%s)", tc.name, tc.path)
+				firstFound = false
+			}
+		} else {
+			result.FilesMissing++
+			result.MissingPaths = append(result.MissingPaths, tc.path)
+		}
+	}
+
+	// Extract distinct file:// path prefixes for mapping UI
+	result.PathPrefixes = extractPathPrefixes(rawLocations)
 
 	// Estimate import time (roughly 1 second per book for metadata extraction)
 	seconds := result.FilesFound
@@ -124,8 +253,9 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 
 // ConvertTrack converts an iTunes track to an audiobook model
 func ConvertTrack(track *Track, opts ImportOptions) (*models.Audiobook, error) {
-	// Decode file location
-	filePath, err := DecodeLocation(track.Location)
+	// Apply path remapping on raw location, then decode
+	location := opts.RemapPath(track.Location)
+	filePath, err := DecodeLocation(location)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode location: %w", err)
 	}
