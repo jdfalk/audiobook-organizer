@@ -1,82 +1,69 @@
 # file: Dockerfile
-# version: 1.3.1
+# version: 2.1.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
-# Builds both Go backend and React frontend, serving both from a single container
+# Builds React frontend, embeds it into a statically-linked Go binary with
+# CGO enabled (for SQLite FTS5 support), produces a minimal container.
 
-# Stage 1: Build Go application
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-builder
-
-ARG TARGETOS
-ARG TARGETARCH
-ARG BUILDPLATFORM
-
-WORKDIR /build
-
-# Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
-
-# Copy dependency files first for better caching
-COPY go.mod go.sum ./
-RUN go mod download && go mod verify
-
-# Copy source code
-COPY . .
-
-# Build the application
-# CGO_ENABLED=0 for static binary
-# -ldflags for smaller binary and version info
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
-    -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')" \
-    -o audiobook-organizer \
-    .
-
-# Stage 2: Build frontend
+# Stage 1: Build frontend
 FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /build/web
 
-# Copy package files for better caching
 COPY web/package*.json ./
 RUN npm ci --prefer-offline --no-audit
 
-# Copy frontend source
 COPY web/ ./
-
-# Build frontend for production
 RUN npm run build
 
-# Stage 3: Final production image
-FROM alpine:3.23
+# Stage 2: Build Go application with embedded frontend
+# Uses native platform (no cross-compile) so CGO works without cross-toolchain.
+FROM golang:1.25-alpine AS go-builder
 
-# Install runtime dependencies (disable maintainer scripts to avoid QEMU trigger issues)
-RUN apk add --no-cache --no-scripts \
-    ca-certificates \
-    tzdata \
-    && update-ca-certificates || true \
+WORKDIR /build
+
+RUN apk add --no-cache git gcc musl-dev sqlite-dev ca-certificates tzdata
+
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+COPY . .
+
+# Copy built frontend into web/dist so go:embed picks it up
+COPY --from=frontend-builder /build/web/dist ./web/dist
+
+# Accept version from build arg (since .git is excluded via .dockerignore)
+ARG APP_VERSION=dev
+
+# Build statically-linked binary with CGO (for FTS5) and embedded frontend
+RUN CGO_ENABLED=1 go build \
+    -tags "embed_frontend fts5" \
+    -ldflags="-s -w -linkmode external -extldflags '-static' -X main.version=${APP_VERSION}" \
+    -o audiobook-organizer \
+    .
+
+# Stage 3: Minimal runtime image (scratch-compatible since binary is static)
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -g 1000 audiobook \
     && adduser -D -u 1000 -G audiobook audiobook
 
-# Set working directory
 WORKDIR /app
 
-# Copy binary from builder
 COPY --from=go-builder --chown=audiobook:audiobook /build/audiobook-organizer /app/
 
-# Copy frontend dist from builder
-COPY --from=frontend-builder --chown=audiobook:audiobook /build/web/dist /app/web/dist
+# Default data directory
+RUN mkdir -p /data && chown audiobook:audiobook /data
+VOLUME /data
 
-# Switch to non-root user
 USER audiobook
 
-# Expose ports (HTTP, optional HTTPS, optional HTTP/3 UDP)
-EXPOSE 8080 8443 8443/udp
+EXPOSE 8080
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Run the application
 ENTRYPOINT ["/app/audiobook-organizer"]
-CMD ["serve", "--host", "0.0.0.0"]
+CMD ["serve", "--host", "0.0.0.0", "--db", "/data/audiobooks.pebble"]

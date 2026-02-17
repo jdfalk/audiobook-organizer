@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -51,6 +51,7 @@ import {
   type ITunesImportStatus,
   type ITunesValidateResponse,
   type ITunesWriteBackResponse,
+  type PathMapping,
   validateITunesLibrary,
   writeBackITunesLibrary,
 } from '../../services/api';
@@ -61,6 +62,7 @@ interface ITunesImportSettings {
   preserveLocation: boolean;
   importPlaylists: boolean;
   skipDuplicates: boolean;
+  pathMappings: PathMapping[];
 }
 
 const defaultSettings: ITunesImportSettings = {
@@ -69,6 +71,7 @@ const defaultSettings: ITunesImportSettings = {
   preserveLocation: false,
   importPlaylists: true,
   skipDuplicates: true,
+  pathMappings: [],
 };
 
 /**
@@ -125,10 +128,19 @@ export function ITunesImport() {
     setValidationResult(null);
 
     try {
+      const activeMappings = settings.pathMappings.filter((m) => m.from && m.to);
       const result = await validateITunesLibrary({
         library_path: settings.libraryPath,
+        path_mappings: activeMappings.length > 0 ? activeMappings : undefined,
       });
       setValidationResult(result);
+      // Auto-populate path mappings from detected prefixes
+      if (result.path_prefixes?.length && settings.pathMappings.length === 0) {
+        setSettings((prev) => ({
+          ...prev,
+          pathMappings: result.path_prefixes!.map((p) => ({ from: p, to: '' })),
+        }));
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Validation failed';
@@ -150,6 +162,7 @@ export function ITunesImport() {
         preserve_location: settings.preserveLocation,
         import_playlists: settings.importPlaylists,
         skip_duplicates: settings.skipDuplicates,
+        path_mappings: settings.pathMappings.filter((m) => m.from && m.to),
       };
 
       const result = await importITunesLibrary(request);
@@ -371,6 +384,36 @@ export function ITunesImport() {
         </Box>
 
         <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Path Mapping (for cross-platform imports)
+          </Typography>
+          {settings.pathMappings.length === 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Validate a library to auto-detect path prefixes.
+            </Typography>
+          )}
+          {settings.pathMappings.map((mapping, idx) => (
+            <Box key={idx} sx={{ mb: 1.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                {mapping.from}
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                label="Local path"
+                placeholder="/local/path/to/media"
+                value={mapping.to}
+                onChange={(e) => {
+                  const updated = [...settings.pathMappings];
+                  updated[idx] = { ...updated[idx], to: e.target.value };
+                  setSettings((prev) => ({ ...prev, pathMappings: updated }));
+                }}
+              />
+            </Box>
+          ))}
+        </Box>
+
+        <Box sx={{ mt: 3 }}>
           <FormControl component="fieldset">
             <FormLabel component="legend">Import Mode</FormLabel>
             <RadioGroup
@@ -576,6 +619,7 @@ export function ITunesImport() {
                       preserve_location: settings.preserveLocation,
                       import_playlists: settings.importPlaylists,
                       skip_duplicates: settings.skipDuplicates,
+                      path_mappings: settings.pathMappings.filter((m) => m.from && m.to),
                     };
                     const result = await importITunesLibrary(request);
                     await pollImportStatus(result.operation_id);
@@ -639,12 +683,19 @@ export function ITunesImport() {
           maxWidth="md"
           fullWidth
         >
-          <DialogTitle>Missing Files</DialogTitle>
+          <DialogTitle>Missing Files ({validationResult?.files_missing ?? 0} total)</DialogTitle>
           <DialogContent>
-            <List>
+            {(validationResult?.files_missing ?? 0) > 100 && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Showing first 100 of {validationResult?.files_missing} missing files.
+                If these paths are from a different OS, use the Path Mapping fields above
+                to translate them to local paths.
+              </Alert>
+            )}
+            <List dense>
               {validationResult?.missing_paths?.map((path) => (
                 <ListItem key={path}>
-                  <ListItemText primary={path} />
+                  <ListItemText primary={path} primaryTypographyProps={{ variant: 'body2', noWrap: true }} />
                 </ListItem>
               ))}
             </List>

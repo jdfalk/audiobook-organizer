@@ -1,5 +1,5 @@
 // file: main.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c
 
 package main
@@ -13,6 +13,9 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
 var executeCmd = cmd.Execute
 
 func main() {
@@ -20,7 +23,9 @@ func main() {
 }
 
 func run() int {
-	// Set embedded filesystem for server (if built with embed_frontend tag)
+	// Set version everywhere
+	cmd.SetVersion(version)
+	server.SetVersion(version)
 	server.SetEmbeddedFS(WebFS)
 
 	// Early initialization of operation queue (without store). This allows

@@ -26,6 +26,7 @@ type MockStore struct {
 	DeleteBookFunc             func(id string) error
 	SearchBooksFunc            func(query string, limit, offset int) ([]Book, error)
 	CountBooksFunc             func() (int, error)
+	GetDashboardStatsFunc      func() (*DashboardStats, error)
 	ListSoftDeletedBooksFunc   func(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Work methods
@@ -377,6 +378,16 @@ func (m *MockStore) CountBooks() (int, error) {
 		return m.CountBooksFunc()
 	}
 	return 0, nil
+}
+
+func (m *MockStore) GetDashboardStats() (*DashboardStats, error) {
+	if m.GetDashboardStatsFunc != nil {
+		return m.GetDashboardStatsFunc()
+	}
+	return &DashboardStats{
+		StateDistribution:  map[string]int{},
+		FormatDistribution: map[string]int{},
+	}, nil
 }
 
 func (m *MockStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {

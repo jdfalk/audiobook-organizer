@@ -1,12 +1,11 @@
 // file: internal/server/system_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
 
 import (
 	"fmt"
-	"log"
 	"runtime"
 	"strings"
 	"time"
@@ -26,6 +25,7 @@ func NewSystemService(db database.Store) *SystemService {
 
 type SystemStatus struct {
 	Status           string               `json:"status"`
+	Version          string               `json:"version"`
 	LibraryBookCount int                  `json:"library_book_count"`
 	ImportBookCount  int                  `json:"import_book_count"`
 	TotalBookCount   int                  `json:"total_book_count"`
@@ -91,13 +91,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 
 	importFolders, err := ss.db.GetAllImportPaths()
 	if err != nil {
-		log.Printf("[DEBUG] getSystemStatus: Failed to get import paths: %v", err)
 		importFolders = []database.ImportPath{}
-	} else {
-		log.Printf("[DEBUG] getSystemStatus: Got %d import paths", len(importFolders))
-		for i, f := range importFolders {
-			log.Printf("[DEBUG]   Folder %d: %s (enabled: %v)", i, f.Path, f.Enabled)
-		}
 	}
 
 	allBooks, err := ss.db.GetAllBooks(100000, 0)
@@ -117,8 +111,6 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		}
 	}
 
-	log.Printf("[DEBUG] getSystemStatus: Library books: %d, Import path books: %d", libraryBookCount, importBookCount)
-
 	recentOps, err := ss.db.GetRecentOperations(5)
 	if err != nil {
 		recentOps = []database.Operation{}
@@ -132,6 +124,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 
 	status := &SystemStatus{
 		Status:           "running",
+		Version:          appVersion,
 		LibraryBookCount: libraryBookCount,
 		ImportBookCount:  importBookCount,
 		TotalBookCount:   libraryBookCount + importBookCount,

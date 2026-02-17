@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.34.0
+// version: 1.35.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -379,7 +379,7 @@ export const Library = () => {
     };
   }, [toast]);
 
-  // Reset loading states when operations complete
+  // Reset loading states when operations complete (reload handled after loadAudiobooks definition)
   useEffect(() => {
     if (activeScanOp?.status === 'completed' || activeScanOp?.status === 'failed') {
       setScanningAll(false);
@@ -705,6 +705,30 @@ export const Library = () => {
     navigate,
     toast,
   ]);
+
+  // Reload books when scan/organize completes
+  useEffect(() => {
+    if (activeScanOp?.status === 'completed' || activeScanOp?.status === 'failed') {
+      loadAudiobooks();
+    }
+  }, [activeScanOp?.status, loadAudiobooks]);
+
+  useEffect(() => {
+    if (activeOrganizeOp?.status === 'completed' || activeOrganizeOp?.status === 'failed') {
+      loadAudiobooks();
+    }
+  }, [activeOrganizeOp?.status, loadAudiobooks]);
+
+  // Auto-refresh books every 10s while a scan is active
+  useEffect(() => {
+    if (!activeScanOp || activeScanOp.status === 'completed' || activeScanOp.status === 'failed') {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      loadAudiobooks();
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, [activeScanOp, loadAudiobooks]);
 
   const handleManualImport = () => {
     setImportFilePath('');
@@ -1803,7 +1827,9 @@ export const Library = () => {
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Scanning: {activeScanOp.progress}/{activeScanOp.total}{' '}
+                      {activeScanOp.total > 0
+                        ? `Scanning: ${activeScanOp.progress}/${activeScanOp.total}`
+                        : 'Scanning: counting files…'}{' '}
                       {activeScanOp.message}
                     </Typography>
                     <Button

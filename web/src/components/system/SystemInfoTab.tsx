@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -9,6 +9,7 @@ import {
   Grid,
   Card,
   CardContent,
+  Chip,
   Stack,
   Divider,
   Button,
@@ -24,6 +25,7 @@ import {
 import * as api from '../../services/api';
 
 interface SystemInfo {
+  version: string;
   os: {
     platform: string;
     arch: string;
@@ -72,6 +74,7 @@ export function SystemInfoTab() {
 
       // Map API SystemStatus to SystemInfo format
       setInfo({
+        version: status.version || 'unknown',
         os: {
           platform: status.runtime.os,
           arch: status.runtime.arch,
@@ -166,7 +169,10 @@ export function SystemInfoTab() {
         alignItems="center"
         mb={2}
       >
-        <Typography variant="h6">System Information</Typography>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Typography variant="h6">System Information</Typography>
+          <Chip label={`v${info.version}`} size="small" color="primary" />
+        </Stack>
         <Button
           variant="outlined"
           startIcon={<RefreshIcon />}

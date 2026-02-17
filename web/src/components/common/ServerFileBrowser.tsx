@@ -1,5 +1,5 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useState, useEffect, useCallback, MouseEvent } from 'react';
@@ -90,7 +90,6 @@ export function ServerFileBrowser({
   const [contextItem, setContextItem] = useState<api.FileSystemItem | null>(
     null
   );
-  const [homeDirectory, setHomeDirectory] = useState<string>('/');
 
   const fetchDirectory = useCallback(
     async (path: string) => {
@@ -122,21 +121,6 @@ export function ServerFileBrowser({
     fetchDirectory(currentPath);
     setEditPath(currentPath);
   }, [currentPath, fetchDirectory]);
-
-  // Fetch home directory on mount
-  useEffect(() => {
-    const fetchHome = async () => {
-      try {
-        const home = await api.getHomeDirectory();
-        setHomeDirectory(home);
-      } catch (err) {
-        console.error('Failed to fetch home directory:', err);
-        // Fallback to root if home fetch fails
-        setHomeDirectory('/');
-      }
-    };
-    fetchHome();
-  }, []);
 
   const handleItemClick = (item: api.FileSystemItem) => {
     if (item.is_dir) {
@@ -225,8 +209,8 @@ export function ServerFileBrowser({
   const navigateToPath = (index: number) => {
     const parts = getPathParts(currentPath);
     if (index === 0) {
-      // Navigate to user's home directory when home icon is clicked
-      setCurrentPath(homeDirectory);
+      // Navigate to filesystem root
+      setCurrentPath('/');
     } else {
       const newPath = '/' + parts.slice(1, index + 1).join('/');
       setCurrentPath(newPath);

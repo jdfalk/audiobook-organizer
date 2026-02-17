@@ -1182,6 +1182,39 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	return count, nil
 }
 
+// GetDashboardStats iterates all books and computes aggregate stats.
+// PebbleDB has no SQL, so this scans the full key range.
+func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
+	stats := &DashboardStats{
+		StateDistribution:  make(map[string]int),
+		FormatDistribution: make(map[string]int),
+	}
+	books, err := p.GetAllBooks(1_000_000, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range books {
+		stats.TotalBooks++
+		if b.Duration != nil {
+			stats.TotalDuration += int64(*b.Duration)
+		}
+		if b.FileSize != nil {
+			stats.TotalSize += *b.FileSize
+		}
+		state := "imported"
+		if b.LibraryState != nil {
+			state = *b.LibraryState
+		}
+		stats.StateDistribution[state]++
+		codec := "unknown"
+		if b.Codec != nil {
+			codec = *b.Codec
+		}
+		stats.FormatDistribution[codec]++
+	}
+	return stats, nil
+}
+
 func (p *PebbleStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{

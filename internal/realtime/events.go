@@ -126,9 +126,7 @@ func (h *EventHub) Broadcast(event *Event) {
 		}
 	}
 
-	if count > 0 {
-		log.Printf("Broadcasted event %s to %d clients", event.Type, count)
-	}
+	_ = count
 }
 
 // SendOperationProgress sends an operation progress event
@@ -292,7 +290,7 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 					return
 				}
 				c.Writer.Flush()
-				log.Printf("Sent heartbeat to client %s", clientID)
+				_ = clientID // heartbeat sent
 			}
 		}
 	}

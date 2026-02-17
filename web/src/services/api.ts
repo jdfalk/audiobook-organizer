@@ -136,8 +136,14 @@ export interface BookTags {
   tags?: Record<string, TagSourceValues>;
 }
 
+export interface PathMapping {
+  from: string;
+  to: string;
+}
+
 export interface ITunesValidateRequest {
   library_path: string;
+  path_mappings?: PathMapping[];
 }
 
 export interface ITunesValidateResponse {
@@ -146,6 +152,7 @@ export interface ITunesValidateResponse {
   files_found: number;
   files_missing: number;
   missing_paths?: string[];
+  path_prefixes?: string[];
   duplicate_count: number;
   estimated_import_time: string;
 }
@@ -156,6 +163,7 @@ export interface ITunesImportRequest {
   preserve_location: boolean;
   import_playlists: boolean;
   skip_duplicates: boolean;
+  path_mappings?: PathMapping[];
 }
 
 export interface ITunesImportResponse {
@@ -236,6 +244,7 @@ export interface ActiveOperationSummary {
 
 export interface SystemStatus {
   status: string;
+  version?: string;
   library_book_count?: number;
   import_book_count?: number;
   total_book_count?: number;
@@ -364,10 +373,8 @@ export interface Config {
   log_format: string;
   enable_json_logging: boolean;
 
-  // Legacy fields
-  api_keys: {
-    goodreads: string;
-  };
+  // Legacy fields (Goodreads deprecated Dec 2020, removed)
+  api_keys: Record<string, never>;
 }
 
 export interface AuthStatus {
@@ -975,6 +982,28 @@ export async function validateITunesLibrary(
   return response.json();
 }
 
+export interface ITunesTestMappingResponse {
+  tested: number;
+  found: number;
+  examples: { title: string; path: string }[];
+}
+
+export async function testITunesPathMapping(
+  libraryPath: string,
+  from: string,
+  to: string
+): Promise<ITunesTestMappingResponse> {
+  const response = await fetch(`${API_BASE}/itunes/test-mapping`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ library_path: libraryPath, from, to }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to test path mapping');
+  }
+  return response.json();
+}
+
 export async function importITunesLibrary(
   payload: ITunesImportRequest
 ): Promise<ITunesImportResponse> {
@@ -1327,4 +1356,18 @@ export async function removeBlockedHash(
     throw await buildApiError(response, 'Failed to remove blocked hash');
   }
   return response.json();
+}
+
+// Version
+export async function getAppVersion(): Promise<string> {
+  try {
+    const response = await fetch(`${API_BASE}/health`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.version || 'unknown';
+    }
+  } catch {
+    // ignore
+  }
+  return 'unknown';
 }

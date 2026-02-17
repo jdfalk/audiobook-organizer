@@ -314,8 +314,8 @@ func TestDefaultMetadataSources(t *testing.T) {
 	InitConfig()
 
 	// Assert
-	if len(AppConfig.MetadataSources) < 4 {
-		t.Errorf("Expected at least 4 default metadata sources, got %d", len(AppConfig.MetadataSources))
+	if len(AppConfig.MetadataSources) < 3 {
+		t.Errorf("Expected at least 3 default metadata sources, got %d", len(AppConfig.MetadataSources))
 	}
 
 	// Verify Audible
@@ -324,10 +324,10 @@ func TestDefaultMetadataSources(t *testing.T) {
 		t.Error("Audible metadata source not configured correctly")
 	}
 
-	// Verify Goodreads
-	goodreads := AppConfig.MetadataSources[1]
-	if goodreads.ID != "goodreads" || !goodreads.Enabled || goodreads.Priority != 2 {
-		t.Error("Goodreads metadata source not configured correctly")
+	// Verify Open Library (replaced Goodreads which was deprecated Dec 2020)
+	openlibrary := AppConfig.MetadataSources[1]
+	if openlibrary.ID != "openlibrary" || !openlibrary.Enabled || openlibrary.Priority != 2 {
+		t.Error("Open Library metadata source not configured correctly")
 	}
 }
 

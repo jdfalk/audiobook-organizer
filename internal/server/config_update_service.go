@@ -126,6 +126,16 @@ func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
 		config.AppConfig.ExcludePatterns = patterns
 	}
 
+	if openaiKey, ok := cus.ExtractStringField(payload, "openai_api_key"); ok {
+		config.AppConfig.OpenAIAPIKey = openaiKey
+	}
+	if enableAI, ok := cus.ExtractBoolField(payload, "enable_ai_parsing"); ok {
+		config.AppConfig.EnableAIParsing = enableAI
+	}
+	if logLevel, ok := cus.ExtractStringField(payload, "log_level"); ok {
+		config.AppConfig.LogLevel = logLevel
+	}
+
 	if supportedExtensions, ok := payload["supported_extensions"].([]any); ok {
 		extensions := make([]string, len(supportedExtensions))
 		for i, e := range supportedExtensions {
@@ -144,9 +154,6 @@ func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
 	masked := cfg
 	if masked.OpenAIAPIKey != "" {
 		masked.OpenAIAPIKey = database.MaskSecret(masked.OpenAIAPIKey)
-	}
-	if masked.APIKeys.Goodreads != "" {
-		masked.APIKeys.Goodreads = database.MaskSecret(masked.APIKeys.Goodreads)
 	}
 	return masked
 }
@@ -185,13 +192,6 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	if val, ok := payload["setup_complete"].(bool); ok {
 		config.AppConfig.SetupComplete = val
 		updated = append(updated, "setup_complete")
-	}
-
-	if apiKeys, ok := payload["api_keys"].(map[string]any); ok {
-		if goodreads, ok := apiKeys["goodreads"].(string); ok {
-			config.AppConfig.APIKeys.Goodreads = goodreads
-			updated = append(updated, "api_keys.goodreads")
-		}
 	}
 
 	if val, ok := payload["organization_strategy"].(string); ok {

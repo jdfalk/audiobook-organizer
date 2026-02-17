@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -7,6 +7,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,7 +32,8 @@ const (
 
 // ITunesValidateRequest represents a validation request for an iTunes library.
 type ITunesValidateRequest struct {
-	LibraryPath string `json:"library_path" binding:"required"`
+	LibraryPath  string               `json:"library_path" binding:"required"`
+	PathMappings []itunes.PathMapping `json:"path_mappings,omitempty"`
 }
 
 // ITunesValidateResponse summarizes validation results for an iTunes library.
@@ -41,18 +43,20 @@ type ITunesValidateResponse struct {
 	FilesFound      int      `json:"files_found"`
 	FilesMissing    int      `json:"files_missing"`
 	MissingPaths    []string `json:"missing_paths,omitempty"`
+	PathPrefixes    []string `json:"path_prefixes,omitempty"`
 	DuplicateCount  int      `json:"duplicate_count"`
 	EstimatedTime   string   `json:"estimated_import_time"`
 }
 
 // ITunesImportRequest represents a request to import an iTunes library.
 type ITunesImportRequest struct {
-	LibraryPath        string `json:"library_path" binding:"required"`
-	ImportMode         string `json:"import_mode" binding:"required,oneof=organized import organize"`
-	PreserveLocation   bool   `json:"preserve_location"`
-	ImportPlaylists    bool   `json:"import_playlists"`
-	SkipDuplicates     bool   `json:"skip_duplicates"`
-	FetchMetadata      bool   `json:"fetch_metadata"`
+	LibraryPath        string               `json:"library_path" binding:"required"`
+	ImportMode         string               `json:"import_mode" binding:"required,oneof=organized import organize"`
+	PreserveLocation   bool                 `json:"preserve_location"`
+	ImportPlaylists    bool                 `json:"import_playlists"`
+	SkipDuplicates     bool                 `json:"skip_duplicates"`
+	FetchMetadata      bool                 `json:"fetch_metadata"`
+	PathMappings       []itunes.PathMapping `json:"path_mappings,omitempty"`
 }
 
 // ITunesImportResponse acknowledges an iTunes import operation.
@@ -116,10 +120,13 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 		return
 	}
 
+	log.Printf("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
+
 	opts := itunes.ImportOptions{
 		LibraryPath:    req.LibraryPath,
 		ImportMode:     itunes.ImportModeImport,
-		SkipDuplicates: true,
+		SkipDuplicates: false, // Don't hash files during validation - just check existence
+		PathMappings:   req.PathMappings,
 	}
 
 	result, err := itunes.ValidateImport(opts)
@@ -137,16 +144,102 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 		}
 	}
 
+	// Limit missing paths to first 100 to avoid huge responses
+	missingPaths := result.MissingPaths
+	if len(missingPaths) > 100 {
+		missingPaths = missingPaths[:100]
+	}
+
+	log.Printf("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
+		result.AudiobookTracks, result.FilesFound, result.FilesMissing, result.PathPrefixes)
+
 	response := ITunesValidateResponse{
 		TotalTracks:     result.TotalTracks,
 		AudiobookTracks: result.AudiobookTracks,
 		FilesFound:      result.FilesFound,
 		FilesMissing:    result.FilesMissing,
-		MissingPaths:    result.MissingPaths,
+		MissingPaths:    missingPaths,
+		PathPrefixes:    result.PathPrefixes,
 		DuplicateCount:  duplicateCount,
 		EstimatedTime:   result.EstimatedTime,
 	}
 
+	c.JSON(http.StatusOK, response)
+}
+
+// ITunesTestMappingRequest tests a single path mapping against the library.
+type ITunesTestMappingRequest struct {
+	LibraryPath string `json:"library_path" binding:"required"`
+	From        string `json:"from" binding:"required"`
+	To          string `json:"to" binding:"required"`
+}
+
+// ITunesTestMappingResponse returns sample results from testing a mapping.
+type ITunesTestMappingResponse struct {
+	Tested int                    `json:"tested"`
+	Found  int                    `json:"found"`
+	Examples []ITunesTestExample  `json:"examples"`
+}
+
+// ITunesTestExample is a single found file example.
+type ITunesTestExample struct {
+	Title string `json:"title"`
+	Path  string `json:"path"`
+}
+
+// handleITunesTestMapping tests a single path mapping against a few tracks.
+func (s *Server) handleITunesTestMapping(c *gin.Context) {
+	var req ITunesTestMappingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	library, err := itunes.ParseLibrary(req.LibraryPath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("failed to parse library: %v", err)})
+		return
+	}
+
+	log.Printf("iTunes test-mapping: from=%q to=%q", req.From, req.To)
+	mapping := itunes.PathMapping{From: req.From, To: req.To}
+	opts := itunes.ImportOptions{PathMappings: []itunes.PathMapping{mapping}}
+
+	response := ITunesTestMappingResponse{Examples: []ITunesTestExample{}}
+	for _, track := range library.Tracks {
+		if !itunes.IsAudiobook(track) {
+			continue
+		}
+		// Only test tracks that match this prefix
+		if !strings.HasPrefix(track.Location, req.From) {
+			continue
+		}
+		if response.Tested >= 20 {
+			break
+		}
+		response.Tested++
+
+		location := opts.RemapPath(track.Location)
+		path, err := itunes.DecodeLocation(location)
+		if err != nil {
+			log.Printf("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
+			continue
+		}
+		if _, err := os.Stat(path); err == nil {
+			response.Found++
+			log.Printf("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
+			if len(response.Examples) < 3 {
+				response.Examples = append(response.Examples, ITunesTestExample{
+					Title: track.Name,
+					Path:  path,
+				})
+			}
+		} else {
+			log.Printf("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
+		}
+	}
+
+	log.Printf("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
 	c.JSON(http.StatusOK, response)
 }
 
@@ -321,6 +414,10 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	}
 
 	importMode := resolveITunesImportMode(req.ImportMode)
+	importOpts := itunes.ImportOptions{
+		LibraryPath:  req.LibraryPath,
+		PathMappings: req.PathMappings,
+	}
 
 	processed := 0
 	for _, track := range library.Tracks {
@@ -336,7 +433,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		processed++
 		updateITunesProcessed(status, processed)
 
-		book, err := buildBookFromTrack(track, req.LibraryPath)
+		book, err := buildBookFromTrack(track, req.LibraryPath, importOpts)
 		if err != nil {
 			recordITunesFailure(status, err.Error())
 			_ = progress.Log("error", err.Error(), nil)
@@ -473,15 +570,18 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 	_ = progress.Log("info", fmt.Sprintf("Metadata enrichment complete: %d books enriched", enriched), nil)
 }
 
-func buildBookFromTrack(track *itunes.Track, libraryPath string) (*database.Book, error) {
+func buildBookFromTrack(track *itunes.Track, libraryPath string, opts itunes.ImportOptions) (*database.Book, error) {
 	if track == nil {
 		return nil, fmt.Errorf("track is nil")
 	}
 
-	filePath, err := itunes.DecodeLocation(track.Location)
+	// Apply path remapping on raw location, then decode
+	location := opts.RemapPath(track.Location)
+	filePath, err := itunes.DecodeLocation(location)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode location: %w", err)
 	}
+
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("file does not exist: %s", filePath)

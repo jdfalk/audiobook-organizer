@@ -230,26 +230,18 @@ export function Settings() {
         credentials: {},
       },
       {
-        id: 'goodreads',
-        name: 'Goodreads',
-        enabled: true,
-        priority: 2,
-        requiresAuth: true,
-        credentials: { apiKey: '', apiSecret: '' },
-      },
-      {
         id: 'openlibrary',
         name: 'Open Library',
-        enabled: false,
-        priority: 3,
-        requiresAuth: true,
-        credentials: { apiKey: '' },
+        enabled: true,
+        priority: 2,
+        requiresAuth: false,
+        credentials: {},
       },
       {
         id: 'google-books',
         name: 'Google Books',
         enabled: false,
-        priority: 4,
+        priority: 3,
         requiresAuth: true,
         credentials: { apiKey: '' },
       },
@@ -389,26 +381,18 @@ export function Settings() {
                   credentials: {},
                 },
                 {
-                  id: 'goodreads',
-                  name: 'Goodreads',
-                  enabled: true,
-                  priority: 2,
-                  requiresAuth: true,
-                  credentials: { apiKey: '', apiSecret: '' },
-                },
-                {
                   id: 'openlibrary',
                   name: 'Open Library',
-                  enabled: false,
-                  priority: 3,
-                  requiresAuth: true,
-                  credentials: { apiKey: '' },
+                  enabled: true,
+                  priority: 2,
+                  requiresAuth: false,
+                  credentials: {},
                 },
                 {
                   id: 'google-books',
                   name: 'Google Books',
                   enabled: false,
-                  priority: 4,
+                  priority: 3,
                   requiresAuth: true,
                   credentials: { apiKey: '' },
                 },
@@ -544,7 +528,7 @@ export function Settings() {
 
   const isValidOpenAIKey = (value: string): boolean => {
     if (!value) return true;
-    return /^sk-[A-Za-z0-9]{8,}$/.test(value);
+    return /^sk-[A-Za-z0-9_-]{8,}$/.test(value);
   };
 
   const handleChange = (
@@ -1135,12 +1119,6 @@ export function Settings() {
       cleaned.openai_api_key.includes('***')
     ) {
       delete cleaned.openai_api_key;
-    }
-    if (cleaned.api_keys?.goodreads?.includes('***')) {
-      cleaned.api_keys = {
-        ...cleaned.api_keys,
-        goodreads: '',
-      };
     }
     return cleaned;
   };
@@ -2206,62 +2184,7 @@ export function Settings() {
                             API Configuration
                           </Typography>
                           <Grid container spacing={2}>
-                            {source.id === 'goodreads' && (
-                              <>
-                                <Grid item xs={12} sm={6}>
-                                  <TextField
-                                    fullWidth
-                                    size="small"
-                                    label="API Key"
-                                    value={source.credentials.apiKey || ''}
-                                    onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiKey',
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="Enter your Goodreads API key"
-                                  />
-                                </Grid>
-                                <Grid item xs={12} sm={6}>
-                                  <TextField
-                                    fullWidth
-                                    size="small"
-                                    label="API Secret"
-                                    type="password"
-                                    value={source.credentials.apiSecret || ''}
-                                    onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiSecret',
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder={
-                                      'Enter your Goodreads API ' + 'secret'
-                                    }
-                                  />
-                                </Grid>
-                                <Grid item xs={12}>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Get your API credentials at:{' '}
-                                    <a
-                                      href="https://www.goodreads.com/api"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      goodreads.com/api
-                                    </a>
-                                  </Typography>
-                                </Grid>
-                              </>
-                            )}
-                            {(source.id === 'openlibrary' ||
-                              source.id === 'google-books') && (
+                            {source.id === 'google-books' && (
                               <>
                                 <Grid item xs={12}>
                                   <TextField
@@ -2286,28 +2209,19 @@ export function Settings() {
                                     variant="caption"
                                     color="text.secondary"
                                   >
-                                    {source.id === 'google-books' ? (
-                                      <>
-                                        Get your API key at:{' '}
-                                        <a
-                                          href={
-                                            'https://console.' +
-                                            'cloud.google.com/' +
-                                            'apis/' +
-                                            'credentials'
-                                          }
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                        >
-                                          Google Cloud Console
-                                        </a>
-                                      </>
-                                    ) : (
-                                      <>
-                                        Open Library API is free and doesn't
-                                        require authentication for basic usage
-                                      </>
-                                    )}
+                                    Get your API key at:{' '}
+                                    <a
+                                      href={
+                                        'https://console.' +
+                                        'cloud.google.com/' +
+                                        'apis/' +
+                                        'credentials'
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      Google Cloud Console
+                                    </a>
                                   </Typography>
                                 </Grid>
                               </>

@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -33,6 +33,7 @@ var databasePath string
 var databaseType string
 var enableSQLite bool
 var playlistDir string
+var logLevel string
 var metadataInspectFile string
 
 var (
@@ -331,6 +332,12 @@ var serveCmd = &cobra.Command{
 	},
 }
 
+// SetVersion sets the version string on the root command.
+// Called from main before Execute so --version and the version command work.
+func SetVersion(v string) {
+	rootCmd.Version = v
+}
+
 // Execute adds all child commands to the root command and sets flags appropriately
 func Execute() error {
 	return rootCmd.Execute()
@@ -345,6 +352,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&databaseType, "db-type", "pebble", "database type: pebble (default) or sqlite")
 	rootCmd.PersistentFlags().BoolVar(&enableSQLite, "enable-sqlite3-i-know-the-risks", false, "enable SQLite3 database (WARNING: cross-compilation issues, PebbleDB recommended)")
 	rootCmd.PersistentFlags().StringVar(&playlistDir, "playlists", "playlists", "directory to store generated playlists")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level: debug, info, warn, error")
 
 	viper.BindPFlag("root_dir", rootCmd.PersistentFlags().Lookup("dir"))
 	viper.BindPFlag("database_path", rootCmd.PersistentFlags().Lookup("db"))
@@ -469,6 +477,9 @@ func initConfig() {
 	}
 
 	config.InitConfig()
+	if logLevel != "" {
+		config.AppConfig.LogLevel = logLevel
+	}
 	if err := config.AppConfig.Validate(); err != nil {
 		fmt.Printf("Warning: configuration validation failed: %v\n", err)
 	}

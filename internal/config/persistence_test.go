@@ -431,14 +431,6 @@ func TestApplySetting(t *testing.T) {
 			check: func() bool { return AppConfig.EnableJsonLogging },
 		},
 		{
-			name:  "goodreads_api_key",
-			key:   "goodreads_api_key",
-			value: "goodreads-key",
-			typ:   "string",
-			setup: func() { AppConfig.APIKeys.Goodreads = "" },
-			check: func() bool { return AppConfig.APIKeys.Goodreads == "goodreads-key" },
-		},
-		{
 			name:    "unknown_key",
 			key:     "unknown_key",
 			value:   "value",
@@ -511,8 +503,6 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			LogFormat:            "json",
 			EnableJsonLogging:    true,
 		}
-		AppConfig.APIKeys.Goodreads = "gr-key"
-
 		err := SaveConfigToDatabase(store)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -523,7 +513,7 @@ func TestSaveConfigToDatabase(t *testing.T) {
 				t.Fatalf("expected %q to be saved", key)
 			}
 		}
-		for _, secretKey := range []string{"openai_api_key", "goodreads_api_key"} {
+		for _, secretKey := range []string{"openai_api_key"} {
 			if _, ok := seen[secretKey]; !ok {
 				t.Fatalf("expected secret %q to be saved when non-empty", secretKey)
 			}
@@ -542,7 +532,6 @@ func TestSaveConfigToDatabase(t *testing.T) {
 		AppConfig = Config{
 			OpenAIAPIKey: "",
 		}
-		AppConfig.APIKeys.Goodreads = ""
 
 		err := SaveConfigToDatabase(store)
 		if err != nil {
@@ -551,9 +540,6 @@ func TestSaveConfigToDatabase(t *testing.T) {
 
 		if _, ok := seen["openai_api_key"]; ok {
 			t.Fatalf("did not expect openai_api_key to be saved when empty")
-		}
-		if _, ok := seen["goodreads_api_key"]; ok {
-			t.Fatalf("did not expect goodreads_api_key to be saved when empty")
 		}
 		if _, ok := seen["root_dir"]; !ok {
 			t.Fatalf("expected root_dir to be saved")

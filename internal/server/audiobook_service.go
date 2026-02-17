@@ -372,11 +372,8 @@ func (svc *AudiobookService) CountAudiobooks(ctx context.Context) (int, error) {
 
 	count, err := svc.store.CountBooks()
 	if err != nil {
-		log.Printf("[DEBUG] CountAudiobooks: Error counting books: %v", err)
 		return 0, err
 	}
-
-	log.Printf("[DEBUG] CountAudiobooks: Returning count: %d", count)
 	return count, nil
 }
 

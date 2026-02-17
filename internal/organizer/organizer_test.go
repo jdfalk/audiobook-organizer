@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package organizer
@@ -28,7 +28,8 @@ func TestSanitizeFilename(t *testing.T) {
 		{"valid filename", "My Audiobook", "My Audiobook"},
 		{"invalid chars", "Book:Title?", "Book_Title_"},
 		{"multiple spaces", "Book  Title", "Book Title"},
-		{"long filename", string(make([]byte, 250)), string(make([]byte, 200))},
+		{"long filename", strings.Repeat("a", 250), strings.Repeat("a", 200)},
+		{"control chars stripped", "hello\x00world\x01test", "helloworldtest"},
 	}
 
 	for _, tt := range tests {

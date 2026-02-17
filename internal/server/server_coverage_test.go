@@ -221,6 +221,6 @@ func TestDashboardEndpoint(t *testing.T) {
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.NotNil(t, response["sizeDistribution"])
+	assert.NotNil(t, response["stateDistribution"])
 	assert.NotNil(t, response["formatDistribution"])
 }

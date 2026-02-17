@@ -171,10 +171,6 @@ func applySetting(key, value, typ string) error {
 			AppConfig.EnableJsonLogging = b
 		}
 
-	// API Keys
-	case "goodreads_api_key":
-		AppConfig.APIKeys.Goodreads = value
-
 	default:
 		return fmt.Errorf("unknown setting key: %s", key)
 	}
@@ -249,8 +245,6 @@ func SaveConfigToDatabase(store database.Store) error {
 		"log_format":          {AppConfig.LogFormat, "string", false},
 		"enable_json_logging": {strconv.FormatBool(AppConfig.EnableJsonLogging), "bool", false},
 
-		// API Keys
-		"goodreads_api_key": {AppConfig.APIKeys.Goodreads, "string", true},
 	}
 
 	log.Printf("[DEBUG] SaveConfigToDatabase: OpenAI key length: %d, EnableAIParsing: %v", len(AppConfig.OpenAIAPIKey), AppConfig.EnableAIParsing)

@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -17,13 +17,14 @@ import {
   Box,
   Alert,
   InputAdornment,
+  Chip,
   CircularProgress,
+  Stack,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
   Settings as SettingsIcon,
   CheckCircle as CheckCircleIcon,
-  LibraryMusic as LibraryMusicIcon,
 } from '@mui/icons-material';
 import { ServerFileBrowser } from '../common/ServerFileBrowser';
 import * as api from '../../services/api';
@@ -63,10 +64,18 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
   const [iTunesValidation, setITunesValidation] = useState<{
     valid: boolean;
     audiobook_count?: number;
-    author_count?: number;
+    files_found?: number;
     error?: string;
   } | null>(null);
   const [iTunesEnabled, setITunesEnabled] = useState(false);
+  const [pathMappings, setPathMappings] = useState<api.PathMapping[]>([]);
+  const [mappingTests, setMappingTests] = useState<Record<number, api.ITunesTestMappingResponse | null>>({});
+  const [testingMapping, setTestingMapping] = useState<number | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+
+  useEffect(() => {
+    api.getAppVersion().then(setAppVersion);
+  }, []);
 
   const steps = [
     'Library Path',
@@ -181,10 +190,6 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     setShowITunesBrowser(true);
   };
 
-  const handleITunesPathSelect = (path: string) => {
-    setITunesPathSelection(path);
-  };
-
   const handleConfirmITunesPath = async () => {
     const trimmed = (iTunesPathSelection || '').trim();
     if (!trimmed) return;
@@ -195,12 +200,20 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     setITunesValidating(true);
     setITunesValidation(null);
     try {
-      const result = await api.validateITunesLibrary({ library_path: trimmed });
+      const activeMappings = pathMappings.filter((m) => m.from && m.to);
+      const result = await api.validateITunesLibrary({
+        library_path: trimmed,
+        path_mappings: activeMappings.length > 0 ? activeMappings : undefined,
+      });
       setITunesValidation({
         valid: true,
         audiobook_count: result.audiobook_tracks,
-        author_count: result.files_found,
+        files_found: result.files_found,
       });
+      // Auto-populate path mappings from detected prefixes
+      if (result.path_prefixes?.length && pathMappings.length === 0) {
+        setPathMappings(result.path_prefixes.map((p) => ({ from: p, to: '' })));
+      }
       setITunesEnabled(true);
     } catch (error) {
       setITunesValidation({
@@ -249,6 +262,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
             preserve_location: false,
             import_playlists: true,
             skip_duplicates: true,
+            path_mappings: pathMappings.filter((m) => m.from && m.to),
           });
         } catch (error) {
           console.error('Failed to start iTunes import:', error);
@@ -289,6 +303,9 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <SettingsIcon />
             <Typography variant="h6">Welcome to Audiobook Organizer</Typography>
+            {appVersion && appVersion !== 'unknown' && (
+              <Chip label={`v${appVersion}`} size="small" color="primary" variant="outlined" />
+            )}
           </Box>
         </DialogTitle>
 
@@ -407,14 +424,40 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               </Typography>
 
               {!iTunesPath ? (
-                <Button
-                  variant="outlined"
-                  startIcon={<LibraryMusicIcon />}
-                  onClick={handleOpenITunesBrowser}
-                  sx={{ mb: 2 }}
-                >
-                  Browse for iTunes Library.xml
-                </Button>
+                <Box sx={{ mb: 2 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="iTunes Library.xml path"
+                    placeholder="/path/to/iTunes Library.xml"
+                    value={iTunesPathSelection}
+                    onChange={(e) => setITunesPathSelection(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && iTunesPathSelection.trim()) {
+                        handleConfirmITunesPath();
+                      }
+                    }}
+                    sx={{ mb: 1 }}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Button size="small" onClick={handleOpenITunesBrowser}>
+                            Browse
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={!iTunesPathSelection.trim() || iTunesValidating}
+                            onClick={handleConfirmITunesPath}
+                            sx={{ ml: 1 }}
+                          >
+                            Use
+                          </Button>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </Box>
               ) : (
                 <Box sx={{ mb: 2 }}>
                   <Box
@@ -454,7 +497,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               {iTunesValidation?.valid && (
                 <Alert severity="success" sx={{ mb: 2 }}>
                   Found {iTunesValidation.audiobook_count} audiobook tracks
-                  ({iTunesValidation.author_count} files found). These will be
+                  ({iTunesValidation.files_found} files found). These will be
                   imported and organized when you complete setup.
                 </Alert>
               )}
@@ -463,6 +506,109 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                 <Alert severity="error" sx={{ mb: 2 }}>
                   {iTunesValidation.error || 'Invalid iTunes library file.'}
                 </Alert>
+              )}
+
+              {iTunesValidation?.valid && iTunesValidation.files_found === 0 && (iTunesValidation.audiobook_count ?? 0) > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  No files found on disk. If your iTunes library was created on a
+                  different machine (e.g. Windows), use path mapping below to
+                  translate the original paths to local paths.
+                </Alert>
+              )}
+
+              {pathMappings.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Path Mapping
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Map each iTunes path prefix to its local equivalent on this server.
+                  </Typography>
+                  {pathMappings.map((mapping, idx) => (
+                    <Box key={idx} sx={{ mb: 2 }}>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 0.5, wordBreak: 'break-all' }}>
+                        {mapping.from}
+                      </Typography>
+                      <Stack direction="row" spacing={1} alignItems="flex-start">
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Local path"
+                          placeholder="/local/path/to/media"
+                          value={mapping.to}
+                          onChange={(e) => {
+                            const updated = [...pathMappings];
+                            updated[idx] = { ...updated[idx], to: e.target.value };
+                            setPathMappings(updated);
+                            setMappingTests((prev) => ({ ...prev, [idx]: null }));
+                          }}
+                        />
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!mapping.to || testingMapping === idx}
+                          sx={{ whiteSpace: 'nowrap', minWidth: 'auto' }}
+                          onClick={async () => {
+                            setTestingMapping(idx);
+                            try {
+                              const result = await api.testITunesPathMapping(iTunesPath, mapping.from, mapping.to);
+                              setMappingTests((prev) => ({ ...prev, [idx]: result }));
+                            } catch {
+                              setMappingTests((prev) => ({ ...prev, [idx]: { tested: 0, found: 0, examples: [] } }));
+                            } finally {
+                              setTestingMapping(null);
+                            }
+                          }}
+                        >
+                          {testingMapping === idx ? 'Testing...' : 'Test'}
+                        </Button>
+                      </Stack>
+                      {mappingTests[idx] && (
+                        <Box sx={{ mt: 0.5, pl: 1 }}>
+                          <Typography variant="body2" color={mappingTests[idx]!.found > 0 ? 'success.main' : 'error.main'}>
+                            Found {mappingTests[idx]!.found}/{mappingTests[idx]!.tested} files tested
+                          </Typography>
+                          {mappingTests[idx]!.examples.map((ex, i) => (
+                            <Typography key={i} variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'text.secondary', wordBreak: 'break-all' }}>
+                              {ex.title}: {ex.path}
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                  {pathMappings.some((m) => m.to) && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={async () => {
+                        setITunesValidating(true);
+                        setITunesValidation(null);
+                        try {
+                          const result = await api.validateITunesLibrary({
+                            library_path: iTunesPath,
+                            path_mappings: pathMappings.filter((m) => m.from && m.to),
+                          });
+                          setITunesValidation({
+                            valid: true,
+                            audiobook_count: result.audiobook_tracks,
+                            files_found: result.files_found,
+                          });
+                          setITunesEnabled(true);
+                        } catch (err) {
+                          setITunesValidation({
+                            valid: false,
+                            error: err instanceof Error ? err.message : 'Validation failed',
+                          });
+                        } finally {
+                          setITunesValidating(false);
+                        }
+                      }}
+                    >
+                      Re-validate with path mapping
+                    </Button>
+                  )}
+                </Box>
               )}
 
               <Alert severity="info">
@@ -607,8 +753,23 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       >
         <DialogTitle>Select iTunes Library.xml</DialogTitle>
         <DialogContent>
+          <TextField
+            fullWidth
+            size="small"
+            label="Or type the full path"
+            placeholder="/path/to/iTunes Library.xml"
+            value={iTunesPathSelection}
+            onChange={(e) => setITunesPathSelection(e.target.value)}
+            sx={{ mb: 2 }}
+          />
           <ServerFileBrowser
-            onSelect={handleITunesPathSelect}
+            onSelect={(path, isDir) => {
+              setITunesPathSelection(path);
+              if (!isDir && path.toLowerCase().endsWith('.xml')) {
+                // Auto-confirm when clicking an XML file
+                setITunesPathSelection(path);
+              }
+            }}
             initialPath={iTunesPathSelection || homePath || '/'}
             showFiles={true}
             allowDirSelect={false}
@@ -629,7 +790,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
             onClick={handleConfirmITunesPath}
             disabled={!(iTunesPathSelection || '').trim() || iTunesValidating}
           >
-            Select File
+            Use this Library
           </Button>
         </DialogActions>
       </Dialog>

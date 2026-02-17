@@ -15,4 +15,9 @@ test_results/**
 node_modules
 web/node_modules
 web/dist
+testdata
+build-output
+*.m4a
+*.m4b
+*.mp3
 .DS_Store
