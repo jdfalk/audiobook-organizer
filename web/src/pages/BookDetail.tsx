@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -238,9 +238,11 @@ export const BookDetail = () => {
           `Metadata refreshed from ${result.source || 'provider'}.`,
         'success'
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to fetch metadata', error);
-      toast('Metadata fetch failed.', 'error');
+      const msg =
+        error instanceof Error ? error.message : 'Metadata fetch failed.';
+      toast(msg, 'error');
     } finally {
       setFetchingMetadata(false);
     }
@@ -255,9 +257,11 @@ export const BookDetail = () => {
       // Reload tags to reflect updated stored values in Compare tab
       await loadTags();
       toast(result.message || 'AI parsing completed.', 'success');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to parse with AI', error);
-      toast('AI parsing failed.', 'error');
+      const msg =
+        error instanceof Error ? error.message : 'AI parsing failed.';
+      toast(msg, 'error');
     } finally {
       setParsingWithAI(false);
     }

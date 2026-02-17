@@ -52,7 +52,7 @@ export interface MockConfig {
   log_level: string;
   log_format: string;
   enable_json_logging: boolean;
-  api_keys: { goodreads: string };
+  api_keys: Record<string, never>;
   supported_extensions: string[];
   exclude_patterns?: string[];
 }
@@ -1236,7 +1236,7 @@ const DEFAULT_CONFIG: MockConfig = {
   log_level: 'info',
   log_format: 'text',
   enable_json_logging: false,
-  api_keys: { goodreads: '' },
+  api_keys: {},
   supported_extensions: ['.m4b', '.mp3', '.m4a'],
   exclude_patterns: [],
 };
@@ -1543,14 +1543,10 @@ export async function setupMockApiLegacy(
       };
 
       const maskedConfig = () => {
-        const apiKeys = configState.api_keys || { goodreads: '' };
         return {
           ...configState,
           openai_api_key: maskSecretValue(configState.openai_api_key || ''),
-          api_keys: {
-            ...apiKeys,
-            goodreads: maskSecretValue(apiKeys.goodreads || ''),
-          },
+          api_keys: {},
         };
       };
 
@@ -1724,8 +1720,7 @@ export async function setupMockApiLegacy(
             }
             const updates = parseJsonBody(init) || {};
             if (updates.api_keys) {
-              const apiKeys = configState.api_keys || { goodreads: '' };
-              configState.api_keys = { ...apiKeys, ...updates.api_keys };
+              configState.api_keys = { ...configState.api_keys, ...updates.api_keys };
             }
             configState = { ...configState, ...updates };
             return Promise.resolve(jsonResponse({ config: maskedConfig() }));

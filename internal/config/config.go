@@ -133,9 +133,8 @@ type Config struct {
 	// Download client integration
 	DownloadClient DownloadClientConfig `json:"download_client"`
 
-	// API Keys (kept for backward compatibility)
+	// API Keys (kept for backward compatibility, Goodreads deprecated Dec 2020)
 	APIKeys struct {
-		Goodreads string `json:"goodreads"`
 	} `json:"api_keys"`
 
 	SupportedExtensions []string `json:"supported_extensions"`
@@ -320,8 +319,7 @@ func InitConfig() {
 		ExcludePatterns:     excludePatterns,
 	}
 
-	// API Keys
-	AppConfig.APIKeys.Goodreads = viper.GetString("api_keys.goodreads")
+	// API Keys (Goodreads deprecated Dec 2020, removed)
 
 	// Load metadata sources from config or use defaults
 	if viper.IsSet("metadata_sources") {
@@ -338,25 +336,12 @@ func InitConfig() {
 				Credentials:  make(map[string]string),
 			},
 			{
-				ID:           "goodreads",
-				Name:         "Goodreads",
-				Enabled:      true,
-				Priority:     2,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey":    "",
-					"apiSecret": "",
-				},
-			},
-			{
 				ID:           "openlibrary",
 				Name:         "Open Library",
-				Enabled:      false,
-				Priority:     3,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
-				},
+				Enabled:      true,
+				Priority:     2,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
 			},
 			{
 				ID:           "google-books",
@@ -619,25 +604,12 @@ func ResetToDefaults() {
 				Credentials:  make(map[string]string),
 			},
 			{
-				ID:           "goodreads",
-				Name:         "Goodreads",
-				Enabled:      true,
-				Priority:     2,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey":    "",
-					"apiSecret": "",
-				},
-			},
-			{
 				ID:           "openlibrary",
 				Name:         "Open Library",
-				Enabled:      false,
-				Priority:     3,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
-				},
+				Enabled:      true,
+				Priority:     2,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
 			},
 			{
 				ID:           "google-books",

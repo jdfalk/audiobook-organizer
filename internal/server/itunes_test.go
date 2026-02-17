@@ -69,7 +69,7 @@ func TestBuildBookFromTrack(t *testing.T) {
 				Size:         tt.trackSize,
 			}
 
-			book, err := buildBookFromTrack(track, libraryPath)
+			book, err := buildBookFromTrack(track, libraryPath, itunes.ImportOptions{})
 			if err != nil {
 				t.Fatalf("buildBookFromTrack error: %v", err)
 			}
@@ -180,7 +180,7 @@ func TestBuildBookFromTrack_AllFields(t *testing.T) {
 	}
 
 	libraryPath := "/path/to/iTunes Library.xml"
-	book, err := buildBookFromTrack(track, libraryPath)
+	book, err := buildBookFromTrack(track, libraryPath, itunes.ImportOptions{})
 	if err != nil {
 		t.Fatalf("buildBookFromTrack error: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestBuildBookFromTrack_MinimalTrack(t *testing.T) {
 		PersistentID: "MIN123",
 	}
 
-	book, err := buildBookFromTrack(track, "/library.xml")
+	book, err := buildBookFromTrack(track, "/library.xml", itunes.ImportOptions{})
 	if err != nil {
 		t.Fatalf("buildBookFromTrack error: %v", err)
 	}
