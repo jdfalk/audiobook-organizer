@@ -1,9 +1,11 @@
 # file: Makefile
-# version: 2.0.0
+# version: 2.1.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
 WEB_DIR := web
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo 'dev')
+LDFLAGS := -X main.version=$(VERSION)
 
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
@@ -50,14 +52,25 @@ install: web-install
 ## build: Full build with embedded frontend
 build: web-build
 	@echo "🔨 Building $(BINARY) with embedded frontend..."
-	@go build -tags embed_frontend -o $(BINARY) .
+	@go build -tags embed_frontend -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY)"
 
 ## build-api: Backend-only build (no frontend, serves placeholder at /)
 build-api:
 	@echo "🔨 Building $(BINARY) (API only)..."
-	@go build -o $(BINARY) .
+	@go build -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY)"
+
+## build-linux: Cross-compile for Linux amd64 (requires: brew install filosottile/musl-cross/musl-cross)
+build-linux: web-build
+	@echo "🔨 Cross-compiling for Linux amd64..."
+	@mkdir -p dist
+	@CC=x86_64-linux-musl-gcc GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build \
+		-tags "embed_frontend fts5" \
+		-ldflags="-s -w -linkmode external -extldflags '-static' -X main.version=$(VERSION)" \
+		-o dist/audiobook-organizer-linux-amd64 .
+	@echo "✅ Built dist/audiobook-organizer-linux-amd64"
+
 
 ## run: Full build and serve
 run: build
