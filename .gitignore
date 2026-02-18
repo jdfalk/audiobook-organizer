@@ -1,3 +1,6 @@
+# Local overrides
+Makefile.local
+
 # ==============================================================================
 # Go
 # Source: https://github.com/github/gitignore/blob/main/Go.gitignore

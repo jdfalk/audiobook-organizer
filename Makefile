@@ -7,6 +7,9 @@ WEB_DIR := web
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo 'dev')
 LDFLAGS := -X main.version=$(VERSION)
 
+# Include local overrides (not committed — see Makefile.local.example)
+-include Makefile.local
+
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-e2e coverage coverage-check ci
@@ -70,8 +73,6 @@ build-linux: web-build
 		-ldflags="-s -w -linkmode external -extldflags '-static' -X main.version=$(VERSION)" \
 		-o dist/audiobook-organizer-linux-amd64 .
 	@echo "✅ Built dist/audiobook-organizer-linux-amd64"
-
-
 
 ## run: Full build and serve
 run: build
