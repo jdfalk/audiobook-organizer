@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -544,7 +544,8 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 	}
 
 	enriched := 0
-	for _, book := range books {
+	consecutiveErrors := 0
+	for i, book := range books {
 		if book.LibraryState == nil || *book.LibraryState != "imported" {
 			continue
 		}
@@ -555,15 +556,28 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 		resp, err := mfs.FetchMetadataForBook(book.ID)
 		if err != nil {
 			_ = progress.Log("debug", fmt.Sprintf("No metadata found for '%s': %v", book.Title, err), nil)
+			consecutiveErrors++
+			// Back off if we're hitting rate limits (many consecutive failures)
+			if consecutiveErrors >= 5 {
+				_ = progress.Log("info", "Rate limit detected, pausing 10s...", nil)
+				time.Sleep(10 * time.Second)
+				consecutiveErrors = 0
+			}
 			continue
 		}
 
+		consecutiveErrors = 0
 		enriched++
 		if resp.Book != nil && resp.Book.AuthorID != nil {
-			// Populate book_authors junction table
 			_ = database.GlobalStore.SetBookAuthors(book.ID, []database.BookAuthor{
 				{BookID: book.ID, AuthorID: *resp.Book.AuthorID, Role: "author", Position: 0},
 			})
+		}
+
+		// Rate limit: pause every 10 enrichments to avoid hammering external APIs
+		if enriched%10 == 0 {
+			_ = progress.Log("info", fmt.Sprintf("Enriched %d books so far (processing %d/%d)...", enriched, i+1, len(books)), nil)
+			time.Sleep(2 * time.Second)
 		}
 	}
 

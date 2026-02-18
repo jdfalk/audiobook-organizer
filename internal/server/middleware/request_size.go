@@ -24,6 +24,10 @@ func selectBodyLimit(path string, jsonLimitBytes, uploadLimitBytes int64) int64 
 	if strings.Contains(path, "/import/") || strings.Contains(path, "/backup/") {
 		return uploadLimitBytes
 	}
+	// OL dump uploads can be multi-GB — no practical limit
+	if strings.Contains(path, "/openlibrary/upload") {
+		return 20 * 1024 * 1024 * 1024 // 20GB
+	}
 	return jsonLimitBytes
 }
 

@@ -105,6 +105,7 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 
 func TestE2E_ScanAndFetchMetadata(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	// Mock OpenLibrary

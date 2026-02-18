@@ -1,5 +1,5 @@
 // file: internal/server/metadata_integration_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b8c9d0-e1f2-3456-abcd-789012345ef0
 
 package server
@@ -10,14 +10,27 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// useOnlyOpenLibrary sets config to only use Open Library as metadata source,
+// returning a cleanup function to restore the original config.
+func useOnlyOpenLibrary(t *testing.T) {
+	t.Helper()
+	orig := config.AppConfig.MetadataSources
+	config.AppConfig.MetadataSources = []config.MetadataSource{
+		{ID: "openlibrary", Name: "Open Library", Enabled: true, Priority: 1},
+	}
+	t.Cleanup(func() { config.AppConfig.MetadataSources = orig })
+}
+
 func TestMetadataFetch_WithMockAPI(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	mockServer := testutil.MockOpenLibraryServer(t, map[string]string{
@@ -52,6 +65,7 @@ func TestMetadataFetch_WithMockAPI(t *testing.T) {
 
 func TestMetadataFetch_FallbackToAuthorSearch(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	callCount := 0
@@ -91,6 +105,7 @@ func TestMetadataFetch_FallbackToAuthorSearch(t *testing.T) {
 
 func TestMetadataFetch_NotFound(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
