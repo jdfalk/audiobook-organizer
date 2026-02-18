@@ -72,6 +72,7 @@ build-linux: web-build
 	@echo "✅ Built dist/audiobook-organizer-linux-amd64"
 
 
+
 ## run: Full build and serve
 run: build
 	@./$(BINARY) serve
