@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -37,10 +37,13 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add.js';
+import DeleteIcon from '@mui/icons-material/Delete.js';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload.js';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
+import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
   getBook,
@@ -79,9 +82,26 @@ const defaultSettings: ITunesImportSettings = {
  * Library.xml metadata into the audiobook organizer.
  */
 export function ITunesImport() {
-  const [settings, setSettings] = useState<ITunesImportSettings>(
-    defaultSettings
-  );
+  const [settings, setSettings] = useState<ITunesImportSettings>(() => {
+    try {
+      const saved = localStorage.getItem('itunes_import_settings');
+      if (saved) {
+        return { ...defaultSettings, ...JSON.parse(saved) };
+      }
+    } catch {
+      // ignore
+    }
+    return defaultSettings;
+  });
+  // Persist settings to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('itunes_import_settings', JSON.stringify(settings));
+    } catch {
+      // ignore
+    }
+  }, [settings]);
+
   const [validationResult, setValidationResult] =
     useState<ITunesValidateResponse | null>(null);
   const [validating, setValidating] = useState(false);
@@ -387,30 +407,65 @@ export function ITunesImport() {
           <Typography variant="subtitle2" gutterBottom>
             Path Mapping (for cross-platform imports)
           </Typography>
-          {settings.pathMappings.length === 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Validate a library to auto-detect path prefixes.
-            </Typography>
-          )}
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Map iTunes file prefixes to local paths. Validate to auto-detect, or add manually.
+          </Typography>
           {settings.pathMappings.map((mapping, idx) => (
-            <Box key={idx} sx={{ mb: 1.5 }}>
-              <Typography variant="caption" color="text.secondary">
-                {mapping.from}
-              </Typography>
-              <TextField
-                fullWidth
+            <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1.5, alignItems: 'flex-start' }}>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="From prefix"
+                  placeholder="file://localhost/W:/itunes/iTunes%20Media"
+                  value={mapping.from}
+                  onChange={(e) => {
+                    const updated = [...settings.pathMappings];
+                    updated[idx] = { ...updated[idx], from: e.target.value };
+                    setSettings((prev) => ({ ...prev, pathMappings: updated }));
+                  }}
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="To local path"
+                  placeholder="/local/path/to/media"
+                  value={mapping.to}
+                  onChange={(e) => {
+                    const updated = [...settings.pathMappings];
+                    updated[idx] = { ...updated[idx], to: e.target.value };
+                    setSettings((prev) => ({ ...prev, pathMappings: updated }));
+                  }}
+                />
+              </Box>
+              <IconButton
                 size="small"
-                label="Local path"
-                placeholder="/local/path/to/media"
-                value={mapping.to}
-                onChange={(e) => {
-                  const updated = [...settings.pathMappings];
-                  updated[idx] = { ...updated[idx], to: e.target.value };
-                  setSettings((prev) => ({ ...prev, pathMappings: updated }));
+                color="error"
+                onClick={() => {
+                  setSettings((prev) => ({
+                    ...prev,
+                    pathMappings: prev.pathMappings.filter((_, i) => i !== idx),
+                  }));
                 }}
-              />
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
             </Box>
           ))}
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() =>
+              setSettings((prev) => ({
+                ...prev,
+                pathMappings: [...prev.pathMappings, { from: '', to: '' }],
+              }))
+            }
+          >
+            Add Mapping
+          </Button>
         </Box>
 
         <Box sx={{ mt: 3 }}>

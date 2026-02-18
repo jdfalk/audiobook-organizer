@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -19,6 +19,11 @@ import {
   InputAdornment,
   Chip,
   CircularProgress,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
   Stack,
 } from '@mui/material';
 import {
@@ -68,6 +73,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
     error?: string;
   } | null>(null);
   const [iTunesEnabled, setITunesEnabled] = useState(false);
+  const [iTunesImportMode, setITunesImportMode] = useState<'import' | 'organize'>('import');
   const [pathMappings, setPathMappings] = useState<api.PathMapping[]>([]);
   const [mappingTests, setMappingTests] = useState<Record<number, api.ITunesTestMappingResponse | null>>({});
   const [testingMapping, setTestingMapping] = useState<number | null>(null);
@@ -255,14 +261,29 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
 
       // Step 4: Trigger iTunes import if configured
       if (iTunesEnabled && iTunesPath) {
+        // Persist iTunes settings so the Settings page can see them
+        const activeMappings = pathMappings.filter((m) => m.from && m.to);
+        try {
+          localStorage.setItem('itunes_import_settings', JSON.stringify({
+            libraryPath: iTunesPath,
+            importMode: iTunesImportMode,
+            preserveLocation: iTunesImportMode === 'import',
+            importPlaylists: true,
+            skipDuplicates: true,
+            pathMappings: activeMappings,
+          }));
+        } catch {
+          // ignore localStorage errors
+        }
+
         try {
           await api.importITunesLibrary({
             library_path: iTunesPath,
-            import_mode: 'organized',
-            preserve_location: false,
+            import_mode: iTunesImportMode,
+            preserve_location: iTunesImportMode === 'import',
             import_playlists: true,
             skip_duplicates: true,
-            path_mappings: pathMappings.filter((m) => m.from && m.to),
+            path_mappings: activeMappings,
           });
         } catch (error) {
           console.error('Failed to start iTunes import:', error);
@@ -495,11 +516,32 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
               )}
 
               {iTunesValidation?.valid && (
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  Found {iTunesValidation.audiobook_count} audiobook tracks
-                  ({iTunesValidation.files_found} files found). These will be
-                  imported and organized when you complete setup.
-                </Alert>
+                <>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    Found {iTunesValidation.audiobook_count} audiobook tracks
+                    ({iTunesValidation.files_found} files found). These will be
+                    processed in the background when you complete setup.
+                  </Alert>
+
+                  <FormControl component="fieldset" sx={{ mb: 2 }}>
+                    <FormLabel component="legend">What should happen after import?</FormLabel>
+                    <RadioGroup
+                      value={iTunesImportMode}
+                      onChange={(e) => setITunesImportMode(e.target.value as 'import' | 'organize')}
+                    >
+                      <FormControlLabel
+                        value="import"
+                        control={<Radio />}
+                        label="Import metadata only (keep files where they are)"
+                      />
+                      <FormControlLabel
+                        value="organize"
+                        control={<Radio />}
+                        label="Import metadata and organize files into library"
+                      />
+                    </RadioGroup>
+                  </FormControl>
+                </>
               )}
 
               {iTunesValidation && !iTunesValidation.valid && (
