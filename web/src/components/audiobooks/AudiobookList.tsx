@@ -182,9 +182,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                 )}
               </TableCell>
               <TableCell>
-                {(audiobook.cover_path || audiobook.cover_url) ? (
+                {audiobook.cover_url ? (
                   <Avatar
-                    src={audiobook.cover_path || (audiobook.cover_url ? `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}` : '')}
+                    src={audiobook.cover_url.startsWith('/api/') ? audiobook.cover_url : `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}`}
                     alt={audiobook.title}
                     variant="rounded"
                     sx={{ width: 40, height: 40 }}

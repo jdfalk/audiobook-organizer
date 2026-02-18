@@ -45,6 +45,10 @@ type Track struct {
 	Rating        int       `xml:"-"` // 0-100 scale
 	Bookmark      int64     `xml:"-"` // milliseconds
 	Bookmarkable  bool      `xml:"-"`
+	TrackNumber   int       `xml:"-"`
+	TrackCount    int       `xml:"-"`
+	DiscNumber    int       `xml:"-"`
+	DiscCount     int       `xml:"-"`
 }
 
 // Playlist represents an iTunes playlist

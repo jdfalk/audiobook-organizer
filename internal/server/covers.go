@@ -1,5 +1,5 @@
 // file: internal/server/covers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -83,6 +83,28 @@ func (s *Server) handleCoverProxy(c *gin.Context) {
 
 	// Serve the cached file
 	c.File(cachePath)
+}
+
+// handleLocalCover serves locally extracted cover art files.
+// GET /api/v1/covers/local/:filename
+func (s *Server) handleLocalCover(c *gin.Context) {
+	filename := c.Param("filename")
+
+	// Prevent path traversal
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
+		return
+	}
+
+	coverDir := filepath.Join(config.AppConfig.RootDir, ".covers")
+	coverPath := filepath.Join(coverDir, filename)
+
+	if _, err := os.Stat(coverPath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "cover not found"})
+		return
+	}
+
+	c.File(coverPath)
 }
 
 func isAllowedCoverSource(url string) bool {

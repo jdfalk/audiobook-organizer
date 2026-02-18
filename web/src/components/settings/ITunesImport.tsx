@@ -58,6 +58,7 @@ import {
   validateITunesLibrary,
   writeBackITunesLibrary,
 } from '../../services/api';
+import { useOperationsStore } from '../../stores/useOperationsStore';
 
 interface ITunesImportSettings {
   libraryPath: string;
@@ -186,6 +187,7 @@ export function ITunesImport() {
       };
 
       const result = await importITunesLibrary(request);
+      useOperationsStore.getState().startPolling(result.operation_id, 'itunes_import');
       await pollImportStatus(result.operation_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Import failed';
@@ -677,6 +679,7 @@ export function ITunesImport() {
                       path_mappings: settings.pathMappings.filter((m) => m.from && m.to),
                     };
                     const result = await importITunesLibrary(request);
+                    useOperationsStore.getState().startPolling(result.operation_id, 'itunes_import');
                     await pollImportStatus(result.operation_id);
                   } catch (err) {
                     setError(err instanceof Error ? err.message : 'Force import failed');

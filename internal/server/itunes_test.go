@@ -1,5 +1,5 @@
 // file: internal/server/itunes_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: 57e871fa-41b4-4fe6-9ed6-457ae78f0a07
 
 package server
@@ -17,8 +17,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
-// TestBuildBookFromTrack verifies field mapping from iTunes tracks.
-func TestBuildBookFromTrack(t *testing.T) {
+// TestBuildBookFromAlbumGroup verifies field mapping from iTunes tracks.
+func TestBuildBookFromAlbumGroup(t *testing.T) {
 	tmpFile, err := os.CreateTemp(t.TempDir(), "itunes-track-*.m4b")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
@@ -31,84 +31,69 @@ func TestBuildBookFromTrack(t *testing.T) {
 		t.Fatalf("failed to close temp file: %v", err)
 	}
 
-	info, err := os.Stat(tmpFile.Name())
-	if err != nil {
-		t.Fatalf("failed to stat temp file: %v", err)
-	}
 	filePath := tmpFile.Name()
 	location := itunes.EncodeLocation(filePath)
 	now := time.Now().UTC()
 	playDate := now.Add(-time.Hour).Unix()
 	libraryPath := "/tmp/iTunes Library.xml"
 
-	tests := []struct {
-		name         string
-		trackSize    int64
-		wantFileSize int64
-	}{
-		{name: "uses track size", trackSize: 4096, wantFileSize: 4096},
-		{name: "falls back to stat size", trackSize: 0, wantFileSize: info.Size()},
+	track := &itunes.Track{
+		Location:     location,
+		Name:         "Chapter 1",
+		Album:        "My Audiobook",
+		PersistentID: "ABC123",
+		TotalTime:    123000,
+		Year:         2000,
+		PlayCount:    2,
+		Rating:       80,
+		Bookmark:     5000,
+		DateAdded:    now,
+		PlayDate:     playDate,
+		AlbumArtist:  "Narrator",
+		Artist:       "Author",
+		Comments:     "First edition",
+		Size:         4096,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			track := &itunes.Track{
-				Location:     location,
-				Name:         "",
-				PersistentID: "ABC123",
-				TotalTime:    123000,
-				Year:         2000,
-				PlayCount:    2,
-				Rating:       80,
-				Bookmark:     5000,
-				DateAdded:    now,
-				PlayDate:     playDate,
-				AlbumArtist:  "Narrator",
-				Artist:       "Author",
-				Comments:     "First edition",
-				Size:         tt.trackSize,
-			}
+	group := albumGroup{key: "Author|My Audiobook", tracks: []*itunes.Track{track}}
+	book, err := buildBookFromAlbumGroup(group, libraryPath, itunes.ImportOptions{})
+	if err != nil {
+		t.Fatalf("buildBookFromAlbumGroup error: %v", err)
+	}
 
-			book, err := buildBookFromTrack(track, libraryPath, itunes.ImportOptions{})
-			if err != nil {
-				t.Fatalf("buildBookFromTrack error: %v", err)
-			}
-
-			wantTitle := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-			if book.Title != wantTitle {
-				t.Fatalf("title = %q, want %q", book.Title, wantTitle)
-			}
-			if book.ITunesPersistentID == nil || *book.ITunesPersistentID != "ABC123" {
-				t.Fatalf("persistent ID not set correctly")
-			}
-			if book.ITunesDateAdded == nil || !book.ITunesDateAdded.Equal(now) {
-				t.Fatalf("date added not set correctly")
-			}
-			if book.ITunesLastPlayed == nil || book.ITunesLastPlayed.Unix() != playDate {
-				t.Fatalf("last played not set correctly")
-			}
-			if book.ITunesPlayCount == nil || *book.ITunesPlayCount != 2 {
-				t.Fatalf("play count not set correctly")
-			}
-			if book.ITunesRating == nil || *book.ITunesRating != 80 {
-				t.Fatalf("rating not set correctly")
-			}
-			if book.ITunesBookmark == nil || *book.ITunesBookmark != 5000 {
-				t.Fatalf("bookmark not set correctly")
-			}
-			if book.ITunesImportSource == nil || *book.ITunesImportSource != libraryPath {
-				t.Fatalf("import source not set correctly")
-			}
-			if book.Narrator == nil || *book.Narrator != "Narrator" {
-				t.Fatalf("narrator not set correctly")
-			}
-			if book.Edition == nil || *book.Edition != "First edition" {
-				t.Fatalf("edition not set correctly")
-			}
-			if book.FileSize == nil || *book.FileSize != tt.wantFileSize {
-				t.Fatalf("file size = %d, want %d", valueOrZero(book.FileSize), tt.wantFileSize)
-			}
-		})
+	// Single-track group uses Album as title
+	if book.Title != "My Audiobook" {
+		t.Fatalf("title = %q, want %q", book.Title, "My Audiobook")
+	}
+	if book.ITunesPersistentID == nil || *book.ITunesPersistentID != "ABC123" {
+		t.Fatalf("persistent ID not set correctly")
+	}
+	if book.ITunesDateAdded == nil || !book.ITunesDateAdded.Equal(now) {
+		t.Fatalf("date added not set correctly")
+	}
+	if book.ITunesLastPlayed == nil || book.ITunesLastPlayed.Unix() != playDate {
+		t.Fatalf("last played not set correctly")
+	}
+	if book.ITunesPlayCount == nil || *book.ITunesPlayCount != 2 {
+		t.Fatalf("play count not set correctly")
+	}
+	if book.ITunesRating == nil || *book.ITunesRating != 80 {
+		t.Fatalf("rating not set correctly")
+	}
+	if book.ITunesBookmark == nil || *book.ITunesBookmark != 5000 {
+		t.Fatalf("bookmark not set correctly")
+	}
+	if book.ITunesImportSource == nil || *book.ITunesImportSource != libraryPath {
+		t.Fatalf("import source not set correctly")
+	}
+	if book.Narrator == nil || *book.Narrator != "Narrator" {
+		t.Fatalf("narrator not set correctly")
+	}
+	if book.Edition == nil || *book.Edition != "First edition" {
+		t.Fatalf("edition not set correctly")
+	}
+	if book.FileSize == nil || *book.FileSize != 4096 {
+		t.Fatalf("file size = %d, want 4096", valueOrZero(book.FileSize))
 	}
 }
 
@@ -149,8 +134,8 @@ func TestValidateITunesLibrary(t *testing.T) {
 	}
 }
 
-// TestBuildBookFromTrack_AllFields verifies complete field mapping
-func TestBuildBookFromTrack_AllFields(t *testing.T) {
+// TestBuildBookFromAlbumGroup_AllFields verifies complete field mapping
+func TestBuildBookFromAlbumGroup_AllFields(t *testing.T) {
 	tmpFile, err := os.CreateTemp(t.TempDir(), "complete-track-*.m4b")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
@@ -180,12 +165,12 @@ func TestBuildBookFromTrack_AllFields(t *testing.T) {
 	}
 
 	libraryPath := "/path/to/iTunes Library.xml"
-	book, err := buildBookFromTrack(track, libraryPath, itunes.ImportOptions{})
+	group := albumGroup{key: "Test Author|Test Series", tracks: []*itunes.Track{track}}
+	book, err := buildBookFromAlbumGroup(group, libraryPath, itunes.ImportOptions{})
 	if err != nil {
-		t.Fatalf("buildBookFromTrack error: %v", err)
+		t.Fatalf("buildBookFromAlbumGroup error: %v", err)
 	}
 
-	// Verify all key fields are set
 	if book.ITunesPersistentID == nil || *book.ITunesPersistentID != "DEF456" {
 		t.Error("persistent ID not set")
 	}
@@ -206,8 +191,8 @@ func TestBuildBookFromTrack_AllFields(t *testing.T) {
 	}
 }
 
-// TestBuildBookFromTrack_MinimalTrack verifies handling of minimal track data
-func TestBuildBookFromTrack_MinimalTrack(t *testing.T) {
+// TestBuildBookFromAlbumGroup_MinimalTrack verifies handling of minimal track data
+func TestBuildBookFromAlbumGroup_MinimalTrack(t *testing.T) {
 	tmpFile, err := os.CreateTemp(t.TempDir(), "minimal-track-*.m4b")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
@@ -217,23 +202,60 @@ func TestBuildBookFromTrack_MinimalTrack(t *testing.T) {
 	filePath := tmpFile.Name()
 	location := itunes.EncodeLocation(filePath)
 
-	// Create minimal track with only required fields
 	track := &itunes.Track{
 		Location:     location,
 		PersistentID: "MIN123",
 	}
 
-	book, err := buildBookFromTrack(track, "/library.xml", itunes.ImportOptions{})
+	group := albumGroup{key: "|", tracks: []*itunes.Track{track}}
+	book, err := buildBookFromAlbumGroup(group, "/library.xml", itunes.ImportOptions{})
 	if err != nil {
-		t.Fatalf("buildBookFromTrack error: %v", err)
+		t.Fatalf("buildBookFromAlbumGroup error: %v", err)
 	}
 
-	// Should still produce a valid book with defaults
 	if book.ITunesPersistentID == nil {
 		t.Error("persistent ID should be set")
 	}
 	if book.FilePath == "" {
 		t.Error("file path should be decoded")
+	}
+}
+
+// TestGroupTracksByAlbum verifies multi-track grouping
+func TestGroupTracksByAlbum(t *testing.T) {
+	library := &itunes.Library{
+		Tracks: map[string]*itunes.Track{
+			"1": {TrackID: 1, Name: "Chapter 1", Artist: "Author A", Album: "Book One", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 1},
+			"2": {TrackID: 2, Name: "Chapter 2", Artist: "Author A", Album: "Book One", Kind: "Audiobook", TrackNumber: 2, DiscNumber: 1},
+			"3": {TrackID: 3, Name: "Chapter 1", Artist: "Author B", Album: "Book Two", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 1},
+			"4": {TrackID: 4, Name: "Music Track", Artist: "Singer", Album: "Pop Album", Kind: "MPEG audio file"},
+		},
+	}
+
+	groups := groupTracksByAlbum(library)
+
+	// Should have 2 groups (not 3 - the music track is filtered out)
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+
+	// Find the "Author A|Book One" group
+	var bookOneGroup *albumGroup
+	for i := range groups {
+		if groups[i].key == "Author A|Book One" {
+			bookOneGroup = &groups[i]
+			break
+		}
+	}
+	if bookOneGroup == nil {
+		t.Fatal("expected to find 'Author A|Book One' group")
+	}
+	if len(bookOneGroup.tracks) != 2 {
+		t.Errorf("expected 2 tracks in Book One group, got %d", len(bookOneGroup.tracks))
+	}
+	// Verify sorted by track number
+	if bookOneGroup.tracks[0].TrackNumber != 1 || bookOneGroup.tracks[1].TrackNumber != 2 {
+		t.Error("tracks not sorted by track number")
 	}
 }
 

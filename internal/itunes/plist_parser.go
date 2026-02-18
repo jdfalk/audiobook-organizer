@@ -40,6 +40,10 @@ type plistTrack struct {
 	Rating        int       `plist:"Rating"`         // 0-100 scale
 	Bookmark      int64     `plist:"Bookmark"`       // milliseconds
 	Bookmarkable  bool      `plist:"Bookmarkable"`
+	TrackNumber   int       `plist:"Track Number"`
+	TrackCount    int       `plist:"Track Count"`
+	DiscNumber    int       `plist:"Disc Number"`
+	DiscCount     int       `plist:"Disc Count"`
 }
 
 // plistPlaylist represents a playlist in the plist format
@@ -105,6 +109,10 @@ func parsePlist(data []byte) (*Library, error) {
 			Rating:       rawTrack.Rating,
 			Bookmark:     rawTrack.Bookmark,
 			Bookmarkable: rawTrack.Bookmarkable,
+			TrackNumber:  rawTrack.TrackNumber,
+			TrackCount:   rawTrack.TrackCount,
+			DiscNumber:   rawTrack.DiscNumber,
+			DiscCount:    rawTrack.DiscCount,
 		}
 	}
 
@@ -163,6 +171,10 @@ func writePlist(library *Library, path string) error {
 			Rating:       track.Rating,
 			Bookmark:     track.Bookmark,
 			Bookmarkable: track.Bookmarkable,
+			TrackNumber:  track.TrackNumber,
+			TrackCount:   track.TrackCount,
+			DiscNumber:   track.DiscNumber,
+			DiscCount:    track.DiscCount,
 		}
 	}
 
