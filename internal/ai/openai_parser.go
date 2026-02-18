@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.2.1
+// version: 1.3.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -126,7 +126,8 @@ Set confidence based on clarity of the filename structure.`
 	return parseMetadataFromJSON(content)
 }
 
-// ParseBatch parses multiple filenames in a single request (more efficient)
+// ParseBatch parses multiple filenames in a single request (more efficient).
+// Retries with exponential backoff on failure to handle rate limiting.
 func (p *OpenAIParser) ParseBatch(ctx context.Context, filenames []string) ([]*ParsedMetadata, error) {
 	if !p.enabled {
 		return nil, fmt.Errorf("OpenAI parser is not enabled")
@@ -142,7 +143,6 @@ func (p *OpenAIParser) ParseBatch(ctx context.Context, filenames []string) ([]*P
 		filenames = filenames[:maxBatchSize]
 	}
 
-	// Create the system prompt (will be cached by OpenAI)
 	systemPrompt := `You are an expert at parsing audiobook filenames. Extract structured metadata from each filename.
 
 Common patterns:
@@ -152,8 +152,8 @@ Common patterns:
 - May include narrator: "Title - Author - Narrator"
 - May include year: "Title (2020)" or "Title - Author (2020)"
 
-Return ONLY valid JSON array with these fields for each file (omit if not found):
-[
+Return ONLY valid JSON with a "results" key containing an array with these fields for each file (omit if not found):
+{"results": [
   {
     "title": "book title",
     "author": "author name",
@@ -164,43 +164,56 @@ Return ONLY valid JSON array with these fields for each file (omit if not found)
     "year": 2020,
     "confidence": "high|medium|low"
   }
-]
+]}
 
 Set confidence based on clarity of the filename structure.`
 
-	// Build user prompt with all filenames
 	userPrompt := "Parse these audiobook filenames:\n\n"
 	for i, filename := range filenames {
 		userPrompt += fmt.Sprintf("%d. %s\n", i+1, filename)
 	}
 
-	// Create chat completion
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
-	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage(systemPrompt),
-			openai.UserMessage(userPrompt),
-		},
-		Model:       shared.ChatModel(p.model),
-		Temperature: param.NewOpt(0.1),
-		MaxTokens:   param.NewOpt[int64](2000),
-		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONObject: &jsonObjectFormat,
-		},
-	})
+	var lastErr error
+	for attempt := 0; attempt <= p.maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * 2 * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
 
-	if err != nil {
-		return nil, fmt.Errorf("OpenAI API call failed: %w", err)
+		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(systemPrompt),
+				openai.UserMessage(userPrompt),
+			},
+			Model:       shared.ChatModel(p.model),
+			Temperature: param.NewOpt(0.1),
+			MaxTokens:   param.NewOpt[int64](2000),
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONObject: &jsonObjectFormat,
+			},
+		})
+
+		if err != nil {
+			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
+			continue
+		}
+
+		if len(completion.Choices) == 0 {
+			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
+			continue
+		}
+
+		content := completion.Choices[0].Message.Content
+		return parseBatchMetadataFromJSON(content)
 	}
 
-	if len(completion.Choices) == 0 {
-		return nil, fmt.Errorf("no response from OpenAI")
-	}
-
-	// Parse the JSON response
-	content := completion.Choices[0].Message.Content
-	return parseBatchMetadataFromJSON(content)
+	return nil, lastErr
 }
 
 // TestConnection tests the OpenAI API connection
@@ -227,8 +240,18 @@ func parseMetadataFromJSON(content string) (*ParsedMetadata, error) {
 	return &metadata, nil
 }
 
-// parseBatchMetadataFromJSON parses an array of metadata objects from JSON string
+// parseBatchMetadataFromJSON parses batch results from JSON.
+// Accepts either {"results": [...]} or a bare array [...].
 func parseBatchMetadataFromJSON(content string) ([]*ParsedMetadata, error) {
+	// Try wrapped format first (JSON Object mode returns objects)
+	var wrapped struct {
+		Results []*ParsedMetadata `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(content), &wrapped); err == nil && len(wrapped.Results) > 0 {
+		return wrapped.Results, nil
+	}
+
+	// Fall back to bare array
 	var results []*ParsedMetadata
 	if err := json.Unmarshal([]byte(content), &results); err != nil {
 		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
