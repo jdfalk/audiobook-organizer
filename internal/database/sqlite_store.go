@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1638,6 +1638,32 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 	return count, err
 }
 
+func (s *SQLiteStore) CountAuthors() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM authors").Scan(&count)
+	return count, err
+}
+
+func (s *SQLiteStore) CountSeries() (int, error) {
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM series").Scan(&count)
+	return count, err
+}
+
+func (s *SQLiteStore) GetBookCountsByLocation(rootDir string) (library, import_ int, err error) {
+	if rootDir == "" {
+		// No root dir configured, all books are imports
+		err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&import_)
+		return 0, import_, err
+	}
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?", rootDir+"%").Scan(&library)
+	if err != nil {
+		return
+	}
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?", rootDir+"%").Scan(&import_)
+	return
+}
+
 func (s *SQLiteStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
 	if limit <= 0 {
 		limit = 1_000_000
@@ -1685,6 +1711,14 @@ func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
 		&stats.TotalBooks, &stats.TotalDuration, &stats.TotalSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get book aggregates: %w", err)
+	}
+
+	// Author and series counts
+	if ac, err := s.CountAuthors(); err == nil {
+		stats.TotalAuthors = ac
+	}
+	if sc, err := s.CountSeries(); err == nil {
+		stats.TotalSeries = sc
 	}
 
 	// State distribution

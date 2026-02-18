@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.17.0
+// version: 2.18.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -61,6 +61,9 @@ type Store interface {
 	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
+	CountAuthors() (int, error)
+	CountSeries() (int, error)
+	GetBookCountsByLocation(rootDir string) (library, import_ int, err error)
 	GetDashboardStats() (*DashboardStats, error)
 	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
 
@@ -435,6 +438,8 @@ type MetadataFieldState struct {
 // DashboardStats holds aggregated statistics computed via SQL rather than loading all books.
 type DashboardStats struct {
 	TotalBooks         int            `json:"total_books"`
+	TotalAuthors       int            `json:"total_authors"`
+	TotalSeries        int            `json:"total_series"`
 	TotalDuration      int64          `json:"total_duration"`
 	TotalSize          int64          `json:"total_size"`
 	StateDistribution  map[string]int `json:"state_distribution"`
