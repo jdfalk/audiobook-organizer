@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.2.1
+// version: 1.3.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -8,11 +8,131 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
+
+// ConfigFilePath returns the path to the YAML config file next to the database.
+func ConfigFilePath() string {
+	if AppConfig.DatabasePath != "" {
+		return filepath.Join(filepath.Dir(AppConfig.DatabasePath), "config.yaml")
+	}
+	if AppConfig.RootDir != "" {
+		return filepath.Join(AppConfig.RootDir, "config.yaml")
+	}
+	return ""
+}
+
+// LoadConfigFromFile loads settings from the YAML config file as a fallback.
+// Called after LoadConfigFromDatabase so file values only fill in gaps.
+func LoadConfigFromFile() error {
+	path := ConfigFilePath()
+	if path == "" {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var fileConfig map[string]any
+	if err := yaml.Unmarshal(data, &fileConfig); err != nil {
+		log.Printf("Warning: Failed to parse config file %s: %v", path, err)
+		return nil
+	}
+
+	applied := 0
+
+	// Only fill in values that are currently empty/default
+	if AppConfig.OpenAIAPIKey == "" {
+		if key, ok := fileConfig["openai_api_key"].(string); ok && key != "" {
+			AppConfig.OpenAIAPIKey = key
+			applied++
+			log.Printf("[INFO] Loaded openai_api_key from config file")
+		}
+	}
+	if !AppConfig.EnableAIParsing {
+		if val, ok := fileConfig["enable_ai_parsing"].(bool); ok && val {
+			AppConfig.EnableAIParsing = true
+			applied++
+			log.Printf("[INFO] Loaded enable_ai_parsing from config file")
+		}
+	}
+	if AppConfig.RootDir == "" {
+		if val, ok := fileConfig["root_dir"].(string); ok && val != "" {
+			AppConfig.RootDir = val
+			applied++
+		}
+	}
+	if AppConfig.Language == "" {
+		if val, ok := fileConfig["language"].(string); ok && val != "" {
+			AppConfig.Language = val
+			applied++
+		}
+	}
+
+	if applied > 0 {
+		log.Printf("Applied %d settings from config file %s", applied, path)
+	}
+	return nil
+}
+
+// SaveConfigToFile writes key settings to a YAML config file next to the database.
+// Secrets are stored in plaintext here — file permissions restrict access.
+func SaveConfigToFile() error {
+	path := ConfigFilePath()
+	if path == "" {
+		return fmt.Errorf("cannot determine config file path")
+	}
+
+	fileConfig := map[string]any{
+		"root_dir":              AppConfig.RootDir,
+		"database_path":         AppConfig.DatabasePath,
+		"playlist_dir":          AppConfig.PlaylistDir,
+		"setup_complete":        AppConfig.SetupComplete,
+		"organization_strategy": AppConfig.OrganizationStrategy,
+		"scan_on_startup":       AppConfig.ScanOnStartup,
+		"auto_organize":         AppConfig.AutoOrganize,
+		"folder_naming_pattern": AppConfig.FolderNamingPattern,
+		"file_naming_pattern":   AppConfig.FileNamingPattern,
+		"auto_fetch_metadata":   AppConfig.AutoFetchMetadata,
+		"language":              AppConfig.Language,
+		"enable_ai_parsing":     AppConfig.EnableAIParsing,
+		"concurrent_scans":      AppConfig.ConcurrentScans,
+		"log_level":             AppConfig.LogLevel,
+	}
+
+	// Only write the key if it's set
+	if AppConfig.OpenAIAPIKey != "" {
+		fileConfig["openai_api_key"] = AppConfig.OpenAIAPIKey
+	}
+
+	data, err := yaml.Marshal(fileConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+
+	// Write with restrictive permissions since it may contain secrets
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	log.Printf("Configuration saved to file: %s", path)
+	return nil
+}
 
 // LoadConfigFromDatabase loads settings from database and applies them to AppConfig
 // This is called after database initialization to override defaults with persisted values
@@ -36,11 +156,17 @@ func LoadConfigFromDatabase(store database.Store) error {
 	for _, setting := range settings {
 		value := setting.Value
 
+		if setting.Key == "openai_api_key" || setting.Key == "enable_ai_parsing" {
+			log.Printf("[DEBUG] LoadConfigFromDatabase: found setting %s (isSecret=%v, valueLen=%d)",
+				setting.Key, setting.IsSecret, len(setting.Value))
+		}
+
 		// Decrypt if secret
 		if setting.IsSecret {
 			decrypted, err := database.DecryptValue(value)
 			if err != nil {
-				log.Printf("Warning: Failed to decrypt setting %s: %v", setting.Key, err)
+				log.Printf("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
+					setting.Key, err)
 				continue
 			}
 			value = decrypted
@@ -55,6 +181,20 @@ func LoadConfigFromDatabase(store database.Store) error {
 	}
 
 	log.Printf("Applied %d settings from database", applied)
+
+	// Fall back to config file for anything the DB didn't provide (e.g. corrupted secrets)
+	if err := LoadConfigFromFile(); err != nil {
+		log.Printf("Warning: Config file fallback failed: %v", err)
+	}
+
+	log.Printf("[DEBUG] After config load: EnableAIParsing=%v, OpenAIAPIKey length=%d",
+		AppConfig.EnableAIParsing, len(AppConfig.OpenAIAPIKey))
+
+	// Re-derive defaults that depend on RootDir
+	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
+		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
+	}
+
 	return nil
 }
 
@@ -178,8 +318,8 @@ func applySetting(key, value, typ string) error {
 	return nil
 }
 
-// SaveConfigToDatabase persists current AppConfig to database
-// This should be called whenever config is modified via API
+// SaveConfigToDatabase persists current AppConfig to database AND config file.
+// This should be called whenever config is modified via API.
 func SaveConfigToDatabase(store database.Store) error {
 	if store == nil {
 		return fmt.Errorf("store is nil")
@@ -227,7 +367,7 @@ func SaveConfigToDatabase(store database.Store) error {
 		"auto_fetch_metadata": {strconv.FormatBool(AppConfig.AutoFetchMetadata), "bool", false},
 		"language":            {AppConfig.Language, "string", false},
 
-		// AI parsing (API key is secret)
+		// AI parsing (API key is secret in DB, plaintext in file)
 		"enable_ai_parsing": {strconv.FormatBool(AppConfig.EnableAIParsing), "bool", false},
 		"openai_api_key":    {AppConfig.OpenAIAPIKey, "string", true},
 
@@ -244,21 +384,13 @@ func SaveConfigToDatabase(store database.Store) error {
 		"log_level":           {AppConfig.LogLevel, "string", false},
 		"log_format":          {AppConfig.LogFormat, "string", false},
 		"enable_json_logging": {strconv.FormatBool(AppConfig.EnableJsonLogging), "bool", false},
-
 	}
-
-	log.Printf("[DEBUG] SaveConfigToDatabase: OpenAI key length: %d, EnableAIParsing: %v", len(AppConfig.OpenAIAPIKey), AppConfig.EnableAIParsing)
 
 	saved := 0
 	for key, s := range settings {
 		// Skip empty secrets
 		if s.isSecret && s.value == "" {
-			log.Printf("[DEBUG] SaveConfigToDatabase: Skipping empty secret: %s", key)
 			continue
-		}
-
-		if key == "openai_api_key" {
-			log.Printf("[DEBUG] SaveConfigToDatabase: Saving OpenAI key (length: %d, secret: %v)", len(s.value), s.isSecret)
 		}
 
 		if err := store.SetSetting(key, s.value, s.typ, s.isSecret); err != nil {
@@ -269,6 +401,12 @@ func SaveConfigToDatabase(store database.Store) error {
 	}
 
 	log.Printf("Saved %d settings to database", saved)
+
+	// Also save to config file as a reliable fallback
+	if err := SaveConfigToFile(); err != nil {
+		log.Printf("Warning: Failed to save config file: %v", err)
+	}
+
 	return nil
 }
 

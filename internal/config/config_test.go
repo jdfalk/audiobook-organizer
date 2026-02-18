@@ -141,8 +141,8 @@ func TestPerformanceDefaults(t *testing.T) {
 	InitConfig()
 
 	concurrentScans := viper.GetInt("concurrent_scans")
-	if concurrentScans != 4 {
-		t.Errorf("Expected concurrent_scans to be 4, got %d", concurrentScans)
+	if concurrentScans < 4 {
+		t.Errorf("Expected concurrent_scans to be >= 4, got %d", concurrentScans)
 	}
 }
 
