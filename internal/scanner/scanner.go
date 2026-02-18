@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.14.0
+// version: 1.16.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -257,6 +257,10 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 		}
 	}
 
+	// Track books needing AI parsing for batch processing
+	var aiCandidates []int
+	var aiCandidatesMu sync.Mutex
+
 	// Worker pool for parallel processing
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, workers)
@@ -320,36 +324,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				log.Printf("[DEBUG] scanner: mediainfo extract failed for %s: %v", books[idx].FilePath, miErr)
 			}
 
-			// If metadata is incomplete or filename fallback was used, try AI parsing first (if enabled)
+			// Mark books needing AI parsing for batch processing later
 			if aiEnabled && (fallbackUsed || books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
-				log.Printf("[DEBUG] scanner: AI fallback triggered for %s (fallback=%v title=%t author=%t series=%t)", books[idx].FilePath, fallbackUsed, books[idx].Title == "", books[idx].Author == "", books[idx].Series == "")
-				filename := filepath.Base(books[idx].FilePath)
-				log.Printf("[DEBUG] scanner: attempting AI metadata fallback for %s", books[idx].FilePath)
-				aiCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				aiMeta, aiErr := aiParser.ParseFilename(aiCtx, filename)
-				cancel()
-				if aiErr == nil && aiMeta != nil {
-					if books[idx].Title == "" && aiMeta.Title != "" {
-						books[idx].Title = aiMeta.Title
-					}
-					if books[idx].Author == "" && aiMeta.Author != "" {
-						books[idx].Author = aiMeta.Author
-					}
-					if books[idx].Series == "" && aiMeta.Series != "" {
-						books[idx].Series = aiMeta.Series
-					}
-					if books[idx].Position == 0 && aiMeta.SeriesNum > 0 {
-						books[idx].Position = aiMeta.SeriesNum
-					}
-					if books[idx].Narrator == "" && aiMeta.Narrator != "" {
-						books[idx].Narrator = aiMeta.Narrator
-					}
-					if books[idx].Publisher == "" && aiMeta.Publisher != "" {
-						books[idx].Publisher = aiMeta.Publisher
-					}
-				} else if aiErr != nil {
-					log.Printf("[WARN] scanner: AI parsing failed for %s: %v", books[idx].FilePath, aiErr)
-				}
+				aiCandidatesMu.Lock()
+				aiCandidates = append(aiCandidates, idx)
+				aiCandidatesMu.Unlock()
 			}
 
 			// Fallback to filepath extraction if title/author still unknown
@@ -394,6 +373,82 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	if ctxErr != nil {
 		return ctxErr
+	}
+
+	// Batch AI parsing phase: process candidates in batches of 20 with rate limiting
+	if aiEnabled && len(aiCandidates) > 0 {
+		log.Printf("[INFO] scanner: AI batch parsing %d books in batches of 20", len(aiCandidates))
+		const batchSize = 20
+		const delayBetweenBatches = 2 * time.Second
+
+		for start := 0; start < len(aiCandidates); start += batchSize {
+			if ctx.Err() != nil {
+				break
+			}
+
+			end := start + batchSize
+			if end > len(aiCandidates) {
+				end = len(aiCandidates)
+			}
+			batch := aiCandidates[start:end]
+
+			// Collect filenames for this batch
+			filenames := make([]string, len(batch))
+			for i, idx := range batch {
+				filenames[i] = filepath.Base(books[idx].FilePath)
+			}
+
+			aiCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			results, aiErr := aiParser.ParseBatch(aiCtx, filenames)
+			cancel()
+
+			if aiErr != nil {
+				log.Printf("[WARN] scanner: AI batch parsing failed (batch %d-%d): %v", start, end, aiErr)
+				// Rate limit error — wait longer before retry/next batch
+				if start+batchSize < len(aiCandidates) {
+					time.Sleep(5 * time.Second)
+				}
+				continue
+			}
+
+			// Apply results
+			for i, idx := range batch {
+				if i >= len(results) || results[i] == nil {
+					continue
+				}
+				aiMeta := results[i]
+				if books[idx].Title == "" && aiMeta.Title != "" {
+					books[idx].Title = aiMeta.Title
+				}
+				if books[idx].Author == "" && aiMeta.Author != "" {
+					books[idx].Author = aiMeta.Author
+				}
+				if books[idx].Series == "" && aiMeta.Series != "" {
+					books[idx].Series = aiMeta.Series
+				}
+				if books[idx].Position == 0 && aiMeta.SeriesNum > 0 {
+					books[idx].Position = aiMeta.SeriesNum
+				}
+				if books[idx].Narrator == "" && aiMeta.Narrator != "" {
+					books[idx].Narrator = aiMeta.Narrator
+				}
+				if books[idx].Publisher == "" && aiMeta.Publisher != "" {
+					books[idx].Publisher = aiMeta.Publisher
+				}
+
+				// Re-save with updated metadata
+				if saveErr := saveBook(&books[idx]); saveErr != nil {
+					log.Printf("[WARN] scanner: failed to re-save AI-enriched book %s: %v", books[idx].FilePath, saveErr)
+				}
+			}
+
+			log.Printf("[INFO] scanner: AI batch %d-%d complete (%d results)", start, end, len(results))
+
+			// Rate limit: wait between batches to avoid OpenAI throttling
+			if end < len(aiCandidates) {
+				time.Sleep(delayBetweenBatches)
+			}
+		}
 	}
 
 	// After processing all books, try to match series using external APIs for uncertain cases
@@ -822,6 +877,9 @@ func saveBookToDatabase(book *Book) error {
 			dbBook.OrganizedFileHash = existing.OrganizedFileHash
 		}
 
+		// Preserve enriched fields that scanner doesn't extract (e.g. from metadata fetch or AI parse)
+		preserveExistingFields(dbBook, existing)
+
 		_, err = database.GlobalStore.UpdateBook(existing.ID, dbBook)
 		return err
 	}
@@ -1035,6 +1093,88 @@ func isUniqueConstraintError(err error) bool {
 	lower := strings.ToLower(err.Error())
 	return strings.Contains(lower, "unique constraint") ||
 		strings.Contains(lower, "duplicate key")
+}
+
+// preserveExistingFields keeps enriched metadata fields from the existing database record
+// when the scanner doesn't extract them (i.e. produces nil/zero). This prevents rescan
+// from wiping out data added by metadata fetch, AI parse, or manual edits.
+func preserveExistingFields(scanned *database.Book, existing *database.Book) {
+	if scanned.Narrator == nil && existing.Narrator != nil {
+		scanned.Narrator = existing.Narrator
+	}
+	if scanned.NarratorsJSON == nil && existing.NarratorsJSON != nil {
+		scanned.NarratorsJSON = existing.NarratorsJSON
+	}
+	if scanned.Publisher == nil && existing.Publisher != nil {
+		scanned.Publisher = existing.Publisher
+	}
+	if scanned.Language == nil && existing.Language != nil {
+		scanned.Language = existing.Language
+	}
+	if scanned.PrintYear == nil && existing.PrintYear != nil {
+		scanned.PrintYear = existing.PrintYear
+	}
+	if scanned.AudiobookReleaseYear == nil && existing.AudiobookReleaseYear != nil {
+		scanned.AudiobookReleaseYear = existing.AudiobookReleaseYear
+	}
+	if scanned.CoverURL == nil && existing.CoverURL != nil {
+		scanned.CoverURL = existing.CoverURL
+	}
+	if scanned.WorkID == nil && existing.WorkID != nil {
+		scanned.WorkID = existing.WorkID
+	}
+	if scanned.ISBN10 == nil && existing.ISBN10 != nil {
+		scanned.ISBN10 = existing.ISBN10
+	}
+	if scanned.ISBN13 == nil && existing.ISBN13 != nil {
+		scanned.ISBN13 = existing.ISBN13
+	}
+	if scanned.Edition == nil && existing.Edition != nil {
+		scanned.Edition = existing.Edition
+	}
+	// Preserve iTunes fields
+	if scanned.ITunesPersistentID == nil && existing.ITunesPersistentID != nil {
+		scanned.ITunesPersistentID = existing.ITunesPersistentID
+	}
+	if scanned.ITunesDateAdded == nil && existing.ITunesDateAdded != nil {
+		scanned.ITunesDateAdded = existing.ITunesDateAdded
+	}
+	if scanned.ITunesPlayCount == nil && existing.ITunesPlayCount != nil {
+		scanned.ITunesPlayCount = existing.ITunesPlayCount
+	}
+	if scanned.ITunesLastPlayed == nil && existing.ITunesLastPlayed != nil {
+		scanned.ITunesLastPlayed = existing.ITunesLastPlayed
+	}
+	if scanned.ITunesRating == nil && existing.ITunesRating != nil {
+		scanned.ITunesRating = existing.ITunesRating
+	}
+	if scanned.ITunesBookmark == nil && existing.ITunesBookmark != nil {
+		scanned.ITunesBookmark = existing.ITunesBookmark
+	}
+	if scanned.ITunesImportSource == nil && existing.ITunesImportSource != nil {
+		scanned.ITunesImportSource = existing.ITunesImportSource
+	}
+	// Preserve version management fields
+	if scanned.IsPrimaryVersion == nil && existing.IsPrimaryVersion != nil {
+		scanned.IsPrimaryVersion = existing.IsPrimaryVersion
+	}
+	if scanned.VersionGroupID == nil && existing.VersionGroupID != nil {
+		scanned.VersionGroupID = existing.VersionGroupID
+	}
+	if scanned.VersionNotes == nil && existing.VersionNotes != nil {
+		scanned.VersionNotes = existing.VersionNotes
+	}
+	// Preserve deletion state
+	if scanned.MarkedForDeletion == nil && existing.MarkedForDeletion != nil {
+		scanned.MarkedForDeletion = existing.MarkedForDeletion
+	}
+	if scanned.MarkedForDeletionAt == nil && existing.MarkedForDeletionAt != nil {
+		scanned.MarkedForDeletionAt = existing.MarkedForDeletionAt
+	}
+	// Preserve series sequence if scan has nil/zero and existing has a value
+	if (scanned.SeriesSequence == nil || *scanned.SeriesSequence == 0) && existing.SeriesSequence != nil && *existing.SeriesSequence != 0 {
+		scanned.SeriesSequence = existing.SeriesSequence
+	}
 }
 
 // identifySeriesUsingExternalAPIs tries to match books to series using external APIs
