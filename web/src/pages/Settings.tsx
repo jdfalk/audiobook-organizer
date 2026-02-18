@@ -1,9 +1,9 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.27.0
+// version: 1.29.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUnsavedChangesBlocker } from '../hooks/useUnsavedChangesBlocker';
 import {
   Box,
@@ -43,6 +43,7 @@ import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
 import { ITunesImport } from '../components/settings/ITunesImport';
+import { OpenLibraryDumps } from '../components/settings/OpenLibraryDumps';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
 import {
   Save as SaveIcon,
@@ -100,9 +101,18 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+const TAB_KEYS = ['library', 'itunes', 'metadata', 'performance', 'security', 'system'] as const;
+
+function tabFromHash(hash: string): number {
+  const key = hash.replace('#', '');
+  const idx = TAB_KEYS.indexOf(key as (typeof TAB_KEYS)[number]);
+  return idx >= 0 ? idx : 0;
+}
+
 export function Settings() {
   const navigate = useNavigate();
-  const [tabValue, setTabValue] = useState(0);
+  const location = useLocation();
+  const [tabValue, setTabValue] = useState(() => tabFromHash(location.hash));
   const [browserOpen, setBrowserOpen] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const scanIntervalsRef = useRef<Record<number, number>>({});
@@ -156,6 +166,11 @@ export function Settings() {
   const [importInProgress, setImportInProgress] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Factory reset state
+  const [factoryResetStep, setFactoryResetStep] = useState<0 | 1 | 2>(0);
+  const [factoryResetConfirmText, setFactoryResetConfirmText] = useState('');
+  const [factoryResetInProgress, setFactoryResetInProgress] = useState(false);
 
   interface UiMetadataSource {
     id: string;
@@ -1248,7 +1263,10 @@ export function Settings() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
             value={tabValue}
-            onChange={(_, newValue) => setTabValue(newValue)}
+            onChange={(_, newValue) => {
+              setTabValue(newValue);
+              window.history.replaceState(null, '', `#${TAB_KEYS[newValue]}`);
+            }}
             aria-label="settings tabs"
           >
             <Tab label="Library" />
@@ -2245,6 +2263,23 @@ export function Settings() {
                 helperText="ISO 639-1 language code (e.g., en, es, fr)"
               />
             </Grid>
+
+            {/* Open Library Data Dumps Section */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                Open Library Data Dumps
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Download Open Library data dumps for fast, offline metadata
+                lookups. Dumps are ~12GB total and enable near-instant ISBN and
+                title searches without API rate limits.
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <OpenLibraryDumps />
+            </Grid>
           </Grid>
         </TabPanel>
 
@@ -2494,6 +2529,109 @@ export function Settings() {
 
         <TabPanel value={tabValue} index={5}>
           <SystemInfoTab />
+
+          <Paper
+            sx={{
+              mt: 4,
+              p: 3,
+              border: 2,
+              borderColor: 'error.main',
+              borderRadius: 1,
+            }}
+          >
+            <Typography variant="h6" color="error" gutterBottom>
+              Danger Zone
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Permanently delete all data including audiobooks, authors, series,
+              settings, and metadata cache. This cannot be undone.
+            </Typography>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => setFactoryResetStep(1)}
+              disabled={factoryResetInProgress}
+            >
+              Factory Reset
+            </Button>
+          </Paper>
+
+          {/* Factory Reset Dialog 1: Warning */}
+          <Dialog
+            open={factoryResetStep === 1}
+            onClose={() => setFactoryResetStep(0)}
+          >
+            <DialogTitle>Factory Reset</DialogTitle>
+            <DialogContent>
+              <Typography>
+                This will permanently delete <strong>ALL</strong> data —
+                audiobooks, authors, series, settings, and metadata cache. This
+                action cannot be undone.
+              </Typography>
+              <Typography sx={{ mt: 1 }}>Continue?</Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setFactoryResetStep(0)}>Cancel</Button>
+              <Button
+                color="error"
+                onClick={() => {
+                  setFactoryResetConfirmText('');
+                  setFactoryResetStep(2);
+                }}
+              >
+                Continue
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Factory Reset Dialog 2: Type RESET */}
+          <Dialog
+            open={factoryResetStep === 2}
+            onClose={() => setFactoryResetStep(0)}
+          >
+            <DialogTitle>Confirm Factory Reset</DialogTitle>
+            <DialogContent>
+              <Typography sx={{ mb: 2 }}>
+                Type <strong>RESET</strong> to confirm.
+              </Typography>
+              <TextField
+                autoFocus
+                fullWidth
+                value={factoryResetConfirmText}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setFactoryResetConfirmText(e.target.value)
+                }
+                placeholder="Type RESET"
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setFactoryResetStep(0)}>Cancel</Button>
+              <Button
+                color="error"
+                variant="contained"
+                disabled={
+                  factoryResetConfirmText !== 'RESET' ||
+                  factoryResetInProgress
+                }
+                onClick={async () => {
+                  setFactoryResetInProgress(true);
+                  try {
+                    await api.factoryReset('RESET');
+                    localStorage.clear();
+                    window.location.href = '/';
+                  } catch (err) {
+                    setFactoryResetInProgress(false);
+                    setFactoryResetStep(0);
+                    alert(
+                      `Factory reset failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+                    );
+                  }
+                }}
+              >
+                {factoryResetInProgress ? 'Resetting...' : 'Reset Everything'}
+              </Button>
+            </DialogActions>
+          </Dialog>
         </TabPanel>
 
         <Box

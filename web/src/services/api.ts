@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.16.0
+// version: 1.19.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -248,6 +248,8 @@ export interface SystemStatus {
   library_book_count?: number;
   import_book_count?: number;
   total_book_count?: number;
+  author_count?: number;
+  series_count?: number;
   library_size_bytes?: number;
   import_size_bytes?: number;
   total_size_bytes?: number;
@@ -572,6 +574,15 @@ export async function getAuthors(): Promise<Author[]> {
   return data.authors || [];
 }
 
+export async function countAuthors(): Promise<number> {
+  const response = await fetch(`${API_BASE}/authors/count`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to count authors');
+  }
+  const data = await response.json();
+  return data.count ?? 0;
+}
+
 // Series
 export async function getSeries(): Promise<Series[]> {
   const response = await fetch(`${API_BASE}/series`);
@@ -580,6 +591,15 @@ export async function getSeries(): Promise<Series[]> {
   }
   const data = await response.json();
   return data.series || [];
+}
+
+export async function countSeries(): Promise<number> {
+  const response = await fetch(`${API_BASE}/series/count`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to count series');
+  }
+  const data = await response.json();
+  return data.count ?? 0;
 }
 
 // Works
@@ -743,6 +763,18 @@ export async function getSystemStorage(): Promise<SystemStorage> {
   const response = await fetch(`${API_BASE}/system/storage`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch system storage');
+  }
+  return response.json();
+}
+
+export async function factoryReset(confirm: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/system/factory-reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Factory reset failed');
   }
   return response.json();
 }
@@ -1370,4 +1402,125 @@ export async function getAppVersion(): Promise<string> {
     // ignore
   }
   return 'unknown';
+}
+
+// Open Library Data Dumps
+export interface OLDumpTypeStatus {
+  filename?: string;
+  date?: string;
+  download_progress: number;
+  import_progress: number;
+  record_count: number;
+  last_updated?: string;
+}
+
+export interface OLDownloadProgress {
+  dump_type: string;
+  status: 'idle' | 'downloading' | 'complete' | 'error';
+  downloaded: number;
+  total_size: number;
+  error?: string;
+  source?: string;
+}
+
+export interface OLUploadedFile {
+  filename: string;
+  size: number;
+  mod_time: string;
+}
+
+export interface OLDumpStatus {
+  enabled: boolean;
+  status?: {
+    editions: OLDumpTypeStatus;
+    authors: OLDumpTypeStatus;
+    works: OLDumpTypeStatus;
+  };
+  downloads?: Record<string, OLDownloadProgress>;
+  uploaded_files?: Record<string, OLUploadedFile>;
+}
+
+export async function getOLDumpStatus(): Promise<OLDumpStatus> {
+  const response = await fetch(`${API_BASE}/openlibrary/status`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get OL dump status');
+  }
+  return response.json();
+}
+
+export async function startOLDumpDownload(
+  types?: string[]
+): Promise<{ message: string; types: string[] }> {
+  const response = await fetch(`${API_BASE}/openlibrary/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ types: types || ['editions', 'authors', 'works'] }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start OL dump download');
+  }
+  return response.json();
+}
+
+export async function startOLDumpImport(
+  types?: string[]
+): Promise<{ message: string; types: string[] }> {
+  const response = await fetch(`${API_BASE}/openlibrary/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ types: types || ['editions', 'authors', 'works'] }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start OL dump import');
+  }
+  return response.json();
+}
+
+export async function uploadOLDump(
+  dumpType: string,
+  file: File,
+  onProgress?: (percent: number) => void
+): Promise<{ message: string; type: string; size: number }> {
+  const formData = new FormData();
+  formData.append('type', dumpType);
+  formData.append('file', file);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/openlibrary/upload`);
+
+    if (onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(JSON.parse(xhr.responseText));
+      } else {
+        let msg = 'Failed to upload dump file';
+        try {
+          const body = JSON.parse(xhr.responseText);
+          if (body.error) msg = body.error;
+        } catch { /* ignore */ }
+        reject(new Error(msg));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Upload network error'));
+    xhr.send(formData);
+  });
+}
+
+export async function deleteOLDumpData(): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/openlibrary/data`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete OL dump data');
+  }
+  return response.json();
 }

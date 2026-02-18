@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect } from 'react';
@@ -81,28 +81,27 @@ export function Dashboard() {
   const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
   const [scanInProgress, setScanInProgress] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
 
+  // Auto-refresh every 15s while a scan is active
+  useEffect(() => {
+    const hasActiveScan = operations.some((op) => op.status === 'running');
+    if (!hasActiveScan) return;
+    const interval = setInterval(loadDashboardData, 15000);
+    return () => clearInterval(interval);
+  }, [operations]);
+
   const loadDashboardData = async () => {
     try {
-      console.log('[Dashboard] Loading dashboard data...');
-      // Fetch real data from API
-      const [systemStatus, bookCount, authors, seriesList] = await Promise.all([
+      const [systemStatus, authorCount, seriesCount] = await Promise.all([
         api.getSystemStatus(),
-        api.countBooks(),
-        api.getAuthors(),
-        api.getSeries(),
+        api.countAuthors(),
+        api.countSeries(),
       ]);
-
-      console.log('[Dashboard] System status:', systemStatus);
-      console.log(
-        '[Dashboard] Import path_count:',
-        systemStatus.library.folder_count
-      );
-      console.log('[Dashboard] Book count:', bookCount);
 
       const libraryBooks =
         systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
@@ -131,8 +130,8 @@ export function Dashboard() {
         library_books: libraryBooks,
         import_books: importBooks,
         total_books: totalBooks,
-        total_authors: authors.length,
-        total_series: seriesList.length,
+        total_authors: systemStatus.author_count ?? authorCount,
+        total_series: systemStatus.series_count ?? seriesCount,
         import_paths: systemStatus.import_paths?.folder_count || 0,
         library_size_gb: librarySizeBytes / (1024 * 1024 * 1024),
         import_size_gb: importSizeBytes / (1024 * 1024 * 1024),
@@ -160,7 +159,8 @@ export function Dashboard() {
       setOperations(recentOps);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
-      // Keep default/empty state on error
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -257,6 +257,14 @@ export function Dashboard() {
         return 'default';
     }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ height: '100%', overflow: 'auto' }}>

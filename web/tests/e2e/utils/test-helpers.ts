@@ -1141,6 +1141,35 @@ export async function setupMockApiRoutes(
       return route.fulfill(jsonResponse({ message: 'File imported' }, 201));
     }
 
+    // Open Library endpoints
+    if (pathname === '/api/v1/openlibrary/status' && method === 'GET') {
+      return route.fulfill(jsonResponse({
+        enabled: true,
+        downloads: {},
+      }));
+    }
+
+    if (pathname === '/api/v1/openlibrary/upload' && method === 'POST') {
+      return route.fulfill(jsonResponse({
+        message: 'dump file uploaded',
+        type: 'editions',
+        filename: 'test.gz',
+        size: 1024,
+      }));
+    }
+
+    if (pathname === '/api/v1/openlibrary/download' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'download started', types: ['editions'] }, 202));
+    }
+
+    if (pathname === '/api/v1/openlibrary/import' && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'import started', types: ['editions'] }, 202));
+    }
+
+    if (pathname === '/api/v1/openlibrary/data' && method === 'DELETE') {
+      return route.fulfill(jsonResponse({ message: 'data deleted' }));
+    }
+
     // Default: pass through to real server (don't 404 - let it fail naturally)
     console.log(`[Mock API] WARNING: Unhandled endpoint ${method} ${pathname}`);
     return route.continue();
