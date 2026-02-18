@@ -277,17 +277,29 @@ func TestEncryptionHelpersAndSettings(t *testing.T) {
 	if err := sqliteStore.SetSetting("secret", "secret-value", "string", true); err != nil {
 		t.Fatalf("sqlite SetSetting secret failed: %v", err)
 	}
-	if _, err := sqliteStore.GetSetting("app"); err == nil {
-		t.Fatal("expected sqlite GetSetting to fail with boolean scan")
+	appSetting, err := sqliteStore.GetSetting("app")
+	if err != nil {
+		t.Fatalf("sqlite GetSetting failed: %v", err)
 	}
-	if _, err := sqliteStore.GetAllSettings(); err != nil {
+	if appSetting.Value != "value" {
+		t.Fatalf("expected value='value', got %q", appSetting.Value)
+	}
+	allSettings, err := sqliteStore.GetAllSettings()
+	if err != nil {
 		t.Fatalf("sqlite GetAllSettings failed: %v", err)
+	}
+	if len(allSettings) < 2 {
+		t.Fatalf("expected at least 2 settings, got %d", len(allSettings))
 	}
 	if err := sqliteStore.DeleteSetting("app"); err != nil {
 		t.Fatalf("sqlite DeleteSetting failed: %v", err)
 	}
-	if _, err := GetDecryptedSetting(sqliteStore, "secret"); err == nil {
-		t.Fatal("expected GetDecryptedSetting to fail with boolean scan")
+	decrypted, err := GetDecryptedSetting(sqliteStore, "secret")
+	if err != nil {
+		t.Fatalf("GetDecryptedSetting failed: %v", err)
+	}
+	if decrypted != "secret-value" {
+		t.Fatalf("expected 'secret-value', got %q", decrypted)
 	}
 }
 

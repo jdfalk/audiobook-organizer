@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -25,8 +25,11 @@ type MockStore struct {
 	UpdateBookFunc             func(id string, book *Book) (*Book, error)
 	DeleteBookFunc             func(id string) error
 	SearchBooksFunc            func(query string, limit, offset int) ([]Book, error)
-	CountBooksFunc             func() (int, error)
-	GetDashboardStatsFunc      func() (*DashboardStats, error)
+	CountBooksFunc               func() (int, error)
+	CountAuthorsFunc             func() (int, error)
+	CountSeriesFunc              func() (int, error)
+	GetBookCountsByLocationFunc  func(rootDir string) (int, int, error)
+	GetDashboardStatsFunc        func() (*DashboardStats, error)
 	ListSoftDeletedBooksFunc   func(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Work methods
@@ -378,6 +381,27 @@ func (m *MockStore) CountBooks() (int, error) {
 		return m.CountBooksFunc()
 	}
 	return 0, nil
+}
+
+func (m *MockStore) CountAuthors() (int, error) {
+	if m.CountAuthorsFunc != nil {
+		return m.CountAuthorsFunc()
+	}
+	return 0, nil
+}
+
+func (m *MockStore) CountSeries() (int, error) {
+	if m.CountSeriesFunc != nil {
+		return m.CountSeriesFunc()
+	}
+	return 0, nil
+}
+
+func (m *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error) {
+	if m.GetBookCountsByLocationFunc != nil {
+		return m.GetBookCountsByLocationFunc(rootDir)
+	}
+	return 0, 0, nil
 }
 
 func (m *MockStore) GetDashboardStats() (*DashboardStats, error) {

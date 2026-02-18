@@ -1,5 +1,5 @@
 // file: internal/database/settings.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d
 
 package database
@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -194,11 +195,6 @@ func (s *PebbleStore) GetAllSettings() ([]Setting, error) {
 			continue
 		}
 
-		// Mask secrets in list view
-		if setting.IsSecret && setting.Value != "" {
-			setting.Value = MaskSecret(setting.Value)
-		}
-
 		settings = append(settings, setting)
 	}
 
@@ -212,7 +208,7 @@ func (s *PebbleStore) DeleteSetting(key string) error {
 // SQLite implementation
 func (s *SQLiteStore) GetSetting(key string) (*Setting, error) {
 	var setting Setting
-	var isSecret int
+	var isSecret any
 
 	err := s.db.QueryRow(`
 		SELECT key, value, type, is_secret
@@ -224,7 +220,7 @@ func (s *SQLiteStore) GetSetting(key string) (*Setting, error) {
 		return nil, err
 	}
 
-	setting.IsSecret = isSecret == 1
+	setting.IsSecret = parseSQLiteBool(isSecret)
 	return &setting, nil
 }
 
@@ -271,23 +267,36 @@ func (s *SQLiteStore) GetAllSettings() ([]Setting, error) {
 	var settings []Setting
 	for rows.Next() {
 		var setting Setting
-		var isSecret int
+		var isSecret any
 
 		if err := rows.Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret); err != nil {
+			log.Printf("Warning: Failed to scan setting row: %v", err)
 			continue
 		}
 
-		setting.IsSecret = isSecret == 1
-
-		// Mask secrets in list view
-		if setting.IsSecret && setting.Value != "" {
-			setting.Value = MaskSecret(setting.Value)
-		}
+		setting.IsSecret = parseSQLiteBool(isSecret)
 
 		settings = append(settings, setting)
 	}
 
 	return settings, rows.Err()
+}
+
+// parseSQLiteBool handles SQLite's loose boolean typing — values can be
+// int64(0/1), bool, or string("true"/"false"/"0"/"1").
+func parseSQLiteBool(v any) bool {
+	switch val := v.(type) {
+	case int64:
+		return val == 1
+	case int:
+		return val == 1
+	case bool:
+		return val
+	case string:
+		return val == "1" || val == "true"
+	default:
+		return false
+	}
 }
 
 func (s *SQLiteStore) DeleteSetting(key string) error {

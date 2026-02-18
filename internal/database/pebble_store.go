@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1182,6 +1182,75 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	return count, nil
 }
 
+func (p *PebbleStore) CountAuthors() (int, error) {
+	count := 0
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("author:0"),
+		UpperBound: []byte("author:;"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		if strings.Contains(string(iter.Key()), ":name:") {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (p *PebbleStore) CountSeries() (int, error) {
+	count := 0
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("series:0"),
+		UpperBound: []byte("series:;"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		if strings.Contains(string(iter.Key()), ":name:") {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (p *PebbleStore) GetBookCountsByLocation(rootDir string) (library, import_ int, err error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
+			library++
+		} else {
+			import_++
+		}
+	}
+	return
+}
+
 // GetDashboardStats iterates all books and computes aggregate stats.
 // PebbleDB has no SQL, so this scans the full key range.
 func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
@@ -1189,6 +1258,13 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 		StateDistribution:  make(map[string]int),
 		FormatDistribution: make(map[string]int),
 	}
+	if ac, err := p.CountAuthors(); err == nil {
+		stats.TotalAuthors = ac
+	}
+	if sc, err := p.CountSeries(); err == nil {
+		stats.TotalSeries = sc
+	}
+
 	books, err := p.GetAllBooks(1_000_000, 0)
 	if err != nil {
 		return nil, err
@@ -2505,32 +2581,33 @@ func (p *PebbleStore) Reset() error {
 	}
 	defer iter.Close()
 
-	// Collect keys to delete (can't delete during iteration)
-	var keysToDelete [][]byte
+	// Batch-delete all keys for performance (avoids per-key fsync)
+	batch := p.db.NewBatch()
 	for iter.First(); iter.Valid(); iter.Next() {
-		keysToDelete = append(keysToDelete, append([]byte(nil), iter.Key()...))
+		if err := batch.Delete(append([]byte(nil), iter.Key()...), pebble.NoSync); err != nil {
+			batch.Close()
+			return fmt.Errorf("failed to stage key deletion: %w", err)
+		}
 	}
 
 	if err := iter.Error(); err != nil {
+		batch.Close()
 		return fmt.Errorf("iterator error: %w", err)
 	}
 
-	// Delete all keys
-	for _, key := range keysToDelete {
-		if err := p.db.Delete(key, pebble.Sync); err != nil {
-			return fmt.Errorf("failed to delete key: %w", err)
-		}
-	}
-
 	// Reinitialize counters to their initial state
-	// Note: "library" counter was removed as it's a legacy counter that was migrated
-	// to use the new distributed library system and is no longer maintained
 	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
 		key := fmt.Sprintf("counter:%s", counter)
-		if err := p.db.Set([]byte(key), []byte("1"), pebble.Sync); err != nil {
+		if err := batch.Set([]byte(key), []byte("1"), pebble.NoSync); err != nil {
+			batch.Close()
 			return fmt.Errorf("failed to initialize counter %s: %w", counter, err)
 		}
+	}
+
+	// Single commit with sync for durability
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit reset batch: %w", err)
 	}
 
 	return nil

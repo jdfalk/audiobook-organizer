@@ -375,6 +375,134 @@ func (_c *MockStore_CountBooks_Call) RunAndReturn(run func() (int, error)) *Mock
 	return _c
 }
 
+// CountAuthors provides a mock function for the type MockStore
+func (_mock *MockStore) CountAuthors() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountAuthors")
+	}
+
+	var r0 int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(int)
+	}
+
+	return r0, ret.Error(1)
+}
+
+type MockStore_CountAuthors_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CountAuthors() *MockStore_CountAuthors_Call {
+	return &MockStore_CountAuthors_Call{Call: _e.mock.On("CountAuthors")}
+}
+
+func (_c *MockStore_CountAuthors_Call) Run(run func()) *MockStore_CountAuthors_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_CountAuthors_Call) Return(n int, err error) *MockStore_CountAuthors_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountAuthors_Call) RunAndReturn(run func() (int, error)) *MockStore_CountAuthors_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountSeries provides a mock function for the type MockStore
+func (_mock *MockStore) CountSeries() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountSeries")
+	}
+
+	var r0 int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(int)
+	}
+
+	return r0, ret.Error(1)
+}
+
+type MockStore_CountSeries_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CountSeries() *MockStore_CountSeries_Call {
+	return &MockStore_CountSeries_Call{Call: _e.mock.On("CountSeries")}
+}
+
+func (_c *MockStore_CountSeries_Call) Run(run func()) *MockStore_CountSeries_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_CountSeries_Call) Return(n int, err error) *MockStore_CountSeries_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountSeries_Call) RunAndReturn(run func() (int, error)) *MockStore_CountSeries_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBookCountsByLocation provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error) {
+	ret := _mock.Called(rootDir)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookCountsByLocation")
+	}
+
+	var r0 int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(int)
+	}
+
+	var r1 int
+	if ret.Get(1) != nil {
+		r1 = ret.Get(1).(int)
+	}
+
+	return r0, r1, ret.Error(2)
+}
+
+type MockStore_GetBookCountsByLocation_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookCountsByLocation(rootDir interface{}) *MockStore_GetBookCountsByLocation_Call {
+	return &MockStore_GetBookCountsByLocation_Call{Call: _e.mock.On("GetBookCountsByLocation", rootDir)}
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) Run(run func(rootDir string)) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) Return(library int, import_ int, err error) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Return(library, import_, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) RunAndReturn(run func(string) (int, int, error)) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDashboardStats provides a mock function for the type MockStore
 func (_mock *MockStore) GetDashboardStats() (*database.DashboardStats, error) {
 	ret := _mock.Called()
