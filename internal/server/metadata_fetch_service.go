@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -7,17 +7,26 @@ package server
 import (
 	"fmt"
 	"log"
+	"sort"
 
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 )
 
 type MetadataFetchService struct {
-	db database.Store
+	db      database.Store
+	olStore *openlibrary.OLStore
 }
 
 func NewMetadataFetchService(db database.Store) *MetadataFetchService {
 	return &MetadataFetchService{db: db}
+}
+
+// SetOLStore sets the Open Library dump store for local-first lookups.
+func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
+	mfs.olStore = store
 }
 
 type FetchMetadataResponse struct {
@@ -27,72 +36,119 @@ type FetchMetadataResponse struct {
 	FetchedCount int
 }
 
-// FetchMetadataForBook fetches and applies metadata for a single audiobook
+// buildSourceChain returns metadata sources ordered by config priority.
+func (mfs *MetadataFetchService) buildSourceChain() []metadata.MetadataSource {
+	// Copy and sort by priority
+	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
+	copy(sources, config.AppConfig.MetadataSources)
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].Priority < sources[j].Priority
+	})
+
+	var chain []metadata.MetadataSource
+	for _, src := range sources {
+		if !src.Enabled {
+			continue
+		}
+		switch src.ID {
+		case "openlibrary":
+			client := metadata.NewOpenLibraryClient()
+			if mfs.olStore != nil {
+				client.SetOLStore(mfs.olStore)
+			}
+			chain = append(chain, client)
+		case "google-books":
+			chain = append(chain, metadata.NewGoogleBooksClient())
+		case "audnexus":
+			chain = append(chain, metadata.NewAudnexusClient())
+		default:
+			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
+		}
+	}
+	return chain
+}
+
+// FetchMetadataForBook fetches and applies metadata for a single audiobook,
+// trying each configured source in priority order until one succeeds.
 func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadataResponse, error) {
-	// Get the audiobook
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
-	// Search for metadata using current title
-	client := metadata.NewOpenLibraryClient()
+	sources := mfs.buildSourceChain()
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no metadata sources enabled")
+	}
 
-	// Strip chapter/book numbers to improve search results
 	searchTitle := stripChapterFromTitle(book.Title)
 
-	// Try with cleaned title first
-	results, err := client.SearchByTitle(searchTitle)
-
-	// Fall back to original title if cleaned search fails
-	if (err != nil || len(results) == 0) && searchTitle != book.Title {
-		results, err = client.SearchByTitle(book.Title)
-	}
-
-	// Final fallback: try with author if we have one
-	if (err != nil || len(results) == 0) && book.AuthorID != nil {
+	// Resolve author name for fallback searches
+	var authorName string
+	if book.AuthorID != nil {
 		author, authorErr := mfs.db.GetAuthorByID(*book.AuthorID)
-		if authorErr == nil && author != nil && author.Name != "" {
-			log.Printf("[INFO] FetchMetadataForBook: Trying fallback search with author: %s", author.Name)
-			results, err = client.SearchByTitleAndAuthor(searchTitle, author.Name)
-
-			// Also try with original title + author if cleaned title failed
-			if (err != nil || len(results) == 0) && searchTitle != book.Title {
-				results, err = client.SearchByTitleAndAuthor(book.Title, author.Name)
-			}
+		if authorErr == nil && author != nil {
+			authorName = author.Name
 		}
 	}
 
-	if err != nil || len(results) == 0 {
-		if book.AuthorID != nil {
-			author, _ := mfs.db.GetAuthorByID(*book.AuthorID)
-			if author != nil {
-				return nil, fmt.Errorf("no metadata found for '%s' by '%s' in Open Library", book.Title, author.Name)
+	var lastErr error
+	for _, src := range sources {
+		results, searchErr := src.SearchByTitle(searchTitle)
+		if searchErr != nil {
+			log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
+			lastErr = searchErr
+			continue
+		}
+
+		// Try original title if cleaned title returned nothing
+		if len(results) == 0 && searchTitle != book.Title {
+			results, searchErr = src.SearchByTitle(book.Title)
+			if searchErr != nil {
+				lastErr = searchErr
+				continue
 			}
 		}
-		return nil, fmt.Errorf("no metadata found for this book in Open Library")
+
+		// Try with author if we have one and still no results
+		if len(results) == 0 && authorName != "" {
+			results, searchErr = src.SearchByTitleAndAuthor(searchTitle, authorName)
+			if searchErr != nil {
+				lastErr = searchErr
+				continue
+			}
+			if len(results) == 0 && searchTitle != book.Title {
+				results, searchErr = src.SearchByTitleAndAuthor(book.Title, authorName)
+				if searchErr != nil {
+					lastErr = searchErr
+					continue
+				}
+			}
+		}
+
+		if len(results) > 0 {
+			meta := results[0]
+			mfs.applyMetadataToBook(book, meta)
+
+			updatedBook, updateErr := mfs.db.UpdateBook(id, book)
+			if updateErr != nil {
+				return nil, fmt.Errorf("failed to update book: %w", updateErr)
+			}
+
+			mfs.persistFetchedMetadata(id, meta)
+
+			return &FetchMetadataResponse{
+				Message: "metadata fetched and applied",
+				Book:    updatedBook,
+				Source:  src.Name(),
+			}, nil
+		}
 	}
 
-	// Use the first result
-	meta := results[0]
-
-	// Update book with fetched metadata
-	mfs.applyMetadataToBook(book, meta)
-
-	// Update in database
-	updatedBook, err := mfs.db.UpdateBook(id, book)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update book: %w", err)
+	if lastErr != nil {
+		return nil, fmt.Errorf("no metadata found from any source (last error: %v)", lastErr)
 	}
-
-	// Persist fetched metadata state
-	mfs.persistFetchedMetadata(id, meta)
-
-	return &FetchMetadataResponse{
-		Message: "metadata fetched and applied",
-		Book:    updatedBook,
-		Source:  "Open Library",
-	}, nil
+	return nil, fmt.Errorf("no metadata found for '%s' from any source", book.Title)
 }
 
 func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {

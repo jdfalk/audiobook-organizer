@@ -155,6 +155,7 @@ func TestImportMetadataEndpoint(t *testing.T) {
 
 func TestSearchAndFetchMetadata(t *testing.T) {
 	server, cleanup := setupTestServer(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	mux := http.NewServeMux()

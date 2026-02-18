@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.56.0
+// version: 1.59.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -48,7 +48,7 @@ var cachedImportSize int64
 var cachedSizeComputedAt time.Time
 var cacheLock sync.RWMutex
 
-const librarySizeCacheTTL = 60 * time.Second
+const librarySizeCacheTTL = 5 * time.Minute
 
 // appVersion is set at startup via SetVersion(), injected from main.version
 var appVersion = "dev"
@@ -452,6 +452,7 @@ type Server struct {
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
 	dashboardCache         *cache.Cache[gin.H]
+	olService              *OpenLibraryService
 }
 
 // ServerConfig holds server configuration
@@ -496,6 +497,12 @@ func NewServer() *Server {
 		metadataStateService:   NewMetadataStateService(database.GlobalStore),
 		dashboardService:       NewDashboardService(database.GlobalStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
+		olService:              NewOpenLibraryService(),
+	}
+
+	// Wire OL dump store into metadata fetch service for local-first lookups
+	if server.olService != nil && server.olService.Store() != nil {
+		server.metadataFetchService.SetOLStore(server.olService.Store())
 	}
 
 	server.setupRoutes()
@@ -506,12 +513,12 @@ func NewServer() *Server {
 // Start starts the HTTP server
 func (s *Server) Start(cfg ServerConfig) error {
 	s.httpServer = &http.Server{
-		Addr:           fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
-		Handler:        s.router,
-		ReadTimeout:    cfg.ReadTimeout,
-		WriteTimeout:   cfg.WriteTimeout,
-		IdleTimeout:    cfg.IdleTimeout,
-		MaxHeaderBytes: 1 << 20, // 1MB
+		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
+		Handler:           s.router,
+		ReadHeaderTimeout: cfg.ReadTimeout, // Only limit header read, not body (allows large uploads)
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		MaxHeaderBytes:    1 << 20, // 1MB
 	}
 
 	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
@@ -926,7 +933,9 @@ func (s *Server) setupRoutes() {
 
 			// Author and series routes
 			protected.GET("/authors", s.listAuthors)
+			protected.GET("/authors/count", s.countAuthors)
 			protected.GET("/series", s.listSeries)
+			protected.GET("/series/count", s.countSeries)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.getHomeDirectory)
@@ -969,6 +978,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/system/storage", s.getSystemStorage)
 			protected.GET("/system/logs", s.getSystemLogs)
 			protected.POST("/system/reset", s.resetSystem)
+			protected.POST("/system/factory-reset", s.factoryReset)
 			protected.GET("/config", s.getConfig)
 			protected.PUT("/config", s.updateConfig)
 			protected.GET("/dashboard", s.getDashboard)
@@ -993,6 +1003,13 @@ func (s *Server) setupRoutes() {
 			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
 			protected.POST("/ai/test-connection", s.testAIConnection)
 			protected.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
+
+			// Open Library dump routes
+			protected.GET("/openlibrary/status", s.getOLStatus)
+			protected.POST("/openlibrary/download", s.startOLDownload)
+			protected.POST("/openlibrary/import", s.startOLImport)
+			protected.POST("/openlibrary/upload", s.uploadOLDump)
+			protected.DELETE("/openlibrary/data", s.deleteOLData)
 
 			// Work routes (logical title-level grouping)
 			protected.GET("/works", s.listWorks)
@@ -1509,6 +1526,24 @@ func (s *Server) listAuthors(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) countAuthors(c *gin.Context) {
+	count, err := database.GlobalStore.CountAuthors()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": count})
+}
+
+func (s *Server) countSeries(c *gin.Context) {
+	count, err := database.GlobalStore.CountSeries()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 func (s *Server) listSeries(c *gin.Context) {
@@ -2047,6 +2082,74 @@ func (s *Server) resetSystem(c *gin.Context) {
 	resetLibrarySizeCache()
 
 	RespondWithOK(c, gin.H{"message": "System reset successfully"})
+}
+
+func (s *Server) factoryReset(c *gin.Context) {
+	var req struct {
+		Confirm string `json:"confirm"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Confirm != "RESET" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request body must contain {\"confirm\": \"RESET\"}"})
+		return
+	}
+
+	log.Printf("[INFO] Factory reset initiated")
+
+	// Reset database (books, authors, series, settings)
+	if err := database.GlobalStore.Reset(); err != nil {
+		log.Printf("[ERROR] Factory reset: database reset failed: %v", err)
+		RespondWithInternalError(c, "failed to reset database: "+err.Error())
+		return
+	}
+	log.Printf("[INFO] Factory reset: database cleared")
+
+	// Delete OL data (pebble store + dump files)
+	if s.olService != nil {
+		s.olService.mu.Lock()
+		if s.olService.store != nil {
+			s.olService.store.Close()
+			s.olService.store = nil
+		}
+		s.olService.mu.Unlock()
+
+		targetDir := getOLDumpDir()
+		if targetDir != "" {
+			if err := os.RemoveAll(targetDir); err != nil {
+				log.Printf("[WARN] Factory reset: failed to remove OL data dir: %v", err)
+			} else {
+				log.Printf("[INFO] Factory reset: OL data deleted")
+			}
+		}
+	}
+
+	// Clear library folder contents (organized audiobooks)
+	if config.AppConfig.RootDir != "" {
+		libraryDir := config.AppConfig.RootDir
+		entries, err := os.ReadDir(libraryDir)
+		if err == nil {
+			for _, entry := range entries {
+				entryPath := filepath.Join(libraryDir, entry.Name())
+				if err := os.RemoveAll(entryPath); err != nil {
+					log.Printf("[WARN] Factory reset: failed to remove %s: %v", entryPath, err)
+				}
+			}
+			log.Printf("[INFO] Factory reset: library folder cleared (%s)", libraryDir)
+		}
+	}
+
+	// Reset config to defaults, then clear paths so wizard re-shows
+	config.ResetToDefaults()
+	config.AppConfig.RootDir = ""
+	config.AppConfig.SetupComplete = false
+	if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+		log.Printf("[WARN] Factory reset: failed to persist config: %v", err)
+	}
+
+	// Reset library size cache
+	resetLibrarySizeCache()
+
+	log.Printf("[INFO] Factory reset complete")
+	c.JSON(http.StatusOK, gin.H{"message": "factory reset complete"})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
