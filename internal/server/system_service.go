@@ -1,5 +1,5 @@
 // file: internal/server/system_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
@@ -29,6 +29,8 @@ type SystemStatus struct {
 	LibraryBookCount int                  `json:"library_book_count"`
 	ImportBookCount  int                  `json:"import_book_count"`
 	TotalBookCount   int                  `json:"total_book_count"`
+	AuthorCount      int                  `json:"author_count"`
+	SeriesCount      int                  `json:"series_count"`
 	LibrarySizeBytes int64                `json:"library_size_bytes"`
 	ImportSizeBytes  int64                `json:"import_size_bytes"`
 	TotalSizeBytes   int64                `json:"total_size_bytes"`
@@ -94,22 +96,15 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		importFolders = []database.ImportPath{}
 	}
 
-	allBooks, err := ss.db.GetAllBooks(100000, 0)
-	if err != nil {
-		allBooks = []database.Book{}
-	}
-
-	libraryBookCount := 0
-	importBookCount := 0
 	rootDir := config.AppConfig.RootDir
-
-	for _, book := range allBooks {
-		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
-			libraryBookCount++
-		} else {
-			importBookCount++
-		}
+	libraryBookCount, importBookCount, err := ss.db.GetBookCountsByLocation(rootDir)
+	if err != nil {
+		libraryBookCount = 0
+		importBookCount = 0
 	}
+
+	authorCount, _ := ss.db.CountAuthors()
+	seriesCount, _ := ss.db.CountSeries()
 
 	recentOps, err := ss.db.GetRecentOperations(5)
 	if err != nil {
@@ -128,6 +123,8 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		LibraryBookCount: libraryBookCount,
 		ImportBookCount:  importBookCount,
 		TotalBookCount:   libraryBookCount + importBookCount,
+		AuthorCount:      authorCount,
+		SeriesCount:      seriesCount,
 		LibrarySizeBytes: librarySize,
 		ImportSizeBytes:  importSize,
 		TotalSizeBytes:   totalSize,
