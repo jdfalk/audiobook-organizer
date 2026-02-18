@@ -970,8 +970,9 @@ func (s *Server) setupRoutes() {
 				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
 			}
 
-			// Cover art proxy
+			// Cover art
 			protected.GET("/covers/proxy", s.handleCoverProxy)
+			protected.GET("/covers/local/:filename", s.handleLocalCover)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)

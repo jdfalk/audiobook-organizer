@@ -1,10 +1,11 @@
 // file: internal/metadata/metadata.go
-// version: 1.8.2
+// version: 1.9.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/dhowden/tag"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 )
 
 var yearPattern = regexp.MustCompile(`(\d{4})`)
@@ -721,4 +723,58 @@ func isTitleCaseCandidate(value string) bool {
 		return false
 	}
 	return trimmed[0] >= 'A' && trimmed[0] <= 'Z'
+}
+
+// ExtractCoverArt extracts embedded cover art from an audio file and saves it
+// to the .covers directory. Returns the path to the saved file, or empty string
+// if no cover art is found.
+func ExtractCoverArt(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("error opening file: %w", err)
+	}
+	defer f.Close()
+
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return "", fmt.Errorf("error reading tags: %w", err)
+	}
+
+	pic := m.Picture()
+	if pic == nil || len(pic.Data) == 0 {
+		return "", nil
+	}
+
+	// Determine extension from MIME type
+	ext := ".jpg"
+	switch pic.MIMEType {
+	case "image/png":
+		ext = ".png"
+	case "image/gif":
+		ext = ".gif"
+	case "image/webp":
+		ext = ".webp"
+	}
+
+	// Hash the image data for dedup
+	hash := fmt.Sprintf("%x", sha256.Sum256(pic.Data))
+
+	coverDir := filepath.Join(config.AppConfig.RootDir, ".covers")
+	if err := os.MkdirAll(coverDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create covers directory: %w", err)
+	}
+
+	coverPath := filepath.Join(coverDir, hash+ext)
+
+	// Skip if already cached
+	if _, err := os.Stat(coverPath); err == nil {
+		return coverPath, nil
+	}
+
+	if err := os.WriteFile(coverPath, pic.Data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write cover: %w", err)
+	}
+
+	log.Printf("[DEBUG] metadata: extracted cover art from %s → %s", filePath, coverPath)
+	return coverPath, nil
 }

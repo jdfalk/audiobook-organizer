@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -139,11 +139,11 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
             }}
           />
         )}
-        {(audiobook.cover_path || audiobook.cover_url) ? (
+        {audiobook.cover_url ? (
           <CardMedia
             component="img"
             height="240"
-            image={audiobook.cover_path || (audiobook.cover_url ? `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}` : '')}
+            image={audiobook.cover_url.startsWith('/api/') ? audiobook.cover_url : `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}`}
             alt={audiobook.title || 'Audiobook cover'}
             sx={{ objectFit: 'cover' }}
           />

@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 1.3.0
+// version: 2.0.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -387,6 +389,12 @@ func (s *Server) handleITunesImportStatus(c *gin.Context) {
 	})
 }
 
+// albumGroup holds tracks belonging to the same album (book).
+type albumGroup struct {
+	key    string // "Artist|Album"
+	tracks []*itunes.Track
+}
+
 func executeITunesImport(ctx context.Context, progress operations.ProgressReporter, opID string, req ITunesImportRequest) error {
 	status := loadITunesImportStatus(opID)
 	progressMessage := "Starting iTunes import"
@@ -399,16 +407,14 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
 
-	totalBooks := 0
-	for _, track := range library.Tracks {
-		if itunes.IsAudiobook(track) {
-			totalBooks++
-		}
-	}
-	setITunesImportTotal(status, totalBooks)
+	// Phase 1: Group audiobook tracks by Artist|Album
+	groups := groupTracksByAlbum(library)
 
-	_ = progress.Log("info", fmt.Sprintf("Found %d audiobooks to import", totalBooks), nil)
-	if totalBooks == 0 {
+	totalGroups := len(groups)
+	setITunesImportTotal(status, totalGroups)
+
+	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook albums to import (from grouped tracks)", totalGroups), nil)
+	if totalGroups == 0 {
 		_ = progress.UpdateProgress(0, 0, "No audiobooks found")
 		return nil
 	}
@@ -419,12 +425,9 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		PathMappings: req.PathMappings,
 	}
 
+	// Phase 2: Create one book per album group
 	processed := 0
-	for _, track := range library.Tracks {
-		if !itunes.IsAudiobook(track) {
-			continue
-		}
-
+	for _, group := range groups {
 		if progress.IsCanceled() {
 			_ = progress.Log("info", "iTunes import canceled", nil)
 			return nil
@@ -433,16 +436,18 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		processed++
 		updateITunesProcessed(status, processed)
 
-		book, err := buildBookFromTrack(track, req.LibraryPath, importOpts)
+		book, err := buildBookFromAlbumGroup(group, req.LibraryPath, importOpts)
 		if err != nil {
 			recordITunesFailure(status, err.Error())
 			_ = progress.Log("error", err.Error(), nil)
-			updateITunesProgress(progress, status, processed, totalBooks)
+			updateITunesProgress(progress, status, processed, totalGroups)
 			continue
 		}
 
-		assignAuthorAndSeries(book, track)
+		// Use first track for author/series assignment
+		assignAuthorAndSeries(book, group.tracks[0])
 
+		// Hash the first track file for dedup
 		hash, err := scanner.ComputeFileHash(book.FilePath)
 		if err != nil {
 			_ = progress.Log("warn", fmt.Sprintf("Failed to hash %s: %v", book.FilePath, err), nil)
@@ -455,7 +460,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
 				updateITunesSkipped(status)
 				_ = progress.Log("warn", fmt.Sprintf("Skipping blocked hash for %s", book.Title), nil)
-				updateITunesProgress(progress, status, processed, totalBooks)
+				updateITunesProgress(progress, status, processed, totalGroups)
 				continue
 			}
 		}
@@ -464,14 +469,14 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
 				updateITunesSkipped(status)
 				_ = progress.Log("info", fmt.Sprintf("Skipping duplicate file path: %s", book.FilePath), nil)
-				updateITunesProgress(progress, status, processed, totalBooks)
+				updateITunesProgress(progress, status, processed, totalGroups)
 				continue
 			}
 			if book.FileHash != nil {
 				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
 					updateITunesSkipped(status)
 					_ = progress.Log("info", fmt.Sprintf("Skipping duplicate hash: %s", book.Title), nil)
-					updateITunesProgress(progress, status, processed, totalBooks)
+					updateITunesProgress(progress, status, processed, totalGroups)
 					continue
 				}
 			}
@@ -479,11 +484,18 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 
 		book.LibraryState = stringPtr(importLibraryState(importMode))
 
+		// Try to extract embedded cover art from first track
+		coverPath, coverErr := metadata.ExtractCoverArt(book.FilePath)
+		if coverErr == nil && coverPath != "" {
+			coverFilename := filepath.Base(coverPath)
+			book.CoverURL = stringPtr("/api/v1/covers/local/" + coverFilename)
+		}
+
 		created, err := database.GlobalStore.CreateBook(book)
 		if err != nil {
 			recordITunesFailure(status, fmt.Sprintf("Failed to save '%s': %v", book.Title, err))
 			_ = progress.Log("error", fmt.Sprintf("Failed to save '%s': %v", book.Title, err), nil)
-			updateITunesProgress(progress, status, processed, totalBooks)
+			updateITunesProgress(progress, status, processed, totalGroups)
 			continue
 		}
 
@@ -497,38 +509,77 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		}
 
 		if req.ImportPlaylists {
-			tags := itunes.ExtractPlaylistTags(track.TrackID, library.Playlists)
+			// Use first track for playlist tag extraction
+			tags := itunes.ExtractPlaylistTags(group.tracks[0].TrackID, library.Playlists)
 			if len(tags) > 0 {
 				_ = progress.Log("info", fmt.Sprintf("Playlist tags for '%s': %s", book.Title, strings.Join(tags, ", ")), nil)
 			}
 		}
 
-		if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
-			if err := organizeImportedBook(created, progress); err != nil {
-				recordITunesFailure(status, fmt.Sprintf("Failed to organize '%s': %v", created.Title, err))
-				_ = progress.Log("warn", fmt.Sprintf("Failed to organize '%s': %v", created.Title, err), nil)
-			} else {
-				created.LibraryState = stringPtr("organized")
-				if _, err := database.GlobalStore.UpdateBook(created.ID, created); err != nil {
-					_ = progress.Log("warn", fmt.Sprintf("Failed to update organized path for '%s': %v", created.Title, err), nil)
-				}
-			}
-		}
-
-		updateITunesProgress(progress, status, processed, totalBooks)
+		updateITunesProgress(progress, status, processed, totalGroups)
 	}
 
-	// Phase 2: Metadata enrichment (if requested)
+	// Phase 3: Metadata enrichment (if requested) — runs before organize
+	// so that author/title are accurate for folder structure
 	if req.FetchMetadata {
 		_ = progress.Log("info", "Starting metadata enrichment phase...", nil)
 		enrichITunesImportedBooks(progress, status)
 	}
 
+	// Phase 4: Organize (if requested) — runs after enrichment
+	if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
+		_ = progress.Log("info", "Starting organize phase...", nil)
+		organizeImportedBooks(progress, status)
+	}
+
 	summary := buildITunesSummary(status)
-	_ = progress.UpdateProgress(totalBooks, totalBooks, summary)
+	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
 	_ = progress.Log("info", summary, nil)
 	_ = ctx
 	return nil
+}
+
+// groupTracksByAlbum groups audiobook tracks by Artist|Album key.
+// Tracks within each group are sorted by disc number then track number.
+func groupTracksByAlbum(library *itunes.Library) []albumGroup {
+	groupMap := make(map[string]*albumGroup)
+	var groupOrder []string
+
+	for _, track := range library.Tracks {
+		if !itunes.IsAudiobook(track) {
+			continue
+		}
+
+		artist := strings.TrimSpace(track.Artist)
+		album := strings.TrimSpace(track.Album)
+
+		// If no album, use the track name as a standalone book
+		if album == "" {
+			album = strings.TrimSpace(track.Name)
+		}
+
+		key := artist + "|" + album
+		if _, exists := groupMap[key]; !exists {
+			groupMap[key] = &albumGroup{key: key}
+			groupOrder = append(groupOrder, key)
+		}
+		groupMap[key].tracks = append(groupMap[key].tracks, track)
+	}
+
+	// Sort tracks within each group by disc then track number
+	result := make([]albumGroup, 0, len(groupOrder))
+	for _, key := range groupOrder {
+		g := groupMap[key]
+		sort.Slice(g.tracks, func(i, j int) bool {
+			if g.tracks[i].DiscNumber != g.tracks[j].DiscNumber {
+				return g.tracks[i].DiscNumber < g.tracks[j].DiscNumber
+			}
+			return g.tracks[i].TrackNumber < g.tracks[j].TrackNumber
+		})
+		result = append(result, *g)
+	}
+
+	return result
 }
 
 // enrichITunesImportedBooks fetches metadata for recently imported books
@@ -584,78 +635,169 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 	_ = progress.Log("info", fmt.Sprintf("Metadata enrichment complete: %d books enriched", enriched), nil)
 }
 
-func buildBookFromTrack(track *itunes.Track, libraryPath string, opts itunes.ImportOptions) (*database.Book, error) {
-	if track == nil {
-		return nil, fmt.Errorf("track is nil")
+// organizeImportedBooks moves all imported books into the organized folder structure.
+// Runs as a separate phase after metadata enrichment so author/title are accurate.
+func organizeImportedBooks(progress operations.ProgressReporter, status *itunesImportStatus) {
+	books, err := database.GlobalStore.GetAllBooks(100000, 0)
+	if err != nil {
+		_ = progress.Log("error", fmt.Sprintf("Failed to list books for organize: %v", err), nil)
+		return
 	}
 
-	// Apply path remapping on raw location, then decode
-	location := opts.RemapPath(track.Location)
+	organized := 0
+	for i := range books {
+		book := &books[i]
+		if book.LibraryState == nil || *book.LibraryState != "imported" {
+			continue
+		}
+		if book.ITunesImportSource == nil {
+			continue
+		}
+
+		if err := organizeImportedBook(book, progress); err != nil {
+			recordITunesFailure(status, fmt.Sprintf("Failed to organize '%s': %v", book.Title, err))
+			_ = progress.Log("warn", fmt.Sprintf("Failed to organize '%s': %v", book.Title, err), nil)
+		} else {
+			book.LibraryState = stringPtr("organized")
+			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+				_ = progress.Log("warn", fmt.Sprintf("Failed to update organized path for '%s': %v", book.Title, err), nil)
+			} else {
+				organized++
+			}
+		}
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("Organize phase complete: %d books organized", organized), nil)
+}
+
+// buildBookFromAlbumGroup creates a single Book from a group of tracks
+// that belong to the same album. For single-track groups, it behaves
+// like the old buildBookFromTrack. For multi-track groups, it uses the
+// album name as the title and sums durations/sizes.
+func buildBookFromAlbumGroup(group albumGroup, libraryPath string, opts itunes.ImportOptions) (*database.Book, error) {
+	if len(group.tracks) == 0 {
+		return nil, fmt.Errorf("album group has no tracks")
+	}
+
+	firstTrack := group.tracks[0]
+
+	// Resolve file path for first track (used as the book's primary file path)
+	location := opts.RemapPath(firstTrack.Location)
 	filePath, err := itunes.DecodeLocation(location)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode location: %w", err)
 	}
-
-	info, err := os.Stat(filePath)
-	if err != nil {
+	if _, err := os.Stat(filePath); err != nil {
 		return nil, fmt.Errorf("file does not exist: %s", filePath)
 	}
 
-	format := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
-	var duration *int
-	if track.TotalTime > 0 {
-		seconds := int(track.TotalTime / 1000)
-		duration = &seconds
+	// For multi-track albums, use the common parent directory as FilePath
+	// and the Album as the title. For single-track, use the file itself.
+	title := strings.TrimSpace(firstTrack.Album)
+	bookFilePath := filePath
+	if len(group.tracks) > 1 && title != "" {
+		// Find common parent directory of all tracks
+		bookFilePath = commonParentDir(group.tracks, opts)
 	}
-	var releaseYear *int
-	if track.Year > 0 {
-		releaseYear = intPtr(track.Year)
+	if title == "" {
+		title = strings.TrimSpace(firstTrack.Name)
 	}
-	var persistentID *string
-	if track.PersistentID != "" {
-		persistentID = stringPtr(track.PersistentID)
-	}
-	title := strings.TrimSpace(track.Name)
 	if title == "" {
 		title = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	}
 
+	// Sum durations and sizes across all tracks
+	var totalDurationMs int64
+	var totalSize int64
+	for _, t := range group.tracks {
+		totalDurationMs += t.TotalTime
+		totalSize += t.Size
+	}
+
+	format := strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+	var duration *int
+	if totalDurationMs > 0 {
+		seconds := int(totalDurationMs / 1000)
+		duration = &seconds
+	}
+	var releaseYear *int
+	if firstTrack.Year > 0 {
+		releaseYear = intPtr(firstTrack.Year)
+	}
+	var persistentID *string
+	if firstTrack.PersistentID != "" {
+		persistentID = stringPtr(firstTrack.PersistentID)
+	}
+
 	book := &database.Book{
 		Title:                title,
-		FilePath:             filePath,
+		FilePath:             bookFilePath,
 		Format:               format,
 		Duration:             duration,
 		OriginalFilename:     stringPtr(filepath.Base(filePath)),
 		AudiobookReleaseYear: releaseYear,
 		ITunesPersistentID:   persistentID,
-		ITunesPlayCount:      intPtr(track.PlayCount),
-		ITunesRating:         intPtr(track.Rating),
-		ITunesBookmark:       int64Ptr(track.Bookmark),
+		ITunesPlayCount:      intPtr(firstTrack.PlayCount),
+		ITunesRating:         intPtr(firstTrack.Rating),
+		ITunesBookmark:       int64Ptr(firstTrack.Bookmark),
 		ITunesImportSource:   stringPtr(libraryPath),
 	}
 
-	if !track.DateAdded.IsZero() {
-		book.ITunesDateAdded = &track.DateAdded
+	if !firstTrack.DateAdded.IsZero() {
+		book.ITunesDateAdded = &firstTrack.DateAdded
 	}
-	if track.PlayDate > 0 {
-		lastPlayed := time.Unix(track.PlayDate, 0)
+	if firstTrack.PlayDate > 0 {
+		lastPlayed := time.Unix(firstTrack.PlayDate, 0)
 		book.ITunesLastPlayed = &lastPlayed
 	}
-	if track.AlbumArtist != "" && track.AlbumArtist != track.Artist {
-		book.Narrator = stringPtr(track.AlbumArtist)
+	if firstTrack.AlbumArtist != "" && firstTrack.AlbumArtist != firstTrack.Artist {
+		book.Narrator = stringPtr(firstTrack.AlbumArtist)
 	}
-	if track.Comments != "" {
-		book.Edition = stringPtr(track.Comments)
+	if firstTrack.Comments != "" {
+		book.Edition = stringPtr(firstTrack.Comments)
 	}
-	if track.Size > 0 {
-		size := track.Size
-		book.FileSize = &size
-	} else if info.Size() > 0 {
-		size := info.Size()
-		book.FileSize = &size
+	if totalSize > 0 {
+		book.FileSize = &totalSize
+	}
+
+	if len(group.tracks) > 1 {
+		log.Printf("iTunes import: grouped %d tracks into album %q", len(group.tracks), title)
 	}
 
 	return book, nil
+}
+
+// commonParentDir finds the common parent directory for all tracks in a group.
+func commonParentDir(tracks []*itunes.Track, opts itunes.ImportOptions) string {
+	if len(tracks) == 0 {
+		return ""
+	}
+
+	// Decode all paths
+	var paths []string
+	for _, t := range tracks {
+		location := opts.RemapPath(t.Location)
+		p, err := itunes.DecodeLocation(location)
+		if err != nil {
+			continue
+		}
+		paths = append(paths, filepath.Dir(p))
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+
+	// Find common prefix
+	common := paths[0]
+	for _, p := range paths[1:] {
+		for !strings.HasPrefix(p, common) {
+			common = filepath.Dir(common)
+			if common == "/" || common == "." {
+				return common
+			}
+		}
+	}
+	return common
 }
 
 func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {

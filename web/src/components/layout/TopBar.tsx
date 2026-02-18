@@ -22,6 +22,7 @@ import LogoutIcon from '@mui/icons-material/Logout.js';
 import { eventSourceManager } from '../../services/eventSourceManager';
 import { useAppStore } from '../../stores/useAppStore';
 import { useAuth } from '../../contexts/AuthContext';
+import { OperationsIndicator } from './OperationsIndicator';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -155,6 +156,7 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
             <SearchIcon />
           </IconButton>
         </Tooltip>
+        <OperationsIndicator />
         <Tooltip title="Toggle color mode">
           <IconButton
             color="inherit"
