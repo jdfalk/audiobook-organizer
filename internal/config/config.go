@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.10.1
+// version: 1.13.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -99,6 +100,10 @@ type Config struct {
 	MetadataSources   []MetadataSource `json:"metadata_sources"`
 	Language          string           `json:"language"`
 
+	// Open Library data dumps
+	OpenLibraryDumpEnabled bool   `json:"openlibrary_dump_enabled"`
+	OpenLibraryDumpDir     string `json:"openlibrary_dump_dir"`
+
 	// AI-powered parsing
 	EnableAIParsing bool   `json:"enable_ai_parsing"`
 	OpenAIAPIKey    string `json:"openai_api_key"`
@@ -170,12 +175,20 @@ func InitConfig() {
 	viper.SetDefault("auto_fetch_metadata", true)
 	viper.SetDefault("language", "en")
 
+	// Open Library dump defaults
+	viper.SetDefault("openlibrary_dump_enabled", false)
+	viper.SetDefault("openlibrary_dump_dir", "")
+
 	// Set AI parsing defaults
 	viper.SetDefault("enable_ai_parsing", false)
 	viper.SetDefault("openai_api_key", "")
 
-	// Set performance defaults
-	viper.SetDefault("concurrent_scans", 4)
+	// Set performance defaults — scale with available CPUs
+	defaultWorkers := runtime.NumCPU()
+	if defaultWorkers < 4 {
+		defaultWorkers = 4
+	}
+	viper.SetDefault("concurrent_scans", defaultWorkers)
 	viper.SetDefault("operation_timeout_minutes", 30)
 
 	// API security/runtime limits
@@ -258,6 +271,10 @@ func InitConfig() {
 		AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
 		Language:          viper.GetString("language"),
 
+		// Open Library dumps
+		OpenLibraryDumpEnabled: viper.GetBool("openlibrary_dump_enabled"),
+		OpenLibraryDumpDir:     viper.GetString("openlibrary_dump_dir"),
+
 		// AI parsing
 		EnableAIParsing: viper.GetBool("enable_ai_parsing"),
 		OpenAIAPIKey:    viper.GetString("openai_api_key"),
@@ -319,6 +336,11 @@ func InitConfig() {
 		ExcludePatterns:     excludePatterns,
 	}
 
+	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
+	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
+		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
+	}
+
 	// API Keys (Goodreads deprecated Dec 2020, removed)
 
 	// Load metadata sources from config or use defaults
@@ -328,8 +350,8 @@ func InitConfig() {
 		// Set default metadata sources
 		AppConfig.MetadataSources = []MetadataSource{
 			{
-				ID:           "audible",
-				Name:         "Audible",
+				ID:           "audnexus",
+				Name:         "Audnexus (Audible)",
 				Enabled:      true,
 				Priority:     1,
 				RequiresAuth: false,
@@ -346,12 +368,10 @@ func InitConfig() {
 			{
 				ID:           "google-books",
 				Name:         "Google Books",
-				Enabled:      false,
-				Priority:     4,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
-				},
+				Enabled:      true,
+				Priority:     3,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
 			},
 		}
 	}
@@ -531,12 +551,16 @@ func ResetToDefaults() {
 		AutoFetchMetadata: true,
 		Language:          "en",
 
+		// Open Library dumps
+		OpenLibraryDumpEnabled: false,
+		OpenLibraryDumpDir:     "",
+
 		// AI parsing
 		EnableAIParsing: false,
 		OpenAIAPIKey:    "",
 
 		// Performance
-		ConcurrentScans:         4,
+		ConcurrentScans:         max(runtime.NumCPU(), 4),
 		OperationTimeoutMinutes: 30,
 		APIRateLimitPerMinute:   100,
 		AuthRateLimitPerMinute:  10,
