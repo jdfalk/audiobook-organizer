@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -7,17 +7,22 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 )
 
-// OpenLibraryClient handles metadata fetching from Open Library API
+// OpenLibraryClient handles metadata fetching from Open Library API.
+// When olStore is set, local dump data is checked before hitting the API.
 type OpenLibraryClient struct {
 	httpClient *http.Client
 	baseURL    string
+	olStore    *openlibrary.OLStore
 }
 
 // NewOpenLibraryClient creates a new Open Library API client
@@ -37,6 +42,44 @@ func NewOpenLibraryClientWithBaseURL(baseURL string) *OpenLibraryClient {
 		},
 		baseURL: strings.TrimRight(baseURL, "/"),
 	}
+}
+
+// Name returns the display name for this metadata source.
+func (c *OpenLibraryClient) Name() string {
+	return "Open Library"
+}
+
+// SetOLStore attaches a local Open Library dump store for local-first lookups.
+func (c *OpenLibraryClient) SetOLStore(store *openlibrary.OLStore) {
+	c.olStore = store
+}
+
+// editionToMetadata converts an OLEdition to BookMetadata.
+func editionToMetadata(ed *openlibrary.OLEdition, store *openlibrary.OLStore) BookMetadata {
+	meta := BookMetadata{
+		Title: ed.Title,
+	}
+	if len(ed.ISBN13) > 0 {
+		meta.ISBN = ed.ISBN13[0]
+	} else if len(ed.ISBN10) > 0 {
+		meta.ISBN = ed.ISBN10[0]
+	}
+	if len(ed.Publishers) > 0 {
+		meta.Publisher = ed.Publishers[0]
+	}
+	if len(ed.Covers) > 0 {
+		meta.CoverURL = fmt.Sprintf("https://covers.openlibrary.org/b/id/%d-L.jpg", ed.Covers[0])
+	}
+	if store != nil && len(ed.Authors) > 0 {
+		author, err := store.LookupAuthor(ed.Authors[0].Key)
+		if err == nil && author != nil {
+			meta.Author = author.Name
+		}
+	}
+	if ed.PublishDate != "" && len(ed.PublishDate) >= 4 {
+		fmt.Sscanf(ed.PublishDate, "%d", &meta.PublishYear)
+	}
+	return meta
 }
 
 // SearchResult represents a book search result from Open Library
@@ -70,9 +113,21 @@ type BookMetadata struct {
 	Language    string
 }
 
-// SearchByTitle searches for books by title
+// SearchByTitle searches for books by title. Checks local dump store first if available.
 func (c *OpenLibraryClient) SearchByTitle(title string) ([]BookMetadata, error) {
-	// Build search query
+	if c.olStore != nil {
+		editions, err := c.olStore.SearchByTitle(title)
+		if err == nil && len(editions) > 0 {
+			results := make([]BookMetadata, 0, len(editions))
+			for i := range editions {
+				results = append(results, editionToMetadata(&editions[i], c.olStore))
+			}
+			log.Printf("[DEBUG] SearchByTitle: found %d results from local dump for %q", len(results), title)
+			return results, nil
+		}
+	}
+
+	// Fall back to API
 	query := url.QueryEscape(title)
 	searchURL := fmt.Sprintf("%s/search.json?title=%s&limit=5", c.baseURL, query)
 
@@ -185,9 +240,18 @@ func (c *OpenLibraryClient) SearchByTitleAndAuthor(title, author string) ([]Book
 	return results, nil
 }
 
-// GetBookByISBN fetches book details by ISBN
+// GetBookByISBN fetches book details by ISBN. Checks local dump store first if available.
 func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error) {
-	// Build API URL
+	if c.olStore != nil {
+		ed, err := c.olStore.LookupByISBN(isbn)
+		if err == nil && ed != nil {
+			meta := editionToMetadata(ed, c.olStore)
+			log.Printf("[DEBUG] GetBookByISBN: found ISBN %s in local dump", isbn)
+			return &meta, nil
+		}
+	}
+
+	// Fall back to API
 	apiURL := fmt.Sprintf("%s/isbn/%s.json", c.baseURL, isbn)
 
 	// Make HTTP request
