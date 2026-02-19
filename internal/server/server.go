@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.59.0
+// version: 1.60.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2079,8 +2079,9 @@ func (s *Server) resetSystem(c *gin.Context) {
 	// Reset config to defaults
 	config.ResetToDefaults()
 
-	// Reset library size cache
+	// Reset caches
 	resetLibrarySizeCache()
+	s.dashboardCache.InvalidateAll()
 
 	RespondWithOK(c, gin.H{"message": "System reset successfully"})
 }
@@ -2146,8 +2147,9 @@ func (s *Server) factoryReset(c *gin.Context) {
 		log.Printf("[WARN] Factory reset: failed to persist config: %v", err)
 	}
 
-	// Reset library size cache
+	// Reset caches
 	resetLibrarySizeCache()
+	s.dashboardCache.InvalidateAll()
 
 	log.Printf("[INFO] Factory reset complete")
 	c.JSON(http.StatusOK, gin.H{"message": "factory reset complete"})
@@ -2572,7 +2574,11 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		onlyMissing = *req.OnlyMissing
 	}
 
-	client := metadata.NewOpenLibraryClient()
+	sourceChain := s.metadataFetchService.BuildSourceChain()
+	if len(sourceChain) == 0 {
+		// Fallback to OpenLibrary if no sources configured
+		sourceChain = []metadata.MetadataSource{metadata.NewOpenLibraryClient()}
+	}
 	results := make([]bulkFetchMetadataResult, 0, len(req.BookIDs))
 	updatedCount := 0
 
@@ -2617,17 +2623,26 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		}
 
 		var metaResults []metadata.BookMetadata
-		if authorName != "" {
-			metaResults, err = client.SearchByTitleAndAuthor(book.Title, authorName)
-		} else {
-			metaResults, err = client.SearchByTitle(book.Title)
+		var sourceName string
+		for _, src := range sourceChain {
+			if authorName != "" {
+				metaResults, err = src.SearchByTitleAndAuthor(book.Title, authorName)
+			} else {
+				metaResults, err = src.SearchByTitle(book.Title)
+			}
+			if err == nil && len(metaResults) > 0 {
+				sourceName = src.Name()
+				break
+			}
+			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), book.Title)
 		}
-		if err != nil || len(metaResults) == 0 {
+		if len(metaResults) == 0 {
 			result.Status = "not_found"
-			result.Message = "no metadata found"
+			result.Message = "no metadata found from any source"
 			results = append(results, result)
 			continue
 		}
+		_ = sourceName
 
 		meta := metaResults[0]
 		fetchedValues := map[string]any{}

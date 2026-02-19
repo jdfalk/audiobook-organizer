@@ -110,7 +110,7 @@ func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 	assert.Equal(t, "skipped", byID[book2.ID].Status)
 	assert.Equal(t, "missing title", byID[book2.ID].Message)
 	assert.Equal(t, "not_found", byID["missing-id"].Status)
-	assert.Equal(t, "no metadata found", byID[book3.ID].Message)
+	assert.Equal(t, "no metadata found from any source", byID[book3.ID].Message)
 }
 
 func TestBulkFetchMetadata_OnlyMissingFalse_AllowsOverwrite(t *testing.T) {

@@ -60,7 +60,7 @@ func TestMetadataFetchService_BuildSourceChain(t *testing.T) {
 
 	mockDB := &database.MockStore{}
 	mfs := NewMetadataFetchService(mockDB)
-	chain := mfs.buildSourceChain()
+	chain := mfs.BuildSourceChain()
 
 	if len(chain) != 2 {
 		t.Fatalf("expected 2 enabled sources, got %d", len(chain))
