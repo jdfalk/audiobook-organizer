@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -36,8 +36,8 @@ type FetchMetadataResponse struct {
 	FetchedCount int
 }
 
-// buildSourceChain returns metadata sources ordered by config priority.
-func (mfs *MetadataFetchService) buildSourceChain() []metadata.MetadataSource {
+// BuildSourceChain returns metadata sources ordered by config priority.
+func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 	// Copy and sort by priority
 	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
 	copy(sources, config.AppConfig.MetadataSources)
@@ -76,7 +76,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
-	sources := mfs.buildSourceChain()
+	sources := mfs.BuildSourceChain()
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("no metadata sources enabled")
 	}

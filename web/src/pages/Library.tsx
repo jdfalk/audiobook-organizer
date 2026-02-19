@@ -543,7 +543,8 @@ export const Library = () => {
         year: book.audiobook_release_year || book.print_year,
         print_year: book.print_year,
         duration: book.duration,
-        coverImage: book.cover_image,
+        cover_url: book.cover_url,
+        coverImage: book.cover_url || book.cover_image,
         filePath: book.file_path,
         file_path: book.file_path,
         fileSize: 0, // Not provided by API
