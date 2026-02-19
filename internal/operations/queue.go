@@ -1,11 +1,12 @@
 // file: internal/operations/queue.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -102,6 +103,40 @@ func NewOperationQueue(store database.Store, workers int) *OperationQueue {
 	}
 
 	return q
+}
+
+// EnqueueResume re-enqueues an interrupted operation without creating a new DB record.
+// The operation record already exists; this just puts it back in the work queue.
+func (q *OperationQueue) EnqueueResume(id, opType string, priority int, fn OperationFunc) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	if _, exists := q.operations[id]; exists {
+		return fmt.Errorf("operation %s already exists", id)
+	}
+
+	ctx, cancel := context.WithCancel(q.ctx)
+	op := &QueuedOperation{
+		ID:       id,
+		Type:     opType,
+		Priority: priority,
+		Func:     fn,
+		Context:  ctx,
+		Cancel:   cancel,
+	}
+	q.operations[id] = op
+
+	if q.store != nil {
+		_ = q.store.UpdateOperationStatus(id, "queued", 0, 0, "resuming interrupted operation")
+	}
+
+	select {
+	case q.pending <- op:
+		log.Printf("Resumed operation %s enqueued", id)
+	default:
+		log.Printf("Warning: pending queue full for resumed operation %s", id)
+	}
+	return nil
 }
 
 // Enqueue adds a new operation to the queue
@@ -303,6 +338,26 @@ func (q *OperationQueue) worker(id int) {
 // Shutdown gracefully shuts down the queue
 func (q *OperationQueue) Shutdown(timeout time.Duration) error {
 	log.Println("Shutting down operation queue...")
+
+	// Mark all active operations as interrupted before canceling
+	q.mu.RLock()
+	for id, op := range q.operations {
+		if q.store != nil {
+			_ = q.store.UpdateOperationStatus(id, "interrupted", 0, 0, "server shutting down")
+			// Update checkpoint status to interrupted
+			if data, err := q.store.GetOperationState(id); err == nil && data != nil {
+				var state OperationState
+				if err := json.Unmarshal(data, &state); err == nil {
+					state.Status = "interrupted"
+					if updated, err := json.Marshal(state); err == nil {
+						_ = q.store.SaveOperationState(id, updated)
+					}
+				}
+			}
+		}
+		_ = op // suppress unused warning
+	}
+	q.mu.RUnlock()
 
 	// Cancel all operations
 	q.cancel()

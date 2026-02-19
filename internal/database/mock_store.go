@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -70,6 +70,14 @@ type MockStore struct {
 	GetRecentOperationsFunc   func(limit int) ([]Operation, error)
 	UpdateOperationStatusFunc func(id, status string, progress, total int, message string) error
 	UpdateOperationErrorFunc  func(id, errorMessage string) error
+
+	// Operation State Persistence
+	SaveOperationStateFunc    func(opID string, state []byte) error
+	GetOperationStateFunc     func(opID string) ([]byte, error)
+	SaveOperationParamsFunc   func(opID string, params []byte) error
+	GetOperationParamsFunc    func(opID string) ([]byte, error)
+	DeleteOperationStateFunc  func(opID string) error
+	GetInterruptedOperationsFunc func() ([]Operation, error)
 
 	// Operation Logs
 	AddOperationLogFunc  func(operationID, level, message string, details *string) error
@@ -503,6 +511,48 @@ func (m *MockStore) UpdateOperationError(id, errorMessage string) error {
 		return m.UpdateOperationErrorFunc(id, errorMessage)
 	}
 	return nil
+}
+
+func (m *MockStore) SaveOperationState(opID string, state []byte) error {
+	if m.SaveOperationStateFunc != nil {
+		return m.SaveOperationStateFunc(opID, state)
+	}
+	return nil
+}
+
+func (m *MockStore) GetOperationState(opID string) ([]byte, error) {
+	if m.GetOperationStateFunc != nil {
+		return m.GetOperationStateFunc(opID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SaveOperationParams(opID string, params []byte) error {
+	if m.SaveOperationParamsFunc != nil {
+		return m.SaveOperationParamsFunc(opID, params)
+	}
+	return nil
+}
+
+func (m *MockStore) GetOperationParams(opID string) ([]byte, error) {
+	if m.GetOperationParamsFunc != nil {
+		return m.GetOperationParamsFunc(opID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) DeleteOperationState(opID string) error {
+	if m.DeleteOperationStateFunc != nil {
+		return m.DeleteOperationStateFunc(opID)
+	}
+	return nil
+}
+
+func (m *MockStore) GetInterruptedOperations() ([]Operation, error) {
+	if m.GetInterruptedOperationsFunc != nil {
+		return m.GetInterruptedOperationsFunc()
+	}
+	return nil, nil
 }
 
 func (m *MockStore) AddOperationLog(operationID, level, message string, details *string) error {

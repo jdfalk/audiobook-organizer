@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.59.0
+// version: 1.60.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -510,6 +511,92 @@ func NewServer() *Server {
 	return server
 }
 
+// resumeInterruptedOperations checks for operations left in running/queued state
+// from a previous server lifecycle and re-enqueues them.
+func (s *Server) resumeInterruptedOperations() {
+	store := database.GlobalStore
+	if store == nil || operations.GlobalQueue == nil {
+		return
+	}
+
+	interrupted, err := store.GetInterruptedOperations()
+	if err != nil {
+		log.Printf("[WARN] Failed to query interrupted operations: %v", err)
+		return
+	}
+
+	oq, ok := operations.GlobalQueue.(*operations.OperationQueue)
+	if !ok {
+		return
+	}
+
+	for _, op := range interrupted {
+		// Mark as interrupted in DB
+		_ = store.UpdateOperationStatus(op.ID, "interrupted", op.Progress, op.Total, "server restarted")
+
+		checkpoint, _ := operations.LoadCheckpoint(store, op.ID)
+		phaseInfo := ""
+		if checkpoint != nil {
+			phaseInfo = fmt.Sprintf(" from %s at %d/%d", checkpoint.Phase, checkpoint.PhaseIndex, checkpoint.PhaseTotal)
+		}
+		log.Printf("[INFO] Resuming interrupted operation %s (%s)%s", op.ID, op.Type, phaseInfo)
+
+		opID := op.ID
+		opType := op.Type
+
+		var resumeFn operations.OperationFunc
+		switch opType {
+		case "itunes_import":
+			params, _ := operations.LoadParams[operations.ITunesImportParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params found for interrupted iTunes import %s, skipping", opID)
+				continue
+			}
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				// Rebuild the ITunesImportRequest from saved params
+				var mappings []itunes.PathMapping
+				for from, to := range params.PathMappings {
+					mappings = append(mappings, itunes.PathMapping{From: from, To: to})
+				}
+				return executeITunesImport(ctx, progress, opID, ITunesImportRequest{
+					LibraryPath:      params.LibraryXMLPath,
+					ImportMode:       params.ImportMode,
+					PathMappings:     mappings,
+					SkipDuplicates:   params.SkipDuplicates,
+					FetchMetadata:    params.EnrichMetadata,
+					PreserveLocation: !params.AutoOrganize,
+				})
+			}
+		case "scan":
+			params, _ := operations.LoadParams[operations.ScanParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params found for interrupted scan %s, skipping", opID)
+				continue
+			}
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				forceUpdate := params.ForceUpdate
+				return s.scanService.PerformScanWithID(ctx, opID, &ScanRequest{
+					FolderPath:  params.FolderPath,
+					ForceUpdate: &forceUpdate,
+				}, progress)
+			}
+		case "organize":
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, progress)
+			}
+		default:
+			log.Printf("[WARN] Unknown operation type %s for %s, marking as failed", opType, opID)
+			_ = store.UpdateOperationError(opID, "unknown operation type, cannot resume")
+			_ = operations.ClearState(store, opID)
+			continue
+		}
+
+		if err := oq.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
+			log.Printf("[WARN] Failed to re-enqueue operation %s: %v", opID, err)
+		}
+	}
+}
+
 // Start starts the HTTP server
 func (s *Server) Start(cfg ServerConfig) error {
 	s.httpServer = &http.Server{
@@ -629,6 +716,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 			}
 		}()
 	}
+
+	// Resume any operations that were interrupted by a previous shutdown/crash
+	s.resumeInterruptedOperations()
 
 	// Heartbeat: push periodic system.status events via SSE (every 5s) while running
 	quit := make(chan os.Signal, 1)

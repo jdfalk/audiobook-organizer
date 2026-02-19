@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -38,6 +38,18 @@ type ScanStats struct {
 	TotalBooks   int
 	LibraryBooks int
 	ImportBooks  int
+}
+
+// PerformScanWithID executes the multi-folder scan operation with checkpoint support.
+func (ss *ScanService) PerformScanWithID(ctx context.Context, opID string, req *ScanRequest, progress operations.ProgressReporter) error {
+	// Save params for resume
+	_ = operations.SaveParams(ss.db, opID, operations.ScanParams{
+		FolderPath:  req.FolderPath,
+		ForceUpdate: req.ForceUpdate != nil && *req.ForceUpdate,
+	})
+	err := ss.PerformScan(ctx, req, progress)
+	_ = operations.ClearState(ss.db, opID)
+	return err
 }
 
 // PerformScan executes the multi-folder scan operation

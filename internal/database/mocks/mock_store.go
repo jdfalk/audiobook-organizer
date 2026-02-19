@@ -322,6 +322,59 @@ func (_c *MockStore_Close_Call) RunAndReturn(run func() error) *MockStore_Close_
 	return _c
 }
 
+// CountAuthors provides a mock function for the type MockStore
+func (_mock *MockStore) CountAuthors() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountAuthors")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (int, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() int); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountAuthors_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountAuthors'
+type MockStore_CountAuthors_Call struct {
+	*mock.Call
+}
+
+// CountAuthors is a helper method to define mock.On call
+func (_e *MockStore_Expecter) CountAuthors() *MockStore_CountAuthors_Call {
+	return &MockStore_CountAuthors_Call{Call: _e.mock.On("CountAuthors")}
+}
+
+func (_c *MockStore_CountAuthors_Call) Run(run func()) *MockStore_CountAuthors_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_CountAuthors_Call) Return(n int, err error) *MockStore_CountAuthors_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountAuthors_Call) RunAndReturn(run func() (int, error)) *MockStore_CountAuthors_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountBooks provides a mock function for the type MockStore
 func (_mock *MockStore) CountBooks() (int, error) {
 	ret := _mock.Called()
@@ -375,47 +428,6 @@ func (_c *MockStore_CountBooks_Call) RunAndReturn(run func() (int, error)) *Mock
 	return _c
 }
 
-// CountAuthors provides a mock function for the type MockStore
-func (_mock *MockStore) CountAuthors() (int, error) {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for CountAuthors")
-	}
-
-	var r0 int
-	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(int)
-	}
-
-	return r0, ret.Error(1)
-}
-
-type MockStore_CountAuthors_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) CountAuthors() *MockStore_CountAuthors_Call {
-	return &MockStore_CountAuthors_Call{Call: _e.mock.On("CountAuthors")}
-}
-
-func (_c *MockStore_CountAuthors_Call) Run(run func()) *MockStore_CountAuthors_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockStore_CountAuthors_Call) Return(n int, err error) *MockStore_CountAuthors_Call {
-	_c.Call.Return(n, err)
-	return _c
-}
-
-func (_c *MockStore_CountAuthors_Call) RunAndReturn(run func() (int, error)) *MockStore_CountAuthors_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // CountSeries provides a mock function for the type MockStore
 func (_mock *MockStore) CountSeries() (int, error) {
 	ret := _mock.Called()
@@ -425,17 +437,29 @@ func (_mock *MockStore) CountSeries() (int, error) {
 	}
 
 	var r0 int
-	if ret.Get(0) != nil {
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (int, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() int); ok {
+		r0 = returnFunc()
+	} else {
 		r0 = ret.Get(0).(int)
 	}
-
-	return r0, ret.Error(1)
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
+// MockStore_CountSeries_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountSeries'
 type MockStore_CountSeries_Call struct {
 	*mock.Call
 }
 
+// CountSeries is a helper method to define mock.On call
 func (_e *MockStore_Expecter) CountSeries() *MockStore_CountSeries_Call {
 	return &MockStore_CountSeries_Call{Call: _e.mock.On("CountSeries")}
 }
@@ -453,107 +477,6 @@ func (_c *MockStore_CountSeries_Call) Return(n int, err error) *MockStore_CountS
 }
 
 func (_c *MockStore_CountSeries_Call) RunAndReturn(run func() (int, error)) *MockStore_CountSeries_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetBookCountsByLocation provides a mock function for the type MockStore
-func (_mock *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error) {
-	ret := _mock.Called(rootDir)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetBookCountsByLocation")
-	}
-
-	var r0 int
-	if ret.Get(0) != nil {
-		r0 = ret.Get(0).(int)
-	}
-
-	var r1 int
-	if ret.Get(1) != nil {
-		r1 = ret.Get(1).(int)
-	}
-
-	return r0, r1, ret.Error(2)
-}
-
-type MockStore_GetBookCountsByLocation_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) GetBookCountsByLocation(rootDir interface{}) *MockStore_GetBookCountsByLocation_Call {
-	return &MockStore_GetBookCountsByLocation_Call{Call: _e.mock.On("GetBookCountsByLocation", rootDir)}
-}
-
-func (_c *MockStore_GetBookCountsByLocation_Call) Run(run func(rootDir string)) *MockStore_GetBookCountsByLocation_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
-	})
-	return _c
-}
-
-func (_c *MockStore_GetBookCountsByLocation_Call) Return(library int, import_ int, err error) *MockStore_GetBookCountsByLocation_Call {
-	_c.Call.Return(library, import_, err)
-	return _c
-}
-
-func (_c *MockStore_GetBookCountsByLocation_Call) RunAndReturn(run func(string) (int, int, error)) *MockStore_GetBookCountsByLocation_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetDashboardStats provides a mock function for the type MockStore
-func (_mock *MockStore) GetDashboardStats() (*database.DashboardStats, error) {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetDashboardStats")
-	}
-
-	var r0 *database.DashboardStats
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() (*database.DashboardStats, error)); ok {
-		return returnFunc()
-	}
-	if returnFunc, ok := ret.Get(0).(func() *database.DashboardStats); ok {
-		r0 = returnFunc()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*database.DashboardStats)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockStore_GetDashboardStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDashboardStats'
-type MockStore_GetDashboardStats_Call struct {
-	*mock.Call
-}
-
-// GetDashboardStats is a helper method to define mock.On call
-func (_e *MockStore_Expecter) GetDashboardStats() *MockStore_GetDashboardStats_Call {
-	return &MockStore_GetDashboardStats_Call{Call: _e.mock.On("GetDashboardStats")}
-}
-
-func (_c *MockStore_GetDashboardStats_Call) Run(run func()) *MockStore_GetDashboardStats_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockStore_GetDashboardStats_Call) Return(stats *database.DashboardStats, err error) *MockStore_GetDashboardStats_Call {
-	_c.Call.Return(stats, err)
-	return _c
-}
-
-func (_c *MockStore_GetDashboardStats_Call) RunAndReturn(run func() (*database.DashboardStats, error)) *MockStore_GetDashboardStats_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1536,6 +1459,57 @@ func (_c *MockStore_DeleteMetadataFieldState_Call) Return(err error) *MockStore_
 }
 
 func (_c *MockStore_DeleteMetadataFieldState_Call) RunAndReturn(run func(bookID string, field string) error) *MockStore_DeleteMetadataFieldState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteOperationState provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteOperationState(opID string) error {
+	ret := _mock.Called(opID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteOperationState")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(opID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteOperationState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOperationState'
+type MockStore_DeleteOperationState_Call struct {
+	*mock.Call
+}
+
+// DeleteOperationState is a helper method to define mock.On call
+//   - opID string
+func (_e *MockStore_Expecter) DeleteOperationState(opID interface{}) *MockStore_DeleteOperationState_Call {
+	return &MockStore_DeleteOperationState_Call{Call: _e.mock.On("DeleteOperationState", opID)}
+}
+
+func (_c *MockStore_DeleteOperationState_Call) Run(run func(opID string)) *MockStore_DeleteOperationState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationState_Call) Return(err error) *MockStore_DeleteOperationState_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationState_Call) RunAndReturn(run func(opID string) error) *MockStore_DeleteOperationState_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2715,6 +2689,72 @@ func (_c *MockStore_GetBookByOriginalHash_Call) RunAndReturn(run func(hash strin
 	return _c
 }
 
+// GetBookCountsByLocation provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error) {
+	ret := _mock.Called(rootDir)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookCountsByLocation")
+	}
+
+	var r0 int
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int, int, error)); ok {
+		return returnFunc(rootDir)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int); ok {
+		r0 = returnFunc(rootDir)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) int); ok {
+		r1 = returnFunc(rootDir)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string) error); ok {
+		r2 = returnFunc(rootDir)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_GetBookCountsByLocation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookCountsByLocation'
+type MockStore_GetBookCountsByLocation_Call struct {
+	*mock.Call
+}
+
+// GetBookCountsByLocation is a helper method to define mock.On call
+//   - rootDir string
+func (_e *MockStore_Expecter) GetBookCountsByLocation(rootDir interface{}) *MockStore_GetBookCountsByLocation_Call {
+	return &MockStore_GetBookCountsByLocation_Call{Call: _e.mock.On("GetBookCountsByLocation", rootDir)}
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) Run(run func(rootDir string)) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) Return(library int, import_ int, err error) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Return(library, import_, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookCountsByLocation_Call) RunAndReturn(run func(rootDir string) (int, int, error)) *MockStore_GetBookCountsByLocation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookStats provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookStats(bookNumericID int) (*database.BookStats, error) {
 	ret := _mock.Called(bookNumericID)
@@ -3087,6 +3127,61 @@ func (_c *MockStore_GetBooksByWorkID_Call) RunAndReturn(run func(workID string) 
 	return _c
 }
 
+// GetDashboardStats provides a mock function for the type MockStore
+func (_mock *MockStore) GetDashboardStats() (*database.DashboardStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDashboardStats")
+	}
+
+	var r0 *database.DashboardStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*database.DashboardStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *database.DashboardStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.DashboardStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetDashboardStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDashboardStats'
+type MockStore_GetDashboardStats_Call struct {
+	*mock.Call
+}
+
+// GetDashboardStats is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetDashboardStats() *MockStore_GetDashboardStats_Call {
+	return &MockStore_GetDashboardStats_Call{Call: _e.mock.On("GetDashboardStats")}
+}
+
+func (_c *MockStore_GetDashboardStats_Call) Run(run func()) *MockStore_GetDashboardStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDashboardStats_Call) Return(dashboardStats *database.DashboardStats, err error) *MockStore_GetDashboardStats_Call {
+	_c.Call.Return(dashboardStats, err)
+	return _c
+}
+
+func (_c *MockStore_GetDashboardStats_Call) RunAndReturn(run func() (*database.DashboardStats, error)) *MockStore_GetDashboardStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDuplicateBooks provides a mock function for the type MockStore
 func (_mock *MockStore) GetDuplicateBooks() ([][]database.Book, error) {
 	ret := _mock.Called()
@@ -3262,6 +3357,61 @@ func (_c *MockStore_GetImportPathByPath_Call) Return(importPath *database.Import
 }
 
 func (_c *MockStore_GetImportPathByPath_Call) RunAndReturn(run func(path string) (*database.ImportPath, error)) *MockStore_GetImportPathByPath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetInterruptedOperations provides a mock function for the type MockStore
+func (_mock *MockStore) GetInterruptedOperations() ([]database.Operation, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInterruptedOperations")
+	}
+
+	var r0 []database.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Operation, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Operation); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetInterruptedOperations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInterruptedOperations'
+type MockStore_GetInterruptedOperations_Call struct {
+	*mock.Call
+}
+
+// GetInterruptedOperations is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetInterruptedOperations() *MockStore_GetInterruptedOperations_Call {
+	return &MockStore_GetInterruptedOperations_Call{Call: _e.mock.On("GetInterruptedOperations")}
+}
+
+func (_c *MockStore_GetInterruptedOperations_Call) Run(run func()) *MockStore_GetInterruptedOperations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetInterruptedOperations_Call) Return(operations []database.Operation, err error) *MockStore_GetInterruptedOperations_Call {
+	_c.Call.Return(operations, err)
+	return _c
+}
+
+func (_c *MockStore_GetInterruptedOperations_Call) RunAndReturn(run func() ([]database.Operation, error)) *MockStore_GetInterruptedOperations_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3448,6 +3598,130 @@ func (_c *MockStore_GetOperationLogs_Call) Return(operationLogs []database.Opera
 }
 
 func (_c *MockStore_GetOperationLogs_Call) RunAndReturn(run func(operationID string) ([]database.OperationLog, error)) *MockStore_GetOperationLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOperationParams provides a mock function for the type MockStore
+func (_mock *MockStore) GetOperationParams(opID string) ([]byte, error) {
+	ret := _mock.Called(opID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationParams")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]byte, error)); ok {
+		return returnFunc(opID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []byte); ok {
+		r0 = returnFunc(opID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(opID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetOperationParams_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOperationParams'
+type MockStore_GetOperationParams_Call struct {
+	*mock.Call
+}
+
+// GetOperationParams is a helper method to define mock.On call
+//   - opID string
+func (_e *MockStore_Expecter) GetOperationParams(opID interface{}) *MockStore_GetOperationParams_Call {
+	return &MockStore_GetOperationParams_Call{Call: _e.mock.On("GetOperationParams", opID)}
+}
+
+func (_c *MockStore_GetOperationParams_Call) Run(run func(opID string)) *MockStore_GetOperationParams_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOperationParams_Call) Return(bytes []byte, err error) *MockStore_GetOperationParams_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockStore_GetOperationParams_Call) RunAndReturn(run func(opID string) ([]byte, error)) *MockStore_GetOperationParams_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOperationState provides a mock function for the type MockStore
+func (_mock *MockStore) GetOperationState(opID string) ([]byte, error) {
+	ret := _mock.Called(opID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationState")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]byte, error)); ok {
+		return returnFunc(opID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []byte); ok {
+		r0 = returnFunc(opID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(opID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetOperationState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOperationState'
+type MockStore_GetOperationState_Call struct {
+	*mock.Call
+}
+
+// GetOperationState is a helper method to define mock.On call
+//   - opID string
+func (_e *MockStore_Expecter) GetOperationState(opID interface{}) *MockStore_GetOperationState_Call {
+	return &MockStore_GetOperationState_Call{Call: _e.mock.On("GetOperationState", opID)}
+}
+
+func (_c *MockStore_GetOperationState_Call) Run(run func(opID string)) *MockStore_GetOperationState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOperationState_Call) Return(bytes []byte, err error) *MockStore_GetOperationState_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockStore_GetOperationState_Call) RunAndReturn(run func(opID string) ([]byte, error)) *MockStore_GetOperationState_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5113,6 +5387,120 @@ func (_c *MockStore_RevokeSession_Call) Return(err error) *MockStore_RevokeSessi
 }
 
 func (_c *MockStore_RevokeSession_Call) RunAndReturn(run func(id string) error) *MockStore_RevokeSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveOperationParams provides a mock function for the type MockStore
+func (_mock *MockStore) SaveOperationParams(opID string, params []byte) error {
+	ret := _mock.Called(opID, params)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveOperationParams")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []byte) error); ok {
+		r0 = returnFunc(opID, params)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SaveOperationParams_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveOperationParams'
+type MockStore_SaveOperationParams_Call struct {
+	*mock.Call
+}
+
+// SaveOperationParams is a helper method to define mock.On call
+//   - opID string
+//   - params []byte
+func (_e *MockStore_Expecter) SaveOperationParams(opID interface{}, params interface{}) *MockStore_SaveOperationParams_Call {
+	return &MockStore_SaveOperationParams_Call{Call: _e.mock.On("SaveOperationParams", opID, params)}
+}
+
+func (_c *MockStore_SaveOperationParams_Call) Run(run func(opID string, params []byte)) *MockStore_SaveOperationParams_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SaveOperationParams_Call) Return(err error) *MockStore_SaveOperationParams_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SaveOperationParams_Call) RunAndReturn(run func(opID string, params []byte) error) *MockStore_SaveOperationParams_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveOperationState provides a mock function for the type MockStore
+func (_mock *MockStore) SaveOperationState(opID string, state []byte) error {
+	ret := _mock.Called(opID, state)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveOperationState")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []byte) error); ok {
+		r0 = returnFunc(opID, state)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SaveOperationState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveOperationState'
+type MockStore_SaveOperationState_Call struct {
+	*mock.Call
+}
+
+// SaveOperationState is a helper method to define mock.On call
+//   - opID string
+//   - state []byte
+func (_e *MockStore_Expecter) SaveOperationState(opID interface{}, state interface{}) *MockStore_SaveOperationState_Call {
+	return &MockStore_SaveOperationState_Call{Call: _e.mock.On("SaveOperationState", opID, state)}
+}
+
+func (_c *MockStore_SaveOperationState_Call) Run(run func(opID string, state []byte)) *MockStore_SaveOperationState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SaveOperationState_Call) Return(err error) *MockStore_SaveOperationState_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SaveOperationState_Call) RunAndReturn(run func(opID string, state []byte) error) *MockStore_SaveOperationState_Call {
 	_c.Call.Return(run)
 	return _c
 }

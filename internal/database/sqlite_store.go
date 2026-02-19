@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1976,6 +1976,80 @@ func (s *SQLiteStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 		logs = append(logs, log)
 	}
 	return logs, rows.Err()
+}
+
+// ---- Operation State Persistence (resumable operations) ----
+
+func (s *SQLiteStore) ensureOpStateTable() {
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS operation_state (
+		op_id TEXT NOT NULL,
+		key_suffix TEXT NOT NULL DEFAULT '',
+		data BLOB NOT NULL,
+		PRIMARY KEY (op_id, key_suffix)
+	)`)
+}
+
+func (s *SQLiteStore) SaveOperationState(opID string, state []byte) error {
+	s.ensureOpStateTable()
+	_, err := s.db.Exec(`INSERT INTO operation_state (op_id, key_suffix, data) VALUES (?, '', ?)
+		ON CONFLICT(op_id, key_suffix) DO UPDATE SET data = ?`, opID, state, state)
+	return err
+}
+
+func (s *SQLiteStore) GetOperationState(opID string) ([]byte, error) {
+	s.ensureOpStateTable()
+	var data []byte
+	err := s.db.QueryRow(`SELECT data FROM operation_state WHERE op_id = ? AND key_suffix = ''`, opID).Scan(&data)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return data, err
+}
+
+func (s *SQLiteStore) SaveOperationParams(opID string, params []byte) error {
+	s.ensureOpStateTable()
+	_, err := s.db.Exec(`INSERT INTO operation_state (op_id, key_suffix, data) VALUES (?, 'params', ?)
+		ON CONFLICT(op_id, key_suffix) DO UPDATE SET data = ?`, opID, params, params)
+	return err
+}
+
+func (s *SQLiteStore) GetOperationParams(opID string) ([]byte, error) {
+	s.ensureOpStateTable()
+	var data []byte
+	err := s.db.QueryRow(`SELECT data FROM operation_state WHERE op_id = ? AND key_suffix = 'params'`, opID).Scan(&data)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return data, err
+}
+
+func (s *SQLiteStore) DeleteOperationState(opID string) error {
+	s.ensureOpStateTable()
+	_, err := s.db.Exec(`DELETE FROM operation_state WHERE op_id = ?`, opID)
+	return err
+}
+
+func (s *SQLiteStore) GetInterruptedOperations() ([]Operation, error) {
+	query := `SELECT id, type, status, progress, total, message, folder_path,
+		created_at, started_at, completed_at, error_message
+		FROM operations WHERE status IN ('running', 'queued')`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ops []Operation
+	for rows.Next() {
+		var op Operation
+		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total,
+			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
+			&op.CompletedAt, &op.ErrorMessage); err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, rows.Err()
 }
 
 // User Preference operations
