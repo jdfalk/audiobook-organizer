@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.18.0
+// version: 2.19.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -84,6 +84,14 @@ type Store interface {
 	GetRecentOperations(limit int) ([]Operation, error)
 	UpdateOperationStatus(id, status string, progress, total int, message string) error
 	UpdateOperationError(id, errorMessage string) error
+
+	// Operation State Persistence (resumable operations)
+	SaveOperationState(opID string, state []byte) error
+	GetOperationState(opID string) ([]byte, error)
+	SaveOperationParams(opID string, params []byte) error
+	GetOperationParams(opID string) ([]byte, error)
+	DeleteOperationState(opID string) error
+	GetInterruptedOperations() ([]Operation, error)
 
 	// Operation Logs
 	AddOperationLog(operationID, level, message string, details *string) error

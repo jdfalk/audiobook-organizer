@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -37,6 +37,14 @@ type OrganizeStats struct {
 	Organized int
 	Failed    int
 	Total     int
+}
+
+// PerformOrganizeWithID executes organization with checkpoint support.
+func (orgSvc *OrganizeService) PerformOrganizeWithID(ctx context.Context, opID string, req *OrganizeRequest, progress operations.ProgressReporter) error {
+	_ = operations.SaveParams(orgSvc.db, opID, operations.OrganizeParams{})
+	err := orgSvc.PerformOrganize(ctx, req, progress)
+	_ = operations.ClearState(orgSvc.db, opID)
+	return err
 }
 
 // PerformOrganize executes the library organization operation

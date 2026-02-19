@@ -110,6 +110,14 @@ func (s *stubStore) AddOperationLog(opID, level, msg string, details *string) er
 func (s *stubStore) GetOperationLogs(opID string) ([]database.OperationLog, error) {
 	return []database.OperationLog{}, nil
 }
+func (s *stubStore) SaveOperationState(opID string, state []byte) error  { return nil }
+func (s *stubStore) GetOperationState(opID string) ([]byte, error)      { return nil, nil }
+func (s *stubStore) SaveOperationParams(opID string, params []byte) error { return nil }
+func (s *stubStore) GetOperationParams(opID string) ([]byte, error)     { return nil, nil }
+func (s *stubStore) DeleteOperationState(opID string) error             { return nil }
+func (s *stubStore) GetInterruptedOperations() ([]database.Operation, error) {
+	return nil, nil
+}
 func (s *stubStore) GetUserPreference(key string) (*database.UserPreference, error) { return nil, nil }
 func (s *stubStore) SetUserPreference(key, value string) error                      { return nil }
 func (s *stubStore) GetAllUserPreferences() ([]database.UserPreference, error) {

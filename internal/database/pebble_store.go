@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2570,6 +2570,80 @@ func (p *PebbleStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 	}
 
 	return &item, nil
+}
+
+// ---- Operation State Persistence (resumable operations) ----
+
+func (p *PebbleStore) SaveOperationState(opID string, state []byte) error {
+	key := []byte(fmt.Sprintf("opstate:%s", opID))
+	return p.db.Set(key, state, pebble.Sync)
+}
+
+func (p *PebbleStore) GetOperationState(opID string) ([]byte, error) {
+	key := []byte(fmt.Sprintf("opstate:%s", opID))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return append([]byte(nil), value...), nil
+}
+
+func (p *PebbleStore) SaveOperationParams(opID string, params []byte) error {
+	key := []byte(fmt.Sprintf("opstate:%s:params", opID))
+	return p.db.Set(key, params, pebble.Sync)
+}
+
+func (p *PebbleStore) GetOperationParams(opID string) ([]byte, error) {
+	key := []byte(fmt.Sprintf("opstate:%s:params", opID))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return append([]byte(nil), value...), nil
+}
+
+func (p *PebbleStore) DeleteOperationState(opID string) error {
+	batch := p.db.NewBatch()
+	if err := batch.Delete([]byte(fmt.Sprintf("opstate:%s", opID)), nil); err != nil {
+		batch.Close()
+		return err
+	}
+	if err := batch.Delete([]byte(fmt.Sprintf("opstate:%s:params", opID)), nil); err != nil {
+		batch.Close()
+		return err
+	}
+	return batch.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {
+	var ops []Operation
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("operation:"),
+		UpperBound: []byte("operation:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var op Operation
+		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+			continue
+		}
+		if op.Status == "running" || op.Status == "queued" {
+			ops = append(ops, op)
+		}
+	}
+	return ops, nil
 }
 
 // Reset clears all data from the store and resets all counters to initial state
