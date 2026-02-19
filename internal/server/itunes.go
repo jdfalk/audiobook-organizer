@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -396,6 +396,31 @@ type albumGroup struct {
 }
 
 func executeITunesImport(ctx context.Context, progress operations.ProgressReporter, opID string, req ITunesImportRequest) error {
+	store := database.GlobalStore
+
+	// Persist operation parameters for resume
+	pathMappings := make(map[string]string)
+	for _, pm := range req.PathMappings {
+		pathMappings[pm.From] = pm.To
+	}
+	_ = operations.SaveParams(store, opID, operations.ITunesImportParams{
+		LibraryXMLPath: req.LibraryPath,
+		LibraryPath:    req.LibraryPath,
+		ImportMode:     req.ImportMode,
+		PathMappings:   pathMappings,
+		SkipDuplicates: req.SkipDuplicates,
+		EnrichMetadata: req.FetchMetadata,
+		AutoOrganize:   !req.PreserveLocation,
+	})
+
+	// Load any existing checkpoint from a previous interrupted run
+	checkpoint, _ := operations.LoadCheckpoint(store, opID)
+	resumeIndex := 0
+	if checkpoint != nil && checkpoint.Phase == "importing" {
+		resumeIndex = checkpoint.PhaseIndex
+		_ = progress.Log("info", fmt.Sprintf("Resuming import from album %d/%d", resumeIndex, checkpoint.PhaseTotal), nil)
+	}
+
 	status := loadITunesImportStatus(opID)
 	progressMessage := "Starting iTunes import"
 	_ = progress.UpdateProgress(0, 0, progressMessage)
@@ -404,6 +429,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	library, err := itunes.ParseLibrary(req.LibraryPath)
 	if err != nil {
 		recordITunesImportError(status, fmt.Sprintf("failed to parse library: %v", err))
+		operations.ClearState(store, opID)
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
 
@@ -416,6 +442,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook albums to import (from grouped tracks)", totalGroups), nil)
 	if totalGroups == 0 {
 		_ = progress.UpdateProgress(0, 0, "No audiobooks found")
+		operations.ClearState(store, opID)
 		return nil
 	}
 
@@ -427,7 +454,12 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 
 	// Phase 2: Create one book per album group
 	processed := 0
-	for _, group := range groups {
+	for i, group := range groups {
+		// Skip already-processed groups on resume
+		if i < resumeIndex {
+			processed++
+			continue
+		}
 		if progress.IsCanceled() {
 			_ = progress.Log("info", "iTunes import canceled", nil)
 			return nil
@@ -517,20 +549,30 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		}
 
 		updateITunesProgress(progress, status, processed, totalGroups)
+
+		// Checkpoint every 10 groups
+		if processed%10 == 0 {
+			_ = operations.SaveCheckpoint(store, opID, "itunes_import", "importing", processed, totalGroups)
+		}
 	}
 
 	// Phase 3: Metadata enrichment (if requested) — runs before organize
 	// so that author/title are accurate for folder structure
 	if req.FetchMetadata {
+		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "enriching", 0, 0)
 		_ = progress.Log("info", "Starting metadata enrichment phase...", nil)
 		enrichITunesImportedBooks(progress, status)
 	}
 
 	// Phase 4: Organize (if requested) — runs after enrichment
 	if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
+		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "organizing", 0, 0)
 		_ = progress.Log("info", "Starting organize phase...", nil)
 		organizeImportedBooks(progress, status)
 	}
+
+	// Clear checkpoint on successful completion
+	_ = operations.ClearState(store, opID)
 
 	summary := buildITunesSummary(status)
 	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)

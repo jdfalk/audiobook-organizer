@@ -27,6 +27,8 @@ func newMockStore(t *testing.T) *mocks.MockStore {
 		testifyMock.Anything,
 	).Return(nil).Maybe()
 	store.EXPECT().UpdateOperationError(testifyMock.Anything, testifyMock.Anything).Return(nil).Maybe()
+	store.EXPECT().GetOperationState(testifyMock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().SaveOperationState(testifyMock.Anything, testifyMock.Anything).Return(nil).Maybe()
 	store.EXPECT().AddOperationLog(
 		testifyMock.Anything,
 		testifyMock.Anything,
