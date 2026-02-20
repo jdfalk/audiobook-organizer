@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -112,6 +112,8 @@ function App() {
 
   const handleWizardComplete = () => {
     setShowWizard(false);
+    // Force a full reload so dashboard fetches fresh data after setup
+    window.location.reload();
   };
 
   if (!auth.initialized || !wizardCheckComplete) {
