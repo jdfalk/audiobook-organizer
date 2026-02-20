@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -78,6 +78,17 @@ export const BookDetail = () => {
   const [tags, setTags] = useState<BookTags | null>(null);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
+  const [segments, setSegments] = useState<Array<{
+    id: string;
+    file_path: string;
+    format: string;
+    size_bytes: number;
+    duration_seconds: number;
+    track_number?: number;
+    total_tracks?: number;
+    active: boolean;
+  }>>([]);
+  const [segmentsLoaded, setSegmentsLoaded] = useState(false);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -139,6 +150,25 @@ export const BookDetail = () => {
     loadVersions();
     loadTags();
   }, [id, loadBook, loadTags, loadVersions]);
+
+  // Load segments when files tab is active
+  useEffect(() => {
+    if (activeTab !== 'files' || !id || segmentsLoaded) return;
+    const loadSegments = async () => {
+      try {
+        const resp = await fetch(`/api/v1/audiobooks/${id}/segments`);
+        if (resp.ok) {
+          const data = await resp.json();
+          setSegments(data);
+        }
+      } catch {
+        // Segments not available, that's fine
+      } finally {
+        setSegmentsLoaded(true);
+      }
+    };
+    loadSegments();
+  }, [activeTab, id, segmentsLoaded]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '—';
@@ -923,6 +953,40 @@ export const BookDetail = () => {
                   </Grid>
                 ))}
             </Grid>
+
+            {segments.length > 0 && (
+              <Box>
+                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Individual Files</Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Track #</TableCell>
+                      <TableCell>File Name</TableCell>
+                      <TableCell>Duration</TableCell>
+                      <TableCell>Format</TableCell>
+                      <TableCell align="right">Size</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {segments.map((seg) => (
+                      <TableRow key={seg.id}>
+                        <TableCell>{seg.track_number ?? '—'}</TableCell>
+                        <TableCell sx={{ wordBreak: 'break-all' }}>
+                          {seg.file_path.split('/').pop()}
+                        </TableCell>
+                        <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
+                        <TableCell>{seg.format?.toUpperCase()}</TableCell>
+                        <TableCell align="right">
+                          {seg.size_bytes > 0
+                            ? `${(seg.size_bytes / 1048576).toFixed(1)} MB`
+                            : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
           </Stack>
         </Paper>
       )}

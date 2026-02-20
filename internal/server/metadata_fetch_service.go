@@ -1,16 +1,18 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
 
 import (
 	"fmt"
+	"hash/crc32"
 	"log"
 	"sort"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 )
@@ -137,6 +139,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 
 			mfs.persistFetchedMetadata(id, meta)
 
+			// Write metadata back to audio file(s) if enabled
+			if config.AppConfig.WriteBackMetadata {
+				mfs.writeBackMetadata(updatedBook, meta)
+			}
+
 			return &FetchMetadataResponse{
 				Message: "metadata fetched and applied",
 				Book:    updatedBook,
@@ -166,6 +173,50 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	}
 	if meta.CoverURL != "" {
 		book.CoverURL = stringPtr(meta.CoverURL)
+	}
+}
+
+// writeBackMetadata writes enriched metadata back to audio file(s).
+func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta metadata.BookMetadata) {
+	tagMap := make(map[string]interface{})
+	if meta.Title != "" {
+		tagMap["title"] = meta.Title
+	}
+	if meta.Author != "" {
+		tagMap["artist"] = meta.Author
+	}
+	if meta.Publisher != "" {
+		tagMap["publisher"] = meta.Publisher
+	}
+	if meta.PublishYear != 0 {
+		tagMap["year"] = meta.PublishYear
+	}
+	if len(tagMap) == 0 {
+		return
+	}
+
+	opConfig := fileops.OperationConfig{VerifyChecksums: true}
+
+	// Write to primary file
+	if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+		log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+	} else {
+		log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
+	}
+
+	// Write to each segment file for multi-file books
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	if err != nil {
+		return
+	}
+	for _, seg := range segments {
+		if !seg.Active {
+			continue
+		}
+		if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
+			log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+		}
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -7,6 +7,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"net/http"
 	"os"
@@ -541,6 +542,33 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		}
 
 		updateITunesImported(status)
+
+		// Create BookSegments for multi-track albums
+		if len(group.tracks) > 1 {
+			bookNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
+			for _, track := range group.tracks {
+				trackLoc := importOpts.RemapPath(track.Location)
+				trackPath, decErr := itunes.DecodeLocation(trackLoc)
+				if decErr != nil {
+					continue
+				}
+				trackFormat := strings.TrimPrefix(strings.ToLower(filepath.Ext(trackPath)), ".")
+				trackNum := track.TrackNumber
+				totalTracks := len(group.tracks)
+				segment := &database.BookSegment{
+					FilePath:    trackPath,
+					Format:      trackFormat,
+					SizeBytes:   track.Size,
+					DurationSec: int(track.TotalTime / 1000),
+					TrackNumber: &trackNum,
+					TotalTracks: &totalTracks,
+					Active:      true,
+				}
+				if _, segErr := database.GlobalStore.CreateBookSegment(bookNumericID, segment); segErr != nil {
+					_ = progress.Log("warn", fmt.Sprintf("Failed to create segment for track %d of '%s': %v", track.TrackNumber, book.Title, segErr), nil)
+				}
+			}
+		}
 
 		// Populate book_authors junction table
 		if created.AuthorID != nil {

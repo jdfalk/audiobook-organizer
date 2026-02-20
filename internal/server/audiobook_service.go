@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -111,8 +111,8 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 		books, err = svc.store.GetBooksBySeriesID(*seriesID)
 	}
 
-	// Fall back to generic list if no specific filter matched
-	if len(books) == 0 && err == nil {
+	// Fall back to generic list only when no filter was applied
+	if search == "" && authorID == nil && seriesID == nil {
 		books, err = svc.store.GetAllBooks(limit, offset)
 	}
 
