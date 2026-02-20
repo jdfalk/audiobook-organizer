@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.35.0
+// version: 1.36.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -417,6 +417,7 @@ export const Library = () => {
     setPage(1);
   }, [searchQuery, filters, sortBy, sortOrder, itemsPerPage]);
 
+  const prevPageRef = useRef(page);
   useEffect(() => {
     const params = new URLSearchParams();
 
@@ -432,7 +433,11 @@ export const Library = () => {
     if (page > 1) params.set('page', page.toString());
     if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
 
-    setSearchParams(params, { replace: true });
+    // Push a new history entry when page changes so back button works;
+    // replace for other changes (search typing, etc.) to avoid history spam.
+    const pageChanged = prevPageRef.current !== page;
+    prevPageRef.current = page;
+    setSearchParams(params, { replace: !pageChanged });
   }, [
     filters,
     itemsPerPage,
