@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -96,9 +96,10 @@ type Config struct {
 	DefaultUserQuotaGB int  `json:"default_user_quota_gb"`
 
 	// Metadata
-	AutoFetchMetadata bool             `json:"auto_fetch_metadata"`
-	MetadataSources   []MetadataSource `json:"metadata_sources"`
-	Language          string           `json:"language"`
+	AutoFetchMetadata  bool             `json:"auto_fetch_metadata"`
+	WriteBackMetadata  bool             `json:"write_back_metadata"`
+	MetadataSources    []MetadataSource `json:"metadata_sources"`
+	Language           string           `json:"language"`
 
 	// Open Library data dumps
 	OpenLibraryDumpEnabled bool   `json:"openlibrary_dump_enabled"`
@@ -173,6 +174,7 @@ func InitConfig() {
 
 	// Set metadata defaults
 	viper.SetDefault("auto_fetch_metadata", true)
+	viper.SetDefault("write_back_metadata", false)
 	viper.SetDefault("language", "en")
 
 	// Open Library dump defaults
@@ -269,6 +271,7 @@ func InitConfig() {
 
 		// Metadata
 		AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
+		WriteBackMetadata: viper.GetBool("write_back_metadata"),
 		Language:          viper.GetString("language"),
 
 		// Open Library dumps

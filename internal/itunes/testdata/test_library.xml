@@ -89,6 +89,106 @@
 			<key>Bookmark</key><integer>3600000</integer>
 			<key>Bookmarkable</key><true/>
 		</dict>
+		<key>500</key>
+		<dict>
+			<key>Track ID</key><integer>500</integer>
+			<key>Persistent ID</key><string>MOBY0001DICK0001</string>
+			<key>Name</key><string>Chapter 1 - Loomings</string>
+			<key>Artist</key><string>Herman Melville</string>
+			<key>Album</key><string>Moby Dick</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>2005</integer>
+			<key>Track Number</key><integer>1</integer>
+			<key>Disc Number</key><integer>1</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Moby%20Dick/Chapter%2001.m4b</string>
+			<key>Size</key><integer>50000000</integer>
+			<key>Total Time</key><integer>3600000</integer>
+			<key>Date Added</key><date>2022-03-10T10:00:00Z</date>
+			<key>Play Count</key><integer>1</integer>
+			<key>Rating</key><integer>80</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>501</key>
+		<dict>
+			<key>Track ID</key><integer>501</integer>
+			<key>Persistent ID</key><string>MOBY0001DICK0002</string>
+			<key>Name</key><string>Chapter 2 - The Carpet-Bag</string>
+			<key>Artist</key><string>Herman Melville</string>
+			<key>Album</key><string>Moby Dick</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>2005</integer>
+			<key>Track Number</key><integer>2</integer>
+			<key>Disc Number</key><integer>1</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Moby%20Dick/Chapter%2002.m4b</string>
+			<key>Size</key><integer>45000000</integer>
+			<key>Total Time</key><integer>3200000</integer>
+			<key>Date Added</key><date>2022-03-10T10:00:00Z</date>
+			<key>Play Count</key><integer>1</integer>
+			<key>Rating</key><integer>80</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>502</key>
+		<dict>
+			<key>Track ID</key><integer>502</integer>
+			<key>Persistent ID</key><string>MOBY0001DICK0003</string>
+			<key>Name</key><string>Chapter 3 - The Spouter-Inn</string>
+			<key>Artist</key><string>Herman Melville</string>
+			<key>Album</key><string>Moby Dick</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>2005</integer>
+			<key>Track Number</key><integer>3</integer>
+			<key>Disc Number</key><integer>1</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Moby%20Dick/Chapter%2003.m4b</string>
+			<key>Size</key><integer>48000000</integer>
+			<key>Total Time</key><integer>3400000</integer>
+			<key>Date Added</key><date>2022-03-10T10:00:00Z</date>
+			<key>Play Count</key><integer>1</integer>
+			<key>Rating</key><integer>80</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>600</key>
+		<dict>
+			<key>Track ID</key><integer>600</integer>
+			<key>Persistent ID</key><string>PRID0001PREJ0001</string>
+			<key>Name</key><string>Part 1</string>
+			<key>Artist</key><string>Jane Austen</string>
+			<key>Album</key><string>Pride and Prejudice</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>2010</integer>
+			<key>Track Number</key><integer>1</integer>
+			<key>Disc Number</key><integer>1</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Pride%20and%20Prejudice/Part%2001.m4b</string>
+			<key>Size</key><integer>60000000</integer>
+			<key>Total Time</key><integer>5400000</integer>
+			<key>Date Added</key><date>2023-01-15T08:00:00Z</date>
+			<key>Play Count</key><integer>2</integer>
+			<key>Rating</key><integer>100</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
+		<key>601</key>
+		<dict>
+			<key>Track ID</key><integer>601</integer>
+			<key>Persistent ID</key><string>PRID0001PREJ0002</string>
+			<key>Name</key><string>Part 2</string>
+			<key>Artist</key><string>Jane Austen</string>
+			<key>Album</key><string>Pride and Prejudice</string>
+			<key>Genre</key><string>Audiobook</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Year</key><integer>2010</integer>
+			<key>Track Number</key><integer>2</integer>
+			<key>Disc Number</key><integer>1</integer>
+			<key>Location</key><string>file://localhost/Users/testuser/Music/iTunes/Audiobooks/Pride%20and%20Prejudice/Part%2002.m4b</string>
+			<key>Size</key><integer>55000000</integer>
+			<key>Total Time</key><integer>4800000</integer>
+			<key>Date Added</key><date>2023-01-15T08:00:00Z</date>
+			<key>Play Count</key><integer>2</integer>
+			<key>Rating</key><integer>100</integer>
+			<key>Bookmarkable</key><true/>
+		</dict>
 	</dict>
 	<key>Playlists</key>
 	<array>

@@ -1,5 +1,5 @@
 // file: internal/server/itunes_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 57e871fa-41b4-4fe6-9ed6-457ae78f0a07
 
 package server
@@ -7,6 +7,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -492,6 +493,139 @@ func TestInt64Ptr(t *testing.T) {
 	p := int64Ptr(99)
 	if p == nil || *p != 99 {
 		t.Errorf("expected *99, got %v", p)
+	}
+}
+
+// TestGroupTracksByAlbum_MultiTrackBooks tests grouping with multi-track test data
+func TestGroupTracksByAlbum_MultiTrackBooks(t *testing.T) {
+	library := &itunes.Library{
+		Tracks: map[string]*itunes.Track{
+			"500": {TrackID: 500, Name: "Chapter 1 - Loomings", Artist: "Herman Melville", Album: "Moby Dick", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 1, TotalTime: 3600000, Size: 50000000},
+			"501": {TrackID: 501, Name: "Chapter 2 - The Carpet-Bag", Artist: "Herman Melville", Album: "Moby Dick", Kind: "Audiobook", TrackNumber: 2, DiscNumber: 1, TotalTime: 3200000, Size: 45000000},
+			"502": {TrackID: 502, Name: "Chapter 3 - The Spouter-Inn", Artist: "Herman Melville", Album: "Moby Dick", Kind: "Audiobook", TrackNumber: 3, DiscNumber: 1, TotalTime: 3400000, Size: 48000000},
+			"600": {TrackID: 600, Name: "Part 1", Artist: "Jane Austen", Album: "Pride and Prejudice", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 1, TotalTime: 5400000, Size: 60000000},
+			"601": {TrackID: 601, Name: "Part 2", Artist: "Jane Austen", Album: "Pride and Prejudice", Kind: "Audiobook", TrackNumber: 2, DiscNumber: 1, TotalTime: 4800000, Size: 55000000},
+		},
+	}
+
+	groups := groupTracksByAlbum(library)
+
+	// Should have 2 groups
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(groups))
+	}
+
+	// Find each group
+	var mobyGroup, prideGroup *albumGroup
+	for i := range groups {
+		switch groups[i].key {
+		case "Herman Melville|Moby Dick":
+			mobyGroup = &groups[i]
+		case "Jane Austen|Pride and Prejudice":
+			prideGroup = &groups[i]
+		}
+	}
+
+	if mobyGroup == nil {
+		t.Fatal("expected to find 'Herman Melville|Moby Dick' group")
+	}
+	if len(mobyGroup.tracks) != 3 {
+		t.Errorf("expected 3 tracks in Moby Dick group, got %d", len(mobyGroup.tracks))
+	}
+	// Verify sorted by track number
+	for i, track := range mobyGroup.tracks {
+		if track.TrackNumber != i+1 {
+			t.Errorf("Moby Dick track %d has TrackNumber %d, want %d", i, track.TrackNumber, i+1)
+		}
+	}
+
+	if prideGroup == nil {
+		t.Fatal("expected to find 'Jane Austen|Pride and Prejudice' group")
+	}
+	if len(prideGroup.tracks) != 2 {
+		t.Errorf("expected 2 tracks in Pride and Prejudice group, got %d", len(prideGroup.tracks))
+	}
+}
+
+// TestBuildBookFromAlbumGroup_MultiTrack tests that multi-track albums sum duration and size
+func TestBuildBookFromAlbumGroup_MultiTrack(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Create 3 temp files for the multi-track album
+	var tracks []*itunes.Track
+	for i := 1; i <= 3; i++ {
+		f, err := os.Create(filepath.Join(tmpDir, fmt.Sprintf("chapter%d.m4b", i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Write(bytes.Repeat([]byte("x"), 100))
+		f.Close()
+
+		tracks = append(tracks, &itunes.Track{
+			TrackID:     500 + i - 1,
+			Name:        fmt.Sprintf("Chapter %d", i),
+			Artist:      "Herman Melville",
+			Album:       "Moby Dick",
+			Kind:        "Audiobook",
+			TrackNumber: i,
+			DiscNumber:  1,
+			TotalTime:   int64(3000000 + i*100000),
+			Size:        int64(40000000 + i*5000000),
+			Location:    itunes.EncodeLocation(filepath.Join(tmpDir, fmt.Sprintf("chapter%d.m4b", i))),
+		})
+	}
+
+	group := albumGroup{key: "Herman Melville|Moby Dick", tracks: tracks}
+	book, err := buildBookFromAlbumGroup(group, "/library.xml", itunes.ImportOptions{})
+	if err != nil {
+		t.Fatalf("buildBookFromAlbumGroup error: %v", err)
+	}
+
+	// Title should be album name
+	if book.Title != "Moby Dick" {
+		t.Errorf("title = %q, want %q", book.Title, "Moby Dick")
+	}
+
+	// FilePath should be common parent dir for multi-track
+	if book.FilePath != tmpDir {
+		t.Errorf("filePath = %q, want common parent dir %q", book.FilePath, tmpDir)
+	}
+
+	// Duration should be summed: (3100000 + 3200000 + 3300000) / 1000 = 9600 seconds
+	expectedDuration := int((3100000 + 3200000 + 3300000) / 1000)
+	if book.Duration == nil || *book.Duration != expectedDuration {
+		t.Errorf("duration = %v, want %d", book.Duration, expectedDuration)
+	}
+
+	// FileSize should be summed
+	expectedSize := int64(45000000 + 50000000 + 55000000)
+	if book.FileSize == nil || *book.FileSize != expectedSize {
+		t.Errorf("fileSize = %v, want %d", book.FileSize, expectedSize)
+	}
+}
+
+// TestGroupTracksByAlbum_DiscSorting tests that tracks are sorted by disc then track number
+func TestGroupTracksByAlbum_DiscSorting(t *testing.T) {
+	library := &itunes.Library{
+		Tracks: map[string]*itunes.Track{
+			"1": {TrackID: 1, Name: "D2T1", Artist: "Author", Album: "Book", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 2},
+			"2": {TrackID: 2, Name: "D1T2", Artist: "Author", Album: "Book", Kind: "Audiobook", TrackNumber: 2, DiscNumber: 1},
+			"3": {TrackID: 3, Name: "D1T1", Artist: "Author", Album: "Book", Kind: "Audiobook", TrackNumber: 1, DiscNumber: 1},
+		},
+	}
+
+	groups := groupTracksByAlbum(library)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+
+	tracks := groups[0].tracks
+	// Expected order: D1T1, D1T2, D2T1
+	expected := []struct{ disc, track int }{{1, 1}, {1, 2}, {2, 1}}
+	for i, e := range expected {
+		if tracks[i].DiscNumber != e.disc || tracks[i].TrackNumber != e.track {
+			t.Errorf("track %d: got disc=%d track=%d, want disc=%d track=%d",
+				i, tracks[i].DiscNumber, tracks[i].TrackNumber, e.disc, e.track)
+		}
 	}
 }
 

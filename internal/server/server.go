@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.60.0
+// version: 1.61.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"hash/crc32"
 	"fmt"
 	"log"
 	"net/http"
@@ -1019,6 +1020,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/tags", s.getAudiobookTags)
 			protected.PUT("/audiobooks/:id", s.updateAudiobook)
 			protected.DELETE("/audiobooks/:id", s.deleteAudiobook)
+			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
 			// Author and series routes
@@ -1449,6 +1451,34 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// listAudiobookSegments returns file segments for a multi-file audiobook.
+func (s *Server) listAudiobookSegments(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if segments == nil {
+		segments = []database.BookSegment{}
+	}
+
+	c.JSON(http.StatusOK, segments)
 }
 
 func (s *Server) getAudiobookTags(c *gin.Context) {
