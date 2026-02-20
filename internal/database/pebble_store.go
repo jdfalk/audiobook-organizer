@@ -2648,25 +2648,12 @@ func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {
 
 // Reset clears all data from the store and resets all counters to initial state
 func (p *PebbleStore) Reset() error {
-	// Delete all keys by iterating through the entire keyspace
-	iter, err := p.db.NewIter(nil)
-	if err != nil {
-		return fmt.Errorf("failed to create iterator: %w", err)
-	}
-	defer iter.Close()
-
-	// Batch-delete all keys for performance (avoids per-key fsync)
+	// Use DeleteRange to wipe the entire keyspace in one operation.
+	// The range ["\x00", "\xff\xff") covers all possible keys.
 	batch := p.db.NewBatch()
-	for iter.First(); iter.Valid(); iter.Next() {
-		if err := batch.Delete(append([]byte(nil), iter.Key()...), pebble.NoSync); err != nil {
-			batch.Close()
-			return fmt.Errorf("failed to stage key deletion: %w", err)
-		}
-	}
-
-	if err := iter.Error(); err != nil {
+	if err := batch.DeleteRange([]byte{0x00}, []byte{0xff, 0xff}, pebble.NoSync); err != nil {
 		batch.Close()
-		return fmt.Errorf("iterator error: %w", err)
+		return fmt.Errorf("failed to delete all keys: %w", err)
 	}
 
 	// Reinitialize counters to their initial state
@@ -2679,9 +2666,14 @@ func (p *PebbleStore) Reset() error {
 		}
 	}
 
-	// Single commit with sync for durability
+	// Commit with sync for durability
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return fmt.Errorf("failed to commit reset batch: %w", err)
+	}
+
+	// Force flush to ensure deletes are persisted to disk
+	if err := p.db.Flush(); err != nil {
+		return fmt.Errorf("failed to flush after reset: %w", err)
 	}
 
 	return nil
