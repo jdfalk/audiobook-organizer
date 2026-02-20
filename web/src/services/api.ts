@@ -54,6 +54,7 @@ export interface Book {
   publisher?: string;
   description?: string;
   cover_image?: string;
+  cover_url?: string;
   isbn?: string;
   isbn10?: string;
   isbn13?: string;
