@@ -1,5 +1,5 @@
 // file: web/src/services/eventSourceManager.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5a9b8c7d-6e5f-4a3b-2c1d-0e9f8a7b6c5d
 
 export type EventSourceStatus = {
@@ -32,10 +32,16 @@ export const createEventSourceManager = (url = '/api/events') => {
   let eventSource: EventSource | null = null;
   let reconnectAttempt = 0;
   let reconnectTimer: number | null = null;
-  let connecting = false; // Prevent race conditions
+  let connectTimeoutTimer: number | null = null;
+  let connecting = false;
 
   const listeners = new Set<EventSourceListener>();
   const statusListeners = new Set<EventSourceStatusListener>();
+
+  // Max reconnect attempts before giving up (avoids infinite connection churn)
+  const maxReconnectAttempts = 5;
+  // Timeout for initial connection — abort if server doesn't respond
+  const connectTimeoutMs = 8000;
 
   const notifyStatus = (status: EventSourceStatus) => {
     statusListeners.forEach((listener) => listener(status));
@@ -43,7 +49,15 @@ export const createEventSourceManager = (url = '/api/events') => {
 
   const hasSubscribers = () => listeners.size > 0 || statusListeners.size > 0;
 
+  const clearConnectTimeout = () => {
+    if (connectTimeoutTimer) {
+      window.clearTimeout(connectTimeoutTimer);
+      connectTimeoutTimer = null;
+    }
+  };
+
   const close = () => {
+    clearConnectTimeout();
     if (reconnectTimer) {
       window.clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -76,6 +90,13 @@ export const createEventSourceManager = (url = '/api/events') => {
     if (reconnectTimer) return;
 
     reconnectAttempt += 1;
+
+    // Stop reconnecting after too many failures to avoid blocking browser connections
+    if (reconnectAttempt > maxReconnectAttempts) {
+      notifyStatus({ state: 'closed', attempt: reconnectAttempt });
+      return;
+    }
+
     const delayMs = createDelay(reconnectAttempt);
     notifyStatus({
       state: 'reconnecting',
@@ -91,13 +112,27 @@ export const createEventSourceManager = (url = '/api/events') => {
   };
 
   const connect = () => {
-    // Prevent duplicate connections from race conditions
     if (eventSource || connecting || !hasSubscribers()) return;
 
     connecting = true;
     eventSource = new EventSource(url);
+
+    // Abort the connection if the server doesn't respond in time
+    clearConnectTimeout();
+    connectTimeoutTimer = window.setTimeout(() => {
+      connectTimeoutTimer = null;
+      if (connecting && eventSource) {
+        eventSource.close();
+        eventSource = null;
+        connecting = false;
+        notifyStatus({ state: 'error', attempt: reconnectAttempt });
+        scheduleReconnect();
+      }
+    }, connectTimeoutMs);
+
     eventSource.onmessage = handleMessage;
     eventSource.onerror = (error) => {
+      clearConnectTimeout();
       connecting = false;
       if (eventSource) {
         eventSource.close();
@@ -107,6 +142,7 @@ export const createEventSourceManager = (url = '/api/events') => {
       scheduleReconnect(error);
     };
     eventSource.onopen = () => {
+      clearConnectTimeout();
       connecting = false;
       reconnectAttempt = 0;
       notifyStatus({ state: 'open', attempt: 0 });
@@ -120,6 +156,10 @@ export const createEventSourceManager = (url = '/api/events') => {
     listeners.add(listener);
     if (statusListener) {
       statusListeners.add(statusListener);
+    }
+    // Reset attempts when a new subscriber arrives (e.g. page navigation)
+    if (reconnectAttempt > maxReconnectAttempts) {
+      reconnectAttempt = 0;
     }
     connect();
 
