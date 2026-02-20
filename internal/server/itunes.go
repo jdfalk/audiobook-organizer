@@ -479,8 +479,17 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		// Use first track for author/series assignment
 		assignAuthorAndSeries(book, group.tracks[0])
 
-		// Hash the first track file for dedup
-		hash, err := scanner.ComputeFileHash(book.FilePath)
+		// Resolve first track's actual file path (book.FilePath may be a directory for multi-track albums)
+		firstTrackPath := book.FilePath
+		if len(group.tracks) > 0 {
+			loc := importOpts.RemapPath(group.tracks[0].Location)
+			if decoded, decErr := itunes.DecodeLocation(loc); decErr == nil {
+				firstTrackPath = decoded
+			}
+		}
+
+		// Hash the first track file for dedup (use actual file, not directory)
+		hash, err := scanner.ComputeFileHash(firstTrackPath)
 		if err != nil {
 			_ = progress.Log("warn", fmt.Sprintf("Failed to hash %s: %v", book.FilePath, err), nil)
 		} else if hash != "" {
@@ -516,8 +525,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 
 		book.LibraryState = stringPtr(importLibraryState(importMode))
 
-		// Try to extract embedded cover art from first track
-		coverPath, coverErr := metadata.ExtractCoverArt(book.FilePath)
+		// Try to extract embedded cover art from first track's actual file
+		coverPath, coverErr := metadata.ExtractCoverArt(firstTrackPath)
 		if coverErr == nil && coverPath != "" {
 			coverFilename := filepath.Base(coverPath)
 			book.CoverURL = stringPtr("/api/v1/covers/local/" + coverFilename)
