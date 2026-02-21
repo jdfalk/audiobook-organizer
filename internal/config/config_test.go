@@ -106,14 +106,14 @@ func TestMetadataDefaults(t *testing.T) {
 		t.Error("Expected metadata sources to be populated")
 	}
 
-	// Verify Audible is first and enabled
+	// Verify Open Library is first and enabled
 	if len(AppConfig.MetadataSources) > 0 {
-		audible := AppConfig.MetadataSources[0]
-		if audible.ID != "audible" {
-			t.Errorf("Expected first metadata source to be 'audible', got '%s'", audible.ID)
+		ol := AppConfig.MetadataSources[0]
+		if ol.ID != "openlibrary" {
+			t.Errorf("Expected first metadata source to be 'openlibrary', got '%s'", ol.ID)
 		}
-		if !audible.Enabled {
-			t.Error("Expected Audible to be enabled by default")
+		if !ol.Enabled {
+			t.Error("Expected Open Library to be enabled by default")
 		}
 	}
 }

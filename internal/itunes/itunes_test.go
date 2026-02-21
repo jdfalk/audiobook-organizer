@@ -61,8 +61,8 @@ func TestParseLibrary_Tracks(t *testing.T) {
 		t.Fatalf("ParseLibrary() error = %v", err)
 	}
 
-	if len(library.Tracks) != 4 {
-		t.Fatalf("expected 4 tracks, got %d", len(library.Tracks))
+	if len(library.Tracks) != 9 {
+		t.Fatalf("expected 9 tracks, got %d", len(library.Tracks))
 	}
 
 	// Find The Hobbit track
@@ -188,9 +188,9 @@ func TestIsAudiobook_FromParsedLibrary(t *testing.T) {
 		}
 	}
 
-	// Tracks 100, 200, 400 are audiobooks; track 300 is music
-	if audiobookCount != 3 {
-		t.Errorf("expected 3 audiobooks, got %d", audiobookCount)
+	// Tracks 100, 200, 400, 500-502 (Moby Dick), 600-601 (P&P) are audiobooks; track 300 is music
+	if audiobookCount != 8 {
+		t.Errorf("expected 8 audiobooks, got %d", audiobookCount)
 	}
 	if musicCount != 1 {
 		t.Errorf("expected 1 music track, got %d", musicCount)
@@ -410,15 +410,15 @@ func TestValidateImport_WithTestLibrary(t *testing.T) {
 		t.Fatalf("ValidateImport() error = %v", err)
 	}
 
-	if result.TotalTracks != 4 {
-		t.Errorf("TotalTracks = %d, want 4", result.TotalTracks)
+	if result.TotalTracks != 9 {
+		t.Errorf("TotalTracks = %d, want 9", result.TotalTracks)
 	}
-	if result.AudiobookTracks != 3 {
-		t.Errorf("AudiobookTracks = %d, want 3", result.AudiobookTracks)
+	if result.AudiobookTracks != 8 {
+		t.Errorf("AudiobookTracks = %d, want 8", result.AudiobookTracks)
 	}
 	// All files should be missing since they're fake paths
-	if result.FilesMissing != 3 {
-		t.Errorf("FilesMissing = %d, want 3", result.FilesMissing)
+	if result.FilesMissing != 8 {
+		t.Errorf("FilesMissing = %d, want 8", result.FilesMissing)
 	}
 	if result.FilesFound != 0 {
 		t.Errorf("FilesFound = %d, want 0", result.FilesFound)

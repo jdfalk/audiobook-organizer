@@ -75,7 +75,11 @@ func (s *stubStore) DeleteBook(id string) error { return nil }
 func (s *stubStore) SearchBooks(query string, limit, offset int) ([]database.Book, error) {
 	return []database.Book{}, nil
 }
-func (s *stubStore) CountBooks() (int, error) { return 0, nil }
+func (s *stubStore) CountBooks() (int, error)                                                      { return 0, nil }
+func (s *stubStore) CountAuthors() (int, error)                                                    { return 0, nil }
+func (s *stubStore) CountSeries() (int, error)                                                     { return 0, nil }
+func (s *stubStore) GetBookCountsByLocation(rootDir string) (int, int, error)                      { return 0, 0, nil }
+func (s *stubStore) GetBookSizesByLocation(rootDir string) (int64, int64, error)                   { return 0, 0, nil }
 func (s *stubStore) GetDashboardStats() (*database.DashboardStats, error) {
 	return &database.DashboardStats{StateDistribution: map[string]int{}, FormatDistribution: map[string]int{}}, nil
 }
