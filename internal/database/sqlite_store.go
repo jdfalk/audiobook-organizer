@@ -1664,6 +1664,19 @@ func (s *SQLiteStore) GetBookCountsByLocation(rootDir string) (library, import_ 
 	return
 }
 
+func (s *SQLiteStore) GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error) {
+	if rootDir == "" {
+		err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&importSize)
+		return 0, importSize, err
+	}
+	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?", rootDir+"%").Scan(&librarySize)
+	if err != nil {
+		return
+	}
+	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?", rootDir+"%").Scan(&importSize)
+	return
+}
+
 func (s *SQLiteStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
 	if limit <= 0 {
 		limit = 1_000_000

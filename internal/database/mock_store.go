@@ -412,6 +412,10 @@ func (m *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error) {
 	return 0, 0, nil
 }
 
+func (m *MockStore) GetBookSizesByLocation(rootDir string) (int64, int64, error) {
+	return 0, 0, nil
+}
+
 func (m *MockStore) GetDashboardStats() (*DashboardStats, error) {
 	if m.GetDashboardStatsFunc != nil {
 		return m.GetDashboardStatsFunc()

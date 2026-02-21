@@ -1251,6 +1251,41 @@ func (p *PebbleStore) GetBookCountsByLocation(rootDir string) (library, import_ 
 	return
 }
 
+func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		size := int64(0)
+		if book.FileSize != nil {
+			size = *book.FileSize
+		}
+		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
+			librarySize += size
+		} else {
+			importSize += size
+		}
+	}
+	return
+}
+
 // GetDashboardStats iterates all books and computes aggregate stats.
 // PebbleDB has no SQL, so this scans the full key range.
 func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {

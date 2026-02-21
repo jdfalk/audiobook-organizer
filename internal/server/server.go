@@ -29,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
@@ -1515,6 +1516,32 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		return
 	}
 
+	// Write updated metadata back to the audio file
+	if updatedBook.FilePath != "" {
+		tagMap := make(map[string]interface{})
+		if v, ok := payload["title"].(string); ok && v != "" {
+			tagMap["title"] = v
+		}
+		if v, ok := payload["author_name"].(string); ok && v != "" {
+			tagMap["artist"] = v
+		}
+		if v, ok := payload["publisher"].(string); ok && v != "" {
+			tagMap["publisher"] = v
+		}
+		if v, ok := payload["narrator"].(string); ok && v != "" {
+			tagMap["album_artist"] = v
+		}
+		if v, ok := payload["audiobook_release_year"].(float64); ok && v != 0 {
+			tagMap["year"] = int(v)
+		}
+		if len(tagMap) > 0 {
+			opConfig := fileops.OperationConfig{VerifyChecksums: true}
+			if writeErr := metadata.WriteMetadataToFile(updatedBook.FilePath, tagMap, opConfig); writeErr != nil {
+				log.Printf("[WARN] write-back failed for %s: %v", updatedBook.FilePath, writeErr)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, updatedBook)
 }
 
@@ -2632,6 +2659,10 @@ func stripChapterFromTitle(title string) string {
 		re := regexp.MustCompile(pattern)
 		cleaned = re.ReplaceAllString(cleaned, "")
 	}
+
+	// Strip audiobook qualifiers like "(Unabridged)", "(Abridged)", etc.
+	qualifiers := regexp.MustCompile(`(?i)\s*\((un)?abridged\)`)
+	cleaned = qualifiers.ReplaceAllString(cleaned, "")
 
 	return strings.TrimSpace(cleaned)
 }

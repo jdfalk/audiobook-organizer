@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -57,6 +57,7 @@ export const BookDetail = () => {
   const [loadingField, setLoadingField] = useState<string | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
+  const [preAIBook, setPreAIBook] = useState<Book | null>(null);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
     'info' | 'files' | 'versions' | 'tags' | 'compare'
@@ -280,20 +281,55 @@ export const BookDetail = () => {
 
   const handleParseWithAI = async () => {
     if (!book) return;
+    // Save current state for undo
+    setPreAIBook({ ...book });
     setParsingWithAI(true);
     try {
       const result = await api.parseAudiobookWithAI(book.id);
       setBook(result.book);
       // Reload tags to reflect updated stored values in Compare tab
       await loadTags();
-      toast(result.message || 'AI parsing completed.', 'success');
+      toast(result.message || 'AI parsing completed. Use "Undo AI Parse" to revert.', 'success');
     } catch (error: unknown) {
       console.error('Failed to parse with AI', error);
+      setPreAIBook(null);
       const msg =
         error instanceof Error ? error.message : 'AI parsing failed.';
       toast(msg, 'error');
     } finally {
       setParsingWithAI(false);
+    }
+  };
+
+  const handleUndoAIParse = async () => {
+    if (!preAIBook || !book) return;
+    setActionLoading(true);
+    setActionLabel('Reverting AI parse...');
+    try {
+      const payload: Partial<Book> = {
+        title: preAIBook.title,
+        author_name: preAIBook.author_name,
+        series_name: preAIBook.series_name,
+        series_position: preAIBook.series_position,
+        narrator: preAIBook.narrator,
+        publisher: preAIBook.publisher,
+        language: preAIBook.language,
+        description: preAIBook.description,
+        audiobook_release_year: preAIBook.audiobook_release_year,
+        print_year: preAIBook.print_year,
+        isbn: preAIBook.isbn,
+      };
+      const saved = await api.updateBook(book.id, payload);
+      setBook(saved);
+      await loadTags();
+      setPreAIBook(null);
+      toast('AI parse reverted.', 'success');
+    } catch (error) {
+      console.error('Failed to undo AI parse', error);
+      toast('Failed to revert AI parse.', 'error');
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
     }
   };
 
@@ -543,6 +579,8 @@ export const BookDetail = () => {
       };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
+      // Reload tags so Compare tab reflects the update immediately
+      await loadTags();
       toast('Metadata updated.', 'success');
       setEditDialogOpen(false);
     } catch (error) {
@@ -788,6 +826,16 @@ export const BookDetail = () => {
             >
               {parsingWithAI ? 'Parsing...' : 'Parse with AI'}
             </Button>
+            {preAIBook && (
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={handleUndoAIParse}
+                disabled={actionLoading}
+              >
+                Undo AI Parse
+              </Button>
+            )}
             <Button
               variant="contained"
               startIcon={<CompareIcon />}
