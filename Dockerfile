@@ -7,7 +7,7 @@
 # CGO enabled (for SQLite FTS5 support), produces a minimal container.
 
 # Stage 1: Build frontend
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:25-alpine AS frontend-builder
 
 WORKDIR /build/web
 
@@ -19,7 +19,7 @@ RUN npm run build
 
 # Stage 2: Build Go application with embedded frontend
 # Uses native platform (no cross-compile) so CGO works without cross-toolchain.
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /build
 
@@ -44,7 +44,7 @@ RUN CGO_ENABLED=1 go build \
     .
 
 # Stage 3: Minimal runtime image (scratch-compatible since binary is static)
-FROM alpine:3.21
+FROM alpine:3.23
 
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -g 1000 audiobook \
