@@ -2753,6 +2753,40 @@ func (_mock *MockStore) GetBookSizesByLocation(rootDir string) (int64, int64, er
 	return r0, r1, r2
 }
 
+// MockStore_GetBookSizesByLocation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookSizesByLocation'
+type MockStore_GetBookSizesByLocation_Call struct {
+	*mock.Call
+}
+
+// GetBookSizesByLocation is a helper method to define mock.On call
+//   - rootDir string
+func (_e *MockStore_Expecter) GetBookSizesByLocation(rootDir interface{}) *MockStore_GetBookSizesByLocation_Call {
+	return &MockStore_GetBookSizesByLocation_Call{Call: _e.mock.On("GetBookSizesByLocation", rootDir)}
+}
+
+func (_c *MockStore_GetBookSizesByLocation_Call) Run(run func(rootDir string)) *MockStore_GetBookSizesByLocation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookSizesByLocation_Call) Return(librarySize int64, importSize int64, err error) *MockStore_GetBookSizesByLocation_Call {
+	_c.Call.Return(librarySize, importSize, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookSizesByLocation_Call) RunAndReturn(run func(rootDir string) (int64, int64, error)) *MockStore_GetBookSizesByLocation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MockStore_GetBookCountsByLocation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookCountsByLocation'
 type MockStore_GetBookCountsByLocation_Call struct {
 	*mock.Call

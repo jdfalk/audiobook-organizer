@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -1610,7 +1612,11 @@ func TestFilesystemService_CreateExclusion_EmptyPath(t *testing.T) {
 func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
 	svc := &FilesystemService{}
 
-	err := svc.CreateExclusion("/tmp/test_file_for_exclusion.txt")
+	// Create a real file so stat succeeds but it's not a directory
+	tmpFile := filepath.Join(t.TempDir(), "not_a_dir.txt")
+	os.WriteFile(tmpFile, []byte("test"), 0644)
+
+	err := svc.CreateExclusion(tmpFile)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
