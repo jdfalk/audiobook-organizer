@@ -54,6 +54,8 @@ type DumpTypeStatus struct {
 	DownloadProgress float64   `json:"download_progress"` // 0.0 to 1.0
 	ImportProgress   float64   `json:"import_progress"`   // 0.0 to 1.0
 	RecordCount      int64     `json:"record_count"`
+	LinesProcessed   int64     `json:"lines_processed"`   // for resume support
+	FileSize         int64     `json:"file_size,omitempty"` // dump file size at import time
 	LastUpdated      time.Time `json:"last_updated"`
 }
 
