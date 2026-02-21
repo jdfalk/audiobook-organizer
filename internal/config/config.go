@@ -353,24 +353,24 @@ func InitConfig() {
 		// Set default metadata sources
 		AppConfig.MetadataSources = []MetadataSource{
 			{
-				ID:           "audnexus",
-				Name:         "Audnexus (Audible)",
+				ID:           "openlibrary",
+				Name:         "Open Library",
 				Enabled:      true,
 				Priority:     1,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
 			},
 			{
-				ID:           "openlibrary",
-				Name:         "Open Library",
+				ID:           "google-books",
+				Name:         "Google Books",
 				Enabled:      true,
 				Priority:     2,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
 			},
 			{
-				ID:           "google-books",
-				Name:         "Google Books",
+				ID:           "audnexus",
+				Name:         "Audnexus (Audible)",
 				Enabled:      true,
 				Priority:     3,
 				RequiresAuth: false,

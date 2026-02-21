@@ -2721,6 +2721,38 @@ func (_mock *MockStore) GetBookCountsByLocation(rootDir string) (int, int, error
 	return r0, r1, r2
 }
 
+// GetBookSizesByLocation provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookSizesByLocation(rootDir string) (int64, int64, error) {
+	ret := _mock.Called(rootDir)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookSizesByLocation")
+	}
+
+	var r0 int64
+	var r1 int64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int64, int64, error)); ok {
+		return returnFunc(rootDir)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
+		r0 = returnFunc(rootDir)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) int64); ok {
+		r1 = returnFunc(rootDir)
+	} else {
+		r1 = ret.Get(1).(int64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string) error); ok {
+		r2 = returnFunc(rootDir)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
 // MockStore_GetBookCountsByLocation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookCountsByLocation'
 type MockStore_GetBookCountsByLocation_Call struct {
 	*mock.Call

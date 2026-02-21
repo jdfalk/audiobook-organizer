@@ -318,16 +318,22 @@ func TestDefaultMetadataSources(t *testing.T) {
 		t.Errorf("Expected at least 3 default metadata sources, got %d", len(AppConfig.MetadataSources))
 	}
 
-	// Verify Audible
-	audible := AppConfig.MetadataSources[0]
-	if audible.ID != "audible" || !audible.Enabled || audible.Priority != 1 {
-		t.Error("Audible metadata source not configured correctly")
+	// Verify Open Library is first priority (best for title search)
+	openlibrary := AppConfig.MetadataSources[0]
+	if openlibrary.ID != "openlibrary" || !openlibrary.Enabled || openlibrary.Priority != 1 {
+		t.Errorf("Open Library metadata source not configured correctly: id=%s enabled=%v priority=%d", openlibrary.ID, openlibrary.Enabled, openlibrary.Priority)
 	}
 
-	// Verify Open Library (replaced Goodreads which was deprecated Dec 2020)
-	openlibrary := AppConfig.MetadataSources[1]
-	if openlibrary.ID != "openlibrary" || !openlibrary.Enabled || openlibrary.Priority != 2 {
-		t.Error("Open Library metadata source not configured correctly")
+	// Verify Google Books is second
+	googleBooks := AppConfig.MetadataSources[1]
+	if googleBooks.ID != "google-books" || !googleBooks.Enabled || googleBooks.Priority != 2 {
+		t.Errorf("Google Books metadata source not configured correctly: id=%s enabled=%v priority=%d", googleBooks.ID, googleBooks.Enabled, googleBooks.Priority)
+	}
+
+	// Verify Audnexus is third (ASIN-only, limited title search)
+	audnexus := AppConfig.MetadataSources[2]
+	if audnexus.ID != "audnexus" || !audnexus.Enabled || audnexus.Priority != 3 {
+		t.Errorf("Audnexus metadata source not configured correctly: id=%s enabled=%v priority=%d", audnexus.ID, audnexus.Enabled, audnexus.Priority)
 	}
 }
 

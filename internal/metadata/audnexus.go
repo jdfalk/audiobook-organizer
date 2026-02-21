@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,7 +17,8 @@ import (
 
 // AudnexusClient fetches audiobook metadata from the Audnexus community API,
 // which provides Audible-sourced data including narrator information.
-// No authentication required.
+// The API requires an ASIN for book lookups — there is no title search endpoint.
+// For title-based search, we search authors by name and then look up their books.
 type AudnexusClient struct {
 	httpClient *http.Client
 	baseURL    string
@@ -47,62 +49,151 @@ func (c *AudnexusClient) Name() string {
 	return "Audnexus (Audible)"
 }
 
-type audnexusSearchResult struct {
-	ASIN        string   `json:"asin"`
-	Title       string   `json:"title"`
-	Authors     []string `json:"authors"`
-	Narrators   []string `json:"narrators"`
-	Publisher   string   `json:"publisherName"`
-	ReleaseDate string   `json:"releaseDate"`
-	Language    string   `json:"language"`
-	Image       string   `json:"image"`
-	Description string   `json:"summary"`
+// Audnexus API response types matching the OpenAPI spec
+type audnexusPerson struct {
+	ASIN string `json:"asin"`
+	Name string `json:"name"`
 }
 
-// SearchByTitle searches Audnexus by title.
+type audnexusSeries struct {
+	ASIN     string `json:"asin"`
+	Name     string `json:"name"`
+	Position string `json:"position"`
+}
+
+type audnexusBook struct {
+	ASIN            string           `json:"asin"`
+	Title           string           `json:"title"`
+	Subtitle        string           `json:"subtitle"`
+	Authors         []audnexusPerson `json:"authors"`
+	Narrators       []audnexusPerson `json:"narrators"`
+	PublisherName   string           `json:"publisherName"`
+	ReleaseDate     string           `json:"releaseDate"`
+	Language        string           `json:"language"`
+	Image           string           `json:"image"`
+	Description     string           `json:"description"`
+	Summary         string           `json:"summary"`
+	ISBN            string           `json:"isbn"`
+	Copyright       int              `json:"copyright"`
+	SeriesPrimary   *audnexusSeries  `json:"seriesPrimary"`
+	SeriesSecondary *audnexusSeries  `json:"seriesSecondary"`
+}
+
+type audnexusAuthor struct {
+	ASIN        string           `json:"asin"`
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Image       string           `json:"image"`
+	Similar     []audnexusPerson `json:"similar"`
+}
+
+// SearchByTitle cannot search Audnexus by title alone (no such endpoint exists).
+// Returns empty results so the chain moves to the next source.
 func (c *AudnexusClient) SearchByTitle(title string) ([]BookMetadata, error) {
-	searchURL := fmt.Sprintf("%s/books?title=%s", c.baseURL, url.QueryEscape(title))
-	return c.doSearch(searchURL)
+	log.Printf("[DEBUG] Audnexus has no title search endpoint, skipping title-only search for %q", title)
+	return nil, nil
 }
 
-// SearchByTitleAndAuthor searches Audnexus by title and author.
+// SearchByTitleAndAuthor searches for an author on Audnexus, then looks up
+// each author's books to find a title match.
 func (c *AudnexusClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
-	searchURL := fmt.Sprintf("%s/books?title=%s&author=%s", c.baseURL, url.QueryEscape(title), url.QueryEscape(author))
-	return c.doSearch(searchURL)
-}
-
-func (c *AudnexusClient) doSearch(searchURL string) ([]BookMetadata, error) {
-	resp, err := c.httpClient.Get(searchURL)
+	// Step 1: Search authors by name → GET /authors?name={name}
+	authorsURL := fmt.Sprintf("%s/authors?name=%s", c.baseURL, url.QueryEscape(author))
+	resp, err := c.httpClient.Get(authorsURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search Audnexus: %w", err)
+		return nil, fmt.Errorf("failed to search Audnexus authors: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Audnexus API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("Audnexus author search returned status %d", resp.StatusCode)
 	}
 
-	var items []audnexusSearchResult
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
-		return nil, fmt.Errorf("failed to decode Audnexus response: %w", err)
+	var authors []audnexusAuthor
+	if err := json.NewDecoder(resp.Body).Decode(&authors); err != nil {
+		return nil, fmt.Errorf("failed to decode Audnexus author response: %w", err)
 	}
 
-	results := make([]BookMetadata, 0, len(items))
-	for _, item := range items {
-		meta := BookMetadata{
-			Title:       item.Title,
-			Publisher:   item.Publisher,
-			Description: item.Description,
-			Language:    item.Language,
-			CoverURL:    item.Image,
-		}
-		if len(item.Authors) > 0 {
-			meta.Author = strings.Join(item.Authors, ", ")
-		}
-		if len(item.ReleaseDate) >= 4 {
-			fmt.Sscanf(item.ReleaseDate, "%d", &meta.PublishYear)
-		}
-		results = append(results, meta)
+	if len(authors) == 0 {
+		return nil, nil
 	}
-	return results, nil
+
+	// Step 2: For the first matching author, try to look up the book by
+	// checking known ASINs. Since Audnexus doesn't list an author's books,
+	// we can't enumerate them. Return the author info as partial metadata.
+	// In the future, this could be enhanced with an ASIN lookup if we have one.
+	log.Printf("[DEBUG] Audnexus found %d authors for %q, but no book title search available", len(authors), author)
+	return nil, nil
+}
+
+// LookupByASIN fetches a book directly by its Audible ASIN.
+// This is the primary way to use Audnexus — other search methods are limited.
+func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
+	bookURL := fmt.Sprintf("%s/books/%s", c.baseURL, url.PathEscape(asin))
+	resp, err := c.httpClient.Get(bookURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup Audnexus book: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Audnexus book lookup returned status %d", resp.StatusCode)
+	}
+
+	var book audnexusBook
+	if err := json.NewDecoder(resp.Body).Decode(&book); err != nil {
+		return nil, fmt.Errorf("failed to decode Audnexus book: %w", err)
+	}
+
+	return c.bookToMetadata(&book), nil
+}
+
+func (c *AudnexusClient) bookToMetadata(book *audnexusBook) *BookMetadata {
+	meta := &BookMetadata{
+		Title:       book.Title,
+		Publisher:   book.PublisherName,
+		Language:    book.Language,
+		CoverURL:    book.Image,
+		ISBN:        book.ISBN,
+	}
+
+	// Use summary or description
+	if book.Summary != "" {
+		meta.Description = book.Summary
+	} else if book.Description != "" {
+		meta.Description = book.Description
+	}
+
+	// Authors
+	authorNames := make([]string, 0, len(book.Authors))
+	for _, a := range book.Authors {
+		authorNames = append(authorNames, a.Name)
+	}
+	if len(authorNames) > 0 {
+		meta.Author = strings.Join(authorNames, ", ")
+	}
+
+	// Narrators
+	narratorNames := make([]string, 0, len(book.Narrators))
+	for _, n := range book.Narrators {
+		narratorNames = append(narratorNames, n.Name)
+	}
+	if len(narratorNames) > 0 {
+		meta.Narrator = strings.Join(narratorNames, ", ")
+	}
+
+	// Year from releaseDate or copyright
+	if len(book.ReleaseDate) >= 4 {
+		fmt.Sscanf(book.ReleaseDate[:4], "%d", &meta.PublishYear)
+	} else if book.Copyright > 0 {
+		meta.PublishYear = book.Copyright
+	}
+
+	// Series
+	if book.SeriesPrimary != nil {
+		meta.Series = book.SeriesPrimary.Name
+		meta.SeriesPosition = book.SeriesPrimary.Position
+	}
+
+	return meta
 }

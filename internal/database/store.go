@@ -64,6 +64,7 @@ type Store interface {
 	CountAuthors() (int, error)
 	CountSeries() (int, error)
 	GetBookCountsByLocation(rootDir string) (library, import_ int, err error)
+	GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error)
 	GetDashboardStats() (*DashboardStats, error)
 	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
 

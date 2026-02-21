@@ -115,6 +115,13 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	runtime.ReadMemStats(&memStats)
 
 	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
+	// Fall back to DB file sizes when filesystem walk returns 0 (e.g. paths don't exist on this host)
+	if librarySize+importSize == 0 {
+		if dbLib, dbImp, err := ss.db.GetBookSizesByLocation(rootDir); err == nil {
+			librarySize = dbLib
+			importSize = dbImp
+		}
+	}
 	totalSize := librarySize + importSize
 
 	status := &SystemStatus{

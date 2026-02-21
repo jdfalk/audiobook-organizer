@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.36.0
+// version: 1.37.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -417,6 +417,28 @@ export const Library = () => {
     setPage(1);
   }, [searchQuery, filters, sortBy, sortOrder, itemsPerPage]);
 
+  // Sync state FROM URL when user navigates (back/forward) or edits URL directly
+  const isInternalUpdate = useRef(false);
+  useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+    const urlPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const urlSearch = searchParams.get('search') ?? '';
+    const urlSort = searchParams.get('sort') as SortField || SortField.Title;
+    const urlOrder = searchParams.get('order') === SortOrder.Descending ? SortOrder.Descending : SortOrder.Ascending;
+    const urlView = (searchParams.get('view') as ViewMode) || 'grid';
+    const urlLimit = Math.max(10, parseInt(searchParams.get('limit') || '20', 10));
+
+    if (urlPage !== page) setPage(urlPage);
+    if (urlSearch !== searchQuery) setSearchQuery(urlSearch);
+    if (urlSort !== sortBy) setSortBy(urlSort);
+    if (urlOrder !== sortOrder) setSortOrder(urlOrder);
+    if (urlView !== viewMode) setViewMode(urlView);
+    if (urlLimit !== itemsPerPage) setItemsPerPage(urlLimit);
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const prevPageRef = useRef(page);
   useEffect(() => {
     const params = new URLSearchParams();
@@ -437,6 +459,7 @@ export const Library = () => {
     // replace for other changes (search typing, etc.) to avoid history spam.
     const pageChanged = prevPageRef.current !== page;
     prevPageRef.current = page;
+    isInternalUpdate.current = true;
     setSearchParams(params, { replace: !pageChanged });
   }, [
     filters,

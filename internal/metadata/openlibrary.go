@@ -103,14 +103,17 @@ type SearchResponse struct {
 
 // BookMetadata represents enriched book metadata
 type BookMetadata struct {
-	Title       string
-	Author      string
-	Description string
-	Publisher   string
-	PublishYear int
-	ISBN        string
-	CoverURL    string
-	Language    string
+	Title          string
+	Author         string
+	Narrator       string
+	Description    string
+	Publisher      string
+	PublishYear    int
+	ISBN           string
+	CoverURL       string
+	Language       string
+	Series         string
+	SeriesPosition string
 }
 
 // SearchByTitle searches for books by title. Checks local dump store first if available.

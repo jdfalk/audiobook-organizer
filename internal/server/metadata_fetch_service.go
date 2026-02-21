@@ -128,6 +128,9 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 		}
 
+		if len(results) == 0 {
+			log.Printf("[DEBUG] %s returned 0 results for %q", src.Name(), searchTitle)
+		}
 		if len(results) > 0 {
 			meta := results[0]
 			mfs.applyMetadataToBook(book, meta)
