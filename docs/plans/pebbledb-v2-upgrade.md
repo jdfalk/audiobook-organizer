@@ -160,18 +160,38 @@ Users upgrading from v1 to v2 need their existing Pebble databases to work:
 2. v2 minimum is format 13 (`FormatFlushableIngest`)
 3. **No migration needed** — v1.1.5 databases are already compatible with v2
 
-Add a startup check:
+### Step 8: Post-Migration — Auto-Upgrade Format to Latest
+
+After migrating to v2, add a startup ratchet in both `NewPebbleStore()` and `NewOLStore()` to upgrade existing databases to the latest format version. This unlocks columnar blocks and other v2 optimizations for databases created under older versions.
+
+Add to `internal/database/pebble_store.go` in `NewPebbleStore()` and `internal/openlibrary/store.go` in `NewOLStore()`, immediately after `pebble.Open()`:
 
 ```go
-func checkDatabaseVersion(db *pebble.DB) error {
-    version := db.FormatMajorVersion()
-    if version < pebble.FormatColumnarBlocks {
-        // Auto-upgrade
-        return db.RatchetFormatMajorVersion(pebble.FormatColumnarBlocks)
+db, err := pebble.Open(path, &pebble.Options{
+    FormatMajorVersion: pebble.FormatColumnarBlocks, // request latest format for new DBs
+})
+if err != nil {
+    return nil, err
+}
+
+// Upgrade existing databases to latest format
+if db.FormatMajorVersion() < pebble.FormatColumnarBlocks {
+    log.Printf("[INFO] Upgrading PebbleDB format from %d to %d (FormatColumnarBlocks)",
+        db.FormatMajorVersion(), pebble.FormatColumnarBlocks)
+    if err := db.RatchetFormatMajorVersion(pebble.FormatColumnarBlocks); err != nil {
+        log.Printf("[WARN] Failed to upgrade PebbleDB format: %v", err)
+        // Non-fatal — DB still works at old format
     }
-    return nil
 }
 ```
+
+**Why this matters:**
+- `FormatMajorVersion` in `Options` only applies to **new** databases
+- Existing databases opened with v2 retain their old format (e.g. 16) unless explicitly ratcheted
+- `RatchetFormatMajorVersion` is a one-way upgrade — once upgraded, the DB can't be opened by older Pebble versions
+- Format 19 (FormatColumnarBlocks) enables the best compression and read performance
+
+**Rollback consideration:** Once ratcheted, the database cannot be downgraded. If a user needs to roll back to the v1 binary, they'd need to restore from backup. Document this in release notes.
 
 ## Test Plan
 
