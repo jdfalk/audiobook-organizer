@@ -1,5 +1,5 @@
 // file: internal/openlibrary/store.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package openlibrary
@@ -9,6 +9,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 	"strings"
@@ -60,9 +61,9 @@ type indexEntry struct {
 }
 
 // ImportDump stream-parses a TSV.gz dump file using parallel workers and batch-writes to PebbleDB.
-// A reader goroutine feeds raw lines to N CPU-bound JSON-parsing workers.
-// A single writer goroutine collects results and batch-writes to Pebble (keeping writes single-threaded).
-// Progress callback receives the number of records imported so far.
+// Supports resume: if a previous import was interrupted, it skips already-processed lines.
+// On re-import with the same file, only new/changed records are written (PebbleDB upserts).
+// Progress callback receives the total number of records imported so far (including resumed).
 func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) error {
 	switch dumpType {
 	case "editions", "authors", "works":
@@ -76,17 +77,44 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 	}
 	defer f.Close()
 
-	// Get file size for progress estimation
 	fi, _ := f.Stat()
+	var fileSize int64
 	var estimatedTotal int64
 	if fi != nil {
+		fileSize = fi.Size()
 		switch dumpType {
 		case "editions":
-			estimatedTotal = fi.Size() / 800
+			estimatedTotal = fileSize / 800
 		case "authors":
-			estimatedTotal = fi.Size() / 400
+			estimatedTotal = fileSize / 400
 		case "works":
-			estimatedTotal = fi.Size() / 500
+			estimatedTotal = fileSize / 500
+		}
+	}
+
+	// Check for resume: if a previous import was interrupted (progress < 1.0),
+	// and the file size matches, skip already-processed lines.
+	var skipLines int64
+	status, _ := s.GetStatus()
+	if status != nil {
+		var prev DumpTypeStatus
+		switch dumpType {
+		case "editions":
+			prev = status.Editions
+		case "authors":
+			prev = status.Authors
+		case "works":
+			prev = status.Works
+		}
+		if prev.LinesProcessed > 0 && prev.ImportProgress < 1.0 && prev.FileSize == fileSize {
+			skipLines = prev.LinesProcessed
+			log.Printf("[INFO] Resuming %s import from line %d", dumpType, skipLines)
+		} else if prev.ImportProgress >= 1.0 && prev.FileSize == fileSize {
+			log.Printf("[INFO] %s import already complete (%d records), skipping", dumpType, prev.RecordCount)
+			if progress != nil {
+				progress(int(prev.RecordCount))
+			}
+			return nil
 		}
 	}
 
@@ -102,13 +130,20 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 	entryCh := make(chan indexEntry, 1000)
 	errCh := make(chan error, 1)
 
-	// Reader goroutine: decompress + scan lines → lineCh
+	// Reader goroutine: decompress + scan lines → lineCh, skipping resumed lines
 	go func() {
 		defer close(lineCh)
 		scanner := bufio.NewScanner(gz)
 		scanner.Buffer(make([]byte, 0, 4*1024*1024), 16*1024*1024)
+		var lineNum int64
 		for scanner.Scan() {
-			// Copy the line since scanner reuses its buffer
+			lineNum++
+			if lineNum <= skipLines {
+				if lineNum%500000 == 0 {
+					log.Printf("[INFO] Skipping %s lines for resume: %d / %d", dumpType, lineNum, skipLines)
+				}
+				continue
+			}
 			line := make([]byte, len(scanner.Bytes()))
 			copy(line, scanner.Bytes())
 			lineCh <- line
@@ -135,23 +170,24 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 				jsonData := []byte(parts[4])
 				entry, err := s.parseEntry(dumpType, jsonData)
 				if err != nil {
-					continue // skip malformed
+					continue
 				}
 				entryCh <- entry
 			}
 		}()
 	}
 
-	// Close entryCh when all workers done
 	go func() {
 		wg.Wait()
 		close(entryCh)
 	}()
 
-	// Writer goroutine (single): batch-write to Pebble
+	// Writer: batch-write to Pebble with periodic checkpoint
 	batch := s.db.NewBatch()
-	count := 0
+	count := int(skipLines) // total lines processed including skipped
+	newRecords := 0
 	const batchSize = 5000
+	const checkpointInterval = 50000
 
 	for entry := range entryCh {
 		for i := range entry.keys {
@@ -160,7 +196,8 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 			}
 		}
 		count++
-		if count%batchSize == 0 {
+		newRecords++
+		if newRecords%batchSize == 0 {
 			if err := batch.Commit(pebble.NoSync); err != nil {
 				return fmt.Errorf("batch commit failed at record %d: %w", count, err)
 			}
@@ -168,8 +205,8 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 			if progress != nil {
 				progress(count)
 			}
-			if count%50000 == 0 {
-				s.updateImportProgress(dumpType, count, estimatedTotal)
+			if newRecords%checkpointInterval == 0 {
+				s.updateImportCheckpoint(dumpType, count, int64(count), fileSize, estimatedTotal)
 			}
 		}
 	}
@@ -189,8 +226,8 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 		progress(count)
 	}
 
-	// Final sync to ensure durability
-	s.updateStatus(dumpType, count)
+	// Mark complete
+	s.updateStatus(dumpType, count, fileSize)
 
 	return nil
 }
@@ -400,7 +437,7 @@ func (s *OLStore) GetStatus() (*DumpStatus, error) {
 	return &status, nil
 }
 
-func (s *OLStore) updateStatus(dumpType string, recordCount int) {
+func (s *OLStore) updateStatus(dumpType string, recordCount int, fileSize int64) {
 	status, _ := s.GetStatus()
 	if status == nil {
 		status = &DumpStatus{}
@@ -408,6 +445,8 @@ func (s *OLStore) updateStatus(dumpType string, recordCount int) {
 
 	ts := DumpTypeStatus{
 		RecordCount:    int64(recordCount),
+		LinesProcessed: int64(recordCount),
+		FileSize:       fileSize,
 		ImportProgress: 1.0,
 		LastUpdated:    time.Now(),
 	}
@@ -428,8 +467,8 @@ func (s *OLStore) updateStatus(dumpType string, recordCount int) {
 	s.db.Set([]byte(prefixMetaStatus), data, pebble.Sync)
 }
 
-// updateImportProgress writes fractional progress during import.
-func (s *OLStore) updateImportProgress(dumpType string, count int, estimatedTotal int64) {
+// updateImportCheckpoint writes intermediate progress for resume support.
+func (s *OLStore) updateImportCheckpoint(dumpType string, recordCount int, linesProcessed int64, fileSize int64, estimatedTotal int64) {
 	status, _ := s.GetStatus()
 	if status == nil {
 		status = &DumpStatus{}
@@ -437,14 +476,16 @@ func (s *OLStore) updateImportProgress(dumpType string, count int, estimatedTota
 
 	var prog float64
 	if estimatedTotal > 0 {
-		prog = float64(count) / float64(estimatedTotal)
+		prog = float64(recordCount) / float64(estimatedTotal)
 		if prog > 0.99 {
-			prog = 0.99 // reserve 1.0 for completion
+			prog = 0.99
 		}
 	}
 
 	ts := DumpTypeStatus{
-		RecordCount:    int64(count),
+		RecordCount:    int64(recordCount),
+		LinesProcessed: linesProcessed,
+		FileSize:       fileSize,
 		ImportProgress: prog,
 		LastUpdated:    time.Now(),
 	}
