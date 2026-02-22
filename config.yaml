@@ -1,0 +1,15 @@
+auto_fetch_metadata: true
+auto_organize: true
+concurrent_scans: 10
+database_path: audiobooks.pebble
+enable_ai_parsing: true
+file_naming_pattern: '{title} - {author} - read by {narrator}'
+folder_naming_pattern: '{author}/{series}/{title} ({print_year})'
+language: en
+log_level: info
+openai_api_key: sk-test12345678
+organization_strategy: auto
+playlist_dir: playlists
+root_dir: ""
+scan_on_startup: false
+setup_complete: false
