@@ -1,8 +1,8 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -25,6 +25,7 @@ import {
   ListItemText,
   Chip,
   CardActionArea,
+  Skeleton,
 } from '@mui/material';
 import {
   LibraryBooks as LibraryBooksIcon,
@@ -62,46 +63,19 @@ interface RecentOperation {
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<SystemStats>({
-    library_books: 0,
-    import_books: 0,
-    total_books: 0,
-    total_authors: 0,
-    total_series: 0,
-    import_paths: 0,
-    library_size_gb: 0,
-    import_size_gb: 0,
-    total_size_gb: 0,
-    disk_used_gb: 0,
-    disk_total_gb: 0,
-    disk_usage_percent: 0,
-  });
-  const [operations, setOperations] = useState<RecentOperation[]>([]);
+  const [stats, setStats] = useState<SystemStats | null>(null);
+  const [authorCount, setAuthorCount] = useState<number | null>(null);
+  const [seriesCount, setSeriesCount] = useState<number | null>(null);
+  const [operations, setOperations] = useState<RecentOperation[] | null>(null);
+  const [storageLoaded, setStorageLoaded] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
   const [scanInProgress, setScanInProgress] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  // Auto-refresh every 15s while a scan is active
-  useEffect(() => {
-    const hasActiveScan = operations.some((op) => op.status === 'running');
-    if (!hasActiveScan) return;
-    const interval = setInterval(loadDashboardData, 15000);
-    return () => clearInterval(interval);
-  }, [operations]);
-
-  const loadDashboardData = async () => {
+  const loadStats = useCallback(async () => {
     try {
-      const [systemStatus, authorCount, seriesCount] = await Promise.all([
-        api.getSystemStatus(),
-        api.countAuthors(),
-        api.countSeries(),
-      ]);
+      const systemStatus = await api.getSystemStatus();
 
       const libraryBooks =
         systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
@@ -130,8 +104,8 @@ export function Dashboard() {
         library_books: libraryBooks,
         import_books: importBooks,
         total_books: totalBooks,
-        total_authors: systemStatus.author_count ?? authorCount,
-        total_series: systemStatus.series_count ?? seriesCount,
+        total_authors: systemStatus.author_count ?? 0,
+        total_series: systemStatus.series_count ?? 0,
         import_paths: systemStatus.import_paths?.folder_count || 0,
         library_size_gb: librarySizeBytes / (1024 * 1024 * 1024),
         import_size_gb: importSizeBytes / (1024 * 1024 * 1024),
@@ -140,8 +114,9 @@ export function Dashboard() {
         disk_total_gb: diskTotalBytes / (1024 * 1024 * 1024),
         disk_usage_percent: diskUsagePercent,
       });
+      setStorageLoaded(true);
 
-      // Convert recent operations to dashboard format
+      // Convert recent operations
       const recentOps = (systemStatus.operations?.recent || [])
         .slice(0, 5)
         .map((op) => ({
@@ -155,14 +130,57 @@ export function Dashboard() {
           message: op.message || `${op.type} operation`,
           timestamp: op.created_at,
         }));
-
       setOperations(recentOps);
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Failed to load system status:', error);
+      // Set empty defaults so spinners stop
+      setStats({
+        library_books: 0, import_books: 0, total_books: 0,
+        total_authors: 0, total_series: 0, import_paths: 0,
+        library_size_gb: 0, import_size_gb: 0, total_size_gb: 0,
+        disk_used_gb: 0, disk_total_gb: 0, disk_usage_percent: 0,
+      });
+      setStorageLoaded(true);
+      setOperations([]);
     }
-  };
+  }, []);
+
+  const loadAuthors = useCallback(async () => {
+    try {
+      const count = await api.countAuthors();
+      setAuthorCount(count);
+    } catch {
+      setAuthorCount(0);
+    }
+  }, []);
+
+  const loadSeries = useCallback(async () => {
+    try {
+      const count = await api.countSeries();
+      setSeriesCount(count);
+    } catch {
+      setSeriesCount(0);
+    }
+  }, []);
+
+  // Fire all requests in parallel — each section updates independently
+  useEffect(() => {
+    loadStats();
+    loadAuthors();
+    loadSeries();
+  }, [loadStats, loadAuthors, loadSeries]);
+
+  // Auto-refresh every 15s while a scan is active
+  useEffect(() => {
+    const hasActiveScan = operations?.some((op) => op.status === 'running');
+    if (!hasActiveScan) return;
+    const interval = setInterval(() => {
+      loadStats();
+      loadAuthors();
+      loadSeries();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [operations, loadStats, loadAuthors, loadSeries]);
 
   const handleScanAll = async () => {
     setScanInProgress(true);
@@ -202,12 +220,14 @@ export function Dashboard() {
   const StatCard = ({
     title,
     value,
+    loading,
     icon,
     suffix = '',
     onClick,
   }: {
     title: string;
     value: number;
+    loading: boolean;
     icon: React.ReactNode;
     suffix?: string;
     onClick?: () => void;
@@ -224,10 +244,14 @@ export function Dashboard() {
               <Typography color="text.secondary" gutterBottom>
                 {title}
               </Typography>
-              <Typography variant="h4">
-                {value.toLocaleString()}
-                {suffix}
-              </Typography>
+              {loading ? (
+                <Skeleton variant="text" width={80} height={42} />
+              ) : (
+                <Typography variant="h4">
+                  {value.toLocaleString()}
+                  {suffix}
+                </Typography>
+              )}
             </Box>
             <Box sx={{ color: 'primary.main' }}>{icon}</Box>
           </Box>
@@ -258,13 +282,10 @@ export function Dashboard() {
     }
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  // Derive loading states per component
+  const bookStatsLoading = stats === null;
+  const authorsLoading = authorCount === null && (stats === null || !stats.total_authors);
+  const seriesLoading = seriesCount === null && (stats === null || !stats.total_series);
 
   return (
     <Box sx={{ height: '100%', overflow: 'auto' }}>
@@ -282,7 +303,8 @@ export function Dashboard() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Library Books"
-            value={stats.library_books}
+            value={stats?.library_books ?? 0}
+            loading={bookStatsLoading}
             icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
@@ -291,7 +313,8 @@ export function Dashboard() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Import Path Books"
-            value={stats.import_books}
+            value={stats?.import_books ?? 0}
+            loading={bookStatsLoading}
             icon={<FolderIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
@@ -300,7 +323,8 @@ export function Dashboard() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Authors"
-            value={stats.total_authors}
+            value={authorCount ?? stats?.total_authors ?? 0}
+            loading={authorsLoading}
             icon={<PersonIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
@@ -309,7 +333,8 @@ export function Dashboard() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Series"
-            value={stats.total_series}
+            value={seriesCount ?? stats?.total_series ?? 0}
+            loading={seriesLoading}
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/library')}
           />
@@ -320,35 +345,45 @@ export function Dashboard() {
             <Typography variant="h6" gutterBottom>
               Storage Usage
             </Typography>
-            <Box sx={{ mb: 2 }}>
-              <Box display="flex" justifyContent="space-between" mb={1}>
-                <Typography variant="body2" color="text.secondary">
-                  Total Size
-                </Typography>
-                <Typography variant="body2" fontWeight="medium">
-                  {stats.disk_used_gb.toFixed(1)} GB /{' '}
-                  {stats.disk_total_gb.toFixed(1)} GB
-                </Typography>
+            {!storageLoaded ? (
+              <Box sx={{ py: 2 }}>
+                <Skeleton variant="text" width="60%" height={24} />
+                <Skeleton variant="rectangular" height={8} sx={{ my: 1, borderRadius: 1 }} />
+                <Skeleton variant="text" width="40%" height={20} />
               </Box>
-              <LinearProgress
-                variant="determinate"
-                value={stats.disk_usage_percent}
-                sx={{ height: 8, borderRadius: 1 }}
-              />
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mt: 0.5, display: 'block' }}
-              >
-                {stats.disk_usage_percent.toFixed(0)}% of disk used
-              </Typography>
-            </Box>
-            <Box display="flex" alignItems="center" gap={1}>
-              <StorageIcon color="action" />
-              <Typography variant="body2" color="text.secondary">
-                System storage healthy
-              </Typography>
-            </Box>
+            ) : (
+              <>
+                <Box sx={{ mb: 2 }}>
+                  <Box display="flex" justifyContent="space-between" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Size
+                    </Typography>
+                    <Typography variant="body2" fontWeight="medium">
+                      {(stats?.disk_used_gb ?? 0).toFixed(1)} GB /{' '}
+                      {(stats?.disk_total_gb ?? 0).toFixed(1)} GB
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={stats?.disk_usage_percent ?? 0}
+                    sx={{ height: 8, borderRadius: 1 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mt: 0.5, display: 'block' }}
+                  >
+                    {(stats?.disk_usage_percent ?? 0).toFixed(0)}% of disk used
+                  </Typography>
+                </Box>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <StorageIcon color="action" />
+                  <Typography variant="body2" color="text.secondary">
+                    System storage healthy
+                  </Typography>
+                </Box>
+              </>
+            )}
           </Paper>
         </Grid>
 
@@ -357,7 +392,13 @@ export function Dashboard() {
             <Typography variant="h6" gutterBottom>
               Recent Operations
             </Typography>
-            {operations.length === 0 ? (
+            {operations === null ? (
+              <Box sx={{ py: 1 }}>
+                <Skeleton variant="text" width="80%" />
+                <Skeleton variant="text" width="60%" />
+                <Skeleton variant="text" width="70%" />
+              </Box>
+            ) : operations.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
                 No recent operations
               </Typography>
