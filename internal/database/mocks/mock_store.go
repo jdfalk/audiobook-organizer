@@ -6368,3 +6368,114 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *
 	_c.Call.Return(run)
 	return _c
 }
+
+// SaveLibraryFingerprint provides a mock function for the type MockStore
+func (_mock *MockStore) SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32 uint32) error {
+	ret := _mock.Called(path, size, modTime, crc32)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveLibraryFingerprint")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, int64, time.Time, uint32) error); ok {
+		r0 = returnFunc(path, size, modTime, crc32)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SaveLibraryFingerprint_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveLibraryFingerprint'
+type MockStore_SaveLibraryFingerprint_Call struct {
+	*mock.Call
+}
+
+// SaveLibraryFingerprint is a helper method to define mock.On call
+//   - path string
+//   - size int64
+//   - modTime time.Time
+//   - crc32 uint32
+func (_e *MockStore_Expecter) SaveLibraryFingerprint(path interface{}, size interface{}, modTime interface{}, crc32 interface{}) *MockStore_SaveLibraryFingerprint_Call {
+	return &MockStore_SaveLibraryFingerprint_Call{Call: _e.mock.On("SaveLibraryFingerprint", path, size, modTime, crc32)}
+}
+
+func (_c *MockStore_SaveLibraryFingerprint_Call) Run(run func(path string, size int64, modTime time.Time, crc32 uint32)) *MockStore_SaveLibraryFingerprint_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(
+			args[0].(string),
+			args[1].(int64),
+			args[2].(time.Time),
+			args[3].(uint32),
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SaveLibraryFingerprint_Call) Return(err error) *MockStore_SaveLibraryFingerprint_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SaveLibraryFingerprint_Call) RunAndReturn(run func(string, int64, time.Time, uint32) error) *MockStore_SaveLibraryFingerprint_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetLibraryFingerprint provides a mock function for the type MockStore
+func (_mock *MockStore) GetLibraryFingerprint(path string) (*database.LibraryFingerprintRecord, error) {
+	ret := _mock.Called(path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetLibraryFingerprint")
+	}
+
+	var r0 *database.LibraryFingerprintRecord
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.LibraryFingerprintRecord, error)); ok {
+		return returnFunc(path)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.LibraryFingerprintRecord); ok {
+		r0 = returnFunc(path)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.LibraryFingerprintRecord)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(path)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetLibraryFingerprint_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLibraryFingerprint'
+type MockStore_GetLibraryFingerprint_Call struct {
+	*mock.Call
+}
+
+// GetLibraryFingerprint is a helper method to define mock.On call
+//   - path string
+func (_e *MockStore_Expecter) GetLibraryFingerprint(path interface{}) *MockStore_GetLibraryFingerprint_Call {
+	return &MockStore_GetLibraryFingerprint_Call{Call: _e.mock.On("GetLibraryFingerprint", path)}
+}
+
+func (_c *MockStore_GetLibraryFingerprint_Call) Run(run func(path string)) *MockStore_GetLibraryFingerprint_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(
+			args[0].(string),
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetLibraryFingerprint_Call) Return(record *database.LibraryFingerprintRecord, err error) *MockStore_GetLibraryFingerprint_Call {
+	_c.Call.Return(record, err)
+	return _c
+}
+
+func (_c *MockStore_GetLibraryFingerprint_Call) RunAndReturn(run func(string) (*database.LibraryFingerprintRecord, error)) *MockStore_GetLibraryFingerprint_Call {
+	_c.Call.Return(run)
+	return _c
+}

@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2294,6 +2294,36 @@ func (s *SQLiteStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 		return nil, err
 	}
 	return &item, nil
+}
+
+// SaveLibraryFingerprint stores or updates the fingerprint for an iTunes library file.
+func (s *SQLiteStore) SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32val uint32) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO itunes_library_state (path, size, mod_time, crc32, updated_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		path, size, modTime.Format(time.RFC3339), crc32val, time.Now().Format(time.RFC3339),
+	)
+	return err
+}
+
+// GetLibraryFingerprint retrieves the stored fingerprint for an iTunes library file.
+func (s *SQLiteStore) GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error) {
+	row := s.db.QueryRow(
+		"SELECT path, size, mod_time, crc32, updated_at FROM itunes_library_state WHERE path = ?",
+		path,
+	)
+	var rec LibraryFingerprintRecord
+	var modTimeStr, updatedAtStr string
+	err := row.Scan(&rec.Path, &rec.Size, &modTimeStr, &rec.CRC32, &updatedAtStr)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	rec.ModTime, _ = time.Parse(time.RFC3339, modTimeStr)
+	rec.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
+	return &rec, nil
 }
 
 // Reset clears all data from all tables

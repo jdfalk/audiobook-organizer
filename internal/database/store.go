@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.19.0
+// version: 2.20.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -162,6 +162,10 @@ type Store interface {
 	RemoveBlockedHash(hash string) error
 	GetAllBlockedHashes() ([]DoNotImport, error)
 	GetBlockedHashByHash(hash string) (*DoNotImport, error)
+
+	// iTunes Library Fingerprints (change detection)
+	SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32 uint32) error
+	GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error)
 }
 
 // Common data structures used by all store implementations
@@ -339,6 +343,15 @@ type DoNotImport struct {
 	Hash      string    `json:"hash"`
 	Reason    string    `json:"reason"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// LibraryFingerprintRecord stores the last-known state of an iTunes Library.xml file.
+type LibraryFingerprintRecord struct {
+	Path      string    `json:"path"`
+	Size      int64     `json:"size"`
+	ModTime   time.Time `json:"mod_time"`
+	CRC32     uint32    `json:"crc32"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Extended models (Pebble only; SQLite may ignore)
