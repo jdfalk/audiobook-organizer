@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2679,6 +2679,41 @@ func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {
 		}
 	}
 	return ops, nil
+}
+
+// SaveLibraryFingerprint stores or updates the fingerprint for an iTunes library file.
+func (p *PebbleStore) SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32val uint32) error {
+	rec := LibraryFingerprintRecord{
+		Path:      path,
+		Size:      size,
+		ModTime:   modTime,
+		CRC32:     crc32val,
+		UpdatedAt: time.Now(),
+	}
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("itunes:fingerprint:%s", path))
+	return p.db.Set(key, data, pebble.Sync)
+}
+
+// GetLibraryFingerprint retrieves the stored fingerprint for an iTunes library file.
+func (p *PebbleStore) GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error) {
+	key := []byte(fmt.Sprintf("itunes:fingerprint:%s", path))
+	data, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var rec LibraryFingerprintRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return nil, err
+	}
+	return &rec, nil
 }
 
 // Reset clears all data from the store and resets all counters to initial state

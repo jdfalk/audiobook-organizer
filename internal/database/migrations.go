@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -139,6 +139,12 @@ var migrations = []Migration{
 		Version:     17,
 		Description: "Add composite indexes and FTS5 full-text search",
 		Up:          migration017Up,
+		Down:        nil,
+	},
+	{
+		Version:     18,
+		Description: "Add itunes_library_state table for change detection",
+		Up:          migration018Up,
 		Down:        nil,
 	},
 }
@@ -960,6 +966,23 @@ func migration017Up(store Store) error {
 	}
 
 	log.Println("  - Composite indexes and FTS5 added successfully")
+	return nil
+}
+
+func migration018Up(store Store) error {
+	if sqlStore, ok := store.(*SQLiteStore); ok {
+		_, err := sqlStore.db.Exec(`
+			CREATE TABLE IF NOT EXISTS itunes_library_state (
+				path       TEXT PRIMARY KEY,
+				size       INTEGER NOT NULL,
+				mod_time   TEXT NOT NULL,
+				crc32      INTEGER NOT NULL,
+				updated_at TEXT NOT NULL
+			)
+		`)
+		return err
+	}
+	// PebbleDB: no schema needed, uses key-value pairs
 	return nil
 }
 
