@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.62.0
+// version: 1.63.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -456,6 +456,7 @@ type Server struct {
 	dashboardService       *DashboardService
 	dashboardCache         *cache.Cache[gin.H]
 	olService              *OpenLibraryService
+	libraryWatcher         *itunes.LibraryWatcher
 }
 
 // ServerConfig holds server configuration

@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -1184,6 +1184,14 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 				response["changed_since_import"] = true
 				response["last_external_change"] = info.ModTime()
 			}
+		}
+	}
+
+	// Also check fsnotify watcher if available
+	if s.libraryWatcher != nil && s.libraryWatcher.HasChanged() {
+		response["changed_since_import"] = true
+		if changedAt := s.libraryWatcher.ChangedAt(); !changedAt.IsZero() {
+			response["last_external_change"] = changedAt
 		}
 	}
 
