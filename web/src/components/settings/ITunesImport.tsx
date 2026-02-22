@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -48,6 +48,7 @@ import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog'
 import {
   getBook,
   getITunesImportStatus,
+  getITunesLibraryStatus,
   importITunesLibrary,
   type Book,
   type ITunesImportRequest,
@@ -126,6 +127,8 @@ export function ITunesImport() {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [pendingConflicts] = useState<ConflictItem[]>([]);
   const [syncingWithConflicts, setSyncingWithConflicts] = useState(false);
+  const [libraryChanged, setLibraryChanged] = useState(false);
+  const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
   const pollTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -135,6 +138,25 @@ export function ITunesImport() {
       }
     };
   }, []);
+
+  // Poll library status when a library path is configured
+  useEffect(() => {
+    const itunesPath = settings.libraryPath;
+    if (!itunesPath) return;
+
+    const checkStatus = async () => {
+      try {
+        const status = await getITunesLibraryStatus(itunesPath);
+        setLibraryChanged(status.changed_since_import === true);
+      } catch {
+        // Silently ignore — library status is non-critical
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, [settings.libraryPath]);
 
   const handleBrowseFile = () => {
     const path = window.prompt('Enter path to iTunes Library.xml:');
@@ -277,7 +299,7 @@ export function ITunesImport() {
     }
   };
 
-  const handleWriteBack = async () => {
+  const handleWriteBack = async (forceOverwrite = false) => {
     if (!writeBackLibraryPath.trim()) {
       setWriteBackNotice({
         severity: 'error',
@@ -302,6 +324,7 @@ export function ITunesImport() {
         library_path: writeBackLibraryPath,
         audiobook_ids: writeBackBooks.map((book) => book.id),
         create_backup: writeBackBackup,
+        force_overwrite: forceOverwrite,
       });
       setWriteBackResult(result);
       setWriteBackNotice({
@@ -309,9 +332,16 @@ export function ITunesImport() {
         message: result.message || `Updated ${result.updated_count} entries.`,
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Write-back failed.';
-      setWriteBackNotice({ severity: 'error', message });
+      if (
+        err instanceof Error &&
+        (err as unknown as Record<string, unknown>).type === 'library_modified'
+      ) {
+        setOverwriteConfirmOpen(true);
+      } else {
+        const message =
+          err instanceof Error ? err.message : 'Write-back failed.';
+        setWriteBackNotice({ severity: 'error', message });
+      }
     } finally {
       setWriteBackLoading(false);
     }
@@ -379,6 +409,12 @@ export function ITunesImport() {
         {error && (
           <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
             {error}
+          </Alert>
+        )}
+
+        {libraryChanged && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            iTunes library has been modified since last import. Consider re-importing to pick up changes.
           </Alert>
         )}
 
@@ -863,7 +899,7 @@ export function ITunesImport() {
             </Button>
             <Button
               variant="contained"
-              onClick={handleWriteBack}
+              onClick={() => handleWriteBack()}
               disabled={writeBackLoading || writeBackBooks.length === 0}
             >
               {writeBackLoading
@@ -880,6 +916,28 @@ export function ITunesImport() {
           onResolve={handleConflictResolve}
           onCancel={() => setShowConflictDialog(false)}
         />
+
+        <Dialog open={overwriteConfirmOpen} onClose={() => setOverwriteConfirmOpen(false)}>
+          <DialogTitle>Library Modified</DialogTitle>
+          <DialogContent>
+            <Typography>
+              The iTunes library has been modified since your last import. Writing back now may overwrite those external changes.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOverwriteConfirmOpen(false)}>Cancel</Button>
+            <Button
+              color="warning"
+              variant="contained"
+              onClick={() => {
+                setOverwriteConfirmOpen(false);
+                handleWriteBack(true);
+              }}
+            >
+              Overwrite Anyway
+            </Button>
+          </DialogActions>
+        </Dialog>
       </CardContent>
     </Card>
   );

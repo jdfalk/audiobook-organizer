@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.19.0
+// version: 1.20.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -177,6 +177,14 @@ export interface ITunesWriteBackRequest {
   library_path: string;
   audiobook_ids: string[];
   create_backup: boolean;
+  force_overwrite?: boolean;
+}
+
+export interface ITunesLibraryStatus {
+  changed_since_import: boolean;
+  fingerprint_stored: string;
+  last_imported: string;
+  last_external_change: string;
 }
 
 export interface ITunesWriteBackResponse {
@@ -1059,8 +1067,27 @@ export async function writeBackITunesLibrary(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  if (response.status === 409) {
+    const data = await response.json();
+    const err = new Error(data.message || 'Library modified');
+    (err as unknown as Record<string, unknown>).type = 'library_modified';
+    (err as unknown as Record<string, unknown>).details = data;
+    throw err;
+  }
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write back iTunes library');
+  }
+  return response.json();
+}
+
+export async function getITunesLibraryStatus(
+  path: string
+): Promise<ITunesLibraryStatus> {
+  const response = await fetch(
+    `${API_BASE}/itunes/library-status?path=${encodeURIComponent(path)}`
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch library status');
   }
   return response.json();
 }
