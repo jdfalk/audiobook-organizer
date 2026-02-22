@@ -1,11 +1,12 @@
 // file: internal/server/itunes.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"log"
@@ -71,9 +72,10 @@ type ITunesImportResponse struct {
 
 // ITunesWriteBackRequest represents a write-back request for iTunes updates.
 type ITunesWriteBackRequest struct {
-	LibraryPath  string   `json:"library_path" binding:"required"`
-	AudiobookIDs []string `json:"audiobook_ids"`
-	CreateBackup bool     `json:"create_backup"`
+	LibraryPath    string   `json:"library_path" binding:"required"`
+	AudiobookIDs   []string `json:"audiobook_ids"`
+	CreateBackup   bool     `json:"create_backup"`
+	ForceOverwrite bool     `json:"force_overwrite"`
 }
 
 // ITunesWriteBackResponse summarizes write-back results.
@@ -337,18 +339,48 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		return
 	}
 
+	// Load stored fingerprint for conflict detection
+	var storedFP *itunes.LibraryFingerprint
+	if rec, err := database.GlobalStore.GetLibraryFingerprint(req.LibraryPath); err == nil && rec != nil {
+		storedFP = &itunes.LibraryFingerprint{
+			Path:    rec.Path,
+			Size:    rec.Size,
+			ModTime: rec.ModTime,
+			CRC32:   rec.CRC32,
+		}
+	}
+
 	opts := itunes.WriteBackOptions{
-		LibraryPath:  req.LibraryPath,
-		Updates:      updates,
-		CreateBackup: req.CreateBackup,
+		LibraryPath:       req.LibraryPath,
+		Updates:           updates,
+		CreateBackup:      req.CreateBackup,
+		ForceOverwrite:    req.ForceOverwrite,
+		StoredFingerprint: storedFP,
 	}
 
 	result, err := itunes.WriteBack(opts)
 	if err != nil {
+		var modErr *itunes.ErrLibraryModified
+		if errors.As(err, &modErr) {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":         "library_modified",
+				"message":       modErr.Error(),
+				"stored_size":   modErr.Stored.Size,
+				"current_size":  modErr.Current.Size,
+				"stored_mtime":  modErr.Stored.ModTime,
+				"current_mtime": modErr.Current.ModTime,
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("write-back failed: %v", err),
 		})
 		return
+	}
+
+	// Update fingerprint after successful write-back
+	if fp, err := itunes.ComputeFingerprint(req.LibraryPath); err == nil {
+		_ = database.GlobalStore.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
 	}
 
 	c.JSON(http.StatusOK, ITunesWriteBackResponse{
@@ -610,6 +642,11 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 
 	// Clear checkpoint on successful completion
 	_ = operations.ClearState(store, opID)
+
+	// Save library fingerprint for change detection
+	if fp, err := itunes.ComputeFingerprint(req.LibraryPath); err == nil {
+		_ = store.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
+	}
 
 	summary := buildITunesSummary(status)
 	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
@@ -1110,4 +1147,45 @@ func intPtr(value int) *int {
 
 func int64Ptr(value int64) *int64 {
 	return &value
+}
+
+// handleITunesLibraryStatus returns the current status of an iTunes library file.
+func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "path query parameter required"})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	rec, err := database.GlobalStore.GetLibraryFingerprint(path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	response := gin.H{
+		"path":                 path,
+		"configured":           true,
+		"fingerprint_stored":   rec != nil,
+		"changed_since_import": false,
+	}
+
+	if rec != nil {
+		response["last_imported"] = rec.UpdatedAt
+
+		// Quick mtime+size check (no CRC32 for polling)
+		if info, err := os.Stat(path); err == nil {
+			if info.Size() != rec.Size || !info.ModTime().Equal(rec.ModTime) {
+				response["changed_since_import"] = true
+				response["last_external_change"] = info.ModTime()
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }

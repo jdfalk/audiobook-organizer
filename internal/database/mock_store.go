@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -147,6 +147,10 @@ type MockStore struct {
 
 	// Version Management
 	GetBooksByVersionGroupFunc func(groupID string) ([]Book, error)
+
+	// iTunes Library Fingerprints
+	SaveLibraryFingerprintFunc func(path string, size int64, modTime time.Time, crc32 uint32) error
+	GetLibraryFingerprintFunc  func(path string) (*LibraryFingerprintRecord, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -863,6 +867,20 @@ func (m *MockStore) GetAllBlockedHashes() ([]DoNotImport, error) {
 func (m *MockStore) GetBlockedHashByHash(hash string) (*DoNotImport, error) {
 	if m.GetBlockedHashByHashFunc != nil {
 		return m.GetBlockedHashByHashFunc(hash)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32 uint32) error {
+	if m.SaveLibraryFingerprintFunc != nil {
+		return m.SaveLibraryFingerprintFunc(path, size, modTime, crc32)
+	}
+	return nil
+}
+
+func (m *MockStore) GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error) {
+	if m.GetLibraryFingerprintFunc != nil {
+		return m.GetLibraryFingerprintFunc(path)
 	}
 	return nil, nil
 }
