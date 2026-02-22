@@ -18,8 +18,10 @@ type WriteBackUpdate struct {
 type WriteBackOptions struct {
 	LibraryPath      string             // Path to iTunes Library.xml to update
 	Updates          []*WriteBackUpdate // List of path updates to apply
-	CreateBackup     bool               // Create backup before modifying (recommended)
-	BackupPath       string             // Optional custom backup path
+	CreateBackup      bool               // Create backup before modifying (recommended)
+	BackupPath        string             // Optional custom backup path
+	ForceOverwrite    bool               // Skip fingerprint check (user confirmed override)
+	StoredFingerprint *LibraryFingerprint // Fingerprint from last import (nil = skip check)
 }
 
 // WriteBackResult contains the results of a write-back operation
@@ -42,6 +44,20 @@ func WriteBack(opts WriteBackOptions) (*WriteBackResult, error) {
 	}
 	if _, err := os.Stat(opts.LibraryPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("iTunes library file not found: %s", opts.LibraryPath)
+	}
+
+	// Check for external modifications (unless force override)
+	if !opts.ForceOverwrite && opts.StoredFingerprint != nil {
+		current, err := ComputeFingerprint(opts.LibraryPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check library state: %w", err)
+		}
+		if !opts.StoredFingerprint.Matches(current) {
+			return nil, &ErrLibraryModified{
+				Stored:  opts.StoredFingerprint,
+				Current: current,
+			}
+		}
 	}
 
 	// Create backup if requested
