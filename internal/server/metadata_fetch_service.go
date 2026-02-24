@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -18,8 +18,9 @@ import (
 )
 
 type MetadataFetchService struct {
-	db      database.Store
-	olStore *openlibrary.OLStore
+	db              database.Store
+	olStore         *openlibrary.OLStore
+	overrideSources []metadata.MetadataSource // for testing
 }
 
 func NewMetadataFetchService(db database.Store) *MetadataFetchService {
@@ -78,7 +79,12 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
-	sources := mfs.BuildSourceChain()
+	var sources []metadata.MetadataSource
+	if len(mfs.overrideSources) > 0 {
+		sources = mfs.overrideSources
+	} else {
+		sources = mfs.BuildSourceChain()
+	}
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("no metadata sources enabled")
 	}
