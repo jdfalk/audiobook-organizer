@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.20.0
+// version: 1.21.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1415,6 +1415,38 @@ export async function removeBlockedHash(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to remove blocked hash');
   }
+  return response.json();
+}
+
+// Metadata History
+export interface MetadataChangeRecord {
+  id: number;
+  book_id: string;
+  field: string;
+  previous_value?: string;
+  new_value?: string;
+  change_type: string;
+  source?: string;
+  changed_at: string;
+}
+
+export async function getBookMetadataHistory(bookId: string): Promise<MetadataChangeRecord[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch metadata history');
+  const data = await response.json();
+  return data.history || [];
+}
+
+export async function getFieldMetadataHistory(bookId: string, field: string): Promise<MetadataChangeRecord[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch field history');
+  const data = await response.json();
+  return data.history || [];
+}
+
+export async function undoMetadataChange(bookId: string, field: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}/undo`, { method: 'POST' });
+  if (!response.ok) throw await buildApiError(response, 'Failed to undo change');
   return response.json();
 }
 
