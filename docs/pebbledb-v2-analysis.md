@@ -152,10 +152,21 @@ Before and after migration, measure:
 
 **Upgrade to v2.** The migration is low-risk and the effort is modest (8-12 hours total).
 
+### Both PebbleDB Stores Must Be Upgraded
+
+The project has **two independent PebbleDB databases** that both need the v2 upgrade:
+
+| Store | Location | Records | Purpose |
+|-------|----------|---------|---------|
+| Main store | `pebble_store.go` | ~thousands | Books, authors, series, settings, metadata state |
+| OL store | `openlibrary/store.go` | ~12M+ | Open Library dump lookup (editions, authors, works) |
+
+Both now log their format version on startup. Any upgrade must target both stores — upgrading only the main store would leave the OL store on the old format and miss the biggest performance win (SST ingestion for bulk OL imports).
+
 ### Priority Order
 
 1. **Import path update + compilation fixes** (Steps 1-2, ~2 hours): Get building on v2. This is the foundation.
-2. **Format version + ratchet** (Steps 3-4, ~30 minutes): Enable columnar blocks for new and existing databases.
+2. **Format version + ratchet for BOTH stores** (Steps 3-4, ~30 minutes): Enable columnar blocks for both main DB and OL DB.
 3. **Open Library SST ingestion** (Step 5, ~4 hours): The biggest single performance win. Can be done as a follow-up PR.
 4. **EventuallyFileOnlySnapshot for background ops** (Step 6, ~2 hours): Nice-to-have, can defer.
 5. **Blob storage for cover art** (future): Only relevant once cover art feature is implemented.

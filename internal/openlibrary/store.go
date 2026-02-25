@@ -1,5 +1,5 @@
 // file: internal/openlibrary/store.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package openlibrary
@@ -30,6 +30,7 @@ func NewOLStore(path string) (*OLStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open OL store: %w", err)
 	}
+	log.Printf("[INFO] OL PebbleDB opened at %s (format version: %s)", path, db.FormatMajorVersion())
 	return &OLStore{db: db}, nil
 }
 
