@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,6 +58,8 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	}
 
 	store := &PebbleStore{db: db}
+
+	log.Printf("[INFO] PebbleDB opened at %s (format version: %s)", path, db.FormatMajorVersion())
 
 	if err := store.migrateImportPathKeys(); err != nil {
 		db.Close()

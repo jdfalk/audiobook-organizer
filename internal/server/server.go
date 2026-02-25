@@ -2753,21 +2753,23 @@ func (s *Server) searchMetadata(c *gin.Context) {
 // stripChapterFromTitle removes chapter/book numbers from titles to improve search results
 // Examples: "The Odyssey: Book 01" -> "The Odyssey", "Harry Potter - Chapter 5" -> "Harry Potter"
 func stripChapterFromTitle(title string) string {
-	// Common patterns for chapters/books
+	cleaned := title
+
+	// Strip leading bracketed series info like "[The Expanse 9.0]" or "[Series Name]"
+	bracketPrefix := regexp.MustCompile(`^\[.*?\]\s*`)
+	cleaned = bracketPrefix.ReplaceAllString(cleaned, "")
+
+	// Strip trailing bracketed info like "Title [Unabridged]"
+	bracketSuffix := regexp.MustCompile(`\s*\[.*?\]\s*$`)
+	cleaned = bracketSuffix.ReplaceAllString(cleaned, "")
+
+	// Common patterns for chapters/books/parts/volumes
 	patterns := []string{
-		`: Book \d+`,
-		`: Chapter \d+`,
-		` - Book \d+`,
-		` - Chapter \d+`,
-		`, Book \d+`,
-		`, Chapter \d+`,
-		`\(Book \d+\)`,
-		`\(Chapter \d+\)`,
-		` Book \d+$`,
-		` Chapter \d+$`,
+		`(?i)[,:\s]*-?\s*(?:Book|Chapter|Part|Volume|Vol\.?|Pt\.?)\s*\d+[\.\d]*\s*$`,
+		`(?i)\s*\((?:Book|Chapter|Part|Volume)\s*\d+[\.\d]*\)`,
+		`(?i)\s*#\d+[\.\d]*\s*$`,
 	}
 
-	cleaned := title
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		cleaned = re.ReplaceAllString(cleaned, "")
@@ -2776,6 +2778,9 @@ func stripChapterFromTitle(title string) string {
 	// Strip audiobook qualifiers like "(Unabridged)", "(Abridged)", etc.
 	qualifiers := regexp.MustCompile(`(?i)\s*\((un)?abridged\)`)
 	cleaned = qualifiers.ReplaceAllString(cleaned, "")
+
+	// Strip trailing " - " artifacts from removals
+	cleaned = strings.TrimRight(cleaned, " -")
 
 	return strings.TrimSpace(cleaned)
 }
