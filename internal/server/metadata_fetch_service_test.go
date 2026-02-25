@@ -395,6 +395,18 @@ func TestStripChapterFromTitle(t *testing.T) {
 		{"Already Clean Title", "Already Clean Title"},
 		{"Title, Chapter 7", "Title"},
 		{"Title (Unabridged)", "Title"},
+		// Bracket series prefix patterns
+		{"[The Expanse 9.0] Leviathan Falls", "Leviathan Falls"},
+		{"[Series Name] The Book Title", "The Book Title"},
+		{"[Dresden Files 1] Storm Front", "Storm Front"},
+		// Trailing brackets
+		{"Title [Unabridged]", "Title"},
+		// Part/Volume patterns
+		{"The Fellowship of the Ring Part 2", "The Fellowship of the Ring"},
+		{"Dune Volume 1", "Dune"},
+		{"Book Title Vol. 3", "Book Title"},
+		// Hash number patterns
+		{"Title #12", "Title"},
 	}
 
 	for _, tc := range tests {
