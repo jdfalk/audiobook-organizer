@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.63.0
+// version: 1.64.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1025,6 +1025,11 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
+			// Metadata change history
+			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
+			protected.GET("/audiobooks/:id/metadata-history/:field", s.getFieldMetadataHistory)
+			protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.undoMetadataChange)
+
 			// Author and series routes
 			protected.GET("/authors", s.listAuthors)
 			protected.GET("/authors/count", s.countAuthors)
@@ -1482,6 +1487,112 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, segments)
+}
+
+func (s *Server) getBookMetadataHistory(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	limit := 100
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	records, err := database.GlobalStore.GetBookChangeHistory(id, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if records == nil {
+		records = []database.MetadataChangeRecord{}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": records, "count": len(records)})
+}
+
+func (s *Server) getFieldMetadataHistory(c *gin.Context) {
+	id := c.Param("id")
+	field := c.Param("field")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	limit := 50
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if records == nil {
+		records = []database.MetadataChangeRecord{}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": records, "count": len(records)})
+}
+
+func (s *Server) undoMetadataChange(c *gin.Context) {
+	id := c.Param("id")
+	field := c.Param("field")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get the latest change for this field
+	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, 1)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(records) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no change history found for this field"})
+		return
+	}
+
+	latest := records[0]
+
+	// Apply the previous value back via metadata state service
+	if latest.PreviousValue != nil {
+		var prevValue any
+		if err := json.Unmarshal([]byte(*latest.PreviousValue), &prevValue); err != nil {
+			prevValue = *latest.PreviousValue
+		}
+		if err := s.metadataStateService.SetOverride(id, field, prevValue, false); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to apply undo: %v", err)})
+			return
+		}
+	} else {
+		// Previous value was nil, so clear the override
+		if err := s.metadataStateService.ClearOverride(id, field); err != nil {
+			// Ignore "not found" errors when clearing
+			if !strings.Contains(err.Error(), "not found") {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to clear override: %v", err)})
+				return
+			}
+		}
+	}
+
+	// Record the undo itself
+	undoRecord := &database.MetadataChangeRecord{
+		BookID:        id,
+		Field:         field,
+		PreviousValue: latest.NewValue,
+		NewValue:      latest.PreviousValue,
+		ChangeType:    "undo",
+		Source:        "manual",
+		ChangedAt:     time.Now(),
+	}
+	if err := database.GlobalStore.RecordMetadataChange(undoRecord); err != nil {
+		log.Printf("[WARN] failed to record undo change for %s/%s: %v", id, field, err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
 }
 
 func (s *Server) getAudiobookTags(c *gin.Context) {

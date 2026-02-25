@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -145,6 +145,12 @@ var migrations = []Migration{
 		Version:     18,
 		Description: "Add itunes_library_state table for change detection",
 		Up:          migration018Up,
+		Down:        nil,
+	},
+	{
+		Version:     19,
+		Description: "Add metadata_changes_history table for undo support",
+		Up:          migration019Up,
 		Down:        nil,
 	},
 }
@@ -983,6 +989,39 @@ func migration018Up(store Store) error {
 		return err
 	}
 	// PebbleDB: no schema needed, uses key-value pairs
+	return nil
+}
+
+func migration019Up(store Store) error {
+	log.Println("  - Adding metadata_changes_history table for undo support")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS metadata_changes_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			book_id TEXT NOT NULL,
+			field TEXT NOT NULL,
+			previous_value TEXT,
+			new_value TEXT,
+			change_type TEXT NOT NULL,
+			source TEXT,
+			changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_metadata_changes_book ON metadata_changes_history(book_id)",
+		"CREATE INDEX IF NOT EXISTS idx_metadata_changes_book_field ON metadata_changes_history(book_id, field)",
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 19 failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

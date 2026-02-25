@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1838,6 +1838,81 @@ func (p *PebbleStore) UpsertMetadataFieldState(state *MetadataFieldState) error 
 
 func (p *PebbleStore) DeleteMetadataFieldState(bookID, field string) error {
 	return p.db.Delete(p.metadataStateKey(bookID, field), pebble.Sync)
+}
+
+// Metadata change history operations
+
+func (p *PebbleStore) RecordMetadataChange(record *MetadataChangeRecord) error {
+	key := fmt.Sprintf("metadata_change:%s:%s:%d", record.BookID, record.Field, record.ChangedAt.UnixNano())
+	data, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte(key), data, pebble.Sync)
+}
+
+func (p *PebbleStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]MetadataChangeRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	prefix := fmt.Sprintf("metadata_change:%s:%s:", bookID, field)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte(prefix),
+		UpperBound: []byte(prefix + "\xff"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var all []MetadataChangeRecord
+	for iter.First(); iter.Valid(); iter.Next() {
+		var r MetadataChangeRecord
+		if err := json.Unmarshal(iter.Value(), &r); err != nil {
+			continue
+		}
+		all = append(all, r)
+	}
+	// Reverse for newest-first
+	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
+		all[i], all[j] = all[j], all[i]
+	}
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
+}
+
+func (p *PebbleStore) GetBookChangeHistory(bookID string, limit int) ([]MetadataChangeRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	prefix := fmt.Sprintf("metadata_change:%s:", bookID)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte(prefix),
+		UpperBound: []byte(prefix + "\xff"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var all []MetadataChangeRecord
+	for iter.First(); iter.Valid(); iter.Next() {
+		var r MetadataChangeRecord
+		if err := json.Unmarshal(iter.Value(), &r); err != nil {
+			continue
+		}
+		all = append(all, r)
+	}
+	// Reverse for newest-first
+	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
+		all[i], all[j] = all[j], all[i]
+	}
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all, nil
 }
 
 // User Preference operations

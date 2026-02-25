@@ -799,6 +799,8 @@ func TestMetadataStateService_UpdateFetchedMetadata(t *testing.T) {
 				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
 				// Mock GetUserPreference for legacy state check (returns nil to indicate no legacy state)
 				mockStore.On("GetUserPreference", "metadata_state_"+bookID).Return(nil, nil).Once()
+				// RecordMetadataChange calls from recordChange helper
+				mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
 				// Second call in SaveMetadataState (in UpdateFetchedMetadata)
 				mockStore.On("GetMetadataFieldStates", bookID).Return([]database.MetadataFieldState{}, nil).Once()
 				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "title")).Return(nil).Once()
@@ -823,6 +825,8 @@ func TestMetadataStateService_UpdateFetchedMetadata(t *testing.T) {
 				}
 				// First call in LoadMetadataState
 				mockStore.On("GetMetadataFieldStates", bookID).Return(existingState, nil).Once()
+				// RecordMetadataChange calls from recordChange helper
+				mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
 				// Second call in SaveMetadataState
 				mockStore.On("GetMetadataFieldStates", bookID).Return(existingState, nil).Once()
 				mockStore.On("UpsertMetadataFieldState", matchMetadataFieldState(bookID, "narrator")).Return(nil).Once()

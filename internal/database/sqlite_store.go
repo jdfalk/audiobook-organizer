@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2161,6 +2161,86 @@ func (s *SQLiteStore) DeleteMetadataFieldState(bookID, field string) error {
 	}
 	_, err := s.db.Exec("DELETE FROM metadata_states WHERE book_id = ? AND field = ?", bookID, field)
 	return err
+}
+
+// Metadata change history operations
+
+func (s *SQLiteStore) RecordMetadataChange(record *MetadataChangeRecord) error {
+	_, err := s.db.Exec(
+		`INSERT INTO metadata_changes_history (book_id, field, previous_value, new_value, change_type, source, changed_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		record.BookID, record.Field, record.PreviousValue, record.NewValue,
+		record.ChangeType, record.Source, record.ChangedAt,
+	)
+	return err
+}
+
+func (s *SQLiteStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]MetadataChangeRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.Query(
+		`SELECT id, book_id, field, previous_value, new_value, change_type, source, changed_at
+		 FROM metadata_changes_history WHERE book_id = ? AND field = ? ORDER BY changed_at DESC LIMIT ?`,
+		bookID, field, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []MetadataChangeRecord
+	for rows.Next() {
+		var r MetadataChangeRecord
+		var prevVal, newVal, source sql.NullString
+		if err := rows.Scan(&r.ID, &r.BookID, &r.Field, &prevVal, &newVal, &r.ChangeType, &source, &r.ChangedAt); err != nil {
+			return nil, err
+		}
+		if prevVal.Valid {
+			r.PreviousValue = &prevVal.String
+		}
+		if newVal.Valid {
+			r.NewValue = &newVal.String
+		}
+		if source.Valid {
+			r.Source = source.String
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
+}
+
+func (s *SQLiteStore) GetBookChangeHistory(bookID string, limit int) ([]MetadataChangeRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.Query(
+		`SELECT id, book_id, field, previous_value, new_value, change_type, source, changed_at
+		 FROM metadata_changes_history WHERE book_id = ? ORDER BY changed_at DESC LIMIT ?`,
+		bookID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []MetadataChangeRecord
+	for rows.Next() {
+		var r MetadataChangeRecord
+		var prevVal, newVal, source sql.NullString
+		if err := rows.Scan(&r.ID, &r.BookID, &r.Field, &prevVal, &newVal, &r.ChangeType, &source, &r.ChangedAt); err != nil {
+			return nil, err
+		}
+		if prevVal.Valid {
+			r.PreviousValue = &prevVal.String
+		}
+		if newVal.Valid {
+			r.NewValue = &newVal.String
+		}
+		if source.Valid {
+			r.Source = source.String
+		}
+		records = append(records, r)
+	}
+	return records, rows.Err()
 }
 
 // Playlist operations
