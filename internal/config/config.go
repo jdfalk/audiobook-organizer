@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -105,6 +105,9 @@ type Config struct {
 	OpenLibraryDumpEnabled bool   `json:"openlibrary_dump_enabled"`
 	OpenLibraryDumpDir     string `json:"openlibrary_dump_dir"`
 
+	// Hardcover.app API
+	HardcoverAPIToken string `json:"hardcover_api_token"`
+
 	// AI-powered parsing
 	EnableAIParsing bool   `json:"enable_ai_parsing"`
 	OpenAIAPIKey    string `json:"openai_api_key"`
@@ -180,6 +183,9 @@ func InitConfig() {
 	// Open Library dump defaults
 	viper.SetDefault("openlibrary_dump_enabled", false)
 	viper.SetDefault("openlibrary_dump_dir", "")
+
+	// Hardcover.app defaults
+	viper.SetDefault("hardcover_api_token", "")
 
 	// Set AI parsing defaults
 	viper.SetDefault("enable_ai_parsing", false)
@@ -278,6 +284,9 @@ func InitConfig() {
 		OpenLibraryDumpEnabled: viper.GetBool("openlibrary_dump_enabled"),
 		OpenLibraryDumpDir:     viper.GetString("openlibrary_dump_dir"),
 
+		// Hardcover.app
+		HardcoverAPIToken: viper.GetString("hardcover_api_token"),
+
 		// AI parsing
 		EnableAIParsing: viper.GetBool("enable_ai_parsing"),
 		OpenAIAPIKey:    viper.GetString("openai_api_key"),
@@ -374,6 +383,14 @@ func InitConfig() {
 				Enabled:      true,
 				Priority:     3,
 				RequiresAuth: false,
+				Credentials:  make(map[string]string),
+			},
+			{
+				ID:           "hardcover",
+				Name:         "Hardcover",
+				Enabled:      false,
+				Priority:     4,
+				RequiresAuth: true,
 				Credentials:  make(map[string]string),
 			},
 		}

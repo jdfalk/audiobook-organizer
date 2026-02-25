@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -64,6 +64,19 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 			chain = append(chain, metadata.NewGoogleBooksClient())
 		case "audnexus":
 			chain = append(chain, metadata.NewAudnexusClient())
+		case "hardcover":
+			token := config.AppConfig.HardcoverAPIToken
+			if token == "" {
+				// Also check credentials map from metadata source config
+				if apiToken, ok := src.Credentials["api_token"]; ok && apiToken != "" {
+					token = apiToken
+				}
+			}
+			if token != "" {
+				chain = append(chain, metadata.NewHardcoverClient(token))
+			} else {
+				log.Printf("[WARN] Hardcover source enabled but no API token configured")
+			}
 		default:
 			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
 		}
