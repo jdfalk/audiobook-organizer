@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.12.0
+// version: 1.13.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -37,6 +37,7 @@ import EditIcon from '@mui/icons-material/Edit.js';
 import PsychologyIcon from '@mui/icons-material/Psychology.js';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
 import CompareIcon from '@mui/icons-material/Compare.js';
+import HistoryIcon from '@mui/icons-material/History.js';
 import InfoIcon from '@mui/icons-material/Info.js';
 import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
 import StorageIcon from '@mui/icons-material/Storage.js';
@@ -44,6 +45,7 @@ import type { Book, BookTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
+import { MetadataHistory } from '../components/MetadataHistory';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
@@ -76,6 +78,7 @@ export const BookDetail = () => {
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [tags, setTags] = useState<BookTags | null>(null);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
@@ -797,6 +800,14 @@ export const BookDetail = () => {
               disabled={actionLoading}
             >
               Edit Metadata
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<HistoryIcon />}
+              onClick={() => setHistoryDialogOpen(true)}
+              disabled={actionLoading}
+            >
+              History
             </Button>
             <Button
               variant="outlined"
@@ -1598,6 +1609,16 @@ export const BookDetail = () => {
         onUpdate={() => {
           loadVersions();
           loadBook();
+        }}
+      />
+
+      <MetadataHistory
+        bookId={book.id}
+        open={historyDialogOpen}
+        onClose={() => setHistoryDialogOpen(false)}
+        onUndoComplete={() => {
+          loadBook();
+          loadTags();
         }}
       />
     </Box>
