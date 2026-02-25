@@ -1,5 +1,5 @@
 // file: internal/server/metadata_state_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package server
@@ -130,6 +130,27 @@ func (mss *MetadataStateService) SaveMetadataState(bookID string, state map[stri
 	return nil
 }
 
+// recordChange is a helper that records a metadata change for undo/audit.
+func (mss *MetadataStateService) recordChange(bookID, field, changeType, source string, previousValue, newValue any) {
+	if mss.db == nil {
+		return
+	}
+	prev, _ := encodeMetadataValue(previousValue)
+	next, _ := encodeMetadataValue(newValue)
+	record := &database.MetadataChangeRecord{
+		BookID:        bookID,
+		Field:         field,
+		PreviousValue: prev,
+		NewValue:      next,
+		ChangeType:    changeType,
+		Source:        source,
+		ChangedAt:     time.Now(),
+	}
+	if err := mss.db.RecordMetadataChange(record); err != nil {
+		log.Printf("[WARN] failed to record metadata change for %s/%s: %v", bookID, field, err)
+	}
+}
+
 // UpdateFetchedMetadata updates the fetched values in metadata state
 func (mss *MetadataStateService) UpdateFetchedMetadata(bookID string, values map[string]any) error {
 	state, err := mss.LoadMetadataState(bookID)
@@ -143,9 +164,11 @@ func (mss *MetadataStateService) UpdateFetchedMetadata(bookID string, values map
 
 	for field, value := range values {
 		entry := state[field]
+		oldValue := entry.FetchedValue
 		entry.FetchedValue = value
 		entry.UpdatedAt = time.Now()
 		state[field] = entry
+		mss.recordChange(bookID, field, "fetched", "", oldValue, value)
 	}
 
 	return mss.SaveMetadataState(bookID, state)
@@ -163,10 +186,13 @@ func (mss *MetadataStateService) SetOverride(bookID string, field string, value 
 	}
 
 	entry := state[field]
+	oldValue := entry.OverrideValue
 	entry.OverrideValue = value
 	entry.OverrideLocked = locked
 	entry.UpdatedAt = time.Now()
 	state[field] = entry
+
+	mss.recordChange(bookID, field, "override", "manual", oldValue, value)
 
 	return mss.SaveMetadataState(bookID, state)
 }
@@ -195,7 +221,8 @@ func (mss *MetadataStateService) ClearOverride(bookID string, field string) erro
 		return err
 	}
 
-	if _, exists := state[field]; exists {
+	if entry, exists := state[field]; exists {
+		mss.recordChange(bookID, field, "clear", "manual", entry.OverrideValue, nil)
 		delete(state, field)
 		return mss.SaveMetadataState(bookID, state)
 	}

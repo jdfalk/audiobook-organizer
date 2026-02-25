@@ -165,6 +165,7 @@ export function Settings() {
   const [exportInProgress, setExportInProgress] = useState(false);
   const [importInProgress, setImportInProgress] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [configLoaded, setConfigLoaded] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // Factory reset state
@@ -435,6 +436,7 @@ export function Settings() {
       };
       setSettings(nextSettings);
       setSavedSnapshot(JSON.stringify(nextSettings));
+      setConfigLoaded(true);
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {
         navigate('/login');
@@ -894,6 +896,10 @@ export function Settings() {
   };
 
   const handleSave = async (): Promise<boolean> => {
+    if (!configLoaded) {
+      console.warn('[Settings] Save blocked — config not yet loaded');
+      return false;
+    }
     setLibraryPathError(null);
     setOpenaiKeyError(null);
     setExtensionsError(null);
@@ -2677,6 +2683,7 @@ export function Settings() {
             variant="contained"
             startIcon={<SaveIcon />}
             onClick={handleSave}
+            disabled={!configLoaded}
           >
             Save Settings
           </Button>

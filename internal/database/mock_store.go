@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -55,6 +55,11 @@ type MockStore struct {
 	GetMetadataFieldStatesFunc   func(bookID string) ([]MetadataFieldState, error)
 	UpsertMetadataFieldStateFunc func(state *MetadataFieldState) error
 	DeleteMetadataFieldStateFunc func(bookID, field string) error
+
+	// Metadata change history
+	RecordMetadataChangeFunc     func(record *MetadataChangeRecord) error
+	GetMetadataChangeHistoryFunc func(bookID string, field string, limit int) ([]MetadataChangeRecord, error)
+	GetBookChangeHistoryFunc     func(bookID string, limit int) ([]MetadataChangeRecord, error)
 
 	// Import Paths
 	GetAllImportPathsFunc   func() ([]ImportPath, error)
@@ -185,6 +190,27 @@ func (m *MockStore) DeleteMetadataFieldState(bookID, field string) error {
 		return m.DeleteMetadataFieldStateFunc(bookID, field)
 	}
 	return nil
+}
+
+func (m *MockStore) RecordMetadataChange(record *MetadataChangeRecord) error {
+	if m.RecordMetadataChangeFunc != nil {
+		return m.RecordMetadataChangeFunc(record)
+	}
+	return nil
+}
+
+func (m *MockStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]MetadataChangeRecord, error) {
+	if m.GetMetadataChangeHistoryFunc != nil {
+		return m.GetMetadataChangeHistoryFunc(bookID, field, limit)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBookChangeHistory(bookID string, limit int) ([]MetadataChangeRecord, error) {
+	if m.GetBookChangeHistoryFunc != nil {
+		return m.GetBookChangeHistoryFunc(bookID, limit)
+	}
+	return nil, nil
 }
 
 func (m *MockStore) GetAllAuthors() ([]Author, error) {

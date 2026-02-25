@@ -1463,6 +1463,150 @@ func (_c *MockStore_DeleteMetadataFieldState_Call) RunAndReturn(run func(bookID 
 	return _c
 }
 
+// RecordMetadataChange provides a mock function for the type MockStore
+func (_mock *MockStore) RecordMetadataChange(record *database.MetadataChangeRecord) error {
+	ret := _mock.Called(record)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecordMetadataChange")
+	}
+
+	if returnFunc, ok := ret.Get(0).(func(*database.MetadataChangeRecord) error); ok {
+		return returnFunc(record)
+	}
+	return ret.Error(0)
+}
+
+// MockStore_RecordMetadataChange_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecordMetadataChange'
+type MockStore_RecordMetadataChange_Call struct {
+	*mock.Call
+}
+
+// RecordMetadataChange is a helper method to define mock.On call
+//   - record *database.MetadataChangeRecord
+func (_e *MockStore_Expecter) RecordMetadataChange(record interface{}) *MockStore_RecordMetadataChange_Call {
+	return &MockStore_RecordMetadataChange_Call{Call: _e.mock.On("RecordMetadataChange", record)}
+}
+
+func (_c *MockStore_RecordMetadataChange_Call) Run(run func(record *database.MetadataChangeRecord)) *MockStore_RecordMetadataChange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.MetadataChangeRecord
+		if args[0] != nil {
+			arg0 = args[0].(*database.MetadataChangeRecord)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_RecordMetadataChange_Call) Return(err error) *MockStore_RecordMetadataChange_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RecordMetadataChange_Call) RunAndReturn(run func(record *database.MetadataChangeRecord) error) *MockStore_RecordMetadataChange_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetMetadataChangeHistory provides a mock function for the type MockStore
+func (_mock *MockStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]database.MetadataChangeRecord, error) {
+	ret := _mock.Called(bookID, field, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMetadataChangeHistory")
+	}
+
+	var r0 []database.MetadataChangeRecord
+	if returnFunc, ok := ret.Get(0).(func(string, string, int) ([]database.MetadataChangeRecord, error)); ok {
+		return returnFunc(bookID, field, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, int) []database.MetadataChangeRecord); ok {
+		r0 = returnFunc(bookID, field, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.MetadataChangeRecord)
+		}
+	}
+	return r0, ret.Error(1)
+}
+
+// MockStore_GetMetadataChangeHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMetadataChangeHistory'
+type MockStore_GetMetadataChangeHistory_Call struct {
+	*mock.Call
+}
+
+// GetMetadataChangeHistory is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetMetadataChangeHistory(bookID interface{}, field interface{}, limit interface{}) *MockStore_GetMetadataChangeHistory_Call {
+	return &MockStore_GetMetadataChangeHistory_Call{Call: _e.mock.On("GetMetadataChangeHistory", bookID, field, limit)}
+}
+
+func (_c *MockStore_GetMetadataChangeHistory_Call) Run(run func(bookID string, field string, limit int)) *MockStore_GetMetadataChangeHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetMetadataChangeHistory_Call) Return(records []database.MetadataChangeRecord, err error) *MockStore_GetMetadataChangeHistory_Call {
+	_c.Call.Return(records, err)
+	return _c
+}
+
+func (_c *MockStore_GetMetadataChangeHistory_Call) RunAndReturn(run func(bookID string, field string, limit int) ([]database.MetadataChangeRecord, error)) *MockStore_GetMetadataChangeHistory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBookChangeHistory provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookChangeHistory(bookID string, limit int) ([]database.MetadataChangeRecord, error) {
+	ret := _mock.Called(bookID, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookChangeHistory")
+	}
+
+	var r0 []database.MetadataChangeRecord
+	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.MetadataChangeRecord, error)); ok {
+		return returnFunc(bookID, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int) []database.MetadataChangeRecord); ok {
+		r0 = returnFunc(bookID, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.MetadataChangeRecord)
+		}
+	}
+	return r0, ret.Error(1)
+}
+
+// MockStore_GetBookChangeHistory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookChangeHistory'
+type MockStore_GetBookChangeHistory_Call struct {
+	*mock.Call
+}
+
+// GetBookChangeHistory is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetBookChangeHistory(bookID interface{}, limit interface{}) *MockStore_GetBookChangeHistory_Call {
+	return &MockStore_GetBookChangeHistory_Call{Call: _e.mock.On("GetBookChangeHistory", bookID, limit)}
+}
+
+func (_c *MockStore_GetBookChangeHistory_Call) Run(run func(bookID string, limit int)) *MockStore_GetBookChangeHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookChangeHistory_Call) Return(records []database.MetadataChangeRecord, err error) *MockStore_GetBookChangeHistory_Call {
+	_c.Call.Return(records, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookChangeHistory_Call) RunAndReturn(run func(bookID string, limit int) ([]database.MetadataChangeRecord, error)) *MockStore_GetBookChangeHistory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteOperationState provides a mock function for the type MockStore
 func (_mock *MockStore) DeleteOperationState(opID string) error {
 	ret := _mock.Called(opID)

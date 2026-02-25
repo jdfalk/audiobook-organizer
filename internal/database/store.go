@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.20.0
+// version: 2.21.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -20,6 +20,11 @@ type Store interface {
 	GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error)
 	UpsertMetadataFieldState(state *MetadataFieldState) error
 	DeleteMetadataFieldState(bookID, field string) error
+
+	// Metadata change history
+	RecordMetadataChange(record *MetadataChangeRecord) error
+	GetMetadataChangeHistory(bookID string, field string, limit int) ([]MetadataChangeRecord, error)
+	GetBookChangeHistory(bookID string, limit int) ([]MetadataChangeRecord, error)
 
 	// Authors
 	GetAllAuthors() ([]Author, error)
@@ -455,6 +460,18 @@ type MetadataFieldState struct {
 	OverrideValue  *string   `json:"override_value,omitempty"` // JSON-encoded value
 	OverrideLocked bool      `json:"override_locked"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// MetadataChangeRecord tracks a single change to a metadata field for undo/audit.
+type MetadataChangeRecord struct {
+	ID            int       `json:"id"`
+	BookID        string    `json:"book_id"`
+	Field         string    `json:"field"`
+	PreviousValue *string   `json:"previous_value,omitempty"` // JSON-encoded
+	NewValue      *string   `json:"new_value,omitempty"`      // JSON-encoded
+	ChangeType    string    `json:"change_type"`              // "fetched", "override", "clear", "undo", "bulk_update"
+	Source        string    `json:"source,omitempty"`          // e.g. "Open Library", "manual", "AI parsing"
+	ChangedAt     time.Time `json:"changed_at"`
 }
 
 // DashboardStats holds aggregated statistics computed via SQL rather than loading all books.

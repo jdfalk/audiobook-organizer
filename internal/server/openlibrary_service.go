@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -39,18 +39,20 @@ func getOLDumpDir() string {
 }
 
 // NewOpenLibraryService creates a new service, optionally opening the existing store.
+// If an existing oldb directory is found, it auto-enables Open Library dumps in config.
 func NewOpenLibraryService() *OpenLibraryService {
 	svc := &OpenLibraryService{
 		tracker:   openlibrary.NewDownloadTracker(),
 		importing: make(map[string]bool),
 	}
 
-	if !config.AppConfig.OpenLibraryDumpEnabled {
-		return svc
-	}
-
 	storePath := filepath.Join(getOLDumpDir(), "oldb")
 	if info, err := os.Stat(storePath); err == nil && info.IsDir() {
+		// Auto-enable if store directory exists on disk
+		if !config.AppConfig.OpenLibraryDumpEnabled {
+			log.Printf("[INFO] Found existing OL dump store at %s, auto-enabling OpenLibraryDumpEnabled", storePath)
+			config.AppConfig.OpenLibraryDumpEnabled = true
+		}
 		store, err := openlibrary.NewOLStore(storePath)
 		if err != nil {
 			log.Printf("[WARN] Failed to open OL dump store: %v", err)
