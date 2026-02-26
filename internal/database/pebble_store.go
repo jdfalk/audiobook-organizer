@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/v2"
 	ulid "github.com/oklog/ulid/v2"
 )
 
