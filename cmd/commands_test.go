@@ -206,6 +206,15 @@ func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor)
 func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
 	return nil, nil
 }
+func (s *stubStore) RecordMetadataChange(record *database.MetadataChangeRecord) error {
+	return nil
+}
+func (s *stubStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]database.MetadataChangeRecord, error) {
+	return nil, nil
+}
+func (s *stubStore) GetBookChangeHistory(bookID string, limit int) ([]database.MetadataChangeRecord, error) {
+	return nil, nil
+}
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
