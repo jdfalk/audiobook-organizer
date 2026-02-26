@@ -1,5 +1,5 @@
 # file: docs/openapi.yaml
-# version: 1.0.2
+# version: 1.1.0
 # guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 openapi: 3.0.3
@@ -7,8 +7,9 @@ info:
   title: Audiobook Organizer API
   description: |
     REST API for the Audiobook Organizer application.
-    Provides endpoints for managing audiobooks, authors, series, import paths, and metadata.
-  version: 1.0.0
+    Provides endpoints for managing audiobooks, authors, series, import paths,
+    metadata, iTunes integration, AI parsing, Open Library, and more.
+  version: 1.1.0
   contact:
     name: API Support
     url: https://github.com/jdfalk/audiobook-organizer
@@ -23,6 +24,10 @@ servers:
     description: Relative path (for production deployment)
 
 tags:
+  - name: Health
+    description: Health checks and events (unprotected)
+  - name: Auth
+    description: Authentication and session management
   - name: Audiobooks
     description: Audiobook management operations
   - name: Authors
@@ -30,445 +35,80 @@ tags:
   - name: Series
     description: Series management
   - name: Library
-    description: Library folder management
+    description: Import path / library folder management
+  - name: Filesystem
+    description: Filesystem browsing and exclusions
   - name: Operations
     description: Background operations (scan, organize)
+  - name: Import
+    description: File import
+  - name: iTunes
+    description: iTunes library integration
   - name: Metadata
     description: Metadata fetching and management
   - name: Versions
     description: Version management for multiple editions
+  - name: Covers
+    description: Cover art proxy and local files
   - name: System
     description: System status and configuration
   - name: Backup
     description: Database backup and restore
+  - name: AI
+    description: AI-powered filename parsing
+  - name: OpenLibrary
+    description: Open Library data dump management
+  - name: Works
+    description: Work / canonical title management
+  - name: VersionGroups
+    description: Version group management
+  - name: WorkQueue
+    description: Background work queue
+  - name: BlockedHashes
+    description: Blocked file hash management
 
-paths:
-  /audiobooks:
-    get:
-      tags: [Audiobooks]
-      summary: List audiobooks
-      description: Retrieve a paginated list of audiobooks
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 24
-            minimum: 1
-            maximum: 100
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            default: 0
-            minimum: 0
-      responses:
-        '200':
-          description: List of audiobooks
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Book'
-        '500':
-          description: Internal server error
-
-  /audiobooks/{id}:
-    get:
-      tags: [Audiobooks]
-      summary: Get audiobook by ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      responses:
-        '200':
-          description: Audiobook details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Book'
-        '404':
-          description: Audiobook not found
-
-    put:
-      tags: [Audiobooks]
-      summary: Update audiobook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Book'
-      responses:
-        '200':
-          description: Updated audiobook
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Book'
-        '400':
-          description: Invalid request body
-        '404':
-          description: Audiobook not found
-
-    delete:
-      tags: [Audiobooks]
-      summary: Delete audiobook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      responses:
-        '204':
-          description: Audiobook deleted
-        '404':
-          description: Audiobook not found
-
-  /audiobooks/batch:
-    post:
-      tags: [Audiobooks]
-      summary: Batch update audiobooks
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                ids:
-                  type: array
-                  items:
-                    type: string
-                    format: ulid
-                updates:
-                  $ref: '#/components/schemas/Book'
-      responses:
-        '200':
-          description: Batch update successful
-        '400':
-          description: Invalid request
-
-  /audiobooks/{id}/versions:
-    get:
-      tags: [Versions]
-      summary: List audiobook versions
-      description: Get all versions of an audiobook (different editions, qualities, etc.)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      responses:
-        '200':
-          description: List of versions
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  versions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Book'
-        '404':
-          description: Audiobook not found
-
-    post:
-      tags: [Versions]
-      summary: Link audiobook version
-      description: Link another audiobook as a version of this one
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                other_id:
-                  type: string
-                  format: ulid
-              required:
-                - other_id
-      responses:
-        '200':
-          description: Version linked successfully
-        '400':
-          description: Invalid request
-        '404':
-          description: Audiobook not found
-
-  /audiobooks/{id}/set-primary:
-    put:
-      tags: [Versions]
-      summary: Set primary version
-      description: Mark this version as the primary version in its version group
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      responses:
-        '200':
-          description: Primary version set
-        '404':
-          description: Audiobook not found
-
-  /audiobooks/{id}/fetch-metadata:
-    post:
-      tags: [Metadata]
-      summary: Fetch and apply metadata
-      description: Fetch metadata from external sources and apply to audiobook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: ulid
-      responses:
-        '200':
-          description: Metadata fetched and applied
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  book:
-                    $ref: '#/components/schemas/Book'
-                  source:
-                    type: string
-        '404':
-          description: Audiobook or metadata not found
-
-  /metadata/search:
-    get:
-      tags: [Metadata]
-      summary: Search metadata
-      description: Search external metadata sources for book information
-      parameters:
-        - name: title
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: author
-          in: query
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  results:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MetadataResult'
-                  source:
-                    type: string
-        '400':
-          description: Title parameter required
-
-  /authors:
-    get:
-      tags: [Authors]
-      summary: List authors
-      responses:
-        '200':
-          description: List of authors
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Author'
-
-  /series:
-    get:
-      tags: [Series]
-      summary: List series
-      responses:
-        '200':
-          description: List of series
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Series'
-
-  /import-paths:
-    get:
-      tags: [Library]
-      summary: List import paths
-      responses:
-        '200':
-          description: List of import paths
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ImportPath'
-
-    post:
-      tags: [Library]
-      summary: Add import path
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                path:
-                  type: string
-                name:
-                  type: string
-              required:
-                - path
-                - name
-      responses:
-        '201':
-          description: Import path added
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ImportPath'
-
-  /import-paths/{id}:
-    delete:
-      tags: [Library]
-      summary: Remove import path
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        '204':
-          description: Import path removed
-        '404':
-          description: Import path not found
-
-  /operations/scan:
-    post:
-      tags: [Operations]
-      summary: Start library scan
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                folder_path:
-                  type: string
-      responses:
-        '202':
-          description: Scan started
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  operation_id:
-                    type: string
-                  message:
-                    type: string
-
-  /operations/organize:
-    post:
-      tags: [Operations]
-      summary: Start library organization
-      responses:
-        '202':
-          description: Organization started
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  operation_id:
-                    type: string
-                  message:
-                    type: string
-
-  /system/status:
-    get:
-      tags: [System]
-      summary: Get system status
-      description: Retrieve system information including library stats, memory usage, and runtime info
-      responses:
-        '200':
-          description: System status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SystemStatus'
-
-  /config:
-    get:
-      tags: [System]
-      summary: Get configuration
-      responses:
-        '200':
-          description: Current configuration
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Config'
-
-    put:
-      tags: [System]
-      summary: Update configuration
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Config'
-      responses:
-        '200':
-          description: Configuration updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Config'
-
+# ────────────────────────────────────────────
+# Reusable parameters
+# ────────────────────────────────────────────
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: ulid
+    intIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    limitQuery:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 24
+        minimum: 1
+        maximum: 100
+    offsetQuery:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+
   schemas:
+    # ── Core domain ──────────────────────────
     Book:
       type: object
       properties:
@@ -534,6 +174,10 @@ components:
         version_notes:
           type: string
           nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -557,10 +201,7 @@ components:
         created_at:
           type: string
           format: date-time
-      required:
-        - id
-        - name
-        - created_at
+      required: [id, name, created_at]
 
     Series:
       type: object
@@ -575,10 +216,7 @@ components:
         created_at:
           type: string
           format: date-time
-      required:
-        - id
-        - name
-        - created_at
+      required: [id, name, created_at]
 
     ImportPath:
       type: object
@@ -600,13 +238,7 @@ components:
           nullable: true
         book_count:
           type: integer
-      required:
-        - id
-        - path
-        - name
-        - enabled
-        - created_at
-        - book_count
+      required: [id, path, name, enabled, created_at, book_count]
 
     MetadataResult:
       type: object
@@ -695,3 +327,2250 @@ components:
         log_level:
           type: string
           enum: [debug, info, warn, error]
+
+    # ── Supporting types ─────────────────────
+    Work:
+      type: object
+      properties:
+        id:
+          type: string
+          format: ulid
+        title:
+          type: string
+        author_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    VersionGroup:
+      type: object
+      properties:
+        id:
+          type: string
+          format: ulid
+        primary_book_id:
+          type: string
+          format: ulid
+          nullable: true
+        books:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+
+    BlockedHash:
+      type: object
+      properties:
+        hash:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Operation:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        progress:
+          type: number
+        message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+
+    PaginatedBooks:
+      type: object
+      properties:
+        count:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    CountResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+
+# ────────────────────────────────────────────
+# Paths
+# ────────────────────────────────────────────
+paths:
+  # ── Health & Events (unprotected, note: /health etc. live outside /api/v1) ──
+  # These are documented here for completeness; the actual mount points are
+  # /health, /api/health, /api/v1/health, /metrics, /api/events.
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns health status with library counts. Also available at /health, /api/health.
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  book_count:
+                    type: integer
+                  author_count:
+                    type: integer
+                  series_count:
+                    type: integer
+
+  # ── Auth ────────────────────────────────────
+  /auth/status:
+    get:
+      tags: [Auth]
+      summary: Check authentication status
+      description: Returns whether auth is enabled and if initial setup is needed.
+      responses:
+        '200':
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth_enabled:
+                    type: boolean
+                  setup_required:
+                    type: boolean
+
+  /auth/setup:
+    post:
+      tags: [Auth]
+      summary: Setup initial admin account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
+      responses:
+        '201':
+          description: Admin account created
+        '400':
+          description: Setup already completed or invalid input
+        '409':
+          description: Admin already exists
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      username:
+                        type: string
+        '401':
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  username:
+                    type: string
+        '401':
+          description: Not authenticated
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+
+  /auth/sessions:
+    get:
+      tags: [Auth]
+      summary: List active sessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    last_active:
+                      type: string
+                      format: date-time
+                    user_agent:
+                      type: string
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revoke a session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Session revoked
+        '404':
+          description: Session not found
+
+  # ── Audiobooks ──────────────────────────────
+  /audiobooks:
+    get:
+      tags: [Audiobooks]
+      summary: List audiobooks
+      description: Retrieve a paginated list of audiobooks with optional filtering and sorting.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: author_id
+          in: query
+          schema:
+            type: integer
+        - name: series_id
+          in: query
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [title, author, created_at, updated_at, duration]
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Paginated list of audiobooks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBooks'
+        '500':
+          description: Internal server error
+
+  /audiobooks/search:
+    get:
+      tags: [Audiobooks]
+      summary: Search audiobooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  /audiobooks/count:
+    get:
+      tags: [Audiobooks]
+      summary: Get total audiobook count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+
+  /audiobooks/duplicates:
+    get:
+      tags: [Audiobooks]
+      summary: List duplicate audiobooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Groups of duplicate audiobooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Book'
+
+  /audiobooks/soft-deleted:
+    get:
+      tags: [Audiobooks]
+      summary: List soft-deleted audiobooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Soft-deleted audiobooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  /audiobooks/purge-soft-deleted:
+    delete:
+      tags: [Audiobooks]
+      summary: Permanently purge all soft-deleted audiobooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Purged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/batch:
+    post:
+      tags: [Audiobooks]
+      summary: Batch update audiobooks
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: ulid
+                updates:
+                  $ref: '#/components/schemas/Book'
+      responses:
+        '200':
+          description: Batch update successful
+        '400':
+          description: Invalid request
+
+  /audiobooks/{id}:
+    get:
+      tags: [Audiobooks]
+      summary: Get audiobook by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Audiobook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          description: Audiobook not found
+
+    put:
+      tags: [Audiobooks]
+      summary: Update audiobook
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+      responses:
+        '200':
+          description: Updated audiobook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          description: Invalid request body
+        '404':
+          description: Audiobook not found
+
+    delete:
+      tags: [Audiobooks]
+      summary: Delete audiobook
+      description: Soft-delete by default. Use hard=true to permanently remove. Use block_hash=true to also block the file hash.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - name: hard
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: block_hash
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '204':
+          description: Audiobook deleted
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/restore:
+    post:
+      tags: [Audiobooks]
+      summary: Restore a soft-deleted audiobook
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          description: Not found
+
+  /audiobooks/{id}/tags:
+    get:
+      tags: [Audiobooks]
+      summary: Get audio file tags
+      description: Returns raw audio metadata tags extracted from the file.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Audio tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Not found
+
+  /audiobooks/{id}/segments:
+    get:
+      tags: [Audiobooks]
+      summary: List file segments (chapters)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Segment list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    index:
+                      type: integer
+                    title:
+                      type: string
+                    start_time:
+                      type: number
+                    end_time:
+                      type: number
+                    duration:
+                      type: number
+        '404':
+          description: Not found
+
+  # ── Versions ────────────────────────────────
+  /audiobooks/{id}/versions:
+    get:
+      tags: [Versions]
+      summary: List audiobook versions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Book'
+        '404':
+          description: Audiobook not found
+
+    post:
+      tags: [Versions]
+      summary: Link audiobook version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                other_id:
+                  type: string
+                  format: ulid
+              required: [other_id]
+      responses:
+        '200':
+          description: Version linked
+        '400':
+          description: Invalid request
+        '404':
+          description: Not found
+
+  /audiobooks/{id}/set-primary:
+    put:
+      tags: [Versions]
+      summary: Set primary version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Primary version set
+        '404':
+          description: Not found
+
+  # ── Metadata History ────────────────────────
+  /audiobooks/{id}/metadata-history:
+    get:
+      tags: [Metadata]
+      summary: Get all metadata change history
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Metadata history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    field:
+                      type: string
+                    old_value:
+                      type: string
+                      nullable: true
+                    new_value:
+                      type: string
+                      nullable: true
+                    source:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /audiobooks/{id}/metadata-history/{field}:
+    get:
+      tags: [Metadata]
+      summary: Get metadata history for a specific field
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - name: field
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Field history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    old_value:
+                      type: string
+                      nullable: true
+                    new_value:
+                      type: string
+                      nullable: true
+                    source:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /audiobooks/{id}/metadata-history/{field}/undo:
+    post:
+      tags: [Metadata]
+      summary: Undo last metadata change for a field
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - name: field
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Change undone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: No history found
+
+  # ── Fetch metadata for single book ──────────
+  /audiobooks/{id}/fetch-metadata:
+    post:
+      tags: [Metadata]
+      summary: Fetch and apply metadata from external sources
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Metadata fetched and applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+                  source:
+                    type: string
+        '404':
+          description: Not found
+
+  # ── AI parse for single book ────────────────
+  /audiobooks/{id}/parse-with-ai:
+    post:
+      tags: [AI]
+      summary: Parse audiobook metadata using AI
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: AI parse results applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+        '404':
+          description: Not found
+
+  # ── Authors ─────────────────────────────────
+  /authors:
+    get:
+      tags: [Authors]
+      summary: List authors
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+
+  /authors/count:
+    get:
+      tags: [Authors]
+      summary: Get author count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+
+  # ── Series ──────────────────────────────────
+  /series:
+    get:
+      tags: [Series]
+      summary: List series
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Series'
+
+  /series/count:
+    get:
+      tags: [Series]
+      summary: Get series count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+
+  # ── Filesystem ──────────────────────────────
+  /filesystem/home:
+    get:
+      tags: [Filesystem]
+      summary: Get home directory path
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Home directory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+
+  /filesystem/browse:
+    get:
+      tags: [Filesystem]
+      summary: Browse a filesystem path
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Directory listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        is_dir:
+                          type: boolean
+                        size:
+                          type: integer
+
+  /filesystem/exclude:
+    post:
+      tags: [Filesystem]
+      summary: Create a path exclusion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '201':
+          description: Exclusion created
+    delete:
+      tags: [Filesystem]
+      summary: Remove a path exclusion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '204':
+          description: Exclusion removed
+
+  # ── Import Paths ────────────────────────────
+  /import-paths:
+    get:
+      tags: [Library]
+      summary: List import paths
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of import paths
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ImportPath'
+
+    post:
+      tags: [Library]
+      summary: Add import path
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                name:
+                  type: string
+              required: [path, name]
+      responses:
+        '201':
+          description: Import path added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPath'
+
+  /import-paths/{id}:
+    delete:
+      tags: [Library]
+      summary: Remove import path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '204':
+          description: Import path removed
+        '404':
+          description: Import path not found
+
+  # ── Operations ──────────────────────────────
+  /operations/active:
+    get:
+      tags: [Operations]
+      summary: List active operations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active operations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operation'
+
+  /operations/stale:
+    get:
+      tags: [Operations]
+      summary: List stale operations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Stale operations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operation'
+
+  /operations/scan:
+    post:
+      tags: [Operations]
+      summary: Start library scan
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                folder_path:
+                  type: string
+      responses:
+        '202':
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+                  message:
+                    type: string
+
+  /operations/organize:
+    post:
+      tags: [Operations]
+      summary: Start library organization
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Organization started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+                  message:
+                    type: string
+
+  /operations/{id}/status:
+    get:
+      tags: [Operations]
+      summary: Get operation status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operation status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          description: Operation not found
+
+  /operations/{id}/logs:
+    get:
+      tags: [Operations]
+      summary: Get operation logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operation log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp:
+                      type: string
+                      format: date-time
+                    level:
+                      type: string
+                    message:
+                      type: string
+        '404':
+          description: Operation not found
+
+  /operations/{id}:
+    delete:
+      tags: [Operations]
+      summary: Cancel an operation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operation cancelled
+        '404':
+          description: Operation not found
+
+  # ── Import ──────────────────────────────────
+  /import/file:
+    post:
+      tags: [Import]
+      summary: Upload an audiobook file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  book:
+                    $ref: '#/components/schemas/Book'
+        '400':
+          description: Invalid file
+
+  # ── iTunes ──────────────────────────────────
+  /itunes/validate:
+    post:
+      tags: [iTunes]
+      summary: Validate iTunes library path
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  track_count:
+                    type: integer
+                  message:
+                    type: string
+
+  /itunes/test-mapping:
+    post:
+      tags: [iTunes]
+      summary: Test path mapping for iTunes import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                mapping:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '200':
+          description: Mapping test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resolved_paths:
+                    type: array
+                    items:
+                      type: string
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /itunes/import:
+    post:
+      tags: [iTunes]
+      summary: Start iTunes library import
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                mapping:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        '202':
+          description: Import started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  import_id:
+                    type: string
+                  message:
+                    type: string
+
+  /itunes/write-back:
+    post:
+      tags: [iTunes]
+      summary: Write metadata back to iTunes library
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Write-back result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /itunes/import-status/{id}:
+    get:
+      tags: [iTunes]
+      summary: Get iTunes import status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Import status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  progress:
+                    type: number
+                  total:
+                    type: integer
+                  imported:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+        '404':
+          description: Import not found
+
+  /itunes/library-status:
+    get:
+      tags: [iTunes]
+      summary: Get iTunes library status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Library status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  path:
+                    type: string
+                    nullable: true
+                  track_count:
+                    type: integer
+
+  /itunes/sync:
+    post:
+      tags: [iTunes]
+      summary: Trigger iTunes sync
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Covers ──────────────────────────────────
+  /covers/proxy:
+    get:
+      tags: [Covers]
+      summary: Proxy an external cover image
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '200':
+          description: Cover image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Missing or invalid URL
+
+  /covers/local/{filename}:
+    get:
+      tags: [Covers]
+      summary: Serve a locally stored cover image
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cover image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found
+
+  # ── System ──────────────────────────────────
+  /system/status:
+    get:
+      tags: [System]
+      summary: Get system status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: System status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemStatus'
+
+  /system/storage:
+    get:
+      tags: [System]
+      summary: Get storage information
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Storage info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_bytes:
+                    type: integer
+                  used_bytes:
+                    type: integer
+                  free_bytes:
+                    type: integer
+                  library_bytes:
+                    type: integer
+
+  /system/logs:
+    get:
+      tags: [System]
+      summary: Get system logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - $ref: '#/components/parameters/limitQuery'
+      responses:
+        '200':
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp:
+                      type: string
+                      format: date-time
+                    level:
+                      type: string
+                    message:
+                      type: string
+
+  /system/reset:
+    post:
+      tags: [System]
+      summary: Reset system (clear library data)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: System reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /system/factory-reset:
+    post:
+      tags: [System]
+      summary: Factory reset (clear all data and config)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Factory reset complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /config:
+    get:
+      tags: [System]
+      summary: Get configuration
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+    put:
+      tags: [System]
+      summary: Update configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Config'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+  /dashboard:
+    get:
+      tags: [System]
+      summary: Get dashboard data
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  book_count:
+                    type: integer
+                  author_count:
+                    type: integer
+                  series_count:
+                    type: integer
+                  total_duration:
+                    type: integer
+                  recent_books:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Book'
+                  active_operations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Operation'
+
+  # ── Backup ──────────────────────────────────
+  /backup/create:
+    post:
+      tags: [Backup]
+      summary: Create a database backup
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  size:
+                    type: integer
+                  message:
+                    type: string
+
+  /backup/list:
+    get:
+      tags: [Backup]
+      summary: List available backups
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Backup list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    filename:
+                      type: string
+                    size:
+                      type: integer
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /backup/restore:
+    post:
+      tags: [Backup]
+      summary: Restore from a backup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+              required: [filename]
+      responses:
+        '200':
+          description: Backup restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /backup/{filename}:
+    delete:
+      tags: [Backup]
+      summary: Delete a backup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Backup deleted
+        '404':
+          description: Backup not found
+
+  # ── Metadata Operations ─────────────────────
+  /metadata/batch-update:
+    post:
+      tags: [Metadata]
+      summary: Batch update metadata
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                updates:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: ulid
+                      fields:
+                        type: object
+                        additionalProperties: true
+      responses:
+        '200':
+          description: Batch update result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /metadata/validate:
+    post:
+      tags: [Metadata]
+      summary: Validate metadata format
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  /metadata/export:
+    get:
+      tags: [Metadata]
+      summary: Export metadata
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Exported metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /metadata/import:
+    post:
+      tags: [Metadata]
+      summary: Import metadata
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /metadata/search:
+    get:
+      tags: [Metadata]
+      summary: Search external metadata sources
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: author
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MetadataResult'
+                  source:
+                    type: string
+        '400':
+          description: Title parameter required
+
+  /metadata/fields:
+    get:
+      tags: [Metadata]
+      summary: List available metadata fields
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Available fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    type:
+                      type: string
+                    editable:
+                      type: boolean
+
+  /metadata/bulk-fetch:
+    post:
+      tags: [Metadata]
+      summary: Bulk fetch metadata for multiple books
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: ulid
+      responses:
+        '200':
+          description: Bulk fetch result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  # ── AI ──────────────────────────────────────
+  /ai/parse-filename:
+    post:
+      tags: [AI]
+      summary: Parse a filename using AI
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+              required: [filename]
+      responses:
+        '200':
+          description: Parsed metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  author:
+                    type: string
+                    nullable: true
+                  series:
+                    type: string
+                    nullable: true
+                  series_position:
+                    type: integer
+                    nullable: true
+                  narrator:
+                    type: string
+                    nullable: true
+
+  /ai/test-connection:
+    post:
+      tags: [AI]
+      summary: Test AI provider connection
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  provider:
+                    type: string
+                  message:
+                    type: string
+
+  # ── Open Library ────────────────────────────
+  /openlibrary/status:
+    get:
+      tags: [OpenLibrary]
+      summary: Get Open Library data dump status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Dump status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  has_data:
+                    type: boolean
+                  record_count:
+                    type: integer
+                  last_updated:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+  /openlibrary/download:
+    post:
+      tags: [OpenLibrary]
+      summary: Download Open Library data dump
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Download started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /openlibrary/import:
+    post:
+      tags: [OpenLibrary]
+      summary: Import Open Library data dump
+      security:
+        - bearerAuth: []
+      responses:
+        '202':
+          description: Import started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /openlibrary/upload:
+    post:
+      tags: [OpenLibrary]
+      summary: Upload an Open Library data dump file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /openlibrary/data:
+    delete:
+      tags: [OpenLibrary]
+      summary: Delete Open Library data
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Data deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Works ───────────────────────────────────
+  /works:
+    get:
+      tags: [Works]
+      summary: List works
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+      responses:
+        '200':
+          description: List of works
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Work'
+
+    post:
+      tags: [Works]
+      summary: Create a work
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                author_name:
+                  type: string
+              required: [title]
+      responses:
+        '201':
+          description: Work created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Work'
+
+  /works/{id}:
+    get:
+      tags: [Works]
+      summary: Get a work
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Work details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Work'
+        '404':
+          description: Not found
+
+    put:
+      tags: [Works]
+      summary: Update a work
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Work'
+      responses:
+        '200':
+          description: Work updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Work'
+        '404':
+          description: Not found
+
+    delete:
+      tags: [Works]
+      summary: Delete a work
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Work deleted
+        '404':
+          description: Not found
+
+  /works/{id}/books:
+    get:
+      tags: [Works]
+      summary: List books belonging to a work
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Books in this work
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  # ── Version Groups ─────────────────────────
+  /version-groups/{id}:
+    get:
+      tags: [VersionGroups]
+      summary: Get a version group
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Version group details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionGroup'
+        '404':
+          description: Not found
+
+  # ── Work Queue ──────────────────────────────
+  /work:
+    get:
+      tags: [WorkQueue]
+      summary: List work queue items
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Work queue items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    payload:
+                      type: object
+                      additionalProperties: true
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /work/stats:
+    get:
+      tags: [WorkQueue]
+      summary: Get work queue statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Queue stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+                  in_progress:
+                    type: integer
+                  completed:
+                    type: integer
+                  failed:
+                    type: integer
+
+  # ── Blocked Hashes ─────────────────────────
+  /blocked-hashes:
+    get:
+      tags: [BlockedHashes]
+      summary: List blocked hashes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of blocked hashes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BlockedHash'
+
+    post:
+      tags: [BlockedHashes]
+      summary: Add a blocked hash
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hash:
+                  type: string
+                reason:
+                  type: string
+              required: [hash]
+      responses:
+        '201':
+          description: Hash blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockedHash'
+
+  /blocked-hashes/{hash}:
+    delete:
+      tags: [BlockedHashes]
+      summary: Remove a blocked hash
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Hash unblocked
+        '404':
+          description: Hash not found
