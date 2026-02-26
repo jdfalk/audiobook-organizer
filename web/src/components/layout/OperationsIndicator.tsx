@@ -1,12 +1,15 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 1.2.0
+// version: 2.0.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Badge,
   Box,
+  Button,
   CircularProgress,
+  Divider,
   IconButton,
   LinearProgress,
   Popover,
@@ -16,11 +19,13 @@ import {
 import NotificationsIcon from '@mui/icons-material/Notifications.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import ErrorIcon from '@mui/icons-material/Error.js';
+import CancelIcon from '@mui/icons-material/Cancel.js';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew.js';
 import {
   useOperationsStore,
   type ActiveOperation,
 } from '../../stores/useOperationsStore';
-import { getActiveOperations } from '../../services/api';
+import { cancelOperation, getActiveOperations } from '../../services/api';
 
 function formatOperationType(type: string): string {
   switch (type) {
@@ -30,14 +35,19 @@ function formatOperationType(type: string): string {
       return 'Library Scan';
     case 'organize':
       return 'Organize';
+    case 'metadata_fetch':
+      return 'Metadata Fetch';
+    case 'ol_dump_import':
+      return 'Open Library Import';
     default:
-      return type;
+      return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }
 
 function formatETA(op: ActiveOperation): string | null {
   if (!op.startedAt || op.progress <= 0 || op.total <= 0) return null;
   const elapsed = (Date.now() - op.startedAt) / 1000;
+  if (elapsed < 5) return null; // wait for stable rate
   const rate = op.progress / elapsed;
   if (rate <= 0) return null;
   const remaining = (op.total - op.progress) / rate;
@@ -48,14 +58,22 @@ function formatETA(op: ActiveOperation): string | null {
   return `~${h}h ${m}m left`;
 }
 
+function parseCurrentItem(message: string): string | null {
+  // Extract book title from messages like "Book 42 of 500 (...) — Title Here"
+  const dashMatch = message.match(/\u2014\s*(.+)$/);
+  if (dashMatch) return dashMatch[1];
+  return null;
+}
+
 export function OperationsIndicator() {
   const activeOperations = useOperationsStore(
     (state) => state.activeOperations
   );
   const startPolling = useOperationsStore((state) => state.startPolling);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
 
-  // On mount, check for already-running operations from the backend
   useEffect(() => {
     let cancelled = false;
 
@@ -81,7 +99,6 @@ export function OperationsIndicator() {
     };
 
     void checkActiveOps();
-    // Re-check every 30s in case operations are started from another tab/API
     const interval = setInterval(checkActiveOps, 30000);
 
     return () => {
@@ -90,8 +107,25 @@ export function OperationsIndicator() {
     };
   }, [startPolling]);
 
+  const handleCancel = async (opId: string) => {
+    setCancelling((prev) => new Set(prev).add(opId));
+    try {
+      await cancelOperation(opId);
+    } catch {
+      // Will show as failed in next poll
+    }
+    setCancelling((prev) => {
+      const next = new Set(prev);
+      next.delete(opId);
+      return next;
+    });
+  };
+
   const inProgress = activeOperations.filter(
     (op) => !['completed', 'failed', 'canceled'].includes(op.status)
+  );
+  const terminal = activeOperations.filter((op) =>
+    ['completed', 'failed', 'canceled'].includes(op.status)
   );
   const badgeCount = inProgress.length;
 
@@ -128,21 +162,40 @@ export function OperationsIndicator() {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Box sx={{ p: 2, minWidth: 320, maxWidth: 400 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Operations
-          </Typography>
+        <Box sx={{ p: 2, minWidth: 380, maxWidth: 460 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 1,
+            }}
+          >
+            <Typography variant="subtitle2">Operations</Typography>
+            <Button
+              size="small"
+              endIcon={<OpenInNewIcon fontSize="small" />}
+              onClick={() => {
+                setAnchorEl(null);
+                navigate('/operations');
+              }}
+            >
+              View All
+            </Button>
+          </Box>
+
           {activeOperations.length === 0 && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
               No active operations
             </Typography>
           )}
-          {activeOperations.map((op: ActiveOperation) => {
-            const isTerminal = ['completed', 'failed', 'canceled'].includes(
-              op.status
-            );
+
+          {/* Active operations first */}
+          {inProgress.map((op: ActiveOperation) => {
             const progressPct =
               op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
+            const eta = formatETA(op);
+            const currentItem = parseCurrentItem(op.message);
 
             return (
               <Box
@@ -165,51 +218,129 @@ export function OperationsIndicator() {
                   <Typography variant="body2" fontWeight="bold">
                     {formatOperationType(op.type)}
                   </Typography>
-                  {op.status === 'completed' && (
-                    <CheckCircleIcon color="success" fontSize="small" />
-                  )}
-                  {op.status === 'failed' && (
-                    <ErrorIcon color="error" fontSize="small" />
-                  )}
+                  <Tooltip title="Cancel operation">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleCancel(op.id)}
+                      disabled={cancelling.has(op.id)}
+                    >
+                      {cancelling.has(op.id) ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        <CancelIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  </Tooltip>
                 </Box>
-                {!isTerminal && op.total > 0 && (() => {
-                  const eta = formatETA(op);
-                  return (
-                    <>
-                      <LinearProgress
-                        variant="determinate"
-                        value={progressPct}
-                        sx={{ mb: 0.5, borderRadius: 1 }}
-                      />
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          {op.progress.toLocaleString()} /{' '}
-                          {op.total.toLocaleString()} ({progressPct}%)
+
+                {op.total > 0 ? (
+                  <>
+                    <LinearProgress
+                      variant="determinate"
+                      value={progressPct}
+                      sx={{ mb: 0.5, borderRadius: 1, height: 6 }}
+                    />
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        {op.progress.toLocaleString()} /{' '}
+                        {op.total.toLocaleString()} ({progressPct}%)
+                      </Typography>
+                      {eta && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          fontStyle="italic"
+                        >
+                          {eta}
                         </Typography>
-                        {eta && (
-                          <Typography variant="caption" color="text.secondary">
-                            {eta}
-                          </Typography>
-                        )}
-                      </Box>
-                    </>
-                  );
-                })()}
-                {!isTerminal && op.total === 0 && (
-                  <LinearProgress sx={{ mb: 0.5, borderRadius: 1 }} />
+                      )}
+                    </Box>
+                  </>
+                ) : (
+                  <LinearProgress sx={{ mb: 0.5, borderRadius: 1, height: 6 }} />
                 )}
+
+                {/* Show current item being processed */}
+                {currentItem && (
+                  <Typography
+                    variant="caption"
+                    color="primary.main"
+                    display="block"
+                    noWrap
+                    title={currentItem}
+                    sx={{ mt: 0.5 }}
+                  >
+                    {currentItem}
+                  </Typography>
+                )}
+
+                {/* Show the full status line */}
                 <Typography
                   variant="caption"
                   color="text.secondary"
                   display="block"
                   noWrap
                   title={op.message}
+                  sx={{ mt: currentItem ? 0 : 0.5 }}
                 >
                   {op.message}
                 </Typography>
               </Box>
             );
           })}
+
+          {/* Terminal operations (completed/failed) */}
+          {terminal.length > 0 && inProgress.length > 0 && (
+            <Divider sx={{ my: 1 }} />
+          )}
+          {terminal.map((op: ActiveOperation) => (
+            <Box
+              key={op.id}
+              sx={{
+                mb: 1,
+                p: 1,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                opacity: 0.7,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Typography variant="caption" fontWeight="bold">
+                  {formatOperationType(op.type)}
+                </Typography>
+                {op.status === 'completed' && (
+                  <CheckCircleIcon color="success" sx={{ fontSize: 16 }} />
+                )}
+                {op.status === 'failed' && (
+                  <ErrorIcon color="error" sx={{ fontSize: 16 }} />
+                )}
+                {op.status === 'canceled' && (
+                  <CancelIcon color="disabled" sx={{ fontSize: 16 }} />
+                )}
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                noWrap
+                title={op.message}
+              >
+                {op.message}
+              </Typography>
+            </Box>
+          ))}
         </Box>
       </Popover>
     </>
