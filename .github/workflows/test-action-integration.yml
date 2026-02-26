@@ -1,5 +1,5 @@
 # file: .github/workflows/test-action-integration.yml
-# version: 1.2.0
+# version: 1.3.0
 # guid: test-action-integration-001
 
 name: Test Frontend Config Action Integration
@@ -10,11 +10,15 @@ on:
     paths:
       - '.github/repository-config.yml'
       - '.github/workflows/test-action-integration.yml'
+      - 'go.mod'
+      - 'web/package.json'
   pull_request:
     branches: [main, develop]
     paths:
       - '.github/repository-config.yml'
       - '.github/workflows/test-action-integration.yml'
+      - 'go.mod'
+      - 'web/package.json'
   workflow_dispatch:
 
 permissions:
@@ -38,71 +42,125 @@ jobs:
           repository-config: ''
           config-file: '.github/repository-config.yml'
 
-      - name: Verify action outputs
-        run: |
-          echo "✅ Action executed successfully"
-          echo "Frontend directory: ${{ steps.frontend-config.outputs.dir }}"
-          echo "Node.js version: ${{ steps.frontend-config.outputs.node-version }}"
-          echo "Has frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
-
-          # Validate outputs
-          if [ "${{ steps.frontend-config.outputs.dir }}" != "web" ]; then
-            echo "❌ Expected dir='web', got '${{ steps.frontend-config.outputs.dir }}'"
-            exit 1
-          fi
-
-          if [ "${{ steps.frontend-config.outputs.node-version }}" != "22" ]; then
-            echo "❌ Expected node-version='22', got '${{ steps.frontend-config.outputs.node-version }}'"
-            exit 1
-          fi
-
-          if [ "${{ steps.frontend-config.outputs.has-frontend }}" != "true" ]; then
-            echo "❌ Expected has-frontend='true', got '${{ steps.frontend-config.outputs.has-frontend }}'"
-            exit 1
-          fi
-
-          echo "✅ All output validations passed"
-
-      - name: Report results
+      - name: Log actual output values
         if: always()
+        env:
+          OUT_DIR: ${{ steps.frontend-config.outputs.dir }}
+          OUT_NODE: ${{ steps.frontend-config.outputs.node-version }}
+          OUT_HAS: ${{ steps.frontend-config.outputs.has-frontend }}
         run: |
-          echo "Test Results:"
-          echo "  Frontend Dir: ${{ steps.frontend-config.outputs.dir }}"
-          echo "  Node Version: ${{ steps.frontend-config.outputs.node-version }}"
-          echo "  Has Frontend: ${{ steps.frontend-config.outputs.has-frontend }}"
+          echo "::group::Action Outputs (for drift diagnosis)"
+          echo "dir=$OUT_DIR"
+          echo "node-version=$OUT_NODE"
+          echo "has-frontend=$OUT_HAS"
+          echo "::endgroup::"
 
-      - name: Alert on output drift
-        if: failure()
-        uses: actions/github-script@v8
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { context } = require('@actions/github');
-            const octokit = github.getOctokit(process.env.GITHUB_TOKEN);
+      - name: Verify action outputs
+        id: verify-outputs
+        env:
+          OUT_DIR: ${{ steps.frontend-config.outputs.dir }}
+          OUT_NODE: ${{ steps.frontend-config.outputs.node-version }}
+          OUT_HAS: ${{ steps.frontend-config.outputs.has-frontend }}
+        run: |
+          FAIL=0
 
-            const body = [
-              '## CI/CD Configuration Drift Detected',
-              '',
-              'The `test-action-integration.yml` workflow detected unexpected outputs',
-              'from `get-frontend-config-action`. This may indicate a breaking change',
-              'in the upstream action or a configuration regression.',
-              '',
-              '**Expected values:**',
-              '- `dir` = `web`',
-              '- `node-version` = `22`',
-              '- `has-frontend` = `true`',
-              '',
-              '**Workflow run:** ' + context.payload.repository.html_url +
-                '/actions/runs/' + context.runId,
-              '',
-              'Please investigate and update `.github/repository-config.yml` or',
-              'pin the action to a known-good version.',
-            ].join('\n');
+          echo "--- Checking dir ---"
+          echo "  actual:   '$OUT_DIR'"
+          echo "  expected: 'web'"
+          if [ "$OUT_DIR" != "web" ]; then
+            echo "::error::Expected dir='web', got '$OUT_DIR'"
+            FAIL=1
+          fi
 
-            await octokit.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '[CI DRIFT] get-frontend-config-action outputs changed',
-              body: body,
-              labels: ['ci', 'priority:high'],
-            });
+          echo "--- Checking node-version ---"
+          echo "  actual:   '$OUT_NODE'"
+          echo "  expected: '22'"
+          if [ "$OUT_NODE" != "22" ]; then
+            echo "::error::Expected node-version='22', got '$OUT_NODE'"
+            FAIL=1
+          fi
+
+          echo "--- Checking has-frontend ---"
+          echo "  actual:   '$OUT_HAS'"
+          echo "  expected: 'true'"
+          if [ "$OUT_HAS" != "true" ]; then
+            echo "::error::Expected has-frontend='true', got '$OUT_HAS'"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -eq 0 ]; then
+            echo "All output validations passed"
+          fi
+          exit $FAIL
+
+      - name: Check version consistency
+        id: version-check
+        env:
+          OUT_NODE: ${{ steps.frontend-config.outputs.node-version }}
+        run: |
+          # Go version: go.mod vs ci.yml
+          GO_MOD_VER=$(grep '^go ' go.mod | awk '{print $2}' | sed 's/\.[0-9]*$//')
+          CI_GO_VER=$(grep "go-version:" .github/workflows/ci.yml | head -1 | grep -oE "'[^']+'" | tr -d "'")
+          REPO_CFG_GO_VER=$(grep -A1 'versions:' .github/repository-config.yml | grep 'go:' | head -1 | grep -oE "'[^']+'" | tr -d "'")
+
+          echo "--- Go version check ---"
+          echo "  go.mod:              $GO_MOD_VER"
+          echo "  ci.yml:              $CI_GO_VER"
+          echo "  repository-config:   $REPO_CFG_GO_VER"
+
+          if [ -n "$CI_GO_VER" ] && [ "$GO_MOD_VER" != "$CI_GO_VER" ]; then
+            echo "::warning::Go version mismatch: go.mod=$GO_MOD_VER vs ci.yml=$CI_GO_VER"
+          fi
+
+          # Node version: repository-config.yml vs ci.yml
+          CI_NODE_VER=$(grep "node-version:" .github/workflows/ci.yml | head -1 | grep -oE "'[^']+'" | tr -d "'")
+
+          echo "--- Node version check ---"
+          echo "  ci.yml:              $CI_NODE_VER"
+          echo "  action output:       $OUT_NODE"
+
+          if [ -n "$CI_NODE_VER" ] && [ "$CI_NODE_VER" != "$OUT_NODE" ]; then
+            echo "::warning::Node version mismatch: ci.yml=$CI_NODE_VER vs action=$OUT_NODE"
+          fi
+
+          echo "Version consistency checks complete"
+
+      - name: Create issue on drift
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUT_DIR: ${{ steps.frontend-config.outputs.dir }}
+          OUT_NODE: ${{ steps.frontend-config.outputs.node-version }}
+          OUT_HAS: ${{ steps.frontend-config.outputs.has-frontend }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Check for existing open ci-drift issue to avoid duplicates
+          EXISTING=$(gh issue list --label "ci-drift" --state open --limit 1 --json number -q '.[0].number' || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "Open ci-drift issue already exists: #$EXISTING -- adding comment"
+            gh issue comment "$EXISTING" --body "Drift detected again in run: $RUN_URL"
+            exit 0
+          fi
+
+          gh issue create \
+            --title "[CI DRIFT] Action output or version mismatch detected" \
+            --label "ci-drift" \
+            --body "## CI/CD Configuration Drift Detected
+
+          The \`test-action-integration.yml\` workflow detected unexpected outputs
+          from \`get-frontend-config-action\` or version inconsistencies across config files.
+
+          **Expected action outputs:**
+          - \`dir\` = \`web\`
+          - \`node-version\` = \`22\`
+          - \`has-frontend\` = \`true\`
+
+          **Actual action outputs:**
+          - \`dir\` = \`$OUT_DIR\`
+          - \`node-version\` = \`$OUT_NODE\`
+          - \`has-frontend\` = \`$OUT_HAS\`
+
+          **Workflow run:** $RUN_URL
+
+          Please investigate and update \`.github/repository-config.yml\`, \`ci.yml\`,
+          or pin the action to a known-good version."
