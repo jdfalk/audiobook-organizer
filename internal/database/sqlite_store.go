@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1261,6 +1261,19 @@ func (s *SQLiteStore) GetBookByFilePath(path string) (*Book, error) {
 	var book Book
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE file_path = ?`, bookSelectColumns)
 	err := scanBook(s.db.QueryRow(query, path), &book)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (s *SQLiteStore) GetBookByITunesPersistentID(persistentID string) (*Book, error) {
+	var book Book
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE itunes_persistent_id = ? LIMIT 1`, bookSelectColumns)
+	err := scanBook(s.db.QueryRow(query, persistentID), &book)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

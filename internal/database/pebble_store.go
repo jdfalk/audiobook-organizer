@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -626,6 +626,38 @@ func (p *PebbleStore) GetBookByFilePath(path string) (*Book, error) {
 	id := string(value) // ULID string
 
 	return p.GetBookByID(id)
+}
+
+// GetBookByITunesPersistentID scans all books to find one matching the given
+// iTunes persistent ID. This is O(n) but syncs are infrequent.
+func (p *PebbleStore) GetBookByITunesPersistentID(persistentID string) (*Book, error) {
+	if persistentID == "" {
+		return nil, nil
+	}
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":hash:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.ITunesPersistentID != nil && *book.ITunesPersistentID == persistentID {
+			return &book, nil
+		}
+	}
+	return nil, nil
 }
 
 func (p *PebbleStore) GetBookByFileHash(hash string) (*Book, error) {

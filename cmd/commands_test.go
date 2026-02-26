@@ -56,8 +56,9 @@ func (s *stubStore) GetAllBooks(limit, offset int) ([]database.Book, error) {
 	return []database.Book{}, nil
 }
 func (s *stubStore) GetBookByID(id string) (*database.Book, error)              { return nil, nil }
-func (s *stubStore) GetBookByFilePath(path string) (*database.Book, error)      { return nil, nil }
-func (s *stubStore) GetBookByFileHash(hash string) (*database.Book, error)      { return nil, nil }
+func (s *stubStore) GetBookByFilePath(path string) (*database.Book, error)                { return nil, nil }
+func (s *stubStore) GetBookByITunesPersistentID(persistentID string) (*database.Book, error) { return nil, nil }
+func (s *stubStore) GetBookByFileHash(hash string) (*database.Book, error)                { return nil, nil }
 func (s *stubStore) GetBookByOriginalHash(hash string) (*database.Book, error)  { return nil, nil }
 func (s *stubStore) GetBookByOrganizedHash(hash string) (*database.Book, error) { return nil, nil }
 func (s *stubStore) GetDuplicateBooks() ([][]database.Book, error)              { return [][]database.Book{}, nil }

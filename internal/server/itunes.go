@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -1204,4 +1204,222 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// ITunesSyncRequest represents a request to sync from iTunes Library.xml.
+type ITunesSyncRequest struct {
+	LibraryPath  string               `json:"library_path,omitempty"`
+	PathMappings []itunes.PathMapping `json:"path_mappings,omitempty"`
+}
+
+// ITunesSyncResponse acknowledges a sync operation.
+type ITunesSyncResponse struct {
+	OperationID string `json:"operation_id"`
+	Message     string `json:"message"`
+}
+
+// handleITunesSync triggers an incremental sync from iTunes Library.xml.
+func (s *Server) handleITunesSync(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	var req ITunesSyncRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Allow empty body — will discover library path from DB
+		req = ITunesSyncRequest{}
+	}
+
+	// Discover library path if not provided
+	libraryPath := req.LibraryPath
+	if libraryPath == "" {
+		libraryPath = discoverITunesLibraryPath()
+	}
+	if libraryPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no iTunes library path configured or provided"})
+		return
+	}
+
+	if _, err := os.Stat(libraryPath); os.IsNotExist(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+		return
+	}
+
+	// Check fingerprint — skip if unchanged
+	if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
+		if info, statErr := os.Stat(libraryPath); statErr == nil {
+			if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
+				c.JSON(http.StatusOK, gin.H{"message": "no changes detected", "operation_id": ""})
+				return
+			}
+		}
+	}
+
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	pathMappings := req.PathMappings
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return executeITunesSync(ctx, progress, libraryPath, pathMappings)
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, ITunesSyncResponse{
+		OperationID: op.ID,
+		Message:     "iTunes sync operation queued",
+	})
+}
+
+// discoverITunesLibraryPath finds the library path from the most recent imported book.
+func discoverITunesLibraryPath() string {
+	if database.GlobalStore == nil {
+		return ""
+	}
+	books, err := database.GlobalStore.GetAllBooks(100, 0)
+	if err != nil {
+		return ""
+	}
+	for _, book := range books {
+		if book.ITunesImportSource != nil && *book.ITunesImportSource != "" {
+			return *book.ITunesImportSource
+		}
+	}
+	return ""
+}
+
+// executeITunesSync re-reads an iTunes Library.xml and updates changed fields
+// or imports new audiobooks.
+func executeITunesSync(ctx context.Context, progress operations.ProgressReporter, libraryPath string, pathMappings []itunes.PathMapping) error {
+	store := database.GlobalStore
+
+	_ = progress.UpdateProgress(0, 0, "Starting iTunes sync")
+	_ = progress.Log("info", "Starting iTunes sync", nil)
+
+	library, err := itunes.ParseLibrary(libraryPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse library: %w", err)
+	}
+
+	groups := groupTracksByAlbum(library)
+	totalGroups := len(groups)
+	if totalGroups == 0 {
+		_ = progress.UpdateProgress(0, 0, "No audiobooks found in library")
+		return nil
+	}
+
+	importOpts := itunes.ImportOptions{
+		LibraryPath:  libraryPath,
+		PathMappings: pathMappings,
+	}
+
+	var updated, newBooks, unchanged int
+	for i, group := range groups {
+		if progress.IsCanceled() {
+			_ = progress.Log("info", "iTunes sync canceled", nil)
+			return nil
+		}
+
+		if len(group.tracks) == 0 {
+			continue
+		}
+
+		firstTrack := group.tracks[0]
+		persistentID := firstTrack.PersistentID
+		if persistentID == "" {
+			continue
+		}
+
+		existing, err := store.GetBookByITunesPersistentID(persistentID)
+		if err != nil {
+			_ = progress.Log("warn", fmt.Sprintf("Error looking up persistent ID %s: %v", persistentID, err), nil)
+			continue
+		}
+
+		if existing != nil {
+			// Compare fields and update if changed
+			changed := false
+
+			newPlayCount := intPtr(firstTrack.PlayCount)
+			if existing.ITunesPlayCount == nil || *existing.ITunesPlayCount != *newPlayCount {
+				existing.ITunesPlayCount = newPlayCount
+				changed = true
+			}
+
+			newRating := intPtr(firstTrack.Rating)
+			if existing.ITunesRating == nil || *existing.ITunesRating != *newRating {
+				existing.ITunesRating = newRating
+				changed = true
+			}
+
+			newBookmark := int64Ptr(firstTrack.Bookmark)
+			if existing.ITunesBookmark == nil || *existing.ITunesBookmark != *newBookmark {
+				existing.ITunesBookmark = newBookmark
+				changed = true
+			}
+
+			if firstTrack.PlayDate > 0 {
+				lastPlayed := time.Unix(firstTrack.PlayDate, 0)
+				if existing.ITunesLastPlayed == nil || !existing.ITunesLastPlayed.Equal(lastPlayed) {
+					existing.ITunesLastPlayed = &lastPlayed
+					changed = true
+				}
+			}
+
+			if changed {
+				if _, err := store.UpdateBook(existing.ID, existing); err != nil {
+					_ = progress.Log("error", fmt.Sprintf("Failed to update '%s': %v", existing.Title, err), nil)
+				} else {
+					updated++
+				}
+			} else {
+				unchanged++
+			}
+		} else {
+			// Import as new book
+			book, err := buildBookFromAlbumGroup(group, libraryPath, importOpts)
+			if err != nil {
+				_ = progress.Log("warn", fmt.Sprintf("Failed to build book from group '%s': %v", group.key, err), nil)
+				continue
+			}
+			assignAuthorAndSeries(book, firstTrack)
+			book.LibraryState = stringPtr("imported")
+
+			if _, err := store.CreateBook(book); err != nil {
+				_ = progress.Log("error", fmt.Sprintf("Failed to create '%s': %v", book.Title, err), nil)
+			} else {
+				newBooks++
+			}
+		}
+
+		processed := i + 1
+		if processed%itunesImportProgressBatch == 0 || processed == totalGroups {
+			message := fmt.Sprintf("Syncing book %d of %d (updated %d, new %d, unchanged %d)",
+				processed, totalGroups, updated, newBooks, unchanged)
+			_ = progress.UpdateProgress(processed, totalGroups, message)
+		}
+	}
+
+	// Save fingerprint after sync
+	if fp, err := itunes.ComputeFingerprint(libraryPath); err == nil {
+		_ = store.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
+	}
+
+	summary := fmt.Sprintf("Sync completed: %d updated, %d new, %d unchanged", updated, newBooks, unchanged)
+	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
+	_ = progress.Log("info", summary, nil)
+	_ = ctx
+	return nil
 }
