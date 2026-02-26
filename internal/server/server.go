@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.64.0
+// version: 1.65.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -728,6 +728,10 @@ func (s *Server) Start(cfg ServerConfig) error {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	shutdown := make(chan struct{})
 	var backgroundWG sync.WaitGroup
+
+	// Start iTunes sync scheduler if enabled
+	s.startITunesSyncScheduler(shutdown, &backgroundWG)
+
 	ticker := time.NewTicker(5 * time.Second)
 	backgroundWG.Add(1)
 	go func() {
@@ -1068,6 +1072,7 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/write-back", s.handleITunesWriteBack)
 				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
 				itunesGroup.GET("/library-status", s.handleITunesLibraryStatus)
+				itunesGroup.POST("/sync", s.handleITunesSync)
 			}
 
 			// Cover art
@@ -1336,6 +1341,72 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 			}
 		}
 	}
+}
+
+// startITunesSyncScheduler launches a background goroutine that periodically
+// triggers an iTunes sync if the library has changed.
+func (s *Server) startITunesSyncScheduler(shutdown chan struct{}, wg *sync.WaitGroup) {
+	if !config.AppConfig.ITunesSyncEnabled {
+		return
+	}
+	interval := time.Duration(config.AppConfig.ITunesSyncInterval) * time.Minute
+	if interval < time.Minute {
+		interval = 30 * time.Minute
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				s.triggerITunesSync()
+			case <-shutdown:
+				return
+			}
+		}
+	}()
+	log.Printf("[INFO] iTunes sync scheduler started (interval=%v)", interval)
+}
+
+// triggerITunesSync finds the library path from DB and enqueues a sync if the file changed.
+func (s *Server) triggerITunesSync() {
+	if database.GlobalStore == nil || operations.GlobalQueue == nil {
+		return
+	}
+
+	libraryPath := discoverITunesLibraryPath()
+	if libraryPath == "" {
+		return
+	}
+
+	// Check fingerprint — skip if unchanged (quick mtime+size check)
+	if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
+		if info, statErr := os.Stat(libraryPath); statErr == nil {
+			if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
+				return // No changes
+			}
+		}
+	}
+
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
+	if err != nil {
+		log.Printf("[WARN] iTunes sync scheduler: failed to create operation: %v", err)
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return executeITunesSync(ctx, progress, libraryPath, nil)
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
+		log.Printf("[WARN] iTunes sync scheduler: failed to enqueue: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] iTunes sync scheduler: enqueued sync operation %s", op.ID)
 }
 
 func isStaleOperationStatus(status string) bool {

@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -44,6 +44,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload.js';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
+import SyncIcon from '@mui/icons-material/Sync.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
@@ -53,6 +54,7 @@ import {
   getITunesImportStatus,
   getITunesLibraryStatus,
   importITunesLibrary,
+  startITunesSync,
   type Book,
   type ITunesImportRequest,
   type ITunesImportStatus,
@@ -791,6 +793,25 @@ export function ITunesImport() {
           </Typography>
 
           <Stack direction="row" spacing={2} flexWrap="wrap">
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<SyncIcon />}
+              onClick={async () => {
+                try {
+                  const result = await startITunesSync(settings.libraryPath || undefined);
+                  if (result.operation_id) {
+                    useOperationsStore.getState().startPolling(result.operation_id, 'itunes_sync');
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Sync failed');
+                }
+              }}
+              disabled={!settings.libraryPath || importing}
+            >
+              Sync Now
+            </Button>
+
             <Button
               variant="contained"
               startIcon={<CloudDownloadIcon />}

@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -17,7 +17,8 @@ type MockStore struct {
 	GetBooksByWorkIDFunc       func(workID string) ([]Book, error)
 	GetBooksBySeriesIDFunc     func(seriesID int) ([]Book, error)
 	GetBooksByAuthorIDFunc     func(authorID int) ([]Book, error)
-	GetBookByFileHashFunc      func(hash string) (*Book, error)
+	GetBookByITunesPersistentIDFunc func(persistentID string) (*Book, error)
+	GetBookByFileHashFunc           func(hash string) (*Book, error)
 	GetBookByOriginalHashFunc  func(hash string) (*Book, error)
 	GetBookByOrganizedHashFunc func(hash string) (*Book, error)
 	GetDuplicateBooksFunc      func() ([][]Book, error)
@@ -328,6 +329,13 @@ func (m *MockStore) GetBookByID(id string) (*Book, error) {
 func (m *MockStore) GetBookByFilePath(path string) (*Book, error) {
 	if m.GetBookByFilePathFunc != nil {
 		return m.GetBookByFilePathFunc(path)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBookByITunesPersistentID(persistentID string) (*Book, error) {
+	if m.GetBookByITunesPersistentIDFunc != nil {
+		return m.GetBookByITunesPersistentIDFunc(persistentID)
 	}
 	return nil, nil
 }

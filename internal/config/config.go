@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -139,6 +139,10 @@ type Config struct {
 	LogFormat         string `json:"log_format"` // 'text' or 'json'
 	EnableJsonLogging bool   `json:"enable_json_logging"`
 
+	// iTunes sync
+	ITunesSyncEnabled  bool `json:"itunes_sync_enabled"`
+	ITunesSyncInterval int  `json:"itunes_sync_interval"` // minutes
+
 	// Download client integration
 	DownloadClient DownloadClientConfig `json:"download_client"`
 
@@ -220,6 +224,10 @@ func InitConfig() {
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("enable_json_logging", false)
+
+	// iTunes sync defaults
+	viper.SetDefault("itunes_sync_enabled", true)
+	viper.SetDefault("itunes_sync_interval", 30)
 
 	// Download client defaults
 	viper.SetDefault("download_client.torrent.type", "")
@@ -314,6 +322,10 @@ func InitConfig() {
 		LogLevel:          viper.GetString("log_level"),
 		LogFormat:         viper.GetString("log_format"),
 		EnableJsonLogging: viper.GetBool("enable_json_logging"),
+
+		// iTunes sync
+		ITunesSyncEnabled:  viper.GetBool("itunes_sync_enabled"),
+		ITunesSyncInterval: viper.GetInt("itunes_sync_interval"),
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
@@ -602,6 +614,10 @@ func ResetToDefaults() {
 		LogLevel:          "info",
 		LogFormat:         "text",
 		EnableJsonLogging: false,
+
+		// iTunes sync
+		ITunesSyncEnabled:  true,
+		ITunesSyncInterval: 30,
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
