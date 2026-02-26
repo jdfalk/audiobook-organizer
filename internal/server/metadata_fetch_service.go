@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -9,6 +9,7 @@ import (
 	"hash/crc32"
 	"log"
 	"sort"
+	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -147,6 +148,35 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 		}
 
+		// Step 4: Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
+		if len(results) == 0 {
+			strippedTitle := stripSubtitle(searchTitle)
+			if strippedTitle != searchTitle && strippedTitle != book.Title {
+				if authorName != "" {
+					results, searchErr = src.SearchByTitleAndAuthor(strippedTitle, authorName)
+				} else {
+					results, searchErr = src.SearchByTitle(strippedTitle)
+				}
+				if searchErr != nil {
+					lastErr = searchErr
+					continue
+				}
+			}
+		}
+
+		// Step 5: Author-only search — pick best match from results
+		if len(results) == 0 && authorName != "" {
+			results, searchErr = src.SearchByTitle(authorName)
+			if searchErr != nil {
+				lastErr = searchErr
+				continue
+			}
+			// Filter results to find best title match
+			if len(results) > 0 {
+				results = bestTitleMatch(results, searchTitle, book.Title)
+			}
+		}
+
 		if len(results) == 0 {
 			log.Printf("[DEBUG] %s returned 0 results for %q", src.Name(), searchTitle)
 		}
@@ -240,6 +270,41 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 			log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
 		}
 	}
+}
+
+// bestTitleMatch filters author-search results to find the best match for the
+// book title. Returns a single-element slice with the best match, or nil if
+// no result has any word overlap with the title.
+func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
+	// Build set of significant words from all title variants
+	titleWords := map[string]bool{}
+	for _, t := range titles {
+		for _, w := range strings.Fields(strings.ToLower(t)) {
+			if len(w) > 2 { // skip short words like "a", "of", "the" noise
+				titleWords[w] = true
+			}
+		}
+	}
+
+	bestIdx := -1
+	bestScore := 0
+	for i, r := range results {
+		score := 0
+		for _, w := range strings.Fields(strings.ToLower(r.Title)) {
+			if titleWords[w] {
+				score++
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			bestIdx = i
+		}
+	}
+
+	if bestIdx >= 0 && bestScore > 0 {
+		return []metadata.BookMetadata{results[bestIdx]}
+	}
+	return nil
 }
 
 func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
