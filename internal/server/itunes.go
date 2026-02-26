@@ -505,7 +505,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		if err != nil {
 			recordITunesFailure(status, err.Error())
 			_ = progress.Log("error", err.Error(), nil)
-			updateITunesProgress(progress, status, processed, totalGroups)
+			updateITunesProgress(progress, status, processed, totalGroups, group.key)
 			continue
 		}
 
@@ -534,7 +534,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
 				updateITunesSkipped(status)
 				_ = progress.Log("warn", fmt.Sprintf("Skipping blocked hash for %s", book.Title), nil)
-				updateITunesProgress(progress, status, processed, totalGroups)
+				updateITunesProgress(progress, status, processed, totalGroups, book.Title)
 				continue
 			}
 		}
@@ -543,7 +543,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
 				updateITunesSkipped(status)
 				_ = progress.Log("info", fmt.Sprintf("Skipping duplicate file path: %s", book.FilePath), nil)
-				updateITunesProgress(progress, status, processed, totalGroups)
+				updateITunesProgress(progress, status, processed, totalGroups, book.Title)
 				continue
 			}
 			if book.FileHash != nil {
@@ -617,7 +617,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			}
 		}
 
-		updateITunesProgress(progress, status, processed, totalGroups)
+		updateITunesProgress(progress, status, processed, totalGroups, book.Title)
 
 		// Checkpoint every 10 groups
 		if processed%10 == 0 {
@@ -1093,7 +1093,7 @@ func recordITunesImportError(status *itunesImportStatus, message string) {
 	status.mu.Unlock()
 }
 
-func updateITunesProgress(progress operations.ProgressReporter, status *itunesImportStatus, processed, total int) {
+func updateITunesProgress(progress operations.ProgressReporter, status *itunesImportStatus, processed, total int, currentTitle ...string) {
 	status.mu.Lock()
 	current := status.Processed
 	imported := status.Imported
@@ -1105,14 +1105,22 @@ func updateITunesProgress(progress operations.ProgressReporter, status *itunesIm
 		return
 	}
 
+	title := ""
+	if len(currentTitle) > 0 {
+		title = currentTitle[0]
+	}
+
 	message := fmt.Sprintf(
-		"Processed %d/%d (imported %d, skipped %d, failed %d)",
+		"Book %d of %d (imported %d, skipped %d, failed %d)",
 		current,
 		total,
 		imported,
 		skipped,
 		failed,
 	)
+	if title != "" {
+		message += fmt.Sprintf(" — %s", title)
+	}
 	_ = progress.UpdateProgress(processed, total, message)
 }
 
