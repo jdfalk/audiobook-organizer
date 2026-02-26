@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -860,6 +860,49 @@ func (p *PebbleStore) SetBookAuthors(bookID string, authors []BookAuthor) error 
 func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	// For Pebble, fall back to the same logic as GetBooksByAuthorID
 	return p.GetBooksByAuthorID(authorID)
+}
+
+func (p *PebbleStore) CreateNarrator(name string) (*Narrator, error) {
+	return nil, nil
+}
+
+func (p *PebbleStore) GetNarratorByID(id int) (*Narrator, error) {
+	return nil, nil
+}
+
+func (p *PebbleStore) GetNarratorByName(name string) (*Narrator, error) {
+	return nil, nil
+}
+
+func (p *PebbleStore) ListNarrators() ([]Narrator, error) {
+	return nil, nil
+}
+
+func (p *PebbleStore) GetBookNarrators(bookID string) ([]BookNarrator, error) {
+	key := []byte(fmt.Sprintf("book_narrators:%s", bookID))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var narrators []BookNarrator
+	if err := json.Unmarshal(val, &narrators); err != nil {
+		return nil, err
+	}
+	return narrators, nil
+}
+
+func (p *PebbleStore) SetBookNarrators(bookID string, narrators []BookNarrator) error {
+	key := []byte(fmt.Sprintf("book_narrators:%s", bookID))
+	data, err := json.Marshal(narrators)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(key, data, pebble.Sync)
 }
 
 func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {

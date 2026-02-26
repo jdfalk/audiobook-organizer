@@ -6681,3 +6681,330 @@ func (_c *MockStore_GetLibraryFingerprint_Call) RunAndReturn(run func(string) (*
 	_c.Call.Return(run)
 	return _c
 }
+
+// --- Narrator methods ---
+
+func (_mock *MockStore) CreateNarrator(name string) (*database.Narrator, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateNarrator")
+	}
+
+	var r0 *database.Narrator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.Narrator, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Narrator); ok {
+		r0 = returnFunc(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Narrator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_CreateNarrator_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CreateNarrator(name interface{}) *MockStore_CreateNarrator_Call {
+	return &MockStore_CreateNarrator_Call{Call: _e.mock.On("CreateNarrator", name)}
+}
+
+func (_c *MockStore_CreateNarrator_Call) Run(run func(name string)) *MockStore_CreateNarrator_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateNarrator_Call) Return(narrator *database.Narrator, err error) *MockStore_CreateNarrator_Call {
+	_c.Call.Return(narrator, err)
+	return _c
+}
+
+func (_c *MockStore_CreateNarrator_Call) RunAndReturn(run func(name string) (*database.Narrator, error)) *MockStore_CreateNarrator_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStore) GetNarratorByID(id int) (*database.Narrator, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetNarratorByID")
+	}
+
+	var r0 *database.Narrator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) (*database.Narrator, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) *database.Narrator); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Narrator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetNarratorByID_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetNarratorByID(id interface{}) *MockStore_GetNarratorByID_Call {
+	return &MockStore_GetNarratorByID_Call{Call: _e.mock.On("GetNarratorByID", id)}
+}
+
+func (_c *MockStore_GetNarratorByID_Call) Run(run func(id int)) *MockStore_GetNarratorByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetNarratorByID_Call) Return(narrator *database.Narrator, err error) *MockStore_GetNarratorByID_Call {
+	_c.Call.Return(narrator, err)
+	return _c
+}
+
+func (_c *MockStore_GetNarratorByID_Call) RunAndReturn(run func(id int) (*database.Narrator, error)) *MockStore_GetNarratorByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStore) GetNarratorByName(name string) (*database.Narrator, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetNarratorByName")
+	}
+
+	var r0 *database.Narrator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.Narrator, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Narrator); ok {
+		r0 = returnFunc(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Narrator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetNarratorByName_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetNarratorByName(name interface{}) *MockStore_GetNarratorByName_Call {
+	return &MockStore_GetNarratorByName_Call{Call: _e.mock.On("GetNarratorByName", name)}
+}
+
+func (_c *MockStore_GetNarratorByName_Call) Run(run func(name string)) *MockStore_GetNarratorByName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetNarratorByName_Call) Return(narrator *database.Narrator, err error) *MockStore_GetNarratorByName_Call {
+	_c.Call.Return(narrator, err)
+	return _c
+}
+
+func (_c *MockStore_GetNarratorByName_Call) RunAndReturn(run func(name string) (*database.Narrator, error)) *MockStore_GetNarratorByName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStore) ListNarrators() ([]database.Narrator, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListNarrators")
+	}
+
+	var r0 []database.Narrator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Narrator, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Narrator); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Narrator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_ListNarrators_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) ListNarrators() *MockStore_ListNarrators_Call {
+	return &MockStore_ListNarrators_Call{Call: _e.mock.On("ListNarrators")}
+}
+
+func (_c *MockStore_ListNarrators_Call) Run(run func()) *MockStore_ListNarrators_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListNarrators_Call) Return(narrators []database.Narrator, err error) *MockStore_ListNarrators_Call {
+	_c.Call.Return(narrators, err)
+	return _c
+}
+
+func (_c *MockStore_ListNarrators_Call) RunAndReturn(run func() ([]database.Narrator, error)) *MockStore_ListNarrators_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStore) GetBookNarrators(bookID string) ([]database.BookNarrator, error) {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookNarrators")
+	}
+
+	var r0 []database.BookNarrator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.BookNarrator, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.BookNarrator); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookNarrator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetBookNarrators_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookNarrators(bookID interface{}) *MockStore_GetBookNarrators_Call {
+	return &MockStore_GetBookNarrators_Call{Call: _e.mock.On("GetBookNarrators", bookID)}
+}
+
+func (_c *MockStore_GetBookNarrators_Call) Run(run func(bookID string)) *MockStore_GetBookNarrators_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookNarrators_Call) Return(bookNarrators []database.BookNarrator, err error) *MockStore_GetBookNarrators_Call {
+	_c.Call.Return(bookNarrators, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookNarrators_Call) RunAndReturn(run func(bookID string) ([]database.BookNarrator, error)) *MockStore_GetBookNarrators_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+func (_mock *MockStore) SetBookNarrators(bookID string, narrators []database.BookNarrator) error {
+	ret := _mock.Called(bookID, narrators)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBookNarrators")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []database.BookNarrator) error); ok {
+		r0 = returnFunc(bookID, narrators)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_SetBookNarrators_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) SetBookNarrators(bookID interface{}, narrators interface{}) *MockStore_SetBookNarrators_Call {
+	return &MockStore_SetBookNarrators_Call{Call: _e.mock.On("SetBookNarrators", bookID, narrators)}
+}
+
+func (_c *MockStore_SetBookNarrators_Call) Run(run func(bookID string, narrators []database.BookNarrator)) *MockStore_SetBookNarrators_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []database.BookNarrator
+		if args[1] != nil {
+			arg1 = args[1].([]database.BookNarrator)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetBookNarrators_Call) Return(err error) *MockStore_SetBookNarrators_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetBookNarrators_Call) RunAndReturn(run func(bookID string, narrators []database.BookNarrator) error) *MockStore_SetBookNarrators_Call {
+	_c.Call.Return(run)
+	return _c
+}

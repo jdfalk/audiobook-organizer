@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -151,6 +151,12 @@ var migrations = []Migration{
 		Version:     19,
 		Description: "Add metadata_changes_history table for undo support",
 		Up:          migration019Up,
+		Down:        nil,
+	},
+	{
+		Version:     20,
+		Description: "Add narrators and book_narrators tables",
+		Up:          migration020Up,
 		Down:        nil,
 	},
 }
@@ -1049,4 +1055,42 @@ func GetMigrationHistory(store Store) ([]MigrationRecord, error) {
 	}
 
 	return records, nil
+}
+
+// migration020Up adds narrators and book_narrators tables
+func migration020Up(store Store) error {
+	log.Println("  - Adding narrators and book_narrators tables")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS narrators (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL UNIQUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_narrators_name ON narrators(name)`,
+		`CREATE TABLE IF NOT EXISTS book_narrators (
+			book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+			narrator_id INTEGER NOT NULL REFERENCES narrators(id),
+			role TEXT NOT NULL DEFAULT 'narrator',
+			position INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (book_id, narrator_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_narrators_book ON book_narrators(book_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_narrators_narrator ON book_narrators(narrator_id)`,
+	}
+
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+		}
+	}
+
+	log.Println("  - narrators and book_narrators tables added successfully")
+	return nil
 }

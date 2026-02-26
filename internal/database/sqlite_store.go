@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -298,6 +298,25 @@ func (s *SQLiteStore) createTables() error {
 
 	CREATE INDEX IF NOT EXISTS idx_book_authors_book ON book_authors(book_id);
 	CREATE INDEX IF NOT EXISTS idx_book_authors_author ON book_authors(author_id);
+
+	CREATE TABLE IF NOT EXISTS narrators (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_narrators_name ON narrators(name);
+
+	CREATE TABLE IF NOT EXISTS book_narrators (
+		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+		narrator_id INTEGER NOT NULL REFERENCES narrators(id),
+		role TEXT NOT NULL DEFAULT 'narrator',
+		position INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (book_id, narrator_id)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_book_narrators_book ON book_narrators(book_id);
+	CREATE INDEX IF NOT EXISTS idx_book_narrators_narrator ON book_narrators(narrator_id);
 
 	CREATE INDEX IF NOT EXISTS idx_books_title ON books(title);
 	CREATE INDEX IF NOT EXISTS idx_books_author ON books(author_id);
@@ -1488,6 +1507,103 @@ func (s *SQLiteStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+// --- Narrator methods ---
+
+func (s *SQLiteStore) CreateNarrator(name string) (*Narrator, error) {
+	result, err := s.db.Exec("INSERT INTO narrators (name) VALUES (?)", name)
+	if err != nil {
+		return nil, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return s.GetNarratorByID(int(id))
+}
+
+func (s *SQLiteStore) GetNarratorByID(id int) (*Narrator, error) {
+	var n Narrator
+	err := s.db.QueryRow("SELECT id, name, created_at FROM narrators WHERE id = ?", id).Scan(&n.ID, &n.Name, &n.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (s *SQLiteStore) GetNarratorByName(name string) (*Narrator, error) {
+	var n Narrator
+	err := s.db.QueryRow("SELECT id, name, created_at FROM narrators WHERE LOWER(name) = LOWER(?)", name).Scan(&n.ID, &n.Name, &n.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func (s *SQLiteStore) ListNarrators() ([]Narrator, error) {
+	rows, err := s.db.Query("SELECT id, name, created_at FROM narrators ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var narrators []Narrator
+	for rows.Next() {
+		var n Narrator
+		if err := rows.Scan(&n.ID, &n.Name, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		narrators = append(narrators, n)
+	}
+	return narrators, rows.Err()
+}
+
+func (s *SQLiteStore) GetBookNarrators(bookID string) ([]BookNarrator, error) {
+	rows, err := s.db.Query(`SELECT book_id, narrator_id, role, position FROM book_narrators WHERE book_id = ? ORDER BY position`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var narrators []BookNarrator
+	for rows.Next() {
+		var bn BookNarrator
+		if err := rows.Scan(&bn.BookID, &bn.NarratorID, &bn.Role, &bn.Position); err != nil {
+			return nil, err
+		}
+		narrators = append(narrators, bn)
+	}
+	return narrators, rows.Err()
+}
+
+func (s *SQLiteStore) SetBookNarrators(bookID string, narrators []BookNarrator) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM book_narrators WHERE book_id = ?`, bookID); err != nil {
+		return err
+	}
+
+	for _, bn := range narrators {
+		if _, err := tx.Exec(
+			`INSERT INTO book_narrators (book_id, narrator_id, role, position) VALUES (?, ?, ?, ?)`,
+			bookID, bn.NarratorID, bn.Role, bn.Position,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {

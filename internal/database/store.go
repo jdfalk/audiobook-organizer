@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.22.0
+// version: 2.23.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -36,6 +36,16 @@ type Store interface {
 	GetBookAuthors(bookID string) ([]BookAuthor, error)
 	SetBookAuthors(bookID string, authors []BookAuthor) error
 	GetBooksByAuthorIDWithRole(authorID int) ([]Book, error)
+
+	// Narrators
+	CreateNarrator(name string) (*Narrator, error)
+	GetNarratorByID(id int) (*Narrator, error)
+	GetNarratorByName(name string) (*Narrator, error)
+	ListNarrators() ([]Narrator, error)
+
+	// Book-Narrator relationships
+	GetBookNarrators(bookID string) ([]BookNarrator, error)
+	SetBookNarrators(bookID string, narrators []BookNarrator) error
 
 	// Series
 	GetAllSeries() ([]Series, error)
@@ -189,6 +199,21 @@ type BookAuthor struct {
 	AuthorID int    `json:"author_id"`
 	Role     string `json:"role"`     // author, co-author, editor
 	Position int    `json:"position"` // 0 = primary
+}
+
+// Narrator represents an audiobook narrator
+type Narrator struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// BookNarrator represents the many-to-many relationship between books and narrators
+type BookNarrator struct {
+	BookID     string `json:"book_id"`
+	NarratorID int    `json:"narrator_id"`
+	Role       string `json:"role"`     // narrator, co-narrator
+	Position   int    `json:"position"` // 0 = primary
 }
 
 // Series represents an audiobook series

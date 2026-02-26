@@ -207,6 +207,14 @@ func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor)
 func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
 	return nil, nil
 }
+func (s *stubStore) CreateNarrator(name string) (*database.Narrator, error) {
+	return &database.Narrator{ID: 1, Name: name}, nil
+}
+func (s *stubStore) GetNarratorByID(id int) (*database.Narrator, error)    { return nil, nil }
+func (s *stubStore) GetNarratorByName(name string) (*database.Narrator, error) { return nil, nil }
+func (s *stubStore) ListNarrators() ([]database.Narrator, error)           { return nil, nil }
+func (s *stubStore) GetBookNarrators(bookID string) ([]database.BookNarrator, error) { return nil, nil }
+func (s *stubStore) SetBookNarrators(bookID string, narrators []database.BookNarrator) error { return nil }
 func (s *stubStore) RecordMetadataChange(record *database.MetadataChangeRecord) error {
 	return nil
 }
