@@ -188,7 +188,7 @@ func InitConfig() {
 	viper.SetDefault("hardcover_api_token", "")
 
 	// Set AI parsing defaults
-	viper.SetDefault("enable_ai_parsing", false)
+	viper.SetDefault("enable_ai_parsing", true)
 	viper.SetDefault("openai_api_key", "")
 
 	// Set performance defaults — scale with available CPUs
@@ -576,7 +576,7 @@ func ResetToDefaults() {
 		OpenLibraryDumpDir:     "",
 
 		// AI parsing
-		EnableAIParsing: false,
+		EnableAIParsing: true,
 		OpenAIAPIKey:    "",
 
 		// Performance
