@@ -35,6 +35,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add.js';
@@ -544,73 +545,85 @@ export function ITunesImport() {
                 }))
               }
             >
-              <FormControlLabel
-                value="organized"
-                control={<Radio />}
-                label="Files already organized"
-              />
-              <FormControlLabel
-                value="import"
-                control={<Radio />}
-                label="Import metadata only"
-              />
-              <FormControlLabel
-                value="organize"
-                control={<Radio />}
-                label="Import and organize now"
-              />
+              <Tooltip title="Import all metadata (titles, authors, play counts, ratings, bookmarks) but mark files as already in their final location. Use this if your iTunes library folder structure is how you want it." placement="right" arrow>
+                <FormControlLabel
+                  value="organized"
+                  control={<Radio />}
+                  label="Files already organized"
+                />
+              </Tooltip>
+              <Tooltip title="Import all metadata into the database but leave files where they are. You can organize them later from the Library page. Good for previewing what will be imported before moving anything." placement="right" arrow>
+                <FormControlLabel
+                  value="import"
+                  control={<Radio />}
+                  label="Import metadata only"
+                />
+              </Tooltip>
+              <Tooltip title="Import all metadata AND move/rename files into the organized folder structure (Author/Series/Title). Files are copied to the root directory. Skips files that are already organized." placement="right" arrow>
+                <FormControlLabel
+                  value="organize"
+                  control={<Radio />}
+                  label="Import and organize now"
+                />
+              </Tooltip>
             </RadioGroup>
           </FormControl>
 
           <Box sx={{ mt: 2 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={settings.preserveLocation}
-                  onChange={(event) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      preserveLocation: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="Preserve original file locations"
-            />
+            <Tooltip title="Don't move files during organize — only update the database with their current locations." placement="right" arrow>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={settings.preserveLocation}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        preserveLocation: event.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Preserve original file locations"
+              />
+            </Tooltip>
           </Box>
 
           <Box>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={settings.importPlaylists}
-                  onChange={(event) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      importPlaylists: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="Import playlists as tags"
-            />
+            <Tooltip title="Convert iTunes playlist memberships into tags on each audiobook." placement="right" arrow>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={settings.importPlaylists}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        importPlaylists: event.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Import playlists as tags"
+              />
+            </Tooltip>
           </Box>
 
           <Box>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={settings.skipDuplicates}
-                  onChange={(event) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      skipDuplicates: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="Skip duplicates already in library"
-            />
+            <Tooltip title="Skip audiobooks that already exist in the library (matched by file path or file hash). Uncheck to re-import and overwrite existing entries." placement="right" arrow>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={settings.skipDuplicates}
+                    onChange={(event) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        skipDuplicates: event.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Skip duplicates already in library"
+              />
+            </Tooltip>
           </Box>
         </Box>
 
