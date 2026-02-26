@@ -1,10 +1,11 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -16,7 +17,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/oklog/ulid/v2"
 )
 
 // OpenLibraryService manages the Open Library data dump lifecycle.
@@ -190,48 +194,112 @@ func (s *Server) startOLImport(c *gin.Context) {
 	}
 	svc.mu.Unlock()
 
-	go func() {
-		var importWg sync.WaitGroup
-		for _, dumpType := range req.Types {
-			svc.mu.Lock()
-			if svc.importing[dumpType] {
-				svc.mu.Unlock()
-				log.Printf("[WARN] OL import already in progress for %s", dumpType)
-				continue
-			}
-			svc.importing[dumpType] = true
-			svc.mu.Unlock()
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	folderPath := targetDir
+	if store != nil {
+		_, _ = store.CreateOperation(opID, "ol_dump_import", &folderPath)
+	}
 
-			importWg.Add(1)
-			go func(dt string) {
-				defer importWg.Done()
-				defer func() {
-					svc.mu.Lock()
-					delete(svc.importing, dt)
-					svc.mu.Unlock()
-				}()
-
-				filePath := filepath.Join(targetDir, openlibrary.DumpFilename(dt))
-				log.Printf("[INFO] Starting OL dump import: %s from %s", dt, filePath)
-
-				err := svc.store.ImportDump(dt, filePath, func(count int) {
-					if count%100000 == 0 {
-						log.Printf("[INFO] OL %s import progress: %d records", dt, count)
-					}
-				})
-
-				if err != nil {
-					log.Printf("[ERROR] OL dump import failed for %s: %v", dt, err)
-				} else {
-					log.Printf("[INFO] OL dump import complete: %s", dt)
-				}
-			}(dumpType)
+	oq := operations.GlobalQueue
+	if oq != nil {
+		typesStr := strings.Join(req.Types, ",")
+		err := oq.Enqueue(opID, "ol_dump_import", operations.PriorityNormal,
+			func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.executeOLImport(ctx, progress, svc, targetDir, req.Types)
+			},
+		)
+		if err != nil {
+			log.Printf("[WARN] Failed to enqueue OL import, running directly: %v", err)
+			go func() {
+				_ = s.executeOLImport(context.Background(), nil, svc, targetDir, req.Types)
+			}()
 		}
-		importWg.Wait()
-		log.Printf("[INFO] All OL dump imports complete")
-	}()
+		_ = typesStr // used for logging if needed
+	} else {
+		// Fallback: no queue, run directly
+		go func() {
+			_ = s.executeOLImport(context.Background(), nil, svc, targetDir, req.Types)
+		}()
+	}
 
-	c.JSON(http.StatusAccepted, gin.H{"message": "import started", "types": req.Types})
+	c.JSON(http.StatusAccepted, gin.H{"message": "import started", "types": req.Types, "operation_id": opID})
+}
+
+func (s *Server) executeOLImport(ctx context.Context, progress operations.ProgressReporter, svc *OpenLibraryService, targetDir string, types []string) error {
+	if progress != nil {
+		_ = progress.UpdateProgress(0, len(types), fmt.Sprintf("Starting Open Library import (%d dump types)", len(types)))
+	}
+
+	var importWg sync.WaitGroup
+	var importErr error
+	var mu sync.Mutex
+
+	for i, dumpType := range types {
+		svc.mu.Lock()
+		if svc.importing[dumpType] {
+			svc.mu.Unlock()
+			log.Printf("[WARN] OL import already in progress for %s", dumpType)
+			continue
+		}
+		svc.importing[dumpType] = true
+		svc.mu.Unlock()
+
+		if progress != nil {
+			_ = progress.Log("info", fmt.Sprintf("Starting %s import", dumpType), nil)
+		}
+
+		importWg.Add(1)
+		go func(dt string, idx int) {
+			defer importWg.Done()
+			defer func() {
+				svc.mu.Lock()
+				delete(svc.importing, dt)
+				svc.mu.Unlock()
+			}()
+
+			filePath := filepath.Join(targetDir, openlibrary.DumpFilename(dt))
+			log.Printf("[INFO] Starting OL dump import: %s from %s", dt, filePath)
+
+			lastReported := 0
+			err := svc.store.ImportDump(dt, filePath, func(count int) {
+				if count-lastReported >= 50000 {
+					lastReported = count
+					if progress != nil {
+						msg := fmt.Sprintf("Importing %s: %dk records", dt, count/1000)
+						_ = progress.UpdateProgress(idx, len(types), msg)
+					}
+					log.Printf("[INFO] OL %s import progress: %d records", dt, count)
+				}
+			})
+
+			if err != nil {
+				log.Printf("[ERROR] OL dump import failed for %s: %v", dt, err)
+				if progress != nil {
+					_ = progress.Log("error", fmt.Sprintf("%s import failed: %v", dt, err), nil)
+				}
+				mu.Lock()
+				importErr = err
+				mu.Unlock()
+			} else {
+				log.Printf("[INFO] OL dump import complete: %s", dt)
+				if progress != nil {
+					_ = progress.Log("info", fmt.Sprintf("%s import complete", dt), nil)
+				}
+			}
+		}(dumpType, i)
+	}
+	importWg.Wait()
+
+	if progress != nil {
+		if importErr != nil {
+			_ = progress.UpdateProgress(len(types), len(types), fmt.Sprintf("Import finished with errors: %v", importErr))
+		} else {
+			_ = progress.UpdateProgress(len(types), len(types), "All Open Library dump imports complete")
+		}
+	}
+	log.Printf("[INFO] All OL dump imports complete")
+	return importErr
 }
 
 func (s *Server) uploadOLDump(c *gin.Context) {

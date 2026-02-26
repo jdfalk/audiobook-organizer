@@ -1,5 +1,5 @@
 // file: web/src/components/settings/OpenLibraryDumps.tsx
-// version: 1.4.0
+// version: 2.0.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -17,17 +17,20 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import {
   getOLDumpStatus,
   startOLDumpDownload,
   startOLDumpImport,
   uploadOLDump,
   deleteOLDumpData,
+  getActiveOperations,
   OLDumpStatus,
   OLDumpTypeStatus,
   OLDownloadProgress,
   OLUploadedFile,
 } from '../../services/api';
+import { useOperationsStore } from '../../stores/useOperationsStore';
 
 function formatBytes(n: number): string {
   if (n < 0) return '?';
@@ -78,15 +81,19 @@ function DumpTypeRow({
   download,
   uploadedFile,
   loading,
+  importing,
 }: {
   label: string;
   status?: OLDumpTypeStatus;
   download?: OLDownloadProgress;
   uploadedFile?: OLUploadedFile;
   loading?: boolean;
+  importing?: boolean;
 }) {
   const hasRecords = status && status.record_count > 0;
   const hasFile = !!uploadedFile;
+  const isComplete = status && status.import_progress >= 1.0;
+  const isInProgress = status && status.import_progress > 0 && status.import_progress < 1;
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
@@ -98,22 +105,31 @@ function DumpTypeRow({
           <Chip
             label={`${formatCount(status.record_count)} records`}
             size="small"
-            color="success"
+            color={isComplete ? 'success' : 'info'}
+            icon={isComplete ? <CheckCircleIcon /> : undefined}
           />
-          {status.import_progress > 0 && status.import_progress < 1 && (
+          {isInProgress && (
             <LinearProgress
               variant="determinate"
               value={status.import_progress * 100}
               sx={{ flexGrow: 1, maxWidth: 200 }}
             />
           )}
+          {importing && !isInProgress && !isComplete && (
+            <LinearProgress sx={{ flexGrow: 1, maxWidth: 200 }} />
+          )}
         </>
       ) : hasFile ? (
-        <Chip
-          label={`Uploaded (${formatBytes(uploadedFile.size)}) - not imported`}
-          size="small"
-          color="warning"
-        />
+        <>
+          <Chip
+            label={`Uploaded (${formatBytes(uploadedFile.size)}) - not imported`}
+            size="small"
+            color="warning"
+          />
+          {importing && (
+            <LinearProgress sx={{ flexGrow: 1, maxWidth: 200 }} />
+          )}
+        </>
       ) : (
         <Chip label="No data" size="small" variant="outlined" />
       )}
@@ -151,13 +167,48 @@ export function OpenLibraryDumps() {
     refresh();
   }, [refresh]);
 
-  // Poll while any download is active
+  // Detect running OL import on mount
+  useEffect(() => {
+    const detectRunningImport = async () => {
+      try {
+        const ops = await getActiveOperations();
+        const running = ops.find(
+          (op) =>
+            op.type === 'ol_dump_import' &&
+            !['completed', 'failed', 'canceled'].includes(op.status)
+        );
+        if (running) {
+          setImporting(true);
+        }
+      } catch {
+        // Ignore
+      }
+    };
+    detectRunningImport();
+  }, []);
+
+  // Poll while downloading or importing
   useEffect(() => {
     const hasActiveDownload = status?.downloads && Object.values(status.downloads).some(
       d => d.status === 'downloading'
     );
-    if (hasActiveDownload) {
-      pollRef.current = setInterval(refresh, 2000);
+    if (hasActiveDownload || importing) {
+      pollRef.current = setInterval(() => {
+        refresh();
+        // Check if import operation is still running
+        if (importing) {
+          getActiveOperations().then((ops) => {
+            const running = ops.find(
+              (op) =>
+                op.type === 'ol_dump_import' &&
+                !['completed', 'failed', 'canceled'].includes(op.status)
+            );
+            if (!running) {
+              setImporting(false);
+            }
+          }).catch(() => {});
+        }
+      }, 3000);
     } else if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = undefined;
@@ -165,14 +216,13 @@ export function OpenLibraryDumps() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [status?.downloads, refresh]);
+  }, [status?.downloads, importing, refresh]);
 
   const handleDownload = async () => {
     setDownloading(true);
     setError(null);
     try {
       await startOLDumpDownload();
-      // Start polling immediately
       setTimeout(refresh, 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Download failed');
@@ -185,13 +235,16 @@ export function OpenLibraryDumps() {
     setImporting(true);
     setError(null);
     try {
-      await startOLDumpImport();
+      const result = await startOLDumpImport();
+      // Track in operations store for the bell indicator
+      if (result?.operation_id) {
+        useOperationsStore.getState().startPolling(result.operation_id, 'ol_dump_import');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed');
-    } finally {
       setImporting(false);
-      refresh();
     }
+    // Don't set importing=false here — polling will detect when it finishes
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,9 +284,9 @@ export function OpenLibraryDumps() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Box sx={{ mb: 2 }}>
-        <DumpTypeRow label="Editions" status={status?.status?.editions} download={dl.editions} uploadedFile={uf.editions} loading={loading} />
-        <DumpTypeRow label="Authors" status={status?.status?.authors} download={dl.authors} uploadedFile={uf.authors} loading={loading} />
-        <DumpTypeRow label="Works" status={status?.status?.works} download={dl.works} uploadedFile={uf.works} loading={loading} />
+        <DumpTypeRow label="Editions" status={status?.status?.editions} download={dl.editions} uploadedFile={uf.editions} loading={loading} importing={importing} />
+        <DumpTypeRow label="Authors" status={status?.status?.authors} download={dl.authors} uploadedFile={uf.authors} loading={loading} importing={importing} />
+        <DumpTypeRow label="Works" status={status?.status?.works} download={dl.works} uploadedFile={uf.works} loading={loading} importing={importing} />
       </Box>
 
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -258,6 +311,7 @@ export function OpenLibraryDumps() {
           size="small"
           color="error"
           onClick={handleDelete}
+          disabled={importing}
         >
           Delete Data
         </Button>
