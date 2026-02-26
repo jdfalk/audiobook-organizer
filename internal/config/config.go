@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -140,8 +140,10 @@ type Config struct {
 	EnableJsonLogging bool   `json:"enable_json_logging"`
 
 	// iTunes sync
-	ITunesSyncEnabled  bool `json:"itunes_sync_enabled"`
-	ITunesSyncInterval int  `json:"itunes_sync_interval"` // minutes
+	ITunesSyncEnabled  bool   `json:"itunes_sync_enabled"`
+	ITunesSyncInterval int    `json:"itunes_sync_interval"` // minutes
+	ITLWriteBackEnabled bool  `json:"itl_write_back_enabled"`
+	ITunesLibraryITLPath string `json:"itunes_library_itl_path"`
 
 	// Download client integration
 	DownloadClient DownloadClientConfig `json:"download_client"`
@@ -228,6 +230,8 @@ func InitConfig() {
 	// iTunes sync defaults
 	viper.SetDefault("itunes_sync_enabled", true)
 	viper.SetDefault("itunes_sync_interval", 30)
+	viper.SetDefault("itl_write_back_enabled", false)
+	viper.SetDefault("itunes_library_itl_path", "")
 
 	// Download client defaults
 	viper.SetDefault("download_client.torrent.type", "")
@@ -324,8 +328,10 @@ func InitConfig() {
 		EnableJsonLogging: viper.GetBool("enable_json_logging"),
 
 		// iTunes sync
-		ITunesSyncEnabled:  viper.GetBool("itunes_sync_enabled"),
-		ITunesSyncInterval: viper.GetInt("itunes_sync_interval"),
+		ITunesSyncEnabled:    viper.GetBool("itunes_sync_enabled"),
+		ITunesSyncInterval:   viper.GetInt("itunes_sync_interval"),
+		ITLWriteBackEnabled:  viper.GetBool("itl_write_back_enabled"),
+		ITunesLibraryITLPath: viper.GetString("itunes_library_itl_path"),
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
@@ -616,8 +622,10 @@ func ResetToDefaults() {
 		EnableJsonLogging: false,
 
 		// iTunes sync
-		ITunesSyncEnabled:  true,
-		ITunesSyncInterval: 30,
+		ITunesSyncEnabled:    true,
+		ITunesSyncInterval:   30,
+		ITLWriteBackEnabled:  false,
+		ITunesLibraryITLPath: "",
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{

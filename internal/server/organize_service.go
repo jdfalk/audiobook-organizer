@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -13,6 +13,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -128,6 +129,9 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 	org := organizer.NewOrganizer(&config.AppConfig)
 	stats := &OrganizeStats{Total: len(booksToOrganize)}
 
+	// Track location changes for iTunes ITL write-back
+	var itlUpdates []itunes.ITLLocationUpdate
+
 	for i, book := range booksToOrganize {
 		if progress.IsCanceled() {
 			_ = progress.Log("info", "Organize canceled", nil)
@@ -136,6 +140,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 
 		_ = progress.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
 
+		oldPath := book.FilePath
 		newPath, err := org.OrganizeBook(&book)
 		if err != nil {
 			errDetails := fmt.Sprintf("Failed to organize %s: %s", book.Title, err.Error())
@@ -153,13 +158,67 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			_ = progress.Log("warn", errDetails, nil)
 		} else {
 			stats.Organized++
+			// Collect ITL update if this book came from iTunes
+			if book.ITunesPersistentID != nil && oldPath != newPath {
+				itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+					PersistentID: *book.ITunesPersistentID,
+					NewLocation:  newPath,
+				})
+			}
 		}
+	}
+
+	// Write back location changes to iTunes Library.itl
+	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+		orgSvc.writeBackITLLocations(itlUpdates, progress)
 	}
 
 	summary := fmt.Sprintf("Organization completed: %d organized, %d failed", stats.Organized, stats.Failed)
 	_ = progress.Log("info", summary, nil)
 
 	return stats
+}
+
+func (orgSvc *OrganizeService) writeBackITLLocations(updates []itunes.ITLLocationUpdate, progress operations.ProgressReporter) {
+	itlPath := config.AppConfig.ITunesLibraryITLPath
+
+	// Create backup before modifying
+	backupPath := itlPath + ".bak"
+	srcData, err := os.ReadFile(itlPath)
+	if err != nil {
+		errDetails := fmt.Sprintf("ITL write-back: failed to read %s: %s", itlPath, err.Error())
+		_ = progress.Log("warn", errDetails, nil)
+		return
+	}
+	if err := os.WriteFile(backupPath, srcData, 0644); err != nil {
+		errDetails := fmt.Sprintf("ITL write-back: failed to create backup: %s", err.Error())
+		_ = progress.Log("warn", errDetails, nil)
+		return
+	}
+
+	result, err := itunes.UpdateITLLocations(itlPath, itlPath, updates)
+	if err != nil {
+		errDetails := fmt.Sprintf("ITL write-back failed: %s", err.Error())
+		_ = progress.Log("warn", errDetails, nil)
+		// Restore backup on failure
+		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
+			_ = progress.Log("error", fmt.Sprintf("ITL restore from backup also failed: %s", restoreErr.Error()), nil)
+		}
+		return
+	}
+
+	// Validate the written file
+	if err := itunes.ValidateITL(itlPath); err != nil {
+		errDetails := fmt.Sprintf("ITL validation failed after write-back: %s", err.Error())
+		_ = progress.Log("warn", errDetails, nil)
+		// Restore backup
+		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
+			_ = progress.Log("error", fmt.Sprintf("ITL restore from backup also failed: %s", restoreErr.Error()), nil)
+		}
+		return
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("ITL write-back: updated %d/%d locations in %s", result.UpdatedCount, len(updates), itlPath), nil)
 }
 
 func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, progress operations.ProgressReporter) {
