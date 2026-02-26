@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.65.0
+// version: 1.66.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2854,6 +2854,25 @@ func stripChapterFromTitle(title string) string {
 	cleaned = strings.TrimRight(cleaned, " -")
 
 	return strings.TrimSpace(cleaned)
+}
+
+// stripSubtitle removes subtitle portions from a title, e.g.
+// "Title: A Subtitle" → "Title", "Title - A Subtitle" → "Title".
+// Returns the original title if no subtitle separator is found.
+func stripSubtitle(title string) string {
+	// Try colon separator first: "Title: Subtitle"
+	if idx := strings.Index(title, ": "); idx > 0 {
+		return strings.TrimSpace(title[:idx])
+	}
+	// Try dash separator: "Title - Subtitle"
+	if idx := strings.Index(title, " - "); idx > 0 {
+		return strings.TrimSpace(title[:idx])
+	}
+	// Try em-dash: "Title — Subtitle"
+	if idx := strings.Index(title, " — "); idx > 0 {
+		return strings.TrimSpace(title[:idx])
+	}
+	return title
 }
 
 // fetchAudiobookMetadata fetches and applies metadata to an audiobook
