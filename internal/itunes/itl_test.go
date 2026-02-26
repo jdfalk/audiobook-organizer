@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a3b9c4d-5e6f-7012-b3c4-d5e6f7a8b9c0
 
 package itunes
@@ -507,4 +507,244 @@ func TestBuildHtimChunk(t *testing.T) {
 	assert.Equal(t, 2, parsed.DiscNumber)
 	// Persistent ID should be non-zero (random)
 	assert.NotEqual(t, [8]byte{}, parsed.PersistentID)
+}
+
+// ---------------------------------------------------------------------------
+// Static fixture: test_library.itl
+// Matches the tracks/playlists in testdata/test_library.xml
+// ---------------------------------------------------------------------------
+
+type fixtureTrack struct {
+	trackID      int
+	persistentID [8]byte
+	name         string
+	artist       string
+	album        string
+	genre        string
+	kind         string
+	location     string
+	size         int
+	totalTime    int
+	year         int
+	trackNumber  int
+	discNumber   int
+	playCount    int
+	rating       int
+}
+
+type fixturePlaylist struct {
+	title    string
+	trackIDs []int
+}
+
+// Persistent IDs for fixture tracks (deterministic, not random)
+var fixtureTracks = []fixtureTrack{
+	{100, [8]byte{0xAB, 0xCD, 0x12, 0x34, 0xEF, 0x56, 0x78, 0x01}, "The Hobbit", "J.R.R. Tolkien", "Middle-earth, Book 1", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/The Hobbit.m4b", 524288000, 39600000, 1997, 0, 0, 3, 80},
+	{200, [8]byte{0xDA, 0xFE, 0x98, 0x76, 0x54, 0x32, 0x10, 0x02}, "Dune", "Frank Herbert", "Dune Chronicles", "Audiobooks", "MPEG audio file", "/Users/testuser/Music/iTunes/Audiobooks/Dune.mp3", 262144000, 79200000, 2007, 0, 0, 1, 100},
+	{300, [8]byte{0x4D, 0x55, 0x53, 0x49, 0x43, 0x12, 0x34, 0x03}, "Bohemian Rhapsody", "Queen", "A Night at the Opera", "Rock", "MPEG audio file", "/Users/testuser/Music/iTunes/Music/Queen/Bohemian Rhapsody.mp3", 12000000, 355000, 1975, 0, 0, 50, 100},
+	{400, [8]byte{0x53, 0x50, 0x4B, 0x4E, 0x45, 0x67, 0x89, 0x04}, "The Art of War", "Sun Tzu", "", "Philosophy", "Spoken Word", "/Users/testuser/Music/iTunes/Audiobooks/Art of War.m4b", 50000000, 7200000, 2010, 0, 0, 0, 0},
+	{500, [8]byte{0x4D, 0x4F, 0x42, 0x59, 0x01, 0x00, 0x00, 0x01}, "Chapter 1 - Loomings", "Herman Melville", "Moby Dick", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/Moby Dick/Chapter 01.m4b", 50000000, 3600000, 2005, 1, 1, 1, 80},
+	{501, [8]byte{0x4D, 0x4F, 0x42, 0x59, 0x01, 0x00, 0x00, 0x02}, "Chapter 2 - The Carpet-Bag", "Herman Melville", "Moby Dick", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/Moby Dick/Chapter 02.m4b", 45000000, 3200000, 2005, 2, 1, 1, 80},
+	{502, [8]byte{0x4D, 0x4F, 0x42, 0x59, 0x01, 0x00, 0x00, 0x03}, "Chapter 3 - The Spouter-Inn", "Herman Melville", "Moby Dick", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/Moby Dick/Chapter 03.m4b", 48000000, 3400000, 2005, 3, 1, 1, 80},
+	{600, [8]byte{0x50, 0x52, 0x49, 0x44, 0x01, 0x00, 0x00, 0x01}, "Part 1", "Jane Austen", "Pride and Prejudice", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/Pride and Prejudice/Part 01.m4b", 60000000, 5400000, 2010, 1, 1, 2, 100},
+	{601, [8]byte{0x50, 0x52, 0x49, 0x44, 0x01, 0x00, 0x00, 0x02}, "Part 2", "Jane Austen", "Pride and Prejudice", "Audiobook", "Audiobook", "/Users/testuser/Music/iTunes/Audiobooks/Pride and Prejudice/Part 02.m4b", 55000000, 4800000, 2010, 2, 1, 2, 100},
+}
+
+var fixturePlaylists = []fixturePlaylist{
+	{"Music", []int{300}},
+	{"Audiobooks", []int{100, 200, 400}},
+	{"Sci-Fi Favorites", []int{100, 200}},
+	{"Recently Added", []int{400}},
+}
+
+func buildFixtureHTIM(ft fixtureTrack) []byte {
+	htimLen := 156
+	buf := make([]byte, htimLen)
+	copy(buf[0:4], "htim")
+	writeUint32BE(buf, 4, uint32(htimLen))
+	writeUint32BE(buf, 8, uint32(htimLen))
+	writeUint32BE(buf, 16, uint32(ft.trackID))
+	writeUint32BE(buf, 36, uint32(ft.size))
+	writeUint32BE(buf, 40, uint32(ft.totalTime))
+	writeUint32BE(buf, 44, uint32(ft.trackNumber))
+	binary.BigEndian.PutUint16(buf[54:56], uint16(ft.year))
+	writeUint32BE(buf, 76, uint32(ft.playCount))
+	buf[104] = byte(ft.discNumber)
+	buf[108] = byte(ft.rating)
+	copy(buf[128:136], ft.persistentID[:])
+	return buf
+}
+
+func buildFixtureITL() []byte {
+	version := "12.9.5.5"
+	var payload bytes.Buffer
+
+	// Write all tracks with their hohm string fields
+	for _, ft := range fixtureTracks {
+		payload.Write(buildFixtureHTIM(ft))
+		if ft.name != "" {
+			payload.Write(buildHohmChunk(0x02, ft.name))
+		}
+		if ft.album != "" {
+			payload.Write(buildHohmChunk(0x03, ft.album))
+		}
+		if ft.artist != "" {
+			payload.Write(buildHohmChunk(0x04, ft.artist))
+		}
+		if ft.genre != "" {
+			payload.Write(buildHohmChunk(0x05, ft.genre))
+		}
+		if ft.kind != "" {
+			payload.Write(buildHohmChunk(0x06, ft.kind))
+		}
+		if ft.location != "" {
+			payload.Write(buildHohmChunk(0x0D, ft.location))
+		}
+	}
+
+	// Write playlists
+	for _, fp := range fixturePlaylists {
+		// hpim
+		hpimLen := 20 + 428
+		hpim := make([]byte, hpimLen)
+		copy(hpim[0:4], "hpim")
+		writeUint32BE(hpim, 4, uint32(hpimLen))
+		writeUint32BE(hpim, 8, uint32(hpimLen))
+		writeUint32BE(hpim, 16, uint32(len(fp.trackIDs)))
+		// Deterministic ppid from title
+		for i := 0; i < 8 && i < len(fp.title); i++ {
+			hpim[440+i] = fp.title[i]
+		}
+		payload.Write(hpim)
+
+		// Playlist title hohm
+		payload.Write(buildHohmChunk(0x64, fp.title))
+
+		// Track items
+		for _, tid := range fp.trackIDs {
+			hptmLen := 28
+			hptm := make([]byte, hptmLen)
+			copy(hptm[0:4], "hptm")
+			writeUint32BE(hptm, 4, uint32(hptmLen))
+			writeUint32BE(hptm, 24, uint32(tid))
+			payload.Write(hptm)
+		}
+	}
+
+	// Compress and encrypt
+	compressed := itlDeflate(payload.Bytes())
+	encrypted := itlEncrypt(version, compressed)
+
+	// Build hdfm header
+	hdr := buildHdfmHeader(version, nil, uint32(len(encrypted))+17+uint32(len(version)), 0)
+
+	var file bytes.Buffer
+	file.Write(hdr)
+	file.Write(encrypted)
+	return file.Bytes()
+}
+
+const fixtureITLPath = "testdata/test_library.itl"
+
+// TestGenerateFixtureITL regenerates the static test_library.itl fixture.
+// Run with: go test ./internal/itunes/ -run TestGenerateFixtureITL -generate-itl
+func TestGenerateFixtureITL(t *testing.T) {
+	if os.Getenv("GENERATE_ITL_FIXTURE") == "" {
+		t.Skip("Set GENERATE_ITL_FIXTURE=1 to regenerate the fixture")
+	}
+
+	data := buildFixtureITL()
+	err := os.WriteFile(fixtureITLPath, data, 0644)
+	require.NoError(t, err)
+	t.Logf("Generated %s (%d bytes)", fixtureITLPath, len(data))
+}
+
+// TestParseFixtureITL loads and validates the static test_library.itl fixture.
+func TestParseFixtureITL(t *testing.T) {
+	if _, err := os.Stat(fixtureITLPath); os.IsNotExist(err) {
+		// Generate it on the fly if it doesn't exist
+		data := buildFixtureITL()
+		require.NoError(t, os.MkdirAll(filepath.Dir(fixtureITLPath), 0755))
+		require.NoError(t, os.WriteFile(fixtureITLPath, data, 0644))
+		t.Log("Generated fixture on the fly")
+	}
+
+	lib, err := ParseITL(fixtureITLPath)
+	require.NoError(t, err)
+
+	// Verify version
+	assert.Equal(t, "12.9.5.5", lib.Version)
+	assert.True(t, lib.UseCompression)
+
+	// Verify tracks
+	require.Len(t, lib.Tracks, len(fixtureTracks))
+	for i, ft := range fixtureTracks {
+		track := lib.Tracks[i]
+		assert.Equal(t, ft.trackID, track.TrackID, "track %d ID", i)
+		assert.Equal(t, ft.name, track.Name, "track %d name", i)
+		assert.Equal(t, ft.artist, track.Artist, "track %d artist", i)
+		assert.Equal(t, ft.album, track.Album, "track %d album", i)
+		assert.Equal(t, ft.genre, track.Genre, "track %d genre", i)
+		assert.Equal(t, ft.kind, track.Kind, "track %d kind", i)
+		assert.Equal(t, ft.location, track.Location, "track %d location", i)
+		assert.Equal(t, ft.size, track.Size, "track %d size", i)
+		assert.Equal(t, ft.totalTime, track.TotalTime, "track %d totalTime", i)
+		assert.Equal(t, ft.year, track.Year, "track %d year", i)
+		assert.Equal(t, ft.trackNumber, track.TrackNumber, "track %d trackNumber", i)
+		assert.Equal(t, ft.discNumber, track.DiscNumber, "track %d discNumber", i)
+		assert.Equal(t, ft.playCount, track.PlayCount, "track %d playCount", i)
+		assert.Equal(t, ft.rating, track.Rating, "track %d rating", i)
+		assert.Equal(t, ft.persistentID, track.PersistentID, "track %d persistentID", i)
+	}
+
+	// Verify playlists
+	require.Len(t, lib.Playlists, len(fixturePlaylists))
+	for i, fp := range fixturePlaylists {
+		pl := lib.Playlists[i]
+		assert.Equal(t, fp.title, pl.Title, "playlist %d title", i)
+		assert.Equal(t, len(fp.trackIDs), len(pl.Items), "playlist %d item count", i)
+		for j, tid := range fp.trackIDs {
+			assert.Equal(t, tid, pl.Items[j], "playlist %d item %d", i, j)
+		}
+	}
+}
+
+// TestFixtureITL_UpdateLocations verifies write-back works on the fixture.
+func TestFixtureITL_UpdateLocations(t *testing.T) {
+	if _, err := os.Stat(fixtureITLPath); os.IsNotExist(err) {
+		data := buildFixtureITL()
+		require.NoError(t, os.MkdirAll(filepath.Dir(fixtureITLPath), 0755))
+		require.NoError(t, os.WriteFile(fixtureITLPath, data, 0644))
+	}
+
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, "updated.itl")
+
+	// Update The Hobbit's location
+	hobbitPID := pidToHex(fixtureTracks[0].persistentID)
+	result, err := UpdateITLLocations(fixtureITLPath, outPath, []ITLLocationUpdate{
+		{PersistentID: hobbitPID, NewLocation: "/new/path/The Hobbit.m4b"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.UpdatedCount)
+
+	// Parse and verify
+	lib, err := ParseITL(outPath)
+	require.NoError(t, err)
+	require.Len(t, lib.Tracks, len(fixtureTracks))
+	assert.Equal(t, "/new/path/The Hobbit.m4b", lib.Tracks[0].Location)
+	// Other tracks unchanged
+	assert.Equal(t, fixtureTracks[1].location, lib.Tracks[1].Location)
+}
+
+// TestFixtureITL_Validate verifies the fixture passes validation.
+func TestFixtureITL_Validate(t *testing.T) {
+	if _, err := os.Stat(fixtureITLPath); os.IsNotExist(err) {
+		data := buildFixtureITL()
+		require.NoError(t, os.MkdirAll(filepath.Dir(fixtureITLPath), 0755))
+		require.NoError(t, os.WriteFile(fixtureITLPath, data, 0644))
+	}
+
+	err := ValidateITL(fixtureITLPath)
+	assert.NoError(t, err)
 }
