@@ -1,5 +1,5 @@
 // file: internal/itunes/itl.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
 
 package itunes
@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/aes"
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -26,11 +27,23 @@ var itlAESKey = []byte("BHUILuilfghuila3")
 // macEpoch is 1904-01-01 00:00:00 UTC, the Mac HFS+ epoch.
 var macEpoch = time.Date(1904, 1, 1, 0, 0, 0, 0, time.UTC)
 
+// ITLPlaylist represents a playlist from the ITL binary.
+type ITLPlaylist struct {
+	PersistentID  [8]byte // 8-byte playlist persistent ID (ppid)
+	Title         string  // From hohm type 0x64
+	IsFolder      bool    // True if this is a playlist folder (issue #11) — TODO: reliable detection
+	IsSmart       bool    // Has smart criteria
+	Items         []int   // Track IDs referenced by this playlist (hptm records)
+	SmartInfo     []byte  // Raw smart info blob (hohm 0x66)
+	SmartCriteria []byte  // Raw smart criteria blob (hohm 0x65)
+}
+
 // ITLLibrary represents a parsed iTunes .itl binary library.
 type ITLLibrary struct {
 	Version         string
 	HeaderRemainder []byte
 	Tracks          []ITLTrack
+	Playlists       []ITLPlaylist
 	UseCompression  bool
 	rawData         []byte // decrypted (and decompressed) payload
 	unknown         uint32 // from hdfm header
@@ -75,6 +88,29 @@ type ITLWriteBackResult struct {
 	UpdatedCount int
 	BackupPath   string
 	OutputPath   string
+}
+
+// ITLNewTrack describes a track to insert into an ITL file.
+type ITLNewTrack struct {
+	Location    string
+	Name        string
+	Album       string
+	Artist      string
+	Genre       string
+	Kind        string // e.g. "MPEG audio file", "AAC audio file"
+	Size        int
+	TotalTime   int // milliseconds
+	TrackNumber int
+	DiscNumber  int
+	Year        int
+	BitRate     int
+	SampleRate  int
+}
+
+// ITLNewPlaylist describes a playlist to insert into an ITL file.
+type ITLNewPlaylist struct {
+	Title    string
+	TrackIDs []int // Song IDs to include
 }
 
 // ---------------------------------------------------------------------------
@@ -424,6 +460,7 @@ func parseITLData(data []byte) (*ITLLibrary, error) {
 func walkChunks(data []byte, lib *ITLLibrary) {
 	offset := 0
 	var currentTrack *ITLTrack
+	var currentPlaylist *ITLPlaylist
 
 	for offset+8 <= len(data) {
 		tag := readTag(data, offset)
@@ -444,23 +481,43 @@ func walkChunks(data []byte, lib *ITLLibrary) {
 			subStart := offset + 12
 			if extLen > length && offset+extLen <= len(data) {
 				// Extra data between length and extLen
-				walkHdsmContent(data, subStart, offset+extLen, lib, &currentTrack)
+				walkHdsmContent(data, subStart, offset+extLen, lib, &currentTrack, &currentPlaylist)
 				offset += extLen
 			} else {
-				walkHdsmContent(data, subStart, offset+length, lib, &currentTrack)
+				walkHdsmContent(data, subStart, offset+length, lib, &currentTrack, &currentPlaylist)
 				offset += length
 			}
 			continue
 
 		case "htim":
 			// htim: track record
+			currentPlaylist = nil
 			t := parseHtim(data, offset, length)
 			lib.Tracks = append(lib.Tracks, t)
 			currentTrack = &lib.Tracks[len(lib.Tracks)-1]
 
+		case "hpim":
+			// hpim: playlist record
+			currentTrack = nil
+			p := parseHpim(data, offset, length)
+			lib.Playlists = append(lib.Playlists, p)
+			currentPlaylist = &lib.Playlists[len(lib.Playlists)-1]
+
+		case "hptm":
+			// hptm: playlist item
+			if currentPlaylist != nil {
+				trackID := parseHptm(data, offset, length)
+				if trackID >= 0 {
+					currentPlaylist.Items = append(currentPlaylist.Items, trackID)
+				}
+			}
+			// TODO: extract checked state from hptm
+
 		case "hohm":
 			if currentTrack != nil {
 				parseHohm(data, offset, length, currentTrack)
+			} else if currentPlaylist != nil {
+				parsePlaylistHohm(data, offset, length, currentPlaylist)
 			}
 		}
 
@@ -468,7 +525,7 @@ func walkChunks(data []byte, lib *ITLLibrary) {
 	}
 }
 
-func walkHdsmContent(data []byte, start, end int, lib *ITLLibrary, currentTrack **ITLTrack) {
+func walkHdsmContent(data []byte, start, end int, lib *ITLLibrary, currentTrack **ITLTrack, currentPlaylist **ITLPlaylist) {
 	offset := start
 	for offset+8 <= end {
 		tag := readTag(data, offset)
@@ -482,13 +539,30 @@ func walkHdsmContent(data []byte, start, end int, lib *ITLLibrary, currentTrack 
 
 		switch tag {
 		case "htim":
+			*currentPlaylist = nil
 			t := parseHtim(data, offset, length)
 			lib.Tracks = append(lib.Tracks, t)
 			*currentTrack = &lib.Tracks[len(lib.Tracks)-1]
 
+		case "hpim":
+			*currentTrack = nil
+			p := parseHpim(data, offset, length)
+			lib.Playlists = append(lib.Playlists, p)
+			*currentPlaylist = &lib.Playlists[len(lib.Playlists)-1]
+
+		case "hptm":
+			if *currentPlaylist != nil {
+				trackID := parseHptm(data, offset, length)
+				if trackID >= 0 {
+					(*currentPlaylist).Items = append((*currentPlaylist).Items, trackID)
+				}
+			}
+
 		case "hohm":
 			if *currentTrack != nil {
 				parseHohm(data, offset, length, *currentTrack)
+			} else if *currentPlaylist != nil {
+				parsePlaylistHohm(data, offset, length, *currentPlaylist)
 			}
 		}
 		offset += length
@@ -641,6 +715,164 @@ func parseHohm(data []byte, offset, length int, track *ITLTrack) {
 	case 0x0D:
 		track.Location = s
 	}
+}
+
+// parseHpim parses a playlist header (hpim) chunk.
+func parseHpim(data []byte, offset, length int) ITLPlaylist {
+	p := ITLPlaylist{}
+	// hpim layout:
+	// +0: "hpim" (4), +4: length (4), +8: recordLength (4), +12: subblocks (4)
+	// +16: item count (4)
+	// Remaining starts at offset+20, persistent ID at remaining[420:428]
+	remaining := length - 20
+	if remaining >= 428 {
+		base := offset + 20
+		copy(p.PersistentID[:], data[base+420:base+428])
+	}
+	return p
+}
+
+// parseHptm parses a playlist item (hptm) chunk and returns the track ID.
+func parseHptm(data []byte, offset, length int) int {
+	// hptm layout:
+	// +0: "hptm" (4), +4: length (4)
+	// +8: 16 unknown bytes
+	// +24: track key/song ID (4)
+	if length < 28 || offset+28 > len(data) {
+		return -1
+	}
+	return int(readUint32BE(data, offset+24))
+	// TODO: extract checked state from hptm
+}
+
+// parsePlaylistHohm parses a hohm chunk in playlist context.
+func parsePlaylistHohm(data []byte, offset, length int, playlist *ITLPlaylist) {
+	if length < 16 {
+		return
+	}
+	hohmType := int(readUint32BE(data, offset+12))
+
+	switch hohmType {
+	case 0x64:
+		// Playlist title — same string format as track hohm
+		if length < 40 {
+			return
+		}
+		encodingFlag := data[offset+16+11]
+		strDataLen := int(readUint32BE(data, offset+28))
+		strStart := offset + 40
+		if strStart+strDataLen > offset+length || strStart+strDataLen > len(data) {
+			strDataLen = offset + length - strStart
+			if strDataLen < 0 {
+				return
+			}
+		}
+		s, err := decodeHohmString(data[strStart:strStart+strDataLen], encodingFlag)
+		if err != nil {
+			return
+		}
+		playlist.Title = s
+
+	case 0x65:
+		// Smart criteria: 8 zero bytes + raw blob
+		blobStart := offset + 40 + 8
+		if blobStart < offset+length && blobStart < len(data) {
+			end := offset + length
+			if end > len(data) {
+				end = len(data)
+			}
+			playlist.SmartCriteria = make([]byte, end-blobStart)
+			copy(playlist.SmartCriteria, data[blobStart:end])
+			playlist.IsSmart = true
+		}
+
+	case 0x66:
+		// Smart info: 8 zero bytes + raw blob
+		blobStart := offset + 40 + 8
+		if blobStart < offset+length && blobStart < len(data) {
+			end := offset + length
+			if end > len(data) {
+				end = len(data)
+			}
+			playlist.SmartInfo = make([]byte, end-blobStart)
+			copy(playlist.SmartInfo, data[blobStart:end])
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Chunk builders for write path
+// ---------------------------------------------------------------------------
+
+// buildHohmChunk builds a hohm chunk for a given type and string value.
+func buildHohmChunk(hohmType uint32, value string) []byte {
+	encodedStr, encFlag := encodeHohmString(value)
+	chunkLen := 40 + len(encodedStr)
+	buf := make([]byte, chunkLen)
+	copy(buf[0:4], "hohm")
+	writeUint32BE(buf, 4, uint32(chunkLen))
+	writeUint32BE(buf, 8, uint32(chunkLen))
+	writeUint32BE(buf, 12, hohmType)
+	buf[16+11] = encFlag
+	writeUint32BE(buf, 28, uint32(len(encodedStr)))
+	// bytes 32-39 are zero (already)
+	copy(buf[40:], encodedStr)
+	return buf
+}
+
+// buildHtimChunk builds a 156-byte htim chunk for a new track.
+func buildHtimChunk(trackID int, track ITLNewTrack) []byte {
+	htimLen := 156
+	buf := make([]byte, htimLen)
+	copy(buf[0:4], "htim")
+	writeUint32BE(buf, 4, uint32(htimLen))
+	writeUint32BE(buf, 8, uint32(htimLen)) // recordLength
+	writeUint32BE(buf, 16, uint32(trackID))
+	writeUint32BE(buf, 36, uint32(track.Size))
+	writeUint32BE(buf, 40, uint32(track.TotalTime))
+	writeUint32BE(buf, 44, uint32(track.TrackNumber))
+	if track.Year > 0 {
+		binary.BigEndian.PutUint16(buf[54:56], uint16(track.Year))
+	}
+	if track.BitRate > 0 {
+		binary.BigEndian.PutUint16(buf[58:60], uint16(track.BitRate))
+	}
+	if track.SampleRate > 0 {
+		binary.BigEndian.PutUint16(buf[60:62], uint16(track.SampleRate))
+	}
+	buf[104] = byte(track.DiscNumber)
+	// Random persistent ID
+	var pid [8]byte
+	_, _ = rand.Read(pid[:])
+	copy(buf[128:136], pid[:])
+	return buf
+}
+
+// buildHpimChunk builds an hpim chunk for a new playlist.
+func buildHpimChunk(itemCount int) []byte {
+	// Minimum hpim: 20 bytes header + 428 bytes remaining (for persistent ID at [420:428])
+	hpimLen := 20 + 428
+	buf := make([]byte, hpimLen)
+	copy(buf[0:4], "hpim")
+	writeUint32BE(buf, 4, uint32(hpimLen))
+	writeUint32BE(buf, 8, uint32(hpimLen)) // recordLength
+	writeUint32BE(buf, 16, uint32(itemCount))
+	// Random persistent ID at remaining[420:428] = offset 20+420 = 440
+	var pid [8]byte
+	_, _ = rand.Read(pid[:])
+	copy(buf[440:448], pid[:])
+	return buf
+}
+
+// buildHptmChunk builds an hptm chunk referencing a track ID.
+func buildHptmChunk(trackID int) []byte {
+	hptmLen := 28
+	buf := make([]byte, hptmLen)
+	copy(buf[0:4], "hptm")
+	writeUint32BE(buf, 4, uint32(hptmLen))
+	// 16 unknown bytes at [8:24] (zero)
+	writeUint32BE(buf, 24, uint32(trackID))
+	return buf
 }
 
 // ---------------------------------------------------------------------------
@@ -937,4 +1169,280 @@ func rewriteHohmLocation(data []byte, offset, length int, newLocation string) []
 	copy(buf[40:], encodedStr)
 
 	return buf
+}
+
+// ---------------------------------------------------------------------------
+// InsertITLTracks — insert new tracks into an ITL file
+// ---------------------------------------------------------------------------
+
+// InsertITLTracks reads an ITL file, appends new tracks after existing ones,
+// and writes the result to outputPath.
+func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWriteBackResult, error) {
+	if len(tracks) == 0 {
+		return &ITLWriteBackResult{OutputPath: outputPath}, nil
+	}
+
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading ITL: %w", err)
+	}
+
+	hdr, err := parseHdfmHeader(data)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := data[hdr.headerLen:]
+	decrypted := itlDecrypt(hdr.version, payload)
+	decompressed, wasCompressed := itlInflate(decrypted)
+
+	// Find max track ID
+	maxID := findMaxTrackID(decompressed)
+
+	// Find insertion point: after last hohm that follows an htim, before first hpim
+	insertOffset := findTrackInsertOffset(decompressed)
+
+	// Build new track chunks
+	var newChunks bytes.Buffer
+	for i, tr := range tracks {
+		trackID := maxID + 1 + i
+		htim := buildHtimChunk(trackID, tr)
+		newChunks.Write(htim)
+
+		// Add hohm chunks for each non-empty string field
+		if tr.Name != "" {
+			newChunks.Write(buildHohmChunk(0x02, tr.Name))
+		}
+		if tr.Album != "" {
+			newChunks.Write(buildHohmChunk(0x03, tr.Album))
+		}
+		if tr.Artist != "" {
+			newChunks.Write(buildHohmChunk(0x04, tr.Artist))
+		}
+		if tr.Genre != "" {
+			newChunks.Write(buildHohmChunk(0x05, tr.Genre))
+		}
+		if tr.Kind != "" {
+			newChunks.Write(buildHohmChunk(0x06, tr.Kind))
+		}
+		if tr.Location != "" {
+			newChunks.Write(buildHohmChunk(0x0D, tr.Location))
+		}
+	}
+
+	// Splice: before insertOffset + newChunks + after insertOffset
+	var newData bytes.Buffer
+	newData.Write(decompressed[:insertOffset])
+	newData.Write(newChunks.Bytes())
+	newData.Write(decompressed[insertOffset:])
+
+	return writeITLFile(outputPath, hdr, newData.Bytes(), wasCompressed, len(tracks))
+}
+
+// findMaxTrackID walks chunks to find the highest track ID.
+func findMaxTrackID(data []byte) int {
+	maxID := 0
+	offset := 0
+	for offset+8 <= len(data) {
+		tag := readTag(data, offset)
+		if tag == "" {
+			break
+		}
+		length := int(readUint32BE(data, offset+4))
+		if length < 8 || offset+length > len(data) {
+			break
+		}
+		if tag == "htim" && offset+20 <= len(data) {
+			id := int(readUint32BE(data, offset+16))
+			if id > maxID {
+				maxID = id
+			}
+		}
+		offset += length
+	}
+	return maxID
+}
+
+// findTrackInsertOffset finds the byte offset where new tracks should be inserted.
+// This is after the last track-related chunk (htim or hohm following htim) and
+// before any playlist chunk (hpim).
+func findTrackInsertOffset(data []byte) int {
+	offset := 0
+	lastTrackEnd := 0
+	inTrackSection := false
+	for offset+8 <= len(data) {
+		tag := readTag(data, offset)
+		if tag == "" {
+			break
+		}
+		length := int(readUint32BE(data, offset+4))
+		if length < 8 || offset+length > len(data) {
+			break
+		}
+		switch tag {
+		case "htim":
+			inTrackSection = true
+			lastTrackEnd = offset + length
+		case "hohm":
+			if inTrackSection {
+				lastTrackEnd = offset + length
+			}
+		case "hpim":
+			// Playlist section starts here; insert before it
+			if lastTrackEnd > 0 {
+				return lastTrackEnd
+			}
+			return offset
+		}
+		offset += length
+	}
+	if lastTrackEnd > 0 {
+		return lastTrackEnd
+	}
+	return len(data)
+}
+
+// ---------------------------------------------------------------------------
+// RewriteITLExtensions — rewrite file extensions in all location hohms
+// ---------------------------------------------------------------------------
+
+// RewriteITLExtensions reads an ITL file and replaces file extensions in all
+// location strings (hohm 0x0D and 0x0B).
+func RewriteITLExtensions(inputPath, outputPath string, oldExt, newExt string) (*ITLWriteBackResult, error) {
+	// Normalize extensions to include dot
+	if !strings.HasPrefix(oldExt, ".") {
+		oldExt = "." + oldExt
+	}
+	if !strings.HasPrefix(newExt, ".") {
+		newExt = "." + newExt
+	}
+
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading ITL: %w", err)
+	}
+
+	hdr, err := parseHdfmHeader(data)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := data[hdr.headerLen:]
+	decrypted := itlDecrypt(hdr.version, payload)
+	decompressed, wasCompressed := itlInflate(decrypted)
+
+	newData, count := rewriteExtensionsInChunks(decompressed, oldExt, newExt)
+
+	return writeITLFile(outputPath, hdr, newData, wasCompressed, count)
+}
+
+// rewriteExtensionsInChunks walks chunks and rewrites extensions in location hohms.
+func rewriteExtensionsInChunks(data []byte, oldExt, newExt string) ([]byte, int) {
+	var out bytes.Buffer
+	offset := 0
+	count := 0
+
+	for offset+8 <= len(data) {
+		tag := readTag(data, offset)
+		if tag == "" {
+			out.Write(data[offset:])
+			break
+		}
+		length := int(readUint32BE(data, offset+4))
+		if length < 8 || offset+length > len(data) {
+			out.Write(data[offset:])
+			break
+		}
+
+		if tag == "hohm" && length >= 40 {
+			hohmType := int(readUint32BE(data, offset+12))
+			if hohmType == 0x0D || hohmType == 0x0B {
+				// Read current string
+				encodingFlag := data[offset+16+11]
+				strDataLen := int(readUint32BE(data, offset+28))
+				strStart := offset + 40
+				if strStart+strDataLen <= offset+length && strStart+strDataLen <= len(data) {
+					s, err := decodeHohmString(data[strStart:strStart+strDataLen], encodingFlag)
+					if err == nil && strings.HasSuffix(strings.ToLower(s), strings.ToLower(oldExt)) {
+						newLoc := s[:len(s)-len(oldExt)] + newExt
+						rewritten := rewriteHohmLocation(data, offset, length, newLoc)
+						out.Write(rewritten)
+						count++
+						offset += length
+						continue
+					}
+				}
+			}
+		}
+
+		out.Write(data[offset : offset+length])
+		offset += length
+	}
+
+	return out.Bytes(), count
+}
+
+// ---------------------------------------------------------------------------
+// InsertITLPlaylist — insert a new playlist into an ITL file
+// ---------------------------------------------------------------------------
+
+// InsertITLPlaylist reads an ITL file, appends a new playlist, and writes
+// the result to outputPath.
+func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*ITLWriteBackResult, error) {
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading ITL: %w", err)
+	}
+
+	hdr, err := parseHdfmHeader(data)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := data[hdr.headerLen:]
+	decrypted := itlDecrypt(hdr.version, payload)
+	decompressed, wasCompressed := itlInflate(decrypted)
+
+	// Build playlist chunks
+	var plChunks bytes.Buffer
+	plChunks.Write(buildHpimChunk(len(playlist.TrackIDs)))
+	plChunks.Write(buildHohmChunk(0x64, playlist.Title))
+	for _, tid := range playlist.TrackIDs {
+		plChunks.Write(buildHptmChunk(tid))
+	}
+
+	// Append at end
+	var newData bytes.Buffer
+	newData.Write(decompressed)
+	newData.Write(plChunks.Bytes())
+
+	return writeITLFile(outputPath, hdr, newData.Bytes(), wasCompressed, 1)
+}
+
+// writeITLFile handles compression, encryption, and writing of an ITL file.
+func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress bool, count int) (*ITLWriteBackResult, error) {
+	var finalPayload []byte
+	if compress {
+		finalPayload = itlDeflate(payload)
+	} else {
+		finalPayload = payload
+	}
+
+	encrypted := itlEncrypt(hdr.version, finalPayload)
+
+	newFileLen := uint32(len(encrypted)) + hdr.headerLen
+	newHeader := buildHdfmHeader(hdr.version, hdr.headerRemainder, newFileLen, hdr.unknown)
+
+	outData := make([]byte, 0, len(newHeader)+len(encrypted))
+	outData = append(outData, newHeader...)
+	outData = append(outData, encrypted...)
+
+	if err := os.WriteFile(outputPath, outData, 0644); err != nil {
+		return nil, fmt.Errorf("writing ITL: %w", err)
+	}
+
+	return &ITLWriteBackResult{
+		UpdatedCount: count,
+		OutputPath:   outputPath,
+	}, nil
 }
