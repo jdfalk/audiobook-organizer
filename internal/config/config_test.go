@@ -124,8 +124,8 @@ func TestAIParsingDefaults(t *testing.T) {
 	viper.Reset()
 	InitConfig()
 
-	if enableAI := viper.GetBool("enable_ai_parsing"); enableAI {
-		t.Error("Expected enable_ai_parsing to be false by default")
+	if enableAI := viper.GetBool("enable_ai_parsing"); !enableAI {
+		t.Error("Expected enable_ai_parsing to be true by default")
 	}
 
 	apiKey := viper.GetString("openai_api_key")
