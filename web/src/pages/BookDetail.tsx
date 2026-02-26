@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.13.0
+// version: 1.14.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -73,6 +73,7 @@ export const BookDetail = () => {
   const [pendingUpdate, setPendingUpdate] =
     useState<Partial<Book> | null>(null);
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
+  const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [versionsError, setVersionsError] = useState<string | null>(null);
@@ -757,6 +758,7 @@ export const BookDetail = () => {
           sx={{ mb: 2 }}
         >
           Marked for deletion on {formatDateTime(book.marked_for_deletion_at)}.
+          Last updated {formatDateTime(book.updated_at)}.
           Restore to keep the book or purge to remove it permanently.
         </Alert>
       )}
@@ -1530,6 +1532,9 @@ export const BookDetail = () => {
             }
             label="Prevent reimporting this file (block hash)"
           />
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block', mt: -0.5, mb: 1 }}>
+            Block hash prevents this exact file from being re-imported by remembering its unique fingerprint.
+          </Typography>
           <Alert severity="warning" sx={{ mt: 2 }}>
             Soft deleted books can be restored or purged later. Blocking the
             hash prevents reimports of the same file.
@@ -1548,25 +1553,40 @@ export const BookDetail = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={purgeDialogOpen} onClose={() => setPurgeDialogOpen(false)}>
+      <Dialog open={purgeDialogOpen} onClose={() => { setPurgeDialogOpen(false); setPurgeConfirmed(false); }}>
         <DialogTitle>Purge Audiobook</DialogTitle>
         <DialogContent dividers>
           <Alert severity="error" sx={{ mb: 2 }}>
-            This permanently removes the record and associated files. This
-            cannot be undone.
+            This will permanently delete this audiobook. This cannot be undone.
           </Alert>
-          <Typography>
+          <Typography gutterBottom>
             Are you sure you want to purge{' '}
             <strong>{book.title || 'this audiobook'}</strong> from the library?
+            All associated files and metadata will be removed.
           </Typography>
+          {book.marked_for_deletion_at && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Soft deleted on {formatDateTime(book.marked_for_deletion_at)}.
+            </Typography>
+          )}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={purgeConfirmed}
+                onChange={(e) => setPurgeConfirmed(e.target.checked)}
+              />
+            }
+            label="I understand this action is permanent and cannot be undone"
+            sx={{ mt: 2 }}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPurgeDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => { setPurgeDialogOpen(false); setPurgeConfirmed(false); }}>Cancel</Button>
           <Button
             onClick={handlePurge}
             color="error"
             variant="contained"
-            disabled={actionLoading}
+            disabled={actionLoading || !purgeConfirmed}
           >
             Purge Permanently
           </Button>
