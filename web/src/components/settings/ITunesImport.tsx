@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -46,6 +46,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
+  cancelOperation,
+  getActiveOperations,
   getBook,
   getITunesImportStatus,
   getITunesLibraryStatus,
@@ -157,6 +159,30 @@ export function ITunesImport() {
     const interval = setInterval(checkStatus, 30000);
     return () => clearInterval(interval);
   }, [settings.libraryPath]);
+
+  // Detect an already-running iTunes import on mount
+  useEffect(() => {
+    let cancelled = false;
+    const detectRunningImport = async () => {
+      try {
+        const ops = await getActiveOperations();
+        if (cancelled) return;
+        const running = ops.find(
+          (op) =>
+            op.type === 'itunes_import' &&
+            !['completed', 'failed', 'canceled'].includes(op.status)
+        );
+        if (running) {
+          setImporting(true);
+          await pollImportStatus(running.id);
+        }
+      } catch {
+        // Ignore — API may not be ready
+      }
+    };
+    detectRunningImport();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBrowseFile = () => {
     const path = window.prompt('Enter path to iTunes Library.xml:');
@@ -592,7 +618,7 @@ export function ITunesImport() {
           <Button
             variant="outlined"
             onClick={handleValidate}
-            disabled={!settings.libraryPath || validating}
+            disabled={!settings.libraryPath || validating || importing}
             startIcon={validating ? undefined : <CheckCircleIcon />}
           >
             {validating ? 'Validating...' : 'Validate Import'}
@@ -642,25 +668,78 @@ export function ITunesImport() {
         </Box>
 
         {importStatus && (
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="body2" gutterBottom>
-              {importStatus.message}
-            </Typography>
+          <Paper variant="outlined" sx={{ mt: 3, p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+              <Typography variant="subtitle2">
+                Import Progress
+              </Typography>
+              {importing && (
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={async () => {
+                    try {
+                      await cancelOperation(importStatus.operation_id);
+                      setImporting(false);
+                    } catch {
+                      setError('Failed to cancel import');
+                    }
+                  }}
+                >
+                  Cancel Import
+                </Button>
+              )}
+            </Stack>
+
             <LinearProgress
               variant="determinate"
               value={importStatus.progress}
-              sx={{ mt: 1 }}
+              sx={{ height: 8, borderRadius: 1, mb: 1 }}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-              {importStatus.progress}% complete
-              {importStatus.processed !== undefined &&
-                importStatus.total_books !== undefined && (
-                <>
-                  {' '}
-                  ({importStatus.processed} / {importStatus.total_books} processed)
-                </>
-              )}
-            </Typography>
+
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                {importStatus.progress}% complete
+                {importStatus.processed !== undefined &&
+                  importStatus.total_books !== undefined && (
+                  <>
+                    {' '}&mdash; {importStatus.processed} / {importStatus.total_books} books
+                  </>
+                )}
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                {importStatus.imported !== undefined && importStatus.imported > 0 && (
+                  <Typography variant="caption" color="success.main">
+                    {importStatus.imported} imported
+                  </Typography>
+                )}
+                {importStatus.skipped !== undefined && importStatus.skipped > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    {importStatus.skipped} skipped
+                  </Typography>
+                )}
+                {importStatus.failed !== undefined && importStatus.failed > 0 && (
+                  <Typography variant="caption" color="error.main">
+                    {importStatus.failed} failed
+                  </Typography>
+                )}
+              </Stack>
+            </Stack>
+
+            {/* Show current item from message */}
+            {importStatus.message && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                noWrap
+                title={importStatus.message}
+                sx={{ mt: 0.5 }}
+              >
+                {importStatus.message}
+              </Typography>
+            )}
 
             {importStatus.status === 'completed' && (
               <Alert severity="success" sx={{ mt: 2 }}>
@@ -684,7 +763,7 @@ export function ITunesImport() {
                 <Typography variant="body2">{importStatus.message}</Typography>
               </Alert>
             )}
-          </Box>
+          </Paper>
         )}
 
         <Divider sx={{ my: 3 }} />
