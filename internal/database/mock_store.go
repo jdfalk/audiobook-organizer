@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -392,6 +392,30 @@ func (m *MockStore) SetBookAuthors(bookID string, authors []BookAuthor) error {
 
 func (m *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	return m.GetBooksByAuthorID(authorID)
+}
+
+func (m *MockStore) CreateNarrator(name string) (*Narrator, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetNarratorByID(id int) (*Narrator, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetNarratorByName(name string) (*Narrator, error) {
+	return nil, nil
+}
+
+func (m *MockStore) ListNarrators() ([]Narrator, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetBookNarrators(bookID string) ([]BookNarrator, error) {
+	return nil, nil
+}
+
+func (m *MockStore) SetBookNarrators(bookID string, narrators []BookNarrator) error {
+	return nil
 }
 
 func (m *MockStore) CreateBook(book *Book) (*Book, error) {
