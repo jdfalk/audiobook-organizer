@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -33,6 +33,19 @@ function formatOperationType(type: string): string {
     default:
       return type;
   }
+}
+
+function formatETA(op: ActiveOperation): string | null {
+  if (!op.startedAt || op.progress <= 0 || op.total <= 0) return null;
+  const elapsed = (Date.now() - op.startedAt) / 1000;
+  const rate = op.progress / elapsed;
+  if (rate <= 0) return null;
+  const remaining = (op.total - op.progress) / rate;
+  if (remaining < 60) return `~${Math.ceil(remaining)}s left`;
+  if (remaining < 3600) return `~${Math.ceil(remaining / 60)}m left`;
+  const h = Math.floor(remaining / 3600);
+  const m = Math.ceil((remaining % 3600) / 60);
+  return `~${h}h ${m}m left`;
 }
 
 export function OperationsIndicator() {
@@ -159,19 +172,29 @@ export function OperationsIndicator() {
                     <ErrorIcon color="error" fontSize="small" />
                   )}
                 </Box>
-                {!isTerminal && op.total > 0 && (
-                  <>
-                    <LinearProgress
-                      variant="determinate"
-                      value={progressPct}
-                      sx={{ mb: 0.5, borderRadius: 1 }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {op.progress.toLocaleString()} /{' '}
-                      {op.total.toLocaleString()} ({progressPct}%)
-                    </Typography>
-                  </>
-                )}
+                {!isTerminal && op.total > 0 && (() => {
+                  const eta = formatETA(op);
+                  return (
+                    <>
+                      <LinearProgress
+                        variant="determinate"
+                        value={progressPct}
+                        sx={{ mb: 0.5, borderRadius: 1 }}
+                      />
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {op.progress.toLocaleString()} /{' '}
+                          {op.total.toLocaleString()} ({progressPct}%)
+                        </Typography>
+                        {eta && (
+                          <Typography variant="caption" color="text.secondary">
+                            {eta}
+                          </Typography>
+                        )}
+                      </Box>
+                    </>
+                  );
+                })()}
                 {!isTerminal && op.total === 0 && (
                   <LinearProgress sx={{ mb: 0.5, borderRadius: 1 }} />
                 )}
