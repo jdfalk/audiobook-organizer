@@ -1524,7 +1524,7 @@ export async function startOLDumpDownload(
 
 export async function startOLDumpImport(
   types?: string[]
-): Promise<{ message: string; types: string[] }> {
+): Promise<{ message: string; types: string[]; operation_id?: string }> {
   const response = await fetch(`${API_BASE}/openlibrary/import`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
