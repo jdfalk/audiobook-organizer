@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.7.2
+# version: 2.8.0
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -48,7 +48,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@41a2edb6639d44ac9f328ea263299a55d78d08b3 # v1.10.2
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@6ed97545daef53051405663133e18fde036645e1 # v1.10.3
     with:
       node-version: ${{ needs.frontend-config.outputs.node-version }}
     secrets: inherit

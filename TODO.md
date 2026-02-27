@@ -60,7 +60,7 @@
 | ~~Welcome wizard (first-run setup)~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | Developer guide (architecture, data flow, deployment) | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | NPM cache fix (CRITICAL-002) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| ghcommon pre-release & tagging strategy (CRITICAL-004) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
+| ~~ghcommon pre-release & tagging strategy (CRITICAL-004)~~ ✅ Complete | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
 
 ---
 
