@@ -807,7 +807,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 				}
 			}
 			if len(watchPaths) > 0 {
-				fileWatcher, err = watcher.New(watchPaths, config.AppConfig.AutoScanDebounceSeconds, func(path string) {
+				debounce := 5 * time.Second
+				if config.AppConfig.AutoScanDebounceSeconds > 0 {
+					debounce = time.Duration(config.AppConfig.AutoScanDebounceSeconds) * time.Second
+				}
+				fileWatcher = watcher.New(func(path string) {
 					log.Printf("[INFO] Auto-scan triggered for: %s", path)
 					if hub := realtime.GetGlobalHub(); hub != nil {
 						hub.Broadcast(&realtime.Event{
@@ -815,7 +819,6 @@ func (s *Server) Start(cfg ServerConfig) error {
 							Data: map[string]any{"path": path},
 						})
 					}
-					// Enqueue a scan operation via the operations queue
 					if s.scanService != nil && operations.GlobalQueue != nil {
 						go func() {
 							scanPath := path
@@ -834,16 +837,13 @@ func (s *Server) Start(cfg ServerConfig) error {
 							}
 						}()
 					}
-				})
-				if err != nil {
-					log.Printf("[WARN] Failed to start file watcher: %v", err)
+				}, debounce)
+				// Start watching the first import path (primary)
+				if startErr := fileWatcher.Start(watchPaths[0]); startErr != nil {
+					log.Printf("[WARN] Failed to start file watcher: %v", startErr)
+					fileWatcher = nil
 				} else {
-					if startErr := fileWatcher.Start(); startErr != nil {
-						log.Printf("[WARN] Failed to start file watcher: %v", startErr)
-						fileWatcher = nil
-					} else {
-						log.Println("[INFO] Auto-scan file watcher started")
-					}
+					log.Printf("[INFO] Auto-scan file watcher started for %s", watchPaths[0])
 				}
 			}
 		}
