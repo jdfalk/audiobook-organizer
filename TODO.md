@@ -69,7 +69,7 @@
 - [x] Hardcover.app integration
 - [ ] Google Books API auth (getting 429 rate limiting, needs proper API key)
 - [x] Cover art: automatic download to local disk
-- [ ] Cover art: embed in audio file metadata tags
+- [x] Cover art: embed in audio file metadata tags (ffmpeg/metaflac, graceful fallback)
 
 ## Search Quality
 
@@ -85,14 +85,14 @@
 - [x] PebbleDB format version logging on startup
 - [ ] PebbleDB v2 upgrade (format versions 14-19, columnar blocks etc)
 - [x] Docker deployment (multi-stage build, docker-compose, Makefile targets)
-- [ ] launchd/systemd service files
+- [x] launchd/systemd service files (macOS plist + Linux systemd unit with install scripts)
 - [x] File watching / auto-scan for new audiobooks (fsnotify watcher with debounce)
 
 ## Data Quality
 
 - [x] Metadata undo/history (MetadataChangeRecord, UI component)
 - [x] Directory-as-filepath bug in tag extraction — fixed, falls back to filename parsing
-- [ ] Basic auth for web UI
+- [x] Basic auth for web UI (constant-time compare, health/static exemptions)
 
 ---
 
