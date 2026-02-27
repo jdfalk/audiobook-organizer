@@ -1066,6 +1066,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/:id/status", s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.getOperationLogs)
 			protected.DELETE("/operations/:id", s.cancelOperation)
+			protected.POST("/operations/clear-stale", s.clearStaleOperations)
 
 			// Import routes
 			protected.POST("/import/file", s.importFile)
@@ -2352,12 +2353,44 @@ func (s *Server) cancelOperation(c *gin.Context) {
 
 	id := c.Param("id")
 
-	// Cancel via queue (which will update database)
+	// Try cancel via queue first (for running operations)
 	if err := operations.GlobalQueue.Cancel(id); err != nil {
+		// Queue doesn't know about it (e.g., stale after restart) — force-update DB
+		if database.GlobalStore != nil {
+			if dbErr := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": dbErr.Error()})
+				return
+			}
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// clearStaleOperations force-marks all pending/running/queued operations as failed.
+func (s *Server) clearStaleOperations(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	ops, err := database.GlobalStore.GetRecentOperations(500)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.Status(http.StatusNoContent)
+
+	cleared := 0
+	for _, op := range ops {
+		if op.Status == "pending" || op.Status == "running" || op.Status == "queued" {
+			_ = database.GlobalStore.UpdateOperationStatus(op.ID, "failed", 0, 0, "force cleared by user")
+			cleared++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"cleared": cleared})
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress
