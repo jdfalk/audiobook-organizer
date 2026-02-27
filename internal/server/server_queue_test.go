@@ -41,18 +41,19 @@ func TestCancelOperationWithQueueMock(t *testing.T) {
 			},
 		},
 		{
-			name:        "queue cancel error",
+			name:        "queue cancel error falls back to DB",
 			operationID: "test-op-456",
 			mockStoreSetup: func(m *dbmocks.MockStore) {
-				// No database expectations needed
+				m.EXPECT().UpdateOperationStatus("test-op-456", "canceled", 0, 0, "force canceled (stale operation)").
+					Return(nil).Once()
 			},
 			mockQueueSetup: func(m *queuemocks.MockQueue) {
 				m.EXPECT().Cancel("test-op-456").
 					Return(errors.New("operation test-op-456 not found")).Once()
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusNoContent,
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
-				assert.Contains(t, w.Body.String(), "operation test-op-456 not found")
+				assert.Empty(t, w.Body.String())
 			},
 		},
 		{
