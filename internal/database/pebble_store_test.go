@@ -629,7 +629,9 @@ func TestPebbleImportPaths(t *testing.T) {
 
 func TestPebbleMigrateImportPathKeys(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "pebble-migrate")
-	db, err := pebble.Open(dbPath, &pebble.Options{})
+	db, err := pebble.Open(dbPath, &pebble.Options{
+		FormatMajorVersion: pebble.FormatNewest,
+	})
 	if err != nil {
 		t.Fatalf("Failed to open Pebble: %v", err)
 	}

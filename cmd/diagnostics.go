@@ -194,7 +194,9 @@ func runDiagnosticsQuery(limit int, prefix string, raw bool) error {
 }
 
 func runRawPebbleQuery(limit int, prefix string) error {
-	db, err := pebble.Open(config.AppConfig.DatabasePath, &pebble.Options{})
+	db, err := pebble.Open(config.AppConfig.DatabasePath, &pebble.Options{
+		FormatMajorVersion: pebble.FormatNewest,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to open Pebble database: %w", err)
 	}

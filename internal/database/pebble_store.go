@@ -52,7 +52,9 @@ type PebbleStore struct {
 
 // NewPebbleStore creates a new PebbleDB store
 func NewPebbleStore(path string) (*PebbleStore, error) {
-	db, err := pebble.Open(path, &pebble.Options{})
+	db, err := pebble.Open(path, &pebble.Options{
+		FormatMajorVersion: pebble.FormatNewest,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open PebbleDB: %w", err)
 	}
