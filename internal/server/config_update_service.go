@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 1.2.1
+// version: 2.0.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -56,97 +56,28 @@ func (cus *ConfigUpdateService) ExtractIntField(payload map[string]any, key stri
 	if !ok {
 		return 0, false
 	}
-	f, ok := val.(float64)
-	return int(f), ok
+	switch v := val.(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	}
+	return 0, false
 }
 
-// ApplyUpdates applies all updates from payload to AppConfig
-func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
-	if payload == nil {
-		return fmt.Errorf("configuration payload is required")
+// extractStringSlice extracts a []string from a payload field containing []any.
+func extractStringSlice(payload map[string]any, key string) ([]string, bool) {
+	raw, ok := payload[key].([]any)
+	if !ok {
+		return nil, false
 	}
-	if _, ok := payload["database_type"]; ok {
-		return fmt.Errorf("database_type cannot be changed at runtime")
-	}
-	if _, ok := payload["enable_sqlite"]; ok {
-		return fmt.Errorf("enable_sqlite cannot be changed at runtime")
-	}
-	if rootDir, ok := cus.ExtractStringField(payload, "root_dir"); ok {
-		config.AppConfig.RootDir = rootDir
-	}
-
-	if autoOrganize, ok := cus.ExtractBoolField(payload, "auto_organize"); ok {
-		config.AppConfig.AutoOrganize = autoOrganize
-	}
-
-	if concurrentScans, ok := cus.ExtractIntField(payload, "concurrent_scans"); ok {
-		config.AppConfig.ConcurrentScans = concurrentScans
-	}
-	if autoScanEnabled, ok := cus.ExtractBoolField(payload, "auto_scan_enabled"); ok {
-		config.AppConfig.AutoScanEnabled = autoScanEnabled
-	}
-	if autoScanDebounceSeconds, ok := cus.ExtractIntField(payload, "auto_scan_debounce_seconds"); ok {
-		config.AppConfig.AutoScanDebounceSeconds = autoScanDebounceSeconds
-	}
-	if operationTimeoutMinutes, ok := cus.ExtractIntField(payload, "operation_timeout_minutes"); ok {
-		config.AppConfig.OperationTimeoutMinutes = operationTimeoutMinutes
-	}
-	if apiRate, ok := cus.ExtractIntField(payload, "api_rate_limit_per_minute"); ok {
-		config.AppConfig.APIRateLimitPerMinute = apiRate
-	}
-	if authRate, ok := cus.ExtractIntField(payload, "auth_rate_limit_per_minute"); ok {
-		config.AppConfig.AuthRateLimitPerMinute = authRate
-	}
-	if jsonBodyLimit, ok := cus.ExtractIntField(payload, "json_body_limit_mb"); ok {
-		config.AppConfig.JSONBodyLimitMB = jsonBodyLimit
-	}
-	if uploadBodyLimit, ok := cus.ExtractIntField(payload, "upload_body_limit_mb"); ok {
-		config.AppConfig.UploadBodyLimitMB = uploadBodyLimit
-	}
-	if enableDiskQuota, ok := cus.ExtractBoolField(payload, "enable_disk_quota"); ok {
-		config.AppConfig.EnableDiskQuota = enableDiskQuota
-	}
-	if diskQuotaPercent, ok := cus.ExtractIntField(payload, "disk_quota_percent"); ok {
-		config.AppConfig.DiskQuotaPercent = diskQuotaPercent
-	}
-	if enableUserQuotas, ok := cus.ExtractBoolField(payload, "enable_user_quotas"); ok {
-		config.AppConfig.EnableUserQuotas = enableUserQuotas
-	}
-	if defaultUserQuotaGB, ok := cus.ExtractIntField(payload, "default_user_quota_gb"); ok {
-		config.AppConfig.DefaultUserQuotaGB = defaultUserQuotaGB
-	}
-
-	if excludePatterns, ok := payload["exclude_patterns"].([]any); ok {
-		patterns := make([]string, len(excludePatterns))
-		for i, p := range excludePatterns {
-			if s, ok := p.(string); ok {
-				patterns[i] = s
-			}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
 		}
-		config.AppConfig.ExcludePatterns = patterns
 	}
-
-	if openaiKey, ok := cus.ExtractStringField(payload, "openai_api_key"); ok {
-		config.AppConfig.OpenAIAPIKey = openaiKey
-	}
-	if enableAI, ok := cus.ExtractBoolField(payload, "enable_ai_parsing"); ok {
-		config.AppConfig.EnableAIParsing = enableAI
-	}
-	if logLevel, ok := cus.ExtractStringField(payload, "log_level"); ok {
-		config.AppConfig.LogLevel = logLevel
-	}
-
-	if supportedExtensions, ok := payload["supported_extensions"].([]any); ok {
-		extensions := make([]string, len(supportedExtensions))
-		for i, e := range supportedExtensions {
-			if s, ok := e.(string); ok {
-				extensions[i] = s
-			}
-		}
-		config.AppConfig.SupportedExtensions = extensions
-	}
-
-	return nil
+	return out, true
 }
 
 // MaskSecrets removes sensitive fields from config for response
@@ -158,97 +89,60 @@ func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
 	return masked
 }
 
-// UpdateConfig applies updates, persists config, and returns the response payload.
+// UpdateConfig is the single unified method for applying config updates from any
+// caller (wizard, settings page, etc.). It validates the payload, applies all
+// fields to AppConfig, derives setup_complete from root_dir, persists to the
+// database, and returns an HTTP-style status code plus response map.
 func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[string]any) {
 	if cus.db == nil {
 		return http.StatusInternalServerError, map[string]any{"error": "database not initialized"}
 	}
-
-	updated := []string{}
-
-	if val, ok := payload["root_dir"].(string); ok {
-		trimmed := strings.TrimSpace(val)
-		config.AppConfig.RootDir = trimmed
-		updated = append(updated, "root_dir")
-		if trimmed == "" {
-			config.AppConfig.SetupComplete = false
-			updated = append(updated, "setup_complete")
-		} else {
-			config.AppConfig.SetupComplete = true
-			updated = append(updated, "setup_complete")
-		}
+	if payload == nil {
+		return http.StatusBadRequest, map[string]any{"error": "configuration payload is required"}
 	}
 
-	if val, ok := payload["database_path"].(string); ok {
-		config.AppConfig.DatabasePath = val
-		updated = append(updated, "database_path")
-	}
-
-	if val, ok := payload["playlist_dir"].(string); ok {
-		config.AppConfig.PlaylistDir = val
-		updated = append(updated, "playlist_dir")
-	}
-
-	if val, ok := payload["setup_complete"].(bool); ok {
-		config.AppConfig.SetupComplete = val
-		updated = append(updated, "setup_complete")
-	}
-
-	if val, ok := payload["organization_strategy"].(string); ok {
-		config.AppConfig.OrganizationStrategy = val
-		updated = append(updated, "organization_strategy")
-	}
-	if val, ok := payload["scan_on_startup"].(bool); ok {
-		config.AppConfig.ScanOnStartup = val
-		updated = append(updated, "scan_on_startup")
-	}
-	if val, ok := payload["auto_organize"].(bool); ok {
-		config.AppConfig.AutoOrganize = val
-		updated = append(updated, "auto_organize")
-	}
-	if val, ok := payload["folder_naming_pattern"].(string); ok {
-		config.AppConfig.FolderNamingPattern = val
-		updated = append(updated, "folder_naming_pattern")
-	}
-	if val, ok := payload["file_naming_pattern"].(string); ok {
-		config.AppConfig.FileNamingPattern = val
-		updated = append(updated, "file_naming_pattern")
-	}
-	if val, ok := payload["create_backups"].(bool); ok {
-		config.AppConfig.CreateBackups = val
-		updated = append(updated, "create_backups")
-	}
-	if val, ok := payload["supported_extensions"].([]any); ok {
-		extensions := make([]string, 0, len(val))
-		for _, item := range val {
-			if ext, ok := item.(string); ok {
-				extensions = append(extensions, ext)
-			}
-		}
-		config.AppConfig.SupportedExtensions = extensions
-		updated = append(updated, "supported_extensions")
-	}
-	if val, ok := payload["exclude_patterns"].([]any); ok {
-		patterns := make([]string, 0, len(val))
-		for _, item := range val {
-			if pattern, ok := item.(string); ok {
-				patterns = append(patterns, pattern)
-			}
-		}
-		config.AppConfig.ExcludePatterns = patterns
-		updated = append(updated, "exclude_patterns")
-	}
-
+	// Reject immutable fields early
 	if _, ok := payload["database_type"]; ok {
 		return http.StatusBadRequest, map[string]any{"error": "database_type cannot be changed at runtime"}
 	}
-
 	if _, ok := payload["enable_sqlite"]; ok {
 		return http.StatusBadRequest, map[string]any{"error": "enable_sqlite cannot be changed at runtime"}
 	}
 
-	if val, ok := payload["openai_api_key"].(string); ok {
-		log.Printf("[DEBUG] updateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
+	updated := []string{}
+
+	// --- String fields ---
+	stringFields := map[string]*string{
+		"database_path":         &config.AppConfig.DatabasePath,
+		"playlist_dir":          &config.AppConfig.PlaylistDir,
+		"organization_strategy": &config.AppConfig.OrganizationStrategy,
+		"folder_naming_pattern": &config.AppConfig.FolderNamingPattern,
+		"file_naming_pattern":   &config.AppConfig.FileNamingPattern,
+		"language":              &config.AppConfig.Language,
+		"log_level":             &config.AppConfig.LogLevel,
+		"openlibrary_dump_dir":  &config.AppConfig.OpenLibraryDumpDir,
+		"hardcover_api_token":   &config.AppConfig.HardcoverAPIToken,
+		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
+	}
+	for key, ptr := range stringFields {
+		if val, ok := cus.ExtractStringField(payload, key); ok {
+			*ptr = val
+			updated = append(updated, key)
+		}
+	}
+
+	// root_dir has special handling: derives setup_complete
+	if val, ok := cus.ExtractStringField(payload, "root_dir"); ok {
+		trimmed := strings.TrimSpace(val)
+		config.AppConfig.RootDir = trimmed
+		updated = append(updated, "root_dir")
+		config.AppConfig.SetupComplete = trimmed != ""
+		updated = append(updated, "setup_complete")
+	}
+
+	// openai_api_key: secret field with debug logging
+	if val, ok := cus.ExtractStringField(payload, "openai_api_key"); ok {
+		log.Printf("[DEBUG] UpdateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
 			if len(val) > 4 {
 				return val[len(val)-4:]
 			}
@@ -256,31 +150,63 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		}())
 		config.AppConfig.OpenAIAPIKey = val
 		updated = append(updated, "openai_api_key")
-	} else {
-		log.Printf("[DEBUG] updateConfig: No openai_api_key in updates (present: %v, type: %T)", ok, payload["openai_api_key"])
-	}
-	if val, ok := payload["enable_ai_parsing"].(bool); ok {
-		log.Printf("[DEBUG] updateConfig: Updating enable_ai_parsing to: %v", val)
-		config.AppConfig.EnableAIParsing = val
-		updated = append(updated, "enable_ai_parsing")
 	}
 
-	if val, ok := payload["concurrent_scans"].(float64); ok {
-		config.AppConfig.ConcurrentScans = int(val)
-		updated = append(updated, "concurrent_scans")
-	} else if val, ok := payload["concurrent_scans"].(int); ok {
-		config.AppConfig.ConcurrentScans = val
-		updated = append(updated, "concurrent_scans")
+	// --- Bool fields ---
+	boolFields := map[string]*bool{
+		"setup_complete":           &config.AppConfig.SetupComplete,
+		"scan_on_startup":         &config.AppConfig.ScanOnStartup,
+		"auto_organize":           &config.AppConfig.AutoOrganize,
+		"auto_scan_enabled":       &config.AppConfig.AutoScanEnabled,
+		"create_backups":          &config.AppConfig.CreateBackups,
+		"enable_disk_quota":       &config.AppConfig.EnableDiskQuota,
+		"enable_user_quotas":      &config.AppConfig.EnableUserQuotas,
+		"enable_ai_parsing":       &config.AppConfig.EnableAIParsing,
+		"enable_auth":             &config.AppConfig.EnableAuth,
+		"auto_fetch_metadata":     &config.AppConfig.AutoFetchMetadata,
+		"write_back_metadata":     &config.AppConfig.WriteBackMetadata,
+		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,
 	}
-	if val, ok := payload["language"].(string); ok {
-		config.AppConfig.Language = val
-		updated = append(updated, "language")
-	}
-	if val, ok := payload["log_level"].(string); ok {
-		config.AppConfig.LogLevel = val
-		updated = append(updated, "log_level")
+	for key, ptr := range boolFields {
+		if val, ok := cus.ExtractBoolField(payload, key); ok {
+			*ptr = val
+			updated = append(updated, key)
+		}
 	}
 
+	// --- Int fields ---
+	intFields := map[string]*int{
+		"concurrent_scans":           &config.AppConfig.ConcurrentScans,
+		"auto_scan_debounce_seconds": &config.AppConfig.AutoScanDebounceSeconds,
+		"operation_timeout_minutes":  &config.AppConfig.OperationTimeoutMinutes,
+		"api_rate_limit_per_minute":  &config.AppConfig.APIRateLimitPerMinute,
+		"auth_rate_limit_per_minute": &config.AppConfig.AuthRateLimitPerMinute,
+		"json_body_limit_mb":         &config.AppConfig.JSONBodyLimitMB,
+		"upload_body_limit_mb":       &config.AppConfig.UploadBodyLimitMB,
+		"disk_quota_percent":         &config.AppConfig.DiskQuotaPercent,
+		"default_user_quota_gb":      &config.AppConfig.DefaultUserQuotaGB,
+		"cache_size":                 &config.AppConfig.CacheSize,
+		"memory_limit_percent":       &config.AppConfig.MemoryLimitPercent,
+		"memory_limit_mb":            &config.AppConfig.MemoryLimitMB,
+	}
+	for key, ptr := range intFields {
+		if val, ok := cus.ExtractIntField(payload, key); ok {
+			*ptr = val
+			updated = append(updated, key)
+		}
+	}
+
+	// --- Slice fields ---
+	if exts, ok := extractStringSlice(payload, "supported_extensions"); ok {
+		config.AppConfig.SupportedExtensions = exts
+		updated = append(updated, "supported_extensions")
+	}
+	if patterns, ok := extractStringSlice(payload, "exclude_patterns"); ok {
+		config.AppConfig.ExcludePatterns = patterns
+		updated = append(updated, "exclude_patterns")
+	}
+
+	// Persist to database
 	if err := config.SaveConfigToDatabase(cus.db); err != nil {
 		log.Printf("ERROR: Failed to persist config to database: %v", err)
 		return http.StatusInternalServerError, map[string]any{
@@ -297,4 +223,18 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"updated": updated,
 		"config":  maskedConfig,
 	}
+}
+
+// ApplyUpdates applies config updates and persists them. This is a convenience
+// wrapper around UpdateConfig for callers that prefer an error return.
+// Deprecated: prefer UpdateConfig directly.
+func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
+	status, resp := cus.UpdateConfig(payload)
+	if status >= 400 {
+		if errMsg, ok := resp["error"].(string); ok {
+			return fmt.Errorf("%s", errMsg)
+		}
+		return fmt.Errorf("config update failed with status %d", status)
+	}
+	return nil
 }

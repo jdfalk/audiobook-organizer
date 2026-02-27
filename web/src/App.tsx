@@ -1,9 +1,9 @@
 // file: web/src/App.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import {
   Box,
@@ -26,6 +26,8 @@ import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
 import { useAuth } from './contexts/AuthContext';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
 
 function App() {
   const auth = useAuth();
@@ -33,6 +35,10 @@ function App() {
   const [wizardCheckComplete, setWizardCheckComplete] = useState(false);
   const [serverShutdown, setServerShutdown] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  const handleShowShortcuts = useCallback(() => setShortcutsOpen(true), []);
+  useKeyboardShortcuts({ onShowHelp: handleShowShortcuts });
 
   useEffect(() => {
     if (!auth.initialized) {
@@ -168,6 +174,10 @@ function App() {
           </Routes>
         </MainLayout>
       )}
+      <KeyboardShortcutsDialog
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </Box>
   );
 }

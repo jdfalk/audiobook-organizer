@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.68.0
+// version: 1.69.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2586,21 +2586,17 @@ func (s *Server) updateConfig(c *gin.Context) {
 	}
 
 	previousConfig := config.AppConfig
-	if err := s.configUpdateService.ApplyUpdates(payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	status, resp := s.configUpdateService.UpdateConfig(payload)
+	if status >= 400 {
+		config.AppConfig = previousConfig
+		c.JSON(status, resp)
 		return
 	}
+
 	if err := config.AppConfig.Validate(); err != nil {
 		config.AppConfig = previousConfig
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-	if database.GlobalStore != nil {
-		if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
-			config.AppConfig = previousConfig
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to persist configuration"})
-			return
-		}
 	}
 
 	maskedConfig := s.configUpdateService.MaskSecrets(config.AppConfig)

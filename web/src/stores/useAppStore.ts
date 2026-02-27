@@ -1,5 +1,5 @@
 // file: web/src/stores/useAppStore.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1e2f3a4b-5c6d-7e8f-9a0b-1c2d3e4f5a6b
 
 import { create } from 'zustand';
@@ -86,12 +86,14 @@ export const useAppStore = create<AppState>()(
             { id, message, severity, timestamp: Date.now() },
           ],
         }));
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-          set((state) => ({
-            notifications: state.notifications.filter((n) => n.id !== id),
-          }));
-        }, 5000);
+        // Auto-remove success/info after 5 seconds; error/warning persist
+        if (severity === 'success' || severity === 'info') {
+          setTimeout(() => {
+            set((state) => ({
+              notifications: state.notifications.filter((n) => n.id !== id),
+            }));
+          }, 5000);
+        }
       },
       removeNotification: (id) =>
         set((state) => ({
