@@ -160,10 +160,22 @@ export function Operations() {
     }
   };
 
-  const handleClearCompleted = () => {
-    setHistory((prev) =>
-      prev.filter((op) => !['completed', 'failed'].includes(op.status))
-    );
+  const handleClearCompleted = async () => {
+    try {
+      await api.deleteOperationHistory('completed');
+      loadHistory();
+    } catch (err) {
+      console.error('Failed to clear completed operations:', err);
+    }
+  };
+
+  const handleClearFailed = async () => {
+    try {
+      await api.deleteOperationHistory('failed,canceled');
+      loadHistory();
+    } catch (err) {
+      console.error('Failed to clear failed operations:', err);
+    }
   };
 
   const handleClearStuck = async () => {
@@ -400,6 +412,9 @@ export function Operations() {
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button variant="outlined" size="small" color="warning" onClick={handleClearStuck}>
               Clear Stuck
+            </Button>
+            <Button variant="outlined" size="small" color="error" onClick={handleClearFailed}>
+              Clear Failed
             </Button>
             <Button variant="outlined" size="small" onClick={handleClearCompleted}>
               Clear Completed

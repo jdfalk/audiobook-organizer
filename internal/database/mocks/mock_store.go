@@ -1658,6 +1658,58 @@ func (_c *MockStore_DeleteOperationState_Call) RunAndReturn(run func(opID string
 	return _c
 }
 
+// DeleteOperationsByStatus provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteOperationsByStatus(statuses []string) (int, error) {
+	ret := _mock.Called(statuses)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteOperationsByStatus")
+	}
+
+	var r0 int
+	if returnFunc, ok := ret.Get(0).(func([]string) int); ok {
+		r0 = returnFunc(statuses)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func([]string) error); ok {
+		r1 = returnFunc(statuses)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockStore_DeleteOperationsByStatus_Call is a *mock.Call
+type MockStore_DeleteOperationsByStatus_Call struct {
+	*mock.Call
+}
+
+// DeleteOperationsByStatus is a helper method to define mock.On call
+func (_e *MockStore_Expecter) DeleteOperationsByStatus(statuses interface{}) *MockStore_DeleteOperationsByStatus_Call {
+	return &MockStore_DeleteOperationsByStatus_Call{Call: _e.mock.On("DeleteOperationsByStatus", statuses)}
+}
+
+func (_c *MockStore_DeleteOperationsByStatus_Call) Run(run func(statuses []string)) *MockStore_DeleteOperationsByStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]string))
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationsByStatus_Call) Return(n int, err error) *MockStore_DeleteOperationsByStatus_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_DeleteOperationsByStatus_Call) RunAndReturn(run func([]string) (int, error)) *MockStore_DeleteOperationsByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteSetting provides a mock function for the type MockStore
 func (_mock *MockStore) DeleteSetting(key string) error {
 	ret := _mock.Called(key)

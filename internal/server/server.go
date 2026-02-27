@@ -1067,6 +1067,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/:id/logs", s.getOperationLogs)
 			protected.DELETE("/operations/:id", s.cancelOperation)
 			protected.POST("/operations/clear-stale", s.clearStaleOperations)
+			protected.DELETE("/operations/history", s.deleteOperationHistory)
 
 			// Import routes
 			protected.POST("/import/file", s.importFile)
@@ -2391,6 +2392,39 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"cleared": cleared})
+}
+
+// deleteOperationHistory deletes operations matching the given status(es).
+// Query param: ?status=completed or ?status=failed or ?status=completed,failed
+func (s *Server) deleteOperationHistory(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	statusParam := c.Query("status")
+	if statusParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status parameter required"})
+		return
+	}
+
+	statuses := strings.Split(statusParam, ",")
+	// Only allow deleting terminal statuses
+	allowed := map[string]bool{"completed": true, "failed": true, "canceled": true}
+	for _, s := range statuses {
+		if !allowed[s] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot delete operations with status %q", s)})
+			return
+		}
+	}
+
+	deleted, err := database.GlobalStore.DeleteOperationsByStatus(statuses)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress

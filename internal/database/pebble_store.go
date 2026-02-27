@@ -2827,6 +2827,45 @@ func (p *PebbleStore) DeleteOperationState(opID string) error {
 	return batch.Commit(pebble.Sync)
 }
 
+func (p *PebbleStore) DeleteOperationsByStatus(statuses []string) (int, error) {
+	if len(statuses) == 0 {
+		return 0, nil
+	}
+	statusSet := make(map[string]bool, len(statuses))
+	for _, s := range statuses {
+		statusSet[s] = true
+	}
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("op:"),
+		UpperBound: []byte("op:\xff"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	deleted := 0
+	batch := p.db.NewBatch()
+	for iter.First(); iter.Valid(); iter.Next() {
+		var op Operation
+		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+			continue
+		}
+		if statusSet[op.Status] {
+			_ = batch.Delete(iter.Key(), nil)
+			deleted++
+		}
+	}
+	if deleted > 0 {
+		if err := batch.Commit(pebble.Sync); err != nil {
+			return 0, err
+		}
+	} else {
+		batch.Close()
+	}
+	return deleted, nil
+}
+
 func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {
 	var ops []Operation
 	iter, err := p.db.NewIter(&pebble.IterOptions{
