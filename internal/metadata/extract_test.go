@@ -1,5 +1,5 @@
 // file: internal/metadata/extract_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3e2f1a6b-7c8d-4e5f-9a0b-1c2d3e4f5a6b
 
 package metadata
@@ -135,5 +135,22 @@ func TestExtractMetadata_FallbackFlagOnReadError(t *testing.T) {
 	}
 	if meta.Artist != "Author Name" {
 		t.Fatalf("expected author %q, got %q", "Author Name", meta.Artist)
+	}
+}
+
+func TestExtractMetadata_DirectoryPath(t *testing.T) {
+	// Create a directory named like an audiobook
+	dir := filepath.Join(t.TempDir(), "Author Name - Book Title")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("create dir: %v", err)
+	}
+
+	// Should not error — should fall back to filename parsing
+	meta, err := ExtractMetadata(dir)
+	if err != nil {
+		t.Fatalf("expected no error for directory, got: %v", err)
+	}
+	if !meta.UsedFilenameFallback {
+		t.Fatal("expected UsedFilenameFallback to be true for directory")
 	}
 }

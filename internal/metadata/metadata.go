@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -89,6 +89,22 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 	}
 	var metadata Metadata
 	log.Printf("[DEBUG] metadata: extracting tags for %s", filePath)
+
+	// Check if path is a directory — tag extraction only works on files
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return metadata, fmt.Errorf("error stat'ing path: %w", err)
+	}
+	if info.IsDir() {
+		log.Printf("[DEBUG] metadata: %s is a directory, falling back to filename parsing", filePath)
+		metadata = extractFromFilename(filePath)
+		metadata.UsedFilenameFallback = true
+		if metadata.SeriesIndex == 0 {
+			metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
+		}
+		return metadata, nil
+	}
+
 	fieldSources := map[string]string{}
 	seriesIndexSource := ""
 	fallbackUsed := false
