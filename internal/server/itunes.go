@@ -1309,7 +1309,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 	store := database.GlobalStore
 	log.Printf("[INFO] executeITunesSync starting: path=%s", libraryPath)
 
-	_ = progress.UpdateProgress(0, 0, "Starting iTunes sync")
+	_ = progress.UpdateProgress(0, 0, "Parsing iTunes library XML...")
 	_ = progress.Log("info", fmt.Sprintf("Starting iTunes sync from %s", libraryPath), nil)
 
 	log.Printf("[INFO] Parsing iTunes library XML...")
@@ -1317,12 +1317,17 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 	if err != nil {
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
-	log.Printf("[INFO] Parsed library: %d tracks", len(library.Tracks))
+	trackCount := len(library.Tracks)
+	log.Printf("[INFO] Parsed library: %d tracks", trackCount)
+	_ = progress.Log("info", fmt.Sprintf("Parsed %d tracks from iTunes library", trackCount), nil)
+	_ = progress.UpdateProgress(0, 0, fmt.Sprintf("Grouping %d tracks by album...", trackCount))
 
 	groups := groupTracksByAlbum(library)
 	totalGroups := len(groups)
+	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook groups from %d tracks", totalGroups, trackCount), nil)
 	if totalGroups == 0 {
 		_ = progress.UpdateProgress(0, 0, "No audiobooks found in library")
+		_ = progress.Log("warn", "No audiobooks found in library", nil)
 		return nil
 	}
 
@@ -1423,9 +1428,10 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		_ = store.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
 	}
 
-	summary := fmt.Sprintf("Sync completed: %d updated, %d new, %d unchanged", updated, newBooks, unchanged)
+	summary := fmt.Sprintf("Sync completed: %d updated, %d new, %d unchanged (from %d tracks, %d groups)",
+		updated, newBooks, unchanged, trackCount, totalGroups)
 	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
 	_ = progress.Log("info", summary, nil)
-	_ = ctx
+	log.Printf("[INFO] %s", summary)
 	return nil
 }

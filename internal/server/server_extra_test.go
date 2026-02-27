@@ -285,7 +285,8 @@ func TestOperationEndpointsErrors(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/operations/bad-id", nil)
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusInternalServerError, w.Code)
+	// Cancel falls back to DB update for stale operations, which succeeds
+	require.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func TestImportFileErrors(t *testing.T) {

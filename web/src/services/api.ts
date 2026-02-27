@@ -724,7 +724,7 @@ export async function getOperationLogs(id: string): Promise<OperationLog[]> {
     throw await buildApiError(response, 'Failed to fetch operation logs');
   }
   const data = await response.json();
-  return data.logs || [];
+  return data.items || data.logs || [];
 }
 
 export async function getOperationLogsTail(
