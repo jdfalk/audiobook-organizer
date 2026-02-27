@@ -1,11 +1,12 @@
 // file: internal/watcher/watcher.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 package watcher
 
 import (
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -14,87 +15,119 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// audioExtensions are the file extensions we watch for
+// audioExtensions are the file extensions we care about.
 var audioExtensions = map[string]bool{
-	".m4b":  true,
 	".mp3":  true,
-	".flac": true,
 	".m4a":  true,
-	".aac":  true,
+	".m4b":  true,
+	".flac": true,
 	".ogg":  true,
+	".opus": true,
 	".wma":  true,
+	".aac":  true,
 }
 
-// ScanFunc is called when a scan should be triggered for a path
-type ScanFunc func(path string)
+// DefaultDebounce is the default debounce period.
+const DefaultDebounce = 5 * time.Second
 
-// Watcher monitors directories for new audio files and triggers scans
+// Callback is invoked after the debounce period with the root directory.
+type Callback func(rootDir string)
+
+// Watcher monitors a directory tree for audio file changes and invokes a
+// callback after a debounce period.
 type Watcher struct {
-	fsWatcher      *fsnotify.Watcher
-	paths          []string
-	debounceDelay  time.Duration
-	onScan         ScanFunc
-	stop           chan struct{}
-	wg             sync.WaitGroup
-	mu             sync.Mutex
-	pendingPaths   map[string]time.Time
-	debounceTimers map[string]*time.Timer
+	fsWatcher     *fsnotify.Watcher
+	rootDir       string
+	debounce      time.Duration
+	callback      Callback
+	stop          chan struct{}
+	stopped       chan struct{}
+	mu            sync.Mutex
+	timer         *time.Timer
+	running       bool
 }
 
-// New creates a new file watcher
-func New(paths []string, debounceSec int, onScan ScanFunc) (*Watcher, error) {
+// New creates a Watcher. The callback is called with rootDir after events
+// settle for the debounce duration. Pass 0 for debounce to use DefaultDebounce.
+func New(callback Callback, debounce time.Duration) *Watcher {
+	if debounce <= 0 {
+		debounce = DefaultDebounce
+	}
+	return &Watcher{
+		debounce: debounce,
+		callback: callback,
+		stop:     make(chan struct{}),
+		stopped:  make(chan struct{}),
+	}
+}
+
+// Start begins watching rootDir recursively. It is safe to call only once.
+func (w *Watcher) Start(rootDir string) error {
+	w.mu.Lock()
+	if w.running {
+		w.mu.Unlock()
+		return nil
+	}
+	w.running = true
+	w.mu.Unlock()
+
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, err
+		return err
+	}
+	w.fsWatcher = fsw
+	w.rootDir = rootDir
+
+	// Walk the tree and add all directories.
+	if err := w.addRecursive(rootDir); err != nil {
+		fsw.Close()
+		return err
 	}
 
-	delay := time.Duration(debounceSec) * time.Second
-	if delay <= 0 {
-		delay = 30 * time.Second
-	}
-
-	return &Watcher{
-		fsWatcher:      fsw,
-		paths:          paths,
-		debounceDelay:  delay,
-		onScan:         onScan,
-		stop:           make(chan struct{}),
-		pendingPaths:   make(map[string]time.Time),
-		debounceTimers: make(map[string]*time.Timer),
-	}, nil
-}
-
-// Start begins watching the configured paths
-func (w *Watcher) Start() error {
-	for _, p := range w.paths {
-		if err := w.fsWatcher.Add(p); err != nil {
-			log.Printf("[WARN] watcher: failed to watch %s: %v", p, err)
-		} else {
-			log.Printf("[INFO] watcher: watching %s for new audiobooks", p)
-		}
-	}
-
-	w.wg.Add(1)
 	go w.eventLoop()
 	return nil
 }
 
-// Stop gracefully shuts down the watcher
+// Stop gracefully shuts down the watcher and waits for the event loop to exit.
 func (w *Watcher) Stop() {
-	close(w.stop)
-	w.fsWatcher.Close()
-	w.wg.Wait()
-
-	// Cancel any pending timers
 	w.mu.Lock()
-	for _, timer := range w.debounceTimers {
-		timer.Stop()
+	if !w.running {
+		w.mu.Unlock()
+		return
+	}
+	w.running = false
+	w.mu.Unlock()
+
+	close(w.stop)
+	if w.fsWatcher != nil {
+		w.fsWatcher.Close()
+	}
+	<-w.stopped
+
+	w.mu.Lock()
+	if w.timer != nil {
+		w.timer.Stop()
+		w.timer = nil
 	}
 	w.mu.Unlock()
 }
 
+func (w *Watcher) addRecursive(root string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip inaccessible dirs
+		}
+		if d.IsDir() {
+			if watchErr := w.fsWatcher.Add(path); watchErr != nil {
+				log.Printf("[WARN] watcher: cannot watch %s: %v", path, watchErr)
+			}
+		}
+		return nil
+	})
+}
+
 func (w *Watcher) eventLoop() {
-	defer w.wg.Done()
+	defer close(w.stopped)
 
 	for {
 		select {
@@ -104,14 +137,7 @@ func (w *Watcher) eventLoop() {
 			if !ok {
 				return
 			}
-			if event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
-				continue
-			}
-			if !isAudioFile(event.Name) {
-				continue
-			}
-			w.scheduleSccan(filepath.Dir(event.Name))
-
+			w.handleEvent(event)
 		case err, ok := <-w.fsWatcher.Errors:
 			if !ok {
 				return
@@ -121,26 +147,48 @@ func (w *Watcher) eventLoop() {
 	}
 }
 
-func (w *Watcher) scheduleSccan(dir string) {
+func (w *Watcher) handleEvent(event fsnotify.Event) {
+	// On Create, if it's a directory, watch it recursively.
+	if event.Op&fsnotify.Create != 0 {
+		if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+			_ = w.addRecursive(event.Name)
+		}
+	}
+
+	relevant := event.Op&(fsnotify.Create|fsnotify.Remove|fsnotify.Rename|fsnotify.Write) != 0
+	if !relevant {
+		return
+	}
+	if !IsAudioFile(event.Name) {
+		return
+	}
+
+	w.scheduleScan()
+}
+
+func (w *Watcher) scheduleScan() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	// Reset or create debounce timer for this directory
-	if timer, exists := w.debounceTimers[dir]; exists {
-		timer.Reset(w.debounceDelay)
-	} else {
-		w.debounceTimers[dir] = time.AfterFunc(w.debounceDelay, func() {
-			log.Printf("[INFO] watcher: triggering scan for %s", dir)
-			w.onScan(dir)
-
-			w.mu.Lock()
-			delete(w.debounceTimers, dir)
-			w.mu.Unlock()
-		})
+	if w.timer != nil {
+		w.timer.Reset(w.debounce)
+		return
 	}
+
+	w.timer = time.AfterFunc(w.debounce, func() {
+		w.mu.Lock()
+		w.timer = nil
+		w.mu.Unlock()
+
+		log.Printf("[INFO] watcher: triggering callback for %s", w.rootDir)
+		if w.callback != nil {
+			w.callback(w.rootDir)
+		}
+	})
 }
 
-func isAudioFile(name string) bool {
+// IsAudioFile reports whether name has a recognized audio extension.
+func IsAudioFile(name string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
 	return audioExtensions[ext]
 }

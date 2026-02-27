@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 2.5.0 -->
+<!-- version: 2.6.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-02-26 -->
 
@@ -49,14 +49,14 @@
 
 | Item | Plan |
 | --- | --- |
-| Persist operation logs + log view UX improvements | [Observability](docs/plans/observability-and-monitoring.md) |
+| ~~Persist operation logs + log view UX improvements~~ ✅ Migration 21, SQLite persistence, queue wiring | [Observability](docs/plans/observability-and-monitoring.md) |
 | ~~SSE system status heartbeats (live metrics without polling)~~ ✅ Complete | [Observability](docs/plans/observability-and-monitoring.md) |
 | ~~Parallel scanning with goroutine pool~~ ✅ Complete | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| Caching layer for frequent book queries | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
+| ~~Caching layer for frequent book queries~~ ✅ 30s/10s TTL cache with invalidation | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
 | Debounced library size recomputation via fsnotify | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| Global notification/toast system | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
+| ~~Global notification/toast system~~ ✅ Toast provider, auto-dismiss for success/info, persist for error/warning | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | ~~Dark mode with persisted preference~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Keyboard shortcuts | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
+| ~~Keyboard shortcuts~~ ✅ / or Ctrl+K for search, g+l library, g+s settings, ? help | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | ~~Welcome wizard (first-run setup)~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
 | Developer guide (architecture, data flow, deployment) | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | NPM cache fix (CRITICAL-002) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
