@@ -68,7 +68,7 @@
 
 - [x] Hardcover.app integration
 - [ ] Google Books API auth (getting 429 rate limiting, needs proper API key)
-- [ ] Cover art: automatic download to local disk (currently only URL proxy)
+- [x] Cover art: automatic download to local disk
 - [ ] Cover art: embed in audio file metadata tags
 
 ## Search Quality
@@ -77,21 +77,21 @@
 - [x] Title cleaning: part/volume/chapter pattern removal
 - [x] Title cleaning: subtitle stripping (colon, dash, em-dash separators)
 - [x] Author-only fallback search with best-title-match scoring
-- [ ] Fuzzy search / Levenshtein distance matching
-- [ ] Search result ranking/scoring
+- [x] Fuzzy search / Levenshtein distance matching
+- [x] Search result ranking/scoring (0-100 fuzzy score, best match first)
 
 ## Infrastructure
 
 - [x] PebbleDB format version logging on startup
 - [ ] PebbleDB v2 upgrade (format versions 14-19, columnar blocks etc)
-- [ ] Docker deployment
+- [x] Docker deployment (multi-stage build, docker-compose, Makefile targets)
 - [ ] launchd/systemd service files
 - [x] File watching / auto-scan for new audiobooks (fsnotify watcher with debounce)
 
 ## Data Quality
 
 - [x] Metadata undo/history (MetadataChangeRecord, UI component)
-- [ ] Directory-as-filepath bug in tag extraction (metadata.go:105 warns for directories)
+- [x] Directory-as-filepath bug in tag extraction — fixed, falls back to filename parsing
 - [ ] Basic auth for web UI
 
 ---
@@ -100,7 +100,7 @@
 
 | Bug | Status | Plan |
 | --- | --- | --- |
-| Directory-as-filepath in tag extraction (metadata.go:105) | Open | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
+| ~~Directory-as-filepath in tag extraction (metadata.go:105)~~ | ✅ Fixed 2026-02-26 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
 
 Previously fixed:
 
