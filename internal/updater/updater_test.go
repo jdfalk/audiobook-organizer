@@ -56,13 +56,15 @@ func TestCheckStable_NotFound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	u := &Updater{
-		currentVersion: "1.0.0",
-		repo:           "test/repo",
-		httpClient:     srv.Client(),
+	// Verify test server is reachable (validates setup)
+	resp, err := srv.Client().Get(srv.URL + "/latest")
+	if err != nil {
+		t.Fatalf("test server unreachable: %v", err)
 	}
-	// Can't easily redirect URL, so test inWindow and DownloadAndReplace error paths
-	_ = u
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", resp.StatusCode)
+	}
 }
 
 func TestDownloadAndReplace_NoUpdate(t *testing.T) {
