@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.66.0
+// version: 1.68.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1033,10 +1033,15 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
 			protected.GET("/audiobooks/:id/metadata-history/:field", s.getFieldMetadataHistory)
 			protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.undoMetadataChange)
+			protected.GET("/audiobooks/:id/field-states", s.getAudiobookFieldStates)
 
-			// Author and series routes
+			// Author, narrator, and series routes
 			protected.GET("/authors", s.listAuthors)
 			protected.GET("/authors/count", s.countAuthors)
+			protected.GET("/narrators", s.listNarrators)
+			protected.GET("/narrators/count", s.countNarrators)
+			protected.GET("/audiobooks/:id/narrators", s.listAudiobookNarrators)
+			protected.PUT("/audiobooks/:id/narrators", s.setAudiobookNarrators)
 			protected.GET("/series", s.listSeries)
 			protected.GET("/series/count", s.countSeries)
 
@@ -1513,11 +1518,12 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 
-	// Add author and series names to response
+	// Add author and series names and narrators to response
 	type bookResponse struct {
 		*database.Book
-		AuthorName *string `json:"author_name,omitempty"`
-		SeriesName *string `json:"series_name,omitempty"`
+		AuthorName *string                `json:"author_name,omitempty"`
+		SeriesName *string                `json:"series_name,omitempty"`
+		Narrators  []database.BookNarrator `json:"narrators,omitempty"`
 	}
 
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
@@ -1527,6 +1533,12 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	}
 	if seriesName != "" {
 		resp.SeriesName = &seriesName
+	}
+
+	if database.GlobalStore != nil {
+		if narrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(narrators) > 0 {
+			resp.Narrators = narrators
+		}
 	}
 
 	c.JSON(http.StatusOK, resp)
@@ -1581,6 +1593,16 @@ func (s *Server) getBookMetadataHistory(c *gin.Context) {
 		records = []database.MetadataChangeRecord{}
 	}
 	c.JSON(http.StatusOK, gin.H{"items": records, "count": len(records)})
+}
+
+func (s *Server) getAudiobookFieldStates(c *gin.Context) {
+	id := c.Param("id")
+	states, err := s.metadataStateService.LoadMetadataState(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"field_states": states})
 }
 
 func (s *Server) getFieldMetadataHistory(c *gin.Context) {
@@ -1867,6 +1889,67 @@ func (s *Server) countAuthors(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": count})
+}
+
+func (s *Server) listNarrators(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	narrators, err := database.GlobalStore.ListNarrators()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, narrators)
+}
+
+func (s *Server) countNarrators(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	narrators, err := database.GlobalStore.ListNarrators()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": len(narrators)})
+}
+
+func (s *Server) listAudiobookNarrators(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	narrators, err := database.GlobalStore.GetBookNarrators(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if narrators == nil {
+		narrators = []database.BookNarrator{}
+	}
+	c.JSON(http.StatusOK, narrators)
+}
+
+func (s *Server) setAudiobookNarrators(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var narrators []database.BookNarrator
+	if err := c.ShouldBindJSON(&narrators); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := database.GlobalStore.SetBookNarrators(id, narrators); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (s *Server) countSeries(c *gin.Context) {
