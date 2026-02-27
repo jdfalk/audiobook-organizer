@@ -20,6 +20,7 @@ require (
 	go.senan.xyz/taglib v0.11.1
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
+	golang.org/x/text v0.34.0
 	golang.org/x/time v0.10.0
 	gopkg.in/yaml.v3 v3.0.1
 	howett.net/plist v1.0.1
@@ -94,6 +95,5 @@ require (
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
