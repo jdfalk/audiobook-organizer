@@ -109,6 +109,9 @@ type Config struct {
 	// Hardcover.app API
 	HardcoverAPIToken string `json:"hardcover_api_token"`
 
+	// Google Books API
+	GoogleBooksAPIKey string `json:"google_books_api_key"`
+
 	// AI-powered parsing
 	EnableAIParsing bool   `json:"enable_ai_parsing"`
 	OpenAIAPIKey    string `json:"openai_api_key"`
@@ -309,6 +312,9 @@ func InitConfig() {
 
 		// Hardcover.app
 		HardcoverAPIToken: viper.GetString("hardcover_api_token"),
+
+		// Google Books
+		GoogleBooksAPIKey: viper.GetString("google_books_api_key"),
 
 		// AI parsing
 		EnableAIParsing: viper.GetBool("enable_ai_parsing"),

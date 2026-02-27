@@ -125,6 +125,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"log_level":             &config.AppConfig.LogLevel,
 		"openlibrary_dump_dir":  &config.AppConfig.OpenLibraryDumpDir,
 		"hardcover_api_token":   &config.AppConfig.HardcoverAPIToken,
+		"google_books_api_key":  &config.AppConfig.GoogleBooksAPIKey,
 		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
 		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
 		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,

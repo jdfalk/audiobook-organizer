@@ -278,6 +278,8 @@ func applySetting(key, value, typ string) error {
 		}
 	case "openai_api_key":
 		AppConfig.OpenAIAPIKey = value
+	case "google_books_api_key":
+		AppConfig.GoogleBooksAPIKey = value
 
 	// Performance
 	case "concurrent_scans":
@@ -379,7 +381,8 @@ func SaveConfigToDatabase(store database.Store) error {
 
 		// AI parsing (API key is secret in DB, plaintext in file)
 		"enable_ai_parsing": {strconv.FormatBool(AppConfig.EnableAIParsing), "bool", false},
-		"openai_api_key":    {AppConfig.OpenAIAPIKey, "string", true},
+		"openai_api_key":        {AppConfig.OpenAIAPIKey, "string", true},
+		"google_books_api_key":  {AppConfig.GoogleBooksAPIKey, "string", true},
 
 		// Performance
 		"concurrent_scans": {strconv.Itoa(AppConfig.ConcurrentScans), "int", false},
@@ -439,6 +442,9 @@ func SyncConfigFromEnv() {
 	}
 	if viper.IsSet("openai_api_key") {
 		AppConfig.OpenAIAPIKey = viper.GetString("openai_api_key")
+	}
+	if viper.IsSet("google_books_api_key") {
+		AppConfig.GoogleBooksAPIKey = viper.GetString("google_books_api_key")
 	}
 	if viper.IsSet("enable_ai_parsing") {
 		AppConfig.EnableAIParsing = viper.GetBool("enable_ai_parsing")

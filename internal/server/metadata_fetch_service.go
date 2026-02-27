@@ -63,7 +63,13 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 			}
 			chain = append(chain, client)
 		case "google-books":
-			chain = append(chain, metadata.NewGoogleBooksClient())
+			apiKey := config.AppConfig.GoogleBooksAPIKey
+			if apiKey == "" {
+				if k, ok := src.Credentials["apiKey"]; ok && k != "" {
+					apiKey = k
+				}
+			}
+			chain = append(chain, metadata.NewGoogleBooksClient(apiKey))
 		case "audnexus":
 			chain = append(chain, metadata.NewAudnexusClient())
 		case "hardcover":
