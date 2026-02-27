@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -108,12 +107,11 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 		if err != nil || !statInfo.IsDir() {
 			return false
 		}
-		sys, ok := statInfo.Sys().(*syscall.Stat_t)
+		inode, ok := getInode(statInfo)
 		if !ok {
 			dirs = append(dirs, path)
 			return true
 		}
-		inode := uint64(sys.Ino)
 		visitedMu.Lock()
 		defer visitedMu.Unlock()
 		if _, seen := visitedInodes[inode]; seen {
