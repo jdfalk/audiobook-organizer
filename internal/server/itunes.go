@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	itunesImportProgressBatch = 10
+	itunesImportProgressBatch = 100
 	itunesImportErrorLimit    = 50
 )
 
@@ -84,6 +84,29 @@ type ITunesWriteBackResponse struct {
 	UpdatedCount int    `json:"updated_count"`
 	BackupPath   string `json:"backup_path,omitempty"`
 	Message      string `json:"message"`
+}
+
+// ITunesBookMapping represents a book with its iTunes path comparison.
+type ITunesBookMapping struct {
+	BookID             string `json:"book_id"`
+	Title              string `json:"title"`
+	Author             string `json:"author"`
+	ITunesPersistentID string `json:"itunes_persistent_id"`
+	LocalPath          string `json:"local_path"`
+	ITunesPath         string `json:"itunes_path"`
+	PathDiffers        bool   `json:"path_differs"`
+}
+
+// ITunesWriteBackPreviewRequest is the request body for the preview endpoint.
+type ITunesWriteBackPreviewRequest struct {
+	LibraryPath string   `json:"library_path" binding:"required"`
+	BookIDs     []string `json:"book_ids,omitempty"`
+}
+
+// ITunesWriteBackPreviewResponse contains the preview results.
+type ITunesWriteBackPreviewResponse struct {
+	Items []ITunesBookMapping `json:"items"`
+	Total int                 `json:"total"`
 }
 
 // ITunesImportStatusResponse reports progress for an iTunes import operation.
@@ -388,6 +411,173 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		UpdatedCount: result.UpdatedCount,
 		BackupPath:   result.BackupPath,
 		Message:      result.Message,
+	})
+}
+
+// handleITunesWriteBackPreview returns a comparison of local paths vs iTunes paths.
+func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req ITunesWriteBackPreviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+		return
+	}
+
+	// Parse iTunes library to build persistent ID -> location map
+	library, err := itunes.ParseLibrary(req.LibraryPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse iTunes library: %v", err)})
+		return
+	}
+
+	itunesLocations := make(map[string]string)
+	for _, track := range library.Tracks {
+		if track.PersistentID != "" {
+			decoded, decErr := itunes.DecodeLocation(track.Location)
+			if decErr == nil {
+				itunesLocations[track.PersistentID] = decoded
+			} else {
+				itunesLocations[track.PersistentID] = track.Location
+			}
+		}
+	}
+
+	// Get books - either specific IDs or all with iTunes persistent IDs
+	var books []database.Book
+	if len(req.BookIDs) > 0 {
+		for _, id := range req.BookIDs {
+			book, bErr := database.GlobalStore.GetBookByID(id)
+			if bErr != nil || book == nil {
+				continue
+			}
+			if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+				books = append(books, *book)
+			}
+		}
+	} else {
+		// Get all books and filter to those with iTunes persistent IDs
+		allBooks, bErr := database.GlobalStore.GetAllBooks(0, 0)
+		if bErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to list books: %v", bErr)})
+			return
+		}
+		for _, book := range allBooks {
+			if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+				books = append(books, book)
+			}
+		}
+	}
+
+	items := make([]ITunesBookMapping, 0, len(books))
+	for _, book := range books {
+		persistentID := *book.ITunesPersistentID
+		itunesPath := itunesLocations[persistentID]
+		author := ""
+		if book.AuthorID != nil {
+			if a, aErr := database.GlobalStore.GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
+				author = a.Name
+			}
+		}
+		items = append(items, ITunesBookMapping{
+			BookID:             book.ID,
+			Title:              book.Title,
+			Author:             author,
+			ITunesPersistentID: persistentID,
+			LocalPath:          book.FilePath,
+			ITunesPath:         itunesPath,
+			PathDiffers:        book.FilePath != itunesPath,
+		})
+	}
+
+	c.JSON(http.StatusOK, ITunesWriteBackPreviewResponse{
+		Items: items,
+		Total: len(items),
+	})
+}
+
+// handleListITunesBooks returns paginated books that have iTunes persistent IDs.
+func (s *Server) handleListITunesBooks(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	search := c.Query("search")
+	limit := 50
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if v, err := fmt.Sscanf(l, "%d", &limit); err != nil || v == 0 {
+			limit = 50
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if v, err := fmt.Sscanf(o, "%d", &offset); err != nil || v == 0 {
+			offset = 0
+		}
+	}
+
+	var allBooks []database.Book
+	var err error
+	if search != "" {
+		allBooks, err = database.GlobalStore.SearchBooks(search, 0, 0)
+	} else {
+		allBooks, err = database.GlobalStore.GetAllBooks(0, 0)
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to list books: %v", err)})
+		return
+	}
+
+	// Filter to books with iTunes persistent IDs
+	var filtered []database.Book
+	for _, book := range allBooks {
+		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+			filtered = append(filtered, book)
+		}
+	}
+
+	total := len(filtered)
+
+	// Apply pagination
+	if offset >= len(filtered) {
+		filtered = nil
+	} else {
+		end := offset + limit
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		filtered = filtered[offset:end]
+	}
+
+	items := make([]ITunesBookMapping, 0, len(filtered))
+	for _, book := range filtered {
+		author := ""
+		if book.AuthorID != nil {
+			if a, aErr := database.GlobalStore.GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
+				author = a.Name
+			}
+		}
+		items = append(items, ITunesBookMapping{
+			BookID:             book.ID,
+			Title:              book.Title,
+			Author:             author,
+			ITunesPersistentID: *book.ITunesPersistentID,
+			LocalPath:          book.FilePath,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": items,
+		"count": total,
 	})
 }
 
@@ -1336,6 +1526,20 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		PathMappings: pathMappings,
 	}
 
+	// Pre-build persistent ID → Book index to avoid O(n) scan per group
+	_ = progress.UpdateProgress(0, 0, "Building persistent ID index...")
+	allBooks, err := store.GetAllBooks(100000, 0)
+	if err != nil {
+		return fmt.Errorf("failed to load books for index: %w", err)
+	}
+	pidIndex := make(map[string]*database.Book, len(allBooks))
+	for i := range allBooks {
+		if allBooks[i].ITunesPersistentID != nil && *allBooks[i].ITunesPersistentID != "" {
+			pidIndex[*allBooks[i].ITunesPersistentID] = &allBooks[i]
+		}
+	}
+	_ = progress.Log("info", fmt.Sprintf("Indexed %d books with iTunes persistent IDs", len(pidIndex)), nil)
+
 	var updated, newBooks, unchanged int
 	for i, group := range groups {
 		if progress.IsCanceled() {
@@ -1353,11 +1557,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 			continue
 		}
 
-		existing, err := store.GetBookByITunesPersistentID(persistentID)
-		if err != nil {
-			_ = progress.Log("warn", fmt.Sprintf("Error looking up persistent ID %s: %v", persistentID, err), nil)
-			continue
-		}
+		existing := pidIndex[persistentID]
 
 		if existing != nil {
 			// Compare fields and update if changed
