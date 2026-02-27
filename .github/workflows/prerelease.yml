@@ -27,7 +27,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@593b4f3b35e68a18f535a44a0cf96b8b55289924 # v2.9.0
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@6df7dc10e4f5e1f4e90e5b5c9505aecbcafe0d5f # v2.9.0
     with:
       release-type: 'auto'
       prerelease: true
