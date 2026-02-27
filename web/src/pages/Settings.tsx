@@ -2232,20 +2232,34 @@ export function Settings() {
                                   <Typography
                                     variant="caption"
                                     color="text.secondary"
+                                    component="div"
                                   >
-                                    Get your API key at:{' '}
+                                    Setup (2 clicks):{' '}
+                                    <strong>1.</strong>{' '}
                                     <a
                                       href={
-                                        'https://console.' +
-                                        'cloud.google.com/' +
-                                        'apis/' +
-                                        'credentials'
+                                        'https://console.cloud.google.com/' +
+                                        'flows/enableapi?' +
+                                        'apiid=books.googleapis.com'
                                       }
                                       target="_blank"
                                       rel="noopener noreferrer"
                                     >
-                                      Google Cloud Console
+                                      Enable Books API
                                     </a>
+                                    {' '}<strong>2.</strong>{' '}
+                                    <a
+                                      href={
+                                        'https://console.cloud.google.com/' +
+                                        'apis/credentials/wizard?' +
+                                        'api=books.googleapis.com'
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      Create API Key
+                                    </a>
+                                    {' '} then paste it above. Free tier: 1,000 requests/day.
                                   </Typography>
                                 </Grid>
                               </>
