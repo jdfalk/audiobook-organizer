@@ -27,7 +27,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@6df7dc1bba970f92b7232929f182de86f545ea3d # v2.9.0
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@94259607508ce3ecaff67347c1cf59a3bd336f60 # v2.9.0
     with:
       release-type: 'auto'
       prerelease: true
@@ -36,4 +36,5 @@ jobs:
       frontend-enabled: true
       docker-enabled: true
       system-packages: 'libtag1-dev'
+      pre-build-script: 'cd web && npm ci && npm run build'
     secrets: inherit
