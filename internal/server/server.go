@@ -2538,15 +2538,12 @@ func (s *Server) getSystemStorage(c *gin.Context) {
 		return
 	}
 
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(rootDir, &stat); err != nil {
+	totalBytes, freeBytes, err := getDiskStats(rootDir)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read filesystem stats"})
 		return
 	}
 
-	blockSize := uint64(stat.Bsize)
-	totalBytes := stat.Blocks * blockSize
-	freeBytes := stat.Bavail * blockSize
 	usedBytes := totalBytes - freeBytes
 	percentUsed := 0.0
 	if totalBytes > 0 {
