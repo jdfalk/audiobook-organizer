@@ -252,7 +252,7 @@ func (q *OperationQueue) worker(id int) {
 				continue
 			}
 
-			log.Printf("Worker %d processing operation %s", id, op.ID)
+			log.Printf("Worker %d processing operation %s (type=%s)", id, op.ID, op.Type)
 
 			// Metrics: mark start
 			start := time.Now()
@@ -260,7 +260,9 @@ func (q *OperationQueue) worker(id int) {
 
 			// Update status to running
 			if q.store != nil {
-				_ = q.store.UpdateOperationStatus(op.ID, "running", 0, 0, "operation started")
+				if err := q.store.UpdateOperationStatus(op.ID, "running", 0, 0, "operation started"); err != nil {
+					log.Printf("Worker %d: failed to update status to running for %s: %v", id, op.ID, err)
+				}
 			}
 
 			// Create progress reporter
@@ -270,13 +272,22 @@ func (q *OperationQueue) worker(id int) {
 				queue:       q,
 			}
 
-			// Execute the operation with timeout protection.
+			// Execute the operation with timeout protection and panic recovery.
 			runCtx := op.Context
 			cancelTimeout := func() {}
 			if q.timeout > 0 {
 				runCtx, cancelTimeout = context.WithTimeout(op.Context, q.timeout)
 			}
-			err := op.Func(runCtx, reporter)
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						err = fmt.Errorf("operation panicked: %v", r)
+						log.Printf("Worker %d: operation %s panicked: %v", id, op.ID, r)
+					}
+				}()
+				err = op.Func(runCtx, reporter)
+			}()
 			cancelTimeout()
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(runCtx.Err(), context.DeadlineExceeded) {
 				err = fmt.Errorf("operation timed out")
