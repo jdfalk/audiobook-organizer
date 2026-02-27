@@ -1,5 +1,5 @@
 // file: web/src/components/layout/TopBar.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useEffect, useRef, useState } from 'react';
@@ -19,6 +19,7 @@ import Brightness4Icon from '@mui/icons-material/Brightness4.js';
 import Brightness7Icon from '@mui/icons-material/Brightness7.js';
 import SearchIcon from '@mui/icons-material/Search.js';
 import LogoutIcon from '@mui/icons-material/Logout.js';
+import SettingsIcon from '@mui/icons-material/Settings.js';
 import { eventSourceManager } from '../../services/eventSourceManager';
 import { useAppStore } from '../../stores/useAppStore';
 import { useAuth } from '../../contexts/AuthContext';
@@ -145,7 +146,6 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
             sx={{ color: 'inherit', width: '100%' }}
           />
         </Box>
-        <Box sx={{ flexGrow: 1, display: { xs: 'block', md: 'none' } }} />
         <Tooltip title="Search library">
           <IconButton
             color="inherit"
@@ -156,13 +156,32 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
             <SearchIcon />
           </IconButton>
         </Tooltip>
+        {/* Spacer pushes everything after this to the right */}
+        <Box sx={{ flexGrow: 1 }} />
+        {connectionMessage && (
+          <Chip
+            label={connectionMessage}
+            color={connectionState === 'open' ? 'success' : 'warning'}
+            size="small"
+            variant="outlined"
+            sx={{ mr: 1 }}
+          />
+        )}
         <OperationsIndicator />
+        <Tooltip title="Settings">
+          <IconButton
+            color="inherit"
+            aria-label="settings"
+            onClick={() => navigate('/settings')}
+          >
+            <SettingsIcon />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Toggle color mode">
           <IconButton
             color="inherit"
             aria-label="toggle color mode"
             onClick={toggleThemeMode}
-            sx={{ mr: 1 }}
           >
             {themeMode === 'dark' ? (
               <Brightness7Icon />
@@ -179,19 +198,10 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
               onClick={() => {
                 void handleLogout();
               }}
-              sx={{ mr: 1 }}
             >
               <LogoutIcon />
             </IconButton>
           </Tooltip>
-        )}
-        {connectionMessage && (
-          <Chip
-            label={connectionMessage}
-            color={connectionState === 'open' ? 'success' : 'warning'}
-            size="small"
-            variant="outlined"
-          />
         )}
       </Toolbar>
     </AppBar>
