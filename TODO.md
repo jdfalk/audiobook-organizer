@@ -83,7 +83,7 @@
 ## Infrastructure
 
 - [x] PebbleDB format version logging on startup
-- [ ] PebbleDB v2 upgrade (format versions 14-19, columnar blocks etc)
+- [x] PebbleDB v2 upgrade (v2.1.4, all imports migrated to v2 path)
 - [x] Docker deployment (multi-stage build, docker-compose, Makefile targets)
 - [x] launchd/systemd service files (macOS plist + Linux systemd unit with install scripts)
 - [x] File watching / auto-scan for new audiobooks (fsnotify watcher with debounce)
