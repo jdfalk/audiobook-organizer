@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	matcher "github.com/jdfalk/audiobook-organizer/internal/matcher"
 	_ "github.com/mattn/go-sqlite3"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -1713,19 +1714,25 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 }
 
 func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
+	// Fetch a larger pool for fuzzy re-ranking (we re-rank in Go, then paginate)
+	fetchLimit := limit * 3
+	if fetchLimit < 100 {
+		fetchLimit = 100
+	}
+
 	// Try FTS5 first for better performance and relevance ranking
 	ftsQuery := sanitizeFTS5Query(query)
 	searchSQL := fmt.Sprintf(
 		`SELECT %s FROM books
 		 JOIN books_fts ON books.rowid = books_fts.rowid
 		 WHERE books_fts MATCH ? AND COALESCE(marked_for_deletion, 0) = 0
-		 ORDER BY rank LIMIT ? OFFSET ?`, bookSelectColumns)
+		 ORDER BY rank LIMIT ?`, bookSelectColumns)
 
-	rows, err := s.db.Query(searchSQL, ftsQuery, limit, offset)
+	rows, err := s.db.Query(searchSQL, ftsQuery, fetchLimit)
 	if err != nil {
 		// Fall back to LIKE if FTS5 table doesn't exist or query fails
-		likeSQL := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSelectColumns)
-		rows, err = s.db.Query(likeSQL, "%"+query+"%", limit, offset)
+		likeSQL := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ?`, bookSelectColumns)
+		rows, err = s.db.Query(likeSQL, "%"+query+"%", fetchLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -1740,7 +1747,48 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 		}
 		books = append(books, book)
 	}
-	return books, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Re-rank using fuzzy scoring
+	books = fuzzyRankBooks(query, books)
+
+	// Apply pagination after ranking
+	if offset >= len(books) {
+		return []Book{}, nil
+	}
+	end := offset + limit
+	if end > len(books) {
+		end = len(books)
+	}
+	return books[offset:end], nil
+}
+
+// fuzzyRankBooks re-ranks books by fuzzy match score against the query.
+func fuzzyRankBooks(query string, books []Book) []Book {
+	if len(books) <= 1 {
+		return books
+	}
+	type scored struct {
+		book  Book
+		score int
+	}
+	items := make([]scored, len(books))
+	for i, b := range books {
+		items[i] = scored{book: b, score: matcher.ScoreMatch(query, b.Title)}
+	}
+	// Insertion sort (stable, fine for small N)
+	for i := 1; i < len(items); i++ {
+		for j := i; j > 0 && items[j].score > items[j-1].score; j-- {
+			items[j], items[j-1] = items[j-1], items[j]
+		}
+	}
+	result := make([]Book, len(items))
+	for i, it := range items {
+		result[i] = it.book
+	}
+	return result
 }
 
 // sanitizeFTS5Query escapes FTS5 special characters and wraps terms for prefix matching.
