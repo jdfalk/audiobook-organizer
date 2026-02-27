@@ -67,7 +67,7 @@
 ## Metadata Sources
 
 - [x] Hardcover.app integration
-- [ ] Google Books API auth (getting 429 rate limiting, needs proper API key)
+- [x] Google Books API key support (config, persistence, credentials map, env var)
 - [x] Cover art: automatic download to local disk
 - [x] Cover art: embed in audio file metadata tags (ffmpeg/metaflac, graceful fallback)
 

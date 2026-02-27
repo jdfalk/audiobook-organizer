@@ -7,11 +7,12 @@ package metadata
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 func TestGoogleBooksClient_Name(t *testing.T) {
-	c := NewGoogleBooksClient()
+	c := NewGoogleBooksClient("")
 	if c.Name() != "Google Books" {
 		t.Errorf("expected 'Google Books', got %q", c.Name())
 	}
@@ -98,6 +99,46 @@ func TestGoogleBooksClient_APIError(t *testing.T) {
 	_, err := client.SearchByTitle("test")
 	if err == nil {
 		t.Error("expected error on 500 response")
+	}
+}
+
+func TestGoogleBooksClient_APIKeyAppended(t *testing.T) {
+	var receivedURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedURL = r.URL.String()
+		_, _ = w.Write([]byte(`{"totalItems": 0, "items": []}`))
+	}))
+	defer server.Close()
+
+	client := &GoogleBooksClient{
+		httpClient: server.Client(),
+		baseURL:    server.URL,
+		apiKey:     "test-key-123",
+	}
+	_, err := client.SearchByTitle("Dune")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(receivedURL, "key=test-key-123") {
+		t.Errorf("expected API key in URL, got %q", receivedURL)
+	}
+}
+
+func TestGoogleBooksClient_NoAPIKey(t *testing.T) {
+	var receivedURL string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedURL = r.URL.String()
+		_, _ = w.Write([]byte(`{"totalItems": 0, "items": []}`))
+	}))
+	defer server.Close()
+
+	client := NewGoogleBooksClientWithBaseURL(server.URL)
+	_, err := client.SearchByTitle("Dune")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(receivedURL, "key=") {
+		t.Errorf("expected no API key in URL, got %q", receivedURL)
 	}
 }
 

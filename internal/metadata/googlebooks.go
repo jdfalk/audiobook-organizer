@@ -1,5 +1,5 @@
 // file: internal/metadata/googlebooks.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-f2a3b4c5d6e7
 
 package metadata
@@ -15,14 +15,15 @@ import (
 )
 
 // GoogleBooksClient fetches metadata from the Google Books Volume API.
-// No API key is required for basic searches (free tier, ~1000 req/day).
+// An API key raises the quota from ~100 req/day to 1000 req/day.
 type GoogleBooksClient struct {
 	httpClient *http.Client
 	baseURL    string
+	apiKey     string
 }
 
 // NewGoogleBooksClient creates a new Google Books API client.
-func NewGoogleBooksClient() *GoogleBooksClient {
+func NewGoogleBooksClient(apiKey string) *GoogleBooksClient {
 	baseURL := os.Getenv("GOOGLE_BOOKS_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://www.googleapis.com/books/v1"
@@ -30,6 +31,7 @@ func NewGoogleBooksClient() *GoogleBooksClient {
 	return &GoogleBooksClient{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    strings.TrimRight(baseURL, "/"),
+		apiKey:     apiKey,
 	}
 }
 
@@ -90,6 +92,9 @@ func (c *GoogleBooksClient) SearchByTitleAndAuthor(title, author string) ([]Book
 
 func (c *GoogleBooksClient) search(escapedQuery string) ([]BookMetadata, error) {
 	searchURL := fmt.Sprintf("%s/volumes?q=%s&maxResults=5", c.baseURL, escapedQuery)
+	if c.apiKey != "" {
+		searchURL += "&key=" + url.QueryEscape(c.apiKey)
+	}
 
 	resp, err := c.httpClient.Get(searchURL)
 	if err != nil {
