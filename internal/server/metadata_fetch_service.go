@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -190,6 +190,16 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 
 			mfs.persistFetchedMetadata(id, meta)
+
+			// Download cover art locally if we got a cover URL
+			if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
+				coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
+				if coverErr != nil {
+					log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
+				} else {
+					log.Printf("[INFO] cover art saved to %s", coverPath)
+				}
+			}
 
 			// Write metadata back to audio file(s) if enabled
 			if config.AppConfig.WriteBackMetadata {
