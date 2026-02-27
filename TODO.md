@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 2.7.0 -->
+<!-- version: 2.8.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-02-26 -->
 
@@ -12,9 +12,9 @@
 
 ## 🎯 MVP Status — February 16, 2026
 
-**~98% complete** · Backend hardening ✅ · Frontend core flows ✅ · Go coverage 81.3% ✅ · Auth E2E + middleware tests ✅
+**~99% complete** · All P0/P1/P2 items done · Release pipeline finalized · All critical bugs fixed
 
-**Remaining for MVP**: manual QA sign-off, release pipeline finalization
+**Remaining for MVP**: manual QA sign-off
 
 ---
 
@@ -26,7 +26,7 @@
 | ~~Complete OpenAPI coverage for all implemented endpoints~~ ✅ v1.1.0, 80+ paths | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
 | ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
-| Release pipeline fixes (token permissions, GoReleaser, changelog) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
+| ~~Release pipeline fixes (token permissions, GoReleaser, changelog)~~ ✅ ghcommon v1.10.3, GoReleaser prerelease, Makefile targets | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
 | ~~Raise Go test coverage from 73.8% to 80%~~ ✅ 81.3% (38 integration tests) | [Session 10 Plan](docs/archive/SESSION_10_INTEGRATION_TEST_PLAN.md) |
 | ~~Expand Playwright E2E to critical workflows~~ ✅ 134/134 passing | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 
@@ -86,7 +86,7 @@
 - [ ] PebbleDB v2 upgrade (format versions 14-19, columnar blocks etc)
 - [ ] Docker deployment
 - [ ] launchd/systemd service files
-- [ ] File watching / auto-scan for new audiobooks
+- [x] File watching / auto-scan for new audiobooks (fsnotify watcher with debounce)
 
 ## Data Quality
 
