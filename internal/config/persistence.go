@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -313,6 +313,26 @@ func applySetting(key, value, typ string) error {
 			AppConfig.EnableJsonLogging = b
 		}
 
+	// Auto-update
+	case "auto_update_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.AutoUpdateEnabled = b
+		}
+	case "auto_update_channel":
+		AppConfig.AutoUpdateChannel = value
+	case "auto_update_check_minutes":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.AutoUpdateCheckMinutes = i
+		}
+	case "auto_update_window_start":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.AutoUpdateWindowStart = i
+		}
+	case "auto_update_window_end":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.AutoUpdateWindowEnd = i
+		}
+
 	// Basic auth
 	case "basic_auth_enabled":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -397,6 +417,13 @@ func SaveConfigToDatabase(store database.Store) error {
 		"log_level":           {AppConfig.LogLevel, "string", false},
 		"log_format":          {AppConfig.LogFormat, "string", false},
 		"enable_json_logging": {strconv.FormatBool(AppConfig.EnableJsonLogging), "bool", false},
+
+		// Auto-update
+		"auto_update_enabled":       {strconv.FormatBool(AppConfig.AutoUpdateEnabled), "bool", false},
+		"auto_update_channel":       {AppConfig.AutoUpdateChannel, "string", false},
+		"auto_update_check_minutes": {strconv.Itoa(AppConfig.AutoUpdateCheckMinutes), "int", false},
+		"auto_update_window_start":  {strconv.Itoa(AppConfig.AutoUpdateWindowStart), "int", false},
+		"auto_update_window_end":    {strconv.Itoa(AppConfig.AutoUpdateWindowEnd), "int", false},
 
 		// Basic auth
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
