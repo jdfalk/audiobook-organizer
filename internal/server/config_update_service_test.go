@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e5f6g7h8-i9j0-k1l2-m3n4-o5p6q7r8s9t0
 
 package server
@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
@@ -63,7 +66,10 @@ func TestConfigUpdateService_ExtractIntField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ApplyUpdates_Success(t *testing.T) {
-	service := NewConfigUpdateService(nil)
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
+	service := NewConfigUpdateService(mockStore)
 
 	updates := map[string]any{
 		"root_dir": "/new/library",

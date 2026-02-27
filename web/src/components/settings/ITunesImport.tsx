@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useEffect, useRef, useState } from 'react';
@@ -65,6 +65,7 @@ import {
   writeBackITunesLibrary,
 } from '../../services/api';
 import { useOperationsStore } from '../../stores/useOperationsStore';
+import { useToast } from '../toast/ToastProvider';
 
 interface ITunesImportSettings {
   libraryPath: string;
@@ -89,6 +90,7 @@ const defaultSettings: ITunesImportSettings = {
  * Library.xml metadata into the audiobook organizer.
  */
 export function ITunesImport() {
+  const { toast } = useToast();
   const [settings, setSettings] = useState<ITunesImportSettings>(() => {
     try {
       const saved = localStorage.getItem('itunes_import_settings');
@@ -116,7 +118,6 @@ export function ITunesImport() {
   const [importStatus, setImportStatus] =
     useState<ITunesImportStatus | null>(null);
   const [showMissingFiles, setShowMissingFiles] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [writeBackOpen, setWriteBackOpen] = useState(false);
   const [writeBackIds, setWriteBackIds] = useState('');
   const [writeBackBooks, setWriteBackBooks] = useState<Book[]>([]);
@@ -134,6 +135,8 @@ export function ITunesImport() {
   const [syncingWithConflicts, setSyncingWithConflicts] = useState(false);
   const [libraryChanged, setLibraryChanged] = useState(false);
   const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
+  const [forceImportConfirmOpen, setForceImportConfirmOpen] = useState(false);
+  const [forceSyncToITunesConfirmOpen, setForceSyncToITunesConfirmOpen] = useState(false);
   const pollTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -196,7 +199,7 @@ export function ITunesImport() {
 
   const handleValidate = async () => {
     setValidating(true);
-    setError(null);
+
     setValidationResult(null);
 
     try {
@@ -216,7 +219,7 @@ export function ITunesImport() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Validation failed';
-      setError(message);
+      toast(message, 'error');
     } finally {
       setValidating(false);
     }
@@ -224,7 +227,7 @@ export function ITunesImport() {
 
   const handleImport = async () => {
     setImporting(true);
-    setError(null);
+
     setImportStatus(null);
 
     try {
@@ -242,7 +245,7 @@ export function ITunesImport() {
       await pollImportStatus(result.operation_id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Import failed';
-      setError(message);
+      toast(message, 'error');
       setImporting(false);
     }
   };
@@ -391,7 +394,7 @@ export function ITunesImport() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to get import status';
-        setError(message);
+        toast(message, 'error');
         setImporting(false);
       }
     };
@@ -414,13 +417,13 @@ export function ITunesImport() {
       }
 
       setShowConflictDialog(false);
-      setError(null);
+  
       // Refresh sync status
       if (importStatus?.operation_id) {
         await pollImportStatus(importStatus.operation_id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Conflict resolution failed');
+      toast(err instanceof Error ? err.message : 'Conflict resolution failed', 'error');
     } finally {
       setSyncingWithConflicts(false);
     }
@@ -434,12 +437,6 @@ export function ITunesImport() {
           Import your iTunes Library.xml with play counts, ratings, and
           bookmarks preserved.
         </Typography>
-
-        {error && (
-          <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
 
         {libraryChanged && (
           <Alert severity="warning" sx={{ mt: 2 }}>
@@ -698,7 +695,7 @@ export function ITunesImport() {
                       await cancelOperation(importStatus.operation_id);
                       setImporting(false);
                     } catch {
-                      setError('Failed to cancel import');
+                      toast('Failed to cancel import', 'error');
                     }
                   }}
                 >
@@ -803,10 +800,10 @@ export function ITunesImport() {
                   if (result.operation_id) {
                     useOperationsStore.getState().startPolling(result.operation_id, 'itunes_sync');
                   } else if (result.message) {
-                    setError(result.message);
+                    toast(result.message, 'warning');
                   }
                 } catch (err) {
-                  setError(err instanceof Error ? err.message : 'Sync failed');
+                  toast(err instanceof Error ? err.message : 'Sync failed', 'error');
                 }
               }}
               disabled={!settings.libraryPath || importing}
@@ -817,27 +814,7 @@ export function ITunesImport() {
             <Button
               variant="contained"
               startIcon={<CloudDownloadIcon />}
-              onClick={async () => {
-                if (window.confirm('Force import from iTunes will overwrite organizer changes. Continue?')) {
-                  setImporting(true);
-                  try {
-                    const request: ITunesImportRequest = {
-                      library_path: settings.libraryPath,
-                      import_mode: 'import',
-                      preserve_location: settings.preserveLocation,
-                      import_playlists: settings.importPlaylists,
-                      skip_duplicates: settings.skipDuplicates,
-                      path_mappings: settings.pathMappings.filter((m) => m.from && m.to),
-                    };
-                    const result = await importITunesLibrary(request);
-                    useOperationsStore.getState().startPolling(result.operation_id, 'itunes_import');
-                    await pollImportStatus(result.operation_id);
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Force import failed');
-                    setImporting(false);
-                  }
-                }
-              }}
+              onClick={() => setForceImportConfirmOpen(true)}
               disabled={!validationResult || importing}
             >
               Force Import from iTunes
@@ -846,13 +823,7 @@ export function ITunesImport() {
             <Button
               variant="contained"
               startIcon={<CloudUploadIcon />}
-              onClick={async () => {
-                if (window.confirm('Force sync to iTunes will overwrite iTunes changes. Continue?')) {
-                  setWriteBackOpen(true);
-                  // Set all books for write-back (force mode)
-                  setWriteBackIds('*');
-                }
-              }}
+              onClick={() => setForceSyncToITunesConfirmOpen(true)}
               disabled={importing || importStatus?.status === 'in_progress'}
             >
               Force Sync to iTunes
@@ -1050,6 +1021,66 @@ export function ITunesImport() {
               }}
             >
               Overwrite Anyway
+            </Button>
+          </DialogActions>
+        </Dialog>
+        <Dialog open={forceImportConfirmOpen} onClose={() => setForceImportConfirmOpen(false)}>
+          <DialogTitle>Force Import from iTunes</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Force import from iTunes will overwrite organizer changes. Continue?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setForceImportConfirmOpen(false)}>Cancel</Button>
+            <Button
+              color="warning"
+              variant="contained"
+              onClick={async () => {
+                setForceImportConfirmOpen(false);
+                setImporting(true);
+                try {
+                  const request: ITunesImportRequest = {
+                    library_path: settings.libraryPath,
+                    import_mode: 'import',
+                    preserve_location: settings.preserveLocation,
+                    import_playlists: settings.importPlaylists,
+                    skip_duplicates: settings.skipDuplicates,
+                    path_mappings: settings.pathMappings.filter((m) => m.from && m.to),
+                  };
+                  const result = await importITunesLibrary(request);
+                  useOperationsStore.getState().startPolling(result.operation_id, 'itunes_import');
+                  await pollImportStatus(result.operation_id);
+                } catch (err) {
+                  toast(err instanceof Error ? err.message : 'Force import failed', 'error');
+                  setImporting(false);
+                }
+              }}
+            >
+              Force Import
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={forceSyncToITunesConfirmOpen} onClose={() => setForceSyncToITunesConfirmOpen(false)}>
+          <DialogTitle>Force Sync to iTunes</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Force sync to iTunes will overwrite iTunes changes. Continue?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setForceSyncToITunesConfirmOpen(false)}>Cancel</Button>
+            <Button
+              color="warning"
+              variant="contained"
+              onClick={() => {
+                setForceSyncToITunesConfirmOpen(false);
+                setWriteBackOpen(true);
+                setWriteBackIds('*');
+              }}
+            >
+              Force Sync
             </Button>
           </DialogActions>
         </Dialog>

@@ -1,5 +1,5 @@
 // file: internal/server/service_layer_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 // last-edited: 2026-02-14
 
@@ -121,6 +121,8 @@ func TestConfigUpdateService_ApplyUpdates_ErrorCases(t *testing.T) {
 // TestConfigUpdateService_ApplyUpdates_ArrayFields tests array field updates
 func TestConfigUpdateService_ApplyUpdates_ArrayFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
 	originalPatterns := config.AppConfig.ExcludePatterns
@@ -741,6 +743,8 @@ func TestConfigUpdateService_UpdateConfig(t *testing.T) {
 // TestConfigUpdateService_ApplyUpdates_FieldTypes tests applying different field types
 func TestConfigUpdateService_ApplyUpdates_FieldTypes(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
 	originalRootDir := config.AppConfig.RootDir
@@ -1314,6 +1318,8 @@ func TestConfigUpdateService_UpdateConfig_IntConcurrentScans(t *testing.T) {
 // TestConfigUpdateService_ApplyUpdates_OpenAIKey tests OpenAI key saved via ApplyUpdates
 func TestConfigUpdateService_ApplyUpdates_OpenAIKey(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
 	originalKey := config.AppConfig.OpenAIAPIKey
