@@ -36,7 +36,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@01f85f91f3d5eec5fc2d04771bf1704685d98eb8 # v1.10.3
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@593b4f3b35e68a18f535a44a0cf96b8b55289924 # v2.9.0
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
@@ -44,4 +44,5 @@ jobs:
       go-enabled: true
       frontend-enabled: true
       docker-enabled: true
+      system-packages: 'libtag1-dev'
     secrets: inherit
