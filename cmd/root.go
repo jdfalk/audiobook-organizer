@@ -240,6 +240,12 @@ var serveCmd = &cobra.Command{
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 
+		// Attach database store to the operation queue (initialized early without store)
+		if operations.GlobalQueue != nil {
+			operations.GlobalQueue.SetStore(database.GlobalStore)
+			fmt.Println("Operation queue connected to database store")
+		}
+
 		// Initialize encryption for settings (generates key if needed)
 		dbDir := filepath.Dir(config.AppConfig.DatabasePath)
 		if err := initEncryption(dbDir); err != nil {

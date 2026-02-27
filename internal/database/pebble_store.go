@@ -2836,8 +2836,8 @@ func (p *PebbleStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 		statusSet[s] = true
 	}
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("op:"),
-		UpperBound: []byte("op:\xff"),
+		LowerBound: []byte("operation:"),
+		UpperBound: []byte("operation:~"),
 	})
 	if err != nil {
 		return 0, err

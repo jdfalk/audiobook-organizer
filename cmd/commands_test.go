@@ -119,7 +119,8 @@ func (s *stubStore) SaveOperationState(opID string, state []byte) error  { retur
 func (s *stubStore) GetOperationState(opID string) ([]byte, error)      { return nil, nil }
 func (s *stubStore) SaveOperationParams(opID string, params []byte) error { return nil }
 func (s *stubStore) GetOperationParams(opID string) ([]byte, error)     { return nil, nil }
-func (s *stubStore) DeleteOperationState(opID string) error             { return nil }
+func (s *stubStore) DeleteOperationState(opID string) error                    { return nil }
+func (s *stubStore) DeleteOperationsByStatus(statuses []string) (int, error)   { return 0, nil }
 func (s *stubStore) GetInterruptedOperations() ([]database.Operation, error) {
 	return nil, nil
 }

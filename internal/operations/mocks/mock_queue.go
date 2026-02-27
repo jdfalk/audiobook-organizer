@@ -7,6 +7,7 @@ package mocks
 import (
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -251,6 +252,42 @@ func (_c *MockQueue_Shutdown_Call) Return(err error) *MockQueue_Shutdown_Call {
 }
 
 func (_c *MockQueue_Shutdown_Call) RunAndReturn(run func(timeout time.Duration) error) *MockQueue_Shutdown_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetStore provides a mock function for the type MockQueue
+func (_mock *MockQueue) SetStore(store database.Store) {
+	_mock.Called(store)
+}
+
+// MockQueue_SetStore_Call is a *mock.Call
+type MockQueue_SetStore_Call struct {
+	*mock.Call
+}
+
+// SetStore is a helper method to define mock.On call
+func (_e *MockQueue_Expecter) SetStore(store interface{}) *MockQueue_SetStore_Call {
+	return &MockQueue_SetStore_Call{Call: _e.mock.On("SetStore", store)}
+}
+
+func (_c *MockQueue_SetStore_Call) Run(run func(store database.Store)) *MockQueue_SetStore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.Store
+		if args[0] != nil {
+			arg0 = args[0].(database.Store)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockQueue_SetStore_Call) Return() *MockQueue_SetStore_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockQueue_SetStore_Call) RunAndReturn(run func(database.Store)) *MockQueue_SetStore_Call {
 	_c.Call.Return(run)
 	return _c
 }

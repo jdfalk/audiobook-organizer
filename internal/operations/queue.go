@@ -51,6 +51,7 @@ type Queue interface {
 	Cancel(id string) error
 	ActiveOperations() []ActiveOperation
 	Shutdown(timeout time.Duration) error
+	SetStore(store database.Store)
 }
 
 // OperationQueue manages async operations with priority handling
