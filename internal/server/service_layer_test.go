@@ -1020,6 +1020,7 @@ func TestImportPathService_GetImportPath(t *testing.T) {
 // TestConfigUpdateService_UpdateConfig_AdditionalFields tests additional config fields
 func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
 	originalPlaylistDir := config.AppConfig.PlaylistDir
@@ -1055,6 +1056,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 
 	t.Run("update database_path", func(t *testing.T) {
 		mockStore2 := mocks.NewMockStore(t)
+		mockStore2.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore2.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		svc2 := NewConfigUpdateService(mockStore2)
 
@@ -1078,6 +1080,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 
 	t.Run("update setup_complete directly", func(t *testing.T) {
 		mockStore3 := mocks.NewMockStore(t)
+		mockStore3.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore3.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		svc3 := NewConfigUpdateService(mockStore3)
 
@@ -1101,6 +1104,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 
 	t.Run("empty root_dir sets setup_complete to false", func(t *testing.T) {
 		mockStore4 := mocks.NewMockStore(t)
+		mockStore4.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore4.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		svc4 := NewConfigUpdateService(mockStore4)
 
@@ -1134,6 +1138,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 
 	t.Run("non-empty root_dir sets setup_complete to true", func(t *testing.T) {
 		mockStore5 := mocks.NewMockStore(t)
+		mockStore5.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore5.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		svc5 := NewConfigUpdateService(mockStore5)
 
@@ -1169,6 +1174,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 // TestConfigUpdateService_UpdateConfig_AllFields tests all updatable fields
 func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
@@ -1285,6 +1291,7 @@ func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
 // TestConfigUpdateService_UpdateConfig_IntConcurrentScans tests int concurrent_scans
 func TestConfigUpdateService_UpdateConfig_IntConcurrentScans(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
+	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	svc := NewConfigUpdateService(mockStore)
 
