@@ -1,5 +1,5 @@
 // file: internal/config/persistence_test.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package config
@@ -520,7 +520,7 @@ func TestSaveConfigToDatabase(t *testing.T) {
 		}
 	})
 
-	t.Run("skips empty secrets", func(t *testing.T) {
+	t.Run("preserves existing secret when AppConfig value is empty", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
 		seen := map[string]struct{}{}
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
@@ -528,6 +528,102 @@ func TestSaveConfigToDatabase(t *testing.T) {
 				seen[key] = struct{}{}
 			}).
 			Return(nil)
+
+		// Simulate: DB has an encrypted key, but decryption failed so AppConfig is empty
+		store.EXPECT().GetSetting("openai_api_key").Return(&database.Setting{
+			Key:      "openai_api_key",
+			Value:    "encrypted-value-in-db",
+			Type:     "string",
+			IsSecret: true,
+		}, nil).Once()
+
+		AppConfig = Config{
+			OpenAIAPIKey: "", // empty because decryption failed on load
+		}
+
+		err := SaveConfigToDatabase(store)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// The secret should NOT have been overwritten — it was preserved
+		if _, ok := seen["openai_api_key"]; ok {
+			t.Fatalf("did not expect openai_api_key to be saved (should preserve existing DB value)")
+		}
+		if _, ok := seen["root_dir"]; !ok {
+			t.Fatalf("expected root_dir to be saved")
+		}
+	})
+
+	t.Run("saves new secret value when provided", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		seen := map[string]struct{}{}
+		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+				if key == "openai_api_key" {
+					if value != "sk-test-123" {
+						t.Errorf("expected openai_api_key value 'sk-test-123', got %q", value)
+					}
+					if !isSecret {
+						t.Error("expected openai_api_key to be marked as secret")
+					}
+				}
+			}).
+			Return(nil)
+
+		AppConfig = Config{
+			OpenAIAPIKey: "sk-test-123",
+		}
+
+		err := SaveConfigToDatabase(store)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if _, ok := seen["openai_api_key"]; !ok {
+			t.Fatal("expected openai_api_key to be saved when non-empty")
+		}
+	})
+
+	t.Run("allows deletion when DB has no existing value", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		seen := map[string]struct{}{}
+		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+			}).
+			Return(nil)
+
+		// DB has no existing value for the secret
+		store.EXPECT().GetSetting("openai_api_key").Return(nil, nil).Once()
+
+		AppConfig = Config{
+			OpenAIAPIKey: "", // empty and DB also empty — allow the write
+		}
+
+		err := SaveConfigToDatabase(store)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Should be saved (empty value written to DB since nothing to preserve)
+		if _, ok := seen["openai_api_key"]; !ok {
+			t.Fatal("expected openai_api_key to be saved when DB has no existing value")
+		}
+	})
+
+	t.Run("allows deletion when GetSetting returns error", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		seen := map[string]struct{}{}
+		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+			}).
+			Return(nil)
+
+		// GetSetting returns an error (e.g., table doesn't exist yet)
+		store.EXPECT().GetSetting("openai_api_key").Return(nil, fmt.Errorf("not found")).Once()
 
 		AppConfig = Config{
 			OpenAIAPIKey: "",
@@ -538,11 +634,41 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if _, ok := seen["openai_api_key"]; ok {
-			t.Fatalf("did not expect openai_api_key to be saved when empty")
+		// Should still be saved since we couldn't confirm an existing value
+		if _, ok := seen["openai_api_key"]; !ok {
+			t.Fatal("expected openai_api_key to be saved when GetSetting errors")
 		}
-		if _, ok := seen["root_dir"]; !ok {
-			t.Fatalf("expected root_dir to be saved")
+	})
+
+	t.Run("allows deletion when existing DB value is empty string", func(t *testing.T) {
+		store := mocks.NewMockStore(t)
+		seen := map[string]struct{}{}
+		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Run(func(key string, value string, typ string, isSecret bool) {
+				seen[key] = struct{}{}
+			}).
+			Return(nil)
+
+		// DB has a setting but with empty value
+		store.EXPECT().GetSetting("openai_api_key").Return(&database.Setting{
+			Key:      "openai_api_key",
+			Value:    "",
+			Type:     "string",
+			IsSecret: true,
+		}, nil).Once()
+
+		AppConfig = Config{
+			OpenAIAPIKey: "",
+		}
+
+		err := SaveConfigToDatabase(store)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Empty existing value means nothing to preserve — allow the write
+		if _, ok := seen["openai_api_key"]; !ok {
+			t.Fatal("expected openai_api_key to be saved when existing DB value is empty")
 		}
 	})
 }

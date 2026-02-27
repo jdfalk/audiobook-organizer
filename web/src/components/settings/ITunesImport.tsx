@@ -799,9 +799,11 @@ export function ITunesImport() {
               startIcon={<SyncIcon />}
               onClick={async () => {
                 try {
-                  const result = await startITunesSync(settings.libraryPath || undefined);
+                  const result = await startITunesSync(settings.libraryPath || undefined, true);
                   if (result.operation_id) {
                     useOperationsStore.getState().startPolling(result.operation_id, 'itunes_sync');
+                  } else if (result.message) {
+                    setError(result.message);
                   }
                 } catch (err) {
                   setError(err instanceof Error ? err.message : 'Sync failed');

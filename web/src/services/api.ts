@@ -1081,12 +1081,13 @@ export async function writeBackITunesLibrary(
 }
 
 export async function startITunesSync(
-  libraryPath?: string
+  libraryPath?: string,
+  force?: boolean
 ): Promise<{ operation_id: string; message: string }> {
   const response = await fetch(`${API_BASE}/itunes/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ library_path: libraryPath }),
+    body: JSON.stringify({ library_path: libraryPath, force: force ?? true }),
   });
   if (!response.ok) throw await buildApiError(response, 'Sync failed');
   return response.json();

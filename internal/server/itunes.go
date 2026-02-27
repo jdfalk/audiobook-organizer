@@ -1210,6 +1210,7 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 type ITunesSyncRequest struct {
 	LibraryPath  string               `json:"library_path,omitempty"`
 	PathMappings []itunes.PathMapping `json:"path_mappings,omitempty"`
+	Force        bool                 `json:"force,omitempty"`
 }
 
 // ITunesSyncResponse acknowledges a sync operation.
@@ -1250,12 +1251,14 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		return
 	}
 
-	// Check fingerprint — skip if unchanged
-	if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
-		if info, statErr := os.Stat(libraryPath); statErr == nil {
-			if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
-				c.JSON(http.StatusOK, gin.H{"message": "no changes detected", "operation_id": ""})
-				return
+	// Check fingerprint — skip if unchanged (unless forced)
+	if !req.Force {
+		if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
+			if info, statErr := os.Stat(libraryPath); statErr == nil {
+				if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
+					c.JSON(http.StatusOK, gin.H{"message": "no changes detected — use force:true to sync anyway", "operation_id": ""})
+					return
+				}
 			}
 		}
 	}

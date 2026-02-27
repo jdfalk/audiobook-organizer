@@ -388,9 +388,15 @@ func SaveConfigToDatabase(store database.Store) error {
 
 	saved := 0
 	for key, s := range settings {
-		// Skip empty secrets
+		// For secrets: if the current value is empty, check if there's already
+		// a value in the DB and preserve it. This prevents accidental deletion
+		// when encryption fails to decrypt on load.
 		if s.isSecret && s.value == "" {
-			continue
+			existing, err := store.GetSetting(key)
+			if err == nil && existing != nil && existing.Value != "" {
+				log.Printf("[DEBUG] Preserving existing secret %s in database (current AppConfig value is empty)", key)
+				continue
+			}
 		}
 
 		if err := store.SetSetting(key, s.value, s.typ, s.isSecret); err != nil {
