@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -16,6 +16,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 )
 
 type MetadataFetchService struct {
@@ -198,6 +199,14 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 					log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
 				} else {
 					log.Printf("[INFO] cover art saved to %s", coverPath)
+					// Embed cover art into audio file metadata if enabled
+					if config.AppConfig.EmbedCoverArt && updatedBook != nil && updatedBook.FilePath != "" {
+						if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
+							log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
+						} else {
+							log.Printf("[INFO] cover art embedded into %s", updatedBook.FilePath)
+						}
+					}
 				}
 			}
 
