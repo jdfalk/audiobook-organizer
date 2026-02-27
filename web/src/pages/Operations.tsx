@@ -166,6 +166,16 @@ export function Operations() {
     );
   };
 
+  const handleClearStuck = async () => {
+    try {
+      await api.clearStaleOperations();
+      loadHistory();
+      loadActiveOperations();
+    } catch (err) {
+      console.error('Failed to clear stuck operations:', err);
+    }
+  };
+
   const handleShowError = (operation: api.Operation) => {
     const details =
       operation.error_message ||
@@ -387,9 +397,14 @@ export function Operations() {
           mb={2}
         >
           <Typography variant="h6">Operation History</Typography>
-          <Button variant="outlined" size="small" onClick={handleClearCompleted}>
-            Clear Completed
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outlined" size="small" color="warning" onClick={handleClearStuck}>
+              Clear Stuck
+            </Button>
+            <Button variant="outlined" size="small" onClick={handleClearCompleted}>
+              Clear Completed
+            </Button>
+          </Box>
         </Stack>
         {pagedHistory.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>

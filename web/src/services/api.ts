@@ -750,6 +750,16 @@ export async function cancelOperation(id: string): Promise<void> {
   }
 }
 
+export async function clearStaleOperations(): Promise<{ cleared: number }> {
+  const response = await fetch(`${API_BASE}/operations/clear-stale`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to clear stale operations');
+  }
+  return response.json();
+}
+
 export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
   const response = await fetch(`${API_BASE}/operations/active`);
   if (!response.ok) {
