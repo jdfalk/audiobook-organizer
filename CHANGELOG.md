@@ -1,13 +1,52 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.6.0 -->
+<!-- version: 1.7.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-02-16 -->
+<!-- last-edited: 2026-02-26 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### February 26, 2026 — P1/P2 Sweep & Critical Bug Fixes (v1.7.0)
+
+##### Critical Bug Fixes
+
+- **OpenAI API key persistence**: Fixed silent deletion of encrypted secrets when decryption fails on load. `SaveConfigToDatabase` now checks for existing DB values before skipping empty secrets. Added 6 targeted persistence tests.
+- **iTunes sync**: Added `Force` flag to bypass fingerprint check; "Sync Now" button always triggers sync. Frontend shows status messages instead of silently swallowing empty responses.
+- **PebbleDB format version**: All 4 `pebble.Open()` calls now set `FormatMajorVersion: pebble.FormatNewest` (024). Previously stuck at 013 (FormatFlushableIngest minimum). Added upgrade tests.
+
+##### Config Interface Unification
+
+- Unified `ApplyUpdates()` and `UpdateConfig()` into a single data-driven `UpdateConfig()` method with field maps for string/bool/int types, secret handling, and `setup_complete` auto-derivation.
+
+##### P1 Completed
+
+- **Metadata fetch fallback**: 5-step cascade with subtitle stripping + author-only search + `bestTitleMatch` scoring
+- **Narrators**: Narrator entity, BookNarrator junction table, API endpoints (GET/PUT), 20 new tests
+- **Metadata provenance UI**: Field-states API, provenance indicators with lock icons in MetadataEditDialog
+- **Delete/purge UX**: Confirmation checkbox, block-hash explanation, deletion timestamp display
+- **CI/CD drift monitoring**: Version checks, output logging, auto-issue creation workflow
+
+##### P2 Completed
+
+- **Operation log persistence**: Migration 21, `operation_summary_logs` table, SQLite CRUD, queue wiring on completion/failure
+- **Book query caching**: Generic TTL cache (30s for GetBook, 10s for GetAllBooks) with invalidation on create/update/delete
+- **Global toast system**: Migrated ITunesImport from local error state to toast notifications; error/warning toasts persist until dismissed; replaced `window.confirm` with MUI Dialog confirmations
+- **Keyboard shortcuts**: `/` or `Ctrl+K` for search focus, `g+l` for library, `g+s` for settings, `?` for help dialog
+- **Debounced fsnotify watcher**: Recursive directory watching with 5s debounce, audio file extension filtering, auto-scan trigger. 8 tests.
+- **Developer guide**: `docs/developer-guide.md` covering architecture, data flow, testing patterns, common tasks
+- **NPM cache fix (CRITICAL-002)**: Added `cache: 'npm'` + `cache-dependency-path` to vulnerability-scan.yml
+- **ghcommon tagging (CRITICAL-004)**: All workflow refs pinned to v1.10.3, GoReleaser prerelease auto-detection, grouped changelog, Makefile release targets
+
+##### Other
+
+- OpenAPI spec expanded to v1.1.0 (80+ paths, 2576 lines)
+- ITL write-back wired into organize workflow with backup/validate/restore
+- Hardcover.app metadata source integration
+- PebbleDB version logging on startup
+- TODO.md fully updated through P2 completion
 
 #### February 16, 2026 — Production Readiness Completion Batch (v1.6.0)
 
