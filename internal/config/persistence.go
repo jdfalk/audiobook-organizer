@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -311,6 +311,16 @@ func applySetting(key, value, typ string) error {
 			AppConfig.EnableJsonLogging = b
 		}
 
+	// Basic auth
+	case "basic_auth_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.BasicAuthEnabled = b
+		}
+	case "basic_auth_username":
+		AppConfig.BasicAuthUsername = value
+	case "basic_auth_password":
+		AppConfig.BasicAuthPassword = value
+
 	default:
 		return fmt.Errorf("unknown setting key: %s", key)
 	}
@@ -384,6 +394,11 @@ func SaveConfigToDatabase(store database.Store) error {
 		"log_level":           {AppConfig.LogLevel, "string", false},
 		"log_format":          {AppConfig.LogFormat, "string", false},
 		"enable_json_logging": {strconv.FormatBool(AppConfig.EnableJsonLogging), "bool", false},
+
+		// Basic auth
+		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
+		"basic_auth_username": {AppConfig.BasicAuthUsername, "string", false},
+		"basic_auth_password": {AppConfig.BasicAuthPassword, "string", true},
 	}
 
 	saved := 0

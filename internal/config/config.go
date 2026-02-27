@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -98,6 +98,7 @@ type Config struct {
 	// Metadata
 	AutoFetchMetadata  bool             `json:"auto_fetch_metadata"`
 	WriteBackMetadata  bool             `json:"write_back_metadata"`
+	EmbedCoverArt      bool             `json:"embed_cover_art"`
 	MetadataSources    []MetadataSource `json:"metadata_sources"`
 	Language           string           `json:"language"`
 
@@ -123,6 +124,11 @@ type Config struct {
 	JSONBodyLimitMB        int  `json:"json_body_limit_mb"`
 	UploadBodyLimitMB      int  `json:"upload_body_limit_mb"`
 	EnableAuth             bool `json:"enable_auth"`
+
+	// Basic HTTP auth (lightweight single-user alternative)
+	BasicAuthEnabled  bool   `json:"basic_auth_enabled"`
+	BasicAuthUsername string `json:"basic_auth_username"`
+	BasicAuthPassword string `json:"basic_auth_password"`
 
 	// Memory management
 	MemoryLimitType    string `json:"memory_limit_type"`    // 'items', 'percent', 'absolute'
@@ -184,6 +190,7 @@ func InitConfig() {
 	// Set metadata defaults
 	viper.SetDefault("auto_fetch_metadata", true)
 	viper.SetDefault("write_back_metadata", false)
+	viper.SetDefault("embed_cover_art", false)
 	viper.SetDefault("language", "en")
 
 	// Open Library dump defaults
@@ -211,6 +218,9 @@ func InitConfig() {
 	viper.SetDefault("json_body_limit_mb", 1)
 	viper.SetDefault("upload_body_limit_mb", 10)
 	viper.SetDefault("enable_auth", true)
+	viper.SetDefault("basic_auth_enabled", false)
+	viper.SetDefault("basic_auth_username", "")
+	viper.SetDefault("basic_auth_password", "")
 
 	// Set memory management defaults
 	viper.SetDefault("memory_limit_type", "items")
@@ -290,6 +300,7 @@ func InitConfig() {
 		// Metadata
 		AutoFetchMetadata: viper.GetBool("auto_fetch_metadata"),
 		WriteBackMetadata: viper.GetBool("write_back_metadata"),
+		EmbedCoverArt:     viper.GetBool("embed_cover_art"),
 		Language:          viper.GetString("language"),
 
 		// Open Library dumps
@@ -311,6 +322,9 @@ func InitConfig() {
 		JSONBodyLimitMB:         viper.GetInt("json_body_limit_mb"),
 		UploadBodyLimitMB:       viper.GetInt("upload_body_limit_mb"),
 		EnableAuth:              viper.GetBool("enable_auth"),
+		BasicAuthEnabled:        viper.GetBool("basic_auth_enabled"),
+		BasicAuthUsername:        viper.GetString("basic_auth_username"),
+		BasicAuthPassword:       viper.GetString("basic_auth_password"),
 
 		// Memory management
 		MemoryLimitType:    viper.GetString("memory_limit_type"),
@@ -587,6 +601,7 @@ func ResetToDefaults() {
 
 		// Metadata
 		AutoFetchMetadata: true,
+		EmbedCoverArt:     false,
 		Language:          "en",
 
 		// Open Library dumps
@@ -605,6 +620,9 @@ func ResetToDefaults() {
 		JSONBodyLimitMB:         1,
 		UploadBodyLimitMB:       10,
 		EnableAuth:              true,
+		BasicAuthEnabled:        false,
+		BasicAuthUsername:        "",
+		BasicAuthPassword:       "",
 
 		// Memory management
 		MemoryLimitType:    "items",
