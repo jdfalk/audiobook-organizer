@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.69.0
+// version: 1.70.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1026,6 +1026,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/tags", s.getAudiobookTags)
 			protected.PUT("/audiobooks/:id", s.updateAudiobook)
 			protected.DELETE("/audiobooks/:id", s.deleteAudiobook)
+			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
@@ -1504,6 +1505,20 @@ func (s *Server) countAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"count": count})
+}
+
+func (s *Server) serveAudiobookCover(c *gin.Context) {
+	id := c.Param("id")
+	if config.AppConfig.RootDir == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "root_dir not configured"})
+		return
+	}
+	coverPath := metadata.CoverPathForBook(config.AppConfig.RootDir, id)
+	if coverPath == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no cover art found"})
+		return
+	}
+	c.File(coverPath)
 }
 
 func (s *Server) getAudiobook(c *gin.Context) {
