@@ -1,5 +1,5 @@
 <!-- file: docs/plans/release-packaging-and-devops.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: a2b3c4d5-e6f7-8a9b-0c1d-2e3f4a5b6c7d -->
 <!-- last-edited: 2026-01-31 -->
 
@@ -83,12 +83,13 @@ This step goes immediately after `actions/checkout` and before any
 handles this, but if you add a local Node step in any other workflow
 (e.g., `ci.yml`), add this symlink step there too.
 
-### ghcommon Pre-release & Tagging Strategy (CRITICAL-004)
+### ghcommon Pre-release & Tagging Strategy (CRITICAL-004) -- RESOLVED
 
-Need structured pre-release tagging before ghcommon 1.0.0. The
-`audiobook-organizer` workflows currently pin ghcommon at a specific commit
-SHA (not a tag). This strategy introduces proper semver tags so downstream
-repos can pin to stable versions.
+~~Need structured pre-release tagging before ghcommon 1.0.0.~~ ghcommon now
+has proper semver tags (latest: v1.10.3). All workflow pins in this repo have
+been updated to use the latest ghcommon tag SHA with version comments.
+GoReleaser config updated with prerelease support, grouped changelogs, and
+release templates.
 
 **Current pins in this repo (all reference the same SHA today):**
 

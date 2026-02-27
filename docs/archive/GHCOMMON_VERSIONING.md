@@ -1,5 +1,5 @@
 <!-- file: GHCOMMON_VERSIONING.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: 9f8e7d6c-5b4a-3210-fedc-ba9876543210 -->
 <!-- last-edited: 2026-01-19 -->
 
@@ -21,10 +21,11 @@ reusable workflows.
 ### Workflow Reference Pattern
 
 ```yaml
-uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
+uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@6ed97545daef53051405663133e18fde036645e1 # v1.10.3
 ```
 
-**Always use `@main`** to get latest workflow versions from ghcommon.
+**Always pin to a specific SHA with a version comment** for reproducibility.
+Use `@<sha> # v1.10.3` format. Never use `@main` in production workflows.
 
 ## reusable-ci.yml
 
@@ -57,7 +58,7 @@ inputs:
 jobs:
   frontend:
     name: Frontend Build and Test
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@6ed97545daef53051405663133e18fde036645e1 # v1.10.3
     with:
       node-version: '22'
     secrets: inherit
@@ -112,7 +113,7 @@ inputs:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@main
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@6ed97545daef53051405663133e18fde036645e1 # v1.10.3
     with:
       release-type: 'auto'
       prerelease: true
@@ -231,7 +232,7 @@ go 1.23
 
 ```yaml
 # ✅ Correct
-uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@main
+uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@6ed97545daef53051405663133e18fde036645e1 # v1.10.3
 ```
 
 ### Issue 3: Missing Permissions
@@ -252,7 +253,7 @@ permissions:
 
 When updating to latest ghcommon standards:
 
-- [ ] Update workflow references to `@main`
+- [x] Update workflow references to pinned SHA with version comment
 - [ ] Verify Go version is 1.23
 - [ ] Verify Node version is 22
 - [ ] Verify Python version is 3.13 (if used)

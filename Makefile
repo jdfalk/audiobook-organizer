@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.1.0
+# version: 2.2.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -12,7 +12,8 @@ LDFLAGS := -X main.version=$(VERSION)
 
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
-        test test-all test-e2e coverage coverage-check ci
+        test test-all test-e2e coverage coverage-check ci \
+        release-dry-run release-snapshot version
 
 # Default: full build (frontend + backend with embed)
 all: build
@@ -39,6 +40,11 @@ help:
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make coverage-check - Verify 80% coverage threshold"
 	@echo "  make ci             - Full CI: all tests + coverage check"
+	@echo ""
+	@echo "Release:"
+	@echo "  make version        - Show current version from git tags"
+	@echo "  make release-dry-run - Test GoReleaser config without publishing"
+	@echo "  make release-snapshot - Build snapshot release (no tag required)"
 	@echo ""
 	@echo "Setup:"
 	@echo "  make install        - Install dependencies (npm)"
@@ -162,8 +168,28 @@ clean:
 	@rm -f $(BINARY) coverage.out coverage.html
 	@echo "✅ Clean complete"
 
+# --- Release targets ---
+
+## version: Show current version from git tags
+version:
+	@echo "Version: $(VERSION)"
+
+## release-dry-run: Test GoReleaser config without publishing
+release-dry-run: web-build
+	@echo "Testing GoReleaser configuration..."
+	@goreleaser check
+	@goreleaser release --snapshot --clean --skip=publish
+	@echo "Dry run complete. Artifacts in dist/"
+
+## release-snapshot: Build snapshot release (no tag required)
+release-snapshot: web-build
+	@echo "Building snapshot release..."
+	@goreleaser release --snapshot --clean
+	@echo "Snapshot built. Artifacts in dist/"
+
 # Quick aliases
-.PHONY: t c b
+.PHONY: t c b v
 t: test
 c: coverage
 b: build
+v: version
