@@ -1,5 +1,5 @@
 # file: .github/workflows/binary-smoke.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: 8dad4b58-c626-48e4-9adc-2696ddd2e864
 
 name: Binary Smoke
@@ -29,6 +29,9 @@ jobs:
         with:
           go-version: '1.25'
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libtag1-dev
+
       - name: Build CLI Binary
         run: go build -o audiobook-organizer .
 
@@ -54,15 +57,28 @@ jobs:
             --tls-key '' \
             >"${tmpdir}/server.log" 2>&1 &
           pid=$!
-          trap 'kill "${pid}" >/dev/null 2>&1 || true' EXIT
+          trap 'kill "${pid}" >/dev/null 2>&1 || true; echo "--- server log ---"; cat "${tmpdir}/server.log" || true' EXIT
 
-          for _ in {1..20}; do
-            if curl -fsS "http://127.0.0.1:18080/api/v1/health" >/dev/null; then
+          healthy=false
+          for i in $(seq 1 20); do
+            if ! kill -0 "${pid}" 2>/dev/null; then
+              echo "Server process died (attempt ${i})"
+              cat "${tmpdir}/server.log"
+              exit 1
+            fi
+            if curl -fsS "http://127.0.0.1:18080/api/v1/health" >/dev/null 2>&1; then
+              healthy=true
               break
             fi
             sleep 1
           done
 
-          curl -fsS "http://127.0.0.1:18080/api/v1/health" >/dev/null
+          if [ "${healthy}" != "true" ]; then
+            echo "Server never became healthy after 20 seconds"
+            cat "${tmpdir}/server.log"
+            exit 1
+          fi
+
+          echo "Health check passed"
           kill "${pid}" >/dev/null 2>&1 || true
           wait "${pid}" >/dev/null 2>&1 || true
