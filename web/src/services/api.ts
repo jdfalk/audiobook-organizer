@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.23.0
+// version: 1.24.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -383,6 +383,13 @@ export interface Config {
   log_level: string;
   log_format: string;
   enable_json_logging: boolean;
+
+  // Auto-update
+  auto_update_enabled?: boolean;
+  auto_update_channel?: string;
+  auto_update_check_minutes?: number;
+  auto_update_window_start?: number;
+  auto_update_window_end?: number;
 
   // Legacy fields (Goodreads deprecated Dec 2020, removed)
   api_keys: Record<string, never>;
@@ -1103,6 +1110,47 @@ export async function writeBackITunesLibrary(
   return response.json();
 }
 
+export interface ITunesBookMapping {
+  book_id: string;
+  title: string;
+  author: string;
+  itunes_persistent_id: string;
+  local_path: string;
+  itunes_path: string;
+  path_differs: boolean;
+}
+
+export async function getITunesBooks(
+  search?: string,
+  limit?: number,
+  offset?: number
+): Promise<{ items: ITunesBookMapping[]; count: number }> {
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (limit != null) params.set('limit', String(limit));
+  if (offset != null) params.set('offset', String(offset));
+  const response = await fetch(`${API_BASE}/itunes/books?${params.toString()}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch iTunes books');
+  }
+  return response.json();
+}
+
+export async function previewITunesWriteBack(
+  libraryPath: string,
+  bookIds?: string[]
+): Promise<{ items: ITunesBookMapping[]; total: number }> {
+  const response = await fetch(`${API_BASE}/itunes/write-back/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ library_path: libraryPath, book_ids: bookIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to preview write-back');
+  }
+  return response.json();
+}
+
 export async function startITunesSync(
   libraryPath?: string,
   force?: boolean
@@ -1636,4 +1684,40 @@ export async function deleteOLDumpData(): Promise<{ message: string }> {
     throw await buildApiError(response, 'Failed to delete OL dump data');
   }
   return response.json();
+}
+
+// Update management
+
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  channel: string;
+  update_available: boolean;
+  release_url?: string;
+  release_notes?: string;
+  published_at?: string;
+  last_checked: string;
+}
+
+export async function getUpdateStatus(): Promise<UpdateInfo> {
+  const response = await fetch(`${API_BASE}/update/status`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get update status');
+  }
+  return response.json();
+}
+
+export async function checkForUpdate(): Promise<UpdateInfo> {
+  const response = await fetch(`${API_BASE}/update/check`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to check for updates');
+  }
+  return response.json();
+}
+
+export async function applyUpdate(): Promise<void> {
+  const response = await fetch(`${API_BASE}/update/apply`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to apply update');
+  }
 }
