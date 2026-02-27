@@ -1,4 +1,4 @@
-# file: deploy/audiobook-organizer.service
+# file: deploy/systemd/audiobook-organizer.service
 # version: 4.0.0
 # guid: f1e2d3c4-b5a6-9870-8765-4321fedcba98
 #
@@ -16,7 +16,7 @@
 #      sudo cp audiobook-organizer /usr/local/bin/
 #      sudo chmod 0755 /usr/local/bin/audiobook-organizer
 #   4. Install service file:
-#      sudo cp deploy/audiobook-organizer.service /etc/systemd/system/
+#      sudo cp deploy/systemd/audiobook-organizer.service /etc/systemd/system/
 #      sudo systemctl daemon-reload
 #   5. Enable and start:
 #      sudo systemctl enable --now audiobook-organizer
