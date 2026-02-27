@@ -1,11 +1,14 @@
 # file: .dockerignore
-# version: 1.0.0
+# version: 1.1.0
 # guid: 5baf4c69-7e4c-4d37-8e5b-673d26ce7fd2
 
 .git
 .gitignore
 .gitmodules
+.github
+.claude
 .vscode
+docs
 logs
 logs/**
 temp_out
@@ -17,7 +20,13 @@ web/node_modules
 web/dist
 testdata
 build-output
+dist
+coverage.out
+coverage.html
 *.m4a
 *.m4b
 *.mp3
 .DS_Store
+*.md
+Makefile.local
+docker-compose.yml

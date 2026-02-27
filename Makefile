@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.2.0
+# version: 2.3.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -13,6 +13,7 @@ LDFLAGS := -X main.version=$(VERSION)
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-e2e coverage coverage-check ci \
+        docker docker-run docker-stop \
         release-dry-run release-snapshot version
 
 # Default: full build (frontend + backend with embed)
@@ -40,6 +41,11 @@ help:
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make coverage-check - Verify 80% coverage threshold"
 	@echo "  make ci             - Full CI: all tests + coverage check"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker         - Build Docker image"
+	@echo "  make docker-run     - Run with docker compose"
+	@echo "  make docker-stop    - Stop docker compose"
 	@echo ""
 	@echo "Release:"
 	@echo "  make version        - Show current version from git tags"
@@ -167,6 +173,25 @@ clean:
 	@echo "🧹 Cleaning..."
 	@rm -f $(BINARY) coverage.out coverage.html
 	@echo "✅ Clean complete"
+
+# --- Docker targets ---
+
+## docker: Build Docker image
+docker:
+	@echo "🐳 Building Docker image..."
+	@docker build --build-arg APP_VERSION=$(VERSION) -t audiobook-organizer:latest .
+	@echo "✅ Docker image built: audiobook-organizer:latest"
+
+## docker-run: Run with docker compose
+docker-run:
+	@echo "🐳 Starting with docker compose..."
+	@APP_VERSION=$(VERSION) docker compose up -d
+	@echo "✅ Running at http://localhost:8080"
+
+## docker-stop: Stop docker compose
+docker-stop:
+	@docker compose down
+	@echo "✅ Stopped"
 
 # --- Release targets ---
 
