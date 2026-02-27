@@ -1307,14 +1307,17 @@ func discoverITunesLibraryPath() string {
 // or imports new audiobooks.
 func executeITunesSync(ctx context.Context, progress operations.ProgressReporter, libraryPath string, pathMappings []itunes.PathMapping) error {
 	store := database.GlobalStore
+	log.Printf("[INFO] executeITunesSync starting: path=%s", libraryPath)
 
 	_ = progress.UpdateProgress(0, 0, "Starting iTunes sync")
-	_ = progress.Log("info", "Starting iTunes sync", nil)
+	_ = progress.Log("info", fmt.Sprintf("Starting iTunes sync from %s", libraryPath), nil)
 
+	log.Printf("[INFO] Parsing iTunes library XML...")
 	library, err := itunes.ParseLibrary(libraryPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
+	log.Printf("[INFO] Parsed library: %d tracks", len(library.Tracks))
 
 	groups := groupTracksByAlbum(library)
 	totalGroups := len(groups)
