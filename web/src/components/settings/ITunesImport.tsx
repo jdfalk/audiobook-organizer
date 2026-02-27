@@ -1,8 +1,8 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   AlertTitle,
@@ -12,6 +12,7 @@ import {
   CardContent,
   CardHeader,
   Checkbox,
+  Chip,
   Divider,
   Dialog,
   DialogActions,
@@ -20,6 +21,7 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
+  InputAdornment,
   LinearProgress,
   List,
   ListItem,
@@ -28,11 +30,14 @@ import {
   Radio,
   RadioGroup,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Tooltip,
@@ -44,18 +49,20 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload.js';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
+import SearchIcon from '@mui/icons-material/Search.js';
 import SyncIcon from '@mui/icons-material/Sync.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
   cancelOperation,
   getActiveOperations,
-  getBook,
+  getITunesBooks,
   getITunesImportStatus,
   getITunesLibraryStatus,
   importITunesLibrary,
+  previewITunesWriteBack,
   startITunesSync,
-  type Book,
+  type ITunesBookMapping,
   type ITunesImportRequest,
   type ITunesImportStatus,
   type ITunesValidateResponse,
@@ -120,7 +127,6 @@ export function ITunesImport() {
   const [showMissingFiles, setShowMissingFiles] = useState(false);
   const [writeBackOpen, setWriteBackOpen] = useState(false);
   const [writeBackIds, setWriteBackIds] = useState('');
-  const [writeBackBooks, setWriteBackBooks] = useState<Book[]>([]);
   const [writeBackLoading, setWriteBackLoading] = useState(false);
   const [writeBackNotice, setWriteBackNotice] = useState<{
     severity: 'error' | 'warning' | 'success';
@@ -130,6 +136,19 @@ export function ITunesImport() {
     useState<ITunesWriteBackResponse | null>(null);
   const [writeBackBackup, setWriteBackBackup] = useState(true);
   const [writeBackLibraryPath, setWriteBackLibraryPath] = useState('');
+  const [writeBackMode, setWriteBackMode] = useState(0); // 0=manual, 1=sync all, 2=browse
+  const [previewItems, setPreviewItems] = useState<ITunesBookMapping[]>([]);
+  const [browseItems, setBrowseItems] = useState<ITunesBookMapping[]>([]);
+  const [browseTotal, setBrowseTotal] = useState(0);
+  const [browseSearch, setBrowseSearch] = useState('');
+  const [browsePage, setBrowsePage] = useState(0);
+  const [browseRowsPerPage, setBrowseRowsPerPage] = useState(25);
+  const [browseSelected, setBrowseSelected] = useState<Set<string>>(new Set());
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [syncAllCount, setSyncAllCount] = useState<number | null>(null);
+  const [confirmWriteBackOpen, setConfirmWriteBackOpen] = useState(false);
+  const [pendingWriteBackIds, setPendingWriteBackIds] = useState<string[]>([]);
+  const searchDebounceRef = useRef<number | null>(null);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [pendingConflicts] = useState<ConflictItem[]>([]);
   const [syncingWithConflicts, setSyncingWithConflicts] = useState(false);
@@ -260,101 +279,109 @@ export function ITunesImport() {
   const handleOpenWriteBack = () => {
     setWriteBackOpen(true);
     setWriteBackIds('');
-    setWriteBackBooks([]);
     setWriteBackNotice(null);
     setWriteBackResult(null);
     setWriteBackBackup(true);
     setWriteBackLibraryPath(settings.libraryPath);
+    setWriteBackMode(0);
+    setPreviewItems([]);
+    setBrowseItems([]);
+    setBrowseSelected(new Set());
+    setSyncAllCount(null);
   };
 
-  const handleLoadWriteBackPreview = async () => {
-    const ids = parseWriteBackIds(writeBackIds);
-    if (!writeBackLibraryPath.trim()) {
-      setWriteBackBooks([]);
-      setWriteBackNotice({
-        severity: 'error',
-        message: 'Library path is required for write-back.',
-      });
-      return;
+  const loadBrowseBooks = useCallback(async (search: string, page: number, rowsPerPage: number) => {
+    setBrowseLoading(true);
+    try {
+      const result = await getITunesBooks(search || undefined, rowsPerPage, page * rowsPerPage);
+      setBrowseItems(result.items || []);
+      setBrowseTotal(result.count);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to load books', 'error');
+    } finally {
+      setBrowseLoading(false);
     }
-    if (ids.length === 0) {
-      setWriteBackBooks([]);
-      setWriteBackNotice({
-        severity: 'error',
-        message: 'Enter one or more audiobook IDs to preview.',
-      });
-      return;
-    }
+  }, [toast]);
 
+  // Auto-load browse data when switching to browse tab
+  useEffect(() => {
+    if (writeBackOpen && writeBackMode === 2 && browseItems.length === 0) {
+      loadBrowseBooks('', 0, browseRowsPerPage);
+    }
+  }, [writeBackOpen, writeBackMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleBrowseSearchChange = (value: string) => {
+    setBrowseSearch(value);
+    setBrowsePage(0);
+    if (searchDebounceRef.current) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = window.setTimeout(() => {
+      loadBrowseBooks(value, 0, browseRowsPerPage);
+    }, 300);
+  };
+
+  const handlePreviewAll = async () => {
+    if (!writeBackLibraryPath.trim()) {
+      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
+      return;
+    }
     setWriteBackLoading(true);
     setWriteBackNotice(null);
-    setWriteBackResult(null);
-
     try {
-      const results = await Promise.allSettled(ids.map((id) => getBook(id)));
-      const books: Book[] = [];
-      const missing: string[] = [];
-
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          books.push(result.value);
-        } else {
-          missing.push(ids[index]);
-        }
-      });
-
-      const eligible = books.filter((book) => book.itunes_persistent_id);
-      setWriteBackBooks(eligible);
-
-      const excludedCount = books.length - eligible.length;
-      if (missing.length > 0 || excludedCount > 0) {
-        const parts = [];
-        if (missing.length > 0) {
-          parts.push(
-            `${missing.length} missing ID${missing.length === 1 ? '' : 's'}`
-          );
-        }
-        if (excludedCount > 0) {
-          parts.push(`${excludedCount} missing iTunes persistent ID`);
-        }
-        setWriteBackNotice({
-          severity: 'warning',
-          message: `Preview loaded with ${parts.join(' and ')}.`,
-        });
-      }
+      const result = await previewITunesWriteBack(writeBackLibraryPath);
+      const differing = (result.items || []).filter((item) => item.path_differs);
+      setPreviewItems(result.items || []);
+      setSyncAllCount(differing.length);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load preview.';
-      setWriteBackNotice({ severity: 'error', message });
+      toast(err instanceof Error ? err.message : 'Preview failed', 'error');
     } finally {
       setWriteBackLoading(false);
     }
   };
 
-  const handleWriteBack = async (forceOverwrite = false) => {
+  const handlePreviewManual = async () => {
     if (!writeBackLibraryPath.trim()) {
-      setWriteBackNotice({
-        severity: 'error',
-        message: 'Library path is required for write-back.',
-      });
+      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
       return;
     }
-    if (writeBackBooks.length === 0) {
-      setWriteBackNotice({
-        severity: 'error',
-        message: 'Load at least one audiobook with an iTunes persistent ID.',
-      });
+    const ids = parseWriteBackIds(writeBackIds);
+    if (ids.length === 0) {
+      setWriteBackNotice({ severity: 'error', message: 'Enter one or more IDs to preview.' });
       return;
     }
+    setWriteBackLoading(true);
+    setWriteBackNotice(null);
+    try {
+      const result = await previewITunesWriteBack(writeBackLibraryPath, ids);
+      setPreviewItems(result.items || []);
+      if (result.items.length === 0) {
+        setWriteBackNotice({ severity: 'warning', message: 'No books found with iTunes persistent IDs for those IDs.' });
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Preview failed', 'error');
+    } finally {
+      setWriteBackLoading(false);
+    }
+  };
 
+  const handleConfirmAndWriteBack = (bookIds: string[]) => {
+    setPendingWriteBackIds(bookIds);
+    setConfirmWriteBackOpen(true);
+  };
+
+  const executeWriteBack = async (bookIds: string[], forceOverwrite = false) => {
+    if (!writeBackLibraryPath.trim()) {
+      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
+      return;
+    }
     setWriteBackLoading(true);
     setWriteBackNotice(null);
     setWriteBackResult(null);
-
     try {
       const result = await writeBackITunesLibrary({
         library_path: writeBackLibraryPath,
-        audiobook_ids: writeBackBooks.map((book) => book.id),
+        audiobook_ids: bookIds,
         create_backup: writeBackBackup,
         force_overwrite: forceOverwrite,
       });
@@ -364,14 +391,10 @@ export function ITunesImport() {
         message: result.message || `Updated ${result.updated_count} entries.`,
       });
     } catch (err) {
-      if (
-        err instanceof Error &&
-        (err as unknown as Record<string, unknown>).type === 'library_modified'
-      ) {
+      if (err instanceof Error && (err as unknown as Record<string, unknown>).type === 'library_modified') {
         setOverwriteConfirmOpen(true);
       } else {
-        const message =
-          err instanceof Error ? err.message : 'Write-back failed.';
+        const message = err instanceof Error ? err.message : 'Write-back failed.';
         setWriteBackNotice({ severity: 'error', message });
       }
     } finally {
@@ -888,7 +911,7 @@ export function ITunesImport() {
         <Dialog
           open={writeBackOpen}
           onClose={() => setWriteBackOpen(false)}
-          maxWidth="md"
+          maxWidth="lg"
           fullWidth
         >
           <DialogTitle>Write Back to iTunes</DialogTitle>
@@ -920,77 +943,339 @@ export function ITunesImport() {
                 value={writeBackLibraryPath}
                 onChange={(event) => setWriteBackLibraryPath(event.target.value)}
                 fullWidth
+                size="small"
                 placeholder="/Users/username/Music/iTunes/Library.xml"
               />
-              <TextField
-                label="Audiobook IDs"
-                value={writeBackIds}
-                onChange={(event) => setWriteBackIds(event.target.value)}
-                placeholder="One ID per line or comma-separated"
-                helperText="Paste audiobook IDs to update in iTunes."
-                fullWidth
-                multiline
-                minRows={3}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={writeBackBackup}
+                    onChange={(event) => setWriteBackBackup(event.target.checked)}
+                  />
+                }
+                label="Create backup before writing"
               />
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Button
-                  variant="outlined"
-                  onClick={handleLoadWriteBackPreview}
-                  disabled={writeBackLoading}
-                >
-                  Load Preview
-                </Button>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={writeBackBackup}
-                      onChange={(event) =>
-                        setWriteBackBackup(event.target.checked)
-                      }
-                    />
-                  }
-                  label="Create backup before writing"
-                />
-              </Stack>
-              {writeBackBooks.length > 0 && (
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Title</TableCell>
-                        <TableCell>File Path</TableCell>
-                        <TableCell>iTunes ID</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {writeBackBooks.map((book) => (
-                        <TableRow key={book.id}>
-                          <TableCell>{book.title}</TableCell>
-                          <TableCell>{book.file_path}</TableCell>
-                          <TableCell>{book.itunes_persistent_id}</TableCell>
+
+              <Tabs value={writeBackMode} onChange={(_e, v) => setWriteBackMode(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tab label="Enter IDs" />
+                <Tab label="Sync All" />
+                <Tab label="Browse & Select" />
+              </Tabs>
+
+              {/* Mode 0: Enter IDs manually */}
+              {writeBackMode === 0 && (
+                <Stack spacing={2}>
+                  <TextField
+                    label="Book IDs or iTunes Persistent IDs"
+                    value={writeBackIds}
+                    onChange={(event) => setWriteBackIds(event.target.value)}
+                    placeholder="One ID per line or comma-separated"
+                    helperText="Paste audiobook IDs or iTunes persistent IDs."
+                    fullWidth
+                    multiline
+                    minRows={3}
+                  />
+                  <Stack direction="row" spacing={2}>
+                    <Button
+                      variant="outlined"
+                      onClick={handlePreviewManual}
+                      disabled={writeBackLoading || !writeBackIds.trim()}
+                    >
+                      Preview
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        const ids = previewItems.length > 0
+                          ? previewItems.map((item) => item.book_id)
+                          : parseWriteBackIds(writeBackIds);
+                        handleConfirmAndWriteBack(ids);
+                      }}
+                      disabled={writeBackLoading || !writeBackIds.trim()}
+                    >
+                      Write Back
+                    </Button>
+                  </Stack>
+                  {previewItems.length > 0 && (
+                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Title</TableCell>
+                            <TableCell>Author</TableCell>
+                            <TableCell>Local Path</TableCell>
+                            <TableCell>iTunes Path</TableCell>
+                            <TableCell>Status</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {previewItems.map((item) => (
+                            <TableRow key={item.book_id} sx={item.path_differs ? { bgcolor: 'warning.50' } : undefined}>
+                              <TableCell>{item.title}</TableCell>
+                              <TableCell>{item.author}</TableCell>
+                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Tooltip title={item.local_path}><span>{item.local_path}</span></Tooltip>
+                              </TableCell>
+                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Tooltip title={item.itunes_path || '(not in library)'}><span>{item.itunes_path || '(not in library)'}</span></Tooltip>
+                              </TableCell>
+                              <TableCell>
+                                {item.path_differs
+                                  ? <Chip label="Differs" color="warning" size="small" />
+                                  : <Chip label="Match" color="success" size="small" />}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Stack>
+              )}
+
+              {/* Mode 1: Sync All */}
+              {writeBackMode === 1 && (
+                <Stack spacing={2}>
+                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+                    {syncAllCount === null ? (
+                      <Typography variant="body1" color="text.secondary">
+                        Click "Preview All" to see how many books have different paths.
+                      </Typography>
+                    ) : (
+                      <Typography variant="h5">
+                        {syncAllCount} book{syncAllCount !== 1 ? 's' : ''} with path changes
+                      </Typography>
+                    )}
+                  </Paper>
+                  <Stack direction="row" spacing={2} justifyContent="center">
+                    <Button
+                      variant="outlined"
+                      onClick={handlePreviewAll}
+                      disabled={writeBackLoading || !writeBackLibraryPath.trim()}
+                    >
+                      Preview All
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        const ids = previewItems.filter((item) => item.path_differs).map((item) => item.book_id);
+                        if (ids.length === 0) {
+                          setWriteBackNotice({ severity: 'warning', message: 'No path changes to sync.' });
+                          return;
+                        }
+                        handleConfirmAndWriteBack(ids);
+                      }}
+                      disabled={writeBackLoading || syncAllCount === null || syncAllCount === 0}
+                    >
+                      Sync All ({syncAllCount ?? 0})
+                    </Button>
+                  </Stack>
+                  {previewItems.length > 0 && (
+                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Title</TableCell>
+                            <TableCell>Author</TableCell>
+                            <TableCell>Local Path</TableCell>
+                            <TableCell>iTunes Path</TableCell>
+                            <TableCell>Status</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {previewItems.map((item) => (
+                            <TableRow key={item.book_id} sx={item.path_differs ? { bgcolor: 'warning.50' } : undefined}>
+                              <TableCell>{item.title}</TableCell>
+                              <TableCell>{item.author}</TableCell>
+                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Tooltip title={item.local_path}><span>{item.local_path}</span></Tooltip>
+                              </TableCell>
+                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <Tooltip title={item.itunes_path || '(not in library)'}><span>{item.itunes_path || '(not in library)'}</span></Tooltip>
+                              </TableCell>
+                              <TableCell>
+                                {item.path_differs
+                                  ? <Chip label="Differs" color="warning" size="small" />
+                                  : <Chip label="Match" color="success" size="small" />}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Stack>
+              )}
+
+              {/* Mode 2: Browse & Select */}
+              {writeBackMode === 2 && (
+                <Stack spacing={2}>
+                  <TextField
+                    size="small"
+                    placeholder="Search by title, author, or path..."
+                    value={browseSearch}
+                    onChange={(e) => handleBrowseSearchChange(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    fullWidth
+                  />
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const allIds = new Set(browseItems.map((item) => item.book_id));
+                        setBrowseSelected((prev) => {
+                          const next = new Set(prev);
+                          allIds.forEach((id) => next.add(id));
+                          return next;
+                        });
+                      }}
+                    >
+                      Select All Visible
+                    </Button>
+                    <Button size="small" onClick={() => setBrowseSelected(new Set())}>
+                      Deselect All
+                    </Button>
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+                      {browseSelected.size} selected
+                    </Typography>
+                  </Stack>
+                  {browseLoading && <LinearProgress />}
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              indeterminate={browseSelected.size > 0 && browseSelected.size < browseItems.length}
+                              checked={browseItems.length > 0 && browseItems.every((item) => browseSelected.has(item.book_id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setBrowseSelected((prev) => {
+                                    const next = new Set(prev);
+                                    browseItems.forEach((item) => next.add(item.book_id));
+                                    return next;
+                                  });
+                                } else {
+                                  setBrowseSelected((prev) => {
+                                    const next = new Set(prev);
+                                    browseItems.forEach((item) => next.delete(item.book_id));
+                                    return next;
+                                  });
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>Title</TableCell>
+                          <TableCell>Author</TableCell>
+                          <TableCell>Local Path</TableCell>
+                          <TableCell>iTunes ID</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </TableHead>
+                      <TableBody>
+                        {browseItems.map((item) => (
+                          <TableRow
+                            key={item.book_id}
+                            hover
+                            onClick={() => {
+                              setBrowseSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(item.book_id)) {
+                                  next.delete(item.book_id);
+                                } else {
+                                  next.add(item.book_id);
+                                }
+                                return next;
+                              });
+                            }}
+                            sx={{ cursor: 'pointer' }}
+                          >
+                            <TableCell padding="checkbox">
+                              <Checkbox checked={browseSelected.has(item.book_id)} />
+                            </TableCell>
+                            <TableCell>{item.title}</TableCell>
+                            <TableCell>{item.author}</TableCell>
+                            <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <Tooltip title={item.local_path}><span>{item.local_path}</span></Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                                {item.itunes_persistent_id}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {browseItems.length === 0 && !browseLoading && (
+                          <TableRow>
+                            <TableCell colSpan={5} align="center">
+                              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                                {browseTotal === 0 ? 'No books with iTunes IDs found.' : 'Loading...'}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <TablePagination
+                    component="div"
+                    count={browseTotal}
+                    page={browsePage}
+                    onPageChange={(_e, newPage) => {
+                      setBrowsePage(newPage);
+                      loadBrowseBooks(browseSearch, newPage, browseRowsPerPage);
+                    }}
+                    rowsPerPage={browseRowsPerPage}
+                    onRowsPerPageChange={(e) => {
+                      const rpp = parseInt(e.target.value, 10);
+                      setBrowseRowsPerPage(rpp);
+                      setBrowsePage(0);
+                      loadBrowseBooks(browseSearch, 0, rpp);
+                    }}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={() => handleConfirmAndWriteBack(Array.from(browseSelected))}
+                    disabled={writeBackLoading || browseSelected.size === 0}
+                  >
+                    Write Back Selected ({browseSelected.size})
+                  </Button>
+                </Stack>
               )}
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={() => setWriteBackOpen(false)}
-              disabled={writeBackLoading}
-            >
-              Cancel
+            <Button onClick={() => setWriteBackOpen(false)} disabled={writeBackLoading}>
+              Close
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Confirmation dialog before write-back */}
+        <Dialog open={confirmWriteBackOpen} onClose={() => setConfirmWriteBackOpen(false)}>
+          <DialogTitle>Confirm Write-Back</DialogTitle>
+          <DialogContent>
+            <Typography>
+              This will update {pendingWriteBackIds.length} book path{pendingWriteBackIds.length !== 1 ? 's' : ''} in your iTunes Library.xml.
+              {writeBackBackup ? ' A backup will be created first.' : ' No backup will be created.'}
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setConfirmWriteBackOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
-              onClick={() => handleWriteBack()}
-              disabled={writeBackLoading || writeBackBooks.length === 0}
+              onClick={() => {
+                setConfirmWriteBackOpen(false);
+                executeWriteBack(pendingWriteBackIds);
+              }}
             >
-              {writeBackLoading
-                ? 'Writing...'
-                : `Update ${writeBackBooks.length} entries`}
+              Confirm ({pendingWriteBackIds.length})
             </Button>
           </DialogActions>
         </Dialog>
@@ -1017,7 +1302,7 @@ export function ITunesImport() {
               variant="contained"
               onClick={() => {
                 setOverwriteConfirmOpen(false);
-                handleWriteBack(true);
+                executeWriteBack(pendingWriteBackIds, true);
               }}
             >
               Overwrite Anyway
