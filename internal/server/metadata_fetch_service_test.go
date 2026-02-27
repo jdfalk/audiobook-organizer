@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
@@ -416,5 +416,76 @@ func TestStripChapterFromTitle(t *testing.T) {
 				t.Errorf("stripChapterFromTitle(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestStripSubtitle(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"Title: Subtitle", "Title"},
+		{"Title - Subtitle", "Title"},
+		{"Title — Subtitle", "Title"},
+		{"No Subtitle", "No Subtitle"},
+		{"", ""},
+		{"Colon:NoSpace", "Colon:NoSpace"},
+		{"A: B - C", "A"},                     // colon takes priority
+		{"Multi - Word Title - Sub", "Multi"},  // first dash wins
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got := stripSubtitle(tc.input)
+			if got != tc.want {
+				t.Errorf("stripSubtitle(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBestTitleMatch(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "Completely Different Book"},
+		{Title: "The Great Adventure Story"},
+		{Title: "Great Adventure"},
+	}
+
+	got := bestTitleMatch(results, "The Great Adventure")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(got))
+	}
+	// "The Great Adventure Story" has 3 word overlaps (the, great, adventure)
+	// but "the" is <=2 chars so skipped. "great" + "adventure" = 2 for both.
+	// "The Great Adventure Story" and "Great Adventure" both score 2,
+	// but the first one encountered wins (index 1).
+	if got[0].Title != "The Great Adventure Story" {
+		t.Errorf("expected 'The Great Adventure Story', got %q", got[0].Title)
+	}
+}
+
+func TestBestTitleMatch_NoOverlap(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "Completely Different Book"},
+		{Title: "Another Unrelated Title"},
+	}
+
+	got := bestTitleMatch(results, "Xyz Qwerty")
+	if got != nil {
+		t.Errorf("expected nil for no overlap, got %v", got)
+	}
+}
+
+func TestBestTitleMatch_EmptyResults(t *testing.T) {
+	got := bestTitleMatch(nil, "Some Title")
+	if got != nil {
+		t.Errorf("expected nil for empty results, got %v", got)
+	}
+
+	got = bestTitleMatch([]metadata.BookMetadata{}, "Some Title")
+	if got != nil {
+		t.Errorf("expected nil for empty slice, got %v", got)
 	}
 }
