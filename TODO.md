@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 2.4.0 -->
+<!-- version: 2.5.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-02-25 -->
+<!-- last-edited: 2026-02-26 -->
 
 # Project TODO
 
@@ -14,7 +14,7 @@
 
 **~98% complete** · Backend hardening ✅ · Frontend core flows ✅ · Go coverage 81.3% ✅ · Auth E2E + middleware tests ✅
 
-**Remaining for MVP**: secret-history scrub/key rotation, manual QA sign-off, OpenAPI completion, release pipeline finalization
+**Remaining for MVP**: manual QA sign-off, release pipeline finalization
 
 ---
 
@@ -22,8 +22,8 @@
 
 | Item | Plan |
 | --- | --- |
-| Rotate exposed key + scrub `.env` from git history | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
-| Complete OpenAPI coverage for all implemented endpoints | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
+| ~~Rotate exposed key + scrub `.env` from git history~~ ✅ Never committed, .gitignore correct | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
+| ~~Complete OpenAPI coverage for all implemented endpoints~~ ✅ v1.1.0, 80+ paths | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
 | ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 | Release pipeline fixes (token permissions, GoReleaser, changelog) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
@@ -36,11 +36,11 @@
 
 | Item | Plan |
 | --- | --- |
-| Fix metadata fetch fallback (fails for translated/subtitled titles) | [Metadata System](docs/plans/metadata-system.md) |
-| Design & implement multiple authors/narrators support | [Metadata System](docs/plans/metadata-system.md) |
-| Metadata quality — raw tags, provenance display, expanded edit dialog | [Metadata System](docs/plans/metadata-system.md) |
-| Delete/purge flow refinement in Book Detail | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| CI/CD health monitoring (detect action output drift) | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
+| ~~Fix metadata fetch fallback (fails for translated/subtitled titles)~~ ✅ 5-step cascade with subtitle stripping + author-only search | [Metadata System](docs/plans/metadata-system.md) |
+| ~~Design & implement multiple authors/narrators support~~ ✅ Narrator entity, BookNarrator junction, API endpoints, tests | [Metadata System](docs/plans/metadata-system.md) |
+| ~~Metadata quality — raw tags, provenance display, expanded edit dialog~~ ✅ Field-states API, provenance indicators, lock icons | [Metadata System](docs/plans/metadata-system.md) |
+| ~~Delete/purge flow refinement in Book Detail~~ ✅ Confirmation checkbox, block-hash explanation, deletion timestamp | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
+| ~~CI/CD health monitoring (detect action output drift)~~ ✅ Version checks, output logging, auto-issue creation | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
 | Capture manual verification notes from P0 QA | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
 
 ---
@@ -75,6 +75,8 @@
 
 - [x] Title cleaning: bracket stripping for "[Series] Title" format
 - [x] Title cleaning: part/volume/chapter pattern removal
+- [x] Title cleaning: subtitle stripping (colon, dash, em-dash separators)
+- [x] Author-only fallback search with best-title-match scoring
 - [ ] Fuzzy search / Levenshtein distance matching
 - [ ] Search result ranking/scoring
 
@@ -114,6 +116,8 @@ Previously fixed:
 | Item | Plan |
 | --- | --- |
 | Anthology detection & review queue | [Anthology Handling](docs/plans/2026-01-31-anthology-handling-design.md) |
+| ~~iTunes ITL binary read/write (Go port of titl)~~ ✅ Parser, location updater, playlists, track insertion | [iTunes Integration](docs/plans/itunes-integration.md) |
+| ~~iTunes ITL write-back in organize workflow~~ ✅ Auto-updates .itl after file moves, with backup/validate/restore | [iTunes Integration](docs/plans/itunes-integration.md) |
 | iTunes bidirectional sync (playcount management + sync) | [iTunes Integration](docs/plans/itunes-integration.md) |
 | Release group & provenance tracking | [Metadata System](docs/plans/metadata-system.md) |
 | Download client integration (Deluge, SABnzbd, qBittorrent) | [Download Clients](docs/plans/download-client-integration.md) |
