@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -154,6 +154,13 @@ type Config struct {
 	ITLWriteBackEnabled bool  `json:"itl_write_back_enabled"`
 	ITunesLibraryITLPath string `json:"itunes_library_itl_path"`
 
+	// Auto-update
+	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
+	AutoUpdateChannel      string `json:"auto_update_channel"`       // "stable" or "develop"
+	AutoUpdateCheckMinutes int    `json:"auto_update_check_minutes"` // e.g. 60
+	AutoUpdateWindowStart  int    `json:"auto_update_window_start"`  // hour 0-23, e.g. 1
+	AutoUpdateWindowEnd    int    `json:"auto_update_window_end"`    // hour 0-23, e.g. 4
+
 	// Download client integration
 	DownloadClient DownloadClientConfig `json:"download_client"`
 
@@ -245,6 +252,13 @@ func InitConfig() {
 	viper.SetDefault("itunes_sync_interval", 30)
 	viper.SetDefault("itl_write_back_enabled", false)
 	viper.SetDefault("itunes_library_itl_path", "")
+
+	// Auto-update defaults
+	viper.SetDefault("auto_update_enabled", false)
+	viper.SetDefault("auto_update_channel", "stable")
+	viper.SetDefault("auto_update_check_minutes", 60)
+	viper.SetDefault("auto_update_window_start", 1)
+	viper.SetDefault("auto_update_window_end", 4)
 
 	// Download client defaults
 	viper.SetDefault("download_client.torrent.type", "")
@@ -346,6 +360,13 @@ func InitConfig() {
 		LogLevel:          viper.GetString("log_level"),
 		LogFormat:         viper.GetString("log_format"),
 		EnableJsonLogging: viper.GetBool("enable_json_logging"),
+
+		// Auto-update
+		AutoUpdateEnabled:      viper.GetBool("auto_update_enabled"),
+		AutoUpdateChannel:      viper.GetString("auto_update_channel"),
+		AutoUpdateCheckMinutes: viper.GetInt("auto_update_check_minutes"),
+		AutoUpdateWindowStart:  viper.GetInt("auto_update_window_start"),
+		AutoUpdateWindowEnd:    viper.GetInt("auto_update_window_end"),
 
 		// iTunes sync
 		ITunesSyncEnabled:    viper.GetBool("itunes_sync_enabled"),
@@ -644,6 +665,13 @@ func ResetToDefaults() {
 		LogLevel:          "info",
 		LogFormat:         "text",
 		EnableJsonLogging: false,
+
+		// Auto-update
+		AutoUpdateEnabled:      false,
+		AutoUpdateChannel:      "stable",
+		AutoUpdateCheckMinutes: 60,
+		AutoUpdateWindowStart:  1,
+		AutoUpdateWindowEnd:    4,
 
 		// iTunes sync
 		ITunesSyncEnabled:    true,

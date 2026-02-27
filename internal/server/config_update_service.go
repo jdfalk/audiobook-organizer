@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -129,6 +129,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
 		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
 		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,
+		"auto_update_channel":   &config.AppConfig.AutoUpdateChannel,
 	}
 	for key, ptr := range stringFields {
 		if val, ok := cus.ExtractStringField(payload, key); ok {
@@ -170,9 +171,10 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"enable_ai_parsing":       &config.AppConfig.EnableAIParsing,
 		"enable_auth":             &config.AppConfig.EnableAuth,
 		"basic_auth_enabled":      &config.AppConfig.BasicAuthEnabled,
-		"auto_fetch_metadata":     &config.AppConfig.AutoFetchMetadata,
-		"write_back_metadata":     &config.AppConfig.WriteBackMetadata,
+		"auto_fetch_metadata":      &config.AppConfig.AutoFetchMetadata,
+		"write_back_metadata":      &config.AppConfig.WriteBackMetadata,
 		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,
+		"auto_update_enabled":      &config.AppConfig.AutoUpdateEnabled,
 	}
 	for key, ptr := range boolFields {
 		if val, ok := cus.ExtractBoolField(payload, key); ok {
@@ -195,6 +197,9 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"cache_size":                 &config.AppConfig.CacheSize,
 		"memory_limit_percent":       &config.AppConfig.MemoryLimitPercent,
 		"memory_limit_mb":            &config.AppConfig.MemoryLimitMB,
+		"auto_update_check_minutes":  &config.AppConfig.AutoUpdateCheckMinutes,
+		"auto_update_window_start":   &config.AppConfig.AutoUpdateWindowStart,
+		"auto_update_window_end":     &config.AppConfig.AutoUpdateWindowEnd,
 	}
 	for key, ptr := range intFields {
 		if val, ok := cus.ExtractIntField(payload, key); ok {

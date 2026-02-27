@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.29.0
+// version: 1.30.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -109,6 +109,225 @@ function tabFromHash(hash: string): number {
   return idx >= 0 ? idx : 0;
 }
 
+interface UpdatesSectionProps {
+  settings: {
+    autoUpdateEnabled: boolean;
+    autoUpdateChannel: string;
+    autoUpdateCheckMinutes: number;
+    autoUpdateWindowStart: number;
+    autoUpdateWindowEnd: number;
+  };
+  setSettings: React.Dispatch<React.SetStateAction<any>>;
+}
+
+function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
+  const [updateInfo, setUpdateInfo] = useState<api.UpdateInfo | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    api.getUpdateStatus().then(setUpdateInfo).catch(() => {});
+  }, []);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      const info = await api.checkForUpdate();
+      setUpdateInfo(info);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Check failed');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleApply = async () => {
+    setConfirmOpen(false);
+    setApplying(true);
+    setError(null);
+    try {
+      await api.applyUpdate();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <Paper sx={{ mt: 4, p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Updates
+      </Typography>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Current version: <strong>{updateInfo?.current_version || 'loading...'}</strong>
+          </Typography>
+          {updateInfo?.update_available && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Update available: {updateInfo.latest_version}
+              {updateInfo.release_url && (
+                <> &mdash; <a href={updateInfo.release_url} target="_blank" rel="noreferrer">Release notes</a></>
+              )}
+            </Alert>
+          )}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={settings.autoUpdateEnabled}
+                onChange={(e) =>
+                  setSettings((prev: any) => ({
+                    ...prev,
+                    autoUpdateEnabled: e.target.checked,
+                  }))
+                }
+              />
+            }
+            label="Enable automatic updates"
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <TextField
+            select
+            fullWidth
+            label="Update channel"
+            value={settings.autoUpdateChannel}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                autoUpdateChannel: e.target.value,
+              }))
+            }
+            size="small"
+          >
+            <MenuItem value="stable">Stable</MenuItem>
+            <MenuItem value="develop">Develop</MenuItem>
+          </TextField>
+        </Grid>
+
+        <Grid item xs={12} sm={4}>
+          <TextField
+            fullWidth
+            type="number"
+            label="Check interval (minutes)"
+            value={settings.autoUpdateCheckMinutes}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                autoUpdateCheckMinutes: parseInt(e.target.value) || 60,
+              }))
+            }
+            size="small"
+            inputProps={{ min: 1 }}
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={4}>
+          <TextField
+            select
+            fullWidth
+            label="Update window start"
+            value={settings.autoUpdateWindowStart}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                autoUpdateWindowStart: parseInt(e.target.value),
+              }))
+            }
+            size="small"
+          >
+            {hourOptions.map((h) => (
+              <MenuItem key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+
+        <Grid item xs={12} sm={4}>
+          <TextField
+            select
+            fullWidth
+            label="Update window end"
+            value={settings.autoUpdateWindowEnd}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                autoUpdateWindowEnd: parseInt(e.target.value),
+              }))
+            }
+            size="small"
+          >
+            {hourOptions.map((h) => (
+              <MenuItem key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Button
+              variant="outlined"
+              onClick={handleCheck}
+              disabled={checking}
+            >
+              {checking ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+              Check Now
+            </Button>
+            {updateInfo?.update_available && (
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={() => setConfirmOpen(true)}
+                disabled={applying}
+              >
+                {applying ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+                Update Now
+              </Button>
+            )}
+            {updateInfo?.last_checked && (
+              <Typography variant="caption" color="text.secondary">
+                Last checked: {new Date(updateInfo.last_checked).toLocaleString()}
+              </Typography>
+            )}
+          </Stack>
+        </Grid>
+      </Grid>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogTitle>Apply Update</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will download and apply the update to version{' '}
+            <strong>{updateInfo?.latest_version}</strong>, then restart the
+            server. The page will be temporarily unavailable.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleApply} color="warning" variant="contained">
+            Update and Restart
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Paper>
+  );
+}
+
 export function Settings() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -211,6 +430,11 @@ export function Settings() {
     enableJsonLogging: boolean;
     purgeSoftDeletedAfterDays: number;
     purgeSoftDeletedDeleteFiles: boolean;
+    autoUpdateEnabled: boolean;
+    autoUpdateChannel: string;
+    autoUpdateCheckMinutes: number;
+    autoUpdateWindowStart: number;
+    autoUpdateWindowEnd: number;
   }
 
   const initialSettings: SettingsState = {
@@ -282,6 +506,13 @@ export function Settings() {
     logLevel: 'info',
     logFormat: 'text', // 'text' or 'json'
     enableJsonLogging: false,
+
+    // Auto-update
+    autoUpdateEnabled: false,
+    autoUpdateChannel: 'stable',
+    autoUpdateCheckMinutes: 60,
+    autoUpdateWindowStart: 1,
+    autoUpdateWindowEnd: 4,
   };
 
   const [settings, setSettings] = useState<SettingsState>(initialSettings);
@@ -433,6 +664,13 @@ export function Settings() {
         logLevel: config.log_level || 'info',
         logFormat: config.log_format || 'text',
         enableJsonLogging: config.enable_json_logging ?? false,
+
+        // Auto-update
+        autoUpdateEnabled: config.auto_update_enabled ?? false,
+        autoUpdateChannel: config.auto_update_channel || 'stable',
+        autoUpdateCheckMinutes: config.auto_update_check_minutes || 60,
+        autoUpdateWindowStart: config.auto_update_window_start ?? 1,
+        autoUpdateWindowEnd: config.auto_update_window_end ?? 4,
       };
       setSettings(nextSettings);
       setSavedSnapshot(JSON.stringify(nextSettings));
@@ -985,6 +1223,13 @@ export function Settings() {
         log_level: settings.logLevel,
         log_format: settings.logFormat,
         enable_json_logging: settings.enableJsonLogging,
+
+        // Auto-update
+        auto_update_enabled: settings.autoUpdateEnabled,
+        auto_update_channel: settings.autoUpdateChannel,
+        auto_update_check_minutes: settings.autoUpdateCheckMinutes,
+        auto_update_window_start: settings.autoUpdateWindowStart,
+        auto_update_window_end: settings.autoUpdateWindowEnd,
       };
 
       console.log(
@@ -2549,6 +2794,8 @@ export function Settings() {
 
         <TabPanel value={tabValue} index={5}>
           <SystemInfoTab />
+
+          <UpdatesSection settings={settings} setSettings={setSettings} />
 
           <Paper
             sx={{

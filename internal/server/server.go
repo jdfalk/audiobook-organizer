@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.71.0
+// version: 1.72.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -38,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/updater"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -457,6 +458,8 @@ type Server struct {
 	dashboardCache         *cache.Cache[gin.H]
 	olService              *OpenLibraryService
 	libraryWatcher         *itunes.LibraryWatcher
+	updater                *updater.Updater
+	updateScheduler        *updater.Scheduler
 }
 
 // ServerConfig holds server configuration
@@ -503,7 +506,20 @@ func NewServer() *Server {
 		dashboardService:       NewDashboardService(database.GlobalStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		olService:              NewOpenLibraryService(),
+		updater:                updater.NewUpdater(appVersion),
 	}
+
+	// Initialize update scheduler
+	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
+		return updater.SchedulerConfig{
+			Enabled:     config.AppConfig.AutoUpdateEnabled,
+			Channel:     config.AppConfig.AutoUpdateChannel,
+			CheckMins:   config.AppConfig.AutoUpdateCheckMinutes,
+			WindowStart: config.AppConfig.AutoUpdateWindowStart,
+			WindowEnd:   config.AppConfig.AutoUpdateWindowEnd,
+		}
+	})
+	server.updateScheduler.Start()
 
 	// Wire OL dump store into metadata fetch service for local-first lookups
 	if server.olService != nil && server.olService.Store() != nil {
@@ -1079,6 +1095,8 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/test-mapping", s.handleITunesTestMapping)
 				itunesGroup.POST("/import", s.handleITunesImport)
 				itunesGroup.POST("/write-back", s.handleITunesWriteBack)
+				itunesGroup.POST("/write-back/preview", s.handleITunesWriteBackPreview)
+				itunesGroup.GET("/books", s.handleListITunesBooks)
 				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
 				itunesGroup.GET("/library-status", s.handleITunesLibraryStatus)
 				itunesGroup.POST("/sync", s.handleITunesSync)
@@ -1143,6 +1161,11 @@ func (s *Server) setupRoutes() {
 			// Work queue routes (alternative singular form for compatibility)
 			protected.GET("/work", s.listWork)
 			protected.GET("/work/stats", s.getWorkStats)
+
+			// Update routes
+			protected.GET("/update/status", s.getUpdateStatus)
+			protected.POST("/update/check", s.checkForUpdate)
+			protected.POST("/update/apply", s.applyUpdate)
 
 			// Blocked hashes management routes
 			protected.GET("/blocked-hashes", s.listBlockedHashes)
