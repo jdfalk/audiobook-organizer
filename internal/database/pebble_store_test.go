@@ -627,6 +627,59 @@ func TestPebbleImportPaths(t *testing.T) {
 	}
 }
 
+func TestPebbleFormatVersion(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	ps := store.(*PebbleStore)
+	version := ps.db.FormatMajorVersion()
+	if version != pebble.FormatNewest {
+		t.Errorf("Expected FormatNewest (%s), got %s", pebble.FormatNewest, version)
+	}
+}
+
+func TestPebbleFormatVersion_UpgradesExisting(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pebble-upgrade")
+
+	// Create a DB at minimum supported format
+	db, err := pebble.Open(dbPath, &pebble.Options{
+		FormatMajorVersion: pebble.FormatFlushableIngest,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create old-format DB: %v", err)
+	}
+	oldVersion := db.FormatMajorVersion()
+	if err := db.Set([]byte("test:key"), []byte("value"), pebble.Sync); err != nil {
+		t.Fatalf("Failed to write test key: %v", err)
+	}
+	db.Close()
+
+	// Reopen via NewPebbleStore — should upgrade to FormatNewest
+	store, err := NewPebbleStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to reopen with NewPebbleStore: %v", err)
+	}
+	defer store.Close()
+
+	newVersion := store.db.FormatMajorVersion()
+	if newVersion == oldVersion {
+		t.Errorf("Format version was not upgraded: still %s", newVersion)
+	}
+	if newVersion != pebble.FormatNewest {
+		t.Errorf("Expected FormatNewest (%s), got %s", pebble.FormatNewest, newVersion)
+	}
+
+	// Verify data survived the upgrade
+	val, closer, err := store.db.Get([]byte("test:key"))
+	if err != nil {
+		t.Fatalf("Data lost after format upgrade: %v", err)
+	}
+	defer closer.Close()
+	if string(val) != "value" {
+		t.Errorf("Expected 'value', got %q", string(val))
+	}
+}
+
 func TestPebbleMigrateImportPathKeys(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "pebble-migrate")
 	db, err := pebble.Open(dbPath, &pebble.Options{
