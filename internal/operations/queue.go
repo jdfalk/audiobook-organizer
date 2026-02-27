@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -323,6 +323,37 @@ func (q *OperationQueue) worker(id int) {
 
 			// Observe duration
 			metrics.ObserveOperationDuration(op.Type, time.Since(start))
+
+			// Persist operation summary log
+			if q.store != nil {
+				now := time.Now()
+				summary := &database.OperationSummaryLog{
+					ID:        op.ID,
+					Type:      op.Type,
+					CreatedAt: start,
+					UpdatedAt: now,
+				}
+				if err != nil {
+					errMsg := err.Error()
+					summary.Status = "failed"
+					summary.Error = &errMsg
+					summary.CompletedAt = &now
+				} else if reporter.canceled {
+					summary.Status = "canceled"
+					summary.CompletedAt = &now
+				} else {
+					summary.Status = "completed"
+					summary.CompletedAt = &now
+					if reporter.total > 0 {
+						summary.Progress = float64(reporter.current) / float64(reporter.total) * 100
+					} else {
+						summary.Progress = 100
+					}
+				}
+				if saveErr := q.store.SaveOperationSummaryLog(summary); saveErr != nil {
+					log.Printf("Warning: failed to persist operation summary for %s: %v", op.ID, saveErr)
+				}
+			}
 
 			// Clean up
 			q.mu.Lock()

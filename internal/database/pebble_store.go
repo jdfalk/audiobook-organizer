@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1865,6 +1865,20 @@ func (p *PebbleStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 	}
 
 	return logs, nil
+}
+
+// Operation Summary Logs (persistent across restarts)
+
+func (p *PebbleStore) SaveOperationSummaryLog(op *OperationSummaryLog) error {
+	return fmt.Errorf("SaveOperationSummaryLog: not implemented for PebbleDB")
+}
+
+func (p *PebbleStore) GetOperationSummaryLog(id string) (*OperationSummaryLog, error) {
+	return nil, fmt.Errorf("GetOperationSummaryLog: not implemented for PebbleDB")
+}
+
+func (p *PebbleStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error) {
+	return nil, fmt.Errorf("ListOperationSummaryLogs: not implemented for PebbleDB")
 }
 
 // Metadata provenance operations

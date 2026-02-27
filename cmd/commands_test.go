@@ -224,6 +224,15 @@ func (s *stubStore) GetMetadataChangeHistory(bookID string, field string, limit 
 func (s *stubStore) GetBookChangeHistory(bookID string, limit int) ([]database.MetadataChangeRecord, error) {
 	return nil, nil
 }
+func (s *stubStore) SaveOperationSummaryLog(op *database.OperationSummaryLog) error {
+	return nil
+}
+func (s *stubStore) GetOperationSummaryLog(id string) (*database.OperationSummaryLog, error) {
+	return nil, nil
+}
+func (s *stubStore) ListOperationSummaryLogs(limit, offset int) ([]database.OperationSummaryLog, error) {
+	return nil, nil
+}
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()

@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -13,18 +13,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // AudiobookService handles all audiobook business logic
 type AudiobookService struct {
-	store database.Store
+	store     database.Store
+	bookCache *cache.Cache[*database.Book]
+	listCache *cache.Cache[[]database.Book]
 }
 
 // NewAudiobookService creates a new AudiobookService instance
 func NewAudiobookService(store database.Store) *AudiobookService {
-	return &AudiobookService{store: store}
+	return &AudiobookService{
+		store:     store,
+		bookCache: cache.New[*database.Book](30 * time.Second),
+		listCache: cache.New[[]database.Book](10 * time.Second),
+	}
+}
+
+// InvalidateBookCaches clears all book-related caches. Called after any
+// mutation (create, update, delete) to keep reads consistent.
+func (svc *AudiobookService) InvalidateBookCaches() {
+	svc.listCache.InvalidateAll()
+	svc.bookCache.InvalidateAll()
 }
 
 // AudiobooksListResponse represents the response for listing audiobooks
@@ -113,7 +127,14 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Fall back to generic list only when no filter was applied
 	if search == "" && authorID == nil && seriesID == nil {
+		cacheKey := fmt.Sprintf("all:%d:%d", limit, offset)
+		if cached, ok := svc.listCache.Get(cacheKey); ok {
+			return cached, nil
+		}
 		books, err = svc.store.GetAllBooks(limit, offset)
+		if err == nil && books != nil {
+			svc.listCache.Set(cacheKey, books)
+		}
 	}
 
 	if err != nil {
@@ -151,6 +172,10 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 		return nil, fmt.Errorf("database not initialized")
 	}
 
+	if cached, ok := svc.bookCache.Get(id); ok {
+		return cached, nil
+	}
+
 	book, err := svc.store.GetBookByID(id)
 	if err != nil {
 		return nil, err
@@ -180,9 +205,10 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 
 	// Build metadata provenance
 	book.MetadataProvenance = buildMetadataProvenance(book, state, meta, authorName, seriesName)
-	now := time.Now().UTC()
-	book.MetadataProvenanceAt = &now
+	nowUTC := time.Now().UTC()
+	book.MetadataProvenanceAt = &nowUTC
 
+	svc.bookCache.Set(id, book)
 	return book, nil
 }
 
@@ -337,6 +363,10 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 		result.Purged++
 	}
 
+	if result.Purged > 0 {
+		svc.InvalidateBookCaches()
+	}
+
 	return result, nil
 }
 
@@ -361,6 +391,7 @@ func (svc *AudiobookService) RestoreAudiobook(ctx context.Context, id string) (*
 		return nil, err
 	}
 
+	svc.InvalidateBookCaches()
 	return updated, nil
 }
 
@@ -627,6 +658,8 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 		return nil, fmt.Errorf("failed to persist metadata state")
 	}
 
+	svc.InvalidateBookCaches()
+
 	// Enrich response with resolved names
 	if resolvedAuthorName != "" && updatedBook.AuthorID != nil {
 		updatedBook.Author = &database.Author{ID: *updatedBook.AuthorID, Name: resolvedAuthorName}
@@ -686,6 +719,7 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 			}
 		}
 
+		svc.InvalidateBookCaches()
 		return map[string]any{
 			"message":     "audiobook soft deleted",
 			"blocked":     blocked,
@@ -712,6 +746,7 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		return nil, err
 	}
 
+	svc.InvalidateBookCaches()
 	return map[string]any{
 		"message": "audiobook deleted",
 		"blocked": blocked,

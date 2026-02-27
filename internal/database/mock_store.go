@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -86,8 +86,11 @@ type MockStore struct {
 	GetInterruptedOperationsFunc func() ([]Operation, error)
 
 	// Operation Logs
-	AddOperationLogFunc  func(operationID, level, message string, details *string) error
-	GetOperationLogsFunc func(operationID string) ([]OperationLog, error)
+	AddOperationLogFunc          func(operationID, level, message string, details *string) error
+	GetOperationLogsFunc         func(operationID string) ([]OperationLog, error)
+	SaveOperationSummaryLogFunc  func(op *OperationSummaryLog) error
+	GetOperationSummaryLogFunc   func(id string) (*OperationSummaryLog, error)
+	ListOperationSummaryLogsFunc func(limit, offset int) ([]OperationSummaryLog, error)
 
 	// User Preferences
 	GetUserPreferenceFunc     func(key string) (*UserPreference, error)
@@ -631,6 +634,27 @@ func (m *MockStore) AddOperationLog(operationID, level, message string, details 
 func (m *MockStore) GetOperationLogs(operationID string) ([]OperationLog, error) {
 	if m.GetOperationLogsFunc != nil {
 		return m.GetOperationLogsFunc(operationID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SaveOperationSummaryLog(op *OperationSummaryLog) error {
+	if m.SaveOperationSummaryLogFunc != nil {
+		return m.SaveOperationSummaryLogFunc(op)
+	}
+	return nil
+}
+
+func (m *MockStore) GetOperationSummaryLog(id string) (*OperationSummaryLog, error) {
+	if m.GetOperationSummaryLogFunc != nil {
+		return m.GetOperationSummaryLogFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error) {
+	if m.ListOperationSummaryLogsFunc != nil {
+		return m.ListOperationSummaryLogsFunc(limit, offset)
 	}
 	return nil, nil
 }

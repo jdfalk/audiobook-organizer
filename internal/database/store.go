@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.23.0
+// version: 2.24.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -113,6 +113,11 @@ type Store interface {
 	// Operation Logs
 	AddOperationLog(operationID, level, message string, details *string) error
 	GetOperationLogs(operationID string) ([]OperationLog, error)
+
+	// Operation Summary Logs (persistent across restarts)
+	SaveOperationSummaryLog(op *OperationSummaryLog) error
+	GetOperationSummaryLog(id string) (*OperationSummaryLog, error)
+	ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error)
 
 	// User Preferences
 	GetUserPreference(key string) (*UserPreference, error)
@@ -359,6 +364,19 @@ type OperationLog struct {
 	Message     string    `json:"message"`
 	Details     *string   `json:"details,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// OperationSummaryLog represents a completed operation persisted for history across restarts.
+type OperationSummaryLog struct {
+	ID          string     `json:"id"`
+	Type        string     `json:"type"`
+	Status      string     `json:"status"`
+	Progress    float64    `json:"progress"`
+	Result      *string    `json:"result,omitempty"`       // JSON-encoded result
+	Error       *string    `json:"error,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 
 // UserPreference represents a user preference setting

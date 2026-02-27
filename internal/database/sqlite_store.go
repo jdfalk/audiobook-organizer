@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2116,6 +2116,54 @@ func (s *SQLiteStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 			return nil, err
 		}
 		logs = append(logs, log)
+	}
+	return logs, rows.Err()
+}
+
+// ---- Operation Summary Logs (persistent across restarts) ----
+
+func (s *SQLiteStore) SaveOperationSummaryLog(op *OperationSummaryLog) error {
+	now := time.Now()
+	_, err := s.db.Exec(`INSERT INTO operation_summary_logs (id, type, status, progress, result, error, created_at, updated_at, completed_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET status=excluded.status, progress=excluded.progress,
+		result=excluded.result, error=excluded.error, updated_at=excluded.updated_at,
+		completed_at=excluded.completed_at`,
+		op.ID, op.Type, op.Status, op.Progress, op.Result, op.Error, op.CreatedAt, now, op.CompletedAt)
+	return err
+}
+
+func (s *SQLiteStore) GetOperationSummaryLog(id string) (*OperationSummaryLog, error) {
+	var op OperationSummaryLog
+	err := s.db.QueryRow(`SELECT id, type, status, progress, result, error, created_at, updated_at, completed_at
+		FROM operation_summary_logs WHERE id = ?`, id).Scan(
+		&op.ID, &op.Type, &op.Status, &op.Progress, &op.Result, &op.Error,
+		&op.CreatedAt, &op.UpdatedAt, &op.CompletedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &op, nil
+}
+
+func (s *SQLiteStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error) {
+	rows, err := s.db.Query(`SELECT id, type, status, progress, result, error, created_at, updated_at, completed_at
+		FROM operation_summary_logs ORDER BY created_at DESC LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []OperationSummaryLog
+	for rows.Next() {
+		var op OperationSummaryLog
+		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Result, &op.Error,
+			&op.CreatedAt, &op.UpdatedAt, &op.CompletedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, op)
 	}
 	return logs, rows.Err()
 }

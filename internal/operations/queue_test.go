@@ -35,6 +35,7 @@ func newMockStore(t *testing.T) *mocks.MockStore {
 		testifyMock.Anything,
 		testifyMock.Anything,
 	).Return(nil).Maybe()
+	store.EXPECT().SaveOperationSummaryLog(testifyMock.Anything).Return(nil).Maybe()
 	return store
 }
 
