@@ -1,21 +1,29 @@
 # file: docker-compose.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: 08a9b7c6-d5e4-4f3a-b2c1-0d9e8f7a6b5c
 
 services:
   audiobook-organizer:
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    image: audiobook-organizer:latest
     ports:
-      - "8080:8080"
+      - "${AO_PORT:-8080}:8080"
     volumes:
-      - ./data:/data
-      - /path/to/audiobooks:/audiobooks
+      - ao-data:/data
+      - ${AUDIOBOOK_ROOT_DIR:-./audiobooks}:/audiobooks:ro
     environment:
       - AO_DIR=/audiobooks
-      - AO_DB=/data/audiobook-organizer.db
+      - AO_DB=/data/audiobooks.pebble
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 5s
+
+volumes:
+  ao-data:

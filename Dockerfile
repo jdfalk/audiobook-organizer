@@ -1,5 +1,5 @@
 # file: Dockerfile
-# version: 2.1.0
+# version: 2.2.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
@@ -7,7 +7,7 @@
 # CGO enabled (for SQLite FTS5 support), produces a minimal container.
 
 # Stage 1: Build frontend
-FROM --platform=$BUILDPLATFORM node:25-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 
 WORKDIR /build/web
 
@@ -19,7 +19,7 @@ RUN npm run build
 
 # Stage 2: Build Go application with embedded frontend
 # Uses native platform (no cross-compile) so CGO works without cross-toolchain.
-FROM golang:1.26-alpine AS go-builder
+FROM golang:1.25-alpine AS go-builder
 
 WORKDIR /build
 
