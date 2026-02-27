@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -157,6 +157,12 @@ var migrations = []Migration{
 		Version:     20,
 		Description: "Add narrators and book_narrators tables",
 		Up:          migration020Up,
+		Down:        nil,
+	},
+	{
+		Version:     21,
+		Description: "Add operation_summary_logs table for persistent operation history",
+		Up:          migration021Up,
 		Down:        nil,
 	},
 }
@@ -1092,5 +1098,41 @@ func migration020Up(store Store) error {
 	}
 
 	log.Println("  - narrators and book_narrators tables added successfully")
+	return nil
+}
+
+// migration021Up adds the operation_summary_logs table for persistent operation history
+func migration021Up(store Store) error {
+	log.Println("  - Adding operation_summary_logs table for persistent operation history")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS operation_summary_logs (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			status TEXT NOT NULL,
+			progress REAL NOT NULL DEFAULT 0,
+			result TEXT,
+			error TEXT,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			completed_at DATETIME
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_op_summary_logs_status ON operation_summary_logs(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_op_summary_logs_created ON operation_summary_logs(created_at)`,
+	}
+
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to execute '%s': %w", stmt, err)
+		}
+	}
+
+	log.Println("  - operation_summary_logs table added successfully")
 	return nil
 }

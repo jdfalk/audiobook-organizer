@@ -3870,6 +3870,142 @@ func (_c *MockStore_GetOperationLogs_Call) RunAndReturn(run func(operationID str
 	return _c
 }
 
+// SaveOperationSummaryLog provides a mock function for the type MockStore
+func (_mock *MockStore) SaveOperationSummaryLog(op *database.OperationSummaryLog) error {
+	ret := _mock.Called(op)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveOperationSummaryLog")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.OperationSummaryLog) error); ok {
+		r0 = returnFunc(op)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// GetOperationSummaryLog provides a mock function for the type MockStore
+func (_mock *MockStore) GetOperationSummaryLog(id string) (*database.OperationSummaryLog, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationSummaryLog")
+	}
+
+	var r0 *database.OperationSummaryLog
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.OperationSummaryLog, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.OperationSummaryLog); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.OperationSummaryLog)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ListOperationSummaryLogs provides a mock function for the type MockStore
+func (_mock *MockStore) ListOperationSummaryLogs(limit int, offset int) ([]database.OperationSummaryLog, error) {
+	ret := _mock.Called(limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListOperationSummaryLogs")
+	}
+
+	var r0 []database.OperationSummaryLog
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.OperationSummaryLog, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.OperationSummaryLog); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationSummaryLog)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_SaveOperationSummaryLog_Call is a *mock.Call that shadows Run/Return methods
+type MockStore_SaveOperationSummaryLog_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) SaveOperationSummaryLog(op interface{}) *MockStore_SaveOperationSummaryLog_Call {
+	return &MockStore_SaveOperationSummaryLog_Call{Call: _e.mock.On("SaveOperationSummaryLog", op)}
+}
+
+func (_c *MockStore_SaveOperationSummaryLog_Call) Run(run func(op *database.OperationSummaryLog)) *MockStore_SaveOperationSummaryLog_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*database.OperationSummaryLog))
+	})
+	return _c
+}
+
+func (_c *MockStore_SaveOperationSummaryLog_Call) Return(err error) *MockStore_SaveOperationSummaryLog_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+// MockStore_GetOperationSummaryLog_Call is a *mock.Call that shadows Run/Return methods
+type MockStore_GetOperationSummaryLog_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetOperationSummaryLog(id interface{}) *MockStore_GetOperationSummaryLog_Call {
+	return &MockStore_GetOperationSummaryLog_Call{Call: _e.mock.On("GetOperationSummaryLog", id)}
+}
+
+func (_c *MockStore_GetOperationSummaryLog_Call) Run(run func(id string)) *MockStore_GetOperationSummaryLog_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOperationSummaryLog_Call) Return(log *database.OperationSummaryLog, err error) *MockStore_GetOperationSummaryLog_Call {
+	_c.Call.Return(log, err)
+	return _c
+}
+
+// MockStore_ListOperationSummaryLogs_Call is a *mock.Call that shadows Run/Return methods
+type MockStore_ListOperationSummaryLogs_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) ListOperationSummaryLogs(limit interface{}, offset interface{}) *MockStore_ListOperationSummaryLogs_Call {
+	return &MockStore_ListOperationSummaryLogs_Call{Call: _e.mock.On("ListOperationSummaryLogs", limit, offset)}
+}
+
+func (_c *MockStore_ListOperationSummaryLogs_Call) Run(run func(limit int, offset int)) *MockStore_ListOperationSummaryLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_ListOperationSummaryLogs_Call) Return(logs []database.OperationSummaryLog, err error) *MockStore_ListOperationSummaryLogs_Call {
+	_c.Call.Return(logs, err)
+	return _c
+}
+
 // GetOperationParams provides a mock function for the type MockStore
 func (_mock *MockStore) GetOperationParams(opID string) ([]byte, error) {
 	ret := _mock.Called(opID)
