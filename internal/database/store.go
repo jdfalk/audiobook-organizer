@@ -119,6 +119,8 @@ type Store interface {
 	GetOperationSummaryLog(id string) (*OperationSummaryLog, error)
 	ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error)
 
+	DeleteOperationsByStatus(statuses []string) (int, error)
+
 	// User Preferences
 	GetUserPreference(key string) (*UserPreference, error)
 	SetUserPreference(key, value string) error

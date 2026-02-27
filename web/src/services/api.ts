@@ -760,6 +760,19 @@ export async function clearStaleOperations(): Promise<{ cleared: number }> {
   return response.json();
 }
 
+export async function deleteOperationHistory(
+  status: string
+): Promise<{ deleted: number }> {
+  const response = await fetch(
+    `${API_BASE}/operations/history?status=${encodeURIComponent(status)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete operation history');
+  }
+  return response.json();
+}
+
 export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
   const response = await fetch(`${API_BASE}/operations/active`);
   if (!response.ok) {

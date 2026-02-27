@@ -2267,6 +2267,29 @@ func (s *SQLiteStore) DeleteOperationState(opID string) error {
 	return err
 }
 
+func (s *SQLiteStore) DeleteOperationsByStatus(statuses []string) (int, error) {
+	if len(statuses) == 0 {
+		return 0, nil
+	}
+	placeholders := ""
+	args := make([]interface{}, len(statuses))
+	for i, s := range statuses {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args[i] = s
+	}
+	result, err := s.db.Exec(`DELETE FROM operations WHERE status IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	// Also clean up summary logs
+	_, _ = s.db.Exec(`DELETE FROM operation_summary_logs WHERE status IN (`+placeholders+`)`, args...)
+	return int(n), nil
+}
+
 func (s *SQLiteStore) GetInterruptedOperations() ([]Operation, error) {
 	query := `SELECT id, type, status, progress, total, message, folder_path,
 		created_at, started_at, completed_at, error_message
