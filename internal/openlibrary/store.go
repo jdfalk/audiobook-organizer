@@ -26,7 +26,9 @@ type OLStore struct {
 
 // NewOLStore opens or creates a PebbleDB instance for Open Library dump data.
 func NewOLStore(path string) (*OLStore, error) {
-	db, err := pebble.Open(path, &pebble.Options{})
+	db, err := pebble.Open(path, &pebble.Options{
+		FormatMajorVersion: pebble.FormatNewest,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open OL store: %w", err)
 	}
