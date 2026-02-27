@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -86,6 +86,9 @@ func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
 	if masked.OpenAIAPIKey != "" {
 		masked.OpenAIAPIKey = database.MaskSecret(masked.OpenAIAPIKey)
 	}
+	if masked.BasicAuthPassword != "" {
+		masked.BasicAuthPassword = database.MaskSecret(masked.BasicAuthPassword)
+	}
 	return masked
 }
 
@@ -123,6 +126,8 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"openlibrary_dump_dir":  &config.AppConfig.OpenLibraryDumpDir,
 		"hardcover_api_token":   &config.AppConfig.HardcoverAPIToken,
 		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
+		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
+		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,
 	}
 	for key, ptr := range stringFields {
 		if val, ok := cus.ExtractStringField(payload, key); ok {
@@ -163,6 +168,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"enable_user_quotas":      &config.AppConfig.EnableUserQuotas,
 		"enable_ai_parsing":       &config.AppConfig.EnableAIParsing,
 		"enable_auth":             &config.AppConfig.EnableAuth,
+		"basic_auth_enabled":      &config.AppConfig.BasicAuthEnabled,
 		"auto_fetch_metadata":     &config.AppConfig.AutoFetchMetadata,
 		"write_back_metadata":     &config.AppConfig.WriteBackMetadata,
 		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,

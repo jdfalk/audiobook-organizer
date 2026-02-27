@@ -470,6 +470,7 @@ func TestSaveConfigToDatabase(t *testing.T) {
 	t.Run("saves all config values", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
 		seen := map[string]struct{}{}
+		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 			Run(func(key string, value string, typ string, isSecret bool) {
 				seen[key] = struct{}{}
@@ -536,6 +537,8 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			Type:     "string",
 			IsSecret: true,
 		}, nil).Once()
+		// Other secrets with no DB value
+		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 
 		AppConfig = Config{
 			OpenAIAPIKey: "", // empty because decryption failed on load
@@ -558,6 +561,7 @@ func TestSaveConfigToDatabase(t *testing.T) {
 	t.Run("saves new secret value when provided", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
 		seen := map[string]struct{}{}
+		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 			Run(func(key string, value string, typ string, isSecret bool) {
 				seen[key] = struct{}{}
@@ -595,8 +599,8 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			}).
 			Return(nil)
 
-		// DB has no existing value for the secret
-		store.EXPECT().GetSetting("openai_api_key").Return(nil, nil).Once()
+		// DB has no existing value for any secret
+		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), nil)
 
 		AppConfig = Config{
 			OpenAIAPIKey: "", // empty and DB also empty — allow the write
@@ -622,8 +626,8 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			}).
 			Return(nil)
 
-		// GetSetting returns an error (e.g., table doesn't exist yet)
-		store.EXPECT().GetSetting("openai_api_key").Return(nil, fmt.Errorf("not found")).Once()
+		// GetSetting returns an error for all secrets
+		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), fmt.Errorf("not found"))
 
 		AppConfig = Config{
 			OpenAIAPIKey: "",
@@ -649,13 +653,13 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			}).
 			Return(nil)
 
-		// DB has a setting but with empty value
-		store.EXPECT().GetSetting("openai_api_key").Return(&database.Setting{
-			Key:      "openai_api_key",
+		// All secrets have empty DB values
+		store.EXPECT().GetSetting(mock.Anything).Return(&database.Setting{
+			Key:      "",
 			Value:    "",
 			Type:     "string",
 			IsSecret: true,
-		}, nil).Once()
+		}, nil)
 
 		AppConfig = Config{
 			OpenAIAPIKey: "",
