@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -122,6 +122,94 @@ Set confidence based on clarity of the filename structure.`
 	}
 
 	// Parse the JSON response
+	content := completion.Choices[0].Message.Content
+	return parseMetadataFromJSON(content)
+}
+
+// AudiobookContext provides rich context for AI parsing beyond just a filename.
+type AudiobookContext struct {
+	FilePath      string `json:"file_path"`                // Full path including folder hierarchy
+	Title         string `json:"title,omitempty"`           // Existing title from DB
+	AuthorName    string `json:"author_name,omitempty"`     // Existing author from DB
+	Narrator      string `json:"narrator,omitempty"`        // Existing narrator from DB
+	FileCount     int    `json:"file_count,omitempty"`      // Number of files in the book
+	TotalDuration int    `json:"total_duration,omitempty"`  // Total duration in seconds
+}
+
+// ParseAudiobook uses OpenAI to parse audiobook metadata from rich context
+// (full file path, existing metadata, file count, duration) rather than just a filename.
+func (p *OpenAIParser) ParseAudiobook(ctx context.Context, abCtx AudiobookContext) (*ParsedMetadata, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	systemPrompt := `You are an expert at identifying audiobook metadata. Extract structured metadata from ALL available context: folder hierarchy, existing metadata, file details.
+
+Key strategies:
+- Folder paths often encode: /Author/Series/Title/ or /Author/Title/
+- Existing metadata may be partially correct — improve or correct it
+- Multi-file books (file_count > 1) are common; individual filenames like "01 Part 1.mp3" are not useful
+- When author and narrator are the same, still include both
+- If multiple authors or narrators, separate them with " & " (ampersand with spaces)
+
+Return ONLY valid JSON with these fields (omit if not found):
+{
+  "title": "book title",
+  "author": "author name (use ' & ' to separate multiple)",
+  "series": "series name",
+  "series_number": 1,
+  "narrator": "narrator name (use ' & ' to separate multiple)",
+  "publisher": "publisher name",
+  "year": 2020,
+  "confidence": "high|medium|low"
+}
+
+Set confidence based on how much context was available and how unambiguous it is.`
+
+	// Build a rich user prompt with all available context
+	userPrompt := fmt.Sprintf("Parse this audiobook's metadata from the following context:\n\nFull file path: %s", abCtx.FilePath)
+
+	if abCtx.Title != "" {
+		userPrompt += fmt.Sprintf("\nExisting title: %s", abCtx.Title)
+	}
+	if abCtx.AuthorName != "" {
+		userPrompt += fmt.Sprintf("\nExisting author: %s", abCtx.AuthorName)
+	}
+	if abCtx.Narrator != "" {
+		userPrompt += fmt.Sprintf("\nExisting narrator: %s", abCtx.Narrator)
+	}
+	if abCtx.FileCount > 0 {
+		userPrompt += fmt.Sprintf("\nFile count: %d files", abCtx.FileCount)
+	}
+	if abCtx.TotalDuration > 0 {
+		hours := abCtx.TotalDuration / 3600
+		minutes := (abCtx.TotalDuration % 3600) / 60
+		userPrompt += fmt.Sprintf("\nTotal duration: %dh %dm", hours, minutes)
+	}
+
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
+	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(systemPrompt),
+			openai.UserMessage(userPrompt),
+		},
+		Model:       shared.ChatModel(p.model),
+		Temperature: param.NewOpt(0.1),
+		MaxTokens:   param.NewOpt[int64](500),
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONObject: &jsonObjectFormat,
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("OpenAI API call failed: %w", err)
+	}
+
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("no response from OpenAI")
+	}
+
 	content := completion.Choices[0].Message.Content
 	return parseMetadataFromJSON(content)
 }

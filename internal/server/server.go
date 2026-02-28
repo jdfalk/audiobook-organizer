@@ -87,6 +87,7 @@ func boolPtr(b bool) *bool {
 type aiParser interface {
 	IsEnabled() bool
 	ParseFilename(ctx context.Context, filename string) (*ai.ParsedMetadata, error)
+	ParseAudiobook(ctx context.Context, abCtx ai.AudiobookContext) (*ai.ParsedMetadata, error)
 	TestConnection(ctx context.Context) error
 }
 
@@ -3661,17 +3662,32 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	}
 
 	// Create AI parser
-	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	parser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 	if !parser.IsEnabled() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
 		return
 	}
 
-	// Extract filename from path
-	filename := filepath.Base(book.FilePath)
+	// Build rich context for the AI parser
+	abCtx := ai.AudiobookContext{
+		FilePath: book.FilePath,
+		Title:    book.Title,
+	}
+	if book.Narrator != nil {
+		abCtx.Narrator = *book.Narrator
+	}
+	if book.Duration != nil {
+		abCtx.TotalDuration = *book.Duration
+	}
+	// Resolve author name from author_id
+	if book.AuthorID != nil {
+		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil {
+			abCtx.AuthorName = author.Name
+		}
+	}
 
-	// Parse with AI
-	metadata, err := parser.ParseFilename(c.Request.Context(), filename)
+	// Parse with AI using full context
+	metadata, err := parser.ParseAudiobook(c.Request.Context(), abCtx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse filename: %v", err)})
 		return
