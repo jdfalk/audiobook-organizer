@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 2.8.0 -->
+<!-- version: 3.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-02-26 -->
+<!-- last-edited: 2026-02-28 -->
 
 # Project TODO
 
@@ -96,6 +96,64 @@
 
 ---
 
+## 🔥 P0 — UI & Metadata Overhaul (February 2026)
+
+See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) for full details.
+
+### Phase 1A: Fix Multiple Authors & AI Parse
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| Migration 22: backfill `book_authors`/`book_narrators` from `&`-delimited names | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+| Route AI parse through AudiobookService (multi-author split, history, narrator join) | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+| AI parse sends full folder path + existing metadata + file count (not just filename) | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+
+### Phase 1B: Fix Fetch Metadata Matching
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| Penalize box sets/collections/omnibus in result scoring | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Precision+recall F1 scoring instead of word-overlap only | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Series position filter (reject mismatched positions) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Minimum quality threshold (reject scores below 0.35) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Rich metadata bonus (prefer results with description, cover, narrator) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+
+### Phase 1C: Fix History & Timestamps
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| `metadata_updated_at` column — only changes on metadata edits | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| `last_written_at` column — set when files are written | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| Change detection in `UpdateBook` (compare old vs new before updating timestamps) | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| Field extractor loop records history entries for all manual edits | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+
+### Phase 2: Save to Files
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| `POST /api/v1/audiobooks/:id/write-back` endpoint | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| Track number support in WriteMetadataToFile (M4B, MP3, FLAC) | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| Per-segment numbering: `001 - Title.mp3`, track X/Y tags | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| "Save to Files" button with confirmation dialog | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+
+### Phase 3: Multi-file Tab Layout
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| `GET /api/v1/audiobooks/:id/segments/:segmentId/tags` endpoint | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| FileSelector component (chips for ≤20 files, dropdown for >20) | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| Scoped Info/Tags/Compare tabs for selected file | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+
+### Phase 4: Multi-file Metadata Read
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| Folder path parser (author/series/title/narrator from directory hierarchy) | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+| Combined metadata assembly (folder + first file tags + filename pattern) | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+| Scanner integration for generic part-numbered files | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+
+---
+
 ## 🐛 Active Bugs
 
 | Bug | Status | Plan |
@@ -112,6 +170,40 @@ Previously fixed:
 ---
 
 ## 🔮 Post-MVP — Feature Backlog
+
+### iTunes Feature Parity — Metadata
+
+| Item | Plan |
+| --- | --- |
+| Genre/category taxonomy | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Rating (1-5 stars) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Copyright field | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Explicit/clean flag | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Chapter marks display (M4B/MP4) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Per-chapter artwork | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Grouping field (link related books beyond series) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Sort fields (sort-title, sort-author, sort-narrator) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Comments/notes field | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+
+### iTunes Feature Parity — Library Management
+
+| Item | Plan |
+| --- | --- |
+| Smart collections / saved filters | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Bulk metadata editing (multi-select) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Duplicate detection | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Missing file detection | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Storage usage dashboard | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Column-customizable list view (iTunes-style sortable table) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Keyboard navigation (arrow keys, spacebar) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Import/export library metadata (backup/restore without files) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Mark as read/unread status | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Reading progress tracking | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Improved cover art display/editing | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Search with filters/facets | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+| Sorting with more fields and saved orders | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
+
+### Other
 
 | Item | Plan |
 | --- | --- |
