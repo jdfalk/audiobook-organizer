@@ -101,6 +101,8 @@ export interface Book {
   metadata_provenance_at?: string;
   created_at: string;
   updated_at: string;
+  metadata_updated_at?: string;
+  last_written_at?: string;
 }
 
 export interface Author {
