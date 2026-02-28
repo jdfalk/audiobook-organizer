@@ -978,27 +978,26 @@ func (s *Server) setupRoutes() {
 		c.Next()
 	})
 
-	apiRatePerMinute := config.AppConfig.APIRateLimitPerMinute
-	if apiRatePerMinute <= 0 {
-		apiRatePerMinute = 600
-	}
-	authRatePerMinute := config.AppConfig.AuthRateLimitPerMinute
-	if authRatePerMinute <= 0 {
-		authRatePerMinute = 30
-	}
-
-	apiBurst := apiRatePerMinute / 5
-	if apiBurst < 20 {
-		apiBurst = 20
-	}
-	authBurst := authRatePerMinute / 10
-	if authBurst < 1 {
-		authBurst = 1
-	}
 	jsonLimitBytes := int64(config.AppConfig.JSONBodyLimitMB) * 1024 * 1024
 	uploadLimitBytes := int64(config.AppConfig.UploadBodyLimitMB) * 1024 * 1024
-	apiRateLimiter := servermiddleware.NewIPRateLimiter(apiRatePerMinute, apiBurst).Middleware()
-	authRateLimiter := servermiddleware.NewIPRateLimiter(authRatePerMinute, authBurst).Middleware()
+
+	// Rate limiting is opt-in. Default 0 means disabled (local/single-user server).
+	apiRateLimiter := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+	authRateLimiter := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
+	if rpm := config.AppConfig.APIRateLimitPerMinute; rpm > 0 {
+		burst := rpm / 5
+		if burst < 10 {
+			burst = 10
+		}
+		apiRateLimiter = servermiddleware.NewIPRateLimiter(rpm, burst).Middleware()
+	}
+	if rpm := config.AppConfig.AuthRateLimitPerMinute; rpm > 0 {
+		burst := rpm / 5
+		if burst < 5 {
+			burst = 5
+		}
+		authRateLimiter = servermiddleware.NewIPRateLimiter(rpm, burst).Middleware()
+	}
 	bodyLimitMiddleware := servermiddleware.MaxRequestBodySize(jsonLimitBytes, uploadLimitBytes)
 	authMiddleware := gin.HandlerFunc(func(c *gin.Context) {
 		c.Next()
