@@ -1865,6 +1865,11 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			opConfig := fileops.OperationConfig{VerifyChecksums: true}
 			if writeErr := metadata.WriteMetadataToFile(updatedBook.FilePath, tagMap, opConfig); writeErr != nil {
 				log.Printf("[WARN] write-back failed for %s: %v", updatedBook.FilePath, writeErr)
+			} else {
+				// Stamp last_written_at after successful write-back.
+				if stampErr := database.GlobalStore.SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
+					log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", updatedBook.ID, stampErr)
+				}
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -498,13 +498,21 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 		state = map[string]metadataFieldState{}
 	}
 
+	// Create a MetadataStateService for recording change history.
+	mss := NewMetadataStateService(svc.store)
+
 	// Process overrides
 	for field, override := range req.Updates.Overrides {
 		entry := state[field]
+		oldOverrideValue := entry.OverrideValue
 		if override.Clear {
 			entry.OverrideValue = nil
 			entry.OverrideLocked = false
 			entry.UpdatedAt = now
+			// Record history for clearing an override.
+			if fmt.Sprintf("%v", oldOverrideValue) != fmt.Sprintf("%v", nil) {
+				mss.recordChange(id, field, "override", "user_edit", oldOverrideValue, nil)
+			}
 		} else {
 			if len(override.Value) > 0 {
 				val := decodeRawValue(override.Value)
@@ -512,6 +520,10 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				entry.OverrideLocked = override.Locked == nil || *override.Locked
 				entry.UpdatedAt = now
 				applyOverrideToPayload(payload, field, val)
+				// Record history for setting an override.
+				if fmt.Sprintf("%v", oldOverrideValue) != fmt.Sprintf("%v", val) {
+					mss.recordChange(id, field, "override", "user_edit", oldOverrideValue, val)
+				}
 			} else if override.Locked != nil {
 				entry.OverrideLocked = *override.Locked
 				entry.UpdatedAt = now
@@ -707,10 +719,17 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 		if value, ok := extractor(); ok {
 			log.Printf("[DEBUG] UpdateAudiobook: creating state for field %s with value %v", field, value)
 			entry := state[field]
+			oldValue := entry.OverrideValue
+
 			entry.OverrideValue = value
 			entry.OverrideLocked = true
 			entry.UpdatedAt = now
 			state[field] = entry
+
+			// Record history only when the value actually changed.
+			if fmt.Sprintf("%v", oldValue) != fmt.Sprintf("%v", value) {
+				mss.recordChange(id, field, "override", "user_edit", oldValue, value)
+			}
 		} else {
 			log.Printf("[DEBUG] UpdateAudiobook: extractor for field %s returned false/nil", field)
 		}

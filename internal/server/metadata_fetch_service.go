@@ -508,6 +508,10 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 		log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 	} else {
 		log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
+		// Stamp last_written_at after successful write-back.
+		if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
+			log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+		}
 	}
 
 	// Write to each segment file for multi-file books
