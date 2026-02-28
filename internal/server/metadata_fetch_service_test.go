@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 3.0.0
+// version: 4.1.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
@@ -457,12 +457,11 @@ func TestBestTitleMatch(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(got))
 	}
-	// "The Great Adventure Story" has 3 word overlaps (the, great, adventure)
-	// but "the" is <=2 chars so skipped. "great" + "adventure" = 2 for both.
-	// "The Great Adventure Story" and "Great Adventure" both score 2,
-	// but the first one encountered wins (index 1).
-	if got[0].Title != "The Great Adventure Story" {
-		t.Errorf("expected 'The Great Adventure Story', got %q", got[0].Title)
+	// With precision+recall scoring, "Great Adventure" (2/2 result words match
+	// query words → precision 1.0) beats "The Great Adventure Story" (2/4 words
+	// match → precision 0.5). Both have recall 1.0; "Great Adventure" wins on F1.
+	if got[0].Title != "Great Adventure" {
+		t.Errorf("expected 'Great Adventure' (higher precision), got %q", got[0].Title)
 	}
 }
 
@@ -848,5 +847,65 @@ func TestApplySeriesPositionFilter_NoPositionInResult(t *testing.T) {
 	got := applySeriesPositionFilter(results, 5)
 	if len(got) != 1 {
 		t.Errorf("expected 1 result (no position to reject), got %d", len(got))
+	}
+}
+
+func TestFetchMetadataForBook_BoxSetRejected_IndividualBookApplied(t *testing.T) {
+	setupGlobalStoreForTest(t)
+
+	mockDB := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{ID: id, Title: "The Long Cosmos"}, nil
+		},
+		UpdateBookFunc: func(id string, book *database.Book) (*database.Book, error) {
+			return book, nil
+		},
+		RecordMetadataChangeFunc: func(record *database.MetadataChangeRecord) error {
+			return nil
+		},
+	}
+
+	// Source returns a box set first, then the real book.
+	src := &mockMetadataSource{
+		name: "TestSource",
+		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
+			return []metadata.BookMetadata{
+				// Box set — should be penalised and rejected.
+				{
+					Title:  "The Long Earth Series 5 Books Collection Terry Pratchett and Stephen Baxter Box Set",
+					Author: "Terry Pratchett",
+				},
+				// Individual book — should win.
+				{
+					Title:       "The Long Cosmos",
+					Author:      "Terry Pratchett",
+					Description: "The fifth book in the Long Earth series.",
+					CoverURL:    "https://example.com/long-cosmos.jpg",
+					PublishYear: 2016,
+				},
+			}, nil
+		},
+	}
+
+	mfs := NewMetadataFetchService(mockDB)
+	mfs.overrideSources = []metadata.MetadataSource{src}
+
+	resp, err := mfs.FetchMetadataForBook("book1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
+	}
+	// The applied book title should be from the individual book, not the box set.
+	if resp.Book == nil {
+		t.Fatal("expected non-nil Book in response")
+	}
+	if strings.Contains(strings.ToLower(resp.Book.Title), "collection") ||
+		strings.Contains(strings.ToLower(resp.Book.Title), "box set") {
+		t.Errorf("box set was applied to book: %q", resp.Book.Title)
+	}
+	if resp.Book.Title != "The Long Cosmos" {
+		t.Errorf("expected title 'The Long Cosmos', got %q", resp.Book.Title)
 	}
 }
