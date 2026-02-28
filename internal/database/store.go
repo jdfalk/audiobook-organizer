@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.24.0
+// version: 2.25.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -74,6 +74,7 @@ type Store interface {
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
 	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
+	SetLastWrittenAt(id string, t time.Time) error   // Stamps last_written_at for write-back
 	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
@@ -281,7 +282,12 @@ type Book struct {
 	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
 	CreatedAt           *time.Time `json:"created_at,omitempty"`
-	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
+	// UpdatedAt is set on every DB write (system-level).
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	// MetadataUpdatedAt is set only when user-visible metadata fields change.
+	MetadataUpdatedAt *time.Time `json:"metadata_updated_at,omitempty"`
+	// LastWrittenAt is set when metadata is written back to the audio files on disk.
+	LastWrittenAt *time.Time `json:"last_written_at,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array

@@ -1220,6 +1220,20 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	return book, nil
 }
 
+// SetLastWrittenAt stamps the last_written_at timestamp for book id.
+func (p *PebbleStore) SetLastWrittenAt(id string, t time.Time) error {
+	book, err := p.GetBookByID(id)
+	if err != nil {
+		return err
+	}
+	if book == nil {
+		return nil // non-fatal: book not found
+	}
+	book.LastWrittenAt = &t
+	_, err = p.UpdateBook(id, book)
+	return err
+}
+
 func (p *PebbleStore) DeleteBook(id string) error {
 	book, err := p.GetBookByID(id)
 	if err != nil {

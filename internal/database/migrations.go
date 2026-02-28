@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -169,6 +169,12 @@ var migrations = []Migration{
 		Version:     22,
 		Description: "Backfill book_authors by splitting '&'-joined author names; backfill book_narrators from legacy narrator field",
 		Up:          migration022Up,
+		Down:        nil,
+	},
+	{
+		Version:     23,
+		Description: "Add metadata_updated_at and last_written_at timestamp columns to books",
+		Up:          migration023Up,
 		Down:        nil,
 	},
 }
@@ -1341,5 +1347,46 @@ func migration022Up(store Store) error {
 	}
 
 	log.Println("  - Migration 22 complete: book_authors and book_narrators backfilled")
+	return nil
+}
+
+// migration023Up adds metadata_updated_at and last_written_at timestamp columns to books table.
+// metadata_updated_at is set only when user-visible metadata changes; last_written_at is set
+// when metadata is written back to audio files on disk.
+func migration023Up(store Store) error {
+	log.Println("  - Adding metadata_updated_at and last_written_at to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	alterStatements := []string{
+		"ALTER TABLE books ADD COLUMN metadata_updated_at DATETIME",
+		"ALTER TABLE books ADD COLUMN last_written_at DATETIME",
+	}
+
+	for _, stmt := range alterStatements {
+		log.Printf("    - Executing: %s", stmt)
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("    - Column already exists, skipping")
+				continue
+			}
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+
+	// Backfill: set metadata_updated_at = updated_at for existing books that already
+	// have an updated_at. This preserves the approximate "last edited" time for
+	// books that were already in the library before this migration.
+	if _, err := sqliteStore.db.Exec(
+		`UPDATE books SET metadata_updated_at = updated_at WHERE updated_at IS NOT NULL AND metadata_updated_at IS NULL`,
+	); err != nil {
+		return fmt.Errorf("failed to backfill metadata_updated_at: %w", err)
+	}
+
+	log.Println("  - metadata_updated_at and last_written_at added successfully")
 	return nil
 }

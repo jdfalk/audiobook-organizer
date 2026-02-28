@@ -7196,3 +7196,41 @@ func (_c *MockStore_SetBookNarrators_Call) RunAndReturn(run func(bookID string, 
 	_c.Call.Return(run)
 	return _c
 }
+
+// SetLastWrittenAt provides a mock function with given fields: id, t
+func (_m *MockStore) SetLastWrittenAt(id string, t time.Time) error {
+	ret := _m.Called(id, t)
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, time.Time) error); ok {
+		r0 = rf(id, t)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetLastWrittenAt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetLastWrittenAt'
+type MockStore_SetLastWrittenAt_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) SetLastWrittenAt(id interface{}, t interface{}) *MockStore_SetLastWrittenAt_Call {
+	return &MockStore_SetLastWrittenAt_Call{Call: _e.mock.On("SetLastWrittenAt", id, t)}
+}
+
+func (_c *MockStore_SetLastWrittenAt_Call) Run(run func(id string, t time.Time)) *MockStore_SetLastWrittenAt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(time.Time))
+	})
+	return _c
+}
+
+func (_c *MockStore_SetLastWrittenAt_Call) Return(err error) *MockStore_SetLastWrittenAt_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetLastWrittenAt_Call) RunAndReturn(run func(id string, t time.Time) error) *MockStore_SetLastWrittenAt_Call {
+	_c.Call.Return(run)
+	return _c
+}
