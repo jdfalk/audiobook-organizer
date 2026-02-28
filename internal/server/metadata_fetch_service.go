@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 3.0.0
+// version: 4.0.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -510,36 +510,152 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	}
 }
 
-// bestTitleMatch filters author-search results to find the best match for the
-// book title. Returns a single-element slice with the best match, or nil if
-// no result has any word overlap with the title.
+// scoreTitleStop is the set of common English stop-words excluded from scoring.
+var scoreTitleStop = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true, "from": true,
+	"that": true, "this": true, "are": true, "was": true, "were": true,
+	"been": true, "have": true, "has": true, "had": true, "not": true,
+	"but": true, "its": true, "our": true, "your": true, "their": true,
+	"all": true, "any": true, "can": true, "will": true, "may": true,
+	"into": true,
+}
+
+// compilationRe detects "N books" patterns like "5 books" or "10 books".
+var compilationRe = regexp.MustCompile(`\b\d+\s+books\b`)
+
+// compilationPhrases is the list of lowercased substrings that mark a
+// result as a compilation/box-set rather than a single title.
+var compilationPhrases = []string{
+	"box set", "boxset", "box-set",
+	"collection",
+	"complete series", "complete collection",
+	"books set", "book set",
+	"omnibus",
+	"anthology",
+	"compendium",
+	"series collection", "series set",
+}
+
+// significantWords returns the deduplicated set of words longer than 2 chars
+// that are not stop-words, all lowercased.
+func significantWords(s string) map[string]bool {
+	words := map[string]bool{}
+	for _, w := range strings.Fields(strings.ToLower(s)) {
+		// Strip leading/trailing punctuation (apostrophes, commas, etc.)
+		w = strings.Trim(w, ".,;:!?\"'()")
+		if len(w) > 2 && !scoreTitleStop[w] {
+			words[w] = true
+		}
+	}
+	return words
+}
+
+// isCompilation returns true when the title appears to be a box-set,
+// collection, omnibus, anthology, or other multi-title compilation.
+func isCompilation(title string) bool {
+	lower := strings.ToLower(title)
+	for _, phrase := range compilationPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return compilationRe.MatchString(lower)
+}
+
+// scoreOneResult computes a quality score in [0, ~1.15] for a single result
+// against a set of search-title significant words.
+func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+	resultWords := significantWords(r.Title)
+
+	if len(searchWords) == 0 || len(resultWords) == 0 {
+		return 0
+	}
+
+	// Recall: how many search words appear in the result?
+	recallHits := 0
+	for w := range searchWords {
+		if resultWords[w] {
+			recallHits++
+		}
+	}
+	recall := float64(recallHits) / float64(len(searchWords))
+
+	// Precision: how many result words appear in the search?
+	precHits := 0
+	for w := range resultWords {
+		if searchWords[w] {
+			precHits++
+		}
+	}
+	precision := float64(precHits) / float64(len(resultWords))
+
+	// F1
+	var f1 float64
+	if recall+precision > 0 {
+		f1 = 2 * recall * precision / (recall + precision)
+	}
+
+	// Compilation penalty
+	if isCompilation(r.Title) {
+		f1 *= 0.15
+	}
+
+	// Length penalty: penalise results that are much longer than the search
+	nSearch := float64(len(searchWords))
+	nResult := float64(len(resultWords))
+	if nResult > 1.5*nSearch {
+		f1 *= (1.5 * nSearch) / nResult
+	}
+
+	// Rich-metadata bonus (capped at +0.15)
+	bonus := 0.0
+	if r.Description != "" {
+		bonus += 0.05
+	}
+	if r.CoverURL != "" {
+		bonus += 0.05
+	}
+	if r.Narrator != "" {
+		bonus += 0.05
+	}
+	if r.ISBN != "" {
+		bonus += 0.05
+	}
+	if bonus > 0.15 {
+		bonus = 0.15
+	}
+
+	return f1 + bonus
+}
+
+// bestTitleMatch filters results to find the single best match for the given
+// title variants using precision+recall+penalty scoring.
+//
+// It replaces the old recall-only word-overlap function. A result must score
+// at least 0.35 to be returned; if none qualify, nil is returned so the
+// caller can fall through to the next source or report "no metadata found".
 func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
-	// Build set of significant words from all title variants
-	titleWords := map[string]bool{}
+	const minScore = 0.35
+
+	// Union of significant words from all title variants.
+	searchWords := map[string]bool{}
 	for _, t := range titles {
-		for _, w := range strings.Fields(strings.ToLower(t)) {
-			if len(w) > 2 { // skip short words like "a", "of", "the" noise
-				titleWords[w] = true
-			}
+		for w := range significantWords(t) {
+			searchWords[w] = true
 		}
 	}
 
 	bestIdx := -1
-	bestScore := 0
+	bestScore := 0.0
 	for i, r := range results {
-		score := 0
-		for _, w := range strings.Fields(strings.ToLower(r.Title)) {
-			if titleWords[w] {
-				score++
-			}
-		}
+		score := scoreOneResult(r, searchWords)
 		if score > bestScore {
 			bestScore = score
 			bestIdx = i
 		}
 	}
 
-	if bestIdx >= 0 && bestScore > 0 {
+	if bestIdx >= 0 && bestScore >= minScore {
 		return []metadata.BookMetadata{results[bestIdx]}
 	}
 	return nil

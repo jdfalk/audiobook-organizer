@@ -662,3 +662,146 @@ func TestRecordChangeHistory(t *testing.T) {
 		}
 	}
 }
+
+// --- scoreTitleMatch tests (Task 1) ---
+
+func TestScoreTitleMatch_BoxSetPenalised(t *testing.T) {
+	// The individual book should beat the box set even if the box set contains
+	// all the query words plus a lot more.
+	results := []metadata.BookMetadata{
+		{Title: "The Long Earth Series 5 Books Collection Terry Pratchett and Stephen Baxter Box Set"},
+		{Title: "The Long Earth", Description: "A novel.", CoverURL: "https://example.com/cover.jpg"},
+	}
+	got := bestTitleMatch(results, "The Long Earth")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(got))
+	}
+	if got[0].Title != "The Long Earth" {
+		t.Errorf("expected individual book, got box set: %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_CollectionPenalised(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "Discworld Collection: Books 1-5"},
+		{Title: "The Colour of Magic", Description: "First Discworld novel.", CoverURL: "https://cdn.example.com/cover.jpg", Narrator: "Tony Robinson"},
+	}
+	got := bestTitleMatch(results, "The Colour of Magic")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Title != "The Colour of Magic" {
+		t.Errorf("expected individual book, got %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_OmnibusPenalised(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "Foundation Omnibus: Foundation, Foundation and Empire, Second Foundation"},
+		{Title: "Foundation", Author: "Isaac Asimov", Description: "The galactic empire crumbles.", ISBN: "9780553293357"},
+	}
+	got := bestTitleMatch(results, "Foundation")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Title != "Foundation" {
+		t.Errorf("expected 'Foundation', got %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_ExactMatchWins(t *testing.T) {
+	// A result with an exact title match should always win.
+	results := []metadata.BookMetadata{
+		{Title: "The Long Cosmos and Other Stories Collection"},
+		{Title: "The Long Cosmos", Description: "Book 5 of the Long Earth series.", CoverURL: "https://example.com/c.jpg"},
+	}
+	got := bestTitleMatch(results, "The Long Cosmos")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Title != "The Long Cosmos" {
+		t.Errorf("expected 'The Long Cosmos', got %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_BelowThresholdReturnsNil(t *testing.T) {
+	// A result that shares no significant words with the query should be
+	// rejected (score below minimum threshold).
+	results := []metadata.BookMetadata{
+		{Title: "A Completely Unrelated Title About Cooking"},
+	}
+	got := bestTitleMatch(results, "The Long Cosmos")
+	if got != nil {
+		t.Errorf("expected nil (below quality threshold), got %v", got)
+	}
+}
+
+func TestScoreTitleMatch_RichMetadataBonus(t *testing.T) {
+	// When two results score similarly on title, the one with richer
+	// metadata (description + cover) should win.
+	results := []metadata.BookMetadata{
+		{Title: "Dune"},
+		{Title: "Dune", Description: "Paul Atreides travels to Arrakis.", CoverURL: "https://example.com/dune.jpg", ISBN: "9780441013593"},
+	}
+	got := bestTitleMatch(results, "Dune")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	// The richer result is at index 1; it should be preferred.
+	if got[0].Description == "" {
+		t.Errorf("expected the richer result (with description), got title-only result")
+	}
+}
+
+func TestScoreTitleMatch_LengthPenalty(t *testing.T) {
+	// A very long title with the search words buried inside should score
+	// lower than a concise matching title.
+	results := []metadata.BookMetadata{
+		// 10-word title containing all query words
+		{Title: "Ender Game Complete Guide Expanded Universe Fan Edition Deluxe Version"},
+		// Concise exact match
+		{Title: "Ender's Game", Description: "Military sci-fi classic.", CoverURL: "https://example.com/enders.jpg"},
+	}
+	got := bestTitleMatch(results, "Ender's Game")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Title != "Ender's Game" {
+		t.Errorf("expected concise match, got %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_NDigitBooksPenalised(t *testing.T) {
+	// "5 books" pattern should trigger the compilation penalty.
+	results := []metadata.BookMetadata{
+		{Title: "Hitchhiker 5 Books Complete Collection Douglas Adams"},
+		{Title: "The Hitchhiker's Guide to the Galaxy", Description: "Don't panic.", CoverURL: "https://example.com/h2g2.jpg"},
+	}
+	got := bestTitleMatch(results, "The Hitchhiker's Guide to the Galaxy")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if strings.Contains(strings.ToLower(got[0].Title), "books") {
+		t.Errorf("compilation result should not win: got %q", got[0].Title)
+	}
+}
+
+func TestScoreTitleMatch_MultipleVariants(t *testing.T) {
+	// bestTitleMatch accepts multiple title variants; scoring should use
+	// the union of words from all variants.
+	results := []metadata.BookMetadata{
+		{Title: "The Fellowship of the Ring Box Set"},
+		{Title: "Fellowship of the Ring", Description: "Part one of LOTR.", CoverURL: "https://example.com/lotr.jpg"},
+	}
+	// Provide both a cleaned and raw title variant.
+	got := bestTitleMatch(results, "Fellowship of the Ring", "The Fellowship of the Ring")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if strings.Contains(strings.ToLower(got[0].Title), "box set") {
+		t.Errorf("box set should not win: got %q", got[0].Title)
+	}
+}
