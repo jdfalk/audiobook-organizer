@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -163,6 +163,12 @@ var migrations = []Migration{
 		Version:     21,
 		Description: "Add operation_summary_logs table for persistent operation history",
 		Up:          migration021Up,
+		Down:        nil,
+	},
+	{
+		Version:     22,
+		Description: "Backfill book_authors by splitting '&'-joined author names; backfill book_narrators from legacy narrator field",
+		Up:          migration022Up,
 		Down:        nil,
 	},
 }
@@ -1134,5 +1140,206 @@ func migration021Up(store Store) error {
 	}
 
 	log.Println("  - operation_summary_logs table added successfully")
+	return nil
+}
+
+// migration022Up backfills the book_authors and book_narrators junction tables
+// for books that were imported before the multi-author "&" splitting feature.
+//
+// Authors: For each book_authors row whose referenced author name contains " & ",
+// this migration splits the name, creates individual author records as needed,
+// replaces the old junction row with one row per split name (role: "author" for
+// position 0, "co-author" for subsequent positions).
+//
+// Narrators: For each book that has a non-empty books.narrator field but no rows
+// in book_narrators, this migration splits on " & ", creates narrator records as
+// needed, and inserts the junction rows.
+//
+// The migration is idempotent: it uses INSERT OR IGNORE and only touches rows
+// where the author name actually contains " & ".
+func migration022Up(store Store) error {
+	log.Println("  - Running migration 22: backfill book_authors (&-split) and book_narrators")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// -------------------------------------------------------------------------
+	// PART 1: Authors — split "&"-joined names
+	// -------------------------------------------------------------------------
+	authorRows, err := sqliteStore.db.Query(`
+		SELECT ba.book_id, ba.author_id, a.name
+		FROM book_authors ba
+		JOIN authors a ON a.id = ba.author_id
+		WHERE a.name LIKE '% & %'
+	`)
+	if err != nil {
+		return fmt.Errorf("migration 22: query joined authors: %w", err)
+	}
+
+	type joinedAuthor struct {
+		bookID   string
+		authorID int
+		name     string
+	}
+	var joinedAuthors []joinedAuthor
+	for authorRows.Next() {
+		var ja joinedAuthor
+		if err := authorRows.Scan(&ja.bookID, &ja.authorID, &ja.name); err != nil {
+			authorRows.Close()
+			return fmt.Errorf("migration 22: scan author row: %w", err)
+		}
+		joinedAuthors = append(joinedAuthors, ja)
+	}
+	authorRows.Close()
+	if err := authorRows.Err(); err != nil {
+		return fmt.Errorf("migration 22: author rows error: %w", err)
+	}
+
+	for _, ja := range joinedAuthors {
+		if !strings.Contains(ja.name, " & ") {
+			continue
+		}
+
+		parts := strings.Split(ja.name, " & ")
+		log.Printf("    - Splitting author %q for book %s into %d parts", ja.name, ja.bookID, len(parts))
+
+		// Remove the old junction row for this book+author pair
+		if _, err := sqliteStore.db.Exec(`DELETE FROM book_authors WHERE book_id = ? AND author_id = ?`,
+			ja.bookID, ja.authorID); err != nil {
+			return fmt.Errorf("migration 22: delete old book_authors row: %w", err)
+		}
+
+		// Create/find each split author and insert into junction table
+		for i, rawName := range parts {
+			name := strings.TrimSpace(rawName)
+			if name == "" {
+				continue
+			}
+
+			var indivAuthorID int
+			var existingID int
+			err := sqliteStore.db.QueryRow(`SELECT id FROM authors WHERE LOWER(name) = LOWER(?)`, name).Scan(&existingID)
+			if err == sql.ErrNoRows {
+				result, createErr := sqliteStore.db.Exec(`INSERT INTO authors (name) VALUES (?)`, name)
+				if createErr != nil {
+					return fmt.Errorf("migration 22: create author %q: %w", name, createErr)
+				}
+				insertedID, _ := result.LastInsertId()
+				indivAuthorID = int(insertedID)
+				log.Printf("      - Created new author %q (id=%d)", name, indivAuthorID)
+			} else if err != nil {
+				return fmt.Errorf("migration 22: lookup author %q: %w", name, err)
+			} else {
+				indivAuthorID = existingID
+				log.Printf("      - Found existing author %q (id=%d)", name, indivAuthorID)
+			}
+
+			role := "author"
+			if i > 0 {
+				role = "co-author"
+			}
+
+			if _, err := sqliteStore.db.Exec(`
+				INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position)
+				VALUES (?, ?, ?, ?)`,
+				ja.bookID, indivAuthorID, role, i); err != nil {
+				return fmt.Errorf("migration 22: insert book_authors for %q: %w", name, err)
+			}
+		}
+
+		// Update books.author_id to point to the primary (first) author
+		primaryName := strings.TrimSpace(parts[0])
+		if primaryName != "" {
+			var primaryID int
+			if err := sqliteStore.db.QueryRow(`SELECT id FROM authors WHERE LOWER(name) = LOWER(?)`, primaryName).Scan(&primaryID); err == nil {
+				if _, err := sqliteStore.db.Exec(`UPDATE books SET author_id = ? WHERE id = ?`, primaryID, ja.bookID); err != nil {
+					log.Printf("    - Warning: could not update books.author_id for book %s: %v", ja.bookID, err)
+				}
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// PART 2: Narrators — backfill from books.narrator field
+	// -------------------------------------------------------------------------
+	narBookRows, err := sqliteStore.db.Query(`
+		SELECT b.id, b.narrator
+		FROM books b
+		WHERE b.narrator IS NOT NULL
+		  AND b.narrator != ''
+		  AND NOT EXISTS (
+			SELECT 1 FROM book_narrators bn WHERE bn.book_id = b.id
+		  )
+	`)
+	if err != nil {
+		return fmt.Errorf("migration 22: query narrator books: %w", err)
+	}
+
+	type narBook struct {
+		bookID   string
+		narrator string
+	}
+	var narBooks []narBook
+	for narBookRows.Next() {
+		var nb narBook
+		if err := narBookRows.Scan(&nb.bookID, &nb.narrator); err != nil {
+			narBookRows.Close()
+			return fmt.Errorf("migration 22: scan narrator book: %w", err)
+		}
+		narBooks = append(narBooks, nb)
+	}
+	narBookRows.Close()
+	if err := narBookRows.Err(); err != nil {
+		return fmt.Errorf("migration 22: narrator book rows error: %w", err)
+	}
+
+	log.Printf("    - Found %d books with narrator field but no book_narrators rows", len(narBooks))
+
+	for _, nb := range narBooks {
+		parts := strings.Split(nb.narrator, " & ")
+		log.Printf("    - Backfilling narrators for book %s: %q (%d part(s))", nb.bookID, nb.narrator, len(parts))
+
+		for i, rawName := range parts {
+			name := strings.TrimSpace(rawName)
+			if name == "" {
+				continue
+			}
+
+			var narratorID int
+			var existingID int
+			err := sqliteStore.db.QueryRow(`SELECT id FROM narrators WHERE LOWER(name) = LOWER(?)`, name).Scan(&existingID)
+			if err == sql.ErrNoRows {
+				result, createErr := sqliteStore.db.Exec(`INSERT INTO narrators (name) VALUES (?)`, name)
+				if createErr != nil {
+					return fmt.Errorf("migration 22: create narrator %q: %w", name, createErr)
+				}
+				insertedID, _ := result.LastInsertId()
+				narratorID = int(insertedID)
+				log.Printf("      - Created new narrator %q (id=%d)", name, narratorID)
+			} else if err != nil {
+				return fmt.Errorf("migration 22: lookup narrator %q: %w", name, err)
+			} else {
+				narratorID = existingID
+				log.Printf("      - Found existing narrator %q (id=%d)", name, narratorID)
+			}
+
+			role := "narrator"
+			if i > 0 {
+				role = "co-narrator"
+			}
+
+			if _, err := sqliteStore.db.Exec(`
+				INSERT OR IGNORE INTO book_narrators (book_id, narrator_id, role, position)
+				VALUES (?, ?, ?, ?)`,
+				nb.bookID, narratorID, role, i); err != nil {
+				return fmt.Errorf("migration 22: insert book_narrators for %q: %w", name, err)
+			}
+		}
+	}
+
+	log.Println("  - Migration 22 complete: book_authors and book_narrators backfilled")
 	return nil
 }
