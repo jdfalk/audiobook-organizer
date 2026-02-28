@@ -1,5 +1,5 @@
 // file: internal/config/persistence_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package config
@@ -717,17 +717,38 @@ func TestSyncConfigFromEnv(t *testing.T) {
 			t.Errorf("expected RootDir to remain unchanged, got %q", AppConfig.RootDir)
 		}
 	})
+
+	t.Run("does not overwrite DB-loaded key with empty env value", func(t *testing.T) {
+		resetConfigTestState()
+		t.Cleanup(resetConfigTestState)
+
+		// Simulate: DB loaded a key, but env var is empty
+		AppConfig = Config{
+			OpenAIAPIKey: "sk-db-loaded-key-1234",
+			RootDir:      "/db-loaded-root",
+		}
+
+		viper.Set("openai_api_key", "")
+		viper.Set("root_dir", "")
+
+		SyncConfigFromEnv()
+
+		if AppConfig.OpenAIAPIKey != "sk-db-loaded-key-1234" {
+			t.Errorf("expected OpenAIAPIKey to remain DB value, got %q", AppConfig.OpenAIAPIKey)
+		}
+		if AppConfig.RootDir != "/db-loaded-root" {
+			t.Errorf("expected RootDir to remain DB value, got %q", AppConfig.RootDir)
+		}
+	})
 }
 
 func TestLifecycleRetentionSettings(t *testing.T) {
-	t.Run("lifecycle settings not yet implemented in applySetting", func(t *testing.T) {
+	t.Run("lifecycle settings are applied from database", func(t *testing.T) {
 		resetConfigTestState()
 		t.Cleanup(resetConfigTestState)
 
 		InitConfig()
 
-		// These settings are currently saved but not applied in applySetting.
-		// Verify that loading them does not override defaults.
 		store := mocks.NewMockStore(t)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
@@ -742,18 +763,15 @@ func TestLifecycleRetentionSettings(t *testing.T) {
 			},
 		}, nil).Once()
 
-		defaultDays := AppConfig.PurgeSoftDeletedAfterDays
-		defaultDeleteFiles := AppConfig.PurgeSoftDeletedDeleteFiles
-
 		err := LoadConfigFromDatabase(store)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if AppConfig.PurgeSoftDeletedAfterDays != defaultDays {
-			t.Errorf("expected PurgeSoftDeletedAfterDays to remain %d, got %d", defaultDays, AppConfig.PurgeSoftDeletedAfterDays)
+		if AppConfig.PurgeSoftDeletedAfterDays != 60 {
+			t.Errorf("expected PurgeSoftDeletedAfterDays to be 60, got %d", AppConfig.PurgeSoftDeletedAfterDays)
 		}
-		if AppConfig.PurgeSoftDeletedDeleteFiles != defaultDeleteFiles {
-			t.Errorf("expected PurgeSoftDeletedDeleteFiles to remain %v, got %v", defaultDeleteFiles, AppConfig.PurgeSoftDeletedDeleteFiles)
+		if !AppConfig.PurgeSoftDeletedDeleteFiles {
+			t.Errorf("expected PurgeSoftDeletedDeleteFiles to be true, got %v", AppConfig.PurgeSoftDeletedDeleteFiles)
 		}
 	})
 }

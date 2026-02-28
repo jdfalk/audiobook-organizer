@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.14.0
+// version: 1.15.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -668,6 +668,12 @@ export const BookDetail = () => {
 
   const isSoftDeleted = book.marked_for_deletion;
   const coverLetter = (book.title || 'A')[0]?.toUpperCase();
+  const coverImageUrl = book.cover_url
+    ? book.cover_url.startsWith('/')
+      ? book.cover_url
+      : `/api/v1/covers/proxy?url=${encodeURIComponent(book.cover_url)}`
+    : `/api/v1/audiobooks/${book.id}/cover`;
+  const [coverError, setCoverError] = useState(false);
 
   return (
     <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
@@ -694,16 +700,34 @@ export const BookDetail = () => {
           Back to Library
         </Button>
         <Stack direction="row" spacing={2} alignItems="center">
-          <Avatar
-            sx={{
-              bgcolor: 'primary.main',
-              width: 56,
-              height: 56,
-              fontSize: 28,
-            }}
-          >
-            {coverLetter}
-          </Avatar>
+          {coverError ? (
+            <Avatar
+              sx={{
+                bgcolor: 'primary.main',
+                width: 120,
+                height: 120,
+                fontSize: 48,
+                borderRadius: 2,
+              }}
+              variant="rounded"
+            >
+              {coverLetter}
+            </Avatar>
+          ) : (
+            <Box
+              component="img"
+              src={coverImageUrl}
+              alt={`Cover art for ${book.title || 'Untitled'}`}
+              onError={() => setCoverError(true)}
+              sx={{
+                width: 120,
+                height: 120,
+                objectFit: 'cover',
+                borderRadius: 2,
+                boxShadow: 2,
+              }}
+            />
+          )}
           <Stack spacing={0.5}>
             <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
               <Typography variant="h4" component="h1">

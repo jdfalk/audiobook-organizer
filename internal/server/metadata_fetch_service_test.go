@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 2.2.0
+// version: 3.0.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
@@ -487,5 +487,178 @@ func TestBestTitleMatch_EmptyResults(t *testing.T) {
 	got = bestTitleMatch([]metadata.BookMetadata{}, "Some Title")
 	if got != nil {
 		t.Errorf("expected nil for empty slice, got %v", got)
+	}
+}
+
+func TestIsGarbageValue(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"Unknown", true},
+		{"unknown", true},
+		{"UNKNOWN", true},
+		{"narrator", true},
+		{"Narrator", true},
+		{"", true},
+		{"n/a", true},
+		{"Terry Pratchett", false},
+		{"Stephen King", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := isGarbageValue(tc.input); got != tc.want {
+				t.Errorf("isGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsBetterValue_NeverDowngrade(t *testing.T) {
+	// Real author -> "Unknown" should NOT replace
+	if isBetterValue("Terry Pratchett", "Unknown") {
+		t.Error("should not replace real author with Unknown")
+	}
+	// Empty -> real value should replace
+	if !isBetterValue("", "Terry Pratchett") {
+		t.Error("should replace empty with real value")
+	}
+	// "Unknown" -> real value should replace
+	if !isBetterValue("Unknown", "Terry Pratchett") {
+		t.Error("should replace Unknown with real value")
+	}
+	// Real -> real is allowed
+	if !isBetterValue("Old Title", "New Title") {
+		t.Error("should allow real->real replacement")
+	}
+}
+
+func TestIsBetterStringPtr_NeverDowngrade(t *testing.T) {
+	real := "Real Narrator"
+	// Real narrator -> "narrator" garbage should NOT replace
+	if isBetterStringPtr(&real, "narrator") {
+		t.Error("should not replace real narrator with garbage 'narrator'")
+	}
+	// nil -> real should replace
+	if !isBetterStringPtr(nil, "John Smith") {
+		t.Error("should replace nil with real value")
+	}
+	// garbage -> real should replace
+	unknown := "Unknown"
+	if !isBetterStringPtr(&unknown, "John Smith") {
+		t.Error("should replace Unknown with real value")
+	}
+}
+
+func TestParseSeriesFromTitle(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantSeries  string
+		wantPos     string
+		wantTitle   string
+	}{
+		{"(Long Earth 05) The Long Cosmos", "Long Earth", "5", "The Long Cosmos"},
+		{"(Dresden Files 01) Storm Front", "Dresden Files", "1", "Storm Front"},
+		{"(Discworld 41) The Shepherd's Crown", "Discworld", "41", "The Shepherd's Crown"},
+		{"(Series #3) Title", "Series", "3", "Title"},
+		{"Series Name, Book 7", "Series Name", "7", ""},
+		{"Just A Regular Title", "", "", ""},
+		{"", "", "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			series, pos, title := parseSeriesFromTitle(tc.input)
+			if series != tc.wantSeries {
+				t.Errorf("series: got %q, want %q", series, tc.wantSeries)
+			}
+			if pos != tc.wantPos {
+				t.Errorf("position: got %q, want %q", pos, tc.wantPos)
+			}
+			if title != tc.wantTitle {
+				t.Errorf("title: got %q, want %q", title, tc.wantTitle)
+			}
+		})
+	}
+}
+
+func TestApplyMetadataToBook_NoDowngrade(t *testing.T) {
+	mockDB := &database.MockStore{}
+	mfs := NewMetadataFetchService(mockDB)
+
+	realAuthor := "Terry Pratchett & Stephen Baxter"
+	realNarrator := "Michael Fenton Stevens"
+	book := &database.Book{
+		ID:       "1",
+		Title:    "The Long Cosmos",
+		Narrator: &realNarrator,
+	}
+	// Simulate AuthorID being set (author resolved separately)
+	_ = realAuthor
+
+	meta := metadata.BookMetadata{
+		Title:    "Unknown",
+		Narrator: "narrator",
+		Author:   "Unknown",
+	}
+
+	mfs.applyMetadataToBook(book, meta)
+
+	// Title should NOT be replaced with "Unknown"
+	if book.Title != "The Long Cosmos" {
+		t.Errorf("title was downgraded to %q", book.Title)
+	}
+	// Narrator should NOT be replaced with garbage "narrator"
+	if book.Narrator == nil || *book.Narrator != "Michael Fenton Stevens" {
+		t.Errorf("narrator was downgraded to %v", book.Narrator)
+	}
+}
+
+func TestRecordChangeHistory(t *testing.T) {
+	var recorded []*database.MetadataChangeRecord
+	mockDB := &database.MockStore{
+		GetAuthorByIDFunc: func(id int) (*database.Author, error) {
+			return &database.Author{ID: id, Name: "Old Author"}, nil
+		},
+		GetSeriesByIDFunc: func(id int) (*database.Series, error) {
+			return &database.Series{ID: id, Name: "Old Series"}, nil
+		},
+		RecordMetadataChangeFunc: func(record *database.MetadataChangeRecord) error {
+			recorded = append(recorded, record)
+			return nil
+		},
+	}
+	mfs := NewMetadataFetchService(mockDB)
+
+	authorID := 1
+	seriesID := 2
+	book := &database.Book{
+		ID:       "book1",
+		Title:    "Old Title",
+		AuthorID: &authorID,
+		SeriesID: &seriesID,
+	}
+	meta := metadata.BookMetadata{
+		Title:     "New Title",
+		Author:    "New Author",
+		Publisher: "New Publisher",
+	}
+
+	mfs.recordChangeHistory(book, meta, "TestSource")
+
+	if len(recorded) < 3 {
+		t.Fatalf("expected at least 3 change records, got %d", len(recorded))
+	}
+
+	// Verify all records have correct source and type
+	for _, r := range recorded {
+		if r.Source != "TestSource" {
+			t.Errorf("expected source 'TestSource', got %q", r.Source)
+		}
+		if r.ChangeType != "fetched" {
+			t.Errorf("expected change_type 'fetched', got %q", r.ChangeType)
+		}
+		if r.BookID != "book1" {
+			t.Errorf("expected book_id 'book1', got %q", r.BookID)
+		}
 	}
 }

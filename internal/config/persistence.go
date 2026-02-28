@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -52,31 +52,30 @@ func LoadConfigFromFile() error {
 
 	applied := 0
 
-	// Only fill in values that are currently empty/default
-	if AppConfig.OpenAIAPIKey == "" {
-		if key, ok := fileConfig["openai_api_key"].(string); ok && key != "" {
-			AppConfig.OpenAIAPIKey = key
-			applied++
-			log.Printf("[INFO] Loaded openai_api_key from config file")
+	// Only fill in values that are currently empty/default.
+	// This is the fallback path when DB decryption fails for secrets.
+	stringFallbacks := map[string]*string{
+		"openai_api_key":     &AppConfig.OpenAIAPIKey,
+		"google_books_api_key": &AppConfig.GoogleBooksAPIKey,
+		"hardcover_api_token": &AppConfig.HardcoverAPIToken,
+		"root_dir":           &AppConfig.RootDir,
+		"language":           &AppConfig.Language,
+	}
+	for key, ptr := range stringFallbacks {
+		if *ptr == "" {
+			if val, ok := fileConfig[key].(string); ok && val != "" {
+				*ptr = val
+				applied++
+				log.Printf("[INFO] Loaded %s from config file", key)
+			}
 		}
 	}
+
 	if !AppConfig.EnableAIParsing {
 		if val, ok := fileConfig["enable_ai_parsing"].(bool); ok && val {
 			AppConfig.EnableAIParsing = true
 			applied++
 			log.Printf("[INFO] Loaded enable_ai_parsing from config file")
-		}
-	}
-	if AppConfig.RootDir == "" {
-		if val, ok := fileConfig["root_dir"].(string); ok && val != "" {
-			AppConfig.RootDir = val
-			applied++
-		}
-	}
-	if AppConfig.Language == "" {
-		if val, ok := fileConfig["language"].(string); ok && val != "" {
-			AppConfig.Language = val
-			applied++
 		}
 	}
 
@@ -111,9 +110,15 @@ func SaveConfigToFile() error {
 		"log_level":             AppConfig.LogLevel,
 	}
 
-	// Only write the key if it's set
+	// Only write secrets if they're set (plaintext in file, file permissions protect them)
 	if AppConfig.OpenAIAPIKey != "" {
 		fileConfig["openai_api_key"] = AppConfig.OpenAIAPIKey
+	}
+	if AppConfig.GoogleBooksAPIKey != "" {
+		fileConfig["google_books_api_key"] = AppConfig.GoogleBooksAPIKey
+	}
+	if AppConfig.HardcoverAPIToken != "" {
+		fileConfig["hardcover_api_token"] = AppConfig.HardcoverAPIToken
 	}
 
 	data, err := yaml.Marshal(fileConfig)
@@ -271,6 +276,18 @@ func applySetting(key, value, typ string) error {
 	case "language":
 		AppConfig.Language = value
 
+	// Open Library dumps
+	case "openlibrary_dump_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.OpenLibraryDumpEnabled = b
+		}
+	case "openlibrary_dump_dir":
+		AppConfig.OpenLibraryDumpDir = value
+
+	// Hardcover.app
+	case "hardcover_api_token":
+		AppConfig.HardcoverAPIToken = value
+
 	// AI parsing
 	case "enable_ai_parsing":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -331,6 +348,16 @@ func applySetting(key, value, typ string) error {
 	case "auto_update_window_end":
 		if i, err := strconv.Atoi(value); err == nil {
 			AppConfig.AutoUpdateWindowEnd = i
+		}
+
+	// Lifecycle / retention
+	case "purge_soft_deleted_after_days":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.PurgeSoftDeletedAfterDays = i
+		}
+	case "purge_soft_deleted_delete_files":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.PurgeSoftDeletedDeleteFiles = b
 		}
 
 	// Basic auth
@@ -399,6 +426,13 @@ func SaveConfigToDatabase(store database.Store) error {
 		"auto_fetch_metadata": {strconv.FormatBool(AppConfig.AutoFetchMetadata), "bool", false},
 		"language":            {AppConfig.Language, "string", false},
 
+		// Open Library dumps
+		"openlibrary_dump_enabled": {strconv.FormatBool(AppConfig.OpenLibraryDumpEnabled), "bool", false},
+		"openlibrary_dump_dir":     {AppConfig.OpenLibraryDumpDir, "string", false},
+
+		// Hardcover.app
+		"hardcover_api_token": {AppConfig.HardcoverAPIToken, "string", true},
+
 		// AI parsing (API key is secret in DB, plaintext in file)
 		"enable_ai_parsing": {strconv.FormatBool(AppConfig.EnableAIParsing), "bool", false},
 		"openai_api_key":        {AppConfig.OpenAIAPIKey, "string", true},
@@ -412,6 +446,10 @@ func SaveConfigToDatabase(store database.Store) error {
 		"cache_size":           {strconv.Itoa(AppConfig.CacheSize), "int", false},
 		"memory_limit_percent": {strconv.Itoa(AppConfig.MemoryLimitPercent), "int", false},
 		"memory_limit_mb":      {strconv.Itoa(AppConfig.MemoryLimitMB), "int", false},
+
+		// Lifecycle / retention
+		"purge_soft_deleted_after_days":   {strconv.Itoa(AppConfig.PurgeSoftDeletedAfterDays), "int", false},
+		"purge_soft_deleted_delete_files": {strconv.FormatBool(AppConfig.PurgeSoftDeletedDeleteFiles), "bool", false},
 
 		// Logging
 		"log_level":           {AppConfig.LogLevel, "string", false},
@@ -461,17 +499,25 @@ func SaveConfigToDatabase(store database.Store) error {
 	return nil
 }
 
-// SyncConfigFromEnv loads env vars from viper and overrides AppConfig (without saving to DB)
-// This is useful for command-line overrides or environment-specific settings
+// SyncConfigFromEnv loads env vars from viper and overrides AppConfig (without saving to DB).
+// Only non-empty env values override DB-loaded values. This prevents empty env vars or
+// viper defaults from wiping out API keys that were loaded from the database.
 func SyncConfigFromEnv() {
 	if viper.IsSet("root_dir") {
-		AppConfig.RootDir = viper.GetString("root_dir")
+		if val := viper.GetString("root_dir"); val != "" {
+			AppConfig.RootDir = val
+		}
 	}
 	if viper.IsSet("openai_api_key") {
-		AppConfig.OpenAIAPIKey = viper.GetString("openai_api_key")
+		if val := viper.GetString("openai_api_key"); val != "" {
+			AppConfig.OpenAIAPIKey = val
+			log.Printf("[DEBUG] SyncConfigFromEnv: overriding OpenAI API key from env/config (length: %d)", len(val))
+		}
 	}
 	if viper.IsSet("google_books_api_key") {
-		AppConfig.GoogleBooksAPIKey = viper.GetString("google_books_api_key")
+		if val := viper.GetString("google_books_api_key"); val != "" {
+			AppConfig.GoogleBooksAPIKey = val
+		}
 	}
 	if viper.IsSet("enable_ai_parsing") {
 		AppConfig.EnableAIParsing = viper.GetBool("enable_ai_parsing")
