@@ -1,5 +1,5 @@
 // file: internal/database/migrations_extra_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 67d3f1c5-8c24-4a3c-9a79-35fb6d68fdd9
 
 package database
@@ -220,4 +220,211 @@ func TestGetMigrationHistory(t *testing.T) {
 			t.Errorf("expected migration version 99, got %d", records[0].Version)
 		}
 	})
+}
+
+// TestMigration022_BackfillMultipleAuthorsNarrators verifies that migration 22
+// splits existing "&"-joined author names into multiple book_authors rows and
+// backfills book_narrators from the legacy books.narrator field.
+func TestMigration022_BackfillMultipleAuthorsNarrators(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	s := store.(*SQLiteStore)
+
+	// --- Setup: create two authors joined with "&" ---
+	result, err := s.db.Exec(`INSERT INTO authors (name) VALUES (?)`, "Alice Smith & Bob Jones")
+	if err != nil {
+		t.Fatalf("insert joined author: %v", err)
+	}
+	joinedAuthorID, _ := result.LastInsertId()
+
+	// Insert a book that references the joined author and has a narrator with "&"
+	bookID := "01JTEST000000000000000001"
+	narratorStr := "Carol Davis & Dave Evans"
+	_, err = s.db.Exec(`
+		INSERT INTO books (id, title, author_id, narrator, file_path, format)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		bookID, "Test Book", int(joinedAuthorID), narratorStr, "/tmp/test.m4b", "m4b")
+	if err != nil {
+		t.Fatalf("insert book: %v", err)
+	}
+
+	// Seed the existing book_authors row (as migration 15 would have done):
+	_, err = s.db.Exec(`INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position) VALUES (?, ?, 'author', 0)`,
+		bookID, int(joinedAuthorID))
+	if err != nil {
+		t.Fatalf("seed book_authors: %v", err)
+	}
+
+	// Confirm pre-condition: only 1 row in book_authors, 0 rows in book_narrators
+	var baCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM book_authors WHERE book_id = ?`, bookID).Scan(&baCount)
+	if baCount != 1 {
+		t.Fatalf("pre-condition: expected 1 book_authors row, got %d", baCount)
+	}
+	var bnCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM book_narrators WHERE book_id = ?`, bookID).Scan(&bnCount)
+	if bnCount != 0 {
+		t.Fatalf("pre-condition: expected 0 book_narrators rows, got %d", bnCount)
+	}
+
+	// --- Run migration 22 ---
+	if err := migration022Up(store); err != nil {
+		t.Fatalf("migration022Up failed: %v", err)
+	}
+
+	// --- Verify authors were split ---
+	rows, err := s.db.Query(`
+		SELECT a.name, ba.role, ba.position
+		FROM book_authors ba
+		JOIN authors a ON a.id = ba.author_id
+		WHERE ba.book_id = ?
+		ORDER BY ba.position`, bookID)
+	if err != nil {
+		t.Fatalf("query book_authors: %v", err)
+	}
+	defer rows.Close()
+
+	type authorRow struct {
+		name, role string
+		pos        int
+	}
+	var authors []authorRow
+	for rows.Next() {
+		var ar authorRow
+		rows.Scan(&ar.name, &ar.role, &ar.pos)
+		authors = append(authors, ar)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("book_authors rows.Err: %v", err)
+	}
+
+	if len(authors) != 2 {
+		t.Fatalf("expected 2 book_authors rows after migration, got %d: %+v", len(authors), authors)
+	}
+	if authors[0].name != "Alice Smith" || authors[0].role != "author" || authors[0].pos != 0 {
+		t.Errorf("first author wrong: %+v", authors[0])
+	}
+	if authors[1].name != "Bob Jones" || authors[1].role != "co-author" || authors[1].pos != 1 {
+		t.Errorf("second author wrong: %+v", authors[1])
+	}
+
+	// --- Verify narrators were backfilled ---
+	narRows, err := s.db.Query(`
+		SELECT n.name, bn.role, bn.position
+		FROM book_narrators bn
+		JOIN narrators n ON n.id = bn.narrator_id
+		WHERE bn.book_id = ?
+		ORDER BY bn.position`, bookID)
+	if err != nil {
+		t.Fatalf("query book_narrators: %v", err)
+	}
+	defer narRows.Close()
+
+	type narRow struct {
+		name, role string
+		pos        int
+	}
+	var narrators []narRow
+	for narRows.Next() {
+		var nr narRow
+		narRows.Scan(&nr.name, &nr.role, &nr.pos)
+		narrators = append(narrators, nr)
+	}
+	if err := narRows.Err(); err != nil {
+		t.Fatalf("book_narrators rows.Err: %v", err)
+	}
+
+	if len(narrators) != 2 {
+		t.Fatalf("expected 2 book_narrators rows after migration, got %d: %+v", len(narrators), narrators)
+	}
+	if narrators[0].name != "Carol Davis" || narrators[0].role != "narrator" || narrators[0].pos != 0 {
+		t.Errorf("first narrator wrong: %+v", narrators[0])
+	}
+	if narrators[1].name != "Dave Evans" || narrators[1].role != "co-narrator" || narrators[1].pos != 1 {
+		t.Errorf("second narrator wrong: %+v", narrators[1])
+	}
+}
+
+// TestMigration022_SingleAuthorUntouched verifies that books with a single author
+// (no "&") are not modified.
+func TestMigration022_SingleAuthorUntouched(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	s := store.(*SQLiteStore)
+
+	result, err := s.db.Exec(`INSERT INTO authors (name) VALUES (?)`, "Solo Author")
+	if err != nil {
+		t.Fatalf("insert author: %v", err)
+	}
+	authorID, _ := result.LastInsertId()
+
+	bookID := "01JTEST000000000000000002"
+	_, err = s.db.Exec(`
+		INSERT INTO books (id, title, author_id, file_path, format)
+		VALUES (?, ?, ?, ?, ?)`,
+		bookID, "Solo Book", int(authorID), "/tmp/solo.m4b", "m4b")
+	if err != nil {
+		t.Fatalf("insert book: %v", err)
+	}
+
+	_, err = s.db.Exec(`INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position) VALUES (?, ?, 'author', 0)`,
+		bookID, int(authorID))
+	if err != nil {
+		t.Fatalf("seed book_authors: %v", err)
+	}
+
+	if err := migration022Up(store); err != nil {
+		t.Fatalf("migration022Up failed: %v", err)
+	}
+
+	var baCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM book_authors WHERE book_id = ?`, bookID).Scan(&baCount)
+	if baCount != 1 {
+		t.Errorf("expected 1 book_authors row for solo author, got %d", baCount)
+	}
+}
+
+// TestMigration022_Idempotent verifies that running migration 22 twice does not
+// produce duplicate rows.
+func TestMigration022_Idempotent(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	s := store.(*SQLiteStore)
+
+	result, err := s.db.Exec(`INSERT INTO authors (name) VALUES (?)`, "Foo & Bar")
+	if err != nil {
+		t.Fatalf("insert author: %v", err)
+	}
+	joinedAuthorID, _ := result.LastInsertId()
+
+	bookID := "01JTEST000000000000000003"
+	_, err = s.db.Exec(`
+		INSERT INTO books (id, title, author_id, file_path, format)
+		VALUES (?, ?, ?, ?, ?)`,
+		bookID, "Idempotent Book", int(joinedAuthorID), "/tmp/idempotent.m4b", "m4b")
+	if err != nil {
+		t.Fatalf("insert book: %v", err)
+	}
+	_, err = s.db.Exec(`INSERT OR IGNORE INTO book_authors (book_id, author_id, role, position) VALUES (?, ?, 'author', 0)`,
+		bookID, int(joinedAuthorID))
+	if err != nil {
+		t.Fatalf("seed book_authors: %v", err)
+	}
+
+	// Run twice
+	if err := migration022Up(store); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	if err := migration022Up(store); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	var baCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM book_authors WHERE book_id = ?`, bookID).Scan(&baCount)
+	if baCount != 2 {
+		t.Errorf("after two runs, expected exactly 2 book_authors rows (Foo + Bar), got %d", baCount)
+	}
 }
