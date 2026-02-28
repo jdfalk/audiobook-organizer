@@ -303,6 +303,46 @@ func applySetting(key, value, typ string) error {
 		if i, err := strconv.Atoi(value); err == nil {
 			AppConfig.ConcurrentScans = i
 		}
+	case "operation_timeout_minutes":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.OperationTimeoutMinutes = i
+		}
+	case "api_rate_limit_per_minute":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.APIRateLimitPerMinute = i
+		}
+	case "auth_rate_limit_per_minute":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.AuthRateLimitPerMinute = i
+		}
+	case "json_body_limit_mb":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.JSONBodyLimitMB = i
+		}
+	case "upload_body_limit_mb":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.UploadBodyLimitMB = i
+		}
+	case "enable_auth":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.EnableAuth = b
+		}
+	case "write_back_metadata":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.WriteBackMetadata = b
+		}
+	case "embed_cover_art":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.EmbedCoverArt = b
+		}
+	case "auto_scan_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.AutoScanEnabled = b
+		}
+	case "auto_scan_debounce_seconds":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.AutoScanDebounceSeconds = i
+		}
 
 	// Memory management
 	case "memory_limit_type":
@@ -471,7 +511,17 @@ func SaveConfigToDatabase(store database.Store) error {
 		"google_books_api_key":  {AppConfig.GoogleBooksAPIKey, "string", true},
 
 		// Performance
-		"concurrent_scans": {strconv.Itoa(AppConfig.ConcurrentScans), "int", false},
+		"concurrent_scans":           {strconv.Itoa(AppConfig.ConcurrentScans), "int", false},
+		"operation_timeout_minutes":  {strconv.Itoa(AppConfig.OperationTimeoutMinutes), "int", false},
+		"api_rate_limit_per_minute":  {strconv.Itoa(AppConfig.APIRateLimitPerMinute), "int", false},
+		"auth_rate_limit_per_minute": {strconv.Itoa(AppConfig.AuthRateLimitPerMinute), "int", false},
+		"json_body_limit_mb":         {strconv.Itoa(AppConfig.JSONBodyLimitMB), "int", false},
+		"upload_body_limit_mb":       {strconv.Itoa(AppConfig.UploadBodyLimitMB), "int", false},
+		"enable_auth":                {strconv.FormatBool(AppConfig.EnableAuth), "bool", false},
+		"write_back_metadata":        {strconv.FormatBool(AppConfig.WriteBackMetadata), "bool", false},
+		"embed_cover_art":            {strconv.FormatBool(AppConfig.EmbedCoverArt), "bool", false},
+		"auto_scan_enabled":          {strconv.FormatBool(AppConfig.AutoScanEnabled), "bool", false},
+		"auto_scan_debounce_seconds": {strconv.Itoa(AppConfig.AutoScanDebounceSeconds), "int", false},
 
 		// Memory management
 		"memory_limit_type":    {AppConfig.MemoryLimitType, "string", false},

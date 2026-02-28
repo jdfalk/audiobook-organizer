@@ -234,7 +234,7 @@ func InitConfig() {
 	viper.SetDefault("operation_timeout_minutes", 30)
 
 	// API security/runtime limits
-	viper.SetDefault("api_rate_limit_per_minute", 100)
+	viper.SetDefault("api_rate_limit_per_minute", 0)
 	viper.SetDefault("auth_rate_limit_per_minute", 10)
 	viper.SetDefault("json_body_limit_mb", 1)
 	viper.SetDefault("upload_body_limit_mb", 10)
