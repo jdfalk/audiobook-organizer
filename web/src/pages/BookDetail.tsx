@@ -94,6 +94,7 @@ export const BookDetail = () => {
     active: boolean;
   }>>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
+  const [coverError, setCoverError] = useState(false);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -673,7 +674,6 @@ export const BookDetail = () => {
       ? book.cover_url
       : `/api/v1/covers/proxy?url=${encodeURIComponent(book.cover_url)}`
     : `/api/v1/audiobooks/${book.id}/cover`;
-  const [coverError, setCoverError] = useState(false);
 
   return (
     <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
