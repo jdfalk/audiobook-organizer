@@ -980,16 +980,16 @@ func (s *Server) setupRoutes() {
 
 	apiRatePerMinute := config.AppConfig.APIRateLimitPerMinute
 	if apiRatePerMinute <= 0 {
-		apiRatePerMinute = 100
+		apiRatePerMinute = 600
 	}
 	authRatePerMinute := config.AppConfig.AuthRateLimitPerMinute
 	if authRatePerMinute <= 0 {
-		authRatePerMinute = 10
+		authRatePerMinute = 30
 	}
 
-	apiBurst := apiRatePerMinute / 10
-	if apiBurst < 1 {
-		apiBurst = 1
+	apiBurst := apiRatePerMinute / 5
+	if apiBurst < 20 {
+		apiBurst = 20
 	}
 	authBurst := authRatePerMinute / 10
 	if authBurst < 1 {
