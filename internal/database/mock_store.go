@@ -981,3 +981,7 @@ func (m *MockStore) Reset() error {
 	}
 	return nil
 }
+
+func (m *MockStore) SetLastWrittenAt(id string, t time.Time) error {
+	return nil
+}

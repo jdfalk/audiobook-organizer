@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -31,7 +31,7 @@ const bookSelectColumns = `
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
 	original_file_hash, organized_file_hash, library_state, quantity,
 	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
-	cover_url, narrators_json
+	metadata_updated_at, last_written_at, cover_url, narrators_json
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -52,6 +52,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		libraryState                                                         sql.NullString
 		markedForDeletion                                                    sql.NullBool
 		markedForDeletionAt, createdAt, updatedAt                            sql.NullTime
+		metadataUpdatedAt, lastWrittenAt                                      sql.NullTime
 	)
 
 	if err := scanner.Scan(
@@ -65,7 +66,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
 		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
-		&coverURL, &narratorsJSON,
+		&metadataUpdatedAt, &lastWrittenAt, &coverURL, &narratorsJSON,
 	); err != nil {
 		return err
 	}
@@ -134,6 +135,12 @@ func scanBook(scanner rowScanner, book *Book) error {
 	}
 	if updatedAt.Valid {
 		book.UpdatedAt = &updatedAt.Time
+	}
+	if metadataUpdatedAt.Valid {
+		book.MetadataUpdatedAt = &metadataUpdatedAt.Time
+	}
+	if lastWrittenAt.Valid {
+		book.LastWrittenAt = &lastWrittenAt.Time
 	}
 	book.CoverURL = nullableString(coverURL)
 	book.NarratorsJSON = nullableString(narratorsJSON)
@@ -283,6 +290,8 @@ func (s *SQLiteStore) createTables() error {
 		marked_for_deletion_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME,
+		metadata_updated_at DATETIME,
+		last_written_at DATETIME,
 		cover_url TEXT,
 		narrators_json TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
@@ -1650,10 +1659,93 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	return book, nil
 }
 
+// metadataChanged returns true if any user-visible metadata field differs between
+// old and new. Internal-only fields (FileHash, LibraryState, ITunes*, etc.) are
+// intentionally excluded so that system updates do not bump metadata_updated_at.
+func metadataChanged(old, new *Book) bool {
+	if old.Title != new.Title {
+		return true
+	}
+	if !equalIntPtr(old.AuthorID, new.AuthorID) {
+		return true
+	}
+	if !equalIntPtr(old.SeriesID, new.SeriesID) {
+		return true
+	}
+	if !equalIntPtr(old.SeriesSequence, new.SeriesSequence) {
+		return true
+	}
+	if !equalStringPtr(old.Narrator, new.Narrator) {
+		return true
+	}
+	if !equalStringPtr(old.Publisher, new.Publisher) {
+		return true
+	}
+	if !equalStringPtr(old.Language, new.Language) {
+		return true
+	}
+	if !equalIntPtr(old.AudiobookReleaseYear, new.AudiobookReleaseYear) {
+		return true
+	}
+	if !equalIntPtr(old.PrintYear, new.PrintYear) {
+		return true
+	}
+	if !equalStringPtr(old.ISBN10, new.ISBN10) {
+		return true
+	}
+	if !equalStringPtr(old.ISBN13, new.ISBN13) {
+		return true
+	}
+	if !equalStringPtr(old.CoverURL, new.CoverURL) {
+		return true
+	}
+	if !equalStringPtr(old.NarratorsJSON, new.NarratorsJSON) {
+		return true
+	}
+	return false
+}
+
+// equalStringPtr returns true if both pointers are nil, or both point to equal strings.
+func equalStringPtr(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// equalIntPtr returns true if both pointers are nil, or both point to equal ints.
+func equalIntPtr(a, b *int) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
-	// Set updated_at timestamp
+	// Always stamp updated_at — this tracks every DB write for debugging.
 	now := time.Now()
 	book.UpdatedAt = &now
+
+	// Fetch the current book to detect whether metadata actually changed.
+	current, fetchErr := s.GetBookByID(id)
+
+	if fetchErr == nil && current != nil && metadataChanged(current, book) {
+		book.MetadataUpdatedAt = &now
+	} else if fetchErr == nil && current != nil {
+		// Preserve the existing metadata_updated_at value — nothing changed.
+		book.MetadataUpdatedAt = current.MetadataUpdatedAt
+	}
+
+	// Never touch last_written_at in UpdateBook. It is set by SetLastWrittenAt only.
+	if current != nil {
+		book.LastWrittenAt = current.LastWrittenAt
+	}
 
 	query := `UPDATE books SET
 		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
@@ -1665,7 +1757,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
-		marked_for_deletion = ?, marked_for_deletion_at = ?, updated_at = ?,
+		marked_for_deletion = ?, marked_for_deletion_at = ?,
+		updated_at = ?, metadata_updated_at = ?, last_written_at = ?,
 		cover_url = ?, narrators_json = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
@@ -1678,7 +1771,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
-		book.MarkedForDeletion, book.MarkedForDeletionAt, book.UpdatedAt,
+		book.MarkedForDeletion, book.MarkedForDeletionAt,
+		book.UpdatedAt, book.MetadataUpdatedAt, book.LastWrittenAt,
 		book.CoverURL, book.NarratorsJSON, id,
 	)
 	if err != nil {
@@ -1693,6 +1787,15 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	}
 	book.ID = id
 	return book, nil
+}
+
+// SetLastWrittenAt stamps the last_written_at timestamp for book id.
+func (s *SQLiteStore) SetLastWrittenAt(id string, t time.Time) error {
+	_, err := s.db.Exec(
+		`UPDATE books SET last_written_at = ? WHERE id = ?`,
+		t, id,
+	)
+	return err
 }
 
 func (s *SQLiteStore) DeleteBook(id string) error {
