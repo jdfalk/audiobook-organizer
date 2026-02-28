@@ -805,3 +805,48 @@ func TestScoreTitleMatch_MultipleVariants(t *testing.T) {
 		t.Errorf("box set should not win: got %q", got[0].Title)
 	}
 }
+
+func TestApplySeriesPositionFilter_RejectsWrongPosition(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "The Long Cosmos", SeriesPosition: "3"}, // wrong — book is #5
+	}
+	got := applySeriesPositionFilter(results, 5)
+	if got != nil {
+		t.Errorf("expected nil (wrong position), got %v", got)
+	}
+}
+
+func TestApplySeriesPositionFilter_AcceptsCorrectPosition(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "The Long Cosmos", SeriesPosition: "5"},
+	}
+	got := applySeriesPositionFilter(results, 5)
+	if got == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if got[0].SeriesPosition != "5" {
+		t.Errorf("expected position 5, got %q", got[0].SeriesPosition)
+	}
+}
+
+func TestApplySeriesPositionFilter_NoKnownPosition(t *testing.T) {
+	results := []metadata.BookMetadata{
+		{Title: "Some Book", SeriesPosition: "3"},
+	}
+	// knownPosition == 0 means "we don't know" — pass through unchanged
+	got := applySeriesPositionFilter(results, 0)
+	if len(got) != 1 {
+		t.Errorf("expected 1 result, got %d", len(got))
+	}
+}
+
+func TestApplySeriesPositionFilter_NoPositionInResult(t *testing.T) {
+	// If the result has no SeriesPosition, we can't reject it on position grounds.
+	results := []metadata.BookMetadata{
+		{Title: "The Long Cosmos"},
+	}
+	got := applySeriesPositionFilter(results, 5)
+	if len(got) != 1 {
+		t.Errorf("expected 1 result (no position to reject), got %d", len(got))
+	}
+}

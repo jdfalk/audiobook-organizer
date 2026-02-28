@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.0.0
+// version: 4.2.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -192,7 +192,23 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			log.Printf("[DEBUG] %s returned 0 results for %q", src.Name(), searchTitle)
 		}
 		if len(results) > 0 {
-			meta := results[0]
+			// Score all results and pick the best; reject if below quality threshold.
+			scored := bestTitleMatch(results, searchTitle, book.Title)
+			if len(scored) == 0 {
+				log.Printf("[DEBUG] %s: all %d results rejected by quality scorer for %q",
+					src.Name(), len(results), searchTitle)
+				continue // try next source
+			}
+			// Apply series position filter if the book's position is already known.
+			if book.SeriesSequence != nil {
+				scored = applySeriesPositionFilter(scored, *book.SeriesSequence)
+				if len(scored) == 0 {
+					log.Printf("[DEBUG] %s: best result rejected by series position filter for %q",
+						src.Name(), searchTitle)
+					continue
+				}
+			}
+			meta := scored[0]
 
 			// Parse series string if present (e.g. "(Long Earth 05) The Long Cosmos")
 			parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
@@ -626,6 +642,26 @@ func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 	}
 
 	return f1 + bonus
+}
+
+// applySeriesPositionFilter rejects the top result if it claims a different
+// series position than the book's known position. If the result has no
+// SeriesPosition or the book has no known position, results pass through.
+func applySeriesPositionFilter(
+	results []metadata.BookMetadata,
+	knownPosition int,
+) []metadata.BookMetadata {
+	if len(results) == 0 || knownPosition <= 0 {
+		return results
+	}
+	wantPos := strconv.Itoa(knownPosition)
+	best := results[0]
+	if best.SeriesPosition != "" && best.SeriesPosition != wantPos {
+		log.Printf("[DEBUG] scorer: rejecting result %q (series position %q != expected %q)",
+			best.Title, best.SeriesPosition, wantPos)
+		return nil
+	}
+	return results
 }
 
 // bestTitleMatch filters results to find the single best match for the given
