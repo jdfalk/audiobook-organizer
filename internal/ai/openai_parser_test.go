@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package ai
@@ -8,6 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -1526,5 +1529,173 @@ func TestParseBatchMetadataFromJSON_ErrorWrapping(t *testing.T) {
 	errorMsg := err.Error()
 	if !strings.Contains(errorMsg, "failed to parse OpenAI response") {
 		t.Errorf("Expected error to mention 'failed to parse OpenAI response', got: %s", errorMsg)
+	}
+}
+
+// --- ParseAudiobook tests ---
+
+func TestParseAudiobook_Disabled(t *testing.T) {
+	parser := NewOpenAIParser("", false)
+	ctx := context.Background()
+
+	_, err := parser.ParseAudiobook(ctx, AudiobookContext{FilePath: "/test/path.mp3"})
+	if err == nil {
+		t.Error("Expected error when parser is disabled")
+	}
+	if err.Error() != "OpenAI parser is not enabled" {
+		t.Errorf("Expected disabled error, got: %v", err)
+	}
+}
+
+func TestParseAudiobook_WithFakeServer(t *testing.T) {
+	// Create a fake OpenAI-compatible server
+	var capturedBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		capturedBody = string(bodyBytes)
+
+		response := `{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "{\"title\":\"The Great Gatsby\",\"author\":\"F. Scott Fitzgerald\",\"narrator\":\"Jake Gyllenhaal\",\"series\":\"\",\"series_number\":0,\"year\":2020,\"confidence\":\"high\"}"
+				},
+				"finish_reason": "stop"
+			}]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	// Point OPENAI_BASE_URL to our fake server
+	os.Setenv("OPENAI_BASE_URL", server.URL)
+	defer os.Unsetenv("OPENAI_BASE_URL")
+
+	parser := NewOpenAIParser("fake-key", true)
+	ctx := context.Background()
+
+	abCtx := AudiobookContext{
+		FilePath:      "/audiobooks/F. Scott Fitzgerald/The Great Gatsby/01 Chapter 1.mp3",
+		Title:         "01 Chapter 1",
+		AuthorName:    "F. Scott Fitzgerald",
+		Narrator:      "Jake Gyllenhaal",
+		FileCount:     12,
+		TotalDuration: 32400, // 9 hours
+	}
+
+	metadata, err := parser.ParseAudiobook(ctx, abCtx)
+	if err != nil {
+		t.Fatalf("ParseAudiobook failed: %v", err)
+	}
+
+	if metadata.Title != "The Great Gatsby" {
+		t.Errorf("Expected title 'The Great Gatsby', got '%s'", metadata.Title)
+	}
+	if metadata.Author != "F. Scott Fitzgerald" {
+		t.Errorf("Expected author 'F. Scott Fitzgerald', got '%s'", metadata.Author)
+	}
+	if metadata.Narrator != "Jake Gyllenhaal" {
+		t.Errorf("Expected narrator 'Jake Gyllenhaal', got '%s'", metadata.Narrator)
+	}
+	if metadata.Confidence != "high" {
+		t.Errorf("Expected confidence 'high', got '%s'", metadata.Confidence)
+	}
+
+	// Verify the prompt included the full path context
+	if !strings.Contains(capturedBody, "F. Scott Fitzgerald/The Great Gatsby") {
+		t.Error("Expected prompt to contain folder hierarchy from file path")
+	}
+	if !strings.Contains(capturedBody, "Existing author") {
+		t.Error("Expected prompt to contain existing author metadata")
+	}
+	if !strings.Contains(capturedBody, "12 files") {
+		t.Error("Expected prompt to contain file count")
+	}
+	if !strings.Contains(capturedBody, "9h 0m") {
+		t.Error("Expected prompt to contain total duration")
+	}
+}
+
+func TestParseAudiobook_MinimalContext(t *testing.T) {
+	// Test with only a file path and no existing metadata
+	var capturedBody string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		capturedBody = string(bodyBytes)
+
+		response := `{
+			"id": "chatcmpl-test2",
+			"object": "chat.completion",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "{\"title\":\"Unknown Book\",\"author\":\"Unknown\",\"confidence\":\"low\"}"
+				},
+				"finish_reason": "stop"
+			}]
+		}`
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	os.Setenv("OPENAI_BASE_URL", server.URL)
+	defer os.Unsetenv("OPENAI_BASE_URL")
+
+	parser := NewOpenAIParser("fake-key", true)
+	ctx := context.Background()
+
+	abCtx := AudiobookContext{
+		FilePath: "/audiobooks/some_file.mp3",
+	}
+
+	metadata, err := parser.ParseAudiobook(ctx, abCtx)
+	if err != nil {
+		t.Fatalf("ParseAudiobook failed: %v", err)
+	}
+
+	if metadata.Confidence != "low" {
+		t.Errorf("Expected confidence 'low', got '%s'", metadata.Confidence)
+	}
+
+	// Ensure optional fields are NOT in the prompt when empty
+	if strings.Contains(capturedBody, "Existing title") {
+		t.Error("Prompt should not contain 'Existing title' when title is empty")
+	}
+	if strings.Contains(capturedBody, "Existing author") {
+		t.Error("Prompt should not contain 'Existing author' when author is empty")
+	}
+	if strings.Contains(capturedBody, "File count") {
+		t.Error("Prompt should not contain 'File count' when file count is 0")
+	}
+}
+
+func TestAudiobookContext_JSONTags(t *testing.T) {
+	abCtx := AudiobookContext{
+		FilePath:      "/test/path.mp3",
+		Title:         "Test",
+		AuthorName:    "Author",
+		Narrator:      "Narrator",
+		FileCount:     5,
+		TotalDuration: 3600,
+	}
+
+	data, err := json.Marshal(abCtx)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	jsonStr := string(data)
+	for _, field := range []string{"file_path", "title", "author_name", "narrator", "file_count", "total_duration"} {
+		if !strings.Contains(jsonStr, fmt.Sprintf(`"%s"`, field)) {
+			t.Errorf("Expected JSON field %s in output: %s", field, jsonStr)
+		}
 	}
 }
