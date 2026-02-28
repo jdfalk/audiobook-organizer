@@ -1,5 +1,5 @@
 // file: internal/server/server_more_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
 
 package server
@@ -485,6 +485,65 @@ func TestParseAudiobookWithAIEndpoint(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestParseAudiobookAIPayloadSplitsAuthors(t *testing.T) {
+	// Verify that the payload shape built by parseAudiobookWithAI (author_name with "&")
+	// is properly split into multiple book_authors by the update service.
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	book, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Multi Author Book",
+		FilePath: "/tmp/multi.m4b",
+	})
+	require.NoError(t, err)
+
+	// This is the same payload shape that parseAudiobookWithAI now builds
+	payload := map[string]any{
+		"title":       "Parsed Title",
+		"author_name": "Author A & Author B",
+		"narrator":    "Narrator X & Narrator Y",
+		"series_name": "Test Series",
+	}
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/audiobooks/"+book.ID, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	server.router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Verify book_authors junction table has 2 entries
+	bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID)
+	require.NoError(t, err)
+	require.Len(t, bookAuthors, 2, "expected 2 book_authors after splitting on &")
+
+	// Verify first author
+	author1, err := database.GlobalStore.GetAuthorByID(bookAuthors[0].AuthorID)
+	require.NoError(t, err)
+	require.Equal(t, "Author A", author1.Name)
+	require.Equal(t, "author", bookAuthors[0].Role)
+
+	// Verify second author
+	author2, err := database.GlobalStore.GetAuthorByID(bookAuthors[1].AuthorID)
+	require.NoError(t, err)
+	require.Equal(t, "Author B", author2.Name)
+	require.Equal(t, "co-author", bookAuthors[1].Role)
+
+	// Verify book_narrators junction table has 2 entries
+	bookNarrators, err := database.GlobalStore.GetBookNarrators(book.ID)
+	require.NoError(t, err)
+	require.Len(t, bookNarrators, 2, "expected 2 book_narrators after splitting on &")
+
+	narr1, err := database.GlobalStore.GetNarratorByID(bookNarrators[0].NarratorID)
+	require.NoError(t, err)
+	require.Equal(t, "Narrator X", narr1.Name)
+
+	narr2, err := database.GlobalStore.GetNarratorByID(bookNarrators[1].NarratorID)
+	require.NoError(t, err)
+	require.Equal(t, "Narrator Y", narr2.Name)
 }
 
 func TestUpdateDeleteBatchAudiobook(t *testing.T) {

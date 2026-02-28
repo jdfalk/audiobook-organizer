@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.72.0
+// version: 1.73.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -3677,56 +3677,35 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 		return
 	}
 
-	// Update book with parsed metadata
+	// Build payload for the update service (routes through AudiobookService
+	// which handles "&" splitting for authors/narrators, junction tables, etc.)
+	payload := map[string]any{}
 	if metadata.Title != "" {
-		book.Title = metadata.Title
+		payload["title"] = metadata.Title
+	}
+	if metadata.Author != "" {
+		payload["author_name"] = metadata.Author
 	}
 	if metadata.Narrator != "" {
-		book.Narrator = &metadata.Narrator
+		payload["narrator"] = metadata.Narrator
 	}
 	if metadata.Publisher != "" {
-		book.Publisher = &metadata.Publisher
+		payload["publisher"] = metadata.Publisher
 	}
 	if metadata.Year > 0 {
-		book.PrintYear = &metadata.Year
+		payload["audiobook_release_year"] = metadata.Year
 	}
-
-	// Handle author
-	if metadata.Author != "" {
-		author, err := database.GlobalStore.GetAuthorByName(metadata.Author)
-		if err != nil || author == nil {
-			// Create new author
-			author, err = database.GlobalStore.CreateAuthor(metadata.Author)
-			if err == nil && author != nil {
-				book.AuthorID = &author.ID
-			}
-		} else {
-			book.AuthorID = &author.ID
-		}
-	}
-
-	// Handle series
 	if metadata.Series != "" {
-		series, err := database.GlobalStore.GetSeriesByName(metadata.Series, book.AuthorID)
-		if err != nil || series == nil {
-			// Create new series
-			series, err = database.GlobalStore.CreateSeries(metadata.Series, book.AuthorID)
-			if err == nil && series != nil {
-				book.SeriesID = &series.ID
-			}
-		} else {
-			book.SeriesID = &series.ID
-		}
-
-		if metadata.SeriesNum > 0 {
-			book.SeriesSequence = &metadata.SeriesNum
-		}
+		payload["series_name"] = metadata.Series
+	}
+	if metadata.SeriesNum > 0 {
+		payload["series_sequence"] = metadata.SeriesNum
 	}
 
-	// Update in database
-	updatedBook, err := database.GlobalStore.UpdateBook(id, book)
+	// Route through the service layer for proper multi-author/narrator handling
+	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update audiobook: %v", err)})
 		return
 	}
 
