@@ -360,6 +360,33 @@ func applySetting(key, value, typ string) error {
 			AppConfig.PurgeSoftDeletedDeleteFiles = b
 		}
 
+	// iTunes sync
+	case "itunes_sync_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ITunesSyncEnabled = b
+		}
+	case "itunes_sync_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ITunesSyncInterval = i
+		}
+	case "itl_write_back_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ITLWriteBackEnabled = b
+		}
+	case "itunes_library_itl_path":
+		AppConfig.ITunesLibraryITLPath = value
+	case "itunes_library_xml_path":
+		AppConfig.ITunesLibraryXMLPath = value
+	case "itunes_auto_write_back":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ITunesAutoWriteBack = b
+		}
+	case "itunes_path_mappings":
+		var mappings []ITunesPathMap
+		if err := json.Unmarshal([]byte(value), &mappings); err == nil {
+			AppConfig.ITunesPathMappings = mappings
+		}
+
 	// Basic auth
 	case "basic_auth_enabled":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -385,6 +412,11 @@ func SaveConfigToDatabase(store database.Store) error {
 	}
 
 	log.Println("Saving configuration to database...")
+
+	pathMappingsJSON, err := json.Marshal(AppConfig.ITunesPathMappings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal itunes_path_mappings: %w", err)
+	}
 
 	extensionsJSON, err := json.Marshal(AppConfig.SupportedExtensions)
 	if err != nil {
@@ -464,6 +496,15 @@ func SaveConfigToDatabase(store database.Store) error {
 		"auto_update_window_end":    {strconv.Itoa(AppConfig.AutoUpdateWindowEnd), "int", false},
 
 		// Basic auth
+		// iTunes sync
+		"itunes_sync_enabled":    {strconv.FormatBool(AppConfig.ITunesSyncEnabled), "bool", false},
+		"itunes_sync_interval":   {strconv.Itoa(AppConfig.ITunesSyncInterval), "int", false},
+		"itl_write_back_enabled": {strconv.FormatBool(AppConfig.ITLWriteBackEnabled), "bool", false},
+		"itunes_library_itl_path": {AppConfig.ITunesLibraryITLPath, "string", false},
+		"itunes_library_xml_path": {AppConfig.ITunesLibraryXMLPath, "string", false},
+		"itunes_auto_write_back":  {strconv.FormatBool(AppConfig.ITunesAutoWriteBack), "bool", false},
+		"itunes_path_mappings":    {string(pathMappingsJSON), "json", false},
+
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
 		"basic_auth_username": {AppConfig.BasicAuthUsername, "string", false},
 		"basic_auth_password": {AppConfig.BasicAuthPassword, "string", true},

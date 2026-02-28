@@ -15,6 +15,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ITunesPathMap defines a bidirectional path prefix mapping between iTunes and local paths.
+// From is the iTunes prefix (e.g. "file://localhost/W:/itunes/iTunes%20Media"),
+// To is the local prefix (e.g. "file://localhost/mnt/bigdata/books/itunes/iTunes Media").
+type ITunesPathMap struct {
+	From string `json:"from"` // iTunes path prefix
+	To   string `json:"to"`   // Local path prefix
+}
+
 // MetadataSource represents a metadata provider configuration
 type MetadataSource struct {
 	ID           string            `json:"id"`
@@ -149,10 +157,13 @@ type Config struct {
 	EnableJsonLogging bool   `json:"enable_json_logging"`
 
 	// iTunes sync
-	ITunesSyncEnabled  bool   `json:"itunes_sync_enabled"`
-	ITunesSyncInterval int    `json:"itunes_sync_interval"` // minutes
-	ITLWriteBackEnabled bool  `json:"itl_write_back_enabled"`
-	ITunesLibraryITLPath string `json:"itunes_library_itl_path"`
+	ITunesSyncEnabled    bool              `json:"itunes_sync_enabled"`
+	ITunesSyncInterval   int               `json:"itunes_sync_interval"` // minutes
+	ITLWriteBackEnabled  bool              `json:"itl_write_back_enabled"`
+	ITunesLibraryITLPath string            `json:"itunes_library_itl_path"`
+	ITunesLibraryXMLPath string            `json:"itunes_library_xml_path"`
+	ITunesPathMappings   []ITunesPathMap   `json:"itunes_path_mappings"`  // Stored path mappings for write-back
+	ITunesAutoWriteBack  bool              `json:"itunes_auto_write_back"` // Auto write-back on every edit (batched)
 
 	// Auto-update
 	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
@@ -252,6 +263,8 @@ func InitConfig() {
 	viper.SetDefault("itunes_sync_interval", 30)
 	viper.SetDefault("itl_write_back_enabled", false)
 	viper.SetDefault("itunes_library_itl_path", "")
+	viper.SetDefault("itunes_library_xml_path", "")
+	viper.SetDefault("itunes_auto_write_back", false)
 
 	// Auto-update defaults
 	viper.SetDefault("auto_update_enabled", false)
@@ -373,6 +386,8 @@ func InitConfig() {
 		ITunesSyncInterval:   viper.GetInt("itunes_sync_interval"),
 		ITLWriteBackEnabled:  viper.GetBool("itl_write_back_enabled"),
 		ITunesLibraryITLPath: viper.GetString("itunes_library_itl_path"),
+		ITunesLibraryXMLPath: viper.GetString("itunes_library_xml_path"),
+		ITunesAutoWriteBack:  viper.GetBool("itunes_auto_write_back"),
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{

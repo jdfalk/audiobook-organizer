@@ -528,6 +528,9 @@ func NewServer() *Server {
 
 	server.setupRoutes()
 
+	// Initialize the iTunes auto write-back batcher
+	InitWriteBackBatcher()
+
 	return server
 }
 
@@ -1788,6 +1791,11 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		}
 	}
 
+	// Enqueue for iTunes auto write-back if enabled
+	if GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
+	}
+
 	c.JSON(http.StatusOK, updatedBook)
 }
 
@@ -1822,6 +1830,16 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	resp := s.batchService.UpdateAudiobooks(&req)
+
+	// Enqueue all updated books for iTunes auto write-back
+	if GlobalWriteBackBatcher != nil && resp != nil {
+		for _, item := range resp.Results {
+			if item.Success {
+				GlobalWriteBackBatcher.Enqueue(item.ID)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -3069,6 +3087,11 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Enqueue for iTunes auto write-back if metadata was updated
+	if GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

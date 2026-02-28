@@ -93,6 +93,24 @@ func (o *ImportOptions) RemapPath(p string) string {
 	return p
 }
 
+// ReverseRemapPath converts a local path back to an iTunes path using the
+// path mappings in reverse (first match wins). This is used during write-back
+// to convert local paths like /mnt/bigdata/books/... back to iTunes paths
+// like /W:/audiobook-organizer/...
+func ReverseRemapPath(localPath string, mappings []PathMapping) string {
+	if len(mappings) == 0 {
+		return localPath
+	}
+	normalized := strings.ReplaceAll(localPath, "\\", "/")
+	for _, m := range mappings {
+		to := strings.ReplaceAll(m.To, "\\", "/")
+		if to != "" && m.From != "" && strings.HasPrefix(normalized, to) {
+			return m.From + normalized[len(to):]
+		}
+	}
+	return localPath
+}
+
 // ValidationResult contains the results of validating an iTunes import
 type ValidationResult struct {
 	TotalTracks     int                 // Total tracks in iTunes library

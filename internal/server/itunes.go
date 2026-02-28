@@ -72,10 +72,11 @@ type ITunesImportResponse struct {
 
 // ITunesWriteBackRequest represents a write-back request for iTunes updates.
 type ITunesWriteBackRequest struct {
-	LibraryPath    string   `json:"library_path" binding:"required"`
-	AudiobookIDs   []string `json:"audiobook_ids"`
-	CreateBackup   bool     `json:"create_backup"`
-	ForceOverwrite bool     `json:"force_overwrite"`
+	LibraryPath    string               `json:"library_path" binding:"required"`
+	AudiobookIDs   []string             `json:"audiobook_ids"`
+	CreateBackup   bool                 `json:"create_backup"`
+	ForceOverwrite bool                 `json:"force_overwrite"`
+	PathMappings   []itunes.PathMapping `json:"path_mappings,omitempty"` // Used to reverse-map local paths to iTunes paths
 }
 
 // ITunesWriteBackResponse summarizes write-back results.
@@ -337,7 +338,17 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		return
 	}
 
+	// Build path mappings for reverse-mapping local paths to iTunes paths.
+	// Prefer request-supplied mappings, then config-stored mappings.
+	pathMappings := req.PathMappings
+	if len(pathMappings) == 0 {
+		for _, m := range config.AppConfig.ITunesPathMappings {
+			pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
+		}
+	}
+
 	updates := make([]*itunes.WriteBackUpdate, 0, len(req.AudiobookIDs))
+	var itlUpdates []itunes.ITLLocationUpdate
 	for _, id := range req.AudiobookIDs {
 		book, err := database.GlobalStore.GetBookByID(id)
 		if err != nil {
@@ -350,11 +361,22 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 			continue
 		}
 
+		// Reverse-map local path back to iTunes path using path mappings
+		itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
+
 		updates = append(updates, &itunes.WriteBackUpdate{
 			ITunesPersistentID: *book.ITunesPersistentID,
 			OldPath:            "",
-			NewPath:            book.FilePath,
+			NewPath:            itunesPath,
 		})
+
+		// Build ITL update using the persistent ID hex bytes
+		if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+				PersistentID: *book.ITunesPersistentID,
+				NewLocation:  itunesPath,
+			})
+		}
 	}
 
 	if len(updates) == 0 {
@@ -406,11 +428,32 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		_ = database.GlobalStore.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
 	}
 
+	// Also write back to ITL binary if configured
+	itlMessage := ""
+	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+		itlPath := config.AppConfig.ITunesLibraryITLPath
+		// Write to a temp file first, then replace
+		itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
+		if itlErr != nil {
+			log.Printf("[WARN] ITL write-back failed: %v", itlErr)
+			itlMessage = fmt.Sprintf(" (ITL write-back failed: %v)", itlErr)
+		} else {
+			// Atomic replace
+			if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
+				log.Printf("[WARN] ITL rename failed: %v", renameErr)
+				itlMessage = fmt.Sprintf(" (ITL rename failed: %v)", renameErr)
+			} else {
+				log.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
+				itlMessage = fmt.Sprintf(" + ITL: %d tracks updated", itlResult.UpdatedCount)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, ITunesWriteBackResponse{
 		Success:      result.Success,
 		UpdatedCount: result.UpdatedCount,
 		BackupPath:   result.BackupPath,
-		Message:      result.Message,
+		Message:      result.Message + itlMessage,
 	})
 }
 
@@ -477,6 +520,12 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		}
 	}
 
+	// Build path mappings for reverse-mapping in preview
+	var previewMappings []itunes.PathMapping
+	for _, m := range config.AppConfig.ITunesPathMappings {
+		previewMappings = append(previewMappings, itunes.PathMapping{From: m.From, To: m.To})
+	}
+
 	items := make([]ITunesBookMapping, 0, len(books))
 	for _, book := range books {
 		persistentID := *book.ITunesPersistentID
@@ -487,6 +536,8 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 				author = a.Name
 			}
 		}
+		// Show what would be written: reverse-map local path to iTunes format
+		reverseMapped := itunes.ReverseRemapPath(book.FilePath, previewMappings)
 		items = append(items, ITunesBookMapping{
 			BookID:             book.ID,
 			Title:              book.Title,
@@ -494,7 +545,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 			ITunesPersistentID: persistentID,
 			LocalPath:          book.FilePath,
 			ITunesPath:         itunesPath,
-			PathDiffers:        book.FilePath != itunesPath,
+			PathDiffers:        reverseMapped != itunesPath,
 		})
 	}
 
