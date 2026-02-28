@@ -129,7 +129,9 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
 		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
 		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,
-		"auto_update_channel":   &config.AppConfig.AutoUpdateChannel,
+		"auto_update_channel":      &config.AppConfig.AutoUpdateChannel,
+		"itunes_library_itl_path":  &config.AppConfig.ITunesLibraryITLPath,
+		"itunes_library_xml_path":  &config.AppConfig.ITunesLibraryXMLPath,
 	}
 	for key, ptr := range stringFields {
 		if val, ok := cus.ExtractStringField(payload, key); ok {
@@ -175,6 +177,9 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"write_back_metadata":      &config.AppConfig.WriteBackMetadata,
 		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,
 		"auto_update_enabled":      &config.AppConfig.AutoUpdateEnabled,
+		"itunes_sync_enabled":      &config.AppConfig.ITunesSyncEnabled,
+		"itl_write_back_enabled":   &config.AppConfig.ITLWriteBackEnabled,
+		"itunes_auto_write_back":   &config.AppConfig.ITunesAutoWriteBack,
 	}
 	for key, ptr := range boolFields {
 		if val, ok := cus.ExtractBoolField(payload, key); ok {
@@ -200,6 +205,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"auto_update_check_minutes":  &config.AppConfig.AutoUpdateCheckMinutes,
 		"auto_update_window_start":   &config.AppConfig.AutoUpdateWindowStart,
 		"auto_update_window_end":     &config.AppConfig.AutoUpdateWindowEnd,
+		"itunes_sync_interval":       &config.AppConfig.ITunesSyncInterval,
 	}
 	for key, ptr := range intFields {
 		if val, ok := cus.ExtractIntField(payload, key); ok {
@@ -216,6 +222,24 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	if patterns, ok := extractStringSlice(payload, "exclude_patterns"); ok {
 		config.AppConfig.ExcludePatterns = patterns
 		updated = append(updated, "exclude_patterns")
+	}
+
+	// iTunes path mappings
+	if raw, ok := payload["itunes_path_mappings"]; ok {
+		if mappingsSlice, ok2 := raw.([]any); ok2 {
+			var mappings []config.ITunesPathMap
+			for _, item := range mappingsSlice {
+				if m, ok3 := item.(map[string]any); ok3 {
+					from, _ := m["from"].(string)
+					to, _ := m["to"].(string)
+					if from != "" && to != "" {
+						mappings = append(mappings, config.ITunesPathMap{From: from, To: to})
+					}
+				}
+			}
+			config.AppConfig.ITunesPathMappings = mappings
+			updated = append(updated, "itunes_path_mappings")
+		}
 	}
 
 	// Persist to database
