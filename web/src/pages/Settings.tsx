@@ -2951,6 +2951,48 @@ export function Settings() {
         </Box>
       </Paper>
 
+      {/* Floating save/cancel panel — visible when there are unsaved changes */}
+      {hasUnsavedChanges && (
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1300,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 2.5,
+            py: 1.5,
+            borderRadius: 3,
+            bgcolor: 'background.paper',
+            boxShadow: 6,
+          }}
+        >
+          <SaveIcon fontSize="small" color="primary" sx={{ mr: 0.5 }} />
+          <Button
+            size="small"
+            onClick={() => {
+              if (savedSnapshot) {
+                const prev = JSON.parse(savedSnapshot) as SettingsState;
+                setSettings(prev);
+              }
+            }}
+          >
+            Discard
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={handleSave}
+            disabled={!configLoaded}
+          >
+            Save
+          </Button>
+        </Paper>
+      )}
+
       {/* Library Path Browser Dialog */}
       <Dialog
         open={browserOpen}

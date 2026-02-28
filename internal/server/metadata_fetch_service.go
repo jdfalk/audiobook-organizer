@@ -1,15 +1,19 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 2.7.0
+// version: 3.0.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"log"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -189,6 +193,27 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		}
 		if len(results) > 0 {
 			meta := results[0]
+
+			// Parse series string if present (e.g. "(Long Earth 05) The Long Cosmos")
+			parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
+			if parsedSeries == "" && meta.Series != "" {
+				parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
+				if parsedTitle == "" {
+					parsedTitle = meta.Title
+				}
+			}
+			if parsedSeries != "" {
+				meta.Series = parsedSeries
+				meta.SeriesPosition = parsedPosition
+				if parsedTitle != "" {
+					meta.Title = parsedTitle
+				}
+			}
+
+			// Record history before applying changes
+			mfs.recordChangeHistory(book, meta, src.Name())
+
+			// Apply metadata with downgrade protection
 			mfs.applyMetadataToBook(book, meta)
 
 			updatedBook, updateErr := mfs.db.UpdateBook(id, book)
@@ -236,13 +261,13 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 }
 
 func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
-	if meta.Title != "" {
+	if meta.Title != "" && isBetterValue(book.Title, meta.Title) {
 		book.Title = meta.Title
 	}
-	if meta.Publisher != "" {
+	if meta.Publisher != "" && isBetterStringPtr(book.Publisher, meta.Publisher) {
 		book.Publisher = stringPtr(meta.Publisher)
 	}
-	if meta.Language != "" {
+	if meta.Language != "" && isBetterStringPtr(book.Language, meta.Language) {
 		book.Language = stringPtr(meta.Language)
 	}
 	if meta.PublishYear != 0 {
@@ -251,6 +276,194 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	if meta.CoverURL != "" {
 		book.CoverURL = stringPtr(meta.CoverURL)
 	}
+	if meta.Narrator != "" && !isGarbageValue(meta.Narrator) && isBetterStringPtr(book.Narrator, meta.Narrator) {
+		book.Narrator = stringPtr(meta.Narrator)
+	}
+
+	// Apply author if fetched data is better
+	if meta.Author != "" && !isGarbageValue(meta.Author) {
+		// Author is handled via AuthorID resolution, but we record it for provenance
+		// The actual AuthorID update happens in persistFetchedMetadata / resolve flow
+	}
+
+	// Apply series info if available
+	if meta.Series != "" && !isGarbageValue(meta.Series) {
+		series, err := mfs.db.GetSeriesByName(meta.Series, book.AuthorID)
+		if err == nil && series == nil {
+			series, err = mfs.db.CreateSeries(meta.Series, book.AuthorID)
+		}
+		if err == nil && series != nil {
+			book.SeriesID = &series.ID
+		}
+		if meta.SeriesPosition != "" {
+			if pos, err := strconv.Atoi(meta.SeriesPosition); err == nil {
+				book.SeriesSequence = &pos
+			}
+		}
+	}
+}
+
+// isGarbageValue returns true if a string value is effectively useless metadata.
+func isGarbageValue(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	garbage := []string{"unknown", "narrator", "various", "n/a", "none", "null", "undefined", ""}
+	for _, g := range garbage {
+		if lower == g {
+			return true
+		}
+	}
+	return false
+}
+
+// isBetterValue returns true if newVal should replace oldVal.
+// Never replaces a good value with garbage.
+func isBetterValue(oldVal, newVal string) bool {
+	if isGarbageValue(newVal) {
+		return false
+	}
+	if isGarbageValue(oldVal) {
+		return true
+	}
+	// Both are real values; allow the update (fetched data may be more accurate)
+	return true
+}
+
+// isBetterStringPtr returns true if newVal should replace the existing *string.
+func isBetterStringPtr(oldPtr *string, newVal string) bool {
+	if isGarbageValue(newVal) {
+		return false
+	}
+	if oldPtr == nil || isGarbageValue(*oldPtr) {
+		return true
+	}
+	// Both are real values; allow the update
+	return true
+}
+
+// recordChangeHistory records metadata changes before they are applied.
+func (mfs *MetadataFetchService) recordChangeHistory(book *database.Book, meta metadata.BookMetadata, sourceName string) {
+	now := time.Now()
+
+	// Resolve current author name for history
+	var currentAuthor string
+	if book.AuthorID != nil {
+		if author, err := mfs.db.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			currentAuthor = author.Name
+		}
+	}
+
+	// Resolve current series name for history
+	var currentSeries string
+	if book.SeriesID != nil {
+		if series, err := mfs.db.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			currentSeries = series.Name
+		}
+	}
+
+	changes := []struct {
+		field    string
+		oldVal   string
+		newVal   string
+	}{
+		{"title", book.Title, meta.Title},
+		{"author_name", currentAuthor, meta.Author},
+		{"narrator", derefString(book.Narrator), meta.Narrator},
+		{"publisher", derefString(book.Publisher), meta.Publisher},
+		{"language", derefString(book.Language), meta.Language},
+		{"series", currentSeries, meta.Series},
+		{"series_position", derefIntAsString(book.SeriesSequence), meta.SeriesPosition},
+		{"cover_url", derefString(book.CoverURL), meta.CoverURL},
+	}
+
+	if meta.PublishYear != 0 {
+		changes = append(changes, struct {
+			field  string
+			oldVal string
+			newVal string
+		}{"audiobook_release_year", derefIntAsString(book.AudiobookReleaseYear), strconv.Itoa(meta.PublishYear)})
+	}
+
+	for _, c := range changes {
+		if c.newVal == "" || c.newVal == c.oldVal {
+			continue
+		}
+		oldJSON := jsonEncodeString(c.oldVal)
+		newJSON := jsonEncodeString(c.newVal)
+		record := &database.MetadataChangeRecord{
+			BookID:        book.ID,
+			Field:         c.field,
+			PreviousValue: &oldJSON,
+			NewValue:      &newJSON,
+			ChangeType:    "fetched",
+			Source:        sourceName,
+			ChangedAt:     now,
+		}
+		if err := mfs.db.RecordMetadataChange(record); err != nil {
+			log.Printf("[WARN] failed to record metadata change for %s.%s: %v", book.ID, c.field, err)
+		}
+	}
+}
+
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}
+
+func derefIntAsString(p *int) string {
+	if p == nil {
+		return ""
+	}
+	return strconv.Itoa(*p)
+}
+
+func jsonEncodeString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+// parseSeriesFromTitle extracts series name, position, and title from strings like:
+//   - "(Long Earth 05) The Long Cosmos" -> series="Long Earth", pos="5", title="The Long Cosmos"
+//   - "(Series Name 3) Title" -> series="Series Name", pos="3", title="Title"
+//   - "Long Earth 05 - The Long Cosmos" -> series="Long Earth", pos="5", title="The Long Cosmos"
+func parseSeriesFromTitle(s string) (series, position, title string) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", "", ""
+	}
+
+	// Pattern 1: "(Series Name NN) Title"
+	parenRe := regexp.MustCompile(`^\((.+?)\s+(\d+)\)\s*(.*)$`)
+	if m := parenRe.FindStringSubmatch(s); m != nil {
+		pos := strings.TrimLeft(m[2], "0")
+		if pos == "" {
+			pos = "0"
+		}
+		return strings.TrimSpace(m[1]), pos, strings.TrimSpace(m[3])
+	}
+
+	// Pattern 2: "(Series Name #NN) Title"
+	parenHashRe := regexp.MustCompile(`^\((.+?)\s+#(\d+)\)\s*(.*)$`)
+	if m := parenHashRe.FindStringSubmatch(s); m != nil {
+		pos := strings.TrimLeft(m[2], "0")
+		if pos == "" {
+			pos = "0"
+		}
+		return strings.TrimSpace(m[1]), pos, strings.TrimSpace(m[3])
+	}
+
+	// Pattern 3: "Series Name, Book NN" (no title extraction)
+	commaBookRe := regexp.MustCompile(`^(.+?),\s*[Bb]ook\s+(\d+)$`)
+	if m := commaBookRe.FindStringSubmatch(s); m != nil {
+		pos := strings.TrimLeft(m[2], "0")
+		if pos == "" {
+			pos = "0"
+		}
+		return strings.TrimSpace(m[1]), pos, ""
+	}
+
+	return "", "", ""
 }
 
 // writeBackMetadata writes enriched metadata back to audio file(s).
