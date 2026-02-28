@@ -865,19 +865,101 @@ func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) CreateNarrator(name string) (*Narrator, error) {
-	return nil, nil
+	// Check if narrator already exists
+	existing, err := p.GetNarratorByName(name)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
+	// Generate a new ID by incrementing a counter
+	counterKey := []byte("narrator_counter")
+	var nextID int
+	if val, closer, err := p.db.Get(counterKey); err == nil {
+		json.Unmarshal(val, &nextID)
+		closer.Close()
+	}
+	nextID++
+
+	narrator := &Narrator{ID: nextID, Name: name, CreatedAt: time.Now()}
+	data, err := json.Marshal(narrator)
+	if err != nil {
+		return nil, err
+	}
+
+	key := []byte(fmt.Sprintf("narrator:%d", nextID))
+	if err := p.db.Set(key, data, pebble.Sync); err != nil {
+		return nil, err
+	}
+
+	// Save name index
+	nameKey := []byte(fmt.Sprintf("narrator_name:%s", strings.ToLower(name)))
+	idData, _ := json.Marshal(nextID)
+	p.db.Set(nameKey, idData, pebble.Sync)
+
+	// Update counter
+	counterData, _ := json.Marshal(nextID)
+	p.db.Set(counterKey, counterData, pebble.Sync)
+
+	return narrator, nil
 }
 
 func (p *PebbleStore) GetNarratorByID(id int) (*Narrator, error) {
-	return nil, nil
+	key := []byte(fmt.Sprintf("narrator:%d", id))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var narrator Narrator
+	if err := json.Unmarshal(val, &narrator); err != nil {
+		return nil, err
+	}
+	return &narrator, nil
 }
 
 func (p *PebbleStore) GetNarratorByName(name string) (*Narrator, error) {
-	return nil, nil
+	nameKey := []byte(fmt.Sprintf("narrator_name:%s", strings.ToLower(name)))
+	val, closer, err := p.db.Get(nameKey)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+
+	var id int
+	if err := json.Unmarshal(val, &id); err != nil {
+		return nil, err
+	}
+	return p.GetNarratorByID(id)
 }
 
 func (p *PebbleStore) ListNarrators() ([]Narrator, error) {
-	return nil, nil
+	var narrators []Narrator
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("narrator:"),
+		UpperBound: []byte("narrator;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var n Narrator
+		if err := json.Unmarshal(iter.Value(), &n); err == nil {
+			narrators = append(narrators, n)
+		}
+	}
+	return narrators, nil
 }
 
 func (p *PebbleStore) GetBookNarrators(bookID string) ([]BookNarrator, error) {

@@ -748,9 +748,11 @@ export const BookDetail = () => {
               )}
             </Box>
             <Typography variant="subtitle1" color="text.secondary">
-              {book.author_name || book.author_id
-                ? `By ${book.author_name || book.author_id}`
-                : ''}
+              {book.authors && book.authors.length > 0
+                ? `By ${book.authors.map((a) => a.name).join(' & ')}`
+                : book.author_name || book.author_id
+                  ? `By ${book.author_name || book.author_id}`
+                  : ''}
             </Typography>
           </Stack>
         </Stack>
@@ -934,9 +936,21 @@ export const BookDetail = () => {
           <Grid container spacing={2}>
             {[
               { label: 'Title', value: book.title || 'Untitled' },
-              { label: 'Author', value: book.author_name || 'Unknown' },
+              {
+                label: 'Author',
+                value:
+                  book.authors && book.authors.length > 0
+                    ? book.authors.map((a) => a.name).join(' & ')
+                    : book.author_name || 'Unknown',
+              },
               { label: 'Series', value: book.series_name },
-              { label: 'Narrator', value: book.narrator },
+              {
+                label: 'Narrator',
+                value:
+                  book.narrators && book.narrators.length > 0
+                    ? book.narrators.map((n) => n.name).join(' & ')
+                    : book.narrator,
+              },
               { label: 'Language', value: book.language },
               { label: 'ISBN 13', value: book.isbn13 },
               { label: 'Work ID', value: book.work_id },
@@ -1264,10 +1278,16 @@ export const BookDetail = () => {
                     Title: {book.title || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Author: {book.author_name || '—'}
+                    Author:{' '}
+                    {book.authors && book.authors.length > 0
+                      ? book.authors.map((a) => a.name).join(' & ')
+                      : book.author_name || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    Narrator: {book.narrator || '—'}
+                    Narrator:{' '}
+                    {book.narrators && book.narrators.length > 0
+                      ? book.narrators.map((n) => n.name).join(' & ')
+                      : book.narrator || '—'}
                   </Typography>
                   <Typography variant="body2">
                     Series: {book.series_name || '—'}

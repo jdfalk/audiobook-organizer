@@ -1561,12 +1561,25 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 
-	// Add author and series names and narrators to response
+	// Add author and series names, authors list, and narrators to response
+	type authorEntry struct {
+		ID       int    `json:"id"`
+		Name     string `json:"name"`
+		Role     string `json:"role"`
+		Position int    `json:"position"`
+	}
+	type narratorEntry struct {
+		ID       int    `json:"id"`
+		Name     string `json:"name"`
+		Role     string `json:"role"`
+		Position int    `json:"position"`
+	}
 	type bookResponse struct {
 		*database.Book
-		AuthorName *string                `json:"author_name,omitempty"`
-		SeriesName *string                `json:"series_name,omitempty"`
-		Narrators  []database.BookNarrator `json:"narrators,omitempty"`
+		AuthorName *string          `json:"author_name,omitempty"`
+		SeriesName *string          `json:"series_name,omitempty"`
+		Authors    []authorEntry    `json:"authors,omitempty"`
+		Narrators  []narratorEntry  `json:"narrators,omitempty"`
 	}
 
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
@@ -1579,8 +1592,44 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	}
 
 	if database.GlobalStore != nil {
-		if narrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(narrators) > 0 {
-			resp.Narrators = narrators
+		// Resolve book authors with names
+		if bookAuthors, err := database.GlobalStore.GetBookAuthors(id); err == nil && len(bookAuthors) > 0 {
+			for _, ba := range bookAuthors {
+				if author, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && author != nil {
+					resp.Authors = append(resp.Authors, authorEntry{
+						ID: author.ID, Name: author.Name, Role: ba.Role, Position: ba.Position,
+					})
+				}
+			}
+			// If we have multiple authors but no author_name set, combine them
+			if resp.AuthorName == nil && len(resp.Authors) > 0 {
+				names := make([]string, len(resp.Authors))
+				for i, a := range resp.Authors {
+					names[i] = a.Name
+				}
+				combined := strings.Join(names, " & ")
+				resp.AuthorName = &combined
+			}
+		}
+
+		// Resolve book narrators with names
+		if bookNarrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(bookNarrators) > 0 {
+			for _, bn := range bookNarrators {
+				if narrator, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
+					resp.Narrators = append(resp.Narrators, narratorEntry{
+						ID: narrator.ID, Name: narrator.Name, Role: bn.Role, Position: bn.Position,
+					})
+				}
+			}
+			// If book has no single narrator field but has narrators in join table, combine
+			if (book.Narrator == nil || *book.Narrator == "") && len(resp.Narrators) > 0 {
+				names := make([]string, len(resp.Narrators))
+				for i, n := range resp.Narrators {
+					names[i] = n.Name
+				}
+				combined := strings.Join(names, " & ")
+				book.Narrator = &combined
+			}
 		}
 	}
 
@@ -1782,6 +1831,34 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		}
 		if v, ok := payload["audiobook_release_year"].(float64); ok && v != 0 {
 			tagMap["year"] = int(v)
+		}
+		// If we have multiple authors in join table, combine with " & " for file tags
+		if _, hasAuthor := tagMap["artist"]; !hasAuthor && database.GlobalStore != nil {
+			if authors, err := database.GlobalStore.GetBookAuthors(id); err == nil && len(authors) > 1 {
+				names := make([]string, 0, len(authors))
+				for _, ba := range authors {
+					if a, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && a != nil {
+						names = append(names, a.Name)
+					}
+				}
+				if len(names) > 0 {
+					tagMap["artist"] = strings.Join(names, " & ")
+				}
+			}
+		}
+		// If we have multiple narrators in join table, combine with " & " for file tags
+		if _, hasNarr := tagMap["album_artist"]; !hasNarr && database.GlobalStore != nil {
+			if narrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(narrators) > 1 {
+				names := make([]string, 0, len(narrators))
+				for _, bn := range narrators {
+					if n, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && n != nil {
+						names = append(names, n.Name)
+					}
+				}
+				if len(names) > 0 {
+					tagMap["album_artist"] = strings.Join(names, " & ")
+				}
+			}
 		}
 		if len(tagMap) > 0 {
 			opConfig := fileops.OperationConfig{VerifyChecksums: true}

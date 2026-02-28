@@ -149,6 +149,22 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	return books, nil
 }
 
+// splitMultipleNames splits a name string on " & " to support multiple authors/narrators.
+func splitMultipleNames(name string) []string {
+	parts := strings.Split(name, " & ")
+	var result []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	if len(result) == 0 {
+		return []string{name}
+	}
+	return result
+}
+
 // EnrichAudiobooksWithNames adds author and series names to audiobook details
 func (svc *AudiobookService) EnrichAudiobooksWithNames(books []database.Book) []AudiobookDetail {
 	enrichedBooks := make([]AudiobookDetail, 0, len(books))
@@ -510,29 +526,91 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 		state[field] = entry
 	}
 
-	// Resolve author by name or ID
+	// Resolve author by name or ID — auto-split on " & " for multiple authors
 	var resolvedAuthorName string
 	if req.Updates.AuthorName != nil {
 		name := strings.TrimSpace(*req.Updates.AuthorName)
 		if name != "" {
-			author, err := svc.store.GetAuthorByName(name)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve author")
-			}
-			if author == nil {
-				author, err = svc.store.CreateAuthor(name)
+			// Split on " & " to support multiple authors
+			authorNames := splitMultipleNames(name)
+			var bookAuthors []database.BookAuthor
+			var primaryAuthorID int
+			for i, aName := range authorNames {
+				aName = strings.TrimSpace(aName)
+				if aName == "" {
+					continue
+				}
+				author, err := svc.store.GetAuthorByName(aName)
 				if err != nil {
-					return nil, fmt.Errorf("failed to create author")
+					return nil, fmt.Errorf("failed to resolve author")
+				}
+				if author == nil {
+					author, err = svc.store.CreateAuthor(aName)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create author")
+					}
+				}
+				role := "author"
+				if i > 0 {
+					role = "co-author"
+				}
+				bookAuthors = append(bookAuthors, database.BookAuthor{
+					BookID: id, AuthorID: author.ID, Role: role, Position: i,
+				})
+				if i == 0 {
+					primaryAuthorID = author.ID
 				}
 			}
-			payload.AuthorID = &author.ID
-			resolvedAuthorName = author.Name
+			// Set primary author on the book for backward compat
+			payload.AuthorID = &primaryAuthorID
+			resolvedAuthorName = name // Keep the combined name for display
+			// Save multiple authors to join table
+			if len(bookAuthors) > 0 {
+				if err := svc.store.SetBookAuthors(id, bookAuthors); err != nil {
+					log.Printf("[WARN] failed to set book authors: %v", err)
+				}
+			}
 		} else {
 			payload.AuthorID = nil
 		}
 	} else if payload.AuthorID != nil {
 		if author, err := svc.store.GetAuthorByID(*payload.AuthorID); err == nil && author != nil {
 			resolvedAuthorName = author.Name
+		}
+	}
+
+	// Resolve narrator — auto-split on " & " for multiple narrators
+	if req.Updates.Narrator != nil {
+		narStr := strings.TrimSpace(*req.Updates.Narrator)
+		if narStr != "" {
+			narratorNames := splitMultipleNames(narStr)
+			var bookNarrators []database.BookNarrator
+			for i, nName := range narratorNames {
+				nName = strings.TrimSpace(nName)
+				if nName == "" {
+					continue
+				}
+				narrator, err := svc.store.GetNarratorByName(nName)
+				if err != nil || narrator == nil {
+					narrator, err = svc.store.CreateNarrator(nName)
+					if err != nil {
+						log.Printf("[WARN] failed to create narrator %q: %v", nName, err)
+						continue
+					}
+				}
+				role := "narrator"
+				if i > 0 {
+					role = "co-narrator"
+				}
+				bookNarrators = append(bookNarrators, database.BookNarrator{
+					BookID: id, NarratorID: narrator.ID, Role: role, Position: i,
+				})
+			}
+			if len(bookNarrators) > 0 {
+				if err := svc.store.SetBookNarrators(id, bookNarrators); err != nil {
+					log.Printf("[WARN] failed to set book narrators: %v", err)
+				}
+			}
 		}
 	}
 

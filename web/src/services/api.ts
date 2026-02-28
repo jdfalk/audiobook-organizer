@@ -38,6 +38,20 @@ const buildApiError = async (
 };
 
 // Response types
+export interface BookAuthorEntry {
+  id: number;
+  name: string;
+  role: string;
+  position: number;
+}
+
+export interface BookNarratorEntry {
+  id: number;
+  name: string;
+  role: string;
+  position: number;
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -50,6 +64,8 @@ export interface Book {
   format?: string;
   duration?: number;
   narrator?: string;
+  authors?: BookAuthorEntry[];
+  narrators?: BookNarratorEntry[];
   language?: string;
   publisher?: string;
   description?: string;
