@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 4.1.0
+// version: 4.2.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
@@ -12,7 +12,9 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/stretchr/testify/mock"
 )
 
 // mockMetadataSource implements metadata.MetadataSource for unit tests.
@@ -907,5 +909,57 @@ func TestFetchMetadataForBook_BoxSetRejected_IndividualBookApplied(t *testing.T)
 	}
 	if resp.Book.Title != "The Long Cosmos" {
 		t.Errorf("expected title 'The Long Cosmos', got %q", resp.Book.Title)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// WriteBackMetadataForBook tests
+// ---------------------------------------------------------------------------
+
+func TestWriteBackMetadataForBook_NotFound(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("GetBookByID", "missing-id").Return(nil, nil)
+
+	svc := NewMetadataFetchService(mockStore)
+	_, err := svc.WriteBackMetadataForBook("missing-id")
+	if err == nil {
+		t.Fatal("expected error for missing book")
+	}
+	if !strings.Contains(err.Error(), "audiobook not found") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWriteBackMetadataForBook_SingleFile(t *testing.T) {
+	authorID := 42
+	year := 2022
+	book := &database.Book{
+		ID:                   "01JTEST000000000000000001",
+		Title:                "Test Book",
+		AuthorID:             &authorID,
+		AudiobookReleaseYear: &year,
+		FilePath:             "/tmp/test-nonexistent.m4b",
+	}
+	author := &database.Author{ID: 42, Name: "Test Author"}
+
+	mockStore := mocks.NewMockStore(t)
+	mockStore.On("GetBookByID", book.ID).Return(book, nil)
+	mockStore.On("GetBookAuthors", book.ID).Return([]database.BookAuthor{
+		{BookID: book.ID, AuthorID: 42, Role: "author", Position: 0},
+	}, nil)
+	mockStore.On("GetAuthorByID", 42).Return(author, nil)
+	mockStore.On("GetBookNarrators", book.ID).Return([]database.BookNarrator{}, nil)
+	mockStore.On("ListBookSegments", mock.AnythingOfType("int")).Return([]database.BookSegment{}, nil)
+	mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
+
+	svc := NewMetadataFetchService(mockStore)
+	// WriteMetadataToFile will fail because the file doesn't exist, but the
+	// function should return (0, nil) — failures are logged not returned.
+	count, err := svc.WriteBackMetadataForBook(book.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected written count 0, got %d", count)
 	}
 }
