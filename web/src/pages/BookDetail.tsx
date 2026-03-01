@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.16.0
+// version: 1.17.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -42,11 +42,12 @@ import InfoIcon from '@mui/icons-material/Info.js';
 import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
 import StorageIcon from '@mui/icons-material/Storage.js';
 import SaveIcon from '@mui/icons-material/Save.js';
-import type { Book, BookTags, OverridePayload } from '../services/api';
+import type { Book, BookTags, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { MetadataHistory } from '../components/MetadataHistory';
+import { FileSelector } from '../components/audiobooks/FileSelector';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
@@ -86,17 +87,11 @@ export const BookDetail = () => {
   const [tags, setTags] = useState<BookTags | null>(null);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
-  const [segments, setSegments] = useState<Array<{
-    id: string;
-    file_path: string;
-    format: string;
-    size_bytes: number;
-    duration_seconds: number;
-    track_number?: number;
-    total_tracks?: number;
-    active: boolean;
-  }>>([]);
+  const [segments, setSegments] = useState<BookSegment[]>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
+  const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
   const [coverError, setCoverError] = useState(false);
 
   const loadBook = useCallback(async () => {
@@ -160,16 +155,13 @@ export const BookDetail = () => {
     loadTags();
   }, [id, loadBook, loadTags, loadVersions]);
 
-  // Load segments when files tab is active
+  // Load segments on mount (after book loads)
   useEffect(() => {
-    if (activeTab !== 'files' || !id || segmentsLoaded) return;
+    if (!id || segmentsLoaded) return;
     const loadSegments = async () => {
       try {
-        const resp = await fetch(`/api/v1/audiobooks/${id}/segments`);
-        if (resp.ok) {
-          const data = await resp.json();
-          setSegments(data);
-        }
+        const data = await api.getBookSegments(id);
+        setSegments(data);
       } catch {
         // Segments not available, that's fine
       } finally {
@@ -177,7 +169,29 @@ export const BookDetail = () => {
       }
     };
     loadSegments();
-  }, [activeTab, id, segmentsLoaded]);
+  }, [id, segmentsLoaded]);
+
+  // Load segment tags when selectedSegmentId changes
+  const loadSegmentTags = useCallback(async (segmentId: string) => {
+    if (!id) return;
+    setSegmentTagsLoading(true);
+    try {
+      const data = await api.getSegmentTags(id, segmentId);
+      setSegmentTags(data);
+    } catch {
+      setSegmentTags(null);
+    } finally {
+      setSegmentTagsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (selectedSegmentId) {
+      loadSegmentTags(selectedSegmentId);
+    } else {
+      setSegmentTags(null);
+    }
+  }, [selectedSegmentId, loadSegmentTags]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '—';
@@ -946,6 +960,16 @@ export const BookDetail = () => {
         </Stack>
       </Paper>
 
+      {segments.length > 1 && (
+        <Paper sx={{ px: 2, py: 1.5, mb: 1 }}>
+          <FileSelector
+            segments={segments}
+            selectedId={selectedSegmentId}
+            onSelect={setSelectedSegmentId}
+          />
+        </Paper>
+      )}
+
       <Paper sx={{ p: 2, mb: 3 }}>
         <Tabs
           value={activeTab}
@@ -967,64 +991,134 @@ export const BookDetail = () => {
 
       {activeTab === 'info' && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          <Grid container spacing={2}>
-            {[
-              { label: 'Title', value: book.title || 'Untitled' },
-              {
-                label: 'Author',
-                value:
-                  book.authors && book.authors.length > 0
-                    ? book.authors.map((a) => a.name).join(' & ')
-                    : book.author_name || 'Unknown',
-              },
-              { label: 'Series', value: book.series_name },
-              {
-                label: 'Narrator',
-                value:
-                  book.narrators && book.narrators.length > 0
-                    ? book.narrators.map((n) => n.name).join(' & ')
-                    : book.narrator,
-              },
-              { label: 'Language', value: book.language },
-              { label: 'ISBN 13', value: book.isbn13 },
-              { label: 'Work ID', value: book.work_id },
-            ]
-              .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null)
-              .map((item) => (
-                <Grid item xs={12} sm={6} md={4} key={item.label}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 1,
-                      bgcolor: 'background.default',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      height: '100%',
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ textTransform: 'uppercase' }}
-                    >
-                      {item.label}
-                    </Typography>
-                    <Typography variant="body1">
-                      {item.value as string}
-                    </Typography>
-                  </Box>
-                </Grid>
-              ))}
-          </Grid>
-          {book.description && (
-            <Box mt={3}>
-              <Typography variant="h6" gutterBottom>
-                Description
+          {selectedSegmentId && segmentTags ? (
+            <>
+              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                File-specific info for: {segmentTags.file_path.split('/').pop()}
               </Typography>
-              <Typography variant="body1" color="text.secondary">
-                {book.description}
-              </Typography>
-            </Box>
+              <Grid container spacing={2}>
+                {[
+                  { label: 'Filename', value: segmentTags.file_path.split('/').pop() },
+                  { label: 'Format', value: segmentTags.format?.toUpperCase() },
+                  { label: 'Duration', value: formatDuration(segmentTags.duration_sec) },
+                  {
+                    label: 'Size',
+                    value: segmentTags.size_bytes > 0
+                      ? `${(segmentTags.size_bytes / 1048576).toFixed(1)} MB`
+                      : undefined,
+                  },
+                  {
+                    label: 'Track Number',
+                    value: segmentTags.track_number != null
+                      ? `${segmentTags.track_number}${segmentTags.total_tracks ? ` of ${segmentTags.total_tracks}` : ''}`
+                      : undefined,
+                  },
+                  { label: 'Codec', value: segmentTags.tags?.codec },
+                  { label: 'Bitrate', value: segmentTags.tags?.bitrate ? `${segmentTags.tags.bitrate} kbps` : undefined },
+                  { label: 'Sample Rate', value: segmentTags.tags?.sample_rate ? `${segmentTags.tags.sample_rate} Hz` : undefined },
+                ]
+                  .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null && item.value !== '\u2014')
+                  .map((item) => (
+                    <Grid item xs={12} sm={6} md={4} key={item.label}>
+                      <Box
+                        sx={{
+                          p: 2,
+                          borderRadius: 1,
+                          bgcolor: 'background.default',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          height: '100%',
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase' }}
+                        >
+                          {item.label}
+                        </Typography>
+                        <Typography variant="body1">
+                          {item.value as string}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+              </Grid>
+              {segmentTags.tags_read_error && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Tag read error: {segmentTags.tags_read_error}
+                </Alert>
+              )}
+              {segmentTags.used_filename_fallback && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  Some metadata was extracted from the filename because embedded tags were incomplete.
+                </Alert>
+              )}
+            </>
+          ) : (
+            <>
+              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              <Grid container spacing={2}>
+                {[
+                  { label: 'Title', value: book.title || 'Untitled' },
+                  {
+                    label: 'Author',
+                    value:
+                      book.authors && book.authors.length > 0
+                        ? book.authors.map((a) => a.name).join(' & ')
+                        : book.author_name || 'Unknown',
+                  },
+                  { label: 'Series', value: book.series_name },
+                  {
+                    label: 'Narrator',
+                    value:
+                      book.narrators && book.narrators.length > 0
+                        ? book.narrators.map((n) => n.name).join(' & ')
+                        : book.narrator,
+                  },
+                  { label: 'Language', value: book.language },
+                  { label: 'ISBN 13', value: book.isbn13 },
+                  { label: 'Work ID', value: book.work_id },
+                ]
+                  .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null)
+                  .map((item) => (
+                    <Grid item xs={12} sm={6} md={4} key={item.label}>
+                      <Box
+                        sx={{
+                          p: 2,
+                          borderRadius: 1,
+                          bgcolor: 'background.default',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          height: '100%',
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ textTransform: 'uppercase' }}
+                        >
+                          {item.label}
+                        </Typography>
+                        <Typography variant="body1">
+                          {item.value as string}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+              </Grid>
+              {book.description && (
+                <Box mt={3}>
+                  <Typography variant="h6" gutterBottom>
+                    Description
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary">
+                    {book.description}
+                  </Typography>
+                </Box>
+              )}
+            </>
           )}
         </Paper>
       )}
@@ -1227,132 +1321,14 @@ export const BookDetail = () => {
             <InfoIcon />
             <Typography variant="h6">Tags &amp; Media</Typography>
           </Stack>
-          {tagsError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {tagsError}
-            </Alert>
-          )}
-          {tagsLoading && (
-            <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-              <CircularProgress size={18} />
-              <Typography variant="body2">Loading tags...</Typography>
-            </Stack>
-          )}
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 1,
-                  bgcolor: 'background.default',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  height: '100%',
-                }}
-              >
-                <Typography variant="subtitle2" gutterBottom>
-                  Embedded / Media Info
-                </Typography>
-                <Stack spacing={1}>
-                  <Typography variant="body2">
-                    Codec: {tags?.media_info?.codec || book.codec || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Bitrate:{' '}
-                    {tags?.media_info?.bitrate
-                      ? `${tags.media_info.bitrate} kbps`
-                      : book.bitrate
-                        ? `${book.bitrate} kbps`
-                        : '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Sample Rate:{' '}
-                    {tags?.media_info?.sample_rate
-                      ? `${tags.media_info.sample_rate} Hz`
-                      : book.sample_rate
-                        ? `${book.sample_rate} Hz`
-                        : '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Channels:{' '}
-                    {tags?.media_info?.channels ?? book.channels ?? '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Bit Depth:{' '}
-                    {tags?.media_info?.bit_depth ?? book.bit_depth ?? '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Quality: {tags?.media_info?.quality || book.quality || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Duration:{' '}
-                    {formatDuration(
-                      tags?.media_info?.duration || book.duration
-                    ) || '—'}
-                  </Typography>
-                </Stack>
-              </Box>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 1,
-                  bgcolor: 'background.default',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  height: '100%',
-                }}
-              >
-                <Typography variant="subtitle2" gutterBottom>
-                  Metadata (Current)
-                </Typography>
-                <Stack spacing={1}>
-                  <Typography variant="body2">
-                    Title: {book.title || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Author:{' '}
-                    {book.authors && book.authors.length > 0
-                      ? book.authors.map((a) => a.name).join(' & ')
-                      : book.author_name || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Narrator:{' '}
-                    {book.narrators && book.narrators.length > 0
-                      ? book.narrators.map((n) => n.name).join(' & ')
-                      : book.narrator || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Series: {book.series_name || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Series Position: {book.series_position ?? '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Publisher: {book.publisher || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Language: {book.language || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    Year:{' '}
-                    {book.audiobook_release_year || book.print_year || '—'}
-                  </Typography>
-                  <Typography variant="body2">
-                    ISBN: {book.isbn || '—'}
-                  </Typography>
-                </Stack>
-              </Box>
-            </Grid>
-          </Grid>
-          {tags?.tags && (
-            <Box mt={3}>
-              <Typography variant="subtitle2" gutterBottom>
-                File Tags
+          {selectedSegmentId && segmentTags ? (
+            <>
+              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Raw embedded tags for: {segmentTags.file_path.split('/').pop()}
               </Typography>
               <Grid container spacing={1}>
-                {Object.entries(tags.tags).map(([key, values]) => (
+                {Object.entries(segmentTags.tags).map(([key, value]) => (
                   <Grid item xs={12} sm={6} md={4} key={key}>
                     <Box
                       sx={{
@@ -1370,46 +1346,212 @@ export const BookDetail = () => {
                       >
                         {key.replace(/_/g, ' ')}
                       </Typography>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        flexWrap="wrap"
-                      >
-                        <Typography variant="body2">
-                          {values.effective_value ??
-                            values.override_value ??
-                            values.stored_value ??
-                            values.fetched_value ??
-                            values.file_value ??
-                            '—'}
-                        </Typography>
-                        {values.effective_source && (
-                          <Chip
-                            size="small"
-                            label={values.effective_source}
-                            variant="outlined"
-                          />
-                        )}
-                        {values.override_locked && (
-                          <Chip
-                            size="small"
-                            label="locked"
-                            color="warning"
-                            variant="outlined"
-                          />
-                        )}
-                      </Stack>
+                      <Typography variant="body2">
+                        {value || '\u2014'}
+                      </Typography>
                     </Box>
                   </Grid>
                 ))}
               </Grid>
-            </Box>
+              {Object.keys(segmentTags.tags).length === 0 && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  No embedded tags found in this file.
+                </Alert>
+              )}
+              {segmentTags.tags_read_error && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Tag read error: {segmentTags.tags_read_error}
+                </Alert>
+              )}
+            </>
+          ) : (
+            <>
+              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              {tagsError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {tagsError}
+                </Alert>
+              )}
+              {tagsLoading && (
+                <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">Loading tags...</Typography>
+                </Stack>
+              )}
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: 'background.default',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="subtitle2" gutterBottom>
+                      Embedded / Media Info
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Typography variant="body2">
+                        Codec: {tags?.media_info?.codec || book.codec || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Bitrate:{' '}
+                        {tags?.media_info?.bitrate
+                          ? `${tags.media_info.bitrate} kbps`
+                          : book.bitrate
+                            ? `${book.bitrate} kbps`
+                            : '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Sample Rate:{' '}
+                        {tags?.media_info?.sample_rate
+                          ? `${tags.media_info.sample_rate} Hz`
+                          : book.sample_rate
+                            ? `${book.sample_rate} Hz`
+                            : '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Channels:{' '}
+                        {tags?.media_info?.channels ?? book.channels ?? '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Bit Depth:{' '}
+                        {tags?.media_info?.bit_depth ?? book.bit_depth ?? '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Quality: {tags?.media_info?.quality || book.quality || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Duration:{' '}
+                        {formatDuration(
+                          tags?.media_info?.duration || book.duration
+                        ) || '\u2014'}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: 'background.default',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="subtitle2" gutterBottom>
+                      Metadata (Current)
+                    </Typography>
+                    <Stack spacing={1}>
+                      <Typography variant="body2">
+                        Title: {book.title || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Author:{' '}
+                        {book.authors && book.authors.length > 0
+                          ? book.authors.map((a) => a.name).join(' & ')
+                          : book.author_name || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Narrator:{' '}
+                        {book.narrators && book.narrators.length > 0
+                          ? book.narrators.map((n) => n.name).join(' & ')
+                          : book.narrator || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Series: {book.series_name || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Series Position: {book.series_position ?? '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Publisher: {book.publisher || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Language: {book.language || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Year:{' '}
+                        {book.audiobook_release_year || book.print_year || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        ISBN: {book.isbn || '\u2014'}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Grid>
+              </Grid>
+              {tags?.tags && (
+                <Box mt={3}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    File Tags
+                  </Typography>
+                  <Grid container spacing={1}>
+                    {Object.entries(tags.tags).map(([key, values]) => (
+                      <Grid item xs={12} sm={6} md={4} key={key}>
+                        <Box
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 1,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                            bgcolor: 'background.default',
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ textTransform: 'uppercase' }}
+                          >
+                            {key.replace(/_/g, ' ')}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            flexWrap="wrap"
+                          >
+                            <Typography variant="body2">
+                              {values.effective_value ??
+                                values.override_value ??
+                                values.stored_value ??
+                                values.fetched_value ??
+                                values.file_value ??
+                                '\u2014'}
+                            </Typography>
+                            {values.effective_source && (
+                              <Chip
+                                size="small"
+                                label={values.effective_source}
+                                variant="outlined"
+                              />
+                            )}
+                            {values.override_locked && (
+                              <Chip
+                                size="small"
+                                label="locked"
+                                color="warning"
+                                variant="outlined"
+                              />
+                            )}
+                          </Stack>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Showing current metadata and media info. File-tag provenance will
+                populate here when available from the backend.
+              </Alert>
+            </>
           )}
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Showing current metadata and media info. File-tag provenance will
-            populate here when available from the backend.
-          </Alert>
         </Paper>
       )}
 
@@ -1419,14 +1561,82 @@ export const BookDetail = () => {
             <CompareIcon />
             <Typography variant="h6">Compare &amp; Resolve</Typography>
           </Stack>
-          {tagsError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {tagsError}
-            </Alert>
-          )}
-          {!tags?.tags && !tagsLoading ? (
-            <Alert severity="info">No tag data available yet.</Alert>
+          {selectedSegmentId && segmentTags ? (
+            <>
+              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                File tag vs book effective value for: {segmentTags.file_path.split('/').pop()}
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Field</TableCell>
+                    <TableCell>File Tag Value</TableCell>
+                    <TableCell>Book Effective Value</TableCell>
+                    <TableCell>Match</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { field: 'title', bookVal: book.title },
+                    {
+                      field: 'author',
+                      bookVal: book.authors?.length
+                        ? book.authors.map((a) => a.name).join(' & ')
+                        : book.author_name,
+                    },
+                    {
+                      field: 'narrator',
+                      bookVal: book.narrators?.length
+                        ? book.narrators.map((n) => n.name).join(' & ')
+                        : book.narrator,
+                    },
+                    { field: 'album', bookVal: book.title },
+                    { field: 'genre', bookVal: 'Audiobook' },
+                    { field: 'year', bookVal: String(book.audiobook_release_year || book.print_year || '') },
+                    { field: 'publisher', bookVal: book.publisher },
+                    { field: 'series', bookVal: book.series_name },
+                    { field: 'language', bookVal: book.language },
+                  ].map(({ field, bookVal }) => {
+                    const fileVal = segmentTags.tags[field] || segmentTags.tags[field.replace(/ /g, '_')] || '';
+                    const bookStr = String(bookVal || '');
+                    const matches = fileVal.toLowerCase() === bookStr.toLowerCase();
+                    return (
+                      <TableRow
+                        key={field}
+                        sx={!matches && fileVal && bookStr ? { bgcolor: 'warning.light' } : undefined}
+                      >
+                        <TableCell sx={{ textTransform: 'capitalize' }}>
+                          {field.replace(/_/g, ' ')}
+                        </TableCell>
+                        <TableCell>{fileVal || '\u2014'}</TableCell>
+                        <TableCell>{bookStr || '\u2014'}</TableCell>
+                        <TableCell>
+                          {!fileVal && !bookStr ? (
+                            <Chip size="small" label="empty" variant="outlined" />
+                          ) : matches ? (
+                            <Chip size="small" label="match" color="success" variant="outlined" />
+                          ) : (
+                            <Chip size="small" label="mismatch" color="warning" variant="outlined" />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </>
           ) : (
+            <>
+              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              {tagsError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {tagsError}
+                </Alert>
+              )}
+              {!tags?.tags && !tagsLoading ? (
+                <Alert severity="info">No tag data available yet.</Alert>
+              ) : (
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -1562,12 +1772,14 @@ export const BookDetail = () => {
                 })}
               </TableBody>
             </Table>
+              )}
+              <Alert severity="info" sx={{ mt: 2 }}>
+                Locked overrides prevent future fetch/tag updates from changing the
+                field. Apply a source to set/lock a field; use Unlock to allow edits
+                without clearing the override value.
+              </Alert>
+            </>
           )}
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Locked overrides prevent future fetch/tag updates from changing the
-            field. Apply a source to set/lock a field; use Unlock to allow edits
-            without clearing the override value.
-          </Alert>
         </Paper>
       )}
 
