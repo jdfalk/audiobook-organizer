@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.25.0
+// version: 1.26.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -153,6 +153,30 @@ export interface BookTags {
     duration?: number;
   };
   tags?: Record<string, TagSourceValues>;
+}
+
+export interface BookSegment {
+  id: string;
+  file_path: string;
+  format: string;
+  size_bytes: number;
+  duration_seconds: number;
+  track_number?: number;
+  total_tracks?: number;
+  active: boolean;
+}
+
+export interface SegmentTags {
+  segment_id: string;
+  file_path: string;
+  format: string;
+  size_bytes: number;
+  duration_sec: number;
+  track_number?: number;
+  total_tracks?: number;
+  tags: Record<string, string>;
+  used_filename_fallback: boolean;
+  tags_read_error?: string;
 }
 
 export interface PathMapping {
@@ -594,6 +618,27 @@ export async function getBookTags(bookId: string): Promise<BookTags> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book tags');
+  }
+  return response.json();
+}
+
+export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/segments`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book segments');
+  }
+  return response.json();
+}
+
+export async function getSegmentTags(
+  bookId: string,
+  segmentId: string
+): Promise<SegmentTags> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/segments/${segmentId}/tags`
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch segment tags');
   }
   return response.json();
 }
