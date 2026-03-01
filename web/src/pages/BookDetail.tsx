@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.15.0
+// version: 1.16.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -41,6 +41,7 @@ import HistoryIcon from '@mui/icons-material/History.js';
 import InfoIcon from '@mui/icons-material/Info.js';
 import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
 import StorageIcon from '@mui/icons-material/Storage.js';
+import SaveIcon from '@mui/icons-material/Save.js';
 import type { Book, BookTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -59,6 +60,8 @@ export const BookDetail = () => {
   const [loadingField, setLoadingField] = useState<string | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
+  const [writingToFiles, setWritingToFiles] = useState(false);
+  const [writeBackDialogOpen, setWriteBackDialogOpen] = useState(false);
   const [preAIBook, setPreAIBook] = useState<Book | null>(null);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
@@ -281,6 +284,23 @@ export const BookDetail = () => {
       toast(msg, 'error');
     } finally {
       setFetchingMetadata(false);
+    }
+  };
+
+  const handleWriteBackMetadata = async () => {
+    if (!book) return;
+    setWritingToFiles(true);
+    setWriteBackDialogOpen(false);
+    try {
+      const result = await api.writeBackMetadata(book.id);
+      toast(result.message || 'Metadata written to files.', 'success');
+    } catch (error: unknown) {
+      console.error('Failed to write metadata to files', error);
+      const msg =
+        error instanceof Error ? error.message : 'Write to files failed.';
+      toast(msg, 'error');
+    } finally {
+      setWritingToFiles(false);
     }
   };
 
@@ -850,6 +870,20 @@ export const BookDetail = () => {
               disabled={fetchingMetadata || actionLoading}
             >
               {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                writingToFiles ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <SaveIcon />
+                )
+              }
+              onClick={() => setWriteBackDialogOpen(true)}
+              disabled={writingToFiles || actionLoading}
+            >
+              {writingToFiles ? 'Writing...' : 'Save to Files'}
             </Button>
             <Button
               variant="outlined"
@@ -1593,6 +1627,67 @@ export const BookDetail = () => {
             disabled={actionLoading}
           >
             {deleteOptions.softDelete ? 'Soft Delete' : 'Delete Now'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Write-back confirmation dialog */}
+      <Dialog
+        open={writeBackDialogOpen}
+        onClose={() => setWriteBackDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Save Metadata to Files</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            This will write the following metadata from the database directly
+            into the audio file tags on disk:
+          </Typography>
+          <Box component="ul" sx={{ mt: 1 }}>
+            <li>
+              <strong>Title</strong> — {book?.title}
+            </li>
+            <li>
+              <strong>Album</strong> — {book?.title} (groups tracks in players)
+            </li>
+            <li>
+              <strong>Artist</strong> —{' '}
+              {book?.authors?.map((a) => a.name).join(' & ') ||
+                book?.author_name ||
+                '(none)'}
+            </li>
+            <li>
+              <strong>Narrator</strong> —{' '}
+              {book?.narrators?.map((n) => n.name).join(' & ') ||
+                book?.narrator ||
+                '(none)'}
+            </li>
+            <li>
+              <strong>Year</strong> —{' '}
+              {book?.audiobook_release_year || book?.print_year || '(none)'}
+            </li>
+            <li>
+              <strong>Genre</strong> — Audiobook
+            </li>
+            <li>
+              <strong>Track numbers</strong> — written for multi-file books
+            </li>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            A backup of each file is created before writing and removed on
+            success. The original file is restored automatically if writing
+            fails.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWriteBackDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            startIcon={<SaveIcon />}
+            onClick={handleWriteBackMetadata}
+          >
+            Write to Files
           </Button>
         </DialogActions>
       </Dialog>

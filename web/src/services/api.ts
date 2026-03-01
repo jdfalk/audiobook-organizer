@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.24.0
+// version: 1.25.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1245,6 +1245,26 @@ export async function fetchBookMetadata(
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch metadata');
+  }
+  return response.json();
+}
+
+export interface WriteBackMetadataResponse {
+  message: string;
+  written_count: number;
+}
+
+export async function writeBackMetadata(
+  bookId: string
+): Promise<WriteBackMetadataResponse> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/write-back`,
+    {
+      method: 'POST',
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to write metadata to files');
   }
   return response.json();
 }
