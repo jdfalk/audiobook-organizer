@@ -169,7 +169,7 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 | Bug | Status | Plan |
 | --- | --- | --- |
 | ~~Directory-as-filepath in tag extraction (metadata.go:105)~~ | ✅ Fixed 2026-02-26 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| Search bar broken: after no results, typing new text and hitting Enter doesn't re-search | 🔴 | TBD |
+| ~~Search bar broken: after no results, typing new text and hitting Enter doesn't re-search~~ | ✅ Fixed 2026-03-01 | SearchBar was hidden by empty state |
 
 Previously fixed:
 
