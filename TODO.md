@@ -131,19 +131,19 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| `POST /api/v1/audiobooks/:id/write-back` endpoint | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| Track number support in WriteMetadataToFile (M4B, MP3, FLAC) | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| Per-segment numbering: `001 - Title.mp3`, track X/Y tags | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| "Save to Files" button with confirmation dialog | 🔴 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| `POST /api/v1/audiobooks/:id/write-back` endpoint | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| Track number support in WriteMetadataToFile (M4B, MP3, FLAC) | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| Per-segment numbering: `001 - Title.mp3`, track X/Y tags | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
+| "Save to Files" button with confirmation dialog | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
 
 ### Phase 3: Multi-file Tab Layout
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| `GET /api/v1/audiobooks/:id/segments/:segmentId/tags` endpoint | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| FileSelector component (chips for ≤20 files, dropdown for >20) | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| Scoped Info/Tags/Compare tabs for selected file | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| Fix Tags tab: show actual embedded media info (codec, bitrate, etc.) for single-file books | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| `GET /api/v1/audiobooks/:id/segments/:segmentId/tags` endpoint | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| FileSelector component (chips for ≤20 files, dropdown for >20) | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| Scoped Info/Tags/Compare tabs for selected file | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| Fix Tags tab: show actual embedded media info (codec, bitrate, etc.) for single-file books | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
 
 ### Phase 4B: Manual Metadata Matching UI
 
