@@ -45,6 +45,7 @@ import {
   PushPin as PushPinIcon,
   PushPinOutlined as PushPinOutlinedIcon,
   VerticalAlignTop as VerticalAlignTopIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
 import { AudiobookList } from '../components/audiobooks/AudiobookList';
@@ -1965,7 +1966,7 @@ export const Library = () => {
       )}
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
-        {audiobooks.length === 0 && !loading ? (
+        {audiobooks.length === 0 && !loading && !searchQuery ? (
           <Paper
             sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
           >
@@ -2190,7 +2191,24 @@ export const Library = () => {
               </Stack>
             </Paper>
 
-            {viewMode === 'grid' ? (
+            {audiobooks.length === 0 && !loading && searchQuery ? (
+              <Paper sx={{ p: 4, textAlign: 'center' }}>
+                <SearchIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 1 }} />
+                <Typography variant="h6" color="text.secondary">
+                  No results for "{searchQuery}"
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Try a different search term or clear the search to see all books.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  sx={{ mt: 2 }}
+                  onClick={() => setSearchQuery('')}
+                >
+                  Clear Search
+                </Button>
+              </Paper>
+            ) : viewMode === 'grid' ? (
               <AudiobookGrid
                 audiobooks={audiobooks}
                 loading={loading}
