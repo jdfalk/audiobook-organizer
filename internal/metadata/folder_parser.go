@@ -60,10 +60,6 @@ var (
 		`(?i)(?:[-–,]\s*)?(?:read\s+by|narrated\s+by|narrator[:\s]+)\s*(.+)$`,
 	)
 
-	// Matches "Author - Title" or "Author, Co-Author - Title" patterns in a segment.
-	// The author portion must come before " - ".
-	reDashSeparator = regexp.MustCompile(`^(.+?)\s+-\s+(.+)$`)
-
 	// Matches a plain "Part N of M" filename (case-insensitive).
 	// Used to detect whether a filename is a useless part number.
 	rePartOfN = regexp.MustCompile(`(?i)^\d+\s+part\s+\d+\s+of\s+\d+`)
