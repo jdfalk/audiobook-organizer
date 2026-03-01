@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 3.0.0 -->
+<!-- version: 3.1.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-03-01 -->
 
@@ -175,6 +175,11 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 | ~~Cover art not reloading after metadata fetch~~ | ✅ Fixed 2026-03-01 | Reset coverError on cover_url change |
 | ~~Metadata change history not recording for manual edits~~ | ✅ Fixed 2026-03-01 | Added recordChangeHistory in updateAudiobook |
 | ~~App.test.tsx missing getAppVersion mock~~ | ✅ Fixed 2026-03-01 | Pre-existing test gap |
+| ~~Library save/batch-save not calling API (local-only)~~ | ✅ Fixed 2026-03-01 | Wired to api.updateBook |
+| ~~FileManager all stubs (add/remove/scan/browse not calling API)~~ | ✅ Fixed 2026-03-01 | Wired to real API calls |
+| ~~Silent error swallowing in Settings, OpenLibraryDumps~~ | ✅ Fixed 2026-03-01 | Added console.error logging |
+| ~~Library fetch/AI-parse catch blocks missing toast~~ | ✅ Fixed 2026-03-01 | Added error toast notifications |
+| ~~Stale "Compare tab" references after rename to "Tags"~~ | ✅ Fixed 2026-03-01 | Updated comments and test vars |
 
 Previously fixed:
 
