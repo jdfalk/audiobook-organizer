@@ -177,6 +177,12 @@ var migrations = []Migration{
 		Up:          migration023Up,
 		Down:        nil,
 	},
+	{
+		Version:     24,
+		Description: "Add metadata_review_status column to books",
+		Up:          migration024Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -1388,5 +1394,37 @@ func migration023Up(store Store) error {
 	}
 
 	log.Println("  - metadata_updated_at and last_written_at added successfully")
+	return nil
+}
+
+// migration024Up adds metadata_review_status column to books table.
+func migration024Up(store Store) error {
+	log.Println("  - Adding metadata_review_status to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration")
+		return nil
+	}
+
+	// Check if column already exists (schema may include it for fresh DBs).
+	var count int
+	err := sqliteStore.db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'metadata_review_status'`,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check for metadata_review_status column: %w", err)
+	}
+	if count > 0 {
+		log.Println("  - Column already exists, skipping")
+		return nil
+	}
+
+	_, err = sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN metadata_review_status TEXT`)
+	if err != nil {
+		return fmt.Errorf("failed to add metadata_review_status column: %w", err)
+	}
+
+	log.Println("  - metadata_review_status added successfully")
 	return nil
 }

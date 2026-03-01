@@ -143,6 +143,15 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 | `GET /api/v1/audiobooks/:id/segments/:segmentId/tags` endpoint | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
 | FileSelector component (chips for ≤20 files, dropdown for >20) | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
 | Scoped Info/Tags/Compare tabs for selected file | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+| Fix Tags tab: show actual embedded media info (codec, bitrate, etc.) for single-file books | 🔴 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
+
+### Phase 4B: Manual Metadata Matching UI
+
+| Item | Status | Plan |
+| --- | --- | --- |
+| Show top 5 scored results to user, let them pick or search | 🔴 | TBD |
+| Search OpenLibrary local dump from UI (title/author/ISBN) | 🔴 | TBD |
+| "No match" option that marks book as manually reviewed | 🔴 | TBD |
 
 ### Phase 4: Multi-file Metadata Read
 
@@ -159,6 +168,7 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 | Bug | Status | Plan |
 | --- | --- | --- |
 | ~~Directory-as-filepath in tag extraction (metadata.go:105)~~ | ✅ Fixed 2026-02-26 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
+| Search bar broken: after no results, typing new text and hitting Enter doesn't re-search | 🔴 | TBD |
 
 Previously fixed:
 
@@ -214,7 +224,8 @@ Previously fixed:
 | Release group & provenance tracking | [Metadata System](docs/plans/metadata-system.md) |
 | Download client integration (Deluge, SABnzbd, qBittorrent) | [Download Clients](docs/plans/download-client-integration.md) |
 | Advanced naming templates (Sonarr-style) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-| Audio transcoding (MP3→M4B, chapters, cover art) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
+| **MP3→chapterized M4B conversion (CRITICAL post-launch)** | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
+| Audio transcoding (general, chapters, cover art) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
 | Web download & export | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
 | Security hardening (CSP, path traversal, audit log) | [Security & Multi-User](docs/plans/security-and-multiuser.md) |
 | Multi-user architecture (auth, RBAC, SSL/TLS) | [Security & Multi-User](docs/plans/security-and-multiuser.md) |
