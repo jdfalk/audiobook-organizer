@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.74.0
+// version: 1.75.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1048,6 +1048,7 @@ func (s *Server) setupRoutes() {
 			protected.DELETE("/audiobooks/:id", s.deleteAudiobook)
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
+			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
 			// Metadata change history
@@ -1664,6 +1665,108 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, segments)
+}
+
+// getSegmentTags returns raw metadata tags for a specific segment file.
+func (s *Server) getSegmentTags(c *gin.Context) {
+	id := c.Param("id")
+	segmentId := c.Param("segmentId")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var found *database.BookSegment
+	for i := range segments {
+		if segments[i].ID == segmentId {
+			found = &segments[i]
+			break
+		}
+	}
+	if found == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "segment not found"})
+		return
+	}
+
+	tags := map[string]string{}
+	usedFallback := false
+	tagsReadError := ""
+
+	meta, err := metadata.ExtractMetadata(found.FilePath)
+	if err != nil {
+		tagsReadError = err.Error()
+	} else {
+		usedFallback = meta.UsedFilenameFallback
+		if meta.Title != "" {
+			tags["title"] = meta.Title
+		}
+		if meta.Artist != "" {
+			tags["artist"] = meta.Artist
+		}
+		if meta.Album != "" {
+			tags["album"] = meta.Album
+		}
+		if meta.Genre != "" {
+			tags["genre"] = meta.Genre
+		}
+		if meta.Series != "" {
+			tags["series"] = meta.Series
+		}
+		if meta.SeriesIndex != 0 {
+			tags["series_index"] = strconv.Itoa(meta.SeriesIndex)
+		}
+		if meta.Comments != "" {
+			tags["comments"] = meta.Comments
+		}
+		if meta.Year != 0 {
+			tags["year"] = strconv.Itoa(meta.Year)
+		}
+		if meta.Narrator != "" {
+			tags["narrator"] = meta.Narrator
+		}
+		if meta.Language != "" {
+			tags["language"] = meta.Language
+		}
+		if meta.Publisher != "" {
+			tags["publisher"] = meta.Publisher
+		}
+		if meta.ISBN10 != "" {
+			tags["isbn10"] = meta.ISBN10
+		}
+		if meta.ISBN13 != "" {
+			tags["isbn13"] = meta.ISBN13
+		}
+	}
+
+	resp := gin.H{
+		"segment_id":             found.ID,
+		"file_path":              found.FilePath,
+		"format":                 found.Format,
+		"size_bytes":             found.SizeBytes,
+		"duration_sec":           found.DurationSec,
+		"track_number":           found.TrackNumber,
+		"total_tracks":           found.TotalTracks,
+		"tags":                   tags,
+		"used_filename_fallback": usedFallback,
+	}
+	if tagsReadError != "" {
+		resp["tags_read_error"] = tagsReadError
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) getBookMetadataHistory(c *gin.Context) {
