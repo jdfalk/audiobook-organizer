@@ -158,9 +158,9 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| Folder path parser (author/series/title/narrator from directory hierarchy) | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
-| Combined metadata assembly (folder + first file tags + filename pattern) | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
-| Scanner integration for generic part-numbered files | 🔴 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+| Folder path parser (author/series/title/narrator from directory hierarchy) | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+| Combined metadata assembly (folder + first file tags + filename pattern) | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
+| Scanner integration for generic part-numbered files | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
 
 ---
 
