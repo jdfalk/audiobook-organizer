@@ -1,8 +1,8 @@
 // file: web/src/pages/Logs.tsx
-// version: 1.0.1
+// version: 2.0.0
 // guid: 6b7c8d9e-0f1a-2b3c-4d5e-6f7a8b9c0d1e
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -21,6 +21,7 @@ import {
   TablePagination,
   IconButton,
   Collapse,
+  Alert,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -30,85 +31,80 @@ import {
   Info as InfoIcon,
   BugReport as DebugIcon,
 } from '@mui/icons-material';
+import * as api from '../services/api';
 
-interface LogEntry {
+interface LogRow {
   id: string;
   timestamp: string;
-  level: 'debug' | 'info' | 'warn' | 'error';
+  level: string;
   message: string;
-  source?: string;
-  metadata?: Record<string, string | number | boolean>;
+  source: string;
+  details?: string;
 }
 
 export function Logs() {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [, setLoading] = useState(false);
+  const [logs, setLogs] = useState<LogRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [levelFilter, setLevelFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  useEffect(() => {
-    fetchLogs();
-  }, [levelFilter, sourceFilter, page, rowsPerPage]);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, levelFilter, sourceFilter]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/v1/logs?level=${levelFilter}&source=${sourceFilter}&page=${page}&limit=${rowsPerPage}`);
-      // const data = await response.json();
-
-      // Mock data for demonstration
-      const mockLogs: LogEntry[] = Array.from({ length: 50 }, (_, i) => ({
-        id: `log-${i}`,
-        timestamp: new Date(Date.now() - i * 60000).toISOString(),
-        level: ['debug', 'info', 'warn', 'error'][
-          Math.floor(Math.random() * 4)
-        ] as LogEntry['level'],
-        message: [
-          'Scanning import path: /audiobooks/import',
-          'Successfully imported audiobook: To Kill a Mockingbird',
-          'Failed to fetch metadata from Goodreads',
-          'Database connection established',
-          'File organization completed',
-          'Memory usage: 45%',
-          'Disk quota check: 67% used',
-        ][Math.floor(Math.random() * 7)],
-        source: ['scanner', 'importer', 'metadata', 'database', 'organizer'][
-          Math.floor(Math.random() * 5)
-        ],
-        metadata: {
-          duration: Math.floor(Math.random() * 1000),
-          files_processed: Math.floor(Math.random() * 100),
-        },
-      }));
-
-      setLogs(mockLogs);
-    } catch (error) {
-      console.error('Failed to fetch logs:', error);
+      const operations = await api.getActiveOperations();
+      // Get logs from each operation
+      const logPromises = operations.map(async (op) => {
+        try {
+          const opLogs = await api.getOperationLogs(op.id);
+          return opLogs.map((log) => ({
+            id: `${op.id}-${log.id}`,
+            timestamp: log.created_at,
+            level: log.level,
+            message: log.message,
+            source: `${op.type} (${op.id.slice(0, 8)})`,
+            details: log.details,
+          }));
+        } catch {
+          return [];
+        }
+      });
+      const allLogs = (await Promise.all(logPromises)).flat();
+      // Sort by timestamp descending
+      allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setLogs(allLogs);
+      if (allLogs.length === 0 && operations.length === 0) {
+        setError('No active operations. Logs appear here during scans, imports, and other operations.');
+      }
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+      setError('Failed to fetch operation logs.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchLogs]);
 
   const getLevelIcon = (level: string) => {
     switch (level) {
       case 'error':
         return <ErrorIcon color="error" />;
       case 'warn':
+      case 'warning':
         return <WarningIcon color="warning" />;
       case 'info':
         return <InfoIcon color="info" />;
@@ -125,6 +121,7 @@ export function Logs() {
       case 'error':
         return 'error';
       case 'warn':
+      case 'warning':
         return 'warning';
       case 'info':
         return 'info';
@@ -136,7 +133,6 @@ export function Logs() {
 
   const filteredLogs = logs.filter((log) => {
     if (levelFilter !== 'all' && log.level !== levelFilter) return false;
-    if (sourceFilter !== 'all' && log.source !== sourceFilter) return false;
     if (
       searchQuery &&
       !log.message.toLowerCase().includes(searchQuery.toLowerCase())
@@ -144,17 +140,6 @@ export function Logs() {
       return false;
     return true;
   });
-
-  const handleChangePage = (_: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
 
   return (
     <Box>
@@ -164,7 +149,7 @@ export function Logs() {
         alignItems="center"
         mb={3}
       >
-        <Typography variant="h4">Logs & Events</Typography>
+        <Typography variant="h4">Operation Logs</Typography>
         <Stack direction="row" spacing={2}>
           <Button
             variant={autoRefresh ? 'contained' : 'outlined'}
@@ -176,6 +161,7 @@ export function Logs() {
             variant="outlined"
             startIcon={<RefreshIcon />}
             onClick={fetchLogs}
+            disabled={loading}
           >
             Refresh
           </Button>
@@ -205,23 +191,14 @@ export function Logs() {
             <MenuItem value="warn">Warning</MenuItem>
             <MenuItem value="error">Error</MenuItem>
           </TextField>
-          <TextField
-            select
-            size="small"
-            label="Source"
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            sx={{ minWidth: 150 }}
-          >
-            <MenuItem value="all">All Sources</MenuItem>
-            <MenuItem value="scanner">Scanner</MenuItem>
-            <MenuItem value="importer">Importer</MenuItem>
-            <MenuItem value="metadata">Metadata</MenuItem>
-            <MenuItem value="database">Database</MenuItem>
-            <MenuItem value="organizer">Organizer</MenuItem>
-          </TextField>
         </Stack>
       </Paper>
+
+      {error && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <TableContainer component={Paper}>
         <Table>
@@ -230,7 +207,7 @@ export function Logs() {
               <TableCell width={50}></TableCell>
               <TableCell width={80}>Level</TableCell>
               <TableCell width={180}>Timestamp</TableCell>
-              <TableCell width={120}>Source</TableCell>
+              <TableCell width={180}>Operation</TableCell>
               <TableCell>Message</TableCell>
             </TableRow>
           </TableHead>
@@ -238,25 +215,27 @@ export function Logs() {
             {filteredLogs
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((log) => (
-                <>
-                  <TableRow key={log.id} hover>
+                <Box component="tbody" key={log.id}>
+                  <TableRow hover>
                     <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          setExpandedRow(expandedRow === log.id ? null : log.id)
-                        }
-                      >
-                        <ExpandMoreIcon
-                          sx={{
-                            transform:
-                              expandedRow === log.id
-                                ? 'rotate(180deg)'
-                                : 'rotate(0deg)',
-                            transition: 'transform 0.3s',
-                          }}
-                        />
-                      </IconButton>
+                      {log.details && (
+                        <IconButton
+                          size="small"
+                          onClick={() =>
+                            setExpandedRow(expandedRow === log.id ? null : log.id)
+                          }
+                        >
+                          <ExpandMoreIcon
+                            sx={{
+                              transform:
+                                expandedRow === log.id
+                                  ? 'rotate(180deg)'
+                                  : 'rotate(0deg)',
+                              transition: 'transform 0.3s',
+                            }}
+                          />
+                        </IconButton>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -273,14 +252,14 @@ export function Logs() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={log.source || 'system'}
+                        label={log.source}
                         size="small"
                         variant="outlined"
                       />
                     </TableCell>
                     <TableCell>{log.message}</TableCell>
                   </TableRow>
-                  {expandedRow === log.id && log.metadata && (
+                  {expandedRow === log.id && log.details && (
                     <TableRow>
                       <TableCell
                         colSpan={5}
@@ -289,18 +268,27 @@ export function Logs() {
                         <Collapse in={expandedRow === log.id}>
                           <Box sx={{ p: 2 }}>
                             <Typography variant="subtitle2" gutterBottom>
-                              Metadata:
+                              Details:
                             </Typography>
-                            <pre style={{ margin: 0, fontSize: '0.875rem' }}>
-                              {JSON.stringify(log.metadata, null, 2)}
+                            <pre style={{ margin: 0, fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>
+                              {log.details}
                             </pre>
                           </Box>
                         </Collapse>
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Box>
               ))}
+            {filteredLogs.length === 0 && !loading && (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  <Typography color="text.secondary" sx={{ py: 4 }}>
+                    No logs to display.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
         <TablePagination
@@ -309,8 +297,11 @@ export function Logs() {
           count={filteredLogs.length}
           rowsPerPage={rowsPerPage}
           page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
         />
       </TableContainer>
     </Box>
