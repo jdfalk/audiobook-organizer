@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
 <!-- version: 3.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-02-28 -->
+<!-- last-edited: 2026-03-01 -->
 
 # Project TODO
 
@@ -170,6 +170,11 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 | --- | --- | --- |
 | ~~Directory-as-filepath in tag extraction (metadata.go:105)~~ | ✅ Fixed 2026-02-26 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
 | ~~Search bar broken: after no results, typing new text and hitting Enter doesn't re-search~~ | ✅ Fixed 2026-03-01 | SearchBar was hidden by empty state |
+| ~~BookDetail UX overhaul: button bar, merged tabs, mismatch readability, resolve buttons~~ | ✅ Fixed 2026-03-01 | [Design](docs/plans/2026-03-01-bookdetail-ux-overhaul-design.md) |
+| ~~Author display showing author_id instead of name~~ | ✅ Fixed 2026-03-01 | Removed author_id from fallback chain |
+| ~~Cover art not reloading after metadata fetch~~ | ✅ Fixed 2026-03-01 | Reset coverError on cover_url change |
+| ~~Metadata change history not recording for manual edits~~ | ✅ Fixed 2026-03-01 | Added recordChangeHistory in updateAudiobook |
+| ~~App.test.tsx missing getAppVersion mock~~ | ✅ Fixed 2026-03-01 | Pre-existing test gap |
 
 Previously fixed:
 
