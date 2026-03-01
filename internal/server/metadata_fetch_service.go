@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.3.0
+// version: 4.4.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -43,6 +43,29 @@ type FetchMetadataResponse struct {
 	Book         *database.Book
 	Source       string
 	FetchedCount int
+}
+
+// MetadataCandidate represents a single search result for manual metadata matching.
+type MetadataCandidate struct {
+	Title          string  `json:"title"`
+	Author         string  `json:"author"`
+	Narrator       string  `json:"narrator,omitempty"`
+	Series         string  `json:"series,omitempty"`
+	SeriesPosition string  `json:"series_position,omitempty"`
+	Year           int     `json:"year,omitempty"`
+	Publisher      string  `json:"publisher,omitempty"`
+	ISBN           string  `json:"isbn,omitempty"`
+	CoverURL       string  `json:"cover_url,omitempty"`
+	Description    string  `json:"description,omitempty"`
+	Language       string  `json:"language,omitempty"`
+	Source         string  `json:"source"`
+	Score          float64 `json:"score"`
+}
+
+// SearchMetadataResponse is returned by SearchMetadataForBook.
+type SearchMetadataResponse struct {
+	Results []MetadataCandidate `json:"results"`
+	Query   string              `json:"query"`
 }
 
 // BuildSourceChain returns metadata sources ordered by config priority.
@@ -102,6 +125,10 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	if book.MetadataReviewStatus != nil && *book.MetadataReviewStatus == "no_match" {
+		return nil, fmt.Errorf("book %q is marked as no-match; use search-metadata to re-evaluate", book.Title)
 	}
 
 	var sources []metadata.MetadataSource
@@ -733,6 +760,228 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 			log.Printf("[ERROR] FetchMetadataForBook: failed to persist fetched metadata state: %v", err)
 		}
 	}
+}
+
+// SearchMetadataForBook searches all configured metadata sources and returns
+// scored candidates for manual matching.
+func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) (*SearchMetadataResponse, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	searchTitle := query
+	if searchTitle == "" {
+		searchTitle = stripChapterFromTitle(book.Title)
+	}
+
+	// Resolve author name
+	var authorName string
+	if book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+
+	var sources []metadata.MetadataSource
+	if len(mfs.overrideSources) > 0 {
+		sources = mfs.overrideSources
+	} else {
+		sources = mfs.BuildSourceChain()
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no metadata sources enabled")
+	}
+
+	searchWords := significantWords(searchTitle)
+	if book.Title != searchTitle {
+		for w := range significantWords(book.Title) {
+			searchWords[w] = true
+		}
+	}
+
+	// Dedupe by lowercase title+author
+	seen := map[string]bool{}
+	var candidates []MetadataCandidate
+
+	for _, src := range sources {
+		var allResults []metadata.BookMetadata
+
+		// SearchByTitle with query
+		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
+			allResults = append(allResults, results...)
+		}
+		// SearchByTitle with original title if different
+		if searchTitle != book.Title {
+			if results, serr := src.SearchByTitle(book.Title); serr == nil {
+				allResults = append(allResults, results...)
+			}
+		}
+		// SearchByTitleAndAuthor
+		if authorName != "" {
+			if results, serr := src.SearchByTitleAndAuthor(searchTitle, authorName); serr == nil {
+				allResults = append(allResults, results...)
+			}
+			if searchTitle != book.Title {
+				if results, serr := src.SearchByTitleAndAuthor(book.Title, authorName); serr == nil {
+					allResults = append(allResults, results...)
+				}
+			}
+		}
+
+		for _, r := range allResults {
+			key := strings.ToLower(r.Title + "|" + r.Author)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+
+			score := scoreOneResult(r, searchWords)
+			if score <= 0 {
+				continue
+			}
+
+			candidates = append(candidates, MetadataCandidate{
+				Title:          r.Title,
+				Author:         r.Author,
+				Narrator:       r.Narrator,
+				Series:         r.Series,
+				SeriesPosition: r.SeriesPosition,
+				Year:           r.PublishYear,
+				Publisher:      r.Publisher,
+				ISBN:            r.ISBN,
+				CoverURL:       r.CoverURL,
+				Description:    r.Description,
+				Language:        r.Language,
+				Source:          src.Name(),
+				Score:          score,
+			})
+		}
+	}
+
+	// Sort by score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	// Cap at 10
+	if len(candidates) > 10 {
+		candidates = candidates[:10]
+	}
+
+	return &SearchMetadataResponse{
+		Results: candidates,
+		Query:   searchTitle,
+	}, nil
+}
+
+// ApplyMetadataCandidate applies a user-selected metadata candidate to a book.
+// If fields is non-empty, only the listed fields are applied.
+func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate MetadataCandidate, fields []string) (*FetchMetadataResponse, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	meta := metadata.BookMetadata{
+		Title:          candidate.Title,
+		Author:         candidate.Author,
+		Narrator:       candidate.Narrator,
+		Series:         candidate.Series,
+		SeriesPosition: candidate.SeriesPosition,
+		PublishYear:    candidate.Year,
+		Publisher:      candidate.Publisher,
+		ISBN:           candidate.ISBN,
+		CoverURL:       candidate.CoverURL,
+		Description:    candidate.Description,
+		Language:        candidate.Language,
+	}
+
+	// If fields list is non-empty, zero out fields NOT in the list
+	if len(fields) > 0 {
+		allowed := map[string]bool{}
+		for _, f := range fields {
+			allowed[f] = true
+		}
+		if !allowed["title"] {
+			meta.Title = ""
+		}
+		if !allowed["author"] {
+			meta.Author = ""
+		}
+		if !allowed["narrator"] {
+			meta.Narrator = ""
+		}
+		if !allowed["series"] {
+			meta.Series = ""
+			meta.SeriesPosition = ""
+		}
+		if !allowed["year"] {
+			meta.PublishYear = 0
+		}
+		if !allowed["publisher"] {
+			meta.Publisher = ""
+		}
+		if !allowed["isbn"] {
+			meta.ISBN = ""
+		}
+		if !allowed["cover_url"] {
+			meta.CoverURL = ""
+		}
+		if !allowed["description"] {
+			meta.Description = ""
+		}
+		if !allowed["language"] {
+			meta.Language = ""
+		}
+	}
+
+	mfs.applyMetadataToBook(book, meta)
+
+	// Set review status to matched
+	matched := "matched"
+	book.MetadataReviewStatus = &matched
+
+	updatedBook, updateErr := mfs.db.UpdateBook(id, book)
+	if updateErr != nil {
+		return nil, fmt.Errorf("failed to update book: %w", updateErr)
+	}
+
+	mfs.recordChangeHistory(book, meta, candidate.Source)
+
+	// Download cover art if available
+	if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
+		coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
+		if coverErr != nil {
+			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
+		} else {
+			log.Printf("[INFO] cover art saved to %s", coverPath)
+			if config.AppConfig.EmbedCoverArt && updatedBook != nil && updatedBook.FilePath != "" {
+				if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
+					log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
+				}
+			}
+		}
+	}
+
+	return &FetchMetadataResponse{
+		Message: "metadata candidate applied",
+		Book:    updatedBook,
+		Source:  candidate.Source,
+	}, nil
+}
+
+// MarkNoMatch marks a book as having no metadata match.
+func (mfs *MetadataFetchService) MarkNoMatch(id string) error {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return fmt.Errorf("audiobook not found")
+	}
+
+	status := "no_match"
+	book.MetadataReviewStatus = &status
+	_, err = mfs.db.UpdateBook(id, book)
+	return err
 }
 
 // WriteBackMetadataForBook reads current DB metadata for the book, resolves authors and
