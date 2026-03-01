@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.26.0
+// version: 1.27.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -102,6 +102,7 @@ export interface Book {
   created_at: string;
   updated_at: string;
   metadata_updated_at?: string;
+  metadata_review_status?: string;
   last_written_at?: string;
 }
 
@@ -1263,6 +1264,27 @@ export interface MetadataResult {
   language?: string;
 }
 
+export interface MetadataCandidate {
+  title: string;
+  author: string;
+  narrator?: string;
+  series?: string;
+  series_position?: string;
+  year?: number;
+  publisher?: string;
+  isbn?: string;
+  cover_url?: string;
+  description?: string;
+  language?: string;
+  source: string;
+  score: number;
+}
+
+export interface SearchMetadataResponse {
+  results: MetadataCandidate[];
+  query: string;
+}
+
 export async function searchMetadata(
   title: string,
   author?: string
@@ -1292,6 +1314,55 @@ export async function fetchBookMetadata(
     throw await buildApiError(response, 'Failed to fetch metadata');
   }
   return response.json();
+}
+
+export async function searchMetadataForBook(
+  bookId: string,
+  query?: string
+): Promise<SearchMetadataResponse> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/search-metadata`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query || '' }),
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to search metadata');
+  }
+  return response.json();
+}
+
+export async function applyMetadataCandidate(
+  bookId: string,
+  candidate: MetadataCandidate,
+  fields?: string[]
+): Promise<{ message: string; book: Book; source: string }> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/apply-metadata`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate, fields: fields || [] }),
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to apply metadata');
+  }
+  return response.json();
+}
+
+export async function markNoMatch(bookId: string): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/mark-no-match`,
+    {
+      method: 'POST',
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to mark as no match');
+  }
 }
 
 export interface WriteBackMetadataResponse {
