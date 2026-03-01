@@ -31,7 +31,7 @@ const bookSelectColumns = `
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
 	original_file_hash, organized_file_hash, library_state, quantity,
 	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
-	metadata_updated_at, last_written_at, cover_url, narrators_json
+	metadata_updated_at, last_written_at, metadata_review_status, cover_url, narrators_json
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -47,7 +47,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		isbn10, isbn13, fileHash, quality, codec                             sql.NullString
 		originalFileHash, organizedFileHash                                  sql.NullString
 		versionGroupID, versionNotes                                         sql.NullString
-		coverURL, narratorsJSON                                              sql.NullString
+		coverURL, narratorsJSON, metadataReviewStatus                         sql.NullString
 		isPrimaryVersion                                                     sql.NullBool
 		libraryState                                                         sql.NullString
 		markedForDeletion                                                    sql.NullBool
@@ -66,7 +66,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
 		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
-		&metadataUpdatedAt, &lastWrittenAt, &coverURL, &narratorsJSON,
+		&metadataUpdatedAt, &lastWrittenAt, &metadataReviewStatus, &coverURL, &narratorsJSON,
 	); err != nil {
 		return err
 	}
@@ -142,6 +142,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if lastWrittenAt.Valid {
 		book.LastWrittenAt = &lastWrittenAt.Time
 	}
+	book.MetadataReviewStatus = nullableString(metadataReviewStatus)
 	book.CoverURL = nullableString(coverURL)
 	book.NarratorsJSON = nullableString(narratorsJSON)
 	return nil
@@ -292,6 +293,7 @@ func (s *SQLiteStore) createTables() error {
 		updated_at DATETIME,
 		metadata_updated_at DATETIME,
 		last_written_at DATETIME,
+		metadata_review_status TEXT,
 		cover_url TEXT,
 		narrators_json TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
@@ -1759,7 +1761,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
 		marked_for_deletion = ?, marked_for_deletion_at = ?,
 		updated_at = ?, metadata_updated_at = ?, last_written_at = ?,
-		cover_url = ?, narrators_json = ?
+		metadata_review_status = ?, cover_url = ?, narrators_json = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -1773,7 +1775,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
 		book.MarkedForDeletion, book.MarkedForDeletionAt,
 		book.UpdatedAt, book.MetadataUpdatedAt, book.LastWrittenAt,
-		book.CoverURL, book.NarratorsJSON, id,
+		book.MetadataReviewStatus, book.CoverURL, book.NarratorsJSON, id,
 	)
 	if err != nil {
 		return nil, err

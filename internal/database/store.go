@@ -288,6 +288,8 @@ type Book struct {
 	MetadataUpdatedAt *time.Time `json:"metadata_updated_at,omitempty"`
 	// LastWrittenAt is set when metadata is written back to the audio files on disk.
 	LastWrittenAt *time.Time `json:"last_written_at,omitempty"`
+	// MetadataReviewStatus tracks manual metadata matching: null, "no_match", "matched".
+	MetadataReviewStatus *string `json:"metadata_review_status,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array
