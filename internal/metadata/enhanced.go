@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -273,6 +273,9 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 	if year, ok := metadata["year"].(int); ok && year > 0 {
 		args = append(args, "--year", fmt.Sprintf("%d", year))
 	}
+	if track, ok := metadata["track"].(string); ok && track != "" {
+		args = append(args, "--tracknum", track)
+	}
 
 	cmd := exec.Command("AtomicParsley", args...)
 	output, err := cmd.CombinedOutput()
@@ -324,6 +327,9 @@ func writeMP3Metadata(filePath string, metadata map[string]interface{}, config f
 	}
 	if year, ok := metadata["year"].(int); ok && year > 0 {
 		args = append(args, "--release-year", fmt.Sprintf("%d", year))
+	}
+	if track, ok := metadata["track"].(string); ok && track != "" {
+		args = append(args, "--track-num", track)
 	}
 	args = append(args, filePath)
 
@@ -382,6 +388,9 @@ func writeFLACMetadata(filePath string, metadata map[string]interface{}, config 
 	}
 	if year, ok := metadata["year"].(int); ok && year > 0 {
 		args = append(args, fmt.Sprintf("--set-tag=DATE=%d", year))
+	}
+	if track, ok := metadata["track"].(string); ok && track != "" {
+		args = append(args, "--set-tag=TRACKNUMBER="+track)
 	}
 	args = append(args, filePath)
 

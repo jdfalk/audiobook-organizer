@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.73.0
+// version: 1.74.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1134,6 +1134,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/metadata/fields", s.getMetadataFields)
 			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
 			protected.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
+			protected.POST("/audiobooks/:id/write-back", s.writeBackAudiobookMetadata)
 
 			// AI-powered parsing routes
 			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
@@ -3181,6 +3182,32 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		"message": resp.Message,
 		"book":    resp.Book,
 		"source":  resp.Source,
+	})
+}
+
+// writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.
+// It writes current DB metadata for the book to all active audio files on disk.
+func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+
+	writtenCount, err := s.metadataFetchService.WriteBackMetadataForBook(id)
+	if err != nil {
+		if err.Error() == fmt.Sprintf("audiobook not found: %s", id) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		log.Printf("[ERROR] write-back failed for book %s: %v", id, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       fmt.Sprintf("metadata written to %d file(s)", writtenCount),
+		"written_count": writtenCount,
 	})
 }
 
