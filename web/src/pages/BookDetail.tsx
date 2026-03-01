@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.20.0
+// version: 1.21.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -624,14 +624,13 @@ export const BookDetail = () => {
         narrator: updated.narrator,
         series_position: updated.series_number,
         audiobook_release_year:
-          (updated as unknown as { audiobook_release_year?: number })
-            .audiobook_release_year ||
+          updated.audiobook_release_year ||
           updated.year ||
           book.audiobook_release_year,
         print_year: updated.year || book.print_year,
         isbn:
-          (updated as unknown as { isbn13?: string }).isbn13 ||
-          (updated as unknown as { isbn10?: string }).isbn10 ||
+          updated.isbn13 ||
+          updated.isbn10 ||
           book.isbn,
         author_name: updated.author,
         series_name: updated.series,

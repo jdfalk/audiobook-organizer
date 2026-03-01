@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -54,6 +54,7 @@ import SyncIcon from '@mui/icons-material/Sync.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import {
+  ApiError,
   cancelOperation,
   getActiveOperations,
   getITunesBooks,
@@ -391,7 +392,7 @@ export function ITunesImport() {
         message: result.message || `Updated ${result.updated_count} entries.`,
       });
     } catch (err) {
-      if (err instanceof Error && (err as unknown as Record<string, unknown>).type === 'library_modified') {
+      if (err instanceof ApiError && err.status === 409) {
         setOverwriteConfirmOpen(true);
       } else {
         const message = err instanceof Error ? err.message : 'Write-back failed.';

@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.27.0
+// version: 1.28.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1163,10 +1163,7 @@ export async function writeBackITunesLibrary(
   });
   if (response.status === 409) {
     const data = await response.json();
-    const err = new Error(data.message || 'Library modified');
-    (err as unknown as Record<string, unknown>).type = 'library_modified';
-    (err as unknown as Record<string, unknown>).details = data;
-    throw err;
+    throw new ApiError(data.message || 'Library modified', 409, data);
   }
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write back iTunes library');
