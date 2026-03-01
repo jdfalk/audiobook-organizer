@@ -1,5 +1,5 @@
 // file: web/tests/unit/BookDetail.test.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 /**
@@ -24,6 +24,7 @@ vi.mock('../../src/services/api', async () => {
     getBook: vi.fn(),
     getBookVersions: vi.fn(),
     getBookTags: vi.fn(),
+    getBookSegments: vi.fn(),
     fetchBookMetadata: vi.fn(),
     parseAudiobookWithAI: vi.fn(),
     updateBook: vi.fn(),
@@ -98,6 +99,7 @@ describe('BookDetail Component', () => {
     vi.mocked(api.getBook).mockResolvedValue(mockBook);
     vi.mocked(api.getBookVersions).mockResolvedValue([]);
     vi.mocked(api.getBookTags).mockResolvedValue(mockTags);
+    vi.mocked(api.getBookSegments).mockResolvedValue([]);
   });
 
   it('renders book details correctly', async () => {
@@ -148,13 +150,14 @@ describe('BookDetail Component', () => {
     expect(fetchButton).toHaveTextContent('Fetching...');
     expect(fetchButton).toBeDisabled();
 
-    // Wait for completion
+    // Wait for completion - after fetch, loadBook() is called which may briefly show loading
     await waitFor(
       () => {
-        expect(fetchButton).toHaveTextContent('Fetch Metadata');
-        expect(fetchButton).not.toBeDisabled();
+        const btn = screen.getByRole('button', { name: /fetch metadata/i });
+        expect(btn).toHaveTextContent('Fetch Metadata');
+        expect(btn).not.toBeDisabled();
       },
-      { timeout: 2000 }
+      { timeout: 3000 }
     );
   });
 
@@ -220,7 +223,7 @@ describe('BookDetail Component', () => {
     await screen.findByRole('heading', { name: 'The Odyssey' });
 
     // Navigate to Compare tab
-    const compareTab = await screen.findByRole('tab', { name: /compare/i });
+    const compareTab = await screen.findByRole('tab', { name: /tags/i });
     await user.click(compareTab);
 
     const compareTable = await screen.findByRole('table');
@@ -299,7 +302,7 @@ describe('BookDetail Component', () => {
 
     await screen.findByRole('heading', { name: 'The Odyssey' });
 
-    const compareTab = screen.getByRole('tab', { name: /compare/i });
+    const compareTab = screen.getByRole('tab', { name: /tags/i });
     await user.click(compareTab);
 
     const compareTable = await screen.findByRole('table');

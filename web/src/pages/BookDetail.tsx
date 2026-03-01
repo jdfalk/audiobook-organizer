@@ -127,6 +127,17 @@ export const BookDetail = () => {
     }
   }, [id, navigate, toast]);
 
+  // Silent refresh: re-fetches book without showing the full-page loading spinner
+  const refreshBook = useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await api.getBook(id);
+      setBook(data);
+    } catch {
+      // Silent refresh - errors are non-critical
+    }
+  }, [id]);
+
   const loadVersions = useCallback(async () => {
     if (!id) return;
     setVersionsLoading(true);
@@ -293,7 +304,7 @@ export const BookDetail = () => {
       const result = await api.fetchBookMetadata(book.id);
       setBook(result.book);
       // Re-fetch enriched book (with populated authors array) and tags
-      await loadBook();
+      await refreshBook();
       await loadTags();
       toast(
         result.message ||

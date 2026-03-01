@@ -235,6 +235,8 @@ func (s *stubStore) ListOperationSummaryLogs(limit, offset int) ([]database.Oper
 	return nil, nil
 }
 
+func (s *stubStore) SetLastWrittenAt(id string, t time.Time) error { return nil }
+
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
 
