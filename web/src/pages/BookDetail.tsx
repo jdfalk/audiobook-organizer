@@ -68,7 +68,7 @@ export const BookDetail = () => {
   const [preAIBook, setPreAIBook] = useState<Book | null>(null);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
-    'info' | 'files' | 'versions' | 'tags' | 'compare'
+    'info' | 'files' | 'versions' | 'tags'
   >('info');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({
