@@ -1,8 +1,9 @@
 // file: web/src/pages/FileManager.tsx
-// version: 1.2.2
+// version: 1.3.0
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+
 import {
   Box,
   Typography,
@@ -33,6 +34,8 @@ import {
   ImportPathCard,
   ImportPath,
 } from '../components/filemanager/ImportPathCard';
+import * as api from '../services/api';
+import { useToast } from '../components/toast/ToastProvider';
 
 export function FileManager() {
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
@@ -41,30 +44,37 @@ export function FileManager() {
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [directoryTree] = useState<DirectoryNode | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    api.getImportPaths().then((paths) => {
+      setImportPaths(paths.map((p) => ({
+        id: p.id,
+        path: p.path,
+        status: 'idle' as const,
+        book_count: p.book_count,
+      })));
+    }).catch((err) => console.error('Failed to load import paths:', err));
+  }, []);
 
   const handleAddFolder = async () => {
     if (!newFolderPath.trim()) return;
 
     try {
-      // TODO: Replace with actual API call
-      // await fetch('/api/v1/library-folders', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ path: newFolderPath })
-      // });
-
+      const result = await api.addImportPath(newFolderPath, newFolderPath);
       const newFolder: ImportPath = {
-        id: Date.now(),
-        path: newFolderPath,
+        id: result.id,
+        path: result.path,
         status: 'idle',
         book_count: 0,
       };
-
       setImportPaths((prev) => [...prev, newFolder]);
       setNewFolderPath('');
       setAddFolderOpen(false);
+      toast('Import path added.', 'success');
     } catch (error) {
       console.error('Failed to add import path:', error);
+      toast('Failed to add import path.', 'error');
     }
   };
 
@@ -72,24 +82,17 @@ export function FileManager() {
     if (!confirm(`Remove import path: ${folder.path}?`)) return;
 
     try {
-      // TODO: Replace with actual API call
-      // await fetch(`/api/v1/library-folders/${folder.id}`, {
-      //   method: 'DELETE'
-      // });
-
+      await api.removeImportPath(folder.id);
       setImportPaths((prev) => prev.filter((f) => f.id !== folder.id));
+      toast('Import path removed.', 'success');
     } catch (error) {
       console.error('Failed to remove import path:', error);
+      toast('Failed to remove import path.', 'error');
     }
-  }, []);
+  }, [toast]);
 
   const handleScanFolder = useCallback(async (folder: ImportPath) => {
     try {
-      // TODO: Replace with actual API call
-      // await fetch(`/api/v1/library-folders/${folder.id}/scan`, {
-      //   method: 'POST'
-      // });
-
       setImportPaths((prev) =>
         prev.map((f) =>
           f.id === folder.id
@@ -97,27 +100,15 @@ export function FileManager() {
             : f
         )
       );
-
-      // Simulate scan progress
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setImportPaths((prev) =>
-          prev.map((f) =>
-            f.id === folder.id
-              ? {
-                  ...f,
-                  progress,
-                  status:
-                    progress >= 100
-                      ? ('complete' as const)
-                      : ('scanning' as const),
-                }
-              : f
-          )
-        );
-        if (progress >= 100) clearInterval(interval);
-      }, 500);
+      await api.startScan(folder.path);
+      setImportPaths((prev) =>
+        prev.map((f) =>
+          f.id === folder.id
+            ? { ...f, status: 'complete' as const, progress: 100 }
+            : f
+        )
+      );
+      toast('Scan started.', 'success');
     } catch (error) {
       console.error('Failed to scan import path:', error);
       setImportPaths((prev) =>
@@ -127,15 +118,24 @@ export function FileManager() {
             : f
         )
       );
+      toast('Failed to start scan.', 'error');
     }
-  }, []);
+  }, [toast]);
 
-  const handleLoadChildren = async (): Promise<DirectoryNode[]> => {
-    // TODO: Replace with actual API call
-    // const response = await fetch(`/api/v1/filesystem/browse?path=${encodeURIComponent(path)}`);
-    // const data = await response.json();
-    // return data.children;
-    return [];
+  const handleLoadChildren = async (path: string): Promise<DirectoryNode[]> => {
+    try {
+      const result = await api.browseFilesystem(path);
+      return (result.items || []).map((item) => ({
+        name: item.name,
+        path: item.path,
+        is_dir: item.is_dir,
+        excluded: item.excluded,
+        children: item.is_dir ? undefined : [],
+      }));
+    } catch (error) {
+      console.error('Failed to browse filesystem:', error);
+      return [];
+    }
   };
 
   const handleSelectDirectory = (path: string) => {
