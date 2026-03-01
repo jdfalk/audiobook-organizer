@@ -104,28 +104,28 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| Migration 22: backfill `book_authors`/`book_narrators` from `&`-delimited names | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
-| Route AI parse through AudiobookService (multi-author split, history, narrator join) | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
-| AI parse sends full folder path + existing metadata + file count (not just filename) | 🔴 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+| Migration 22: backfill `book_authors`/`book_narrators` from `&`-delimited names | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+| Route AI parse through AudiobookService (multi-author split, history, narrator join) | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
+| AI parse sends full folder path + existing metadata + file count (not just filename) | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
 
 ### Phase 1B: Fix Fetch Metadata Matching
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| Penalize box sets/collections/omnibus in result scoring | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Precision+recall F1 scoring instead of word-overlap only | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Series position filter (reject mismatched positions) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Minimum quality threshold (reject scores below 0.35) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Rich metadata bonus (prefer results with description, cover, narrator) | 🔴 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Penalize box sets/collections/omnibus in result scoring | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Precision+recall F1 scoring instead of word-overlap only | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Series position filter (reject mismatched positions) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Minimum quality threshold (reject scores below 0.35) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
+| Rich metadata bonus (prefer results with description, cover, narrator) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
 
 ### Phase 1C: Fix History & Timestamps
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| `metadata_updated_at` column — only changes on metadata edits | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| `last_written_at` column — set when files are written | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| Change detection in `UpdateBook` (compare old vs new before updating timestamps) | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| Field extractor loop records history entries for all manual edits | 🔴 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| `metadata_updated_at` column — only changes on metadata edits | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| `last_written_at` column — set when files are written | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| Change detection in `UpdateBook` (compare old vs new before updating timestamps) | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
+| Field extractor loop records history entries for all manual edits | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
 
 ### Phase 2: Save to Files
 
