@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.38.0
+// version: 1.39.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -866,22 +866,16 @@ export const Library = () => {
 
   const handleSaveMetadata = async (audiobook: Audiobook) => {
     try {
-      // TODO: Replace with actual API call
-      // await fetch(`/api/v1/audiobooks/${audiobook.id}`, {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(audiobook)
-      // });
-      console.log('Saved audiobook:', audiobook);
-
-      // Update local state
+      const saved = await api.updateBook(audiobook.id, audiobook);
+      // Update local state with server response
       setAudiobooks((prev) =>
-        prev.map((ab) => (ab.id === audiobook.id ? audiobook : ab))
+        prev.map((ab) => (ab.id === audiobook.id ? saved : ab))
       );
       setEditingAudiobook(null);
+      toast('Metadata saved.', 'success');
     } catch (error) {
       console.error('Failed to save audiobook:', error);
-      throw error;
+      toast('Failed to save metadata. Please try again.', 'error');
     }
   };
 
@@ -1034,39 +1028,22 @@ export const Library = () => {
 
   const handleBatchSave = async (updates: Partial<Audiobook>) => {
     try {
-      // TODO: Replace with actual API call
-      // await fetch('/api/v1/audiobooks/batch', {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     ids: selectedAudiobooks.map(ab => ab.id),
-      //     updates
-      //   })
-      // });
-      console.log(
-        'Batch updated:',
-        selectedAudiobooks.length,
-        'audiobooks with',
-        updates
+      const results = await Promise.allSettled(
+        selectedAudiobooks.map((ab) => api.updateBook(ab.id, updates))
       );
-
-      // Update local state
-      setAudiobooks((prev) =>
-        prev.map((ab) =>
-          selectedAudiobooks.some((selected) => selected.id === ab.id)
-            ? { ...ab, ...updates }
-            : ab
-        )
-      );
-      toast(
-        `Updated metadata for ${selectedAudiobooks.length} audiobooks.`,
-        'success'
-      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        toast(`Updated ${results.length - failed} audiobooks, ${failed} failed.`, 'warning');
+      } else {
+        toast(`Updated metadata for ${selectedAudiobooks.length} audiobooks.`, 'success');
+      }
+      // Reload to get server state
+      loadAudiobooks();
       setSelectedAudiobooks([]);
       setBatchEditOpen(false);
     } catch (error) {
       console.error('Failed to batch update audiobooks:', error);
-      throw error;
+      toast('Failed to update audiobooks. Please try again.', 'error');
     }
   };
 
