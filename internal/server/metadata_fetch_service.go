@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.2.0
+// version: 4.3.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -733,4 +733,144 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 			log.Printf("[ERROR] FetchMetadataForBook: failed to persist fetched metadata state: %v", err)
 		}
 	}
+}
+
+// WriteBackMetadataForBook reads current DB metadata for the book, resolves authors and
+// narrators, writes comprehensive tags to all active audio file segments, and records a
+// history entry. It is called by POST /api/v1/audiobooks/:id/write-back.
+func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string) (int, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return 0, fmt.Errorf("audiobook not found: %s", id)
+	}
+
+	// --- Resolve author names ---
+	var authorNames []string
+	bookAuthors, err := mfs.db.GetBookAuthors(id)
+	if err == nil && len(bookAuthors) > 0 {
+		for _, ba := range bookAuthors {
+			if author, aerr := mfs.db.GetAuthorByID(ba.AuthorID); aerr == nil && author != nil {
+				authorNames = append(authorNames, author.Name)
+			}
+		}
+	} else if book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			authorNames = append(authorNames, author.Name)
+		}
+	}
+	artistStr := strings.Join(authorNames, " & ")
+
+	// --- Resolve narrator names ---
+	var narratorNames []string
+	bookNarrators, err := mfs.db.GetBookNarrators(id)
+	if err == nil && len(bookNarrators) > 0 {
+		for _, bn := range bookNarrators {
+			if narrator, nerr := mfs.db.GetNarratorByID(bn.NarratorID); nerr == nil && narrator != nil {
+				narratorNames = append(narratorNames, narrator.Name)
+			}
+		}
+	} else if book.Narrator != nil && *book.Narrator != "" {
+		narratorNames = append(narratorNames, *book.Narrator)
+	}
+	narratorStr := strings.Join(narratorNames, " & ")
+
+	// --- Determine year ---
+	year := 0
+	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
+		year = *book.AudiobookReleaseYear
+	} else if book.PrintYear != nil && *book.PrintYear > 0 {
+		year = *book.PrintYear
+	}
+
+	opConfig := fileops.OperationConfig{VerifyChecksums: true}
+
+	// --- Collect active segments ---
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
+	if segErr != nil {
+		segments = nil
+	}
+	// Filter to active only
+	var activeSegments []database.BookSegment
+	for _, seg := range segments {
+		if seg.Active {
+			activeSegments = append(activeSegments, seg)
+		}
+	}
+
+	totalTracks := len(activeSegments)
+	writtenCount := 0
+
+	if totalTracks > 1 {
+		// Multi-file: write to each segment with per-track title and numbering
+		digits := len(fmt.Sprintf("%d", totalTracks))
+		trackFmt := fmt.Sprintf("%%0%dd", digits)
+		for i, seg := range activeSegments {
+			trackNum := i + 1
+			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, book.Title)
+			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
+			tagMap := mfs.buildTagMap(book.Title, segTitle, artistStr, narratorStr, year, trackStr)
+			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+			} else {
+				writtenCount++
+			}
+		}
+	} else {
+		// Single-file or no segments: write to book.FilePath
+		tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
+		if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+			log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+		} else {
+			writtenCount++
+		}
+	}
+
+	// --- Record history entry ---
+	now := time.Now()
+	summaryVal := fmt.Sprintf("%q (wrote %d file(s))", book.Title, writtenCount)
+	summaryJSON := jsonEncodeString(summaryVal)
+	record := &database.MetadataChangeRecord{
+		BookID:     book.ID,
+		Field:      "write_back",
+		NewValue:   &summaryJSON,
+		ChangeType: "write-back",
+		Source:     "manual",
+		ChangedAt:  now,
+	}
+	if err := mfs.db.RecordMetadataChange(record); err != nil {
+		log.Printf("[WARN] failed to record write-back history for %s: %v", book.ID, err)
+	}
+
+	// Stamp last_written_at
+	if writtenCount > 0 {
+		if err := mfs.db.SetLastWrittenAt(book.ID, now); err != nil {
+			log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+		}
+	}
+
+	return writtenCount, nil
+}
+
+// buildTagMap constructs the tag map shared by all write-back paths.
+func (mfs *MetadataFetchService) buildTagMap(
+	albumTitle, trackTitle, artist, narrator string, year int, track string,
+) map[string]interface{} {
+	tagMap := make(map[string]interface{})
+	tagMap["title"] = trackTitle
+	tagMap["album"] = albumTitle
+	if artist != "" {
+		tagMap["artist"] = artist
+	}
+	if narrator != "" {
+		tagMap["narrator"] = narrator
+	}
+	if year > 0 {
+		tagMap["year"] = year
+	}
+	tagMap["genre"] = "Audiobook"
+	if track != "" {
+		tagMap["track"] = track
+	}
+	return tagMap
 }
