@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.19.0
+// version: 1.20.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -346,7 +346,7 @@ export const BookDetail = () => {
     try {
       const result = await api.parseAudiobookWithAI(book.id);
       setBook(result.book);
-      // Reload tags to reflect updated stored values in Compare tab
+      // Reload tags to reflect updated stored values in Tags tab
       await loadTags();
       toast(result.message || 'AI parsing completed. Use "Undo AI Parse" to revert.', 'success');
     } catch (error: unknown) {
@@ -638,7 +638,7 @@ export const BookDetail = () => {
       };
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
-      // Reload tags so Compare tab reflects the update immediately
+      // Reload tags so Tags tab reflects the update immediately
       await loadTags();
       toast('Metadata updated.', 'success');
       setEditDialogOpen(false);

@@ -1,5 +1,5 @@
 // file: web/src/components/settings/OpenLibraryDumps.tsx
-// version: 2.0.0
+// version: 2.1.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -206,7 +206,7 @@ export function OpenLibraryDumps() {
             if (!running) {
               setImporting(false);
             }
-          }).catch(() => {});
+          }).catch((err) => console.error('Failed to poll import status:', err));
         }
       }, 3000);
     } else if (pollRef.current) {

@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.unlock.test.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2b197bb0-4a61-49ef-8b75-1f9c6c23c84e
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -50,8 +50,8 @@ describe('BookDetail override unlock', () => {
       </MemoryRouter>
     );
 
-    const compareTab = await screen.findByRole('tab', { name: /tags/i });
-    fireEvent.click(compareTab);
+    const tagsTab = await screen.findByRole('tab', { name: /tags/i });
+    fireEvent.click(tagsTab);
 
     const unlockButton = await screen.findByRole('button', { name: 'Unlock' });
     fireEvent.click(unlockButton);
