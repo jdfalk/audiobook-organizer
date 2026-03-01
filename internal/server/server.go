@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.75.0
+// version: 1.76.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1135,6 +1135,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/metadata/fields", s.getMetadataFields)
 			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
 			protected.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
+			protected.POST("/audiobooks/:id/search-metadata", s.searchAudiobookMetadata)
+			protected.POST("/audiobooks/:id/apply-metadata", s.applyAudiobookMetadata)
+			protected.POST("/audiobooks/:id/mark-no-match", s.markAudiobookNoMatch)
 			protected.POST("/audiobooks/:id/write-back", s.writeBackAudiobookMetadata)
 
 			// AI-powered parsing routes
@@ -3286,6 +3289,69 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		"book":    resp.Book,
 		"source":  resp.Source,
 	})
+}
+
+// searchAudiobookMetadata handles POST /api/v1/audiobooks/:id/search-metadata.
+func (s *Server) searchAudiobookMetadata(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var body struct {
+		Query string `json:"query"`
+	}
+	_ = c.ShouldBindJSON(&body)
+	resp, err := s.metadataFetchService.SearchMetadataForBook(id, body.Query)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// applyAudiobookMetadata handles POST /api/v1/audiobooks/:id/apply-metadata.
+func (s *Server) applyAudiobookMetadata(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var body struct {
+		Candidate MetadataCandidate `json:"candidate"`
+		Fields    []string          `json:"fields"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	resp, err := s.metadataFetchService.ApplyMetadataCandidate(id, body.Candidate, body.Fields)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": resp.Message,
+		"book":    resp.Book,
+		"source":  resp.Source,
+	})
+}
+
+// markAudiobookNoMatch handles POST /api/v1/audiobooks/:id/mark-no-match.
+func (s *Server) markAudiobookNoMatch(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if err := s.metadataFetchService.MarkNoMatch(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Book marked as no match"})
 }
 
 // writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.
