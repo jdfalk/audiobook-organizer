@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.30.0
+// version: 1.31.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -128,7 +128,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
-    api.getUpdateStatus().then(setUpdateInfo).catch(() => {});
+    api.getUpdateStatus().then(setUpdateInfo).catch((err) => console.error('Failed to get update status:', err));
   }, []);
 
   const handleCheck = async () => {
