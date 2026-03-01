@@ -1,0 +1,297 @@
+// file: internal/metadata/assemble_test.go
+// version: 1.0.0
+// guid: 2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f
+
+package metadata
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// mockAssembleExtractor returns fixed metadata for testing assembly logic.
+type mockAssembleExtractor struct {
+	meta Metadata
+	err  error
+}
+
+func (m *mockAssembleExtractor) ExtractMetadata(_ string) (Metadata, error) {
+	return m.meta, m.err
+}
+
+func TestResolveTitlePrefersTag(t *testing.T) {
+	tag := &Metadata{Title: "The Great Book"}
+	fm := &FolderMetadata{Title: "Folder Title"}
+	title, source := resolveTitle(tag, fm, "/some/path")
+	if title != "The Great Book" || source != "tag.Title" {
+		t.Errorf("got title=%q source=%q, want 'The Great Book' / 'tag.Title'", title, source)
+	}
+}
+
+func TestResolveTitleSkipsGenericTag(t *testing.T) {
+	tag := &Metadata{Title: "Part 1"}
+	fm := &FolderMetadata{Title: "Real Book Title"}
+	title, source := resolveTitle(tag, fm, "/some/path")
+	if title != "Real Book Title" || source != "folder.Title" {
+		t.Errorf("got title=%q source=%q, want 'Real Book Title' / 'folder.Title'", title, source)
+	}
+}
+
+func TestResolveTitleFallsBackToFilename(t *testing.T) {
+	tag := &Metadata{Title: "Chapter 3"}
+	fm := &FolderMetadata{}
+	title, source := resolveTitle(tag, fm, "/audiobooks/My Novel.mp3")
+	if title != "My Novel" || source != "filename" {
+		t.Errorf("got title=%q source=%q, want 'My Novel' / 'filename'", title, source)
+	}
+}
+
+func TestResolveTitleNoSources(t *testing.T) {
+	fm := &FolderMetadata{}
+	title, source := resolveTitle(nil, fm, "")
+	if title != "" || source != "unknown" {
+		t.Errorf("got title=%q source=%q, want '' / 'unknown'", title, source)
+	}
+}
+
+func TestResolveAuthorsPrefersTag(t *testing.T) {
+	tag := &Metadata{Artist: "Author One & Author Two"}
+	fm := &FolderMetadata{Authors: []string{"Folder Author"}}
+	authors, source := resolveAuthors(tag, fm)
+	if source != "tag.Artist" {
+		t.Errorf("got source=%q, want 'tag.Artist'", source)
+	}
+	if len(authors) != 2 || authors[0] != "Author One" || authors[1] != "Author Two" {
+		t.Errorf("got authors=%v, want [Author One, Author Two]", authors)
+	}
+}
+
+func TestResolveAuthorsFallsBackToFolder(t *testing.T) {
+	fm := &FolderMetadata{Authors: []string{"Folder Author"}}
+	authors, source := resolveAuthors(nil, fm)
+	if source != "folder.Authors" || len(authors) != 1 || authors[0] != "Folder Author" {
+		t.Errorf("got authors=%v source=%q", authors, source)
+	}
+}
+
+func TestResolveAuthorsNone(t *testing.T) {
+	authors, source := resolveAuthors(nil, &FolderMetadata{})
+	if authors != nil || source != "unknown" {
+		t.Errorf("got authors=%v source=%q", authors, source)
+	}
+}
+
+func TestResolveSeriesFromTag(t *testing.T) {
+	tag := &Metadata{Series: "Discworld", SeriesIndex: 5}
+	fm := &FolderMetadata{}
+	name, pos, source := resolveSeries(tag, fm)
+	if name != "Discworld" || pos != 5 || source != "tag.Series" {
+		t.Errorf("got name=%q pos=%d source=%q", name, pos, source)
+	}
+}
+
+func TestResolveSeriesFromFolder(t *testing.T) {
+	fm := &FolderMetadata{SeriesName: "Wheel of Time", SeriesPosition: 14}
+	name, pos, source := resolveSeries(nil, fm)
+	if name != "Wheel of Time" || pos != 14 || source != "folder.Series" {
+		t.Errorf("got name=%q pos=%d source=%q", name, pos, source)
+	}
+}
+
+func TestResolveSeriesAlbumConfirmed(t *testing.T) {
+	tag := &Metadata{Album: "Discworld"}
+	fm := &FolderMetadata{SeriesName: "Discworld", SeriesPosition: 3}
+	name, pos, source := resolveSeries(tag, fm)
+	if name != "Discworld" || pos != 3 || source != "folder.Series(album-confirmed)" {
+		t.Errorf("got name=%q pos=%d source=%q", name, pos, source)
+	}
+}
+
+func TestResolveSeriesNone(t *testing.T) {
+	name, pos, source := resolveSeries(nil, &FolderMetadata{})
+	if name != "" || pos != 0 || source != "unknown" {
+		t.Errorf("got name=%q pos=%d source=%q", name, pos, source)
+	}
+}
+
+func TestResolveNarratorFromTag(t *testing.T) {
+	tag := &Metadata{Narrator: "Stephen Fry"}
+	fm := &FolderMetadata{Narrator: "Folder Narrator"}
+	narrator, source := resolveNarrator(tag, fm)
+	if narrator != "Stephen Fry" || source != "tag.Narrator" {
+		t.Errorf("got narrator=%q source=%q", narrator, source)
+	}
+}
+
+func TestResolveNarratorFromFolder(t *testing.T) {
+	fm := &FolderMetadata{Narrator: "Folder Narrator"}
+	narrator, source := resolveNarrator(nil, fm)
+	if narrator != "Folder Narrator" || source != "folder.Narrator" {
+		t.Errorf("got narrator=%q source=%q", narrator, source)
+	}
+}
+
+func TestResolveNarratorFromComment(t *testing.T) {
+	tag := &Metadata{Comments: "Some info. Narrated by: John Smith, more stuff"}
+	narrator, source := resolveNarrator(tag, &FolderMetadata{})
+	if narrator != "John Smith" || source != "tag.Comment" {
+		t.Errorf("got narrator=%q source=%q", narrator, source)
+	}
+}
+
+func TestResolveNarratorNone(t *testing.T) {
+	narrator, source := resolveNarrator(nil, &FolderMetadata{})
+	if narrator != "" || source != "unknown" {
+		t.Errorf("got narrator=%q source=%q", narrator, source)
+	}
+}
+
+func TestExtractNarratorFromComment(t *testing.T) {
+	tests := []struct {
+		comment string
+		want    string
+	}{
+		{"Narrator: Jane Doe", "Jane Doe"},
+		{"Read by: Bob Smith, chapter 1", "Bob Smith"},
+		{"Narrated by: Alice\nMore info", "Alice"},
+		{"Reader: Tom Jones; extra", "Tom Jones"},
+		{"No narrator info here", ""},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		got := extractNarratorFromComment(tc.comment)
+		if got != tc.want {
+			t.Errorf("extractNarratorFromComment(%q) = %q, want %q", tc.comment, got, tc.want)
+		}
+	}
+}
+
+func TestIsGenericTitle(t *testing.T) {
+	tests := []struct {
+		title string
+		want  bool
+	}{
+		{"Part 1", true},
+		{"Chapter 2", true},
+		{"Track 03", true},
+		{"Disc 1", true},
+		{"Disk 2", true},
+		{"The Great Gatsby", false},
+		{"My Audiobook", false},
+	}
+	for _, tc := range tests {
+		got := isGenericTitle(tc.title)
+		if got != tc.want {
+			t.Errorf("isGenericTitle(%q) = %v, want %v", tc.title, got, tc.want)
+		}
+	}
+}
+
+func TestFindFirstAudioFile(t *testing.T) {
+	dir := t.TempDir()
+	// Create files in non-alphabetical order
+	for _, name := range []string{"chapter02.mp3", "chapter01.mp3", "cover.jpg", "chapter03.m4b"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("fake"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := FindFirstAudioFile(dir, []string{".mp3", ".m4b", ".m4a"})
+	want := filepath.Join(dir, "chapter01.mp3")
+	if got != want {
+		t.Errorf("FindFirstAudioFile = %q, want %q", got, want)
+	}
+}
+
+func TestFindFirstAudioFileNoMatches(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("hi"), 0644)
+	got := FindFirstAudioFile(dir, []string{".mp3", ".m4b"})
+	if got != "" {
+		t.Errorf("FindFirstAudioFile = %q, want empty", got)
+	}
+}
+
+func TestFindFirstAudioFileEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	got := FindFirstAudioFile(dir, []string{".mp3"})
+	if got != "" {
+		t.Errorf("FindFirstAudioFile = %q, want empty", got)
+	}
+}
+
+func TestFindFirstAudioFileBadDir(t *testing.T) {
+	got := FindFirstAudioFile("/nonexistent/path/12345", []string{".mp3"})
+	if got != "" {
+		t.Errorf("FindFirstAudioFile = %q, want empty", got)
+	}
+}
+
+func TestAssembleBookMetadataIntegration(t *testing.T) {
+	// Create a temp directory structure: Author/Book/file.mp3
+	base := t.TempDir()
+	bookDir := filepath.Join(base, "Terry Pratchett", "The Colour of Magic")
+	if err := os.MkdirAll(bookDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Create a fake mp3 file (tag extraction will fail, falling back to folder)
+	fakeFile := filepath.Join(bookDir, "chapter01.mp3")
+	if err := os.WriteFile(fakeFile, []byte("not a real mp3"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a mock extractor to simulate real tag data
+	oldExtractor := GlobalMetadataExtractor
+	GlobalMetadataExtractor = &mockAssembleExtractor{
+		meta: Metadata{
+			Title:  "The Colour of Magic",
+			Artist: "Terry Pratchett",
+			Year:   1983,
+			Genre:  "Fantasy",
+		},
+	}
+	defer func() { GlobalMetadataExtractor = oldExtractor }()
+
+	bm, err := AssembleBookMetadata(bookDir, fakeFile, 3, 12345.0)
+	if err != nil {
+		t.Fatalf("AssembleBookMetadata error: %v", err)
+	}
+
+	if bm.FileCount != 3 {
+		t.Errorf("FileCount = %d, want 3", bm.FileCount)
+	}
+	if bm.TotalDuration != 12345.0 {
+		t.Errorf("TotalDuration = %f, want 12345.0", bm.TotalDuration)
+	}
+	if bm.Title != "The Colour of Magic" {
+		t.Errorf("Title = %q, want 'The Colour of Magic'", bm.Title)
+	}
+	if bm.TitleSource != "tag.Title" {
+		t.Errorf("TitleSource = %q, want 'tag.Title'", bm.TitleSource)
+	}
+	if len(bm.Authors) == 0 || bm.Authors[0] != "Terry Pratchett" {
+		t.Errorf("Authors = %v, want [Terry Pratchett]", bm.Authors)
+	}
+	if bm.Year != 1983 {
+		t.Errorf("Year = %d, want 1983", bm.Year)
+	}
+	if bm.Genre != "Fantasy" {
+		t.Errorf("Genre = %q, want 'Fantasy'", bm.Genre)
+	}
+}
+
+func TestAssembleBookMetadataNoFile(t *testing.T) {
+	base := t.TempDir()
+	bookDir := filepath.Join(base, "Some Author", "Some Book")
+	os.MkdirAll(bookDir, 0755)
+
+	bm, err := AssembleBookMetadata(bookDir, "", 0, 0)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	// Should still get folder-based metadata
+	if bm.Title != "Some Book" {
+		t.Errorf("Title = %q, want 'Some Book'", bm.Title)
+	}
+}
