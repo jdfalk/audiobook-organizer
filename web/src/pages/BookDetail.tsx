@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.17.0
+// version: 1.18.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
   LinearProgress,
   Table,
   TableHead,
@@ -42,11 +43,13 @@ import InfoIcon from '@mui/icons-material/Info.js';
 import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
 import StorageIcon from '@mui/icons-material/Storage.js';
 import SaveIcon from '@mui/icons-material/Save.js';
+import SearchIcon from '@mui/icons-material/Search.js';
 import type { Book, BookTags, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { MetadataHistory } from '../components/MetadataHistory';
+import { MetadataSearchDialog } from '../components/audiobooks/MetadataSearchDialog';
 import { FileSelector } from '../components/audiobooks/FileSelector';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
@@ -84,6 +87,7 @@ export const BookDetail = () => {
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [metadataSearchOpen, setMetadataSearchOpen] = useState(false);
   const [tags, setTags] = useState<BookTags | null>(null);
   const [tagsLoading, setTagsLoading] = useState(false);
   const [tagsError, setTagsError] = useState<string | null>(null);
@@ -885,6 +889,14 @@ export const BookDetail = () => {
             >
               {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
             </Button>
+            <IconButton
+              color="primary"
+              onClick={() => setMetadataSearchOpen(true)}
+              disabled={actionLoading}
+              title="Search metadata providers"
+            >
+              <SearchIcon />
+            </IconButton>
             <Button
               variant="outlined"
               startIcon={
@@ -1991,6 +2003,16 @@ export const BookDetail = () => {
           loadBook();
           loadTags();
         }}
+      />
+      <MetadataSearchDialog
+        open={metadataSearchOpen}
+        book={book}
+        onClose={() => setMetadataSearchOpen(false)}
+        onApplied={(updatedBook) => {
+          setBook(updatedBook);
+          loadTags();
+        }}
+        toast={toast}
       />
     </Box>
   );
