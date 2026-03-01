@@ -149,9 +149,10 @@ See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-d
 
 | Item | Status | Plan |
 | --- | --- | --- |
-| Show top 5 scored results to user, let them pick or search | 🔴 | TBD |
-| Search OpenLibrary local dump from UI (title/author/ISBN) | 🔴 | TBD |
-| "No match" option that marks book as manually reviewed | 🔴 | TBD |
+| Show top 10 scored results to user, let them pick or search | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
+| Search from UI (title/author/ISBN) | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
+| "No match" option that marks book as manually reviewed | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
+| Field-level apply (Advanced mode with checkboxes) | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
 
 ### Phase 4: Multi-file Metadata Read
 
