@@ -175,6 +175,14 @@ func extractNarratorFromComment(comment string) string {
 	return ""
 }
 
+// PrimaryAuthor returns the first author from the Authors slice, or empty string.
+func (bm *AssembledMetadata) PrimaryAuthor() string {
+	if len(bm.Authors) == 0 {
+		return ""
+	}
+	return bm.Authors[0]
+}
+
 // FindFirstAudioFile returns the alphabetically first audio file in dirPath.
 func FindFirstAudioFile(dirPath string, supportedExts []string) string {
 	entries, err := os.ReadDir(dirPath)

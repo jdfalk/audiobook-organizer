@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -281,33 +281,75 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				progressCh <- books[idx].FilePath
 			}()
 
-			// Extract metadata from the file
-			meta, err := metadata.ExtractMetadata(books[idx].FilePath)
+			// Extract metadata from the file. For multi-file books where the filename
+			// is a generic part number (e.g. "01 Part 1 of 67.mp3"), use folder path
+			// hierarchy combined with first-file tags for richer metadata.
 			fallbackUsed := false
-			if err != nil {
-				fmt.Printf("Warning: Could not extract metadata from %s: %v\n", books[idx].FilePath, err)
+			filePath := books[idx].FilePath
+
+			if metadata.IsGenericPartFilename(filePath) {
+				dirPath := filepath.Dir(filePath)
+				firstFile := metadata.FindFirstAudioFile(dirPath, config.AppConfig.SupportedExtensions)
+				if firstFile == "" {
+					firstFile = filePath
+				}
+				fileCount := countAudioFilesInDir(dirPath, config.AppConfig.SupportedExtensions)
+				bm, bmErr := metadata.AssembleBookMetadata(dirPath, firstFile, fileCount, 0)
+				if bmErr != nil {
+					log.Printf("[WARN] scanner: AssembleBookMetadata failed for %s: %v", dirPath, bmErr)
+					fallbackUsed = true
+				} else {
+					if bm.Title != "" {
+						books[idx].Title = bm.Title
+					}
+					if bm.PrimaryAuthor() != "" {
+						books[idx].Author = bm.PrimaryAuthor()
+					}
+					if bm.Narrator != "" {
+						books[idx].Narrator = bm.Narrator
+					}
+					if bm.Language != "" {
+						books[idx].Language = bm.Language
+					}
+					if bm.Publisher != "" {
+						books[idx].Publisher = bm.Publisher
+					}
+					if bm.SeriesName != "" {
+						books[idx].Series = bm.SeriesName
+					}
+					if bm.SeriesPosition > 0 {
+						books[idx].Position = bm.SeriesPosition
+					}
+					fallbackUsed = bm.Title == "" || bm.PrimaryAuthor() == ""
+				}
 			} else {
-				fallbackUsed = meta.UsedFilenameFallback
-				if meta.Title != "" {
-					books[idx].Title = meta.Title
-				}
-				if meta.Artist != "" {
-					books[idx].Author = meta.Artist
-				}
-				if meta.Narrator != "" {
-					books[idx].Narrator = meta.Narrator
-				}
-				if meta.Language != "" {
-					books[idx].Language = meta.Language
-				}
-				if meta.Publisher != "" {
-					books[idx].Publisher = meta.Publisher
-				}
-				if meta.Series != "" {
-					books[idx].Series = meta.Series
-				}
-				if meta.SeriesIndex > 0 {
-					books[idx].Position = meta.SeriesIndex
+				meta, err := metadata.ExtractMetadata(filePath)
+				if err != nil {
+					fmt.Printf("Warning: Could not extract metadata from %s: %v\n", filePath, err)
+					fallbackUsed = true
+				} else {
+					fallbackUsed = meta.UsedFilenameFallback
+					if meta.Title != "" {
+						books[idx].Title = meta.Title
+					}
+					if meta.Artist != "" {
+						books[idx].Author = meta.Artist
+					}
+					if meta.Narrator != "" {
+						books[idx].Narrator = meta.Narrator
+					}
+					if meta.Language != "" {
+						books[idx].Language = meta.Language
+					}
+					if meta.Publisher != "" {
+						books[idx].Publisher = meta.Publisher
+					}
+					if meta.Series != "" {
+						books[idx].Series = meta.Series
+					}
+					if meta.SeriesIndex > 0 {
+						books[idx].Position = meta.SeriesIndex
+					}
 				}
 			}
 
@@ -1180,4 +1222,24 @@ func identifySeriesUsingExternalAPIs(books []Book) error {
 	// Implement API calls to GoodReads or similar services
 	// This is a placeholder - actual implementation would depend on available APIs
 	return nil
+}
+
+// countAudioFilesInDir counts the number of audio files (by extension) in a directory.
+// Non-recursive.
+func countAudioFilesInDir(dirPath string, supportedExts []string) int {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return 0
+	}
+	extSet := make(map[string]bool, len(supportedExts))
+	for _, e := range supportedExts {
+		extSet[strings.ToLower(e)] = true
+	}
+	count := 0
+	for _, e := range entries {
+		if !e.IsDir() && extSet[strings.ToLower(filepath.Ext(e.Name()))] {
+			count++
+		}
+	}
+	return count
 }

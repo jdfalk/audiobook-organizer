@@ -1,5 +1,5 @@
 // file: internal/server/import_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 
 package server
@@ -59,10 +59,35 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		return nil, fmt.Errorf("unsupported file type: %s", ext)
 	}
 
-	// Extract metadata
-	meta, err := metadata.ExtractMetadata(req.FilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract metadata: %w", err)
+	// Extract metadata — use folder-aware assembly for generic part filenames.
+	var meta metadata.Metadata
+	if metadata.IsGenericPartFilename(req.FilePath) {
+		dirPath := filepath.Dir(req.FilePath)
+		firstFile := metadata.FindFirstAudioFile(dirPath, config.AppConfig.SupportedExtensions)
+		if firstFile == "" {
+			firstFile = req.FilePath
+		}
+		bm, bmErr := metadata.AssembleBookMetadata(dirPath, firstFile, 0, 0)
+		if bmErr != nil {
+			return nil, fmt.Errorf("failed to assemble metadata: %w", bmErr)
+		}
+		meta = metadata.Metadata{
+			Title:       bm.Title,
+			Artist:      bm.PrimaryAuthor(),
+			Series:      bm.SeriesName,
+			SeriesIndex: bm.SeriesPosition,
+			Narrator:    bm.Narrator,
+			Language:    bm.Language,
+			Publisher:   bm.Publisher,
+			ISBN10:      bm.ISBN10,
+			ISBN13:      bm.ISBN13,
+		}
+	} else {
+		var err error
+		meta, err = metadata.ExtractMetadata(req.FilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract metadata: %w", err)
+		}
 	}
 
 	// Create book record
@@ -76,7 +101,6 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	if meta.Artist != "" {
 		author, err := is.db.GetAuthorByName(meta.Artist)
 		if err != nil {
-			// Create new author
 			author, err = is.db.CreateAuthor(meta.Artist)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create author: %w", err)
@@ -91,7 +115,6 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	if meta.Series != "" && book.AuthorID != nil {
 		series, err := is.db.GetSeriesByName(meta.Series, book.AuthorID)
 		if err != nil {
-			// Create new series
 			series, err = is.db.CreateSeries(meta.Series, book.AuthorID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create series: %w", err)
