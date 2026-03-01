@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataEditDialog.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -259,6 +259,10 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
             {renderField('narrator', 'Narrator', { gridSm: 6 })}
             {renderField('series', 'Series', { gridSm: 8 })}
             {renderField('series_number', 'Series Number', { type: 'number', gridSm: 4 })}
+            {renderField('track_number', 'Track Number', { gridSm: 3 })}
+            {renderField('total_tracks', 'Total Tracks', { type: 'number', gridSm: 3 })}
+            {renderField('disk_number', 'Disk Number', { gridSm: 3 })}
+            {renderField('total_disks', 'Total Disks', { type: 'number', gridSm: 3 })}
             {renderField('genre', 'Genre', { gridSm: 6 })}
             {renderField('year', 'Year', { gridSm: 6 })}
             {renderField('language', 'Language', { gridSm: 6 })}

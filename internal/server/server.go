@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.76.0
+// version: 1.77.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1912,6 +1912,12 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		return
 	}
 
+	// Fetch old book for change history comparison
+	var oldBook *database.Book
+	if database.GlobalStore != nil {
+		oldBook, _ = database.GlobalStore.GetBookByID(id)
+	}
+
 	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -1920,6 +1926,75 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Record metadata change history for manual edits
+	if oldBook != nil && database.GlobalStore != nil {
+		now := time.Now()
+		manualChanges := []struct {
+			field  string
+			oldVal string
+			newVal string
+		}{
+			{"title", oldBook.Title, updatedBook.Title},
+			{"narrator", ptrStr(oldBook.Narrator), ptrStr(updatedBook.Narrator)},
+			{"publisher", ptrStr(oldBook.Publisher), ptrStr(updatedBook.Publisher)},
+			{"language", ptrStr(oldBook.Language), ptrStr(updatedBook.Language)},
+		}
+		// Compare author names
+		oldAuthor := ""
+		if oldBook.AuthorID != nil {
+			if a, err := database.GlobalStore.GetAuthorByID(*oldBook.AuthorID); err == nil && a != nil {
+				oldAuthor = a.Name
+			}
+		}
+		newAuthor := ""
+		if updatedBook.AuthorID != nil {
+			if a, err := database.GlobalStore.GetAuthorByID(*updatedBook.AuthorID); err == nil && a != nil {
+				newAuthor = a.Name
+			}
+		}
+		manualChanges = append(manualChanges, struct {
+			field  string
+			oldVal string
+			newVal string
+		}{"author_name", oldAuthor, newAuthor})
+		// Compare year
+		oldYear := ""
+		if oldBook.AudiobookReleaseYear != nil {
+			oldYear = strconv.Itoa(*oldBook.AudiobookReleaseYear)
+		}
+		newYear := ""
+		if updatedBook.AudiobookReleaseYear != nil {
+			newYear = strconv.Itoa(*updatedBook.AudiobookReleaseYear)
+		}
+		manualChanges = append(manualChanges, struct {
+			field  string
+			oldVal string
+			newVal string
+		}{"audiobook_release_year", oldYear, newYear})
+
+		for _, c := range manualChanges {
+			if c.newVal == "" || c.newVal == c.oldVal {
+				continue
+			}
+			oldJSON, _ := json.Marshal(c.oldVal)
+			newJSON, _ := json.Marshal(c.newVal)
+			oldStr := string(oldJSON)
+			newStr := string(newJSON)
+			record := &database.MetadataChangeRecord{
+				BookID:        id,
+				Field:         c.field,
+				PreviousValue: &oldStr,
+				NewValue:      &newStr,
+				ChangeType:    "manual",
+				Source:        "manual",
+				ChangedAt:     now,
+			}
+			if err := database.GlobalStore.RecordMetadataChange(record); err != nil {
+				log.Printf("[WARN] failed to record manual metadata change for %s.%s: %v", id, c.field, err)
+			}
+		}
 	}
 
 	// Write updated metadata back to the audio file
@@ -4214,4 +4289,11 @@ func GetDefaultServerConfig() ServerConfig {
 		WriteTimeout: 0,                 // Disable write timeout so SSE streams stay open
 		IdleTimeout:  120 * time.Second, // 2 minute idle timeout
 	}
+}
+
+func ptrStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

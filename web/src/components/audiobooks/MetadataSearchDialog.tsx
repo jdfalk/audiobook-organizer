@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +25,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search.js';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess.js';
+import HeadphonesIcon from '@mui/icons-material/Headphones.js';
 import type { Book, MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
 
@@ -272,6 +273,15 @@ export function MetadataSearchDialog({
                       size="small"
                       variant="outlined"
                     />
+                    {candidate.narrator && (
+                      <Chip
+                        icon={<HeadphonesIcon />}
+                        label="Audiobook"
+                        size="small"
+                        color="info"
+                        variant="outlined"
+                      />
+                    )}
                   </Stack>
                 </Box>
                 <Button
