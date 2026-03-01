@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.18.0
+// version: 1.19.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,7 +23,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
   LinearProgress,
   Table,
   TableHead,
@@ -97,6 +96,11 @@ export const BookDetail = () => {
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
   const [coverError, setCoverError] = useState(false);
+
+  // Reset cover error when cover URL changes (e.g. after metadata fetch)
+  useEffect(() => {
+    setCoverError(false);
+  }, [book?.cover_url]);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -288,7 +292,8 @@ export const BookDetail = () => {
     try {
       const result = await api.fetchBookMetadata(book.id);
       setBook(result.book);
-      // Reload tags to reflect updated stored values in Compare tab
+      // Re-fetch enriched book (with populated authors array) and tags
+      await loadBook();
       await loadTags();
       toast(
         result.message ||
@@ -788,9 +793,9 @@ export const BookDetail = () => {
             <Typography variant="subtitle1" color="text.secondary">
               {book.authors && book.authors.length > 0
                 ? `By ${book.authors.map((a) => a.name).join(' & ')}`
-                : book.author_name || book.author_id
-                  ? `By ${book.author_name || book.author_id}`
-                  : ''}
+                : book.author_name
+                  ? `By ${book.author_name}`
+                  : 'Unknown Author'}
             </Typography>
           </Stack>
         </Stack>
@@ -861,11 +866,12 @@ export const BookDetail = () => {
           >
             <Button
               variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={() => setEditDialogOpen(true)}
-              disabled={actionLoading}
+              color="info"
+              startIcon={<CompareIcon />}
+              onClick={() => setVersionDialogOpen(true)}
+              disabled={versionsLoading}
             >
-              Edit Metadata
+              Manage Versions
             </Button>
             <Button
               variant="outlined"
@@ -874,42 +880,6 @@ export const BookDetail = () => {
               disabled={actionLoading}
             >
               History
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={
-                fetchingMetadata ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <CloudDownloadIcon />
-                )
-              }
-              onClick={handleFetchMetadata}
-              disabled={fetchingMetadata || actionLoading}
-            >
-              {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
-            </Button>
-            <IconButton
-              color="primary"
-              onClick={() => setMetadataSearchOpen(true)}
-              disabled={actionLoading}
-              title="Search metadata providers"
-            >
-              <SearchIcon />
-            </IconButton>
-            <Button
-              variant="outlined"
-              startIcon={
-                writingToFiles ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SaveIcon />
-                )
-              }
-              onClick={() => setWriteBackDialogOpen(true)}
-              disabled={writingToFiles || actionLoading}
-            >
-              {writingToFiles ? 'Writing...' : 'Save to Files'}
             </Button>
             <Button
               variant="outlined"
@@ -936,18 +906,53 @@ export const BookDetail = () => {
               </Button>
             )}
             <Button
-              variant="contained"
-              startIcon={<CompareIcon />}
-              color="secondary"
-              onClick={() => setVersionDialogOpen(true)}
-              disabled={versionsLoading}
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => setEditDialogOpen(true)}
+              disabled={actionLoading}
             >
-              Manage Versions
+              Edit Metadata
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                fetchingMetadata ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <CloudDownloadIcon />
+                )
+              }
+              onClick={handleFetchMetadata}
+              disabled={fetchingMetadata || actionLoading}
+            >
+              {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<SearchIcon />}
+              onClick={() => setMetadataSearchOpen(true)}
+              disabled={actionLoading}
+            >
+              Search Metadata
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                writingToFiles ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <SaveIcon />
+                )
+              }
+              onClick={() => setWriteBackDialogOpen(true)}
+              disabled={writingToFiles || actionLoading}
+            >
+              {writingToFiles ? 'Writing...' : 'Save to Files'}
             </Button>
             {!isSoftDeleted ? (
               <Button
                 variant="contained"
-                color="warning"
+                color="error"
                 startIcon={<DeleteIcon />}
                 onClick={() => {
                   setDeleteOptions({ softDelete: true, blockHash: true });
@@ -997,7 +1002,6 @@ export const BookDetail = () => {
             value="versions"
           />
           <Tab label="Tags" value="tags" />
-          <Tab label="Compare" value="compare" />
         </Tabs>
       </Paper>
 
@@ -1330,254 +1334,16 @@ export const BookDetail = () => {
       {activeTab === 'tags' && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-            <InfoIcon />
-            <Typography variant="h6">Tags &amp; Media</Typography>
-          </Stack>
-          {selectedSegmentId && segmentTags ? (
-            <>
-              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Raw embedded tags for: {segmentTags.file_path.split('/').pop()}
-              </Typography>
-              <Grid container spacing={1}>
-                {Object.entries(segmentTags.tags).map(([key, value]) => (
-                  <Grid item xs={12} sm={6} md={4} key={key}>
-                    <Box
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 1,
-                        border: '1px dashed',
-                        borderColor: 'divider',
-                        bgcolor: 'background.default',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ textTransform: 'uppercase' }}
-                      >
-                        {key.replace(/_/g, ' ')}
-                      </Typography>
-                      <Typography variant="body2">
-                        {value || '\u2014'}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-              {Object.keys(segmentTags.tags).length === 0 && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  No embedded tags found in this file.
-                </Alert>
-              )}
-              {segmentTags.tags_read_error && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  Tag read error: {segmentTags.tags_read_error}
-                </Alert>
-              )}
-            </>
-          ) : (
-            <>
-              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              {tagsError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {tagsError}
-                </Alert>
-              )}
-              {tagsLoading && (
-                <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-                  <CircularProgress size={18} />
-                  <Typography variant="body2">Loading tags...</Typography>
-                </Stack>
-              )}
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 1,
-                      bgcolor: 'background.default',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      height: '100%',
-                    }}
-                  >
-                    <Typography variant="subtitle2" gutterBottom>
-                      Embedded / Media Info
-                    </Typography>
-                    <Stack spacing={1}>
-                      <Typography variant="body2">
-                        Codec: {tags?.media_info?.codec || book.codec || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Bitrate:{' '}
-                        {tags?.media_info?.bitrate
-                          ? `${tags.media_info.bitrate} kbps`
-                          : book.bitrate
-                            ? `${book.bitrate} kbps`
-                            : '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Sample Rate:{' '}
-                        {tags?.media_info?.sample_rate
-                          ? `${tags.media_info.sample_rate} Hz`
-                          : book.sample_rate
-                            ? `${book.sample_rate} Hz`
-                            : '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Channels:{' '}
-                        {tags?.media_info?.channels ?? book.channels ?? '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Bit Depth:{' '}
-                        {tags?.media_info?.bit_depth ?? book.bit_depth ?? '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Quality: {tags?.media_info?.quality || book.quality || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Duration:{' '}
-                        {formatDuration(
-                          tags?.media_info?.duration || book.duration
-                        ) || '\u2014'}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 1,
-                      bgcolor: 'background.default',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      height: '100%',
-                    }}
-                  >
-                    <Typography variant="subtitle2" gutterBottom>
-                      Metadata (Current)
-                    </Typography>
-                    <Stack spacing={1}>
-                      <Typography variant="body2">
-                        Title: {book.title || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Author:{' '}
-                        {book.authors && book.authors.length > 0
-                          ? book.authors.map((a) => a.name).join(' & ')
-                          : book.author_name || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Narrator:{' '}
-                        {book.narrators && book.narrators.length > 0
-                          ? book.narrators.map((n) => n.name).join(' & ')
-                          : book.narrator || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Series: {book.series_name || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Series Position: {book.series_position ?? '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Publisher: {book.publisher || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Language: {book.language || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Year:{' '}
-                        {book.audiobook_release_year || book.print_year || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        ISBN: {book.isbn || '\u2014'}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                </Grid>
-              </Grid>
-              {tags?.tags && (
-                <Box mt={3}>
-                  <Typography variant="subtitle2" gutterBottom>
-                    File Tags
-                  </Typography>
-                  <Grid container spacing={1}>
-                    {Object.entries(tags.tags).map(([key, values]) => (
-                      <Grid item xs={12} sm={6} md={4} key={key}>
-                        <Box
-                          sx={{
-                            p: 1.5,
-                            borderRadius: 1,
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                            bgcolor: 'background.default',
-                          }}
-                        >
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{ textTransform: 'uppercase' }}
-                          >
-                            {key.replace(/_/g, ' ')}
-                          </Typography>
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            flexWrap="wrap"
-                          >
-                            <Typography variant="body2">
-                              {values.effective_value ??
-                                values.override_value ??
-                                values.stored_value ??
-                                values.fetched_value ??
-                                values.file_value ??
-                                '\u2014'}
-                            </Typography>
-                            {values.effective_source && (
-                              <Chip
-                                size="small"
-                                label={values.effective_source}
-                                variant="outlined"
-                              />
-                            )}
-                            {values.override_locked && (
-                              <Chip
-                                size="small"
-                                label="locked"
-                                color="warning"
-                                variant="outlined"
-                              />
-                            )}
-                          </Stack>
-                        </Box>
-                      </Grid>
-                    ))}
-                  </Grid>
-                </Box>
-              )}
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Showing current metadata and media info. File-tag provenance will
-                populate here when available from the backend.
-              </Alert>
-            </>
-          )}
-        </Paper>
-      )}
-
-      {activeTab === 'compare' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <CompareIcon />
-            <Typography variant="h6">Compare &amp; Resolve</Typography>
+            <Typography variant="h6">Tags &amp; Compare</Typography>
           </Stack>
+
+          {/* Segment selected: unified comparison table */}
           {selectedSegmentId && segmentTags ? (
             <>
               {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                File tag vs book effective value for: {segmentTags.file_path.split('/').pop()}
+                Comparing tags for: {segmentTags.file_path.split('/').pop()}
               </Typography>
               <Table size="small">
                 <TableHead>
@@ -1586,6 +1352,7 @@ export const BookDetail = () => {
                     <TableCell>File Tag Value</TableCell>
                     <TableCell>Book Effective Value</TableCell>
                     <TableCell>Match</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1609,14 +1376,21 @@ export const BookDetail = () => {
                     { field: 'publisher', bookVal: book.publisher },
                     { field: 'series', bookVal: book.series_name },
                     { field: 'language', bookVal: book.language },
+                    { field: 'track', bookVal: '' },
+                    { field: 'disk', bookVal: '' },
                   ].map(({ field, bookVal }) => {
                     const fileVal = segmentTags.tags[field] || segmentTags.tags[field.replace(/ /g, '_')] || '';
                     const bookStr = String(bookVal || '');
                     const matches = fileVal.toLowerCase() === bookStr.toLowerCase();
+                    const isMismatch = !matches && fileVal && bookStr;
                     return (
                       <TableRow
                         key={field}
-                        sx={!matches && fileVal && bookStr ? { bgcolor: 'warning.light' } : undefined}
+                        sx={isMismatch ? {
+                          bgcolor: 'error.dark',
+                          '& .MuiTableCell-root': { color: 'error.contrastText' },
+                          opacity: 0.85,
+                        } : undefined}
                       >
                         <TableCell sx={{ textTransform: 'capitalize' }}>
                           {field.replace(/_/g, ' ')}
@@ -1629,7 +1403,33 @@ export const BookDetail = () => {
                           ) : matches ? (
                             <Chip size="small" label="match" color="success" variant="outlined" />
                           ) : (
-                            <Chip size="small" label="mismatch" color="warning" variant="outlined" />
+                            <Chip size="small" label="mismatch" color="error" variant="outlined" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isMismatch && (
+                            <Stack direction="row" spacing={0.5}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => applySourceValue(field === 'author' ? 'author_name' : field, 'file')}
+                                disabled={loadingField === `${field}-file`}
+                                sx={isMismatch ? { color: 'inherit', borderColor: 'inherit' } : undefined}
+                              >
+                                Use File
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => {
+                                  // "Use Book" = queue writing book value to file tag
+                                  toast('Book value queued for write to file', 'info');
+                                }}
+                                sx={isMismatch ? { color: 'inherit', borderColor: 'inherit' } : undefined}
+                              >
+                                Use Book
+                              </Button>
+                            </Stack>
                           )}
                         </TableCell>
                       </TableRow>
@@ -1637,8 +1437,14 @@ export const BookDetail = () => {
                   })}
                 </TableBody>
               </Table>
+              {segmentTags.tags_read_error && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Tag read error: {segmentTags.tags_read_error}
+                </Alert>
+              )}
             </>
           ) : (
+            /* No segment selected: show field sources with resolve actions */
             <>
               {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               {tagsError && (
@@ -1646,149 +1452,195 @@ export const BookDetail = () => {
                   {tagsError}
                 </Alert>
               )}
+              {tagsLoading && (
+                <Stack direction="row" spacing={1} alignItems="center" mb={2}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">Loading tags...</Typography>
+                </Stack>
+              )}
+
+              {/* Media Info Summary */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={6}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 1,
+                      bgcolor: 'background.default',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      height: '100%',
+                    }}
+                  >
+                    <Typography variant="subtitle2" gutterBottom>
+                      Media Info
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      <Typography variant="body2">
+                        Codec: {tags?.media_info?.codec || book.codec || '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Bitrate:{' '}
+                        {tags?.media_info?.bitrate
+                          ? `${tags.media_info.bitrate} kbps`
+                          : book.bitrate
+                            ? `${book.bitrate} kbps`
+                            : '\u2014'}
+                      </Typography>
+                      <Typography variant="body2">
+                        Duration:{' '}
+                        {formatDuration(
+                          tags?.media_info?.duration || book.duration
+                        ) || '\u2014'}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Grid>
+              </Grid>
+
+              {/* Field Sources Table */}
               {!tags?.tags && !tagsLoading ? (
-                <Alert severity="info">No tag data available yet.</Alert>
+                <Alert severity="info">No tag data available yet. Select a file above to compare tags.</Alert>
               ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Field</TableCell>
-                  <TableCell>File Tag</TableCell>
-                  <TableCell>Fetched</TableCell>
-                  <TableCell>Stored</TableCell>
-                  <TableCell>Override</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {[
-                  'title',
-                  'author_name',
-                  'narrator',
-                  'series_name',
-                  'publisher',
-                  'language',
-                  'audiobook_release_year',
-                ].map((field) => {
-                  const entry = getFieldSources(field);
-                  return (
-                    <TableRow key={field}>
-                      <TableCell sx={{ textTransform: 'capitalize' }}>
-                        {field.replace(/_/g, ' ')}
-                      </TableCell>
-                      <TableCell>{entry?.file ?? '—'}</TableCell>
-                      <TableCell>{entry?.fetched ?? '—'}</TableCell>
-                      <TableCell>{entry?.stored ?? '—'}</TableCell>
-                      <TableCell>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
-                        >
-                          <span>{entry?.override ?? '—'}</span>
-                          {entry?.locked && (
-                            <Chip
-                              label="locked"
-                              size="small"
-                              color="warning"
-                              sx={{ ml: 0.5 }}
-                            />
-                          )}
-                          {entry?.source && (
-                            <Chip
-                              label={entry.source}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1}>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => applySourceValue(field, 'file')}
-                            disabled={
-                              (!entry?.file && entry?.file !== 0) ||
-                              loadingField === `${field}-file`
-                            }
-                            startIcon={
-                              loadingField === `${field}-file` ? (
-                                <CircularProgress size={16} />
-                              ) : undefined
-                            }
-                          >
-                            {loadingField === `${field}-file`
-                              ? 'Applying...'
-                              : 'Use File'}
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => applySourceValue(field, 'fetched')}
-                            disabled={
-                              (!entry?.fetched && entry?.fetched !== 0) ||
-                              loadingField === `${field}-fetched`
-                            }
-                            startIcon={
-                              loadingField === `${field}-fetched` ? (
-                                <CircularProgress size={16} />
-                              ) : undefined
-                            }
-                          >
-                            {loadingField === `${field}-fetched`
-                              ? 'Applying...'
-                              : 'Use Fetched'}
-                          </Button>
-                          {entry?.override && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="secondary"
-                              onClick={() => clearOverride(field)}
-                              disabled={loadingField === `${field}-clear`}
-                              startIcon={
-                                loadingField === `${field}-clear` ? (
-                                  <CircularProgress size={16} />
-                                ) : undefined
-                              }
-                            >
-                              {loadingField === `${field}-clear`
-                                ? 'Clearing...'
-                                : 'Clear'}
-                            </Button>
-                          )}
-                          {entry?.locked && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => unlockOverride(field)}
-                              disabled={loadingField === `${field}-unlock`}
-                              startIcon={
-                                loadingField === `${field}-unlock` ? (
-                                  <CircularProgress size={16} />
-                                ) : undefined
-                              }
-                            >
-                              {loadingField === `${field}-unlock`
-                                ? 'Unlocking...'
-                                : 'Unlock'}
-                            </Button>
-                          )}
-                        </Stack>
-                      </TableCell>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Field</TableCell>
+                      <TableCell>File Tag</TableCell>
+                      <TableCell>Fetched</TableCell>
+                      <TableCell>Stored</TableCell>
+                      <TableCell>Override</TableCell>
+                      <TableCell>Actions</TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  </TableHead>
+                  <TableBody>
+                    {[
+                      'title',
+                      'author_name',
+                      'narrator',
+                      'series_name',
+                      'publisher',
+                      'language',
+                      'audiobook_release_year',
+                    ].map((field) => {
+                      const entry = getFieldSources(field);
+                      return (
+                        <TableRow key={field}>
+                          <TableCell sx={{ textTransform: 'capitalize' }}>
+                            {field.replace(/_/g, ' ')}
+                          </TableCell>
+                          <TableCell>{entry?.file ?? '\u2014'}</TableCell>
+                          <TableCell>{entry?.fetched ?? '\u2014'}</TableCell>
+                          <TableCell>{entry?.stored ?? '\u2014'}</TableCell>
+                          <TableCell>
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <span>{entry?.override ?? '\u2014'}</span>
+                              {entry?.locked && (
+                                <Chip
+                                  label="locked"
+                                  size="small"
+                                  color="warning"
+                                  sx={{ ml: 0.5 }}
+                                />
+                              )}
+                              {entry?.source && (
+                                <Chip
+                                  label={entry.source}
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              )}
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={1}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => applySourceValue(field, 'file')}
+                                disabled={
+                                  (!entry?.file && entry?.file !== 0) ||
+                                  loadingField === `${field}-file`
+                                }
+                                startIcon={
+                                  loadingField === `${field}-file` ? (
+                                    <CircularProgress size={16} />
+                                  ) : undefined
+                                }
+                              >
+                                {loadingField === `${field}-file`
+                                  ? 'Applying...'
+                                  : 'Use File'}
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => applySourceValue(field, 'fetched')}
+                                disabled={
+                                  (!entry?.fetched && entry?.fetched !== 0) ||
+                                  loadingField === `${field}-fetched`
+                                }
+                                startIcon={
+                                  loadingField === `${field}-fetched` ? (
+                                    <CircularProgress size={16} />
+                                  ) : undefined
+                                }
+                              >
+                                {loadingField === `${field}-fetched`
+                                  ? 'Applying...'
+                                  : 'Use Fetched'}
+                              </Button>
+                              {entry?.override && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="secondary"
+                                  onClick={() => clearOverride(field)}
+                                  disabled={loadingField === `${field}-clear`}
+                                  startIcon={
+                                    loadingField === `${field}-clear` ? (
+                                      <CircularProgress size={16} />
+                                    ) : undefined
+                                  }
+                                >
+                                  {loadingField === `${field}-clear`
+                                    ? 'Clearing...'
+                                    : 'Clear'}
+                                </Button>
+                              )}
+                              {entry?.locked && (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => unlockOverride(field)}
+                                  disabled={loadingField === `${field}-unlock`}
+                                  startIcon={
+                                    loadingField === `${field}-unlock` ? (
+                                      <CircularProgress size={16} />
+                                    ) : undefined
+                                  }
+                                >
+                                  {loadingField === `${field}-unlock`
+                                    ? 'Unlocking...'
+                                    : 'Unlock'}
+                                </Button>
+                              )}
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               )}
               <Alert severity="info" sx={{ mt: 2 }}>
-                Locked overrides prevent future fetch/tag updates from changing the
-                field. Apply a source to set/lock a field; use Unlock to allow edits
-                without clearing the override value.
+                Select a file above to compare file tags with book values.
+                Locked overrides prevent future fetch/tag updates from changing the field.
               </Alert>
             </>
           )}

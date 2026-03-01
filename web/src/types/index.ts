@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.7.0
+// version: 1.8.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -20,6 +20,10 @@ export interface Audiobook {
   isbn10?: string;
   isbn13?: string;
   description?: string;
+  track_number?: string;
+  total_tracks?: number;
+  disk_number?: string;
+  total_disks?: number;
   duration_seconds?: number;
   file_path: string;
   original_filename?: string;
