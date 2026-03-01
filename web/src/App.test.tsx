@@ -1,5 +1,5 @@
 // file: web/src/App.test.tsx
-// version: 1.0.5
+// version: 1.0.6
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -46,6 +46,7 @@ vi.mock('./services/api', () => ({
   getBooks: vi.fn().mockResolvedValue([]),
   searchBooks: vi.fn().mockResolvedValue([]),
   getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+  getAppVersion: vi.fn().mockResolvedValue('1.0.0-test'),
 }));
 
 beforeEach(() => {
