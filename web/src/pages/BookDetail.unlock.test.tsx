@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.unlock.test.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2b197bb0-4a61-49ef-8b75-1f9c6c23c84e
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -17,6 +17,7 @@ vi.mock('../services/api', () => ({
     updated_at: '2026-01-01T00:00:00Z',
   }),
   getBookVersions: vi.fn().mockResolvedValue([]),
+  getBookSegments: vi.fn().mockResolvedValue([]),
   getBookTags: vi.fn().mockResolvedValue({
     tags: {
       title: {
@@ -49,7 +50,7 @@ describe('BookDetail override unlock', () => {
       </MemoryRouter>
     );
 
-    const compareTab = await screen.findByRole('tab', { name: /compare/i });
+    const compareTab = await screen.findByRole('tab', { name: /tags/i });
     fireEvent.click(compareTab);
 
     const unlockButton = await screen.findByRole('button', { name: 'Unlock' });
