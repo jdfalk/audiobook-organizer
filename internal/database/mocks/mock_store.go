@@ -726,6 +726,55 @@ func (_c *MockStore_CreateBookSegment_Call) RunAndReturn(run func(bookNumericID 
 	return _c
 }
 
+// UpdateBookSegment provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateBookSegment(segment *database.BookSegment) error {
+	ret := _mock.Called(segment)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateBookSegment")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.BookSegment) error); ok {
+		r0 = returnFunc(segment)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpdateBookSegment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateBookSegment'
+type MockStore_UpdateBookSegment_Call struct {
+	*mock.Call
+}
+
+// UpdateBookSegment is a helper method to define mock.On call
+//   - segment *database.BookSegment
+func (_e *MockStore_Expecter) UpdateBookSegment(segment interface{}) *MockStore_UpdateBookSegment_Call {
+	return &MockStore_UpdateBookSegment_Call{Call: _e.mock.On("UpdateBookSegment", segment)}
+}
+
+func (_c *MockStore_UpdateBookSegment_Call) Run(run func(segment *database.BookSegment)) *MockStore_UpdateBookSegment_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.BookSegment
+		if args[0] != nil {
+			arg0 = args[0].(*database.BookSegment)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateBookSegment_Call) Return(err error) *MockStore_UpdateBookSegment_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateBookSegment_Call) RunAndReturn(run func(segment *database.BookSegment) error) *MockStore_UpdateBookSegment_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateImportPath provides a mock function for the type MockStore
 func (_mock *MockStore) CreateImportPath(path string, name string) (*database.ImportPath, error) {
 	ret := _mock.Called(path, name)

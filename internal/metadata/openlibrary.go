@@ -110,6 +110,7 @@ type BookMetadata struct {
 	Publisher      string
 	PublishYear    int
 	ISBN           string
+	ASIN           string
 	CoverURL       string
 	Language       string
 	Series         string

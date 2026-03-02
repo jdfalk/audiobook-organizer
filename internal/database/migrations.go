@@ -183,6 +183,12 @@ var migrations = []Migration{
 		Up:          migration024Up,
 		Down:        nil,
 	},
+	{
+		Version:     25,
+		Description: "Add asin column to books",
+		Up:          migration025Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -1426,5 +1432,29 @@ func migration024Up(store Store) error {
 	}
 
 	log.Println("  - metadata_review_status added successfully")
+	return nil
+}
+
+// migration025Up adds asin column to books table.
+func migration025Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Skipping migration 25 for non-SQLite store")
+		return nil
+	}
+
+	var count int
+	err := sqliteStore.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('books') WHERE name='asin'`).Scan(&count)
+	if err == nil && count > 0 {
+		log.Println("  - Column already exists, skipping")
+		return nil
+	}
+
+	_, err = sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN asin TEXT`)
+	if err != nil {
+		return fmt.Errorf("failed to add asin column: %w", err)
+	}
+
+	log.Println("  - asin added successfully")
 	return nil
 }

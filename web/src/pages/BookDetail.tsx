@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.21.0
+// version: 1.23.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -43,6 +43,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
 import StorageIcon from '@mui/icons-material/Storage.js';
 import SaveIcon from '@mui/icons-material/Save.js';
 import SearchIcon from '@mui/icons-material/Search.js';
+import TransformIcon from '@mui/icons-material/Transform.js';
 import type { Book, BookTags, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -64,6 +65,7 @@ export const BookDetail = () => {
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
   const [writingToFiles, setWritingToFiles] = useState(false);
+  const [transcoding, setTranscoding] = useState(false);
   const [writeBackDialogOpen, setWriteBackDialogOpen] = useState(false);
   const [preAIBook, setPreAIBook] = useState<Book | null>(null);
   const { toast } = useToast();
@@ -96,6 +98,7 @@ export const BookDetail = () => {
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
   const [coverError, setCoverError] = useState(false);
+  const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
 
   // Reset cover error when cover URL changes (e.g. after metadata fetch)
   useEffect(() => {
@@ -318,6 +321,22 @@ export const BookDetail = () => {
       toast(msg, 'error');
     } finally {
       setFetchingMetadata(false);
+    }
+  };
+
+  const handleTranscode = async () => {
+    if (!book) return;
+    setTranscoding(true);
+    try {
+      await api.startTranscode(book.id);
+      toast('Transcode started. The book will be converted to M4B.', 'success');
+    } catch (error: unknown) {
+      console.error('Failed to start transcode', error);
+      const msg =
+        error instanceof Error ? error.message : 'Transcode failed to start.';
+      toast(msg, 'error');
+    } finally {
+      setTranscoding(false);
     }
   };
 
@@ -639,7 +658,7 @@ export const BookDetail = () => {
       setBook(saved);
       // Reload tags so Tags tab reflects the update immediately
       await loadTags();
-      toast('Metadata updated.', 'success');
+      toast('Metadata saved to database. Use "Save to Files" to write tags to the audio file.', 'success');
       setEditDialogOpen(false);
     } catch (error) {
       if (error instanceof api.ApiError) {
@@ -679,7 +698,7 @@ export const BookDetail = () => {
         force_update: true,
       });
       setBook(saved);
-      toast('Metadata updated.', 'success');
+      toast('Metadata saved to database (overwrite).', 'success');
       setEditDialogOpen(false);
       setConflictDialogOpen(false);
       setPendingUpdate(null);
@@ -772,12 +791,15 @@ export const BookDetail = () => {
               src={coverImageUrl}
               alt={`Cover art for ${book.title || 'Untitled'}`}
               onError={() => setCoverError(true)}
+              onClick={() => setCoverLightboxOpen(true)}
               sx={{
                 width: 120,
                 height: 120,
                 objectFit: 'cover',
                 borderRadius: 2,
                 boxShadow: 2,
+                cursor: 'pointer',
+                '&:hover': { opacity: 0.85 },
               }}
             />
           )}
@@ -807,6 +829,29 @@ export const BookDetail = () => {
                   ? `By ${book.author_name}`
                   : 'Unknown Author'}
             </Typography>
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+              <Chip
+                icon={<AccessTimeIcon />}
+                label={`Created ${formatDateTime(book.created_at)}`}
+                variant="outlined"
+                size="small"
+              />
+              <Chip
+                icon={<InfoIcon />}
+                label={`Updated ${formatDateTime(book.updated_at)}`}
+                variant="outlined"
+                size="small"
+              />
+              {book.version_group_id && (
+                <Chip
+                  icon={<CompareIcon />}
+                  label="Version Group Linked"
+                  color="secondary"
+                  variant="outlined"
+                  size="small"
+                />
+              )}
+            </Stack>
           </Stack>
         </Stack>
       </Stack>
@@ -842,38 +887,13 @@ export const BookDetail = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 3, mb: 3 }}>
+      <Paper sx={{ p: 2, mb: 3 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
           justifyContent="space-between"
         >
           <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Chip
-              icon={<AccessTimeIcon />}
-              label={`Created ${formatDateTime(book.created_at)}`}
-              variant="outlined"
-            />
-            <Chip
-              icon={<InfoIcon />}
-              label={`Updated ${formatDateTime(book.updated_at)}`}
-              variant="outlined"
-            />
-            {book.version_group_id && (
-              <Chip
-                icon={<CompareIcon />}
-                label="Version Group Linked"
-                color="secondary"
-                variant="outlined"
-              />
-            )}
-          </Stack>
-          <Stack
-            direction="row"
-            spacing={1}
-            flexWrap="wrap"
-            justifyContent="flex-end"
-          >
             <Button
               variant="outlined"
               color="info"
@@ -915,6 +935,13 @@ export const BookDetail = () => {
                 Undo AI Parse
               </Button>
             )}
+          </Stack>
+          <Stack
+            direction="row"
+            spacing={1}
+            flexWrap="wrap"
+            justifyContent="flex-end"
+          >
             <Button
               variant="outlined"
               startIcon={<EditIcon />}
@@ -945,6 +972,22 @@ export const BookDetail = () => {
             >
               Search Metadata
             </Button>
+            {book && book.format?.toLowerCase() !== 'm4b' && (
+              <Button
+                variant="outlined"
+                startIcon={
+                  transcoding ? (
+                    <CircularProgress size={20} />
+                  ) : (
+                    <TransformIcon />
+                  )
+                }
+                onClick={handleTranscode}
+                disabled={transcoding || actionLoading}
+              >
+                {transcoding ? 'Converting...' : 'Convert to M4B'}
+              </Button>
+            )}
             <Button
               variant="outlined"
               startIcon={
@@ -1222,7 +1265,15 @@ export const BookDetail = () => {
                   </TableHead>
                   <TableBody>
                     {segments.map((seg) => (
-                      <TableRow key={seg.id}>
+                      <TableRow
+                        key={seg.id}
+                        hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setSelectedSegmentId(seg.id);
+                          setActiveTab('tags');
+                        }}
+                      >
                         <TableCell>{seg.track_number ?? '—'}</TableCell>
                         <TableCell sx={{ wordBreak: 'break-all' }}>
                           {seg.file_path.split('/').pop()}
@@ -1346,6 +1397,27 @@ export const BookDetail = () => {
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <CompareIcon />
             <Typography variant="h6">Tags &amp; Compare</Typography>
+            {segments.length > 1 && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={async () => {
+                  try {
+                    const result = await api.extractTrackInfo(book.id);
+                    toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
+                    // Reload segments to reflect changes
+                    if (id) {
+                      const segs = await api.getBookSegments(id);
+                      setSegments(segs);
+                    }
+                  } catch (err) {
+                    toast('Failed to extract track info', 'error');
+                  }
+                }}
+              >
+                Auto-fill Track Numbers
+              </Button>
+            )}
           </Stack>
 
           {/* Segment selected: unified comparison table */}
@@ -1391,7 +1463,15 @@ export const BookDetail = () => {
                   ].map(({ field, bookVal }) => {
                     const fileVal = segmentTags.tags[field] || segmentTags.tags[field.replace(/ /g, '_')] || '';
                     const bookStr = String(bookVal || '');
-                    const matches = fileVal.toLowerCase() === bookStr.toLowerCase();
+                    const exactMatch = fileVal.toLowerCase() === bookStr.toLowerCase();
+                    // For title field: treat "Part X of Y" patterns or file tags containing book title as partial match
+                    const isPartialTitleMatch = field === 'title' && !exactMatch && fileVal && bookStr && (
+                      /^part\s+\d+\s+of\s+\d+$/i.test(fileVal) ||
+                      /^\d+\s+of\s+\d+$/i.test(fileVal) ||
+                      fileVal.toLowerCase().includes(bookStr.toLowerCase()) ||
+                      bookStr.toLowerCase().includes(fileVal.toLowerCase())
+                    );
+                    const matches = exactMatch || isPartialTitleMatch;
                     const isMismatch = !matches && fileVal && bookStr;
                     return (
                       <TableRow
@@ -1410,8 +1490,10 @@ export const BookDetail = () => {
                         <TableCell>
                           {!fileVal && !bookStr ? (
                             <Chip size="small" label="empty" variant="outlined" />
-                          ) : matches ? (
+                          ) : exactMatch ? (
                             <Chip size="small" label="match" color="success" variant="outlined" />
+                          ) : isPartialTitleMatch ? (
+                            <Chip size="small" label="partial" color="warning" variant="outlined" />
                           ) : (
                             <Chip size="small" label="mismatch" color="error" variant="outlined" />
                           )}
@@ -1518,7 +1600,7 @@ export const BookDetail = () => {
                       <TableCell>Field</TableCell>
                       <TableCell>File Tag</TableCell>
                       <TableCell>Fetched</TableCell>
-                      <TableCell>Stored</TableCell>
+                      <TableCell>Database Stored</TableCell>
                       <TableCell>Override</TableCell>
                       <TableCell>Actions</TableCell>
                     </TableRow>
@@ -1529,9 +1611,16 @@ export const BookDetail = () => {
                       'author_name',
                       'narrator',
                       'series_name',
+                      'series_index',
+                      'album',
+                      'genre',
                       'publisher',
                       'language',
                       'audiobook_release_year',
+                      'print_year',
+                      'edition',
+                      'isbn10',
+                      'isbn13',
                     ].map((field) => {
                       const entry = getFieldSources(field);
                       return (
@@ -1876,6 +1965,22 @@ export const BookDetail = () => {
         }}
         toast={toast}
       />
+
+      {/* Cover image lightbox */}
+      <Dialog
+        open={coverLightboxOpen}
+        onClose={() => setCoverLightboxOpen(false)}
+        maxWidth="sm"
+      >
+        <DialogContent sx={{ p: 1 }}>
+          <Box
+            component="img"
+            src={coverImageUrl}
+            alt={`Cover art for ${book.title || 'Untitled'}`}
+            sx={{ width: '100%', maxWidth: 600, display: 'block' }}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };

@@ -2598,6 +2598,17 @@ func (p *PebbleStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 	return segment, nil
 }
 
+func (p *PebbleStore) UpdateBookSegment(segment *BookSegment) error {
+	segment.UpdatedAt = time.Now()
+	segment.Version++
+	key := []byte(fmt.Sprintf("bfs:%d:%s", segment.BookID, segment.ID))
+	data, err := json.Marshal(segment)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(key, data, pebble.Sync)
+}
+
 func (p *PebbleStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
 	prefix := []byte(fmt.Sprintf("bfs:%d:", bookNumericID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})

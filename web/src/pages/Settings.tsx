@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.31.0
+// version: 1.33.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -478,10 +478,18 @@ export function Settings() {
         credentials: {},
       },
       {
+        id: 'hardcover',
+        name: 'Hardcover',
+        enabled: false,
+        priority: 3,
+        requiresAuth: true,
+        credentials: { apiKey: '' },
+      },
+      {
         id: 'google-books',
         name: 'Google Books',
         enabled: false,
-        priority: 3,
+        priority: 4,
         requiresAuth: true,
         credentials: { apiKey: '' },
       },
@@ -609,15 +617,21 @@ export function Settings() {
         openaiApiKey: '', // Clear field when loading, show placeholder instead
         metadataSources:
           config.metadata_sources && config.metadata_sources.length > 0
-            ? config.metadata_sources.map((source) => ({
-                id: source.id,
-                name: source.name,
-                enabled: source.enabled,
-                priority: source.priority,
-                requiresAuth: source.requires_auth,
-                credentials:
-                  source.credentials || ({} as { [key: string]: string }),
-              }))
+            ? config.metadata_sources.map((source) => {
+                // Force requiresAuth for sources that need API keys,
+                // even if the saved config has requires_auth: false
+                const authSources = ['google-books', 'hardcover'];
+                return {
+                  id: source.id,
+                  name: source.name,
+                  enabled: source.enabled,
+                  priority: source.priority,
+                  requiresAuth: source.requires_auth || authSources.includes(source.id),
+                  credentials: authSources.includes(source.id)
+                    ? { apiKey: '', ...source.credentials }
+                    : source.credentials || ({} as { [key: string]: string }),
+                };
+              })
             : [
                 {
                   id: 'audible',
@@ -636,10 +650,18 @@ export function Settings() {
                   credentials: {},
                 },
                 {
+                  id: 'hardcover',
+                  name: 'Hardcover',
+                  enabled: false,
+                  priority: 3,
+                  requiresAuth: true,
+                  credentials: { apiKey: '' },
+                },
+                {
                   id: 'google-books',
                   name: 'Google Books',
                   enabled: false,
-                  priority: 3,
+                  priority: 4,
                   requiresAuth: true,
                   credentials: { apiKey: '' },
                 },
@@ -2270,13 +2292,6 @@ export function Settings() {
             </Grid>
 
             <Grid item xs={12}>
-              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-                API Keys
-              </Typography>
-              <Divider sx={{ mb: 2 }} />
-            </Grid>
-
-            <Grid item xs={12}>
               <Stack
                 direction={{ xs: 'column', md: 'row' }}
                 spacing={2}
@@ -2453,61 +2468,79 @@ export function Settings() {
                             API Configuration
                           </Typography>
                           <Grid container spacing={2}>
+                            <Grid item xs={12}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                label={`${source.name} API Key`}
+                                type="password"
+                                value={source.credentials.apiKey || ''}
+                                onChange={(e) =>
+                                  handleCredentialChange(
+                                    source.id,
+                                    'apiKey',
+                                    e.target.value
+                                  )
+                                }
+                                placeholder={
+                                  'Enter your ' + source.name + ' API key'
+                                }
+                              />
+                            </Grid>
                             {source.id === 'google-books' && (
-                              <>
-                                <Grid item xs={12}>
-                                  <TextField
-                                    fullWidth
-                                    size="small"
-                                    label="API Key"
-                                    value={source.credentials.apiKey || ''}
-                                    onChange={(e) =>
-                                      handleCredentialChange(
-                                        source.id,
-                                        'apiKey',
-                                        e.target.value
-                                      )
+                              <Grid item xs={12}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  component="div"
+                                >
+                                  Setup (2 clicks):{' '}
+                                  <strong>1.</strong>{' '}
+                                  <a
+                                    href={
+                                      'https://console.cloud.google.com/' +
+                                      'flows/enableapi?' +
+                                      'apiid=books.googleapis.com'
                                     }
-                                    placeholder={
-                                      'Enter your ' + source.name + ' API key'
-                                    }
-                                  />
-                                </Grid>
-                                <Grid item xs={12}>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                    component="div"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                   >
-                                    Setup (2 clicks):{' '}
-                                    <strong>1.</strong>{' '}
-                                    <a
-                                      href={
-                                        'https://console.cloud.google.com/' +
-                                        'flows/enableapi?' +
-                                        'apiid=books.googleapis.com'
-                                      }
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      Enable Books API
-                                    </a>
-                                    {' '}<strong>2.</strong>{' '}
-                                    <a
-                                      href={
-                                        'https://console.cloud.google.com/' +
-                                        'apis/credentials/wizard?' +
-                                        'api=books.googleapis.com'
-                                      }
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      Create API Key
-                                    </a>
-                                    {' '} then paste it above. Free tier: 1,000 requests/day.
-                                  </Typography>
-                                </Grid>
-                              </>
+                                    Enable Books API
+                                  </a>
+                                  {' '}<strong>2.</strong>{' '}
+                                  <a
+                                    href={
+                                      'https://console.cloud.google.com/' +
+                                      'apis/credentials/wizard?' +
+                                      'api=books.googleapis.com'
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Create API Key
+                                  </a>
+                                  {' '} then paste it above. Free tier: 1,000 requests/day.
+                                </Typography>
+                              </Grid>
+                            )}
+                            {source.id === 'hardcover' && (
+                              <Grid item xs={12}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  component="div"
+                                >
+                                  Get your API key from{' '}
+                                  <a
+                                    href="https://hardcover.app/account/api"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    hardcover.app/account/api
+                                  </a>
+                                  {' '}(free account required).
+                                </Typography>
+                              </Grid>
                             )}
                           </Grid>
                         </Box>
@@ -2544,6 +2577,35 @@ export function Settings() {
 
             <Grid item xs={12}>
               <OpenLibraryDumps />
+            </Grid>
+
+            {/* Database Maintenance */}
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                Database Maintenance
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Split compound author/narrator names (e.g. &quot;Author A &amp; Author B&quot;)
+                into separate records for better matching and display.
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={async () => {
+                  try {
+                    const result = await api.optimizeDatabase();
+                    alert(
+                      `Processed ${result.books_processed} books.\n` +
+                      `Authors split: ${result.authors_split}\n` +
+                      `Narrators split: ${result.narrators_split}`
+                    );
+                  } catch {
+                    alert('Failed to optimize database');
+                  }
+                }}
+              >
+                Optimize Database
+              </Button>
             </Grid>
           </Grid>
         </TabPanel>

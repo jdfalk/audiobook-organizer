@@ -566,6 +566,9 @@ func TestMockStore_AllMethods(t *testing.T) {
 	if segment, err := mock.CreateBookSegment(1, &BookSegment{}); err != nil || segment != nil {
 		t.Errorf("CreateBookSegment() = %v, %v; want nil, nil", segment, err)
 	}
+	if err := mock.UpdateBookSegment(&BookSegment{}); err != nil {
+		t.Errorf("UpdateBookSegment() returned error: %v", err)
+	}
 	if segments, err := mock.ListBookSegments(1); err != nil || segments != nil {
 		t.Errorf("ListBookSegments() = %v, %v; want nil, nil", segments, err)
 	}
