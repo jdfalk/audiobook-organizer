@@ -154,8 +154,14 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		book.LibraryState = stringPtr("organized")
 		applyOrganizedFileMetadata(&book, newPath)
 		if _, err := orgSvc.db.UpdateBook(book.ID, &book); err != nil {
-			errDetails := fmt.Sprintf("Failed to update book path: %s", err.Error())
-			_ = progress.Log("warn", errDetails, nil)
+			errDetails := fmt.Sprintf("Failed to update book path for %s: %s — rolling back file move", book.ID, err.Error())
+			_ = progress.Log("error", errDetails, nil)
+			// Rollback: move file back to original location
+			if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
+				critMsg := fmt.Sprintf("CRITICAL: rollback failed for %s! File at %s, DB expects %s: %v", book.ID, newPath, oldPath, rbErr)
+				_ = progress.Log("error", critMsg, nil)
+			}
+			stats.Failed++
 		} else {
 			stats.Organized++
 			// Collect ITL update if this book came from iTunes

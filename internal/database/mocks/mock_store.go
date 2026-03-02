@@ -7283,3 +7283,171 @@ func (_c *MockStore_SetLastWrittenAt_Call) RunAndReturn(run func(id string, t ti
 	_c.Call.Return(run)
 	return _c
 }
+
+// CreateBookTombstone provides a mock function for the type MockStore
+func (_mock *MockStore) CreateBookTombstone(book *database.Book) error {
+	ret := _mock.Called(book)
+	if len(ret) == 0 {
+		panic("no return value specified for CreateBookTombstone")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.Book) error); ok {
+		r0 = returnFunc(book)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// GetBookTombstone provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookTombstone(id string) (*database.Book, error) {
+	ret := _mock.Called(id)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookTombstone")
+	}
+	var r0 *database.Book
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Book); ok {
+		r0 = returnFunc(id)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.Book)
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// DeleteBookTombstone provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteBookTombstone(id string) error {
+	ret := _mock.Called(id)
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteBookTombstone")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// ListBookTombstones provides a mock function for the type MockStore
+func (_mock *MockStore) ListBookTombstones(limit int) ([]database.Book, error) {
+	ret := _mock.Called(limit)
+	if len(ret) == 0 {
+		panic("no return value specified for ListBookTombstones")
+	}
+	var r0 []database.Book
+	if returnFunc, ok := ret.Get(0).(func(int) []database.Book); ok {
+		r0 = returnFunc(limit)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.Book)
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CreateBookTombstone_Call wraps Run/Return for CreateBookTombstone
+type MockStore_CreateBookTombstone_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CreateBookTombstone(book interface{}) *MockStore_CreateBookTombstone_Call {
+	return &MockStore_CreateBookTombstone_Call{Call: _e.mock.On("CreateBookTombstone", book)}
+}
+
+func (_c *MockStore_CreateBookTombstone_Call) Run(run func(book *database.Book)) *MockStore_CreateBookTombstone_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(*database.Book)) })
+	return _c
+}
+
+func (_c *MockStore_CreateBookTombstone_Call) Return(err error) *MockStore_CreateBookTombstone_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateBookTombstone_Call) RunAndReturn(run func(*database.Book) error) *MockStore_CreateBookTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_GetBookTombstone_Call wraps Run/Return for GetBookTombstone
+type MockStore_GetBookTombstone_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookTombstone(id interface{}) *MockStore_GetBookTombstone_Call {
+	return &MockStore_GetBookTombstone_Call{Call: _e.mock.On("GetBookTombstone", id)}
+}
+
+func (_c *MockStore_GetBookTombstone_Call) Run(run func(id string)) *MockStore_GetBookTombstone_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+
+func (_c *MockStore_GetBookTombstone_Call) Return(book *database.Book, err error) *MockStore_GetBookTombstone_Call {
+	_c.Call.Return(book, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookTombstone_Call) RunAndReturn(run func(string) (*database.Book, error)) *MockStore_GetBookTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_DeleteBookTombstone_Call wraps Run/Return for DeleteBookTombstone
+type MockStore_DeleteBookTombstone_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) DeleteBookTombstone(id interface{}) *MockStore_DeleteBookTombstone_Call {
+	return &MockStore_DeleteBookTombstone_Call{Call: _e.mock.On("DeleteBookTombstone", id)}
+}
+
+func (_c *MockStore_DeleteBookTombstone_Call) Run(run func(id string)) *MockStore_DeleteBookTombstone_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+
+func (_c *MockStore_DeleteBookTombstone_Call) Return(err error) *MockStore_DeleteBookTombstone_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteBookTombstone_Call) RunAndReturn(run func(string) error) *MockStore_DeleteBookTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_ListBookTombstones_Call wraps Run/Return for ListBookTombstones
+type MockStore_ListBookTombstones_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) ListBookTombstones(limit interface{}) *MockStore_ListBookTombstones_Call {
+	return &MockStore_ListBookTombstones_Call{Call: _e.mock.On("ListBookTombstones", limit)}
+}
+
+func (_c *MockStore_ListBookTombstones_Call) Run(run func(limit int)) *MockStore_ListBookTombstones_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(int)) })
+	return _c
+}
+
+func (_c *MockStore_ListBookTombstones_Call) Return(books []database.Book, err error) *MockStore_ListBookTombstones_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_ListBookTombstones_Call) RunAndReturn(run func(int) ([]database.Book, error)) *MockStore_ListBookTombstones_Call {
+	_c.Call.Return(run)
+	return _c
+}
