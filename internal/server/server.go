@@ -2760,20 +2760,83 @@ func (s *Server) startTranscode(c *gin.Context) {
 			return err
 		}
 
-		// Update book with new file path and format
+		// Get the original book to preserve its data
+		originalBook, err := database.GlobalStore.GetBookByID(req.BookID)
+		if err != nil {
+			return fmt.Errorf("failed to get original book: %w", err)
+		}
+
+		// Set up version group if not already set
+		groupID := ""
+		if originalBook.VersionGroupID != nil && *originalBook.VersionGroupID != "" {
+			groupID = *originalBook.VersionGroupID
+		} else {
+			groupID = ulid.Make().String()
+		}
+
+		// Mark original as non-primary version
+		notPrimary := false
+		origNotes := "Original format"
+		if _, err := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
+			IsPrimaryVersion: &notPrimary,
+			VersionGroupID:   &groupID,
+			VersionNotes:     &origNotes,
+		}); err != nil {
+			progress.Log("warn", fmt.Sprintf("Failed to update original book version info: %v", err), nil)
+		}
+
+		// Create a new book record for the M4B version
 		m4bFormat := "m4b"
 		aacCodec := "aac"
 		bitrateVal := opts.Bitrate
 		if bitrateVal <= 0 {
 			bitrateVal = 128
 		}
-		_, updateErr := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
-			FilePath: outputPath,
-			Format:   m4bFormat,
-			Codec:    &aacCodec,
-			Bitrate:  &bitrateVal,
-		})
-		return updateErr
+		isPrimary := true
+		m4bNotes := "Transcoded to M4B"
+
+		newBook := &database.Book{
+			ID:                   ulid.Make().String(),
+			Title:                originalBook.Title,
+			FilePath:             outputPath,
+			Format:               m4bFormat,
+			Codec:                &aacCodec,
+			Bitrate:              &bitrateVal,
+			AuthorID:             originalBook.AuthorID,
+			SeriesID:             originalBook.SeriesID,
+			SeriesSequence:       originalBook.SeriesSequence,
+			Duration:             originalBook.Duration,
+			Narrator:             originalBook.Narrator,
+			Publisher:            originalBook.Publisher,
+			PrintYear:            originalBook.PrintYear,
+			AudiobookReleaseYear: originalBook.AudiobookReleaseYear,
+			ISBN10:               originalBook.ISBN10,
+			ISBN13:               originalBook.ISBN13,
+			ASIN:                 originalBook.ASIN,
+			Language:             originalBook.Language,
+			CoverURL:             originalBook.CoverURL,
+			IsPrimaryVersion:     &isPrimary,
+			VersionGroupID:       &groupID,
+			VersionNotes:         &m4bNotes,
+		}
+		if _, err := database.GlobalStore.CreateBook(newBook); err != nil {
+			// Fallback: just update the original book's file path
+			progress.Log("warn", fmt.Sprintf("Failed to create M4B version record, updating original: %v", err), nil)
+			isPrim := true
+			if _, updateErr := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
+				FilePath:         outputPath,
+				Format:           m4bFormat,
+				Codec:            &aacCodec,
+				Bitrate:          &bitrateVal,
+				IsPrimaryVersion: &isPrim,
+			}); updateErr != nil {
+				return updateErr
+			}
+			return nil
+		}
+
+		progress.Log("info", fmt.Sprintf("Created M4B version %s (group %s), original %s demoted to non-primary", newBook.ID, groupID, req.BookID), nil)
+		return nil
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
