@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata
@@ -126,26 +126,40 @@ func (c *AudnexusClient) SearchByTitleAndAuthor(title, author string) ([]BookMet
 	return nil, nil
 }
 
+// audnexusRegions are the regions to try when looking up a book by ASIN.
+// Some books are only available in certain regional Audible stores.
+var audnexusRegions = []string{"", "us", "uk", "au", "ca", "in", "de", "fr", "jp"}
+
 // LookupByASIN fetches a book directly by its Audible ASIN.
-// This is the primary way to use Audnexus — other search methods are limited.
+// Tries multiple regions since books may only be indexed in certain Audible stores.
 func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
-	bookURL := fmt.Sprintf("%s/books/%s", c.baseURL, url.PathEscape(asin))
-	resp, err := c.httpClient.Get(bookURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to lookup Audnexus book: %w", err)
-	}
-	defer resp.Body.Close()
+	var lastErr error
+	for _, region := range audnexusRegions {
+		bookURL := fmt.Sprintf("%s/books/%s", c.baseURL, url.PathEscape(asin))
+		if region != "" {
+			bookURL += "?region=" + region
+		}
+		resp, err := c.httpClient.Get(bookURL)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to lookup Audnexus book: %w", err)
+			continue
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Audnexus book lookup returned status %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusOK {
+			var book audnexusBook
+			if err := json.NewDecoder(resp.Body).Decode(&book); err != nil {
+				resp.Body.Close()
+				lastErr = fmt.Errorf("failed to decode Audnexus book: %w", err)
+				continue
+			}
+			resp.Body.Close()
+			log.Printf("[DEBUG] Audnexus found ASIN %s in region %q", asin, region)
+			return c.bookToMetadata(&book), nil
+		}
+		resp.Body.Close()
+		lastErr = fmt.Errorf("Audnexus book lookup returned status %d (region=%s)", resp.StatusCode, region)
 	}
-
-	var book audnexusBook
-	if err := json.NewDecoder(resp.Body).Decode(&book); err != nil {
-		return nil, fmt.Errorf("failed to decode Audnexus book: %w", err)
-	}
-
-	return c.bookToMetadata(&book), nil
+	return nil, lastErr
 }
 
 func (c *AudnexusClient) bookToMetadata(book *audnexusBook) *BookMetadata {

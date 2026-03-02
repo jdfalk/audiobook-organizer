@@ -98,6 +98,8 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 				}
 			}
 			chain = append(chain, metadata.NewGoogleBooksClient(apiKey))
+		case "audible":
+			chain = append(chain, metadata.NewAudibleClient())
 		case "audnexus":
 			chain = append(chain, metadata.NewAudnexusClient())
 		case "hardcover":
@@ -876,10 +878,23 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		}
 	}
 
-	// If the query looks like an ASIN (10 chars, starts with B0), try Audnexus direct lookup
+	// Try ASIN lookup: either the whole query is an ASIN, or extract one from the query
+	asinToLookup := ""
 	if looksLikeASIN(searchTitle) {
-		audnexus := metadata.NewAudnexusClient()
-		if result, err := audnexus.LookupByASIN(searchTitle); err == nil && result != nil {
+		asinToLookup = searchTitle
+	} else {
+		asinToLookup = extractASIN(searchTitle)
+	}
+	if asinToLookup != "" {
+		// Try Audible API first (more complete), fall back to Audnexus
+		audibleClient := metadata.NewAudibleClient()
+		result, err := audibleClient.LookupByASIN(asinToLookup)
+		if err != nil || result == nil {
+			log.Printf("[DEBUG] metadata-search: Audible API lookup for %q failed, trying Audnexus: %v", asinToLookup, err)
+			audnexus := metadata.NewAudnexusClient()
+			result, err = audnexus.LookupByASIN(asinToLookup)
+		}
+		if err == nil && result != nil {
 			key := strings.ToLower(result.Title + "|" + result.Author)
 			if !seen[key] {
 				score := scoreOneResult(*result, searchWords)
@@ -903,7 +918,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 				})
 			}
 		} else {
-			log.Printf("[DEBUG] metadata-search: ASIN lookup for %q failed: %v", searchTitle, err)
+			log.Printf("[DEBUG] metadata-search: ASIN lookup for %q failed: %v", asinToLookup, err)
 		}
 	}
 
@@ -937,6 +952,19 @@ func looksLikeASIN(s string) bool {
 		}
 	}
 	return true
+}
+
+// extractASIN finds an ASIN-like pattern (B0 followed by 8 alphanumeric chars) anywhere in the string.
+func extractASIN(s string) string {
+	s = strings.TrimSpace(s)
+	// Split on whitespace and check each token
+	for _, word := range strings.Fields(s) {
+		word = strings.Trim(word, ",.;:!?()[]{}\"'")
+		if looksLikeASIN(word) {
+			return word
+		}
+	}
+	return ""
 }
 
 // ApplyMetadataCandidate applies a user-selected metadata candidate to a book.
