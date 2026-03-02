@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.6.0
+// version: 4.7.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -65,8 +65,10 @@ type MetadataCandidate struct {
 
 // SearchMetadataResponse is returned by SearchMetadataForBook.
 type SearchMetadataResponse struct {
-	Results []MetadataCandidate `json:"results"`
-	Query   string              `json:"query"`
+	Results       []MetadataCandidate `json:"results"`
+	Query         string              `json:"query"`
+	SourcesTried  []string            `json:"sources_tried"`
+	SourcesFailed map[string]string   `json:"sources_failed,omitempty"`
 }
 
 // BuildSourceChain returns metadata sources ordered by config priority.
@@ -817,32 +819,48 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 	// Dedupe by lowercase title+author
 	seen := map[string]bool{}
 	var candidates []MetadataCandidate
+	var sourcesTried []string
+	sourcesFailed := map[string]string{}
 
 	for _, src := range sources {
 		var allResults []metadata.BookMetadata
+		var lastErr error
+		sourcesTried = append(sourcesTried, src.Name())
 
 		// SearchByTitle with query
 		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
 			allResults = append(allResults, results...)
 		} else {
+			lastErr = serr
 			log.Printf("[DEBUG] metadata-search: %s SearchByTitle(%q) error: %v", src.Name(), searchTitle, serr)
 		}
 		// SearchByTitle with original title if different
 		if searchTitle != book.Title {
 			if results, serr := src.SearchByTitle(book.Title); serr == nil {
 				allResults = append(allResults, results...)
+			} else {
+				lastErr = serr
 			}
 		}
 		// SearchByTitleAndAuthor
 		if authorName != "" {
 			if results, serr := src.SearchByTitleAndAuthor(searchTitle, authorName); serr == nil {
 				allResults = append(allResults, results...)
+			} else {
+				lastErr = serr
 			}
 			if searchTitle != book.Title {
 				if results, serr := src.SearchByTitleAndAuthor(book.Title, authorName); serr == nil {
 					allResults = append(allResults, results...)
+				} else {
+					lastErr = serr
 				}
 			}
+		}
+
+		// If all calls failed (no results and there was an error), record it
+		if len(allResults) == 0 && lastErr != nil {
+			sourcesFailed[src.Name()] = lastErr.Error()
 		}
 
 		log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
@@ -935,8 +953,10 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
 
 	return &SearchMetadataResponse{
-		Results: candidates,
-		Query:   searchTitle,
+		Results:       candidates,
+		Query:         searchTitle,
+		SourcesTried:  sourcesTried,
+		SourcesFailed: sourcesFailed,
 	}, nil
 }
 

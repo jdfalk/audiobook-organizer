@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"os"
 	"os/exec"
@@ -213,17 +214,27 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 		return "", fmt.Errorf("failed to get book: %w", err)
 	}
 
-	// Try to get segments — not all books have them
-	var segments []database.BookSegment
-	// segments require numeric ID; skip if not available
-	// The store interface uses bookNumericID for segments
+	// Get segments for multi-file books
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, segErr := store.ListBookSegments(bookNumericID)
+	if segErr != nil {
+		progress.Log("warn", fmt.Sprintf("Could not fetch segments: %v, falling back to book file path", segErr), nil)
+		segments = nil
+	} else {
+		progress.Log("info", fmt.Sprintf("Found %d segments for book %s", len(segments), book.ID), nil)
+	}
 
 	inputFiles, err := CollectInputFiles(book, segments)
 	if err != nil {
+		progress.Log("error", fmt.Sprintf("Failed to collect input files: %v", err), nil)
 		return "", fmt.Errorf("failed to collect input files: %w", err)
 	}
 
 	multiFile := len(inputFiles) > 1
+	progress.Log("info", fmt.Sprintf("Transcoding %d input file(s) to M4B", len(inputFiles)), nil)
+	for i, f := range inputFiles {
+		progress.Log("info", fmt.Sprintf("  Input %d: %s", i+1, f), nil)
+	}
 
 	// Determine output path: same directory, .m4b extension
 	baseDir := filepath.Dir(inputFiles[0])
@@ -269,12 +280,17 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	}
 
 	progress.UpdateProgress(2, 5, "Transcoding audio")
+	progress.Log("info", fmt.Sprintf("Running ffmpeg: %s %s", ffmpegPath, strings.Join(args, " ")), nil)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("ffmpeg transcode failed: %w\noutput: %s", err, string(output))
+		errMsg := fmt.Sprintf("ffmpeg transcode failed: %v", err)
+		outputStr := string(output)
+		progress.Log("error", errMsg, &outputStr)
+		return "", fmt.Errorf("ffmpeg transcode failed: %w\noutput: %s", err, outputStr)
 	}
+	progress.Log("info", "FFmpeg transcode completed successfully", nil)
 
 	// Mux chapter metadata if multi-file
 	if multiFile {
@@ -339,6 +355,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	}
 
 	progress.UpdateProgress(5, 5, "Complete")
+	progress.Log("info", fmt.Sprintf("Transcode complete: %s → %s", book.FilePath, outputPath), nil)
 
 	log.Printf("[INFO] transcode: completed %s → %s", book.FilePath, outputPath)
 	return outputPath, nil

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1966,15 +1966,71 @@ func (p *PebbleStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 // Operation Summary Logs (persistent across restarts)
 
 func (p *PebbleStore) SaveOperationSummaryLog(op *OperationSummaryLog) error {
-	return fmt.Errorf("SaveOperationSummaryLog: not implemented for PebbleDB")
+	data, err := json.Marshal(op)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("opsummary:%s", op.ID))
+	return p.db.Set(key, data, pebble.Sync)
 }
 
 func (p *PebbleStore) GetOperationSummaryLog(id string) (*OperationSummaryLog, error) {
-	return nil, fmt.Errorf("GetOperationSummaryLog: not implemented for PebbleDB")
+	key := []byte(fmt.Sprintf("opsummary:%s", id))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	var op OperationSummaryLog
+	if err := json.Unmarshal(val, &op); err != nil {
+		return nil, err
+	}
+	return &op, nil
 }
 
 func (p *PebbleStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error) {
-	return nil, fmt.Errorf("ListOperationSummaryLogs: not implemented for PebbleDB")
+	var logs []OperationSummaryLog
+	prefix := []byte("opsummary:")
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var op OperationSummaryLog
+		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+			continue
+		}
+		logs = append(logs, op)
+	}
+
+	// Sort by created_at descending
+	for i := 0; i < len(logs)-1; i++ {
+		for j := i + 1; j < len(logs); j++ {
+			if logs[j].CreatedAt.After(logs[i].CreatedAt) {
+				logs[i], logs[j] = logs[j], logs[i]
+			}
+		}
+	}
+
+	// Apply offset and limit
+	if offset >= len(logs) {
+		return nil, nil
+	}
+	logs = logs[offset:]
+	if limit > 0 && len(logs) > limit {
+		logs = logs[:limit]
+	}
+
+	return logs, nil
 }
 
 // Metadata provenance operations

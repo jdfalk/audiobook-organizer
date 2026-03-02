@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.29.0
+// version: 1.30.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1316,6 +1316,8 @@ export interface MetadataCandidate {
 export interface SearchMetadataResponse {
   results: MetadataCandidate[];
   query: string;
+  sources_tried?: string[];
+  sources_failed?: Record<string, string>;
 }
 
 export async function searchMetadata(

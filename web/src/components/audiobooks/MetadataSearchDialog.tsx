@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -26,6 +26,7 @@ import SearchIcon from '@mui/icons-material/Search.js';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess.js';
 import HeadphonesIcon from '@mui/icons-material/Headphones.js';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber.js';
 import type { Book, MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
 
@@ -72,6 +73,8 @@ export function MetadataSearchDialog({
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
   const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [sourcesTried, setSourcesTried] = useState<string[]>([]);
+  const [sourcesFailed, setSourcesFailed] = useState<Record<string, string>>({});
 
   // Auto-populate query and search on open
   useEffect(() => {
@@ -93,6 +96,8 @@ export function MetadataSearchDialog({
       try {
         const resp = await api.searchMetadataForBook(book.id, searchQuery);
         setResults(resp.results || []);
+        setSourcesTried(resp.sources_tried || []);
+        setSourcesFailed(resp.sources_failed || {});
       } catch (err) {
         toast(
           err instanceof Error ? err.message : 'Search failed',
@@ -220,6 +225,22 @@ export function MetadataSearchDialog({
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
             No results found. Try a different search query, or paste an Audible ASIN (e.g. B0XXXXXXXXX).
           </Typography>
+        )}
+
+        {!loading && Object.keys(sourcesFailed).length > 0 && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'warning.main', borderRadius: 1, opacity: 0.85 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+              <WarningAmberIcon fontSize="small" sx={{ color: 'warning.contrastText' }} />
+              <Typography variant="body2" fontWeight="bold" sx={{ color: 'warning.contrastText' }}>
+                {Object.keys(sourcesFailed).length} of {sourcesTried.length} sources failed
+              </Typography>
+            </Stack>
+            {Object.entries(sourcesFailed).map(([source, error]) => (
+              <Typography key={source} variant="caption" sx={{ display: 'block', color: 'warning.contrastText' }}>
+                {source}: {error}
+              </Typography>
+            ))}
+          </Box>
         )}
 
         <Stack spacing={2}>
