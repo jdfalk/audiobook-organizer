@@ -436,36 +436,44 @@ func InitConfig() {
 		// Set default metadata sources
 		AppConfig.MetadataSources = []MetadataSource{
 			{
-				ID:           "openlibrary",
-				Name:         "Open Library",
+				ID:           "audible",
+				Name:         "Audible",
 				Enabled:      true,
 				Priority:     1,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
 			},
 			{
-				ID:           "google-books",
-				Name:         "Google Books",
+				ID:           "openlibrary",
+				Name:         "Open Library",
 				Enabled:      true,
 				Priority:     2,
-				RequiresAuth: true,
-				Credentials: map[string]string{
-					"apiKey": "",
-				},
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
 			},
 			{
 				ID:           "audnexus",
-				Name:         "Audnexus (Audible)",
+				Name:         "Audnexus",
 				Enabled:      true,
 				Priority:     3,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
 			},
 			{
+				ID:           "google-books",
+				Name:         "Google Books",
+				Enabled:      false,
+				Priority:     4,
+				RequiresAuth: true,
+				Credentials: map[string]string{
+					"apiKey": "",
+				},
+			},
+			{
 				ID:           "hardcover",
 				Name:         "Hardcover",
 				Enabled:      false,
-				Priority:     4,
+				Priority:     5,
 				RequiresAuth: true,
 				Credentials:  make(map[string]string),
 			},
@@ -749,6 +757,14 @@ func ResetToDefaults() {
 				Credentials:  make(map[string]string),
 			},
 			{
+				ID:           "audnexus",
+				Name:         "Audnexus",
+				Enabled:      true,
+				Priority:     3,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
+			},
+			{
 				ID:           "google-books",
 				Name:         "Google Books",
 				Enabled:      false,
@@ -757,6 +773,14 @@ func ResetToDefaults() {
 				Credentials: map[string]string{
 					"apiKey": "",
 				},
+			},
+			{
+				ID:           "hardcover",
+				Name:         "Hardcover",
+				Enabled:      false,
+				Priority:     5,
+				RequiresAuth: true,
+				Credentials:  make(map[string]string),
 			},
 		},
 	}
