@@ -15,6 +15,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -269,6 +270,47 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (m
 			meta = m
 		} else {
 			log.Printf("[WARN] GetAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	// Backfill empty media_info from file if DB fields are missing
+	if book.FilePath != "" && (book.Codec == nil || book.Bitrate == nil || book.SampleRate == nil) {
+		if mi, err := mediainfo.Extract(book.FilePath); err == nil {
+			needsUpdate := false
+			if book.Codec == nil && mi.Codec != "" {
+				book.Codec = &mi.Codec
+				needsUpdate = true
+			}
+			if book.Bitrate == nil && mi.Bitrate > 0 {
+				book.Bitrate = &mi.Bitrate
+				needsUpdate = true
+			}
+			if book.SampleRate == nil && mi.SampleRate > 0 {
+				book.SampleRate = &mi.SampleRate
+				needsUpdate = true
+			}
+			if book.Channels == nil && mi.Channels > 0 {
+				book.Channels = &mi.Channels
+				needsUpdate = true
+			}
+			if book.Duration == nil && mi.Duration > 0 {
+				book.Duration = &mi.Duration
+				needsUpdate = true
+			}
+			if needsUpdate {
+				if _, err := svc.store.UpdateBook(book.ID, book); err != nil {
+					log.Printf("[WARN] GetAudiobookTags: failed to backfill media info for %s: %v", book.ID, err)
+				}
+				response["media_info"] = map[string]any{
+					"codec":       stringVal(book.Codec),
+					"bitrate":     intVal(book.Bitrate),
+					"sample_rate": intVal(book.SampleRate),
+					"channels":    intVal(book.Channels),
+					"bit_depth":   intVal(book.BitDepth),
+					"quality":     stringVal(book.Quality),
+					"duration":    intVal(book.Duration),
+				}
+			}
 		}
 	}
 

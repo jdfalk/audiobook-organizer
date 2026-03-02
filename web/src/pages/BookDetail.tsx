@@ -1464,8 +1464,8 @@ export const BookDetail = () => {
                     const fileVal = segmentTags.tags[field] || segmentTags.tags[field.replace(/ /g, '_')] || '';
                     const bookStr = String(bookVal || '');
                     const exactMatch = fileVal.toLowerCase() === bookStr.toLowerCase();
-                    // For title field: treat "Part X of Y" patterns or file tags containing book title as partial match
-                    const isPartialTitleMatch = field === 'title' && !exactMatch && fileVal && bookStr && (
+                    // For title/album: treat "Part X of Y" patterns or file tags containing book title as partial match
+                    const isPartialTitleMatch = (field === 'title' || field === 'album') && !exactMatch && fileVal && bookStr && (
                       /^part\s+\d+\s+of\s+\d+$/i.test(fileVal) ||
                       /^\d+\s+of\s+\d+$/i.test(fileVal) ||
                       fileVal.toLowerCase().includes(bookStr.toLowerCase()) ||
