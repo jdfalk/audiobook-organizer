@@ -362,20 +362,32 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 	}
 
 	for _, book := range books {
-		// Delete associated files if requested
+		// Step 1: Create tombstone (snapshot of book for rollback)
+		if err := svc.store.CreateBookTombstone(&book); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to create tombstone: %v", book.ID, err))
+			continue
+		}
+
+		// Step 2: Delete from database (book record gone, tombstone preserved)
+		if err := svc.store.DeleteBook(book.ID); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete DB record: %v", book.ID, err))
+			// Tombstone exists but book still exists — sweeper will clean up tombstone
+			continue
+		}
+
+		// Step 3: Delete file if requested
 		if deleteFiles && book.FilePath != "" {
 			if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
-				result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete file: %v", book.ID, err))
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete file (tombstone preserved): %v", book.ID, err))
+				// DB record gone, file still exists, tombstone preserved for sweeper
 			} else if err == nil {
 				result.FilesDeleted++
 			}
 		}
 
-		// Delete from database
-		if err := svc.store.DeleteBook(book.ID); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", book.ID, err))
-			continue
-		}
+		// Step 4: Clean up tombstone (best-effort — sweeper handles failures)
+		_ = svc.store.DeleteBookTombstone(book.ID)
+
 		result.Purged++
 	}
 
@@ -456,7 +468,12 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	if req.Updates.Format != "" {
 		currentBook.Format = req.Updates.Format
 	}
-	if req.Updates.FilePath != "" {
+	if req.Updates.FilePath != "" && req.Updates.FilePath != currentBook.FilePath {
+		// Validate new file exists before accepting path change
+		if _, err := os.Stat(req.Updates.FilePath); err != nil {
+			return nil, fmt.Errorf("file does not exist at new path: %s", req.Updates.FilePath)
+		}
+		log.Printf("[INFO] audiobook_service: FilePath changed for %s: %s → %s", id, currentBook.FilePath, req.Updates.FilePath)
 		currentBook.FilePath = req.Updates.FilePath
 	}
 	if req.Updates.Narrator != nil {

@@ -1963,6 +1963,65 @@ func (p *PebbleStore) GetOperationLogs(operationID string) ([]OperationLog, erro
 	return logs, nil
 }
 
+// Book Tombstones (safe deletion pattern)
+
+func (p *PebbleStore) CreateBookTombstone(book *Book) error {
+	data, err := json.Marshal(book)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("tombstone:%s", book.ID))
+	return p.db.Set(key, data, pebble.Sync)
+}
+
+func (p *PebbleStore) GetBookTombstone(id string) (*Book, error) {
+	key := []byte(fmt.Sprintf("tombstone:%s", id))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		if err == pebble.ErrNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer closer.Close()
+	var book Book
+	if err := json.Unmarshal(val, &book); err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (p *PebbleStore) DeleteBookTombstone(id string) error {
+	key := []byte(fmt.Sprintf("tombstone:%s", id))
+	return p.db.Delete(key, pebble.Sync)
+}
+
+func (p *PebbleStore) ListBookTombstones(limit int) ([]Book, error) {
+	var books []Book
+	prefix := []byte("tombstone:")
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xFF),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		books = append(books, book)
+		if limit > 0 && len(books) >= limit {
+			break
+		}
+	}
+	return books, nil
+}
+
 // Operation Summary Logs (persistent across restarts)
 
 func (p *PebbleStore) SaveOperationSummaryLog(op *OperationSummaryLog) error {

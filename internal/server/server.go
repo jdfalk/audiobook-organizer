@@ -1114,6 +1114,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/clear-stale", s.clearStaleOperations)
 			protected.DELETE("/operations/history", s.deleteOperationHistory)
 			protected.POST("/operations/optimize-database", s.optimizeDatabase)
+			protected.POST("/operations/sweep-tombstones", s.sweepTombstones)
+			protected.GET("/operations/audit-files", s.auditFileConsistency)
 
 			// Import routes
 			protected.POST("/import/file", s.importFile)
@@ -2820,15 +2822,18 @@ func (s *Server) startTranscode(c *gin.Context) {
 			VersionNotes:         &m4bNotes,
 		}
 		if _, err := database.GlobalStore.CreateBook(newBook); err != nil {
-			// Fallback: just update the original book's file path
+			// Fallback: update original but preserve version info for traceability
 			progress.Log("warn", fmt.Sprintf("Failed to create M4B version record, updating original: %v", err), nil)
 			isPrim := true
+			fallbackNotes := fmt.Sprintf("Transcoded to M4B (in-place, original was at %s)", originalBook.FilePath)
 			if _, updateErr := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
 				FilePath:         outputPath,
 				Format:           m4bFormat,
 				Codec:            &aacCodec,
 				Bitrate:          &bitrateVal,
 				IsPrimaryVersion: &isPrim,
+				VersionGroupID:   &groupID,
+				VersionNotes:     &fallbackNotes,
 			}); updateErr != nil {
 				return updateErr
 			}
@@ -3023,6 +3028,32 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 		"authors_split":   authorsSplit,
 		"narrators_split": narratorsSplit,
 	})
+}
+
+func (s *Server) sweepTombstones(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	result, err := SweepTombstones(database.GlobalStore)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (s *Server) auditFileConsistency(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	result, err := AuditFileConsistency(database.GlobalStore)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress

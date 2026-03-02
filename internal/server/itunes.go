@@ -1011,13 +1011,21 @@ func organizeImportedBooks(progress operations.ProgressReporter, status *itunesI
 			continue
 		}
 
+		oldPath := book.FilePath
 		if err := organizeImportedBook(book, progress); err != nil {
 			recordITunesFailure(status, fmt.Sprintf("Failed to organize '%s': %v", book.Title, err))
 			_ = progress.Log("warn", fmt.Sprintf("Failed to organize '%s': %v", book.Title, err), nil)
 		} else {
 			book.LibraryState = stringPtr("organized")
 			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
-				_ = progress.Log("warn", fmt.Sprintf("Failed to update organized path for '%s': %v", book.Title, err), nil)
+				_ = progress.Log("error", fmt.Sprintf("Failed to update organized path for '%s': %v — rolling back", book.Title, err), nil)
+				if book.FilePath != oldPath {
+					if rbErr := os.Rename(book.FilePath, oldPath); rbErr != nil {
+						_ = progress.Log("error", fmt.Sprintf("CRITICAL: rollback failed for %s: file at %s, DB expects %s", book.ID, book.FilePath, oldPath), nil)
+					} else {
+						book.FilePath = oldPath
+					}
+				}
 			} else {
 				organized++
 			}

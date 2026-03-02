@@ -2071,6 +2071,60 @@ func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
 	return stats, rows2.Err()
 }
 
+// Book Tombstones (safe deletion pattern)
+// SQLite uses a dedicated tombstones table. For simplicity, we serialize the book as JSON.
+
+func (s *SQLiteStore) CreateBookTombstone(book *Book) error {
+	data, err := json.Marshal(book)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`INSERT OR REPLACE INTO book_tombstones (id, data, created_at) VALUES (?, ?, datetime('now'))`, book.ID, string(data))
+	return err
+}
+
+func (s *SQLiteStore) GetBookTombstone(id string) (*Book, error) {
+	row := s.db.QueryRow(`SELECT data FROM book_tombstones WHERE id = ?`, id)
+	var data string
+	if err := row.Scan(&data); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var book Book
+	if err := json.Unmarshal([]byte(data), &book); err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+func (s *SQLiteStore) DeleteBookTombstone(id string) error {
+	_, err := s.db.Exec(`DELETE FROM book_tombstones WHERE id = ?`, id)
+	return err
+}
+
+func (s *SQLiteStore) ListBookTombstones(limit int) ([]Book, error) {
+	rows, err := s.db.Query(`SELECT data FROM book_tombstones ORDER BY created_at ASC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var books []Book
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal([]byte(data), &book); err != nil {
+			continue
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
+}
+
 // GetBooksByVersionGroup returns all books in a version group
 func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE version_group_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY is_primary_version DESC, title`, bookSelectColumns)

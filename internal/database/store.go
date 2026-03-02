@@ -85,6 +85,12 @@ type Store interface {
 	GetDashboardStats() (*DashboardStats, error)
 	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
 
+	// Tombstone operations (for safe deletion)
+	CreateBookTombstone(book *Book) error             // Copy book to tombstone before hard delete
+	GetBookTombstone(id string) (*Book, error)        // Retrieve a tombstone by original book ID
+	DeleteBookTombstone(id string) error              // Remove tombstone after confirmed cleanup
+	ListBookTombstones(limit int) ([]Book, error)     // List tombstones for sweeper
+
 	// Version Management
 	GetBooksByVersionGroup(groupID string) ([]Book, error)
 

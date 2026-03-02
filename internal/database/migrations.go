@@ -189,6 +189,12 @@ var migrations = []Migration{
 		Up:          migration025Up,
 		Down:        nil,
 	},
+	{
+		Version:     26,
+		Description: "Create book_tombstones table",
+		Up:          migration026Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -1456,5 +1462,26 @@ func migration025Up(store Store) error {
 	}
 
 	log.Println("  - asin added successfully")
+	return nil
+}
+
+// migration026Up creates book_tombstones table for safe deletion pattern.
+func migration026Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Skipping migration 26 for non-SQLite store (PebbleDB uses key prefix)")
+		return nil
+	}
+
+	_, err := sqliteStore.db.Exec(`CREATE TABLE IF NOT EXISTS book_tombstones (
+		id TEXT PRIMARY KEY,
+		data TEXT NOT NULL,
+		created_at DATETIME DEFAULT (datetime('now'))
+	)`)
+	if err != nil {
+		return fmt.Errorf("failed to create book_tombstones table: %w", err)
+	}
+
+	log.Println("  - book_tombstones table created successfully")
 	return nil
 }

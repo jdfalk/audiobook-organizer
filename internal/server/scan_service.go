@@ -249,10 +249,14 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 			}
 			// Update DB path if changed
 			if newPath != dbBook.FilePath {
+				oldPath := dbBook.FilePath
 				dbBook.FilePath = newPath
 				applyOrganizedFileMetadata(dbBook, newPath)
 				if _, err := ss.db.UpdateBook(dbBook.ID, dbBook); err != nil {
-					_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
+					_ = progress.Log("error", fmt.Sprintf("Failed to update path for %s: %v — rolling back", dbBook.Title, err), nil)
+					if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
+						_ = progress.Log("error", fmt.Sprintf("CRITICAL: rollback failed for %s: file at %s, DB expects %s", dbBook.ID, newPath, oldPath), nil)
+					}
 				} else {
 					organized++
 				}

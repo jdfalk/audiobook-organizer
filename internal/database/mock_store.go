@@ -156,6 +156,12 @@ type MockStore struct {
 	GetAllBlockedHashesFunc  func() ([]DoNotImport, error)
 	GetBlockedHashByHashFunc func(hash string) (*DoNotImport, error)
 
+	// Tombstone operations
+	CreateBookTombstoneFunc func(book *Book) error
+	GetBookTombstoneFunc    func(id string) (*Book, error)
+	DeleteBookTombstoneFunc func(id string) error
+	ListBookTombstonesFunc  func(limit int) ([]Book, error)
+
 	// Version Management
 	GetBooksByVersionGroupFunc func(groupID string) ([]Book, error)
 
@@ -496,6 +502,34 @@ func (m *MockStore) GetDashboardStats() (*DashboardStats, error) {
 func (m *MockStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
 	if m.ListSoftDeletedBooksFunc != nil {
 		return m.ListSoftDeletedBooksFunc(limit, offset, olderThan)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) CreateBookTombstone(book *Book) error {
+	if m.CreateBookTombstoneFunc != nil {
+		return m.CreateBookTombstoneFunc(book)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookTombstone(id string) (*Book, error) {
+	if m.GetBookTombstoneFunc != nil {
+		return m.GetBookTombstoneFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) DeleteBookTombstone(id string) error {
+	if m.DeleteBookTombstoneFunc != nil {
+		return m.DeleteBookTombstoneFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) ListBookTombstones(limit int) ([]Book, error) {
+	if m.ListBookTombstonesFunc != nil {
+		return m.ListBookTombstonesFunc(limit)
 	}
 	return nil, nil
 }
