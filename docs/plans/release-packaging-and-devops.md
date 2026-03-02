@@ -631,10 +631,10 @@ COPY --from=go-builder --chown=audiobook:audiobook /build/audiobook-organizer /a
 COPY --from=frontend-builder --chown=audiobook:audiobook /build/web/dist /app/web/dist
 
 USER audiobook
-EXPOSE 8080
+EXPOSE 8484
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8484/health || exit 1
 
 ENTRYPOINT ["/app/audiobook-organizer"]
 CMD ["--help"]
@@ -682,10 +682,10 @@ Minimum viable chart needs:
 
 - `Chart.yaml` with `apiVersion: v2`, `name: audiobook-organizer`, matching
   the release version
-- `values.yaml` with image repository/tag, port (8080), resource limits,
+- `values.yaml` with image repository/tag, port (8484), resource limits,
   volume mounts for the data directory (PebbleDB stores data on disk)
 - `templates/deployment.yaml` referencing the multi-arch image from ghcr.io
-- `templates/service.yaml` exposing port 8080
+- `templates/service.yaml` exposing port 8484
 - `templates/persistentvolumeclaim.yaml` for the database directory
 
 ### Binary Distribution

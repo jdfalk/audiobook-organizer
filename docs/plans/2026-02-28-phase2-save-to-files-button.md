@@ -749,7 +749,7 @@ make ci
 ## Manual verification steps
 
 1. Start the server: `make run`
-2. Open the browser at `http://localhost:8080`
+2. Open the browser at `http://localhost:8484`
 3. Navigate to any book detail page that has a real `.m4b` or `.mp3` file on disk.
 4. Verify the "Save to Files" button appears in the action bar between "Fetch Metadata"
    and "Parse with AI".

@@ -15,7 +15,7 @@ The included certificates (`localhost.crt` and `localhost.key`) are:
 The server uses these snake oil certificates **by default** for local development:
 
 ```bash
-# HTTP/3 (QUIC on UDP 8443) + HTTP/2 (TCP 8080) with default snake oil certs
+# HTTP/3 (QUIC on UDP 8443) + HTTP/2 (TCP 8484) with default snake oil certs
 ./audiobook-organizer serve
 
 # To disable HTTP/3:

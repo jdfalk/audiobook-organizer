@@ -202,7 +202,7 @@ test.describe('Full End-to-End Demo Workflow', () => {
     console.log(`📁 Demo directories created: ${tempDir}`);
 
     try {
-      // Reset to factory defaults (now uses correct port 8080)
+      // Reset to factory defaults (now uses correct port 8484)
       await resetToFactoryDefaults(page);
 
       // ==============================================

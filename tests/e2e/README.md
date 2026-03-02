@@ -55,7 +55,7 @@ pytest tests/e2e/ --html=test_results/e2e_report.html --self-contained-html
 Set environment variable `TEST_BASE_URL` to test against different instances:
 
 ```bash
-export TEST_BASE_URL=http://localhost:8080
+export TEST_BASE_URL=http://localhost:8484
 pytest tests/e2e/ -v
 ```
 
@@ -80,7 +80,7 @@ docker run --rm audiobook-organizer-test bash -lc "go test ./... && npm test --p
 
 # E2E tests (requires the server running on the host)
 docker run --rm --network host \
-  -e TEST_BASE_URL=http://host.docker.internal:8080 \
+  -e TEST_BASE_URL=http://host.docker.internal:8484 \
   audiobook-organizer-test \
   bash -lc "xvfb-run -a pytest tests/e2e -v"
 ```

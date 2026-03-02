@@ -24,7 +24,7 @@ feature plan docs for detailed designs.
 ### Manual QA & Validation
 
 Execute the manual validation checklist across all core workflows. The server
-runs on port 8080 by default; all paths below assume `http://localhost:8080`.
+runs on port 8484 by default; all paths below assume `http://localhost:8484`.
 
 #### 1. Library — Search, Sort, Import Path CRUD, Scan
 

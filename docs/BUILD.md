@@ -154,7 +154,7 @@ the module root or a specific package. Example:
 Targeting a specific package keeps execution fast and avoids Selenium E2E
 dependencies. Running the entire workspace through `#runTests` will also invoke
 the Python end-to-end suite under `tests/e2e`, which requires a reachable app at
-`TEST_BASE_URL` (defaults to `http://localhost:8080`). Start the server first if
+`TEST_BASE_URL` (defaults to `http://localhost:8484`). Start the server first if
 you intend to run those browser tests.
 
 ### JavaScript/TypeScript Frontend Tests
@@ -211,7 +211,7 @@ docker run --rm audiobook-organizer-test bash -lc "go test ./... && npm test --p
 
 # Run Selenium E2E tests (server must be reachable on the host)
 docker run --rm --network host \
-  -e TEST_BASE_URL=http://host.docker.internal:8080 \
+  -e TEST_BASE_URL=http://host.docker.internal:8484 \
   audiobook-organizer-test \
   bash -lc "xvfb-run -a pytest tests/e2e -v"
 ```

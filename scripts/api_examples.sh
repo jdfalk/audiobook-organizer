@@ -7,12 +7,12 @@
 # Convenient API examples for quick testing
 # Source this file or run individual examples
 
-API="${API:-http://localhost:8080/api/v1}"
+API="${API:-http://localhost:8484/api/v1}"
 
 echo "Audiobook Organizer API Examples"
 echo "=================================="
 echo ""
-echo "Set API endpoint with: export API=http://localhost:8080/api/v1"
+echo "Set API endpoint with: export API=http://localhost:8484/api/v1"
 echo "Current API: $API"
 echo ""
 
@@ -233,7 +233,7 @@ example_work_stats() {
 # ============================================================================
 example_system_status() {
     echo "Example: Get system status"
-    curl -X GET "http://localhost:8080/api/v1/system/status" \
+    curl -X GET "http://localhost:8484/api/v1/system/status" \
         -H "Accept: application/json"
     echo ""
 }
@@ -243,7 +243,7 @@ example_system_status() {
 # ============================================================================
 example_system_logs() {
     echo "Example: Get system logs"
-    curl -X GET "http://localhost:8080/api/v1/logs?limit=50&offset=0" \
+    curl -X GET "http://localhost:8484/api/v1/logs?limit=50&offset=0" \
         -H "Accept: application/json"
     echo ""
 }
@@ -253,7 +253,7 @@ example_system_logs() {
 # ============================================================================
 example_health_check() {
     echo "Example: Health check"
-    curl -X GET "http://localhost:8080/api/health" \
+    curl -X GET "http://localhost:8484/api/health" \
         -H "Accept: application/json"
     echo ""
 }

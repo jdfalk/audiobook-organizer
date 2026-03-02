@@ -98,7 +98,7 @@ func TestNewTorrentClientFromConfig(t *testing.T) {
 						Type: "qbittorrent",
 						QBittorrent: config.QBittorrentConfig{
 							Host:     "localhost",
-							Port:     8080,
+							Port:     8484,
 							Username: "admin",
 							Password: "admin",
 						},

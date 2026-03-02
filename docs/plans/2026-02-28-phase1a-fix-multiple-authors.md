@@ -1418,7 +1418,7 @@ sleep 2
 
 # Trigger a migration check — the server runs RunMigrations on startup.
 # Check logs for "Applying migration 22"
-curl -s http://localhost:8080/api/v1/health | jq .
+curl -s http://localhost:8484/api/v1/health | jq .
 
 # Stop server
 kill $SERVER_PID

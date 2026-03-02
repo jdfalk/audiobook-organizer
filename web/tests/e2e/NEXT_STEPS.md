@@ -189,8 +189,8 @@ test('provenance data loads in <500ms', async ({ page }) => {
 
 ```typescript
 webServer: {
-  command: '../audiobook-organizer serve --port 8080',
-  url: 'http://127.0.0.1:8080',
+  command: '../audiobook-organizer serve --port 8484',
+  url: 'http://127.0.0.1:8484',
   reuseExistingServer: false,
 }
 ```

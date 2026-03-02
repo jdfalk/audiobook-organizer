@@ -27,14 +27,14 @@ cd /Users/jdfalk/repos/github.com/jdfalk/audiobook-organizer
 # Build (first time only or after code changes)
 make build
 
-# Start the server (runs on http://localhost:8080)
+# Start the server (runs on http://localhost:8484)
 ./audiobook-organizer serve
 ```
 
 Expected output:
 ```
 2026-02-05 12:34:56 [INFO] Starting audiobook-organizer API server
-2026-02-05 12:34:56 [INFO] Listening on http://localhost:8080
+2026-02-05 12:34:56 [INFO] Listening on http://localhost:8484
 ```
 
 ### Step 2: Run the End-to-End Test Script
@@ -80,8 +80,8 @@ make build && ./audiobook-organizer serve
 # Source the example API functions
 source scripts/api_examples.sh
 
-# Set API endpoint (default: http://localhost:8080)
-API_ENDPOINT="http://localhost:8080"
+# Set API endpoint (default: http://localhost:8484)
+API_ENDPOINT="http://localhost:8484"
 
 # Test 1: Health Check
 echo "=== Testing Server Health ==="
@@ -266,8 +266,8 @@ After running the demo, verify:
 
 ### Server Won't Start
 ```bash
-# Check if port 8080 is in use
-lsof -i :8080
+# Check if port 8484 is in use
+lsof -i :8484
 
 # Kill the process if needed
 kill -9 <PID>
@@ -286,7 +286,7 @@ bash scripts/e2e_test.sh --verbose
 
 # Try manual curl command from api_examples.sh
 source scripts/api_examples.sh
-curl -s http://localhost:8080/api/health | jq '.'
+curl -s http://localhost:8484/api/health | jq '.'
 ```
 
 ### Metadata Not Fetching
@@ -301,7 +301,7 @@ curl -s "https://openlibrary.org/search.json?q=the+hobbit" | jq '.numFound'
 curl -s -X POST \
   -H "Content-Type: application/json" \
   -d '{"missing_only": false}' \
-  http://localhost:8080/api/v1/metadata/bulk-fetch | jq '.'
+  http://localhost:8484/api/v1/metadata/bulk-fetch | jq '.'
 ```
 
 ### Files Not Organizing
@@ -313,7 +313,7 @@ ls -la /tmp/demo-audiobooks/
 # Check server logs for organization errors
 
 # Verify book has required metadata (author, title)
-curl -s http://localhost:8080/api/v1/audiobooks | jq '.items[0]'
+curl -s http://localhost:8484/api/v1/audiobooks | jq '.items[0]'
 ```
 
 ---

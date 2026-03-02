@@ -33,7 +33,7 @@ class TestResult:
 class APITester:
     """Automated API endpoint tester."""
 
-    def __init__(self, base_url: str = "http://localhost:8080"):
+    def __init__(self, base_url: str = "http://localhost:8484"):
         self.base_url = base_url
         self.results: list[TestResult] = []
         self.session = requests.Session()
@@ -385,7 +385,7 @@ class APITester:
 def main():
     """Main entry point."""
     # Check if custom URL provided
-    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8080"
+    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8484"
 
     print(f"""
 ╔══════════════════════════════════════════════════════════════════════════════╗

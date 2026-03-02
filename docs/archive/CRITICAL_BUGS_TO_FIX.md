@@ -8,7 +8,7 @@
 **Date**: 2026-01-27
 **Status**: 🔴 **BLOCKING ISSUES** - Server running, but UI has critical problems
 **Priority**: P0 - Must fix before MVP release
-**Server Status**: ✅ Running at http://localhost:8080
+**Server Status**: ✅ Running at http://localhost:8484
 
 ---
 
@@ -28,7 +28,7 @@ The "Browse" button in the initial welcome/setup dialog doesn't work correctly.
 - Selected folder should populate the text field without replacing existing text unless user selects a folder
 
 ### Steps to Reproduce
-1. Open app at http://localhost:8080
+1. Open app at http://localhost:8484
 2. See welcome dialog with library path field
 3. Notice default value is `/home` (wrong on macOS)
 4. Click "Browse" button
@@ -486,7 +486,7 @@ The Settings page doesn't work at all.
 - Check server logs for errors
 
 ### Debug Steps
-1. Open http://localhost:8080/settings
+1. Open http://localhost:8484/settings
 2. Open browser DevTools → Console
 3. Look for JavaScript errors
 4. Check Network tab for failed requests
@@ -580,10 +580,10 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 **Bug #2 Fix Verification**:
 ```bash
 # Monitor connection stability
-open http://localhost:8080
+open http://localhost:8484
 # Leave open for 5-10 minutes
 # Check if API calls still work
-curl http://localhost:8080/api/health
+curl http://localhost:8484/api/health
 ```
 
 **Bug #3 Fix Verification**:
@@ -608,7 +608,7 @@ curl http://localhost:8080/api/health
 ## 📋 Development Environment
 
 **Server**:
-- Running at: http://localhost:8080
+- Running at: http://localhost:8484
 - PID: Check `/tmp/audiobook-server.pid`
 - Logs: `/tmp/audiobook-server.log`
 - Database: PebbleDB with 2 books, 2 authors
@@ -625,7 +625,7 @@ kill $(cat /tmp/audiobook-server.pid)
 
 # Rebuild and restart
 go build -tags embed_frontend -o audiobook-organizer .
-nohup ./audiobook-organizer serve --port 8080 > /tmp/audiobook-server.log 2>&1 &
+nohup ./audiobook-organizer serve --port 8484 > /tmp/audiobook-server.log 2>&1 &
 echo $! > /tmp/audiobook-server.pid
 ```
 

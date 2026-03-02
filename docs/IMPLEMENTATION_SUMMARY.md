@@ -374,7 +374,7 @@ example_organize_all
 
 **Load testing:**
 ```bash
-ab -c 100 -n 1000 http://localhost:8080/api/v1/audiobooks
+ab -c 100 -n 1000 http://localhost:8484/api/v1/audiobooks
 ```
 
 ---

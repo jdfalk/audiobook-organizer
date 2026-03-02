@@ -342,7 +342,7 @@ services:
   audiobook-organizer:
     build: .
     ports:
-      - "8080:8080"
+      - "8484:8484"
     volumes:
       - ./data:/data           # Database and config
       - /path/to/audiobooks:/audiobooks  # Library directory
@@ -351,7 +351,7 @@ services:
       - AO_DB=/data/audiobook-organizer.db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/v1/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8484/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -395,8 +395,8 @@ services:
 ### 5.7 Verify Docker Build End-to-End
 **Steps**:
 1. `docker build -t audiobook-organizer .`
-2. `docker run -p 8080:8080 -v ~/audiobooks:/audiobooks audiobook-organizer serve --dir /audiobooks`
-3. Open http://localhost:8080, verify UI loads
+2. `docker run -p 8484:8484 -v ~/audiobooks:/audiobooks audiobook-organizer serve --dir /audiobooks`
+3. Open http://localhost:8484, verify UI loads
 4. Import a book, verify scan/organize work inside container
 5. Stop container, restart, verify data persists
 

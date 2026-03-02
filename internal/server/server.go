@@ -4661,7 +4661,7 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 // GetDefaultServerConfig returns default server configuration
 func GetDefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		Port:         "8080",
+		Port:         "8484",
 		Host:         "localhost",
 		ReadTimeout:  15 * time.Second,  // Allow slow clients without stalling forever
 		WriteTimeout: 0,                 // Disable write timeout so SSE streams stay open

@@ -22,7 +22,7 @@ export async function resetToFactoryDefaults(
   baseURL?: string
 ): Promise<boolean> {
   // Use Playwright's configured baseURL if not provided
-  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8080';
+  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8484';
   try {
     const response = await page.evaluate(
       async ({ baseURL }: { baseURL: string }) => {
@@ -117,8 +117,8 @@ export async function setupPhase2Interactive(
   await setupMockApiRoutes(page, mockOptions);
 
   // Now navigate to initial page (mocks are ready before this)
-  // Use context baseURL if available, otherwise default to 8080
-  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8080';
+  // Use context baseURL if available, otherwise default to 8484
+  const finalBaseURL = baseURL || page.context().baseURL || 'http://127.0.0.1:8484';
   console.log('[Setup] Initial navigation to:', finalBaseURL);
   try {
     // First navigation - mocks are now ready

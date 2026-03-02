@@ -171,8 +171,8 @@ Use video editing software:
 ### "API server did not start"
 
 ```bash
-# Check if port 8080 is already in use
-lsof -i :8080
+# Check if port 8484 is already in use
+lsof -i :8484
 
 # If port is in use, either:
 # 1. Kill the process: kill -9 <PID>

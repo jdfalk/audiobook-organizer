@@ -235,7 +235,7 @@ Emit SSE event with status
 
 ## 📝 Notes
 
-- Server is running on https://localhost:8080
+- Server is running on https://localhost:8484
 - Migration 013 will run automatically on next server start
 - M4B/M4A test files generating in background
 - All changes are backward compatible

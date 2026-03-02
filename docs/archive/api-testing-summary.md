@@ -55,7 +55,7 @@ findings, and required fixes.
 python3 scripts/test-api-endpoints.py
 
 # Run against custom URL
-python3 scripts/test-api-endpoints.py http://remote-server:8080
+python3 scripts/test-api-endpoints.py http://remote-server:8484
 ```
 
 ## Test Results

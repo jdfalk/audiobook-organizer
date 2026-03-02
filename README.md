@@ -157,7 +157,7 @@ go build -o audiobook-organizer
 docker compose up -d --build
 ```
 
-The app will be available at `http://localhost:8080`.
+The app will be available at `http://localhost:8484`.
 
 ### Binary
 
