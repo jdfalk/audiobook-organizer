@@ -393,7 +393,14 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 }
 
 func cleanTagValue(value string) string {
-	return strings.TrimSpace(value)
+	// Strip null bytes and other control characters that appear in some M4B tags
+	cleaned := strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return -1
+		}
+		return r
+	}, value)
+	return strings.TrimSpace(cleaned)
 }
 
 func firstNonEmpty(values ...string) string {

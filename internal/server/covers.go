@@ -1,5 +1,5 @@
 // file: internal/server/covers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -96,22 +96,31 @@ func (s *Server) handleLocalCover(c *gin.Context) {
 		return
 	}
 
-	coverDir := filepath.Join(config.AppConfig.RootDir, ".covers")
-	coverPath := filepath.Join(coverDir, filename)
-
-	if _, err := os.Stat(coverPath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "cover not found"})
-		return
+	// Check both .covers/ (proxy cache) and covers/ (downloaded covers)
+	dirs := []string{
+		filepath.Join(config.AppConfig.RootDir, ".covers"),
+		filepath.Join(config.AppConfig.RootDir, "covers"),
 	}
-
-	c.File(coverPath)
+	for _, dir := range dirs {
+		coverPath := filepath.Join(dir, filename)
+		if _, err := os.Stat(coverPath); err == nil {
+			c.File(coverPath)
+			return
+		}
+	}
+	c.JSON(http.StatusNotFound, gin.H{"error": "cover not found"})
 }
 
 func isAllowedCoverSource(url string) bool {
 	allowed := []string{
 		"https://covers.openlibrary.org/",
+		"http://covers.openlibrary.org/",
 		"https://books.google.com/",
+		"http://books.google.com/",
 		"https://images-na.ssl-images-amazon.com/",
+		"http://images-na.ssl-images-amazon.com/",
+		"https://images.amazon.com/",
+		"http://images.amazon.com/",
 	}
 	for _, prefix := range allowed {
 		if strings.HasPrefix(url, prefix) {

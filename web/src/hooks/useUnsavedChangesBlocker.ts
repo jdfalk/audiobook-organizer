@@ -1,8 +1,8 @@
 // file: web/src/hooks/useUnsavedChangesBlocker.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: e3f4a5b6-c7d8-9e0f-1a2b-3c4d5e6f7a8b
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface Blocker {
@@ -18,6 +18,7 @@ interface Blocker {
 export function useUnsavedChangesBlocker(shouldBlock: boolean): Blocker {
   const [blocked, setBlocked] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const proceedingRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,7 +35,7 @@ export function useUnsavedChangesBlocker(shouldBlock: boolean): Blocker {
   // Override navigate to intercept in-app navigation
   // We do this by patching pushState/replaceState
   useEffect(() => {
-    if (!shouldBlock) {
+    if (!shouldBlock || proceedingRef.current) {
       setBlocked(false);
       setPendingPath(null);
       return;
@@ -71,12 +72,17 @@ export function useUnsavedChangesBlocker(shouldBlock: boolean): Blocker {
   }, [shouldBlock, location.pathname]);
 
   const proceed = useCallback(() => {
-    setBlocked(false);
     if (pendingPath) {
       const path = pendingPath;
+      // Mark as proceeding so the effect doesn't re-intercept
+      proceedingRef.current = true;
+      setBlocked(false);
       setPendingPath(null);
-      // Use setTimeout to ensure state is cleaned up before navigating
-      setTimeout(() => navigate(path), 0);
+      // Navigate after state cleanup
+      setTimeout(() => {
+        navigate(path);
+        proceedingRef.current = false;
+      }, 0);
     }
   }, [pendingPath, navigate]);
 
