@@ -192,7 +192,7 @@ export function MetadataSearchDialog({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search by title, author, ISBN..."
+          placeholder="Search by title, author, ISBN, or Audible ASIN..."
           sx={{ mt: 1, mb: 2 }}
           InputProps={{
             startAdornment: (
@@ -218,7 +218,7 @@ export function MetadataSearchDialog({
 
         {!loading && results.length === 0 && (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No results found. Try a different search query.
+            No results found. Try a different search query, or paste an Audible ASIN (e.g. B0XXXXXXXXX).
           </Typography>
         )}
 
