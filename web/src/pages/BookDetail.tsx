@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.23.0
+// version: 1.24.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -94,11 +94,17 @@ export const BookDetail = () => {
   const [tagsError, setTagsError] = useState<string | null>(null);
   const [segments, setSegments] = useState<BookSegment[]>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
+  const [multiSegmentTags, setMultiSegmentTags] = useState<Map<string, SegmentTags>>(new Map());
   const [coverError, setCoverError] = useState(false);
   const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
+
+  // Derived multi-select state
+  const isSingleSelect = selectedSegmentIds.size === 1;
+  const isMultiSelect = selectedSegmentIds.size > 1;
+  const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
 
   // Reset cover error when cover URL changes (e.g. after metadata fetch)
   useEffect(() => {
@@ -193,7 +199,7 @@ export const BookDetail = () => {
     loadSegments();
   }, [id, segmentsLoaded]);
 
-  // Load segment tags when selectedSegmentId changes
+  // Load segment tags when selection changes
   const loadSegmentTags = useCallback(async (segmentId: string) => {
     if (!id) return;
     setSegmentTagsLoading(true);
@@ -207,13 +213,46 @@ export const BookDetail = () => {
     }
   }, [id]);
 
+  // Load multiple segment tags in parallel for multi-select
+  const loadMultiSegmentTags = useCallback(async (segIds: string[]) => {
+    if (!id || segIds.length === 0) {
+      setMultiSegmentTags(new Map());
+      return;
+    }
+    setSegmentTagsLoading(true);
+    try {
+      const results = await Promise.all(
+        segIds.map(async (sid) => {
+          try {
+            const data = await api.getSegmentTags(id, sid);
+            return [sid, data] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const map = new Map<string, SegmentTags>();
+      for (const r of results) {
+        if (r) map.set(r[0], r[1]);
+      }
+      setMultiSegmentTags(map);
+    } finally {
+      setSegmentTagsLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
-    if (selectedSegmentId) {
-      loadSegmentTags(selectedSegmentId);
+    if (isSingleSelect && singleSelectedId) {
+      loadSegmentTags(singleSelectedId);
+      setMultiSegmentTags(new Map());
+    } else if (isMultiSelect) {
+      setSegmentTags(null);
+      loadMultiSegmentTags(Array.from(selectedSegmentIds));
     } else {
       setSegmentTags(null);
+      setMultiSegmentTags(new Map());
     }
-  }, [selectedSegmentId, loadSegmentTags]);
+  }, [selectedSegmentIds, isSingleSelect, isMultiSelect, singleSelectedId, loadSegmentTags, loadMultiSegmentTags]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '—';
@@ -1034,8 +1073,14 @@ export const BookDetail = () => {
         <Paper sx={{ px: 2, py: 1.5, mb: 1 }}>
           <FileSelector
             segments={segments}
-            selectedId={selectedSegmentId}
-            onSelect={setSelectedSegmentId}
+            selectedIds={selectedSegmentIds}
+            onToggle={(id) => setSelectedSegmentIds(prev => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id); else next.add(id);
+              return next;
+            })}
+            onSelectAll={() => setSelectedSegmentIds(new Set(segments.map(s => s.id)))}
+            onClearAll={() => setSelectedSegmentIds(new Set())}
           />
         </Paper>
       )}
@@ -1060,7 +1105,7 @@ export const BookDetail = () => {
 
       {activeTab === 'info' && (
         <Paper sx={{ p: 3, mb: 3 }}>
-          {selectedSegmentId && segmentTags ? (
+          {singleSelectedId && segmentTags ? (
             <>
               {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -1127,7 +1172,7 @@ export const BookDetail = () => {
             </>
           ) : (
             <>
-              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              {singleSelectedId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               <Grid container spacing={2}>
                 {[
                   { label: 'Title', value: book.title || 'Untitled' },
@@ -1270,7 +1315,7 @@ export const BookDetail = () => {
                         hover
                         sx={{ cursor: 'pointer' }}
                         onClick={() => {
-                          setSelectedSegmentId(seg.id);
+                          setSelectedSegmentIds(new Set([seg.id]));
                           setActiveTab('tags');
                         }}
                       >
@@ -1421,7 +1466,7 @@ export const BookDetail = () => {
           </Stack>
 
           {/* Segment selected: unified comparison table */}
-          {selectedSegmentId && segmentTags ? (
+          {singleSelectedId && segmentTags ? (
             <>
               {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
@@ -1535,10 +1580,128 @@ export const BookDetail = () => {
                 </Alert>
               )}
             </>
+          ) : isMultiSelect && multiSegmentTags.size > 0 ? (
+            /* Multi-select comparison table */
+            <>
+              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Comparing {multiSegmentTags.size} files
+              </Typography>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Field</TableCell>
+                    <TableCell>File Values</TableCell>
+                    <TableCell>Book Value</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {[
+                    { field: 'title', bookVal: book.title },
+                    {
+                      field: 'author',
+                      bookVal: book.authors?.length
+                        ? book.authors.map((a) => a.name).join(' & ')
+                        : book.author_name,
+                    },
+                    {
+                      field: 'narrator',
+                      bookVal: book.narrators?.length
+                        ? book.narrators.map((n) => n.name).join(' & ')
+                        : book.narrator,
+                    },
+                    { field: 'album', bookVal: book.title },
+                    { field: 'genre', bookVal: 'Audiobook' },
+                    { field: 'year', bookVal: String(book.audiobook_release_year || book.print_year || '') },
+                    { field: 'publisher', bookVal: book.publisher },
+                    { field: 'series', bookVal: book.series_name },
+                    { field: 'language', bookVal: book.language },
+                  ].map(({ field, bookVal }) => {
+                    const bookStr = String(bookVal || '');
+                    const fileValues = Array.from(multiSegmentTags.values()).map(
+                      (st) => st.tags[field] || st.tags[field.replace(/ /g, '_')] || ''
+                    );
+                    const uniqueValues = [...new Set(fileValues.filter(Boolean))];
+                    const allSame = uniqueValues.length <= 1;
+                    const displayVal = allSame
+                      ? (uniqueValues[0] || '\u2014')
+                      : `${uniqueValues.length} different values`;
+                    const matchesBook = allSame && uniqueValues[0]?.toLowerCase() === bookStr.toLowerCase();
+
+                    return (
+                      <TableRow key={field}>
+                        <TableCell sx={{ textTransform: 'capitalize' }}>
+                          {field.replace(/_/g, ' ')}
+                        </TableCell>
+                        <TableCell>
+                          {allSame ? displayVal : (
+                            <Chip size="small" label={displayVal} color="warning" variant="outlined" />
+                          )}
+                        </TableCell>
+                        <TableCell>{bookStr || '\u2014'}</TableCell>
+                        <TableCell>
+                          {matchesBook ? (
+                            <Chip size="small" label="match" color="success" variant="outlined" />
+                          ) : allSame ? (
+                            <Chip size="small" label="mismatch" color="error" variant="outlined" />
+                          ) : (
+                            <Chip size="small" label="mixed" color="warning" variant="outlined" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {!matchesBook && bookStr && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={async () => {
+                                try {
+                                  const segIds = Array.from(selectedSegmentIds);
+                                  await api.writeBackMetadata(book.id, segIds);
+                                  toast(`Book value applied to ${segIds.length} files`, 'success');
+                                  loadMultiSegmentTags(segIds);
+                                } catch {
+                                  toast('Failed to write metadata', 'error');
+                                }
+                              }}
+                            >
+                              Apply Book Value to All
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<SaveIcon />}
+                  onClick={async () => {
+                    try {
+                      setWritingToFiles(true);
+                      const segIds = Array.from(selectedSegmentIds);
+                      const result = await api.writeBackMetadata(book.id, segIds);
+                      toast(result.message || `Metadata written to ${segIds.length} files`, 'success');
+                      loadMultiSegmentTags(segIds);
+                    } catch {
+                      toast('Failed to write metadata to files', 'error');
+                    } finally {
+                      setWritingToFiles(false);
+                    }
+                  }}
+                  disabled={writingToFiles}
+                >
+                  {writingToFiles ? 'Writing...' : `Write Back Selected (${selectedSegmentIds.size})`}
+                </Button>
+              </Stack>
+            </>
           ) : (
             /* No segment selected: show field sources with resolve actions */
             <>
-              {selectedSegmentId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
+              {singleSelectedId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               {tagsError && (
                 <Alert severity="error" sx={{ mb: 2 }}>
                   {tagsError}

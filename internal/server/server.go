@@ -3762,7 +3762,20 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
-	writtenCount, err := s.metadataFetchService.WriteBackMetadataForBook(id)
+	// Parse optional segment filter from request body
+	var body struct {
+		SegmentIDs []string `json:"segment_ids"`
+	}
+	// Ignore bind errors — body is optional
+	_ = c.ShouldBindJSON(&body)
+
+	var writtenCount int
+	var err error
+	if len(body.SegmentIDs) > 0 {
+		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id, body.SegmentIDs)
+	} else {
+		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id)
+	}
 	if err != nil {
 		if err.Error() == fmt.Sprintf("audiobook not found: %s", id) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

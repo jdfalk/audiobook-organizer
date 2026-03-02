@@ -11,4 +11,5 @@ func TestInterfaceCompliance(t *testing.T) {
 	var _ MetadataSource = (*OpenLibraryClient)(nil)
 	var _ MetadataSource = (*GoogleBooksClient)(nil)
 	var _ MetadataSource = (*AudnexusClient)(nil)
+	var _ MetadataSource = (*WikipediaClient)(nil)
 }

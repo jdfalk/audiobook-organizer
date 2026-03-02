@@ -119,6 +119,8 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 			} else {
 				log.Printf("[WARN] Hardcover source enabled but no API token configured")
 			}
+		case "wikipedia":
+			chain = append(chain, metadata.NewWikipediaClient())
 		default:
 			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
 		}
@@ -1108,7 +1110,7 @@ func (mfs *MetadataFetchService) MarkNoMatch(id string) error {
 // WriteBackMetadataForBook reads current DB metadata for the book, resolves authors and
 // narrators, writes comprehensive tags to all active audio file segments, and records a
 // history entry. It is called by POST /api/v1/audiobooks/:id/write-back.
-func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string) (int, error) {
+func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilter ...[]string) (int, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return 0, fmt.Errorf("audiobook not found: %s", id)
@@ -1166,6 +1168,21 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string) (int, error
 		if seg.Active {
 			activeSegments = append(activeSegments, seg)
 		}
+	}
+
+	// Apply optional segment filter
+	if len(segmentFilter) > 0 && len(segmentFilter[0]) > 0 {
+		filterSet := make(map[string]struct{}, len(segmentFilter[0]))
+		for _, sid := range segmentFilter[0] {
+			filterSet[sid] = struct{}{}
+		}
+		var filtered []database.BookSegment
+		for _, seg := range activeSegments {
+			if _, ok := filterSet[seg.ID]; ok {
+				filtered = append(filtered, seg)
+			}
+		}
+		activeSegments = filtered
 	}
 
 	totalTracks := len(activeSegments)
