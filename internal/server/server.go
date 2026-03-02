@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.77.0
+// version: 1.78.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -38,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/updater"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	ulid "github.com/oklog/ulid/v2"
@@ -344,6 +345,15 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
 	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
 	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
+	addEntry("genre", meta.Genre, nil)
+	addEntry("album", meta.Album, nil)
+	var seriesIdx any
+	if meta.SeriesIndex > 0 {
+		seriesIdx = meta.SeriesIndex
+	}
+	addEntry("series_index", seriesIdx, intVal(book.SeriesSequence))
+	addEntry("print_year", nil, intVal(book.PrintYear))
+	addEntry("edition", nil, stringVal(book.Edition))
 
 	return provenance
 }
@@ -373,6 +383,17 @@ func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 }
 
 // calculateLibrarySizes computes library and import path sizes with caching
+// filePhysicalSize returns the on-disk size using block count (physical), falling
+// back to logical size if syscall info is unavailable.
+func filePhysicalSize(info os.FileInfo) int64 {
+	if sys := info.Sys(); sys != nil {
+		if stat, ok := sys.(*syscall.Stat_t); ok {
+			return stat.Blocks * 512
+		}
+	}
+	return info.Size()
+}
+
 func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64) {
 	cacheLock.RLock()
 	if time.Since(cachedSizeComputedAt) < librarySizeCacheTTL {
@@ -401,7 +422,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 		if info, err := os.Stat(rootDir); err == nil && info.IsDir() {
 			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 				if err == nil && !info.IsDir() {
-					librarySize += info.Size()
+					librarySize += filePhysicalSize(info)
 				}
 				return nil
 			})
@@ -421,7 +442,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 					if rootDir != "" && strings.HasPrefix(path, rootDir) {
 						return nil
 					}
-					importSize += info.Size()
+					importSize += filePhysicalSize(info)
 				}
 				return nil
 			})
@@ -1049,6 +1070,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
+			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
 			// Metadata change history
@@ -1083,11 +1105,13 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/stale", s.listStaleOperations)
 			protected.POST("/operations/scan", s.startScan)
 			protected.POST("/operations/organize", s.startOrganize)
+			protected.POST("/operations/transcode", s.startTranscode)
 			protected.GET("/operations/:id/status", s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.getOperationLogs)
 			protected.DELETE("/operations/:id", s.cancelOperation)
 			protected.POST("/operations/clear-stale", s.clearStaleOperations)
 			protected.DELETE("/operations/history", s.deleteOperationHistory)
+			protected.POST("/operations/optimize-database", s.optimizeDatabase)
 
 			// Import routes
 			protected.POST("/import/file", s.importFile)
@@ -1668,6 +1692,54 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, segments)
+}
+
+// extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
+func (s *Server) extractTrackInfo(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePaths := make([]string, len(segments))
+	for i, seg := range segments {
+		filePaths[i] = seg.FilePath
+	}
+
+	trackInfos := metadata.ExtractTrackInfoBatch(filePaths)
+	updated := 0
+	for i, info := range trackInfos {
+		if info.TrackNumber == nil {
+			continue
+		}
+		segments[i].TrackNumber = info.TrackNumber
+		segments[i].TotalTracks = info.TotalTracks
+		if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
+			log.Printf("WARN: failed to update segment %s track info: %v", segments[i].ID, err)
+			continue
+		}
+		updated++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"updated":  updated,
+		"total":    len(segments),
+		"segments": segments,
+	})
 }
 
 // getSegmentTags returns raw metadata tags for a specific segment file.
@@ -2633,6 +2705,82 @@ func (s *Server) startOrganize(c *gin.Context) {
 	c.JSON(http.StatusAccepted, op)
 }
 
+func (s *Server) startTranscode(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	var req struct {
+		BookID       string `json:"book_id"`
+		OutputFormat string `json:"output_format"`
+		Bitrate      int    `json:"bitrate"`
+		KeepOriginal *bool  `json:"keep_original"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.BookID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_id is required"})
+		return
+	}
+
+	// Verify the book exists
+	if _, err := database.GlobalStore.GetBookByID(req.BookID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		return
+	}
+
+	id := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(id, "transcode", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	keepOriginal := true
+	if req.KeepOriginal != nil {
+		keepOriginal = *req.KeepOriginal
+	}
+
+	opts := transcode.TranscodeOpts{
+		BookID:       req.BookID,
+		OutputFormat: req.OutputFormat,
+		Bitrate:      req.Bitrate,
+		KeepOriginal: keepOriginal,
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		outputPath, err := transcode.Transcode(ctx, opts, database.GlobalStore, progress)
+		if err != nil {
+			return err
+		}
+
+		// Update book with new file path and format
+		m4bFormat := "m4b"
+		aacCodec := "aac"
+		bitrateVal := opts.Bitrate
+		if bitrateVal <= 0 {
+			bitrateVal = 128
+		}
+		_, updateErr := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
+			FilePath: outputPath,
+			Format:   m4bFormat,
+			Codec:    &aacCodec,
+			Bitrate:  &bitrateVal,
+		})
+		return updateErr
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
 func (s *Server) getOperationStatus(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -2730,6 +2878,85 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
+}
+
+// optimizeDatabase splits &-delimited author/narrator strings and re-extracts empty media info.
+func (s *Server) optimizeDatabase(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	books, err := database.GlobalStore.GetAllBooks(10000, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	authorsSplit := 0
+	narratorsSplit := 0
+
+	for _, book := range books {
+		// Split compound author names into individual book_authors
+		if book.AuthorID != nil {
+			author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID)
+			if err == nil && author != nil && strings.Contains(author.Name, " & ") {
+				names := splitMultipleNames(author.Name)
+				if len(names) > 1 {
+					var bookAuthors []database.BookAuthor
+					for _, name := range names {
+						a, err := database.GlobalStore.GetAuthorByName(name)
+						if err != nil || a == nil {
+							a, err = database.GlobalStore.CreateAuthor(name)
+							if err != nil {
+								continue
+							}
+						}
+						bookAuthors = append(bookAuthors, database.BookAuthor{
+							AuthorID: a.ID,
+							Role:     "author",
+						})
+					}
+					if len(bookAuthors) > 0 {
+						if err := database.GlobalStore.SetBookAuthors(book.ID, bookAuthors); err == nil {
+							authorsSplit++
+						}
+					}
+				}
+			}
+		}
+
+		// Split compound narrator names into individual book_narrators
+		if book.Narrator != nil && strings.Contains(*book.Narrator, " & ") {
+			names := splitMultipleNames(*book.Narrator)
+			if len(names) > 1 {
+				var bookNarrators []database.BookNarrator
+				for _, name := range names {
+					n, err := database.GlobalStore.GetNarratorByName(name)
+					if err != nil || n == nil {
+						n, err = database.GlobalStore.CreateNarrator(name)
+						if err != nil {
+							continue
+						}
+					}
+					bookNarrators = append(bookNarrators, database.BookNarrator{
+						NarratorID: n.ID,
+					})
+				}
+				if len(bookNarrators) > 0 {
+					if err := database.GlobalStore.SetBookNarrators(book.ID, bookNarrators); err == nil {
+						narratorsSplit++
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"books_processed": len(books),
+		"authors_split":   authorsSplit,
+		"narrators_split": narratorsSplit,
+	})
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress

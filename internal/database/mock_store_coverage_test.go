@@ -119,6 +119,7 @@ func TestMockStore_CustomFuncPaths(t *testing.T) {
 
 	// Book segments
 	mock.CreateBookSegmentFunc = func(int, *BookSegment) (*BookSegment, error) { return nil, nil }
+	mock.UpdateBookSegmentFunc = func(*BookSegment) error { return nil }
 	mock.ListBookSegmentsFunc = func(int) ([]BookSegment, error) { return nil, nil }
 	mock.MergeBookSegmentsFunc = func(int, *BookSegment, []string) error { return nil }
 
@@ -215,6 +216,7 @@ func TestMockStore_CustomFuncPaths(t *testing.T) {
 	_, _ = mock.GetUserPreferenceForUser("user-1", "key")
 	_, _ = mock.GetAllPreferencesForUser("user-1")
 	_, _ = mock.CreateBookSegment(1, &BookSegment{})
+	_ = mock.UpdateBookSegment(&BookSegment{})
 	_, _ = mock.ListBookSegments(1)
 	_ = mock.MergeBookSegments(1, &BookSegment{}, []string{"seg-1"})
 	_ = mock.AddPlaybackEvent(&PlaybackEvent{})

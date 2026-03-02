@@ -24,7 +24,7 @@ const bookSelectColumns = `
 	id, title, author_id, series_id, series_sequence,
 	file_path, original_filename, format, duration,
 	work_id, narrator, edition, language, publisher,
-	print_year, audiobook_release_year, isbn10, isbn13,
+	print_year, audiobook_release_year, isbn10, isbn13, asin,
 	itunes_persistent_id, itunes_date_added, itunes_play_count,
 	itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source,
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
@@ -44,7 +44,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		workID, narrator, edition, language, publisher                       sql.NullString
 		itunesPersistentID, itunesImportSource                               sql.NullString
 		itunesDateAdded, itunesLastPlayed                                    sql.NullTime
-		isbn10, isbn13, fileHash, quality, codec                             sql.NullString
+		isbn10, isbn13, asin, fileHash, quality, codec                       sql.NullString
 		originalFileHash, organizedFileHash                                  sql.NullString
 		versionGroupID, versionNotes                                         sql.NullString
 		coverURL, narratorsJSON, metadataReviewStatus                         sql.NullString
@@ -59,7 +59,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&book.ID, &title, &authorID, &seriesID, &seriesSequence,
 		&filePath, &originalFilename, &format, &duration,
 		&workID, &narrator, &edition, &language, &publisher,
-		&printYear, &releaseYear, &isbn10, &isbn13,
+		&printYear, &releaseYear, &isbn10, &isbn13, &asin,
 		&itunesPersistentID, &itunesDateAdded, &itunesPlayCount,
 		&itunesLastPlayed, &itunesRating, &itunesBookmark, &itunesImportSource,
 		&fileHash, &fileSize, &bitrate, &codec, &sampleRate, &channels,
@@ -88,6 +88,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.AudiobookReleaseYear = nullableInt(releaseYear)
 	book.ISBN10 = nullableString(isbn10)
 	book.ISBN13 = nullableString(isbn13)
+	book.ASIN = nullableString(asin)
 	book.ITunesPersistentID = nullableString(itunesPersistentID)
 	if itunesDateAdded.Valid {
 		book.ITunesDateAdded = &itunesDateAdded.Time
@@ -265,6 +266,7 @@ func (s *SQLiteStore) createTables() error {
 		audiobook_release_year INTEGER,
 		isbn10 TEXT,
 		isbn13 TEXT,
+		asin TEXT,
 		itunes_persistent_id TEXT,
 		itunes_date_added TIMESTAMP,
 		itunes_play_count INTEGER DEFAULT 0,
@@ -534,6 +536,7 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"publisher":              "TEXT",
 		"isbn10":                 "TEXT",
 		"isbn13":                 "TEXT",
+		"asin":                   "TEXT",
 		"bitrate_kbps":           "INTEGER",
 		"codec":                  "TEXT",
 		"sample_rate_hz":         "INTEGER",
@@ -839,6 +842,19 @@ func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 		return nil, fmt.Errorf("failed to create book segment: %w", err)
 	}
 	return segment, nil
+}
+
+func (s *SQLiteStore) UpdateBookSegment(segment *BookSegment) error {
+	segment.UpdatedAt = time.Now()
+	segment.Version++
+	_, err := s.db.Exec(
+		`UPDATE book_segments SET track_number=?, total_tracks=?, updated_at=?, version=? WHERE id=?`,
+		segment.TrackNumber, segment.TotalTracks, segment.UpdatedAt, segment.Version, segment.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update book segment: %w", err)
+	}
+	return nil
 }
 
 func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
@@ -1636,18 +1652,18 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
 		format, duration, work_id, narrator, edition, language, publisher,
-		print_year, audiobook_release_year, isbn10, isbn13,
+		print_year, audiobook_release_year, isbn10, isbn13, asin,
 		itunes_persistent_id, itunes_date_added, itunes_play_count, itunes_last_played,
 		itunes_rating, itunes_bookmark, itunes_import_source,
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
-		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
+		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
 		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
@@ -1753,7 +1769,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 		file_path = ?, original_filename = ?, format = ?, duration = ?,
 		work_id = ?, narrator = ?, edition = ?, language = ?, publisher = ?,
-		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?,
+		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?, asin = ?,
 		itunes_persistent_id = ?, itunes_date_added = ?, itunes_play_count = ?, itunes_last_played = ?,
 		itunes_rating = ?, itunes_bookmark = ?, itunes_import_source = ?,
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
@@ -1767,7 +1783,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
 		book.FilePath, book.OriginalFilename, book.Format, book.Duration,
 		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
-		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13,
+		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
 		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,

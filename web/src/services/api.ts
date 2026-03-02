@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.28.0
+// version: 1.29.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -781,10 +781,46 @@ export async function startScan(
   return response.json();
 }
 
+export async function startTranscode(
+  bookId: string,
+  opts?: { output_format?: string; bitrate?: number; keep_original?: boolean }
+): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/operations/transcode`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      book_id: bookId,
+      output_format: opts?.output_format,
+      bitrate: opts?.bitrate,
+      keep_original: opts?.keep_original,
+    }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start transcode');
+  }
+  return response.json();
+}
+
 export async function getOperationStatus(id: string): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/${id}/status`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operation status');
+  }
+  return response.json();
+}
+
+export interface OptimizeDatabaseResult {
+  books_processed: number;
+  authors_split: number;
+  narrators_split: number;
+}
+
+export async function optimizeDatabase(): Promise<OptimizeDatabaseResult> {
+  const response = await fetch(`${API_BASE}/operations/optimize-database`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to optimize database');
   }
   return response.json();
 }
@@ -1378,6 +1414,26 @@ export async function writeBackMetadata(
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
+  }
+  return response.json();
+}
+
+// Extract track info from filenames
+export interface ExtractTrackInfoResponse {
+  updated: number;
+  total: number;
+  segments: BookSegment[];
+}
+
+export async function extractTrackInfo(
+  bookId: string
+): Promise<ExtractTrackInfoResponse> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/extract-track-info`,
+    { method: 'POST' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to extract track info');
   }
   return response.json();
 }

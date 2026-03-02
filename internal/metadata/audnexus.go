@@ -155,6 +155,7 @@ func (c *AudnexusClient) bookToMetadata(book *audnexusBook) *BookMetadata {
 		Language:    book.Language,
 		CoverURL:    book.Image,
 		ISBN:        book.ISBN,
+		ASIN:        book.ASIN,
 	}
 
 	// Use summary or description

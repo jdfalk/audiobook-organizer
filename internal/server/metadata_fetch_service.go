@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.4.0
+// version: 4.6.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -273,8 +274,14 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 					log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
 				} else {
 					log.Printf("[INFO] cover art saved to %s", coverPath)
-					// Embed cover art into audio file metadata if enabled
-					if config.AppConfig.EmbedCoverArt && updatedBook != nil && updatedBook.FilePath != "" {
+					// Update book's cover_url to the local path for serving
+					localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
+					if updatedBook != nil {
+						updatedBook.CoverURL = &localCoverURL
+						mfs.db.UpdateBook(id, &database.Book{CoverURL: &localCoverURL})
+					}
+					// Embed cover art into audio file only if it doesn't already have one
+					if updatedBook != nil && updatedBook.FilePath != "" && !metadata.HasExistingCoverArt(updatedBook.FilePath) {
 						if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
 							log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
 						} else {
@@ -755,6 +762,9 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 			fetchedValues["isbn13"] = meta.ISBN
 		}
 	}
+	if meta.ASIN != "" {
+		fetchedValues["asin"] = meta.ASIN
+	}
 	if len(fetchedValues) > 0 {
 		if err := updateFetchedMetadataState(bookID, fetchedValues); err != nil {
 			log.Printf("[ERROR] FetchMetadataForBook: failed to persist fetched metadata state: %v", err)
@@ -810,6 +820,8 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		// SearchByTitle with query
 		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
 			allResults = append(allResults, results...)
+		} else {
+			log.Printf("[DEBUG] metadata-search: %s SearchByTitle(%q) error: %v", src.Name(), searchTitle, serr)
 		}
 		// SearchByTitle with original title if different
 		if searchTitle != book.Title {
@@ -829,6 +841,8 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 			}
 		}
 
+		log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
+
 		for _, r := range allResults {
 			key := strings.ToLower(r.Title + "|" + r.Author)
 			if seen[key] {
@@ -838,6 +852,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 
 			score := scoreOneResult(r, searchWords)
 			if score <= 0 {
+				log.Printf("[DEBUG] metadata-search: score=0 for %q by %q from %s", r.Title, r.Author, src.Name())
 				continue
 			}
 
@@ -859,6 +874,37 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		}
 	}
 
+	// If the query looks like an ASIN (10 chars, starts with B0), try Audnexus direct lookup
+	if looksLikeASIN(searchTitle) {
+		audnexus := metadata.NewAudnexusClient()
+		if result, err := audnexus.LookupByASIN(searchTitle); err == nil && result != nil {
+			key := strings.ToLower(result.Title + "|" + result.Author)
+			if !seen[key] {
+				score := scoreOneResult(*result, searchWords)
+				if score <= 0 {
+					score = 1.0 // Direct ASIN match always scores high
+				}
+				candidates = append(candidates, MetadataCandidate{
+					Title:          result.Title,
+					Author:         result.Author,
+					Narrator:       result.Narrator,
+					Series:         result.Series,
+					SeriesPosition: result.SeriesPosition,
+					Year:           result.PublishYear,
+					Publisher:      result.Publisher,
+					ISBN:            result.ISBN,
+					CoverURL:       result.CoverURL,
+					Description:    result.Description,
+					Language:        result.Language,
+					Source:          "Audnexus (Audible)",
+					Score:          score,
+				})
+			}
+		} else {
+			log.Printf("[DEBUG] metadata-search: ASIN lookup for %q failed: %v", searchTitle, err)
+		}
+	}
+
 	// Sort by score descending
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].Score > candidates[j].Score
@@ -869,10 +915,26 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		candidates = candidates[:10]
 	}
 
+	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
+
 	return &SearchMetadataResponse{
 		Results: candidates,
 		Query:   searchTitle,
 	}, nil
+}
+
+// looksLikeASIN checks if a string looks like an Amazon ASIN (10 alphanumeric chars, typically starts with B0).
+func looksLikeASIN(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) != 10 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+			return false
+		}
+	}
+	return true
 }
 
 // ApplyMetadataCandidate applies a user-selected metadata candidate to a book.
@@ -949,16 +1011,25 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 
 	mfs.recordChangeHistory(book, meta, candidate.Source)
 
-	// Download cover art if available
+	// Download cover art and embed into audio file
 	if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
 		coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
 		if coverErr != nil {
 			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
 		} else {
 			log.Printf("[INFO] cover art saved to %s", coverPath)
-			if config.AppConfig.EmbedCoverArt && updatedBook != nil && updatedBook.FilePath != "" {
+			// Update book's cover_url to the local path for serving
+			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
+			if updatedBook != nil {
+				updatedBook.CoverURL = &localCoverURL
+				mfs.db.UpdateBook(id, &database.Book{CoverURL: &localCoverURL})
+			}
+			// Embed cover art into audio file only if it doesn't already have one
+			if updatedBook != nil && updatedBook.FilePath != "" && !metadata.HasExistingCoverArt(updatedBook.FilePath) {
 				if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
 					log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
+				} else {
+					log.Printf("[INFO] cover art embedded into %s", updatedBook.FilePath)
 				}
 			}
 		}
@@ -1059,6 +1130,11 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string) (int, error
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, book.Title)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
 			tagMap := mfs.buildTagMap(book.Title, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
+			if len(tagMap) == 0 {
+				writtenCount++ // nothing to change, count as success
+				continue
+			}
 			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
 				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
 			} else {
@@ -1068,7 +1144,10 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string) (int, error
 	} else {
 		// Single-file or no segments: write to book.FilePath
 		tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
-		if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+		tagMap = filterUnchangedTags(book.FilePath, tagMap)
+		if len(tagMap) == 0 {
+			writtenCount++ // nothing to change, count as success
+		} else if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 			log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 		} else {
 			writtenCount++
@@ -1122,4 +1201,43 @@ func (mfs *MetadataFetchService) buildTagMap(
 		tagMap["track"] = track
 	}
 	return tagMap
+}
+
+// filterUnchangedTags reads the current tags from filePath and removes any
+// entries from tagMap whose values already match, so only changed fields are
+// written back to the file.
+func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[string]interface{} {
+	current, err := metadata.ExtractMetadata(filePath)
+	if err != nil {
+		// Can't read current tags — write everything to be safe
+		return tagMap
+	}
+
+	currentVals := map[string]string{
+		"title":    current.Title,
+		"album":    current.Album,
+		"artist":   current.Artist,
+		"narrator": current.Narrator,
+		"genre":    current.Genre,
+		"year":     fmt.Sprintf("%d", current.Year),
+	}
+
+	filtered := make(map[string]interface{}, len(tagMap))
+	for k, v := range tagMap {
+		cur, ok := currentVals[k]
+		if !ok {
+			// Unknown field (e.g. "track") — always write
+			filtered[k] = v
+			continue
+		}
+		newStr := fmt.Sprintf("%v", v)
+		if newStr != cur {
+			filtered[k] = v
+		}
+	}
+
+	if len(filtered) == 0 {
+		return filtered
+	}
+	return filtered
 }

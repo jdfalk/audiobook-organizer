@@ -894,5 +894,9 @@ func applyOverrideToPayload(payload *AudiobookUpdate, field string, value any) {
 		if v, ok := value.(string); ok {
 			payload.ISBN13 = stringPtr(v)
 		}
+	case "asin":
+		if v, ok := value.(string); ok {
+			payload.ASIN = stringPtr(v)
+		}
 	}
 }

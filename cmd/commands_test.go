@@ -177,6 +177,9 @@ func (s *stubStore) ListBookSegments(bookNumericID int) ([]database.BookSegment,
 func (s *stubStore) MergeBookSegments(bookNumericID int, newSegment *database.BookSegment, supersedeIDs []string) error {
 	return nil
 }
+func (s *stubStore) UpdateBookSegment(segment *database.BookSegment) error {
+	return nil
+}
 func (s *stubStore) AddPlaybackEvent(event *database.PlaybackEvent) error { return nil }
 func (s *stubStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error) {
 	return []database.PlaybackEvent{}, nil

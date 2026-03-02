@@ -132,9 +132,10 @@ type MockStore struct {
 	GetAllPreferencesForUserFunc func(userID string) ([]UserPreferenceKV, error)
 
 	// Book segments
-	CreateBookSegmentFunc func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
-	ListBookSegmentsFunc  func(bookNumericID int) ([]BookSegment, error)
-	MergeBookSegmentsFunc func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+	CreateBookSegmentFunc  func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
+	UpdateBookSegmentFunc  func(segment *BookSegment) error
+	ListBookSegmentsFunc   func(bookNumericID int) ([]BookSegment, error)
+	MergeBookSegmentsFunc  func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
 
 	// Playback events
 	AddPlaybackEventFunc       func(event *PlaybackEvent) error
@@ -854,6 +855,13 @@ func (m *MockStore) CreateBookSegment(bookNumericID int, segment *BookSegment) (
 		return m.CreateBookSegmentFunc(bookNumericID, segment)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) UpdateBookSegment(segment *BookSegment) error {
+	if m.UpdateBookSegmentFunc != nil {
+		return m.UpdateBookSegmentFunc(segment)
+	}
+	return nil
 }
 
 func (m *MockStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {

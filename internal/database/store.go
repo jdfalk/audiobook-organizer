@@ -165,6 +165,7 @@ type Store interface {
 
 	// Book segments & merge operations
 	CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error)
+	UpdateBookSegment(segment *BookSegment) error
 	ListBookSegments(bookNumericID int) ([]BookSegment, error)
 	MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
 
@@ -251,6 +252,7 @@ type Book struct {
 	AudiobookReleaseYear *int    `json:"audiobook_release_year,omitempty"`
 	ISBN10               *string `json:"isbn10,omitempty"`
 	ISBN13               *string `json:"isbn13,omitempty"`
+	ASIN                 *string `json:"asin,omitempty"`
 	// iTunes import fields
 	ITunesPersistentID *string    `json:"itunes_persistent_id,omitempty"`
 	ITunesDateAdded    *time.Time `json:"itunes_date_added,omitempty"`
