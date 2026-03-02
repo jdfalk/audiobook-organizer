@@ -477,6 +477,14 @@ func InitConfig() {
 				RequiresAuth: true,
 				Credentials:  make(map[string]string),
 			},
+			{
+				ID:           "wikipedia",
+				Name:         "Wikipedia",
+				Enabled:      true,
+				Priority:     6,
+				RequiresAuth: false,
+				Credentials:  make(map[string]string),
+			},
 		}
 	}
 
@@ -780,6 +788,14 @@ func ResetToDefaults() {
 				Enabled:      false,
 				Priority:     5,
 				RequiresAuth: true,
+				Credentials:  make(map[string]string),
+			},
+			{
+				ID:           "wikipedia",
+				Name:         "Wikipedia",
+				Enabled:      true,
+				Priority:     6,
+				RequiresAuth: false,
 				Credentials:  make(map[string]string),
 			},
 		},

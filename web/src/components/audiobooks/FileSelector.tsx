@@ -1,14 +1,16 @@
 // file: web/src/components/audiobooks/FileSelector.tsx
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8f2a3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b6c
 
-import { Box, Chip, MenuItem, Select, type SelectChangeEvent } from '@mui/material';
+import { Box, Checkbox, Chip, MenuItem, Select, type SelectChangeEvent } from '@mui/material';
 import type { BookSegment } from '../../services/api';
 
 interface FileSelectorProps {
   segments: BookSegment[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
 }
 
 /**
@@ -35,31 +37,49 @@ function chipLabel(seg: BookSegment, totalDigits: number): string {
   return trackStr + truncateBasename(seg.file_path);
 }
 
-export const FileSelector = ({ segments, selectedId, onSelect }: FileSelectorProps) => {
+export const FileSelector = ({ segments, selectedIds, onToggle, onSelectAll, onClearAll }: FileSelectorProps) => {
   // Hide for single-file books
   if (segments.length <= 1) return null;
 
   const totalDigits = Math.max(2, String(segments.length).length);
+  const allSelected = selectedIds.size === segments.length;
+  const noneSelected = selectedIds.size === 0;
 
-  // > 20 segments: dropdown only
+  // > 20 segments: dropdown with multiple select
   if (segments.length > 20) {
-    const handleChange = (event: SelectChangeEvent<string>) => {
+    const selectedArray = Array.from(selectedIds);
+    const handleChange = (event: SelectChangeEvent<string[]>) => {
       const val = event.target.value;
-      onSelect(val === '__all__' ? null : val);
+      const newIds = typeof val === 'string' ? val.split(',') : val;
+      // Sync: toggle each difference
+      const newSet = new Set(newIds);
+      for (const id of segments.map(s => s.id)) {
+        const wasSelected = selectedIds.has(id);
+        const isNowSelected = newSet.has(id);
+        if (wasSelected !== isNowSelected) {
+          onToggle(id);
+        }
+      }
     };
 
     return (
       <Box sx={{ mb: 2 }}>
         <Select
           size="small"
-          value={selectedId ?? '__all__'}
+          multiple
+          value={selectedArray}
           onChange={handleChange}
           sx={{ minWidth: 300 }}
           displayEmpty
+          renderValue={(selected) =>
+            selected.length === 0
+              ? 'No files selected'
+              : `${selected.length} file${selected.length === 1 ? '' : 's'} selected`
+          }
         >
-          <MenuItem value="__all__">All Files</MenuItem>
           {segments.map((seg) => (
             <MenuItem key={seg.id} value={seg.id}>
+              <Checkbox size="small" checked={selectedIds.has(seg.id)} sx={{ p: 0, mr: 1 }} />
               {chipLabel(seg, totalDigits)}
             </MenuItem>
           ))}
@@ -68,7 +88,7 @@ export const FileSelector = ({ segments, selectedId, onSelect }: FileSelectorPro
     );
   }
 
-  // 2-20 segments: horizontal scrollable chip strip
+  // 2-20 segments: horizontal scrollable chip strip with checkboxes
   return (
     <Box
       sx={{
@@ -83,21 +103,25 @@ export const FileSelector = ({ segments, selectedId, onSelect }: FileSelectorPro
       }}
     >
       <Chip
-        label="All Files"
-        variant={selectedId === null ? 'filled' : 'outlined'}
-        color={selectedId === null ? 'primary' : 'default'}
-        onClick={() => onSelect(null)}
+        label={allSelected ? 'Clear' : 'Select All'}
+        variant="outlined"
+        color={allSelected ? 'default' : 'primary'}
+        onClick={allSelected || !noneSelected ? onClearAll : onSelectAll}
       />
-      {segments.map((seg) => (
-        <Chip
-          key={seg.id}
-          label={chipLabel(seg, totalDigits)}
-          variant={selectedId === seg.id ? 'filled' : 'outlined'}
-          color={selectedId === seg.id ? 'primary' : 'default'}
-          onClick={() => onSelect(selectedId === seg.id ? null : seg.id)}
-          sx={{ flexShrink: 0 }}
-        />
-      ))}
+      {segments.map((seg) => {
+        const isSelected = selectedIds.has(seg.id);
+        return (
+          <Chip
+            key={seg.id}
+            icon={<Checkbox size="small" checked={isSelected} sx={{ p: 0, '& .MuiSvgIcon-root': { fontSize: 16 } }} />}
+            label={chipLabel(seg, totalDigits)}
+            variant={isSelected ? 'filled' : 'outlined'}
+            color={isSelected ? 'primary' : 'default'}
+            onClick={() => onToggle(seg.id)}
+            sx={{ flexShrink: 0 }}
+          />
+        );
+      })}
     </Box>
   );
 };
