@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 
-const BASE_URL = process.env.API_URL || 'https://localhost:8080';
+const BASE_URL = process.env.API_URL || 'https://localhost:8484';
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './demo_recordings';
 const DEMO_VIDEO_PATH = path.join(OUTPUT_DIR, 'audiobook-demo.webm');
 const SCREENSHOTS_DIR = path.join(OUTPUT_DIR, 'screenshots');

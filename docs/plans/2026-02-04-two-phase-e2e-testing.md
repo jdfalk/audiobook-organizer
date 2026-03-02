@@ -240,7 +240,7 @@ import { Page } from '@playwright/test';
  */
 export async function resetToFactoryDefaults(
   page: Page,
-  baseURL: string = 'http://localhost:8080'
+  baseURL: string = 'http://localhost:8484'
 ) {
   try {
     const response = await page.evaluate(
@@ -280,7 +280,7 @@ export async function resetToFactoryDefaults(
  */
 export async function setupPhase1ApiDriven(
   page: Page,
-  baseURL: string = 'http://localhost:8080'
+  baseURL: string = 'http://localhost:8484'
 ) {
   // Reset state
   await resetToFactoryDefaults(page, baseURL);
@@ -309,7 +309,7 @@ export async function setupPhase1ApiDriven(
  */
 export async function setupPhase2Interactive(
   page: Page,
-  baseURL: string = 'http://localhost:8080',
+  baseURL: string = 'http://localhost:8484',
   mockOptions = {}
 ) {
   // Reset state via real API first
@@ -551,7 +551,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 
-const BASE_URL = process.env.API_URL || 'https://localhost:8080';
+const BASE_URL = process.env.API_URL || 'https://localhost:8484';
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './demo_recordings';
 const DEMO_VIDEO_PATH = path.join(OUTPUT_DIR, 'audiobook-demo.webm');
 const SCREENSHOTS_DIR = path.join(OUTPUT_DIR, 'screenshots');
@@ -878,7 +878,7 @@ npm run record-demo
 
 ## Environment Variables
 
-- `API_URL`: API server URL (default: http://localhost:8080)
+- `API_URL`: API server URL (default: http://localhost:8484)
 - `PLAYWRIGHT_TEST_BASE_URL`: Base URL for tests (default: http://localhost:5173)
 
 ## Best Practices

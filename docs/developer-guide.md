@@ -31,7 +31,7 @@ make build    # installs npm deps, builds frontend, compiles Go binary
 ./audiobook-organizer serve
 ```
 
-Open `http://localhost:8080`. The welcome wizard walks you through setting a library root directory.
+Open `http://localhost:8484`. The welcome wizard walks you through setting a library root directory.
 
 ### Common Make Targets
 

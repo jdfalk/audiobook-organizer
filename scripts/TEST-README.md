@@ -26,11 +26,11 @@ Comprehensive Python script for manual API endpoint testing.
 **Usage:**
 
 ```bash
-# Test local server (default: http://localhost:8080)
+# Test local server (default: http://localhost:8484)
 python3 test-api-endpoints.py
 
 # Test remote server
-python3 test-api-endpoints.py http://your-server:8080
+python3 test-api-endpoints.py http://your-server:8484
 ```
 
 **Requirements:**
@@ -225,8 +225,8 @@ When adding new endpoints:
 ### Server won't start
 
 ```bash
-# Check if port 8080 is in use
-lsof -i :8080
+# Check if port 8484 is in use
+lsof -i :8484
 
 # Kill existing process
 kill -9 <PID>
@@ -236,7 +236,7 @@ kill -9 <PID>
 
 ```bash
 # Ensure server is running
-curl http://localhost:8080/api/health
+curl http://localhost:8484/api/health
 ```
 
 ### Python script errors

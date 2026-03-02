@@ -22,7 +22,7 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:8080',
+    baseURL: 'http://127.0.0.1:8484',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -56,7 +56,7 @@ export default defineConfig({
     // Build full app (frontend + embedded backend) and run single Go binary
     // Disable TLS for testing by passing empty cert/key flags
     command: `bash -c 'cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && rm -rf /tmp/ao-e2e-db && mkdir -p /tmp/ao-e2e-db /tmp/ao-e2e-books && ./audiobook-organizer serve --tls-cert "" --tls-key "" --host 127.0.0.1 --db /tmp/ao-e2e-db/e2e.pebble --dir /tmp/ao-e2e-books'`,
-    url: 'http://127.0.0.1:8080',
+    url: 'http://127.0.0.1:8484',
     timeout: 120000,
     reuseExistingServer: !process.env.CI,
   },

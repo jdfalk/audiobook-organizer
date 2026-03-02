@@ -16,7 +16,7 @@ to navigate to actual application URLs (`/library/${bookId}`).
 
 **Impact**: Tests cannot run in isolation without:
 
-1. Running backend server (Go application on <http://localhost:8080>)
+1. Running backend server (Go application on <http://localhost:8484>)
 2. Test database with seed data
 3. Mock API routes properly configured
 
@@ -116,11 +116,11 @@ await page.getByRole('tab', { name: 'Tags' }).click();
 // playwright.config.ts
 export default defineConfig({
   use: {
-    baseURL: 'http://localhost:8080', // Go backend
+    baseURL: 'http://localhost:8484', // Go backend
   },
   webServer: {
     command: 'go run main.go',
-    port: 8080,
+    port: 8484,
     timeout: 120 * 1000,
     reuseExistingServer: !process.env.CI,
   },
@@ -353,7 +353,7 @@ npx playwright test metadata-provenance.spec.ts
    - Add cleanup script for test data
 
 3. **Update Playwright Config** (30 minutes)
-   - Add `baseURL: 'http://localhost:8080'`
+   - Add `baseURL: 'http://localhost:8484'`
    - Add `webServer` configuration
    - Configure test timeout and retries
 

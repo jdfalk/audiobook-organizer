@@ -3,7 +3,7 @@
 ## What's Been Completed
 
 ### ✅ 1. Server Running
-- Application rebuilt and running on https://localhost:8080
+- Application rebuilt and running on https://localhost:8484
 - HTTP/2 and HTTP/3 (QUIC) support enabled
 - TLS certificates in place
 

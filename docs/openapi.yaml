@@ -18,7 +18,7 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080/api/v1
+  - url: http://localhost:8484/api/v1
     description: Local development server
   - url: /api/v1
     description: Relative path (for production deployment)

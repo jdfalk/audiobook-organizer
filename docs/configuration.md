@@ -34,13 +34,13 @@ overrides are applied again for selected keys (`root_dir`, `openai_api_key`,
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--host` | Bind host | `localhost` |
-| `--port` | HTTP/HTTPS listen port | `8080` |
+| `--port` | HTTP/HTTPS listen port | `8484` |
 | `--read-timeout` | HTTP read timeout | `0s` |
 | `--write-timeout` | HTTP write timeout | `0s` |
 | `--idle-timeout` | HTTP idle timeout | `120s` |
 | `--tls-cert` | TLS certificate path | `certs/localhost.crt` |
 | `--tls-key` | TLS private key path | `certs/localhost.key` |
-| `--http3-port` | UDP port for HTTP/3 | `8080` |
+| `--http3-port` | UDP port for HTTP/3 | `8484` |
 | `--workers` | Background operation worker count | `2` |
 
 ### `inspect-metadata` Flags

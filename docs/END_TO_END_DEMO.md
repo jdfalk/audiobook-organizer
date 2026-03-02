@@ -12,7 +12,7 @@ This guide provides step-by-step instructions for testing the complete audiobook
 Before running the demo, ensure:
 
 1. The application is built: `make build-api` or `make build`
-2. The server is running on `localhost:8080` or you know the correct API endpoint
+2. The server is running on `localhost:8484` or you know the correct API endpoint
 3. `curl` is installed for making API requests
 4. Optional: A test directory with sample audiobook files
 
@@ -21,7 +21,7 @@ Before running the demo, ensure:
 Start the API server:
 ```bash
 ./audiobook-organizer serve
-# Server runs on http://localhost:8080
+# Server runs on http://localhost:8484
 ```
 
 In another terminal, run the demo commands below.
@@ -36,7 +36,7 @@ Configure a directory to scan for audiobooks.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/import/paths \
+curl -X POST http://localhost:8484/api/v1/import/paths \
   -H "Content-Type: application/json" \
   -d '{
     "path": "/home/user/audiobooks",
@@ -60,7 +60,7 @@ Browse available files in the import path.
 
 **Request:**
 ```bash
-curl -X GET "http://localhost:8080/api/v1/filesystem/browse?path=/home/user/audiobooks" \
+curl -X GET "http://localhost:8484/api/v1/filesystem/browse?path=/home/user/audiobooks" \
   -H "Accept: application/json"
 ```
 
@@ -93,7 +93,7 @@ Import a specific audiobook file.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/import/file \
+curl -X POST http://localhost:8484/api/v1/import/file \
   -H "Content-Type: application/json" \
   -d '{
     "file_path": "/home/user/audiobooks/Book1.m4b",
@@ -130,7 +130,7 @@ List all books in the library with pagination.
 
 **Request:**
 ```bash
-curl -X GET "http://localhost:8080/api/v1/audiobooks?limit=50&offset=0" \
+curl -X GET "http://localhost:8484/api/v1/audiobooks?limit=50&offset=0" \
   -H "Accept: application/json"
 ```
 
@@ -175,10 +175,10 @@ curl -X GET "http://localhost:8080/api/v1/audiobooks?limit=50&offset=0" \
 Example with pagination:
 ```bash
 # Get second page (25 items per page)
-curl -X GET "http://localhost:8080/api/v1/audiobooks?limit=25&offset=25"
+curl -X GET "http://localhost:8484/api/v1/audiobooks?limit=25&offset=25"
 
 # Search for specific book
-curl -X GET "http://localhost:8080/api/v1/audiobooks?search=sample"
+curl -X GET "http://localhost:8484/api/v1/audiobooks?search=sample"
 ```
 
 ### Step 2.2: Fetch Metadata for All Books
@@ -187,7 +187,7 @@ Bulk fetch metadata from external sources (Goodreads, iTunes, etc).
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/metadata/bulk-fetch \
+curl -X POST http://localhost:8484/api/v1/metadata/bulk-fetch \
   -H "Content-Type: application/json" \
   -d '{
     "book_ids": ["book-001"],
@@ -228,7 +228,7 @@ Verify metadata was fetched.
 
 **Request:**
 ```bash
-curl -X GET "http://localhost:8080/api/v1/audiobooks/book-001" \
+curl -X GET "http://localhost:8484/api/v1/audiobooks/book-001" \
   -H "Accept: application/json"
 ```
 
@@ -269,7 +269,7 @@ Reorganize a book's files according to configured rules.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/organize \
+curl -X POST http://localhost:8484/api/v1/audiobooks/book-001/organize \
   -H "Content-Type: application/json" \
   -d '{
     "dry_run": false,
@@ -294,7 +294,7 @@ curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/organize \
 To preview changes without making them, use `"dry_run": true`:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/organize \
+curl -X POST http://localhost:8484/api/v1/audiobooks/book-001/organize \
   -H "Content-Type: application/json" \
   -d '{
     "dry_run": true
@@ -313,7 +313,7 @@ Organize all books in the library (batch operation).
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/organize-all \
+curl -X POST http://localhost:8484/api/v1/audiobooks/organize-all \
   -H "Content-Type: application/json" \
   -d '{
     "dry_run": false,
@@ -360,7 +360,7 @@ Update book information (title, author, series, etc).
 
 **Request:**
 ```bash
-curl -X PUT http://localhost:8080/api/v1/audiobooks/book-001 \
+curl -X PUT http://localhost:8484/api/v1/audiobooks/book-001 \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Updated Title",
@@ -405,7 +405,7 @@ Override specific metadata fields (useful when automatic fetch is incorrect).
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/metadata-override \
+curl -X POST http://localhost:8484/api/v1/audiobooks/book-001/metadata-override \
   -H "Content-Type: application/json" \
   -d '{
     "author": "Correct Author Name",
@@ -438,7 +438,7 @@ Add or remove tags from a book.
 
 **Request - Add Tags:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/tags \
+curl -X POST http://localhost:8484/api/v1/audiobooks/book-001/tags \
   -H "Content-Type: application/json" \
   -d '{
     "tags": ["favorite", "completed"],
@@ -457,7 +457,7 @@ curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/tags \
 
 **Request - Remove Tags:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/audiobooks/book-001/tags \
+curl -X POST http://localhost:8484/api/v1/audiobooks/book-001/tags \
   -H "Content-Type: application/json" \
   -d '{
     "tags": ["old-tag"],
@@ -474,7 +474,7 @@ Execute a complete workflow from import to organization:
 ### Setup
 ```bash
 # Set variables for easier testing
-API_BASE="http://localhost:8080/api/v1"
+API_BASE="http://localhost:8484/api/v1"
 AUDIOBOOK_FILE="/home/user/audiobooks/test_book.m4b"
 ```
 
@@ -539,7 +539,7 @@ echo "Workflow complete!"
 All list endpoints support pagination:
 
 ```bash
-curl -X GET "http://localhost:8080/api/v1/audiobooks?limit=25&offset=0&search=query"
+curl -X GET "http://localhost:8484/api/v1/audiobooks?limit=25&offset=0&search=query"
 ```
 
 **Parameters:**
@@ -640,13 +640,13 @@ Create `test_e2e.sh`:
 #!/bin/bash
 set -e
 
-API="http://localhost:8080/api/v1"
+API="http://localhost:8484/api/v1"
 
 echo "Testing Audiobook Organizer E2E..."
 
 # Test 1: Health check
 echo -n "1. Health check... "
-curl -s -f http://localhost:8080/api/health > /dev/null && echo "✓" || echo "✗"
+curl -s -f http://localhost:8484/api/health > /dev/null && echo "✓" || echo "✗"
 
 # Test 2: List audiobooks
 echo -n "2. List audiobooks... "
@@ -681,7 +681,7 @@ chmod +x test_e2e.sh
 ### Using Postman
 
 1. Import OpenAPI spec: `docs/openapi.yaml`
-2. Set base URL: `http://localhost:8080`
+2. Set base URL: `http://localhost:8484`
 3. Create requests for each endpoint
 4. Test with various parameters
 
@@ -701,7 +701,7 @@ Test with multiple concurrent requests:
 # Install: brew install ab (macOS) or apt-get install apache2-utils (Linux)
 
 # Test with 100 concurrent requests
-ab -c 100 -n 1000 http://localhost:8080/api/v1/audiobooks
+ab -c 100 -n 1000 http://localhost:8484/api/v1/audiobooks
 
 # Expected: < 100ms response time for most requests
 ```
@@ -710,7 +710,7 @@ ab -c 100 -n 1000 http://localhost:8080/api/v1/audiobooks
 
 ```bash
 # Test large pagination
-time curl -s "http://localhost:8080/api/v1/audiobooks?limit=1000&offset=10000" > /dev/null
+time curl -s "http://localhost:8484/api/v1/audiobooks?limit=1000&offset=10000" > /dev/null
 
 # Should complete in < 1 second
 ```

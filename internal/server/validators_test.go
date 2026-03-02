@@ -779,7 +779,7 @@ func TestValidateURL(t *testing.T) {
 		},
 		{
 			name:    "valid URL with port",
-			url:     "https://example.com:8080",
+			url:     "https://example.com:8484",
 			wantErr: false,
 		},
 		{

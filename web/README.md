@@ -38,7 +38,7 @@ npm run dev
 ```
 
 The dev server runs on `http://localhost:5173` with API proxy to
-`http://localhost:8080`.
+`http://localhost:8484`.
 
 ### Build for Production
 
@@ -106,8 +106,8 @@ web/
 
 ## API Integration
 
-The frontend connects to the backend API running on port 8080. In development,
-Vite proxies `/api` requests to `http://localhost:8080`.
+The frontend connects to the backend API running on port 8484. In development,
+Vite proxies `/api` requests to `http://localhost:8484`.
 
 Environment variables:
 

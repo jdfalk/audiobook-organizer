@@ -2372,7 +2372,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Duplicate Detection', () => {
   test('should detect duplicate when importing same file 5 times', async ({ page }) => {
-    await page.goto('https://localhost:8080/library');
+    await page.goto('https://localhost:8484/library');
 
     // Import the same file 5 times
     const testFilePath = '/path/to/test/audiobook.mp3';
@@ -2416,7 +2416,7 @@ test.describe('Duplicate Detection', () => {
   });
 
   test('should handle bulk import with duplicates', async ({ page }) => {
-    await page.goto('https://localhost:8080/library');
+    await page.goto('https://localhost:8484/library');
 
     // Select 20 files (10 unique + 10 duplicates)
     const filePaths = [
@@ -2450,7 +2450,7 @@ test.describe('Duplicate Detection', () => {
   });
 
   test('should show duplicate notification in UI', async ({ page }) => {
-    await page.goto('https://localhost:8080/library');
+    await page.goto('https://localhost:8484/library');
 
     // Import file first time
     await page.click('[data-testid="import-button"]');
@@ -2486,7 +2486,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Wanted Feature', () => {
   test('should search and add book to wanted list', async ({ page }) => {
-    await page.goto('https://localhost:8080/search');
+    await page.goto('https://localhost:8484/search');
 
     // Search for a book
     await page.fill('[data-testid="search-input"]', 'The Lord of the Rings');
@@ -2502,7 +2502,7 @@ test.describe('Wanted Feature', () => {
     await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
 
     // Navigate to wanted list
-    await page.goto('https://localhost:8080/wanted');
+    await page.goto('https://localhost:8484/wanted');
 
     // Verify book appears in wanted list
     await expect(page.locator('[data-testid="wanted-book"]')).toContainText('The Lord of the Rings');
@@ -2512,7 +2512,7 @@ test.describe('Wanted Feature', () => {
   });
 
   test('should add author with all works', async ({ page }) => {
-    await page.goto('https://localhost:8080/search');
+    await page.goto('https://localhost:8484/search');
 
     await page.fill('[data-testid="search-input"]', 'Brandon Sanderson');
     await page.waitForTimeout(1000);
@@ -2528,7 +2528,7 @@ test.describe('Wanted Feature', () => {
     expect(successMsg).toContain('books added');
 
     // Navigate to wanted list
-    await page.goto('https://localhost:8080/wanted');
+    await page.goto('https://localhost:8484/wanted');
 
     // Verify multiple books appear
     const bookCount = await page.locator('[data-testid="wanted-book"]').count();
@@ -2537,13 +2537,13 @@ test.describe('Wanted Feature', () => {
 
   test('should auto-match imported file to wanted book', async ({ page }) => {
     // First, add a book to wanted list
-    await page.goto('https://localhost:8080/search');
+    await page.goto('https://localhost:8484/search');
     await page.fill('[data-testid="search-input"]', 'Dune');
     await page.waitForTimeout(1000);
     await page.click('[data-testid="book-result"]:first-child [data-testid="add-to-wanted-button"]');
 
     // Now import a file with matching title
-    await page.goto('https://localhost:8080/library');
+    await page.goto('https://localhost:8484/library');
     await page.click('[data-testid="import-button"]');
     await page.fill('[data-testid="file-path-input"]', '/test/dune.mp3');
     await page.click('[data-testid="confirm-import"]');
@@ -2561,19 +2561,19 @@ test.describe('Wanted Feature', () => {
     await expect(bookCard.locator('[data-testid="state-chip"]')).toContainText('imported');
 
     // Verify book is removed from wanted list
-    await page.goto('https://localhost:8080/wanted');
+    await page.goto('https://localhost:8484/wanted');
     await expect(page.locator('[data-testid="wanted-book"]:has-text("Dune")')).not.toBeVisible();
   });
 
   test('should transition wanted book to imported manually', async ({ page }) => {
     // Add book to wanted list
-    await page.goto('https://localhost:8080/search');
+    await page.goto('https://localhost:8484/search');
     await page.fill('[data-testid="search-input"]', 'Test Book');
     await page.waitForTimeout(1000);
     await page.click('[data-testid="book-result"]:first-child [data-testid="add-to-wanted-button"]');
 
     // Go to wanted list
-    await page.goto('https://localhost:8080/wanted');
+    await page.goto('https://localhost:8484/wanted');
 
     // Click "Mark as Imported"
     await page.click('[data-testid="wanted-book"]:first-child [data-testid="mark-imported-button"]');
@@ -2589,7 +2589,7 @@ test.describe('Wanted Feature', () => {
     await expect(page.locator('[data-testid="wanted-book"]:has-text("Test Book")')).not.toBeVisible();
 
     // Verify book appears in library as imported
-    await page.goto('https://localhost:8080/library');
+    await page.goto('https://localhost:8484/library');
     const bookCard = await page.locator('[data-testid="book-card"]:has-text("Test Book")');
     await expect(bookCard.locator('[data-testid="state-chip"]')).toContainText('imported');
   });

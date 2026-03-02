@@ -186,7 +186,7 @@ docker:
 docker-run:
 	@echo "🐳 Starting with docker compose..."
 	@APP_VERSION=$(VERSION) docker compose up -d
-	@echo "✅ Running at http://localhost:8080"
+	@echo "✅ Running at http://localhost:8484"
 
 ## docker-stop: Stop docker compose
 docker-stop:

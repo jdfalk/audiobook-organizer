@@ -10,7 +10,7 @@ services:
         APP_VERSION: ${APP_VERSION:-dev}
     image: audiobook-organizer:latest
     ports:
-      - "${AO_PORT:-8080}:8080"
+      - "${AO_PORT:-8484}:8484"
     volumes:
       - ao-data:/data
       - ${AUDIOBOOK_ROOT_DIR:-./audiobooks}:/audiobooks:ro
@@ -19,7 +19,7 @@ services:
       - AO_DB=/data/audiobooks.pebble
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8484/health"]
       interval: 30s
       timeout: 10s
       retries: 3

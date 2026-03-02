@@ -297,7 +297,7 @@ func stubCommandDeps(t *testing.T) {
 	shutdownQueue = func(timeout time.Duration) error { return nil }
 	newServer = func() *server.Server { return &server.Server{} }
 	getDefaultServerConfig = func() server.ServerConfig {
-		return server.ServerConfig{Host: "localhost", Port: "8080"}
+		return server.ServerConfig{Host: "localhost", Port: "8484"}
 	}
 	startServer = func(srv *server.Server, cfg server.ServerConfig) error { return nil }
 

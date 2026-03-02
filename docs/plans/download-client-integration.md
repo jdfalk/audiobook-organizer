@@ -802,13 +802,13 @@ type DelugeConfig struct {
 }
 
 type QBittorrentConfig struct {
-    URL      string `json:"url"`      // e.g. "http://localhost:8080"
+    URL      string `json:"url"`      // e.g. "http://localhost:8484"
     Username string `json:"username"`
     Password string `json:"password"`
 }
 
 type SABnzbdConfig struct {
-    URL    string `json:"url"`    // e.g. "http://localhost:8080"
+    URL    string `json:"url"`    // e.g. "http://localhost:8484"
     APIKey string `json:"api_key"`
 }
 
@@ -855,12 +855,12 @@ download_client:
     password: "localoftp"          # In production, store via encrypted setting API
 
   qbittorrent:
-    url: "http://localhost:8080"
+    url: "http://localhost:8484"
     username: "admin"
     password: "adminadmin"
 
   sabnzbd:
-    url: "http://localhost:8080"
+    url: "http://localhost:8484"
     api_key: "abc123def456"
 
   shadow:

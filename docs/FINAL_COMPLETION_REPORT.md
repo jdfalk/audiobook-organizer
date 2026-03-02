@@ -244,7 +244,7 @@ bash scripts/e2e_test.sh
 
 # Or use API examples
 source scripts/api_examples.sh
-curl -s http://localhost:8080/api/health | jq '.'
+curl -s http://localhost:8484/api/health | jq '.'
 ```
 
 ### Quick Manual Walkthrough
