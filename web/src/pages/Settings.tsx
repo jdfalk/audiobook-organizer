@@ -526,6 +526,7 @@ export function Settings() {
   const [settings, setSettings] = useState<SettingsState>(initialSettings);
   const [saved, setSaved] = useState(false);
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
+  const [sourceTestStatus, setSourceTestStatus] = useState<Record<string, { testing: boolean; result?: { success: boolean; message?: string; error?: string } }>>({});
   const [savedApiKeyMask, setSavedApiKeyMask] = useState<string>('');
   const settingsSnapshot = useMemo(
     () => JSON.stringify(settings),
@@ -1109,6 +1110,34 @@ export function Settings() {
       ),
     }));
     setSaved(false);
+  };
+
+  const handleTestMetadataSource = async (sourceId: string) => {
+    const source = settings.metadataSources.find((s) => s.id === sourceId);
+    const apiKey = source?.credentials?.apiKey || '';
+    if (!apiKey) {
+      setSourceTestStatus((prev) => ({
+        ...prev,
+        [sourceId]: { testing: false, result: { success: false, error: 'No API key entered' } },
+      }));
+      return;
+    }
+    setSourceTestStatus((prev) => ({
+      ...prev,
+      [sourceId]: { testing: true },
+    }));
+    try {
+      const result = await api.testMetadataSource(sourceId, apiKey);
+      setSourceTestStatus((prev) => ({
+        ...prev,
+        [sourceId]: { testing: false, result },
+      }));
+    } catch (err) {
+      setSourceTestStatus((prev) => ({
+        ...prev,
+        [sourceId]: { testing: false, result: { success: false, error: String(err) } },
+      }));
+    }
   };
 
   const handleCredentialChange = (
@@ -2486,6 +2515,31 @@ export function Settings() {
                                   'Enter your ' + source.name + ' API key'
                                 }
                               />
+                            </Grid>
+                            <Grid item xs={12}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={!source.credentials.apiKey || sourceTestStatus[source.id]?.testing}
+                                onClick={() => handleTestMetadataSource(source.id)}
+                              >
+                                {sourceTestStatus[source.id]?.testing ? 'Testing...' : 'Test Connection'}
+                              </Button>
+                              {sourceTestStatus[source.id]?.result && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    ml: 2,
+                                    color: sourceTestStatus[source.id]?.result?.success
+                                      ? 'success.main'
+                                      : 'error.main',
+                                  }}
+                                >
+                                  {sourceTestStatus[source.id]?.result?.success
+                                    ? sourceTestStatus[source.id]?.result?.message
+                                    : sourceTestStatus[source.id]?.result?.error}
+                                </Typography>
+                              )}
                             </Grid>
                             {source.id === 'google-books' && (
                               <Grid item xs={12}>
