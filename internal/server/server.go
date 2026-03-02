@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.79.0
+// version: 1.80.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -498,10 +498,12 @@ type ServerConfig struct {
 
 // NewServer creates a new server instance
 func NewServer() *Server {
-	router := gin.Default()
+	router := gin.New() // don't use gin.Default() — we add our own middleware
 
-	// Set up middleware
-	router.Use(gin.Logger())
+	// Custom logger that skips noisy polling endpoints
+	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
+		SkipPaths: []string{"/api/v1/operations/active"},
+	}))
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(servermiddleware.BasicAuth())
