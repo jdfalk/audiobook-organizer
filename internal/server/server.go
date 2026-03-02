@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.78.0
+// version: 1.79.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1167,6 +1167,7 @@ func (s *Server) setupRoutes() {
 			// AI-powered parsing routes
 			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
 			protected.POST("/ai/test-connection", s.testAIConnection)
+			protected.POST("/metadata-sources/test", s.testMetadataSource)
 			protected.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
 
 			// Open Library dump routes
@@ -4146,6 +4147,47 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "OpenAI connection successful"})
+}
+
+// testMetadataSource tests a metadata source API key by performing a simple search.
+func (s *Server) testMetadataSource(c *gin.Context) {
+	var req struct {
+		SourceID string `json:"source_id"`
+		APIKey   string `json:"api_key"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.SourceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source_id is required", "success": false})
+		return
+	}
+	if req.APIKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "api_key is required", "success": false})
+		return
+	}
+
+	testQuery := "The Hobbit" // well-known book for test queries
+
+	switch req.SourceID {
+	case "google-books":
+		client := metadata.NewGoogleBooksClient(req.APIKey)
+		results, err := client.SearchByTitle(testQuery)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "error": fmt.Sprintf("Google Books API error: %v", err)})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Google Books connection successful (%d results)", len(results))})
+
+	case "hardcover":
+		client := metadata.NewHardcoverClient(req.APIKey)
+		results, err := client.SearchByTitle(testQuery)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "error": fmt.Sprintf("Hardcover API error: %v", err)})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Hardcover connection successful (%d results)", len(results))})
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown source: %s", req.SourceID), "success": false})
+	}
 }
 
 // parseAudiobookWithAI parses an audiobook's filename with AI and updates its metadata

@@ -106,6 +106,8 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 				// Also check credentials map from metadata source config
 				if apiToken, ok := src.Credentials["api_token"]; ok && apiToken != "" {
 					token = apiToken
+				} else if apiKey, ok := src.Credentials["apiKey"]; ok && apiKey != "" {
+					token = apiKey
 				}
 			}
 			if token != "" {

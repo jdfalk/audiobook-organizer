@@ -1495,6 +1495,20 @@ export async function parseFilenameWithAI(
   return response.json();
 }
 
+export async function testMetadataSource(
+  sourceId: string,
+  apiKey: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const response = await fetch(`${API_BASE}/metadata-sources/test`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ source_id: sourceId, api_key: apiKey }),
+  });
+  return response.json();
+}
+
 export async function testAIConnection(
   apiKey?: string
 ): Promise<{ success: boolean; message?: string; error?: string }> {
