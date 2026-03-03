@@ -1,10 +1,11 @@
 // file: internal/database/mock_store.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -1026,4 +1027,20 @@ func (m *MockStore) Reset() error {
 
 func (m *MockStore) SetLastWrittenAt(id string, t time.Time) error {
 	return nil
+}
+
+func (m *MockStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetBookAtVersion(id string, ts time.Time) (*Book, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
+	return 0, nil
 }

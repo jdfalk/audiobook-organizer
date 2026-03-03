@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2880,4 +2880,24 @@ func (s *SQLiteStore) Reset() error {
 	}
 
 	return nil
+}
+
+// GetBookVersions is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+	return nil, nil
+}
+
+// GetBookAtVersion is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) GetBookAtVersion(id string, ts time.Time) (*Book, error) {
+	return nil, fmt.Errorf("book versioning not supported in SQLite store")
+}
+
+// RevertBookToVersion is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) {
+	return nil, fmt.Errorf("book versioning not supported in SQLite store")
+}
+
+// PruneBookVersions is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) PruneBookVersions(id string, keepCount int) (int, error) {
+	return 0, nil
 }

@@ -7451,3 +7451,205 @@ func (_c *MockStore_ListBookTombstones_Call) RunAndReturn(run func(int) ([]datab
 	_c.Call.Return(run)
 	return _c
 }
+
+// GetBookVersions provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookVersions(id string, limit int) ([]database.BookVersion, error) {
+	ret := _mock.Called(id, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookVersions")
+	}
+
+	var r0 []database.BookVersion
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.BookVersion, error)); ok {
+		return returnFunc(id, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int) []database.BookVersion); ok {
+		r0 = returnFunc(id, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookVersion)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int) error); ok {
+		r1 = returnFunc(id, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetBookVersions_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookVersions(id interface{}, limit interface{}) *MockStore_GetBookVersions_Call {
+	return &MockStore_GetBookVersions_Call{Call: _e.mock.On("GetBookVersions", id, limit)}
+}
+
+func (_c *MockStore_GetBookVersions_Call) Run(run func(id string, limit int)) *MockStore_GetBookVersions_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(int)) })
+	return _c
+}
+
+func (_c *MockStore_GetBookVersions_Call) Return(versions []database.BookVersion, err error) *MockStore_GetBookVersions_Call {
+	_c.Call.Return(versions, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookVersions_Call) RunAndReturn(run func(string, int) ([]database.BookVersion, error)) *MockStore_GetBookVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBookAtVersion provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookAtVersion(id string, ts time.Time) (*database.Book, error) {
+	ret := _mock.Called(id, ts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookAtVersion")
+	}
+
+	var r0 *database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) (*database.Book, error)); ok {
+		return returnFunc(id, ts)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) *database.Book); ok {
+		r0 = returnFunc(id, ts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, time.Time) error); ok {
+		r1 = returnFunc(id, ts)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetBookAtVersion_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookAtVersion(id interface{}, ts interface{}) *MockStore_GetBookAtVersion_Call {
+	return &MockStore_GetBookAtVersion_Call{Call: _e.mock.On("GetBookAtVersion", id, ts)}
+}
+
+func (_c *MockStore_GetBookAtVersion_Call) Run(run func(id string, ts time.Time)) *MockStore_GetBookAtVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(time.Time)) })
+	return _c
+}
+
+func (_c *MockStore_GetBookAtVersion_Call) Return(book *database.Book, err error) *MockStore_GetBookAtVersion_Call {
+	_c.Call.Return(book, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookAtVersion_Call) RunAndReturn(run func(string, time.Time) (*database.Book, error)) *MockStore_GetBookAtVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevertBookToVersion provides a mock function for the type MockStore
+func (_mock *MockStore) RevertBookToVersion(id string, ts time.Time) (*database.Book, error) {
+	ret := _mock.Called(id, ts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevertBookToVersion")
+	}
+
+	var r0 *database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) (*database.Book, error)); ok {
+		return returnFunc(id, ts)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) *database.Book); ok {
+		r0 = returnFunc(id, ts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, time.Time) error); ok {
+		r1 = returnFunc(id, ts)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_RevertBookToVersion_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) RevertBookToVersion(id interface{}, ts interface{}) *MockStore_RevertBookToVersion_Call {
+	return &MockStore_RevertBookToVersion_Call{Call: _e.mock.On("RevertBookToVersion", id, ts)}
+}
+
+func (_c *MockStore_RevertBookToVersion_Call) Run(run func(id string, ts time.Time)) *MockStore_RevertBookToVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(time.Time)) })
+	return _c
+}
+
+func (_c *MockStore_RevertBookToVersion_Call) Return(book *database.Book, err error) *MockStore_RevertBookToVersion_Call {
+	_c.Call.Return(book, err)
+	return _c
+}
+
+func (_c *MockStore_RevertBookToVersion_Call) RunAndReturn(run func(string, time.Time) (*database.Book, error)) *MockStore_RevertBookToVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PruneBookVersions provides a mock function for the type MockStore
+func (_mock *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
+	ret := _mock.Called(id, keepCount)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PruneBookVersions")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, int) (int, error)); ok {
+		return returnFunc(id, keepCount)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int) int); ok {
+		r0 = returnFunc(id, keepCount)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int) error); ok {
+		r1 = returnFunc(id, keepCount)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_PruneBookVersions_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) PruneBookVersions(id interface{}, keepCount interface{}) *MockStore_PruneBookVersions_Call {
+	return &MockStore_PruneBookVersions_Call{Call: _e.mock.On("PruneBookVersions", id, keepCount)}
+}
+
+func (_c *MockStore_PruneBookVersions_Call) Run(run func(id string, keepCount int)) *MockStore_PruneBookVersions_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(int)) })
+	return _c
+}
+
+func (_c *MockStore_PruneBookVersions_Call) Return(pruned int, err error) *MockStore_PruneBookVersions_Call {
+	_c.Call.Return(pruned, err)
+	return _c
+}
+
+func (_c *MockStore_PruneBookVersions_Call) RunAndReturn(run func(string, int) (int, error)) *MockStore_PruneBookVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}

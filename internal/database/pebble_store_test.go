@@ -1,16 +1,20 @@
 // file: internal/database/pebble_store_test.go
-// version: 1.0.3
+// version: 1.1.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package database
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/cockroachdb/pebble/v2"
 	ulid "github.com/oklog/ulid/v2"
+	"github.com/stretchr/testify/require"
 )
 
 // setupPebbleTestDB creates a temporary PebbleDB database for testing
@@ -824,4 +828,105 @@ func TestPebbleUserPreferences(t *testing.T) {
 	if len(prefs) != 1 {
 		t.Errorf("Expected 1 preference, got %d", len(prefs))
 	}
+}
+
+func TestPebbleUpdateBookCreatesVersion(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	book := &Book{Title: "Original Title", FilePath: "/test/book.m4b"}
+	created, err := store.CreateBook(book)
+	require.NoError(t, err)
+
+	created.Title = "Updated Title"
+	updated, err := store.UpdateBook(created.ID, created)
+	require.NoError(t, err)
+	require.Equal(t, "Updated Title", updated.Title)
+
+	versions, err := store.GetBookVersions(created.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, versions, 1)
+
+	var oldBook Book
+	err = json.Unmarshal(versions[0].Data, &oldBook)
+	require.NoError(t, err)
+	require.Equal(t, "Original Title", oldBook.Title)
+}
+
+func TestPebbleGetBookAtVersion(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	book := &Book{Title: "V1", FilePath: "/test/v1.m4b"}
+	created, err := store.CreateBook(book)
+	require.NoError(t, err)
+
+	created.Title = "V2"
+	store.UpdateBook(created.ID, created)
+	time.Sleep(time.Millisecond)
+	created.Title = "V3"
+	store.UpdateBook(created.ID, created)
+
+	versions, err := store.GetBookVersions(created.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, versions, 2)
+
+	// Newest first, so versions[1] is V1
+	oldBook, err := store.GetBookAtVersion(created.ID, versions[1].Timestamp)
+	require.NoError(t, err)
+	require.Equal(t, "V1", oldBook.Title)
+}
+
+func TestPebbleRevertBookToVersion(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	book := &Book{Title: "Original", FilePath: "/test/orig.m4b"}
+	created, err := store.CreateBook(book)
+	require.NoError(t, err)
+
+	created.Title = "Modified"
+	store.UpdateBook(created.ID, created)
+
+	versions, err := store.GetBookVersions(created.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, versions, 1)
+
+	reverted, err := store.RevertBookToVersion(created.ID, versions[0].Timestamp)
+	require.NoError(t, err)
+	require.Equal(t, "Original", reverted.Title)
+
+	current, err := store.GetBookByID(created.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Original", current.Title)
+
+	// Revert creates a new version (snapshot of "Modified")
+	versions2, err := store.GetBookVersions(created.ID, 10)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(versions2), 2)
+}
+
+func TestPebblePruneBookVersions(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	book := &Book{Title: "V1", FilePath: "/test/prune.m4b"}
+	created, err := store.CreateBook(book)
+	require.NoError(t, err)
+
+	for i := 2; i <= 6; i++ {
+		created.Title = fmt.Sprintf("V%d", i)
+		store.UpdateBook(created.ID, created)
+		time.Sleep(time.Millisecond)
+	}
+
+	versions, _ := store.GetBookVersions(created.ID, 100)
+	require.Len(t, versions, 5)
+
+	pruned, err := store.PruneBookVersions(created.ID, 2)
+	require.NoError(t, err)
+	require.Equal(t, 3, pruned)
+
+	remaining, _ := store.GetBookVersions(created.ID, 100)
+	require.Len(t, remaining, 2)
 }
