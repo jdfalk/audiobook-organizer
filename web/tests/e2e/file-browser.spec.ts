@@ -1,5 +1,5 @@
 // file: web/tests/e2e/file-browser.spec.ts
-// version: 1.2.0
+// version: 1.4.0
 // guid: bbd8bdb0-5dc1-448f-a520-def03ae76825
 // last-edited: 2026-02-04
 
@@ -90,7 +90,7 @@ const openImportFileBrowser = async (page: Page) => {
   await setupMockApi(page, { filesystem, books: [] });
   await page.goto('/library');
   await page.waitForLoadState('networkidle');
-  await page.getByRole('button', { name: 'Import Files' }).click();
+  await page.getByRole('button', { name: 'Import Files' }).first().click();
   await expect(
     page.getByRole('dialog', { name: 'Import Audiobook File' })
   ).toBeVisible();
@@ -156,7 +156,7 @@ test.describe('File Browser', () => {
 
     // Assert
     await expect(page.getByText('Folder excluded from scan.')).toBeVisible();
-    await expect(page.getByText('Excluded')).toBeVisible();
+    await expect(page.getByText('Excluded', { exact: true })).toBeVisible();
   });
 
   test('removes excluded folder marker', async ({ page }) => {
@@ -166,18 +166,30 @@ test.describe('File Browser', () => {
     await page.getByRole('button', { name: 'user' }).click();
     await page.getByRole('button', { name: 'audiobooks' }).click();
 
-    await page.getByRole('button', { name: 'temp' }).click({ button: 'right' });
-    await page
-      .getByRole('menuitem', { name: 'Exclude from scan' })
-      .click();
+    // Exclude temp first — use listitem in case button is disabled from prior test state
+    await page.getByRole('listitem').filter({ hasText: 'temp' }).click({ button: 'right' });
+    // Context menu may show "Exclude" or "Include" depending on current state
+    const excludeItem = page.getByRole('menuitem', { name: 'Exclude from scan' });
+    const includeItem = page.getByRole('menuitem', { name: 'Include in scan' });
+    if (await excludeItem.isVisible()) {
+      await excludeItem.click();
+      await expect(page.getByText('Folder excluded from scan.')).toBeVisible();
+      await expect(page.getByText('Folder excluded from scan.')).not.toBeVisible({ timeout: 10000 });
+    } else {
+      // Already excluded, dismiss menu
+      await page.keyboard.press('Escape');
+    }
 
-    // Act
-    await page.getByRole('button', { name: 'temp' }).click({ button: 'right' });
+    // Now it should be excluded — verify
+    await expect(page.getByText('Excluded', { exact: true })).toBeVisible();
+
+    // Act - un-exclude it
+    await page.getByRole('listitem').filter({ hasText: 'temp' }).click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Include in scan' }).click();
 
     // Assert
     await expect(page.getByText('Folder included in scan.')).toBeVisible();
-    await expect(page.getByText('Excluded')).not.toBeVisible();
+    await expect(page.getByText('Excluded', { exact: true })).not.toBeVisible();
   });
 
   test('shows disk space information', async ({ page }) => {
@@ -185,8 +197,8 @@ test.describe('File Browser', () => {
     await openImportFileBrowser(page);
 
     // Act + Assert
-    await expect(page.getByText(/Available/i)).toBeVisible();
-    await expect(page.getByText(/Library/i)).toBeVisible();
+    await expect(page.getByText(/Available\s+[\d.]+\s+[KMGT]?B/i)).toBeVisible();
+    await expect(page.getByText(/Library\s+[\d.]+\s+[KMGT]?B/i)).toBeVisible();
   });
 
   test('filters files by extension', async ({ page }) => {

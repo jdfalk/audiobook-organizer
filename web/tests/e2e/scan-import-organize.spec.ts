@@ -1,7 +1,7 @@
 // file: web/tests/e2e/scan-import-organize.spec.ts
-// version: 1.4.0
+// version: 1.5.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
-// last-edited: 2026-02-04
+// last-edited: 2026-03-02
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -277,11 +277,15 @@ test.describe('Scan/Import/Organize Workflow', () => {
     await expect(page.getByText('Organized 3 of 3')).toBeVisible();
     await waitForToast(page, 'Successfully organized 3 audiobooks.');
 
+    // Close the organize dialog before proceeding
+    await page.getByRole('button', { name: 'Close' }).click();
+
     // Act: filter organized and confirm
     await page.getByRole('button', { name: /filters/i }).click();
     await page.getByLabel('Library State').click();
     await page.getByRole('option', { name: 'Organized' }).click();
-    await page.getByRole('button', { name: /filters/i }).click();
+    await page.keyboard.press('Escape'); // Close dropdown
+    await page.keyboard.press('Escape'); // Close filter drawer
 
     // Assert
     await expect(page.getByText('Import Book 1')).toBeVisible();
@@ -290,7 +294,8 @@ test.describe('Scan/Import/Organize Workflow', () => {
     await page.getByRole('button', { name: /filters/i }).click();
     await page.getByLabel('Library State').click();
     await page.getByRole('option', { name: 'Import' }).click();
-    await page.getByRole('button', { name: /filters/i }).click();
+    await page.keyboard.press('Escape'); // Close dropdown
+    await page.keyboard.press('Escape'); // Close filter drawer
 
     // Assert
     await expect(page.getByText('No audiobooks found')).toBeVisible();

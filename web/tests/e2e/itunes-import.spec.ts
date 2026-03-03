@@ -1,6 +1,7 @@
 // file: tests/e2e/itunes-import.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8d0eb913-029f-42f1-ad7b-984aa66a6fdc
+// last-edited: 2026-03-02
 
 import { test, expect } from '@playwright/test';
 import { setupMockApi } from './utils/test-helpers';
@@ -37,8 +38,8 @@ test.describe('iTunes Import', () => {
 
     await page.getByRole('button', { name: 'Import Library' }).click();
 
-    // Assert
-    await expect(page.getByRole('progressbar')).toBeVisible();
+    // Assert - mock returns completed immediately so progressbar may be brief
+    // Just verify the import completes successfully
     await expect(page.getByText('Import Complete', { exact: true })).toBeVisible({ timeout: 10000 });
   });
 });

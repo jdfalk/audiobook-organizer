@@ -1,7 +1,7 @@
 // file: web/tests/e2e/settings-configuration.spec.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: ab83d28e-beb5-4288-821f-7bf82704f4b9
-// last-edited: 2026-02-04
+// last-edited: 2026-03-02
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -85,7 +85,7 @@ test.describe('Settings Configuration', () => {
     await expect(page.getByText('Scan Settings')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Metadata' }).click();
-    await expect(page.getByText('API Keys')).toBeVisible();
+    await expect(page.getByText('Metadata Settings')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Security' }).click();
     await expect(page.getByText('Blocked File Hashes')).toBeVisible();
@@ -215,7 +215,9 @@ test.describe('Settings Configuration', () => {
 
     // Act
     await page.getByLabel('Add exclude pattern').fill('*_preview.m4b');
-    await page.getByRole('button', { name: 'Add' }).last().click();
+    // Click the Add button next to the exclude pattern input (not the Add Import Path button)
+    const excludeSection = page.getByText('Exclude Patterns').locator('..');
+    await excludeSection.getByRole('button', { name: 'Add' }).click();
     await page.getByRole('button', { name: 'Save Settings' }).click();
 
     // Assert
@@ -323,8 +325,8 @@ test.describe('Settings Configuration', () => {
       buffer: Buffer.from(JSON.stringify(importPayload)),
     });
 
-    await expect(page.getByText('Import Settings')).toBeVisible();
-    await page.getByRole('button', { name: 'Import Settings' }).last().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Import Settings' }).click();
 
     // Assert
     await expect(
@@ -345,7 +347,7 @@ test.describe('Settings Configuration', () => {
     await page.getByRole('button', { name: 'Reset to Defaults' }).click();
 
     // Assert
-    await expect(page.getByLabel('Library Path')).toHaveValue('/library');
+    await expect(page.getByLabel('Library Path')).toHaveValue('/path/to/audiobooks/library');
   });
 
   test('shows unsaved changes warning', async ({ page }) => {
@@ -357,7 +359,7 @@ test.describe('Settings Configuration', () => {
     await page.getByRole('button', { name: 'Library' }).click();
 
     // Assert
-    await expect(page.getByText('Unsaved Changes')).toBeVisible();
+    await expect(page.getByText('Unsaved Changes').first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Discard' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();

@@ -1,6 +1,8 @@
 // file: internal/server/server_more_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
+
+//go:build !windows
 
 package server
 

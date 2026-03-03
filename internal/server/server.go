@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.80.0
+// version: 1.81.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -383,17 +383,6 @@ func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 }
 
 // calculateLibrarySizes computes library and import path sizes with caching
-// filePhysicalSize returns the on-disk size using block count (physical), falling
-// back to logical size if syscall info is unavailable.
-func filePhysicalSize(info os.FileInfo) int64 {
-	if sys := info.Sys(); sys != nil {
-		if stat, ok := sys.(*syscall.Stat_t); ok {
-			return stat.Blocks * 512
-		}
-	}
-	return info.Size()
-}
-
 func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64) {
 	cacheLock.RLock()
 	if time.Since(cachedSizeComputedAt) < librarySizeCacheTTL {

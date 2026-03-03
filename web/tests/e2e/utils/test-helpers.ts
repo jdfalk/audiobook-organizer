@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.5.0
+// version: 2.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 // last-edited: 2026-02-15
 
@@ -348,7 +348,7 @@ export async function setupMockApiRoutes(
     importPaths: options.importPaths || [],
     backups: options.backups || [],
     blockedHashes: options.blockedHashes || [],
-    filesystem: options.filesystem || {},
+    filesystem: JSON.parse(JSON.stringify(options.filesystem || {})),
     homeDirectory: options.homeDirectory || '/',
     operations: options.operations || {},
     itunes: options.itunes || {},
@@ -663,12 +663,17 @@ export async function setupMockApiRoutes(
     }
 
     if (pathname === '/api/v1/import-paths' && method === 'POST') {
+      let postedPath = '/unknown';
+      try {
+        const body = route.request().postDataJSON();
+        if (body?.path) postedPath = body.path;
+      } catch { /* ignore */ }
       const nextId =
         mockState.importPaths.reduce((max, item) => Math.max(max, item.id), 0) +
         1;
       const newPath = {
         id: nextId,
-        path: '/unknown',
+        path: postedPath,
         book_count: 0,
       };
       mockState.importPaths.push(newPath);
@@ -979,6 +984,49 @@ export async function setupMockApiRoutes(
       const browsePath = url.searchParams.get('path') || '/';
       const fsData = mockState.filesystem[browsePath] || { path: browsePath, items: [] };
       return route.fulfill(jsonResponse(fsData));
+    }
+
+    if (pathname === '/api/v1/filesystem/exclude' && method === 'POST') {
+      try {
+        const body = route.request().postDataJSON();
+        const targetPath = body?.path;
+        if (targetPath) {
+          // Update excluded flag in all filesystem entries
+          for (const entry of Object.values(mockState.filesystem)) {
+            const fsEntry = entry as { items?: Array<{ path: string; excluded: boolean }> };
+            if (fsEntry.items) {
+              for (const item of fsEntry.items) {
+                if (item.path === targetPath) {
+                  item.excluded = true;
+                }
+              }
+            }
+          }
+        }
+        return route.fulfill(jsonResponse({ excluded: true, path: targetPath }));
+      } catch { /* ignore */ }
+      return route.fulfill(jsonResponse({ excluded: true, path: '' }));
+    }
+
+    if (pathname === '/api/v1/filesystem/exclude' && method === 'DELETE') {
+      try {
+        const body = route.request().postDataJSON();
+        const targetPath = body?.path;
+        if (targetPath) {
+          for (const entry of Object.values(mockState.filesystem)) {
+            const fsEntry = entry as { items?: Array<{ path: string; excluded: boolean }> };
+            if (fsEntry.items) {
+              for (const item of fsEntry.items) {
+                if (item.path === targetPath) {
+                  item.excluded = false;
+                }
+              }
+            }
+          }
+        }
+        return route.fulfill(jsonResponse({ excluded: false, path: targetPath }));
+      } catch { /* ignore */ }
+      return route.fulfill(jsonResponse({ excluded: false, path: '' }));
     }
 
     // Blocked hashes

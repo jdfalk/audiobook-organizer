@@ -1,7 +1,7 @@
 // file: web/tests/e2e/dynamic-ui-interactions.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9f8e7d6c-5b4a-3210-fedc-ba9876543210
-// last-edited: 2026-02-04
+// last-edited: 2026-03-02
 
 /**
  * E2E tests for dynamic UI interactions with in-place loading states
@@ -154,7 +154,7 @@ test.describe('Dynamic UI - BookDetail Page', () => {
 
   test('Compare tab - Use Fetched button shows spinner', async ({ page }) => {
     // Navigate to Compare tab
-    await page.getByRole('tab', { name: /compare/i }).click();
+    await page.getByRole('tab', { name: /tags/i }).click();
     await page.waitForLoadState('networkidle');
 
     // Find Use Fetched button for audiobook_release_year
@@ -173,7 +173,7 @@ test.describe('Dynamic UI - BookDetail Page', () => {
   });
 
   test('Compare tab - other buttons remain clickable during action', async ({ page }) => {
-    await page.getByRole('tab', { name: /compare/i }).click();
+    await page.getByRole('tab', { name: /tags/i }).click();
     await page.waitForLoadState('networkidle');
 
     const row = page.getByRole('row', { name: /audiobook release year/i });

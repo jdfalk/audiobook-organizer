@@ -1,7 +1,7 @@
 // file: web/tests/e2e/dashboard.spec.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: f6e23777-438b-4931-88d9-d2c6d2225a00
-// last-edited: 2026-02-04
+// last-edited: 2026-03-02
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -154,7 +154,7 @@ test.describe('Dashboard', () => {
     // Act
     await page.getByRole('button', { name: 'Organize All' }).click();
     await page
-      .getByRole('dialog', { name: 'Organize All Import Books' })
+      .getByRole('dialog', { name: 'Organize All Scanned Books' })
       .getByRole('button', { name: 'Organize' })
       .click();
 
