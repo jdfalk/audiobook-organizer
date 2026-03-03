@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.9.0
+// version: 4.10.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1096,6 +1096,18 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 		}
 	}
 
+	// Generate segment titles after metadata is applied
+	if err := mfs.generateSegmentTitles(id, updatedBook.Title); err != nil {
+		log.Printf("[WARN] generate segment titles failed for %s: %v", id, err)
+	}
+
+	// Run file rename pipeline (non-fatal)
+	if config.AppConfig.AutoRenameOnApply || config.AppConfig.AutoWriteTagsOnApply {
+		if err := mfs.runApplyPipeline(id, updatedBook); err != nil {
+			log.Printf("[WARN] apply pipeline failed for %s: %v", id, err)
+		}
+	}
+
 	return &FetchMetadataResponse{
 		Message: "metadata candidate applied",
 		Book:    updatedBook,
@@ -1316,4 +1328,143 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 		return filtered
 	}
 	return filtered
+}
+
+// generateSegmentTitles computes and persists segment titles for all segments of a book.
+func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle string) error {
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(bookID)))
+	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	if err != nil {
+		return fmt.Errorf("list segments: %w", err)
+	}
+	if len(segments) == 0 {
+		return nil
+	}
+
+	// Sort by track number (nil last), then filepath
+	sort.Slice(segments, func(i, j int) bool {
+		ti := segments[i].TrackNumber
+		tj := segments[j].TrackNumber
+		if ti != nil && tj != nil {
+			if *ti != *tj {
+				return *ti < *tj
+			}
+		} else if ti != nil {
+			return true
+		} else if tj != nil {
+			return false
+		}
+		return segments[i].FilePath < segments[j].FilePath
+	})
+
+	totalTracks := len(segments)
+
+	// Determine segment title format from config
+	segTitleFormat := config.AppConfig.SegmentTitleFormat
+	if segTitleFormat == "" {
+		segTitleFormat = DefaultSegmentTitleFormat
+	}
+
+	for i := range segments {
+		// Auto-assign track numbers if nil
+		if segments[i].TrackNumber == nil {
+			trackNum := i + 1
+			segments[i].TrackNumber = &trackNum
+		}
+		segments[i].TotalTracks = &totalTracks
+
+		// Compute segment title
+		title := FormatSegmentTitle(segTitleFormat, bookTitle, *segments[i].TrackNumber, totalTracks)
+		segments[i].SegmentTitle = &title
+
+		if err := mfs.db.UpdateBookSegment(&segments[i]); err != nil {
+			log.Printf("[WARN] failed to update segment title for %s: %v", segments[i].ID, err)
+		}
+	}
+
+	return nil
+}
+
+// runApplyPipeline runs the file rename pipeline after metadata is applied.
+func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book) error {
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(id)))
+	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	if err != nil {
+		return fmt.Errorf("list segments: %w", err)
+	}
+	if len(segments) == 0 {
+		return nil
+	}
+
+	// Resolve author name
+	var authorName string
+	if book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+
+	// Resolve series name and position
+	var seriesName, seriesPos string
+	if book.SeriesID != nil {
+		if series, serr := mfs.db.GetSeriesByID(*book.SeriesID); serr == nil && series != nil {
+			seriesName = series.Name
+		}
+		if book.SeriesSequence != nil {
+			seriesPos = strconv.Itoa(*book.SeriesSequence)
+		}
+	}
+
+	year := 0
+	if book.AudiobookReleaseYear != nil {
+		year = *book.AudiobookReleaseYear
+	}
+
+	vars := FormatVars{
+		Author:    authorName,
+		Title:     book.Title,
+		Series:    seriesName,
+		SeriesPos: seriesPos,
+		Year:      year,
+		Narrator:  derefString(book.Narrator),
+		Lang:      derefString(book.Language),
+	}
+
+	pathFormat := config.AppConfig.PathFormat
+	if pathFormat == "" {
+		pathFormat = DefaultPathFormat
+	}
+	segTitleFormat := config.AppConfig.SegmentTitleFormat
+	if segTitleFormat == "" {
+		segTitleFormat = DefaultSegmentTitleFormat
+	}
+
+	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, segments, vars)
+
+	if config.AppConfig.AutoRenameOnApply {
+		if err := RenameFiles(entries); err != nil {
+			return fmt.Errorf("rename files: %w", err)
+		}
+
+		// Update segment records with new paths
+		segMap := make(map[string]*database.BookSegment, len(segments))
+		for i := range segments {
+			segMap[segments[i].ID] = &segments[i]
+		}
+		for _, entry := range entries {
+			if seg, ok := segMap[entry.SegmentID]; ok {
+				seg.FilePath = entry.TargetPath
+				if err := mfs.db.UpdateBookSegment(seg); err != nil {
+					log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
+				}
+			}
+		}
+	}
+
+	// Tag writing stub
+	if config.AppConfig.AutoWriteTagsOnApply {
+		log.Printf("[INFO] tag writing not yet implemented for book %s", id)
+	}
+
+	return nil
 }
