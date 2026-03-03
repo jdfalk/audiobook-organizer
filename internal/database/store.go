@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.25.0
+// version: 2.26.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -74,6 +74,12 @@ type Store interface {
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
 	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
+
+	// Book Version History (copy-on-write)
+	GetBookVersions(id string, limit int) ([]BookVersion, error)
+	GetBookAtVersion(id string, ts time.Time) (*Book, error)
+	RevertBookToVersion(id string, ts time.Time) (*Book, error)
+	PruneBookVersions(id string, keepCount int) (int, error)
 	SetLastWrittenAt(id string, t time.Time) error   // Stamps last_written_at for write-back
 	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
@@ -534,6 +540,13 @@ type MetadataChangeRecord struct {
 	ChangeType    string    `json:"change_type"`              // "fetched", "override", "clear", "undo", "bulk_update"
 	Source        string    `json:"source,omitempty"`          // e.g. "Open Library", "manual", "AI parsing"
 	ChangedAt     time.Time `json:"changed_at"`
+}
+
+// BookVersion represents an immutable snapshot of a book at a point in time.
+type BookVersion struct {
+	BookID    string    `json:"book_id"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      []byte    `json:"data"` // Full JSON-serialized Book
 }
 
 // DashboardStats holds aggregated statistics computed via SQL rather than loading all books.
