@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -244,7 +244,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 		baseName = book.Title
 	}
 	outputPath := filepath.Join(baseDir, baseName+".m4b")
-	tmpOutput := outputPath + ".tmp.m4b"
+	tmpOutput := filepath.Join(baseDir, baseName+"-transcode.tmp.m4b")
 
 	progress.UpdateProgress(1, 5, "Preparing transcode")
 
@@ -258,6 +258,15 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	if totalDurationUs == 0 && book.Duration != nil && *book.Duration > 0 {
 		totalDurationUs = int64(*book.Duration) * 1_000_000
 	}
+	// Fallback: probe input files with ffprobe if we still have no duration
+	if totalDurationUs == 0 {
+		for _, f := range inputFiles {
+			if dur := probeFileDuration(f); dur > 0 {
+				totalDurationUs += dur
+			}
+		}
+	}
+	progress.Log("info", fmt.Sprintf("Total duration for progress: %d us (from %d segments)", totalDurationUs, len(segments)), nil)
 
 	if multiFile {
 		// Build concat file
@@ -323,12 +332,9 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	scanner := bufio.NewScanner(stdoutPipe)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "out_time_ms=") {
-			if us, err := strconv.ParseInt(strings.TrimPrefix(line, "out_time_ms="), 10, 64); err == nil && totalDurationUs > 0 {
-				pct := int(us * 100 / totalDurationUs)
-				if pct > 100 {
-					pct = 100
-				}
+		if val, ok := strings.CutPrefix(line, "out_time_ms="); ok {
+			if us, err := strconv.ParseInt(val, 10, 64); err == nil && totalDurationUs > 0 {
+				pct := min(int(us*100/totalDurationUs), 100)
 				progress.UpdateProgress(2, 5, fmt.Sprintf("Transcoding audio (%d%%)", pct))
 			}
 		}
@@ -409,4 +415,26 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 
 	log.Printf("[INFO] transcode: completed %s → %s", book.FilePath, outputPath)
 	return outputPath, nil
+}
+
+// probeFileDuration uses ffprobe to get a file's duration in microseconds.
+func probeFileDuration(filePath string) int64 {
+	ffprobePath, err := exec.LookPath("ffprobe")
+	if err != nil {
+		return 0
+	}
+	out, err := exec.Command(ffprobePath,
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		filePath,
+	).Output()
+	if err != nil {
+		return 0
+	}
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil {
+		return 0
+	}
+	return int64(seconds * 1_000_000)
 }
