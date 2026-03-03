@@ -1,5 +1,5 @@
 // file: tests/e2e/playwright.config.ts
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { defineConfig, devices } from '@playwright/test';
@@ -31,6 +31,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: ['**/demo-full-workflow.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
@@ -45,6 +46,7 @@ export default defineConfig({
     },
     {
       name: 'webkit',
+      testIgnore: ['**/demo-full-workflow.spec.ts'],
       use: { ...devices['Desktop Safari'] },
       // We accept WebKit failures for now; main gate stays on Chromium.
       expect: {

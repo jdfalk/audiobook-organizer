@@ -1,7 +1,7 @@
 // file: web/tests/e2e/search-and-filter.spec.ts
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-a3b4c5d6e7f8
-// last-edited: 2026-02-04
+// last-edited: 2026-03-02
 
 import { test, expect } from '@playwright/test';
 import {
@@ -219,7 +219,7 @@ test.describe('Search and Filter Functionality', () => {
     await searchInput.fill('zzznonexistent');
 
     // THEN: Shows "No audiobooks found" message
-    await expect(page.getByText(/no audiobooks found/i)).toBeVisible();
+    await expect(page.getByText(/no results for/i)).toBeVisible();
   });
 
   test('clears search with clear button', async ({ page }) => {

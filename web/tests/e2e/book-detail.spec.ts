@@ -1,7 +1,7 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.9.0
+// version: 1.11.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
-// last-edited: 2026-02-06
+// last-edited: 2026-03-02
 
 import { expect, test } from '@playwright/test';
 import { mockEventSource } from './utils/test-helpers';
@@ -364,7 +364,7 @@ test.describe('Book Detail page', () => {
       page.getByRole('heading', { name: 'The Test Book' })
     ).toBeVisible();
     await page.getByRole('tab', { name: 'Files' }).click();
-    await expect(page.getByText('File Hash')).toBeVisible();
+    await expect(page.getByText('File Path')).toBeVisible();
 
     await page.getByRole('tab', { name: /Versions/ }).click();
     await expect(page.getByText(/Versions/).first()).toBeVisible();
@@ -407,6 +407,8 @@ test.describe('Book Detail page', () => {
     await expect(
       page.getByRole('dialog', { name: 'Purge Audiobook' })
     ).toBeVisible();
+    // Must check the confirmation checkbox before purging
+    await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Purge Permanently' }).click();
     await expect(page).toHaveURL(/\/library$/);
   });
@@ -438,7 +440,7 @@ test.describe('Book Detail page', () => {
     await setupRoutes(page);
     await page.goto(`/library/${bookId}`);
 
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
     await expect(page.getByText('File Title')).toBeVisible();
     await page.getByRole('button', { name: 'Use File' }).first().click();
     await expect(
@@ -452,7 +454,7 @@ test.describe('Book Detail page', () => {
     await setupRoutes(page);
     await page.goto(`/library/${bookId}`);
 
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
     const narratorRow = page.getByRole('row', { name: /narrator/i });
     await expect(narratorRow.getByText('Override Narrator')).toBeVisible();
     await narratorRow.getByRole('button', { name: 'Unlock' }).click();

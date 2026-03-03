@@ -1,5 +1,6 @@
 // file: web/tests/e2e/utils/setup-modes.spec.ts
-// version: 1.0.0
+// version: 1.1.0
+// last-edited: 2026-03-02
 // guid: e2d3c4b5-a6f7-8901-2345-6789abcdef01
 
 import { test, expect } from '@playwright/test';
@@ -59,11 +60,14 @@ test.describe('Setup Modes', () => {
     });
     expect(wizardCompleted).toBe('true');
 
-    // Verify mock API is set up
-    const apiMock = await page.evaluate(() => {
-      return (window as unknown as { __apiMock: unknown }).__apiMock !== undefined;
+    // Verify mock API is set up by making a test API call
+    // The new route-based mocking doesn't set window.__apiMock,
+    // but we can verify mocks work by calling an API endpoint
+    const response = await page.evaluate(async () => {
+      const res = await fetch('/api/v1/health');
+      return { ok: res.ok, status: res.status };
     });
-    expect(apiMock).toBe(true);
+    expect(response.ok).toBe(true);
   });
 
   test('setupPhase2Interactive accepts custom mock options', async ({

@@ -1,7 +1,7 @@
 // file: tests/e2e/metadata-provenance.spec.ts
-// version: 1.2.0
+// version: 1.4.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
-// last-edited: 2026-02-09
+// last-edited: 2026-03-02
 
 /**
  * E2E tests for metadata provenance features (SESSION-003).
@@ -384,7 +384,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(page.getByText('locked', { exact: true }).first()).toBeVisible();
 
     // Assert - Publisher uses 'fetched' source (only source available)
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
     const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
     await expect(publisherRow.getByText('Audible Studios').first()).toBeVisible();
     await expect(publisherRow.getByText('fetched').first()).toBeVisible();
@@ -394,7 +394,7 @@ test.describe('Metadata Provenance E2E', () => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
     // Wait for table to be populated
     await expect(page.getByRole('columnheader', { name: 'Field' })).toBeVisible();
 
@@ -419,7 +419,7 @@ test.describe('Metadata Provenance E2E', () => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Act - Apply fetched value for author_name
     const authorRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'author' }) });
@@ -434,7 +434,7 @@ test.describe('Metadata Provenance E2E', () => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Act - Clear override for narrator (which has override set)
     const narratorRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'narrator' }) });
@@ -455,10 +455,10 @@ test.describe('Metadata Provenance E2E', () => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Act - Apply override for series_name
-    const seriesRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'series' }) });
+    const seriesRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: /^series name$/ }) });
     await seriesRow.getByRole('button', { name: 'Use File' }).click();
 
     // Assert - Verify override applied
@@ -484,7 +484,7 @@ test.describe('Metadata Provenance E2E', () => {
     await page.goto(`/library/${bookId}`);
 
     // Act
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Assert - Verify table headers
     await expect(
@@ -497,7 +497,7 @@ test.describe('Metadata Provenance E2E', () => {
       page.getByRole('columnheader', { name: 'Fetched' })
     ).toBeVisible();
     await expect(
-      page.getByRole('columnheader', { name: 'Stored' })
+      page.getByRole('columnheader', { name: 'Database Stored' })
     ).toBeVisible();
     await expect(
       page.getByRole('columnheader', { name: 'Override' })
@@ -520,7 +520,7 @@ test.describe('Metadata Provenance E2E', () => {
     await page.goto(`/library/${bookId}`);
 
     // Act
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Assert - Publisher has no file or stored value, only fetched
     const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
@@ -547,7 +547,7 @@ test.describe('Metadata Provenance E2E', () => {
     await page.goto(`/library/${bookId}`);
 
     // Act
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Assert - Publisher "Use File" button should be disabled (file_value is null)
     const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
@@ -571,10 +571,10 @@ test.describe('Metadata Provenance E2E', () => {
     // Act
     await page.getByRole('tab', { name: 'Tags' }).click();
 
-    // Assert - Media info should be visible
+    // Assert - Media info should be visible (Tags tab shows Codec, Bitrate, Duration)
     await expect(page.getByText('128 kbps')).toBeVisible();
-    await expect(page.getByText('M4B')).toBeVisible();
-    await expect(page.getByText('44100')).toBeVisible();
+    await expect(page.getByText('Codec: M4B')).toBeVisible();
+    await expect(page.getByText(/Duration:/)).toBeVisible();
   });
 
   test('updates effective value when applying different source', async ({
@@ -589,7 +589,7 @@ test.describe('Metadata Provenance E2E', () => {
     await expect(page.getByRole('heading', { name: 'Provenance Test Book' })).toBeVisible();
 
     // Act - Switch to Compare and apply file value
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
     const titleRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'title' }) });
     await titleRow.getByRole('button', { name: 'Use File' }).click();
 
@@ -627,7 +627,7 @@ test.describe('Metadata Provenance E2E', () => {
     // Arrange
     await setupProvenanceRoutes(page);
     await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('tab', { name: 'Tags' }).click();
 
     // Act - Apply file value for release year (numeric field)
     const yearRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'audiobook release year' }) });
