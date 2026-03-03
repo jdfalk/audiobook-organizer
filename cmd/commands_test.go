@@ -246,6 +246,17 @@ func (s *stubStore) ListBookTombstones(limit int) ([]database.Book, error) {
 	return []database.Book{}, nil
 }
 
+func (s *stubStore) GetBookVersions(id string, limit int) ([]database.BookVersion, error) {
+	return nil, nil
+}
+func (s *stubStore) GetBookAtVersion(id string, ts time.Time) (*database.Book, error) {
+	return nil, nil
+}
+func (s *stubStore) RevertBookToVersion(id string, ts time.Time) (*database.Book, error) {
+	return nil, nil
+}
+func (s *stubStore) PruneBookVersions(id string, keepCount int) (int, error) { return 0, nil }
+
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
 
