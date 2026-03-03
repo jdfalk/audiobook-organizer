@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -246,6 +247,19 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	outputPath := filepath.Join(baseDir, baseName+".m4b")
 	tmpOutput := filepath.Join(baseDir, baseName+"-transcode.tmp.m4b")
 
+	// Track all temp files for cleanup on failure
+	tempFiles := []string{tmpOutput}
+	success := false
+	defer func() {
+		if !success {
+			for _, f := range tempFiles {
+				if err := os.Remove(f); err == nil {
+					log.Printf("[INFO] transcode: cleaned up temp file: %s", f)
+				}
+			}
+		}
+	}()
+
 	progress.UpdateProgress(1, 5, "Preparing transcode")
 
 	var args []string
@@ -359,6 +373,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 			defer os.Remove(chapterFile)
 
 			chapteredOutput := outputPath + ".ch.m4b"
+			tempFiles = append(tempFiles, chapteredOutput)
 			chapterArgs := []string{
 				"-y",
 				"-i", tmpOutput,
@@ -385,6 +400,8 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	if book.CoverURL != nil && *book.CoverURL != "" {
 		coverPath := *book.CoverURL
 		if _, err := os.Stat(coverPath); err == nil {
+			coverOutput := tmpOutput + ".cover.m4b"
+			tempFiles = append(tempFiles, coverOutput)
 			coverArgs := []string{
 				"-y",
 				"-i", tmpOutput,
@@ -393,14 +410,14 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 				"-c", "copy",
 				"-disposition:v:0", "attached_pic",
 				"-movflags", "+faststart",
-				tmpOutput + ".cover.m4b",
+				coverOutput,
 			}
 			coverCmd := exec.CommandContext(ctx, ffmpegPath, coverArgs...)
 			if coverOut, err := coverCmd.CombinedOutput(); err != nil {
 				log.Printf("[WARN] transcode: cover art embedding failed: %v\noutput: %s", err, string(coverOut))
 			} else {
 				os.Remove(tmpOutput)
-				tmpOutput = tmpOutput + ".cover.m4b"
+				tmpOutput = coverOutput
 			}
 		}
 	}
@@ -410,6 +427,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 		return "", fmt.Errorf("failed to finalize output file: %w", err)
 	}
 
+	success = true
 	progress.UpdateProgress(5, 5, "Complete")
 	progress.Log("info", fmt.Sprintf("Transcode complete: %s → %s", book.FilePath, outputPath), nil)
 
@@ -437,4 +455,50 @@ func probeFileDuration(filePath string) int64 {
 		return 0
 	}
 	return int64(seconds * 1_000_000)
+}
+
+// CleanupStaleTempFiles removes transcode temp files older than maxAge from the given directory tree.
+// Call this periodically (e.g. on server start and via a ticker) to catch orphans from crashed transcodes.
+func CleanupStaleTempFiles(rootDir string, maxAge time.Duration) int {
+	cleaned := 0
+	_ = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		name := info.Name()
+		if strings.Contains(name, "-transcode.tmp") || strings.HasSuffix(name, ".ch.m4b") {
+			if time.Since(info.ModTime()) > maxAge {
+				if err := os.Remove(path); err == nil {
+					log.Printf("[INFO] transcode: cleaned up stale temp file: %s (age: %s)", path, time.Since(info.ModTime()).Round(time.Minute))
+					cleaned++
+				}
+			}
+		}
+		return nil
+	})
+	return cleaned
+}
+
+// StartCleanupTicker runs periodic temp file cleanup. Returns a stop function.
+func StartCleanupTicker(rootDir string, interval, maxAge time.Duration) func() {
+	ticker := time.NewTicker(interval)
+	done := make(chan struct{})
+	go func() {
+		// Run once immediately on start
+		if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
+			log.Printf("[INFO] transcode: startup cleanup removed %d stale temp files", n)
+		}
+		for {
+			select {
+			case <-ticker.C:
+				if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
+					log.Printf("[INFO] transcode: periodic cleanup removed %d stale temp files", n)
+				}
+			case <-done:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
 }
