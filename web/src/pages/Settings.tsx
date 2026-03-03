@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.33.0
+// version: 1.34.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -435,6 +435,11 @@ export function Settings() {
     autoUpdateCheckMinutes: number;
     autoUpdateWindowStart: number;
     autoUpdateWindowEnd: number;
+    pathFormat: string;
+    segmentTitleFormat: string;
+    autoRenameOnApply: boolean;
+    autoWriteTagsOnApply: boolean;
+    verifyAfterWrite: boolean;
   }
 
   const initialSettings: SettingsState = {
@@ -529,6 +534,13 @@ export function Settings() {
     autoUpdateCheckMinutes: 60,
     autoUpdateWindowStart: 1,
     autoUpdateWindowEnd: 4,
+
+    // Smart apply pipeline
+    pathFormat: '{author}/{series_prefix}{title}/{track_title}.{ext}',
+    segmentTitleFormat: '{title} - {track}/{total_tracks}',
+    autoRenameOnApply: true,
+    autoWriteTagsOnApply: true,
+    verifyAfterWrite: true,
   };
 
   const [settings, setSettings] = useState<SettingsState>(initialSettings);
@@ -710,6 +722,13 @@ export function Settings() {
         autoUpdateCheckMinutes: config.auto_update_check_minutes || 60,
         autoUpdateWindowStart: config.auto_update_window_start ?? 1,
         autoUpdateWindowEnd: config.auto_update_window_end ?? 4,
+
+        // Smart apply pipeline
+        pathFormat: config.path_format || '{author}/{series_prefix}{title}/{track_title}.{ext}',
+        segmentTitleFormat: config.segment_title_format || '{title} - {track}/{total_tracks}',
+        autoRenameOnApply: config.auto_rename_on_apply ?? true,
+        autoWriteTagsOnApply: config.auto_write_tags_on_apply ?? true,
+        verifyAfterWrite: config.verify_after_write ?? true,
       };
       setSettings(nextSettings);
       setSavedSnapshot(JSON.stringify(nextSettings));
@@ -1297,6 +1316,13 @@ export function Settings() {
         auto_update_check_minutes: settings.autoUpdateCheckMinutes,
         auto_update_window_start: settings.autoUpdateWindowStart,
         auto_update_window_end: settings.autoUpdateWindowEnd,
+
+        // Smart apply pipeline
+        path_format: settings.pathFormat,
+        segment_title_format: settings.segmentTitleFormat,
+        auto_rename_on_apply: settings.autoRenameOnApply,
+        auto_write_tags_on_apply: settings.autoWriteTagsOnApply,
+        verify_after_write: settings.verifyAfterWrite,
       };
 
       console.log(
@@ -1952,6 +1978,89 @@ export function Settings() {
                   Mockingbird - Part 03 of 50.m4b"
                 </Typography>
               </Alert>
+            </Grid>
+
+            {/* Smart Apply Pipeline Section */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="h6" gutterBottom>
+                Smart Apply Pipeline
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Controls how metadata is applied to files when using the smart apply pipeline.
+                The path format determines how files are organized on disk.
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Path Format"
+                value={settings.pathFormat}
+                onChange={(e) => handleChange('pathFormat', e.target.value)}
+                helperText="Template for file paths. Available: {author}, {series_prefix}, {title}, {track_title}, {ext}, {track}, {total_tracks}, {year}, {narrator}"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Segment Title Format"
+                value={settings.segmentTitleFormat}
+                onChange={(e) => handleChange('segmentTitleFormat', e.target.value)}
+                helperText="Template for segment titles in multi-file books. Available: {title}, {track}, {total_tracks}, {author}"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.autoRenameOnApply}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        autoRenameOnApply: e.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Auto-rename files on apply"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.autoWriteTagsOnApply}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        autoWriteTagsOnApply: e.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Auto-write tags on apply"
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={4}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.verifyAfterWrite}
+                    onChange={(e) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        verifyAfterWrite: e.target.checked,
+                      }))
+                    }
+                  />
+                }
+                label="Verify files after write"
+              />
             </Grid>
 
             {/* Import Paths Section */}

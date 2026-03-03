@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.32.0
+// version: 1.33.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -433,6 +433,13 @@ export interface Config {
   auto_update_check_minutes?: number;
   auto_update_window_start?: number;
   auto_update_window_end?: number;
+
+  // Smart apply pipeline
+  path_format?: string;
+  segment_title_format?: string;
+  auto_rename_on_apply?: boolean;
+  auto_write_tags_on_apply?: boolean;
+  verify_after_write?: boolean;
 
   // Legacy fields (Goodreads deprecated Dec 2020, removed)
   api_keys: Record<string, never>;
