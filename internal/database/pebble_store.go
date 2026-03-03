@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1099,7 +1099,20 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 		return nil, err
 	}
 
+	// CoW: snapshot old state before overwriting
+	oldData, marshalErr := json.Marshal(oldBook)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("failed to marshal old book for version: %w", marshalErr)
+	}
+	versionKey := []byte(fmt.Sprintf("book_ver:%s:%d", id, time.Now().UnixNano()))
+
 	batch := p.db.NewBatch()
+
+	// Write version snapshot before main key
+	if err := batch.Set(versionKey, oldData, nil); err != nil {
+		batch.Close()
+		return nil, err
+	}
 
 	// Update main key
 	key := []byte(fmt.Sprintf("book:%s", id))
@@ -1232,6 +1245,103 @@ func (p *PebbleStore) SetLastWrittenAt(id string, t time.Time) error {
 	book.LastWrittenAt = &t
 	_, err = p.UpdateBook(id, book)
 	return err
+}
+
+// GetBookVersions returns CoW version snapshots for a book, newest-first.
+func (p *PebbleStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+	prefix := fmt.Sprintf("book_ver:%s:", id)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte(prefix),
+		UpperBound: []byte(prefix + "\xff"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var versions []BookVersion
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		nsec, parseErr := strconv.ParseInt(parts[2], 10, 64)
+		if parseErr != nil {
+			continue
+		}
+		dataCopy := make([]byte, len(iter.Value()))
+		copy(dataCopy, iter.Value())
+		versions = append(versions, BookVersion{
+			BookID:    id,
+			Timestamp: time.Unix(0, nsec),
+			Data:      dataCopy,
+		})
+	}
+	// Reverse for newest-first
+	for i, j := 0, len(versions)-1; i < j; i, j = i+1, j-1 {
+		versions[i], versions[j] = versions[j], versions[i]
+	}
+	if limit > 0 && len(versions) > limit {
+		versions = versions[:limit]
+	}
+	return versions, nil
+}
+
+// GetBookAtVersion retrieves a book snapshot at a specific version timestamp.
+func (p *PebbleStore) GetBookAtVersion(id string, ts time.Time) (*Book, error) {
+	key := []byte(fmt.Sprintf("book_ver:%s:%d", id, ts.UnixNano()))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, fmt.Errorf("version not found")
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var book Book
+	if err := json.Unmarshal(value, &book); err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+// RevertBookToVersion restores a book to a previous version snapshot.
+func (p *PebbleStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) {
+	oldBook, err := p.GetBookAtVersion(id, ts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get version: %w", err)
+	}
+	oldBook.ID = id
+	return p.UpdateBook(id, oldBook)
+}
+
+// PruneBookVersions keeps the newest keepCount versions and deletes the rest.
+func (p *PebbleStore) PruneBookVersions(id string, keepCount int) (int, error) {
+	if keepCount < 0 {
+		keepCount = 0
+	}
+	versions, err := p.GetBookVersions(id, 0)
+	if err != nil {
+		return 0, err
+	}
+	if len(versions) <= keepCount {
+		return 0, nil
+	}
+	toDelete := versions[keepCount:]
+	batch := p.db.NewBatch()
+	for _, v := range toDelete {
+		key := []byte(fmt.Sprintf("book_ver:%s:%d", id, v.Timestamp.UnixNano()))
+		if err := batch.Delete(key, nil); err != nil {
+			batch.Close()
+			return 0, err
+		}
+	}
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return 0, err
+	}
+	return len(toDelete), nil
 }
 
 func (p *PebbleStore) DeleteBook(id string) error {
