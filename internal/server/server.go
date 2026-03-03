@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.81.0
+// version: 1.83.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1155,6 +1155,9 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/search-metadata", s.searchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/apply-metadata", s.applyAudiobookMetadata)
 			protected.POST("/audiobooks/:id/mark-no-match", s.markAudiobookNoMatch)
+			protected.POST("/audiobooks/:id/revert-metadata", s.revertAudiobookMetadata)
+			protected.GET("/audiobooks/:id/cow-versions", s.listBookCOWVersions)
+			protected.POST("/audiobooks/:id/cow-versions/prune", s.pruneBookCOWVersions)
 			protected.POST("/audiobooks/:id/write-back", s.writeBackAudiobookMetadata)
 
 			// AI-powered parsing routes
@@ -3740,6 +3743,79 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Book marked as no match"})
+}
+
+// revertAudiobookMetadata handles POST /api/v1/audiobooks/:id/revert-metadata.
+// It restores a book to a previous CoW version snapshot via the store layer.
+func (s *Server) revertAudiobookMetadata(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var body struct {
+		Timestamp string `json:"timestamp"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Timestamp == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "timestamp is required"})
+		return
+	}
+	ts, err := time.Parse(time.RFC3339Nano, body.Timestamp)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamp format, use RFC3339Nano"})
+		return
+	}
+	book, err := database.GlobalStore.RevertBookToVersion(id, ts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Book reverted to version", "book": book})
+}
+
+// listBookCOWVersions handles GET /api/v1/audiobooks/:id/cow-versions.
+// Returns copy-on-write version snapshots from the store layer.
+func (s *Server) listBookCOWVersions(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	limit := 50
+	if q := c.Query("limit"); q != "" {
+		if v, err := strconv.Atoi(q); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	versions, err := database.GlobalStore.GetBookVersions(id, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"versions": versions})
+}
+
+// pruneBookCOWVersions handles POST /api/v1/audiobooks/:id/cow-versions/prune.
+// Prunes old copy-on-write version snapshots, keeping the most recent N.
+func (s *Server) pruneBookCOWVersions(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	var body struct {
+		KeepCount int `json:"keep_count"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.KeepCount <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "keep_count must be a positive integer"})
+		return
+	}
+	pruned, err := database.GlobalStore.PruneBookVersions(id, body.KeepCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"pruned": pruned})
 }
 
 // writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.

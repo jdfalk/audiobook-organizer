@@ -1,5 +1,5 @@
 // file: web/src/components/MetadataHistory.tsx
-// version: 1.0.0
+// version: 1.2.0
 // guid: 8e3a7b2c-5d1f-4a9e-b6c0-2f8d4e7a1b3c
 
 import { useCallback, useEffect, useState } from 'react';
@@ -25,6 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import UndoIcon from '@mui/icons-material/Undo.js';
+import SearchIcon from '@mui/icons-material/Search.js';
 import ArrowRightAltIcon from '@mui/icons-material/ArrowRightAlt.js';
 import type { MetadataChangeRecord } from '../services/api';
 import * as api from '../services/api';
@@ -50,13 +51,15 @@ const FIELD_LABELS: Record<string, string> = {
 
 const CHANGE_TYPE_COLORS: Record<
   string,
-  'info' | 'warning' | 'default' | 'success' | 'secondary'
+  'info' | 'warning' | 'default' | 'success' | 'secondary' | 'primary'
 > = {
   fetched: 'info',
   override: 'warning',
   clear: 'default',
   undo: 'success',
   bulk_update: 'secondary',
+  search: 'default',
+  revert: 'success',
 };
 
 function parseJsonValue(raw?: string): string {
@@ -169,14 +172,28 @@ export const MetadataHistory = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {history.map((record) => (
-                  <TableRow key={record.id}>
+                {history.map((record) => {
+                  const isSearch = record.field === '__search__';
+                  return (
+                  <TableRow key={record.id} sx={isSearch ? { bgcolor: 'action.hover' } : undefined}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>
-                        {fieldLabel(record.field)}
+                        {isSearch ? (
+                          <Stack direction="row" spacing={0.5} alignItems="center">
+                            <SearchIcon fontSize="small" color="action" />
+                            <span>Search</span>
+                          </Stack>
+                        ) : (
+                          fieldLabel(record.field)
+                        )}
                       </Typography>
                     </TableCell>
                     <TableCell>
+                      {isSearch ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {parseJsonValue(record.new_value)}
+                        </Typography>
+                      ) : (
                       <Stack
                         direction="row"
                         spacing={0.5}
@@ -211,6 +228,7 @@ export const MetadataHistory = ({
                           {parseJsonValue(record.new_value)}
                         </Typography>
                       </Stack>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -232,7 +250,7 @@ export const MetadataHistory = ({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      {latestIds.has(record.id) &&
+                      {!isSearch && latestIds.has(record.id) &&
                       record.change_type !== 'undo' ? (
                         <Tooltip title={`Undo this ${fieldLabel(record.field)} change`}>
                           <span>
@@ -252,7 +270,8 @@ export const MetadataHistory = ({
                       ) : null}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
