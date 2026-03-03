@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.24.0
+// version: 1.25.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -29,6 +29,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  TextField,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
 import DeleteIcon from '@mui/icons-material/Delete.js';
@@ -100,6 +101,8 @@ export const BookDetail = () => {
   const [multiSegmentTags, setMultiSegmentTags] = useState<Map<string, SegmentTags>>(new Map());
   const [coverError, setCoverError] = useState(false);
   const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
 
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
@@ -1531,7 +1534,48 @@ export const BookDetail = () => {
                           {field.replace(/_/g, ' ')}
                         </TableCell>
                         <TableCell>{fileVal || '\u2014'}</TableCell>
-                        <TableCell>{bookStr || '\u2014'}</TableCell>
+                        <TableCell
+                          onClick={() => {
+                            if (editingField !== field) {
+                              setEditingField(field);
+                              setEditingValue(bookStr);
+                            }
+                          }}
+                          sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, minWidth: 120 }}
+                        >
+                          {editingField === field ? (
+                            <TextField
+                              size="small"
+                              variant="standard"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={async () => {
+                                if (editingValue !== bookStr) {
+                                  const apiField = field === 'author' ? 'author_name' : field === 'year' ? 'audiobook_release_year' : field;
+                                  try {
+                                    const payload: Record<string, unknown> = {};
+                                    payload[apiField] = editingValue || null;
+                                    const saved = await api.updateBook(book.id, payload as Partial<api.Book>);
+                                    setBook(saved);
+                                    toast(`Updated ${field}`, 'success');
+                                  } catch {
+                                    toast(`Failed to update ${field}`, 'error');
+                                  }
+                                }
+                                setEditingField(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                if (e.key === 'Escape') { setEditingField(null); }
+                              }}
+                              autoFocus
+                              fullWidth
+                              inputProps={{ style: { fontSize: '0.875rem' } }}
+                            />
+                          ) : (
+                            bookStr || '\u2014'
+                          )}
+                        </TableCell>
                         <TableCell>
                           {!fileVal && !bookStr ? (
                             <Chip size="small" label="empty" variant="outlined" />
@@ -1559,7 +1603,6 @@ export const BookDetail = () => {
                                 size="small"
                                 variant="outlined"
                                 onClick={() => {
-                                  // "Use Book" = queue writing book value to file tag
                                   toast('Book value queued for write to file', 'info');
                                 }}
                                 sx={isMismatch ? { color: 'inherit', borderColor: 'inherit' } : undefined}

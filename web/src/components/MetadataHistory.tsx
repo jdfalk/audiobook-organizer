@@ -1,5 +1,5 @@
 // file: web/src/components/MetadataHistory.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8e3a7b2c-5d1f-4a9e-b6c0-2f8d4e7a1b3c
 
 import { useCallback, useEffect, useState } from 'react';
@@ -27,7 +27,9 @@ import {
 import UndoIcon from '@mui/icons-material/Undo.js';
 import SearchIcon from '@mui/icons-material/Search.js';
 import ArrowRightAltIcon from '@mui/icons-material/ArrowRightAlt.js';
-import type { MetadataChangeRecord } from '../services/api';
+import RestoreIcon from '@mui/icons-material/Restore.js';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep.js';
+import type { MetadataChangeRecord, BookVersionEntry } from '../services/api';
 import * as api from '../services/api';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -95,6 +97,22 @@ export const MetadataHistory = ({
   const [error, setError] = useState<string | null>(null);
   const [undoingField, setUndoingField] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState<string | null>(null);
+  const [cowVersions, setCowVersions] = useState<BookVersionEntry[]>([]);
+  const [cowLoading, setCowLoading] = useState(false);
+  const [revertingTimestamp, setRevertingTimestamp] = useState<string | null>(null);
+  const [pruning, setPruning] = useState(false);
+
+  const loadCowVersions = useCallback(async () => {
+    setCowLoading(true);
+    try {
+      const versions = await api.getBookCOWVersions(bookId, 50);
+      setCowVersions(versions);
+    } catch (err) {
+      console.error('Failed to load CoW versions', err);
+    } finally {
+      setCowLoading(false);
+    }
+  }, [bookId]);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -113,8 +131,9 @@ export const MetadataHistory = ({
   useEffect(() => {
     if (open) {
       loadHistory();
+      loadCowVersions();
     }
-  }, [open, loadHistory]);
+  }, [open, loadHistory, loadCowVersions]);
 
   // Determine the most recent change per field for undo eligibility
   const latestByField = new Set<string>();
@@ -138,6 +157,36 @@ export const MetadataHistory = ({
       setSnackbar('Failed to undo change.');
     } finally {
       setUndoingField(null);
+    }
+  };
+
+  const handleRevert = async (timestamp: string) => {
+    setRevertingTimestamp(timestamp);
+    try {
+      const result = await api.revertToSnapshot(bookId, timestamp);
+      setSnackbar(result.message || 'Reverted to snapshot.');
+      await loadHistory();
+      await loadCowVersions();
+      onUndoComplete?.();
+    } catch (err) {
+      console.error('Failed to revert to snapshot', err);
+      setSnackbar('Failed to revert to snapshot.');
+    } finally {
+      setRevertingTimestamp(null);
+    }
+  };
+
+  const handlePrune = async () => {
+    setPruning(true);
+    try {
+      const result = await api.pruneBookVersions(bookId, 5);
+      setSnackbar(`Pruned ${result.pruned} old version(s).`);
+      await loadCowVersions();
+    } catch (err) {
+      console.error('Failed to prune versions', err);
+      setSnackbar('Failed to prune versions.');
+    } finally {
+      setPruning(false);
     }
   };
 
@@ -275,6 +324,77 @@ export const MetadataHistory = ({
               </TableBody>
             </Table>
           )}
+          {/* Version Snapshots Section */}
+          <Box sx={{ mt: 3 }}>
+            <Stack direction="row" alignItems="center" spacing={1} mb={1}>
+              <RestoreIcon fontSize="small" />
+              <Typography variant="h6">Version Snapshots</Typography>
+              {cowVersions.length > 5 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={pruning ? <CircularProgress size={14} /> : <DeleteSweepIcon />}
+                  onClick={handlePrune}
+                  disabled={pruning}
+                >
+                  {pruning ? 'Pruning...' : 'Prune (keep 5)'}
+                </Button>
+              )}
+            </Stack>
+            {cowLoading && (
+              <Box display="flex" justifyContent="center" py={2}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+            {!cowLoading && cowVersions.length === 0 && (
+              <Alert severity="info" sx={{ mb: 1 }}>
+                No version snapshots recorded yet. Snapshots are created automatically when metadata is updated.
+              </Alert>
+            )}
+            {!cowLoading && cowVersions.length > 0 && (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Snapshot Time</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {cowVersions.map((version, idx) => (
+                    <TableRow key={version.timestamp}>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {new Date(version.timestamp).toLocaleString()}
+                          {idx === 0 && (
+                            <Chip label="latest" size="small" color="primary" variant="outlined" sx={{ ml: 1 }} />
+                          )}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Revert metadata to this snapshot">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={
+                                revertingTimestamp === version.timestamp
+                                  ? <CircularProgress size={14} />
+                                  : <RestoreIcon />
+                              }
+                              onClick={() => handleRevert(version.timestamp)}
+                              disabled={revertingTimestamp !== null || idx === 0}
+                            >
+                              {revertingTimestamp === version.timestamp ? 'Reverting...' : 'Revert'}
+                            </Button>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose}>Close</Button>
