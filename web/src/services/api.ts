@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.31.0
+// version: 1.32.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1758,6 +1758,40 @@ export async function getFieldMetadataHistory(bookId: string, field: string): Pr
 export async function undoMetadataChange(bookId: string, field: string): Promise<{ message: string }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}/undo`, { method: 'POST' });
   if (!response.ok) throw await buildApiError(response, 'Failed to undo change');
+  return response.json();
+}
+
+export async function revertToSnapshot(bookId: string, timestamp: string): Promise<{ message: string; book: Book }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/revert-metadata`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timestamp }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to revert to version');
+  return response.json();
+}
+
+export interface BookVersionEntry {
+  book_id: string;
+  timestamp: string;
+  data: string;
+}
+
+export async function getBookCOWVersions(bookId: string, limit?: number): Promise<BookVersionEntry[]> {
+  const params = limit ? `?limit=${limit}` : '';
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/cow-versions${params}`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch book versions');
+  const data = await response.json();
+  return data.versions || [];
+}
+
+export async function pruneBookVersions(bookId: string, keepCount: number): Promise<{ pruned: number }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/cow-versions/prune`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep_count: keepCount }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to prune versions');
   return response.json();
 }
 
