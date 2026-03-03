@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.84.0
+// version: 1.85.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -755,6 +755,16 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()
+
+	// Start periodic cleanup of stale transcode temp files
+	if database.DB != nil {
+		if paths, err := database.GetImportPaths(); err == nil {
+			for _, p := range paths {
+				stopCleanup := transcode.StartCleanupTicker(p.Path, 1*time.Hour, 2*time.Hour)
+				defer stopCleanup()
+			}
+		}
+	}
 
 	// Heartbeat: push periodic system.status events via SSE (every 5s) while running
 	quit := make(chan os.Signal, 1)
