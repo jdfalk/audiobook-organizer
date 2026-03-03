@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -179,6 +179,13 @@ type Config struct {
 	APIKeys struct {
 	} `json:"api_keys"`
 
+	// Path formatting & apply pipeline
+	PathFormat           string `json:"path_format"`
+	SegmentTitleFormat   string `json:"segment_title_format"`
+	AutoRenameOnApply    bool   `json:"auto_rename_on_apply"`
+	AutoWriteTagsOnApply bool   `json:"auto_write_tags_on_apply"`
+	VerifyAfterWrite     bool   `json:"verify_after_write"`
+
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
 }
@@ -289,6 +296,13 @@ func InitConfig() {
 	viper.SetDefault("download_client.usenet.sabnzbd.port", 0)
 	viper.SetDefault("download_client.usenet.sabnzbd.api_key", "")
 	viper.SetDefault("download_client.usenet.sabnzbd.use_https", false)
+	// Path formatting & apply pipeline defaults
+	viper.SetDefault("path_format", "{author}/{series_prefix}{title}/{track_title}.{ext}")
+	viper.SetDefault("segment_title_format", "{title} - {track}/{total_tracks}")
+	viper.SetDefault("auto_rename_on_apply", true)
+	viper.SetDefault("auto_write_tags_on_apply", true)
+	viper.SetDefault("verify_after_write", true)
+
 	viper.SetDefault("supported_extensions", []string{
 		".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",
 	})
@@ -417,6 +431,13 @@ func InitConfig() {
 				},
 			},
 		},
+
+		// Path formatting & apply pipeline
+		PathFormat:           viper.GetString("path_format"),
+		SegmentTitleFormat:   viper.GetString("segment_title_format"),
+		AutoRenameOnApply:    viper.GetBool("auto_rename_on_apply"),
+		AutoWriteTagsOnApply: viper.GetBool("auto_write_tags_on_apply"),
+		VerifyAfterWrite:     viper.GetBool("verify_after_write"),
 
 		SupportedExtensions: supportedExtensions,
 		ExcludePatterns:     excludePatterns,
@@ -740,6 +761,13 @@ func ResetToDefaults() {
 				},
 			},
 		},
+
+		// Path formatting & apply pipeline
+		PathFormat:           "{author}/{series_prefix}{title}/{track_title}.{ext}",
+		SegmentTitleFormat:   "{title} - {track}/{total_tracks}",
+		AutoRenameOnApply:    true,
+		AutoWriteTagsOnApply: true,
+		VerifyAfterWrite:     true,
 
 		SupportedExtensions: []string{
 			".m4b", ".mp3", ".m4a", ".aac", ".ogg", ".flac", ".wma",

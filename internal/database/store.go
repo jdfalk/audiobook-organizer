@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.26.0
+// version: 2.27.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -474,6 +474,7 @@ type BookSegment struct {
 	DurationSec  int       `json:"duration_seconds"`
 	TrackNumber  *int      `json:"track_number,omitempty"`
 	TotalTracks  *int      `json:"total_tracks,omitempty"`
+	SegmentTitle *string   `json:"segment_title,omitempty"`
 	Active       bool      `json:"active"`
 	SupersededBy *string   `json:"superseded_by,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
