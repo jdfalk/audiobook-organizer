@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.25.0
+// version: 1.26.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,6 +30,8 @@ import {
   TableCell,
   TableBody,
   TextField,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
 import DeleteIcon from '@mui/icons-material/Delete.js';
@@ -45,6 +47,10 @@ import StorageIcon from '@mui/icons-material/Storage.js';
 import SaveIcon from '@mui/icons-material/Save.js';
 import SearchIcon from '@mui/icons-material/Search.js';
 import TransformIcon from '@mui/icons-material/Transform.js';
+import StarIcon from '@mui/icons-material/Star.js';
+import StarBorderIcon from '@mui/icons-material/StarBorder.js';
+import LinkIcon from '@mui/icons-material/Link.js';
+import LinkOffIcon from '@mui/icons-material/LinkOff.js';
 import type { Book, BookTags, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -938,15 +944,6 @@ export const BookDetail = () => {
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Button
               variant="outlined"
-              color="info"
-              startIcon={<CompareIcon />}
-              onClick={() => setVersionDialogOpen(true)}
-              disabled={versionsLoading}
-            >
-              Manage Versions
-            </Button>
-            <Button
-              variant="outlined"
               startIcon={<HistoryIcon />}
               onClick={() => setHistoryDialogOpen(true)}
               disabled={actionLoading}
@@ -1300,7 +1297,29 @@ export const BookDetail = () => {
 
             {segments.length > 0 && (
               <Box>
-                <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Individual Files</Typography>
+                <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 2, mb: 1 }}>
+                  <Typography variant="h6">Individual Files</Typography>
+                  {segments.length > 1 && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={async () => {
+                        try {
+                          const result = await api.extractTrackInfo(book.id);
+                          toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
+                          if (id) {
+                            const segs = await api.getBookSegments(id);
+                            setSegments(segs);
+                          }
+                        } catch (err) {
+                          toast('Failed to extract track info', 'error');
+                        }
+                      }}
+                    >
+                      Auto-fill Track Numbers
+                    </Button>
+                  )}
+                </Stack>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -1381,12 +1400,6 @@ export const BookDetail = () => {
                       version.id === book.id
                         ? 'primary.light'
                         : 'background.paper',
-                    cursor: version.id === book.id ? 'default' : 'pointer',
-                  }}
-                  onClick={() => {
-                    if (version.id !== book.id) {
-                      navigate(`/library/${version.id}`);
-                    }
                   }}
                 >
                   <Stack
@@ -1394,7 +1407,32 @@ export const BookDetail = () => {
                     spacing={1}
                     alignItems="center"
                   >
-                    <Box flex={1}>
+                    <Tooltip title={version.is_primary_version ? 'Primary version' : 'Set as primary'}>
+                      <IconButton
+                        size="small"
+                        color={version.is_primary_version ? 'primary' : 'default'}
+                        onClick={async () => {
+                          try {
+                            await api.setPrimaryVersion(version.id);
+                            loadVersions();
+                            loadBook();
+                          } catch {
+                            toast('Failed to set primary version', 'error');
+                          }
+                        }}
+                      >
+                        {version.is_primary_version ? <StarIcon /> : <StarBorderIcon />}
+                      </IconButton>
+                    </Tooltip>
+                    <Box
+                      flex={1}
+                      sx={{ cursor: version.id === book.id ? 'default' : 'pointer' }}
+                      onClick={() => {
+                        if (version.id !== book.id) {
+                          navigate(`/library/${version.id}`);
+                        }
+                      }}
+                    >
                       <Typography variant="subtitle1">
                         {version.title}{' '}
                         {version.id === book.id ? '(Current)' : ''}
@@ -1407,21 +1445,42 @@ export const BookDetail = () => {
                         {version.file_path}
                       </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
                       {version.is_primary_version && (
-                        <Chip label="Primary" color="primary" />
+                        <Chip label="Primary" color="primary" size="small" />
                       )}
                       {version.quality && (
-                        <Chip label={version.quality} color="success" />
+                        <Chip label={version.quality} color="success" size="small" />
                       )}
                       {version.codec && (
-                        <Chip label={version.codec} variant="outlined" />
+                        <Chip label={version.codec} variant="outlined" size="small" />
                       )}
                       {version.format && (
                         <Chip
                           label={version.format.toUpperCase()}
                           variant="outlined"
+                          size="small"
                         />
+                      )}
+                      {version.id !== book.id && (
+                        <Tooltip title="Unlink this version">
+                          <IconButton
+                            size="small"
+                            color="secondary"
+                            onClick={async () => {
+                              try {
+                                await api.unlinkBookVersion(book.id, version.id);
+                                loadVersions();
+                                loadBook();
+                                toast('Version unlinked', 'success');
+                              } catch {
+                                toast('Failed to unlink version', 'error');
+                              }
+                            }}
+                          >
+                            <LinkOffIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </Stack>
                   </Stack>
@@ -1431,11 +1490,11 @@ export const BookDetail = () => {
           )}
           <Button
             variant="outlined"
-            startIcon={<CompareIcon />}
+            startIcon={<LinkIcon />}
             sx={{ mt: 2 }}
             onClick={() => setVersionDialogOpen(true)}
           >
-            Open Version Manager
+            Link Another Version
           </Button>
         </Paper>
       )}
@@ -1445,27 +1504,6 @@ export const BookDetail = () => {
           <Stack direction="row" alignItems="center" spacing={1} mb={2}>
             <CompareIcon />
             <Typography variant="h6">Tags &amp; Compare</Typography>
-            {segments.length > 1 && (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={async () => {
-                  try {
-                    const result = await api.extractTrackInfo(book.id);
-                    toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
-                    // Reload segments to reflect changes
-                    if (id) {
-                      const segs = await api.getBookSegments(id);
-                      setSegments(segs);
-                    }
-                  } catch (err) {
-                    toast('Failed to extract track info', 'error');
-                  }
-                }}
-              >
-                Auto-fill Track Numbers
-              </Button>
-            )}
           </Stack>
 
           {/* Segment selected: unified comparison table */}
