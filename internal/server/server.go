@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.83.0
+// version: 1.84.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1723,6 +1723,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		if info.TrackNumber == nil {
 			continue
 		}
+		oldTrack := segments[i].TrackNumber
 		segments[i].TrackNumber = info.TrackNumber
 		segments[i].TotalTracks = info.TotalTracks
 		if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
@@ -1730,6 +1731,24 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 			continue
 		}
 		updated++
+
+		// Record the track number change in history
+		var prevVal, newVal string
+		if oldTrack != nil {
+			prevVal = strconv.Itoa(*oldTrack)
+		}
+		newVal = strconv.Itoa(*info.TrackNumber)
+		prev := prevVal
+		nv := newVal
+		_ = database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+			BookID:        id,
+			Field:         "track_number",
+			PreviousValue: &prev,
+			NewValue:      &nv,
+			ChangeType:    "auto_number",
+			Source:        "filename_extraction",
+			ChangedAt:     time.Now(),
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{

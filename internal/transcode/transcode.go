@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -11,6 +11,7 @@ import (
 	"hash/crc32"
 	"log"
 	"os"
+	"bufio"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -249,6 +250,15 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 
 	var args []string
 
+	// Compute total duration (microseconds) for progress reporting
+	var totalDurationUs int64
+	for _, seg := range segments {
+		totalDurationUs += int64(seg.DurationSec) * 1_000_000
+	}
+	if totalDurationUs == 0 && book.Duration != nil && *book.Duration > 0 {
+		totalDurationUs = int64(*book.Duration) * 1_000_000
+	}
+
 	if multiFile {
 		// Build concat file
 		concatFile, err := BuildConcatFile(inputFiles)
@@ -265,6 +275,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 			"-c:a", "aac",
 			"-b:a", fmt.Sprintf("%dk", opts.Bitrate),
 			"-movflags", "+faststart",
+			"-progress", "pipe:1",
 			tmpOutput,
 		}
 	} else {
@@ -275,6 +286,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 			"-c:a", "aac",
 			"-b:a", fmt.Sprintf("%dk", opts.Bitrate),
 			"-movflags", "+faststart",
+			"-progress", "pipe:1",
 			tmpOutput,
 		}
 	}
@@ -283,10 +295,48 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 	progress.Log("info", fmt.Sprintf("Running ffmpeg: %s %s", ffmpegPath, strings.Join(args, " ")), nil)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
-	output, err := cmd.CombinedOutput()
+
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start ffmpeg: %w", err)
+	}
+
+	// Capture stderr in background
+	var stderrBuf strings.Builder
+	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			stderrBuf.WriteString(scanner.Text())
+			stderrBuf.WriteString("\n")
+		}
+	}()
+
+	// Parse stdout progress lines
+	scanner := bufio.NewScanner(stdoutPipe)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "out_time_ms=") {
+			if us, err := strconv.ParseInt(strings.TrimPrefix(line, "out_time_ms="), 10, 64); err == nil && totalDurationUs > 0 {
+				pct := int(us * 100 / totalDurationUs)
+				if pct > 100 {
+					pct = 100
+				}
+				progress.UpdateProgress(2, 5, fmt.Sprintf("Transcoding audio (%d%%)", pct))
+			}
+		}
+	}
+
+	if err := cmd.Wait(); err != nil {
 		errMsg := fmt.Sprintf("ffmpeg transcode failed: %v", err)
-		outputStr := string(output)
+		outputStr := stderrBuf.String()
 		progress.Log("error", errMsg, &outputStr)
 		return "", fmt.Errorf("ffmpeg transcode failed: %w\noutput: %s", err, outputStr)
 	}

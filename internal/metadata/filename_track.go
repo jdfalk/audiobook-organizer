@@ -1,5 +1,5 @@
 // file: internal/metadata/filename_track.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package metadata
@@ -97,12 +97,9 @@ func ExtractTrackInfoBatch(filePaths []string) []TrackInfo {
 		}
 	}
 
-	// If no file had an explicit total but we found track numbers, use count or max
+	// If no file had an explicit total but we found track numbers, use file count
 	if !anyHasTotal && maxTrack > 0 {
-		total := maxTrack
-		if len(filePaths) > total {
-			total = len(filePaths)
-		}
+		total := len(filePaths)
 		for i := range results {
 			if results[i].TrackNumber != nil {
 				results[i].TotalTracks = &total
