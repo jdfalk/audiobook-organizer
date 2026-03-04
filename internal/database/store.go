@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.27.0
+// version: 2.28.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -70,7 +70,8 @@ type Store interface {
 	GetBookByOriginalHash(hash string) (*Book, error)
 	GetBookByOrganizedHash(hash string) (*Book, error)
 	GetDuplicateBooks() ([][]Book, error)   // Returns groups of duplicate books (by hash)
-	GetFolderDuplicates() ([][]Book, error) // Returns groups of duplicate books (same folder + title)
+	GetFolderDuplicates() ([][]Book, error)                        // Returns groups of duplicate books (same folder + title)
+	GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) // Find books with same title in same directory
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty

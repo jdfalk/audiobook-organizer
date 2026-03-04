@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -377,6 +377,10 @@ func (m *MockStore) GetDuplicateBooks() ([][]Book, error) {
 	if m.GetDuplicateBooksFunc != nil {
 		return m.GetDuplicateBooksFunc()
 	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) {
 	return nil, nil
 }
 

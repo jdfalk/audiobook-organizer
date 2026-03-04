@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.86.0
+// version: 1.87.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1732,11 +1732,32 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 	}
 
 	trackInfos := metadata.ExtractTrackInfoBatch(filePaths)
+
+	// Second pass: assign sequential numbers to files that had no parseable track number
+	usedNumbers := map[int]bool{}
+	for _, info := range trackInfos {
+		if info.TrackNumber != nil {
+			usedNumbers[*info.TrackNumber] = true
+		}
+	}
+	nextNum := 1
+	total := len(segments)
+	for i := range trackInfos {
+		if trackInfos[i].TrackNumber == nil {
+			for usedNumbers[nextNum] {
+				nextNum++
+			}
+			n := nextNum
+			trackInfos[i].TrackNumber = &n
+			usedNumbers[nextNum] = true
+			nextNum++
+		}
+		// Ensure TotalTracks is set for all entries
+		trackInfos[i].TotalTracks = &total
+	}
+
 	updated := 0
 	for i, info := range trackInfos {
-		if info.TrackNumber == nil {
-			continue
-		}
 		oldTrack := segments[i].TrackNumber
 		segments[i].TrackNumber = info.TrackNumber
 		segments[i].TotalTracks = info.TotalTracks
