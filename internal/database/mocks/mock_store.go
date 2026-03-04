@@ -3606,6 +3606,59 @@ func (_c *MockStore_GetDuplicateBooks_Call) RunAndReturn(run func() ([][]databas
 	return _c
 }
 
+// GetFolderDuplicates provides a mock function for the type MockStore
+func (_mock *MockStore) GetFolderDuplicates() ([][]database.Book, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFolderDuplicates")
+	}
+
+	var r0 [][]database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([][]database.Book, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() [][]database.Book); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([][]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetFolderDuplicates_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetFolderDuplicates() *MockStore_GetFolderDuplicates_Call {
+	return &MockStore_GetFolderDuplicates_Call{Call: _e.mock.On("GetFolderDuplicates")}
+}
+
+func (_c *MockStore_GetFolderDuplicates_Call) Run(run func()) *MockStore_GetFolderDuplicates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetFolderDuplicates_Call) Return(bookss [][]database.Book, err error) *MockStore_GetFolderDuplicates_Call {
+	_c.Call.Return(bookss, err)
+	return _c
+}
+
+func (_c *MockStore_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]database.Book, error)) *MockStore_GetFolderDuplicates_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetImportPathByID provides a mock function for the type MockStore
 func (_mock *MockStore) GetImportPathByID(id int) (*database.ImportPath, error) {
 	ret := _mock.Called(id)

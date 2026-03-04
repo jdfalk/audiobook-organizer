@@ -326,20 +326,49 @@ func (svc *AudiobookService) GetDuplicateBooks(ctx context.Context) (*Duplicates
 		return nil, fmt.Errorf("database not initialized")
 	}
 
+	// Get hash-based duplicates
 	duplicateGroups, err := svc.store.GetDuplicateBooks()
 	if err != nil {
 		return nil, err
 	}
-
-	// Ensure we never return null - always return empty array
 	if duplicateGroups == nil {
 		duplicateGroups = [][]database.Book{}
 	}
 
-	// Calculate total duplicates count (sum of all books in duplicate groups minus the count of groups)
+	// Get folder-based duplicates (same title in same folder, e.g. M4B + MP3)
+	folderGroups, err := svc.store.GetFolderDuplicates()
+	if err != nil {
+		log.Printf("[WARN] folder duplicate detection failed: %v", err)
+	} else {
+		// Merge folder groups, avoiding duplicate groups already found by hash
+		seenBookIDs := map[string]bool{}
+		for _, group := range duplicateGroups {
+			for _, b := range group {
+				seenBookIDs[b.ID] = true
+			}
+		}
+		for _, group := range folderGroups {
+			// Skip if all books in this group are already in hash-based groups
+			allSeen := true
+			for _, b := range group {
+				if !seenBookIDs[b.ID] {
+					allSeen = false
+					break
+				}
+			}
+			if !allSeen {
+				duplicateGroups = append(duplicateGroups, group)
+				for _, b := range group {
+					seenBookIDs[b.ID] = true
+				}
+			}
+		}
+	}
+
+	// Calculate total duplicates count
 	totalDuplicates := 0
 	for _, group := range duplicateGroups {
-		totalDuplicates += len(group) - 1 // Count extras in each group
+		totalDuplicates += len(group) - 1
 	}
 
 	return &DuplicatesResult{

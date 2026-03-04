@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -51,6 +51,24 @@ const FIELD_OPTIONS = [
   'description',
   'language',
 ] as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  author: 'Author',
+  narrator: 'Narrator',
+  series: 'Series',
+  series_position: 'Series Position',
+  year: 'Year',
+  publisher: 'Publisher',
+  isbn: 'ISBN',
+  cover_url: 'Cover Image',
+  description: 'Description',
+  language: 'Language',
+};
+
+function humanizeField(field: string): string {
+  return FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const SOURCE_COLORS: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'info'> = {
   openlibrary: 'primary',
@@ -349,7 +367,7 @@ export function MetadataSearchDialog({
                               size="small"
                             />
                           }
-                          label={`${field}: ${value}`}
+                          label={`${humanizeField(field)}: ${value}`}
                         />
                       );
                     })}

@@ -380,6 +380,10 @@ func (m *MockStore) GetDuplicateBooks() ([][]Book, error) {
 	return nil, nil
 }
 
+func (m *MockStore) GetFolderDuplicates() ([][]Book, error) {
+	return nil, nil
+}
+
 func (m *MockStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	if m.GetBooksBySeriesIDFunc != nil {
 		return m.GetBooksBySeriesIDFunc(seriesID)

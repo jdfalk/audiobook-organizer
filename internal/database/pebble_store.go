@@ -776,6 +776,11 @@ func (p *PebbleStore) GetDuplicateBooks() ([][]Book, error) {
 	return duplicateGroups, nil
 }
 
+func (p *PebbleStore) GetFolderDuplicates() ([][]Book, error) {
+	// PebbleStore doesn't support folder-based duplicate detection efficiently.
+	return nil, nil
+}
+
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	var books []Book
 	prefix := []byte(fmt.Sprintf("book:series:%d:", seriesID))
