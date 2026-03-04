@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -63,6 +63,7 @@ import {
   importITunesLibrary,
   previewITunesWriteBack,
   startITunesSync,
+  updateConfig,
   type ITunesBookMapping,
   type ITunesImportRequest,
   type ITunesImportStatus,
@@ -77,6 +78,7 @@ import { useToast } from '../toast/ToastProvider';
 
 interface ITunesImportSettings {
   libraryPath: string;
+  itlPath: string;
   importMode: 'organized' | 'import' | 'organize';
   preserveLocation: boolean;
   importPlaylists: boolean;
@@ -86,6 +88,7 @@ interface ITunesImportSettings {
 
 const defaultSettings: ITunesImportSettings = {
   libraryPath: '',
+  itlPath: '',
   importMode: 'import',
   preserveLocation: false,
   importPlaylists: true,
@@ -277,19 +280,7 @@ export function ITunesImport() {
       .filter((value) => value.length > 0);
   }
 
-  const handleOpenWriteBack = () => {
-    setWriteBackOpen(true);
-    setWriteBackIds('');
-    setWriteBackNotice(null);
-    setWriteBackResult(null);
-    setWriteBackBackup(true);
-    setWriteBackLibraryPath(settings.libraryPath);
-    setWriteBackMode(0);
-    setPreviewItems([]);
-    setBrowseItems([]);
-    setBrowseSelected(new Set());
-    setSyncAllCount(null);
-  };
+  /* handleOpenWriteBack removed — write-back is now automatic via ITL path */
 
   const loadBrowseBooks = useCallback(async (search: string, page: number, rowsPerPage: number) => {
     setBrowseLoading(true);
@@ -488,6 +479,22 @@ export function ITunesImport() {
                 </Button>
               ),
             }}
+          />
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            label="iTunes Library ITL Path (optional)"
+            value={settings.itlPath}
+            onChange={(event) => {
+              const itlPath = event.target.value;
+              setSettings((prev) => ({ ...prev, itlPath }));
+              // Save to backend config — enables automatic ITL write-back during organize
+              updateConfig({ itunes_library_itl_path: itlPath }).catch(() => {});
+            }}
+            fullWidth
+            placeholder="/path/to/iTunes Library.itl"
+            helperText="Path to iTunes Library.itl binary file. When set, organize automatically writes back file locations to iTunes."
           />
         </Box>
 
@@ -869,17 +876,7 @@ export function ITunesImport() {
           </Stack>
         </Box>
 
-        <Divider sx={{ my: 4 }} />
-
-        <Stack spacing={1}>
-          <Typography variant="subtitle1">Write Back to iTunes</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Update file paths in your Library.xml after organizing audiobooks.
-          </Typography>
-          <Button variant="outlined" onClick={handleOpenWriteBack}>
-            Open Write-Back Dialog
-          </Button>
-        </Stack>
+        {/* Write-back is now automatic when ITL path is configured */}
 
         <Dialog
           open={showMissingFiles}

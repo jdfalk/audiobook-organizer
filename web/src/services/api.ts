@@ -442,6 +442,12 @@ export interface Config {
   auto_write_tags_on_apply?: boolean;
   verify_after_write?: boolean;
 
+  // iTunes sync
+  itunes_library_itl_path?: string;
+  itl_write_back_enabled?: boolean;
+  itunes_auto_write_back?: boolean;
+  itunes_sync_enabled?: boolean;
+
   // Legacy fields (Goodreads deprecated Dec 2020, removed)
   api_keys: Record<string, never>;
 }
