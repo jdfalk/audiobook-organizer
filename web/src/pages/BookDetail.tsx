@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.28.0
+// version: 1.30.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -50,6 +50,8 @@ import StarIcon from '@mui/icons-material/Star.js';
 import StarBorderIcon from '@mui/icons-material/StarBorder.js';
 import LinkIcon from '@mui/icons-material/Link.js';
 import LinkOffIcon from '@mui/icons-material/LinkOff.js';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline.js';
 import type { Book, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -57,6 +59,7 @@ import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog'
 import { MetadataHistory } from '../components/MetadataHistory';
 import { MetadataSearchDialog } from '../components/audiobooks/MetadataSearchDialog';
 import { FileSelector } from '../components/audiobooks/FileSelector';
+import { RelocateFileDialog } from '../components/audiobooks/RelocateFileDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
@@ -69,6 +72,7 @@ export const BookDetail = () => {
   const [actionLabel, setActionLabel] = useState<string | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
+  const [rescanningFolder, setRescanningFolder] = useState(false);
   const [writingToFiles, setWritingToFiles] = useState(false);
   const [transcoding, setTranscoding] = useState(false);
   const [writeBackDialogOpen, setWriteBackDialogOpen] = useState(false);
@@ -96,6 +100,7 @@ export const BookDetail = () => {
   const [metadataSearchOpen, setMetadataSearchOpen] = useState(false);
   const [segments, setSegments] = useState<BookSegment[]>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
+  const [relocateSegment, setRelocateSegment] = useState<BookSegment | null>(null);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
@@ -364,6 +369,29 @@ export const BookDetail = () => {
     }
   };
 
+  const handleRescanFolder = async () => {
+    if (!book) return;
+    setRescanningFolder(true);
+    try {
+      // Get parent directory from file_path
+      const lastSlash = book.file_path.lastIndexOf('/');
+      const folderPath = lastSlash > 0 ? book.file_path.substring(0, lastSlash) : book.file_path;
+      await api.startScan(folderPath, undefined, true);
+      toast(`Scanning folder: ${folderPath}`, 'success');
+      // Refresh book and segments after a short delay to let scan complete
+      setTimeout(async () => {
+        await refreshBook();
+      }, 3000);
+    } catch (error: unknown) {
+      console.error('Failed to rescan folder', error);
+      const msg =
+        error instanceof Error ? error.message : 'Folder rescan failed.';
+      toast(msg, 'error');
+    } finally {
+      setRescanningFolder(false);
+    }
+  };
+
   const versionSummary = useMemo(() => {
     if (!book) return null;
     const primary = versions.find((v) => v.is_primary_version);
@@ -428,24 +456,27 @@ export const BookDetail = () => {
         description: 'description',
       };
 
+      // Use ?? '' to ensure all fields are present in JSON (undefined is dropped by JSON.stringify)
       const payload: Partial<Book> & { overrides?: Record<string, OverridePayload> } = {
-        title: updated.title,
-        description: updated.description,
-        publisher: updated.publisher,
-        language: updated.language,
-        narrator: updated.narrator,
-        series_position: updated.series_number,
+        title: updated.title ?? '',
+        description: updated.description ?? '',
+        publisher: updated.publisher ?? '',
+        language: updated.language ?? '',
+        narrator: updated.narrator ?? '',
+        series_position: updated.series_number ?? undefined,
         audiobook_release_year:
           updated.audiobook_release_year ||
           updated.year ||
-          book.audiobook_release_year,
-        print_year: updated.year || book.print_year,
+          book.audiobook_release_year ||
+          undefined,
+        print_year: updated.year || book.print_year || undefined,
         isbn:
           updated.isbn13 ||
           updated.isbn10 ||
-          book.isbn,
-        author_name: updated.author,
-        series_name: updated.series,
+          book.isbn ||
+          '',
+        author_name: updated.author ?? '',
+        series_name: updated.series ?? '',
       };
 
       // Auto-lock edited fields (Plex-style: edits are automatically locked)
@@ -725,6 +756,20 @@ export const BookDetail = () => {
               disabled={parsingWithAI || actionLoading}
             >
               {parsingWithAI ? 'Parsing...' : 'Parse with AI'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
+                rescanningFolder ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <FolderOpenIcon />
+                )
+              }
+              onClick={handleRescanFolder}
+              disabled={rescanningFolder || actionLoading}
+            >
+              {rescanningFolder ? 'Scanning...' : 'Rescan Folder'}
             </Button>
           </Stack>
           <Stack
@@ -1055,7 +1100,9 @@ export const BookDetail = () => {
                 ))}
             </Grid>
 
-            {segments.length > 0 && (
+            {segments.length > 0 && (() => {
+              const missingCount = segments.filter((s) => s.file_exists === false).length;
+              return (
               <Box>
                 <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 2, mb: 1 }}>
                   <Typography variant="h6">Individual Files</Typography>
@@ -1080,6 +1127,12 @@ export const BookDetail = () => {
                     </Button>
                   )}
                 </Stack>
+                {missingCount > 0 && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    {missingCount} of {segments.length} file{segments.length !== 1 ? 's' : ''} could not be found on disk.
+                    Click a missing file to relocate it.
+                  </Alert>
+                )}
                 <Table size="small">
                   <TableHead>
                     <TableRow>
@@ -1091,18 +1144,39 @@ export const BookDetail = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {segments.map((seg) => (
+                    {segments.map((seg) => {
+                      const isMissing = seg.file_exists === false;
+                      return (
                       <TableRow
                         key={seg.id}
                         hover
-                        sx={{ cursor: 'pointer' }}
+                        sx={{
+                          cursor: 'pointer',
+                          ...(isMissing && {
+                            bgcolor: 'error.50',
+                            '&:hover': { bgcolor: 'error.100' },
+                          }),
+                        }}
                         onClick={() => {
-                          setSelectedSegmentIds(new Set([seg.id]));
-                          setActiveTab('info');
+                          if (isMissing) {
+                            setRelocateSegment(seg);
+                          } else {
+                            setSelectedSegmentIds(new Set([seg.id]));
+                            setActiveTab('info');
+                          }
                         }}
                       >
-                        <TableCell>{seg.track_number ?? '—'}</TableCell>
-                        <TableCell sx={{ wordBreak: 'break-all' }}>
+                        <TableCell>
+                          <Stack direction="row" alignItems="center" spacing={0.5}>
+                            {isMissing && (
+                              <Tooltip title={`Missing: ${seg.file_path}`}>
+                                <ErrorOutlineIcon color="error" fontSize="small" />
+                              </Tooltip>
+                            )}
+                            <span>{seg.track_number ?? '—'}</span>
+                          </Stack>
+                        </TableCell>
+                        <TableCell sx={{ wordBreak: 'break-all', ...(isMissing && { color: 'error.main' }) }}>
                           {seg.file_path.split('/').pop()}
                         </TableCell>
                         <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
@@ -1113,11 +1187,13 @@ export const BookDetail = () => {
                             : '—'}
                         </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Box>
-            )}
+              );
+            })()}
           </Stack>
         </Paper>
       )}
@@ -1492,6 +1568,20 @@ export const BookDetail = () => {
           />
         </DialogContent>
       </Dialog>
+      {relocateSegment && (
+        <RelocateFileDialog
+          open={!!relocateSegment}
+          onClose={() => setRelocateSegment(null)}
+          segment={relocateSegment}
+          bookId={book.id}
+          onRelocated={async () => {
+            if (id) {
+              const segs = await api.getBookSegments(id);
+              setSegments(segs);
+            }
+          }}
+        />
+      )}
     </Box>
   );
 };

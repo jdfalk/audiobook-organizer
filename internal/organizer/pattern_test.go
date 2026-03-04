@@ -1,5 +1,5 @@
 // file: internal/organizer/pattern_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package organizer
@@ -426,9 +426,19 @@ func TestSanitizationWithRealWorldData(t *testing.T) {
 			expected: "Series #5 - Title",
 		},
 		{
-			name:     "parentheses and brackets",
+			name:     "parentheses preserved, brackets stripped",
 			input:    "Title (Narrator) [2020]",
-			expected: "Title (Narrator) [2020]",
+			expected: "Title (Narrator) 2020",
+		},
+		{
+			name:     "brackets with series info stripped",
+			input:    "[The Expanse 9.0] Leviathan Falls",
+			expected: "The Expanse 9.0 Leviathan Falls",
+		},
+		{
+			name:     "parentheses unabridged preserved",
+			input:    "Title (Unabridged)",
+			expected: "Title (Unabridged)",
 		},
 		{
 			name:     "em dash and en dash",

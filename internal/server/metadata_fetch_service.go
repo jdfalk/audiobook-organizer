@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.11.0
+// version: 4.13.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1098,7 +1098,7 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
 			if updatedBook != nil {
 				updatedBook.CoverURL = &localCoverURL
-				mfs.db.UpdateBook(id, &database.Book{CoverURL: &localCoverURL})
+				mfs.db.UpdateBook(id, updatedBook)
 			}
 			// Embed cover art into audio file only if it doesn't already have one
 			if updatedBook != nil && updatedBook.FilePath != "" && !metadata.HasExistingCoverArt(updatedBook.FilePath) {
@@ -1457,16 +1457,20 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, segments, vars)
 
 	if config.AppConfig.AutoRenameOnApply {
-		if err := RenameFiles(entries); err != nil {
+		renameResult, err := RenameFiles(entries)
+		if err != nil {
 			return fmt.Errorf("rename files: %w", err)
 		}
+		if len(renameResult.Skipped) > 0 {
+			log.Printf("[WARN] %d files skipped (source missing) during rename", len(renameResult.Skipped))
+		}
 
-		// Update segment records with new paths
+		// Update segment records with new paths (only for succeeded renames)
 		segMap := make(map[string]*database.BookSegment, len(segments))
 		for i := range segments {
 			segMap[segments[i].ID] = &segments[i]
 		}
-		for _, entry := range entries {
+		for _, entry := range renameResult.Succeeded {
 			if seg, ok := segMap[entry.SegmentID]; ok {
 				seg.FilePath = entry.TargetPath
 				if err := mfs.db.UpdateBookSegment(seg); err != nil {

@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.33.0
+// version: 1.34.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -165,6 +165,7 @@ export interface BookSegment {
   track_number?: number;
   total_tracks?: number;
   active: boolean;
+  file_exists?: boolean;
 }
 
 export interface SegmentTags {
@@ -1448,6 +1449,36 @@ export async function extractTrackInfo(
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to extract track info');
+  }
+  return response.json();
+}
+
+// File Relocation
+export interface RelocateRequest {
+  segment_id?: string;
+  new_path?: string;
+  folder_path?: string;
+}
+
+export interface RelocateResult {
+  updated: number;
+  errors?: string[];
+}
+
+export async function relocateBookFiles(
+  bookId: string,
+  req: RelocateRequest
+): Promise<RelocateResult> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/relocate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to relocate files');
   }
   return response.json();
 }

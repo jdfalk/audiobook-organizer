@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.87.0
+// version: 1.89.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1148,6 +1148,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
+			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 
 			// Metadata change history
@@ -1702,7 +1703,21 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 		segments = []database.BookSegment{}
 	}
 
-	c.JSON(http.StatusOK, segments)
+	// Wrap segments with file_exists check
+	type segmentWithStatus struct {
+		database.BookSegment
+		FileExists bool `json:"file_exists"`
+	}
+	result := make([]segmentWithStatus, len(segments))
+	for i, seg := range segments {
+		_, statErr := os.Stat(seg.FilePath)
+		result[i] = segmentWithStatus{
+			BookSegment: seg,
+			FileExists:  statErr == nil,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
@@ -1733,7 +1748,25 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 
 	trackInfos := metadata.ExtractTrackInfoBatch(filePaths)
 
-	// Second pass: assign sequential numbers to files that had no parseable track number
+	// Second pass: normalize track numbers to be 1-indexed and fill gaps
+	// Some players/files use 0-based numbering (0-50); we always want 1-based (1-51)
+	hasZero := false
+	for _, info := range trackInfos {
+		if info.TrackNumber != nil && *info.TrackNumber == 0 {
+			hasZero = true
+			break
+		}
+	}
+	if hasZero {
+		for i := range trackInfos {
+			if trackInfos[i].TrackNumber != nil {
+				n := *trackInfos[i].TrackNumber + 1
+				trackInfos[i].TrackNumber = &n
+			}
+		}
+	}
+
+	// Assign sequential numbers to files that had no parseable track number
 	usedNumbers := map[int]bool{}
 	for _, info := range trackInfos {
 		if info.TrackNumber != nil {
@@ -1791,6 +1824,95 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		"total":    len(segments),
 		"segments": segments,
 	})
+}
+
+// relocateBookFiles updates segment file paths when files have been moved.
+func (s *Server) relocateBookFiles(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	var req RelocateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	result := RelocateResult{}
+
+	if req.SegmentID != "" && req.NewPath != "" {
+		// Individual mode: update one segment
+		for i, seg := range segments {
+			if seg.ID == req.SegmentID {
+				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "new path does not exist on disk"})
+					return
+				}
+				segments[i].FilePath = req.NewPath
+				if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("update segment %s: %v", seg.ID, err))
+				} else {
+					result.Updated++
+				}
+				break
+			}
+		}
+	} else if req.FolderPath != "" {
+		// Folder mode: scan folder and match files by name
+		dirEntries, err := os.ReadDir(req.FolderPath)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot read folder: %v", err)})
+			return
+		}
+
+		// Build map of filename -> full path in the new folder
+		fileMap := make(map[string]string)
+		for _, de := range dirEntries {
+			if !de.IsDir() {
+				fileMap[de.Name()] = filepath.Join(req.FolderPath, de.Name())
+			}
+		}
+
+		for i, seg := range segments {
+			oldName := filepath.Base(seg.FilePath)
+			if newPath, ok := fileMap[oldName]; ok {
+				segments[i].FilePath = newPath
+				if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("update segment %s: %v", seg.ID, err))
+				} else {
+					result.Updated++
+				}
+			}
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide segment_id+new_path or folder_path"})
+		return
+	}
+
+	// Update book's file_path to match first segment
+	if result.Updated > 0 && len(segments) > 0 {
+		book.FilePath = segments[0].FilePath
+		if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+			log.Printf("[WARN] failed to update book file_path: %v", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
 }
 
 // getSegmentTags returns raw metadata tags for a specific segment file.
