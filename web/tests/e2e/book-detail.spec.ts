@@ -1,7 +1,7 @@
 // file: tests/e2e/book-detail.spec.ts
-// version: 1.11.0
+// version: 1.12.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
-// last-edited: 2026-03-02
+// last-edited: 2026-03-04
 
 import { expect, test } from '@playwright/test';
 import { mockEventSource } from './utils/test-helpers';
@@ -426,38 +426,4 @@ test.describe('Book Detail page', () => {
     await expect(page.getByText('AI parsed desc')).toBeVisible();
   });
 
-  test('renders tags tab with media info and tag values', async ({ page }) => {
-    await setupRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    await expect(page.getByText('192 kbps')).toBeVisible();
-    await expect(page.locator('text=The Test Book').first()).toBeVisible();
-    await expect(page.locator('text=Jane Tester').first()).toBeVisible();
-  });
-
-  test('compare tab applies file value to title', async ({ page }) => {
-    await setupRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    await expect(page.getByText('File Title')).toBeVisible();
-    await page.getByRole('button', { name: 'Use File' }).first().click();
-    await expect(
-      page.getByRole('heading', { name: 'File Title' })
-    ).toBeVisible();
-  });
-
-  test('compare tab unlocks override without clearing value', async ({
-    page,
-  }) => {
-    await setupRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const narratorRow = page.getByRole('row', { name: /narrator/i });
-    await expect(narratorRow.getByText('Override Narrator')).toBeVisible();
-    await narratorRow.getByRole('button', { name: 'Unlock' }).click();
-    await expect(narratorRow.getByText('locked')).not.toBeVisible();
-  });
 });

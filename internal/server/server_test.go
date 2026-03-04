@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/oklog/ulid/v2"
@@ -2485,4 +2486,127 @@ func TestGetOperationStatusNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	assert.Contains(t, []int{404, 500}, w.Code)
+}
+
+// TestAutoNumberTrackNumbering tests the track renumbering logic used by handleAutoNumber.
+// The logic is inline in server.go (~line 1738-1775) and operates on []metadata.TrackInfo:
+//  1. If any track has number 0, all tracks get +1 (0-based → 1-based)
+//  2. Files without parseable track numbers get gap-filled sequential numbers
+//  3. All files get TotalTracks set to len(segments)
+func TestAutoNumberTrackNumbering(t *testing.T) {
+	intPtr := func(n int) *int { return &n }
+
+	// applyAutoNumberLogic replicates the inline logic from handleAutoNumber in server.go.
+	applyAutoNumberLogic := func(trackInfos []metadata.TrackInfo, totalSegments int) []metadata.TrackInfo {
+		// Phase 1: if any track is 0, shift all numbered tracks +1
+		hasZero := false
+		for _, info := range trackInfos {
+			if info.TrackNumber != nil && *info.TrackNumber == 0 {
+				hasZero = true
+				break
+			}
+		}
+		if hasZero {
+			for i := range trackInfos {
+				if trackInfos[i].TrackNumber != nil {
+					n := *trackInfos[i].TrackNumber + 1
+					trackInfos[i].TrackNumber = &n
+				}
+			}
+		}
+
+		// Phase 2: assign sequential numbers to nil entries, filling gaps
+		usedNumbers := map[int]bool{}
+		for _, info := range trackInfos {
+			if info.TrackNumber != nil {
+				usedNumbers[*info.TrackNumber] = true
+			}
+		}
+		nextNum := 1
+		total := totalSegments
+		for i := range trackInfos {
+			if trackInfos[i].TrackNumber == nil {
+				for usedNumbers[nextNum] {
+					nextNum++
+				}
+				n := nextNum
+				trackInfos[i].TrackNumber = &n
+				usedNumbers[nextNum] = true
+				nextNum++
+			}
+			trackInfos[i].TotalTracks = &total
+		}
+		return trackInfos
+	}
+
+	tests := []struct {
+		name           string
+		input          []metadata.TrackInfo
+		total          int
+		expectedTracks []int
+	}{
+		{
+			name: "0-based tracks shifted to 1-based",
+			input: []metadata.TrackInfo{
+				{TrackNumber: intPtr(0)},
+				{TrackNumber: intPtr(1)},
+				{TrackNumber: intPtr(2)},
+			},
+			total:          3,
+			expectedTracks: []int{1, 2, 3},
+		},
+		{
+			name: "gap filling with missing track number",
+			input: []metadata.TrackInfo{
+				{TrackNumber: intPtr(1)},
+				{TrackNumber: intPtr(3)},
+				{TrackNumber: nil},
+			},
+			total:          3,
+			expectedTracks: []int{1, 3, 2},
+		},
+		{
+			name: "already 1-based stays the same",
+			input: []metadata.TrackInfo{
+				{TrackNumber: intPtr(1)},
+				{TrackNumber: intPtr(2)},
+				{TrackNumber: intPtr(3)},
+			},
+			total:          3,
+			expectedTracks: []int{1, 2, 3},
+		},
+		{
+			name: "all files without track numbers get sequential",
+			input: []metadata.TrackInfo{
+				{TrackNumber: nil},
+				{TrackNumber: nil},
+				{TrackNumber: nil},
+			},
+			total:          3,
+			expectedTracks: []int{1, 2, 3},
+		},
+		{
+			name: "mixed 0-based with gaps and nil",
+			input: []metadata.TrackInfo{
+				{TrackNumber: intPtr(0)},
+				{TrackNumber: intPtr(2)},
+				{TrackNumber: nil},
+			},
+			total:          3,
+			expectedTracks: []int{1, 3, 2},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := applyAutoNumberLogic(tc.input, tc.total)
+			require.Len(t, result, len(tc.expectedTracks))
+			for i, expected := range tc.expectedTracks {
+				require.NotNil(t, result[i].TrackNumber, "track %d should not be nil", i)
+				assert.Equal(t, expected, *result[i].TrackNumber, "track %d number", i)
+				require.NotNil(t, result[i].TotalTracks, "track %d TotalTracks should not be nil", i)
+				assert.Equal(t, tc.total, *result[i].TotalTracks, "track %d TotalTracks", i)
+			}
+		})
+	}
 }
