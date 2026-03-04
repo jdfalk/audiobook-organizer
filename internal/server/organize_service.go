@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -11,6 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"path/filepath"
+
+	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -51,6 +54,9 @@ func (orgSvc *OrganizeService) PerformOrganizeWithID(ctx context.Context, opID s
 // PerformOrganize executes the library organization operation
 func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *OrganizeRequest, progress operations.ProgressReporter) error {
 	_ = progress.Log("info", "Starting file organization", nil)
+
+	// Auto-backup database before organizing
+	orgSvc.autoBackup(progress)
 
 	// Get books to organize
 	allBooks, err := orgSvc.db.GetAllBooks(1000, 0)
@@ -103,6 +109,28 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	}
 
 	return nil
+}
+
+func (orgSvc *OrganizeService) autoBackup(progress operations.ProgressReporter) {
+	dbPath := config.AppConfig.DatabasePath
+	dbType := config.AppConfig.DatabaseType
+	if dbPath == "" {
+		_ = progress.Log("warn", "Skipping auto-backup: no database path configured", nil)
+		return
+	}
+
+	backupConfig := backup.DefaultBackupConfig()
+	if !filepath.IsAbs(backupConfig.BackupDir) {
+		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
+	}
+
+	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
+	if err != nil {
+		errDetails := fmt.Sprintf("Auto-backup failed: %s", err.Error())
+		_ = progress.Log("warn", errDetails, nil)
+		return
+	}
+	_ = progress.Log("info", fmt.Sprintf("Auto-backup created: %s (%d bytes)", info.Filename, info.Size), nil)
 }
 
 func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, progress operations.ProgressReporter) []database.Book {

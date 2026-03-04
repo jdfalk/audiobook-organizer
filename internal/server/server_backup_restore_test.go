@@ -79,7 +79,12 @@ func TestDeleteBackup_Success(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
 	require.NotEmpty(t, info.Filename)
 
-	backupPath := filepath.Join(backup.DefaultBackupConfig().BackupDir, info.Filename)
+	// Backup dir is resolved relative to DatabasePath directory
+	backupDir := backup.DefaultBackupConfig().BackupDir
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupDir) {
+		backupDir = filepath.Join(filepath.Dir(dbPath), backupDir)
+	}
+	backupPath := filepath.Join(backupDir, info.Filename)
 	_, err = os.Stat(backupPath)
 	require.NoError(t, err)
 

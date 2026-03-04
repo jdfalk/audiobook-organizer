@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect, useCallback } from 'react';
@@ -38,6 +38,7 @@ import {
   MenuBook as MenuBookIcon,
 } from '@mui/icons-material';
 import * as api from '../services/api';
+import { useOperationsStore } from '../stores/useOperationsStore';
 
 interface SystemStats {
   library_books: number;
@@ -187,7 +188,8 @@ export function Dashboard() {
     setScanInProgress(true);
     setActionNotice(null);
     try {
-      await api.startScan();
+      const op = await api.startScan();
+      useOperationsStore.getState().startPolling(op.id, 'scan');
       setActionNotice('Scan started for all import paths.');
       navigate('/operations');
     } catch (error) {
@@ -206,7 +208,8 @@ export function Dashboard() {
     setOrganizeInProgress(true);
     setActionNotice(null);
     try {
-      await api.startOrganize();
+      const op = await api.startOrganize();
+      useOperationsStore.getState().startPolling(op.id, 'organize');
       setActionNotice('Organize operation started.');
       setOrganizeDialogOpen(false);
       navigate('/operations');

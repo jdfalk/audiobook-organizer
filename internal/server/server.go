@@ -3690,6 +3690,11 @@ func (s *Server) createBackup(c *gin.Context) {
 	dbPath := config.AppConfig.DatabasePath
 	dbType := config.AppConfig.DatabaseType
 
+	// Resolve backup dir relative to database directory so it's always absolute
+	if dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
+		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
+	}
+
 	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -3702,6 +3707,9 @@ func (s *Server) createBackup(c *gin.Context) {
 // listBackups lists all available backups
 func (s *Server) listBackups(c *gin.Context) {
 	backupConfig := backup.DefaultBackupConfig()
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
+		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
+	}
 
 	backups, err := backup.ListBackups(backupConfig.BackupDir)
 	if err != nil {
@@ -3734,6 +3742,9 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	}
 
 	backupConfig := backup.DefaultBackupConfig()
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
+		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
+	}
 	backupPath := filepath.Join(backupConfig.BackupDir, req.BackupFilename)
 
 	// Use current database path as target if not specified
@@ -3762,6 +3773,11 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	}
 
 	backupConfig := backup.DefaultBackupConfig()
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
+		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
+	}
+	// Sanitize filename to prevent path traversal
+	filename = filepath.Base(filename)
 	backupPath := filepath.Join(backupConfig.BackupDir, filename)
 
 	if err := backup.DeleteBackup(backupPath); err != nil {

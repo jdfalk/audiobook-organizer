@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -67,9 +67,20 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 
-	// Check if file already exists at exact target path
-	if _, err := os.Stat(targetPath); err == nil {
-		return targetPath, nil // Already organized at this location
+	// Check if source and target are the same path
+	if book.FilePath == targetPath {
+		return targetPath, nil
+	}
+
+	// Check if file already exists at target path
+	if targetInfo, err := os.Stat(targetPath); err == nil {
+		// Target exists — check if it's the same inode (already hardlinked)
+		if srcInfo, srcErr := os.Stat(book.FilePath); srcErr == nil {
+			if os.SameFile(srcInfo, targetInfo) {
+				return targetPath, nil // Already the same file (hardlink/reflink)
+			}
+		}
+		return targetPath, nil // Target already exists with different content; don't overwrite
 	}
 
 	// Check for duplicate files by hash (if hash is available in book metadata)
