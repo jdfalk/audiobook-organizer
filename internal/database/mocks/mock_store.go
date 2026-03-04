@@ -3634,6 +3634,31 @@ func (_mock *MockStore) GetFolderDuplicates() ([][]database.Book, error) {
 	return r0, r1
 }
 
+type MockStore_GetBooksByTitleInDir_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBooksByTitleInDir(normalizedTitle interface{}, dirPath interface{}) *MockStore_GetBooksByTitleInDir_Call {
+	return &MockStore_GetBooksByTitleInDir_Call{Call: _e.mock.On("GetBooksByTitleInDir", normalizedTitle, dirPath)}
+}
+
+func (_c *MockStore_GetBooksByTitleInDir_Call) Run(run func(string, string)) *MockStore_GetBooksByTitleInDir_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBooksByTitleInDir_Call) Return(books []database.Book, err error) *MockStore_GetBooksByTitleInDir_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_GetBooksByTitleInDir_Call) RunAndReturn(run func(string, string) ([]database.Book, error)) *MockStore_GetBooksByTitleInDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 type MockStore_GetFolderDuplicates_Call struct {
 	*mock.Call
 }
@@ -3657,6 +3682,34 @@ func (_c *MockStore_GetFolderDuplicates_Call) Return(bookss [][]database.Book, e
 func (_c *MockStore_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]database.Book, error)) *MockStore_GetFolderDuplicates_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// GetBooksByTitleInDir provides a mock function for the type MockStore
+func (_mock *MockStore) GetBooksByTitleInDir(normalizedTitle string, dirPath string) ([]database.Book, error) {
+	ret := _mock.Called(normalizedTitle, dirPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBooksByTitleInDir")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) ([]database.Book, error)); ok {
+		return returnFunc(normalizedTitle, dirPath)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) []database.Book); ok {
+		r0 = returnFunc(normalizedTitle, dirPath)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(normalizedTitle, dirPath)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // GetImportPathByID provides a mock function for the type MockStore

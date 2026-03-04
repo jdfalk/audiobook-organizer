@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1456,6 +1456,28 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 // that share the same parent directory and title (case-insensitive).
 // This catches M4B + MP3 versions of the same book in the same folder.
 // It prefers single-file M4B over multi-file formats.
+// GetBooksByTitleInDir finds books with the given normalized (lowercased) title
+// in the given directory path. Results are ordered so M4B files come first.
+func (s *SQLiteStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) {
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE LOWER(title) = ? AND file_path LIKE ? AND COALESCE(marked_for_deletion, 0) = 0
+		ORDER BY CASE WHEN format = 'm4b' THEN 0 ELSE 1 END`, bookSelectColumns)
+	rows, err := s.db.Query(query, normalizedTitle, dirPath+"/%")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query books by title in dir: %w", err)
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
+}
+
 func (s *SQLiteStore) GetFolderDuplicates() ([][]Book, error) {
 	// Group by parent directory + lower(title) where there are 2+ books
 	query := fmt.Sprintf(`

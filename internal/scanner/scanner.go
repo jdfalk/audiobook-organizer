@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -905,6 +905,43 @@ func saveBookToDatabase(book *Book) error {
 		}
 
 		if existing == nil {
+			// Smart dedup: check for same-title books in same directory (format-aware version linking)
+			if dbBook.Title != "" {
+				parentDir := filepath.Dir(book.FilePath)
+				siblings, lookupErr := database.GlobalStore.GetBooksByTitleInDir(strings.ToLower(dbBook.Title), parentDir)
+				if lookupErr == nil && len(siblings) > 0 {
+					// Determine or reuse version_group_id
+					var groupID string
+					for _, sib := range siblings {
+						if sib.VersionGroupID != nil && *sib.VersionGroupID != "" {
+							groupID = *sib.VersionGroupID
+							break
+						}
+					}
+					if groupID == "" {
+						h := sha256.Sum256([]byte(parentDir + "/" + strings.ToLower(dbBook.Title)))
+						groupID = fmt.Sprintf("vg-%x", h[:8])
+					}
+					dbBook.VersionGroupID = &groupID
+					isM4B := strings.EqualFold(dbBook.Format, "m4b")
+					isPrimary := isM4B
+					dbBook.IsPrimaryVersion = &isPrimary
+
+					// Update siblings to share the version group
+					for _, sib := range siblings {
+						if sib.VersionGroupID == nil || *sib.VersionGroupID == "" {
+							sibIsM4B := strings.EqualFold(sib.Format, "m4b")
+							sib.VersionGroupID = &groupID
+							sib.IsPrimaryVersion = &sibIsM4B
+							if _, uerr := database.GlobalStore.UpdateBook(sib.ID, &sib); uerr != nil {
+								log.Printf("[WARN] Failed to update sibling version group for %s: %v", sib.FilePath, uerr)
+							}
+						}
+					}
+					log.Printf("[INFO] Auto-linked version group %s for %q in %s", groupID, dbBook.Title, parentDir)
+				}
+			}
+
 			_, err = database.GlobalStore.CreateBook(dbBook)
 			return err
 		}

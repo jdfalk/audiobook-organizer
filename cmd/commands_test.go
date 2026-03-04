@@ -62,7 +62,10 @@ func (s *stubStore) GetBookByFileHash(hash string) (*database.Book, error)      
 func (s *stubStore) GetBookByOriginalHash(hash string) (*database.Book, error)  { return nil, nil }
 func (s *stubStore) GetBookByOrganizedHash(hash string) (*database.Book, error) { return nil, nil }
 func (s *stubStore) GetDuplicateBooks() ([][]database.Book, error)              { return [][]database.Book{}, nil }
-func (s *stubStore) GetFolderDuplicates() ([][]database.Book, error)            { return [][]database.Book{}, nil }
+func (s *stubStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]database.Book, error) {
+	return nil, nil
+}
+func (s *stubStore) GetFolderDuplicates() ([][]database.Book, error) { return [][]database.Book{}, nil }
 func (s *stubStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error) {
 	return []database.Book{}, nil
 }
