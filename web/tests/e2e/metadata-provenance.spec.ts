@@ -1,12 +1,12 @@
 // file: tests/e2e/metadata-provenance.spec.ts
-// version: 1.4.0
+// version: 2.0.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
-// last-edited: 2026-03-02
+// last-edited: 2026-03-04
 
 /**
- * E2E tests for metadata provenance features (SESSION-003).
- * Tests per-field tracking of effective_value, source, stored_value,
- * fetched_value, override_value, and locked state.
+ * E2E tests for MetadataEditDialog provenance features.
+ * Tests per-field lock state, source labels, auto-lock on edit,
+ * fetched comparison display, year validation, and save/cancel behavior.
  */
 
 import { expect, test } from '@playwright/test';
@@ -14,36 +14,23 @@ import { mockEventSource, skipWelcomeWizard } from './utils/test-helpers';
 
 const bookId = 'prov-test-book';
 
-type TagEntry = {
-  file_value: string | number | null;
-  fetched_value: string | number | null;
-  stored_value: string | number | null;
-  override_value: string | number | null;
-  override_locked: boolean;
-  effective_value: string | number | null;
-  effective_source: 'file' | 'fetched' | 'stored' | 'override' | '';
-};
-
-type TagsData = {
-  media_info: {
-    codec: string;
-    bitrate: number;
-    sample_rate: number;
-    channels: number;
-    bit_depth: number;
-    quality: string;
-    duration: number;
-  };
-  tags: Record<string, TagEntry>;
-};
-
 /**
- * Creates initial book state for testing
+ * Creates a mock audiobook for testing.
  */
-const createBookState = () => ({
+const createBookData = () => ({
   id: bookId,
   title: 'Provenance Test Book',
-  author_name: 'Test Author',
+  author: 'Test Author',
+  narrator: 'User Override Narrator',
+  series: 'DB Series',
+  series_number: 3,
+  genre: 'Science Fiction',
+  year: 2024,
+  language: 'en',
+  publisher: 'Audible Studios',
+  isbn10: '',
+  isbn13: '978-1234567890',
+  description: 'A test book for provenance.',
   file_path: '/library/provenance-test.m4b',
   file_hash: 'hash-prov-test',
   original_file_hash: 'hash-orig',
@@ -55,178 +42,87 @@ const createBookState = () => ({
 });
 
 /**
- * Creates comprehensive tags data with various provenance scenarios
+ * Creates mock field-states response matching the backend shape.
+ * Keys use backend names (author_name, series_name, etc.).
  */
-const createTagsData = (): TagsData => ({
-  media_info: {
-    codec: 'M4B',
-    bitrate: 128,
-    sample_rate: 44100,
-    channels: 2,
-    bit_depth: 16,
-    quality: '128kbps AAC',
-    duration: 7200,
-  },
-  tags: {
+const createFieldStates = () => ({
+  field_states: {
     title: {
-      file_value: 'File: Provenance Test',
       fetched_value: 'API: Provenance Test',
-      stored_value: 'Provenance Test Book',
       override_value: null,
       override_locked: false,
-      effective_value: 'Provenance Test Book',
-      effective_source: 'stored',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     author_name: {
-      file_value: 'File Author',
       fetched_value: 'API Author',
-      stored_value: 'Test Author',
       override_value: null,
       override_locked: false,
-      effective_value: 'Test Author',
-      effective_source: 'stored',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     narrator: {
-      file_value: 'File Narrator',
       fetched_value: 'API Narrator',
-      stored_value: 'DB Narrator',
       override_value: 'User Override Narrator',
       override_locked: true,
-      effective_value: 'User Override Narrator',
-      effective_source: 'override',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     series_name: {
-      file_value: 'File Series',
       fetched_value: 'API Series',
-      stored_value: 'DB Series',
       override_value: null,
       override_locked: false,
-      effective_value: 'DB Series',
-      effective_source: 'stored',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     publisher: {
-      file_value: null,
-      fetched_value: 'Audible Studios',
-      stored_value: null,
+      fetched_value: null,
       override_value: null,
       override_locked: false,
-      effective_value: 'Audible Studios',
-      effective_source: 'fetched',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     language: {
-      file_value: 'en',
       fetched_value: 'en',
-      stored_value: 'en',
       override_value: null,
       override_locked: false,
-      effective_value: 'en',
-      effective_source: 'stored',
+      updated_at: '2024-12-28T10:00:00Z',
     },
     audiobook_release_year: {
-      file_value: 2022,
       fetched_value: 2023,
-      stored_value: 2024,
       override_value: null,
       override_locked: false,
-      effective_value: 2024,
-      effective_source: 'stored',
+      updated_at: '2024-12-28T10:00:00Z',
+    },
+    isbn13: {
+      fetched_value: '978-0000000000',
+      override_value: null,
+      override_locked: false,
+      updated_at: '2024-12-28T10:00:00Z',
+    },
+    genre: {
+      fetched_value: null,
+      override_value: null,
+      override_locked: false,
+      updated_at: '2024-12-28T10:00:00Z',
     },
   },
 });
 
 /**
- * Mocks EventSource to prevent SSE connections
+ * Sets up API mocking for the MetadataEditDialog tests.
  */
-// Note: Using mockEventSource from test-helpers instead of this local definition
-// to avoid duplication
-
-/**
- * Recomputes effective value and source based on provenance hierarchy
- * Note: This helper is defined but used within the browser context in setupProvenanceRoutes
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const recomputeEffective = (entry: TagEntry) => {
-  if (entry.override_value !== null && entry.override_value !== undefined) {
-    entry.effective_value = entry.override_value;
-    entry.effective_source = 'override';
-  } else if (entry.stored_value !== null && entry.stored_value !== undefined) {
-    entry.effective_value = entry.stored_value;
-    entry.effective_source = 'stored';
-  } else if (
-    entry.fetched_value !== null &&
-    entry.fetched_value !== undefined
-  ) {
-    entry.effective_value = entry.fetched_value;
-    entry.effective_source = 'fetched';
-  } else if (entry.file_value !== null && entry.file_value !== undefined) {
-    entry.effective_value = entry.file_value;
-    entry.effective_source = 'file';
-  } else {
-    entry.effective_value = null;
-    entry.effective_source = '';
-  }
-};
-
-/**
- * Sets up comprehensive API mocking for provenance testing
- */
-const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
-  const bookState = createBookState();
-  const tagsState = createTagsData();
+const setupMockRoutes = async (page: import('@playwright/test').Page) => {
+  const bookData = createBookData();
+  const fieldStatesData = createFieldStates();
 
   await page.addInitScript(
     ({
-      bookId: injectedBookId,
-      bookData,
-      tagsData,
+      injectedBookId,
+      book,
+      fieldStates,
     }: {
-      bookId: string;
-      bookData: ReturnType<typeof createBookState>;
-      tagsData: TagsData;
+      injectedBookId: string;
+      book: ReturnType<typeof createBookData>;
+      fieldStates: ReturnType<typeof createFieldStates>;
     }) => {
-      // Restore persisted state from sessionStorage (survives reloads)
-      const savedBook = sessionStorage.getItem('__mock_book');
-      const savedTags = sessionStorage.getItem('__mock_tags');
-      let book = savedBook ? JSON.parse(savedBook) : { ...bookData };
-      const tags = savedTags ? JSON.parse(savedTags) : JSON.parse(JSON.stringify(tagsData));
-
-      const persistState = () => {
-        sessionStorage.setItem('__mock_book', JSON.stringify(book));
-        sessionStorage.setItem('__mock_tags', JSON.stringify(tags));
-      };
-
-      const recompute = (field: string) => {
-        const entry = tags.tags[field];
-        if (!entry) return;
-        if (
-          entry.override_value !== null &&
-          entry.override_value !== undefined
-        ) {
-          entry.effective_value = entry.override_value;
-          entry.effective_source = 'override';
-        } else if (
-          entry.stored_value !== null &&
-          entry.stored_value !== undefined
-        ) {
-          entry.effective_value = entry.stored_value;
-          entry.effective_source = 'stored';
-        } else if (
-          entry.fetched_value !== null &&
-          entry.fetched_value !== undefined
-        ) {
-          entry.effective_value = entry.fetched_value;
-          entry.effective_source = 'fetched';
-        } else if (
-          entry.file_value !== null &&
-          entry.file_value !== undefined
-        ) {
-          entry.effective_value = entry.file_value;
-          entry.effective_source = 'file';
-        } else {
-          entry.effective_value = null;
-          entry.effective_source = '';
-        }
-      };
+      let savedBook = { ...book };
+      let lastSaveDirtyFields: string[] = [];
 
       const jsonResponse = (body: unknown, status = 200) =>
         new Response(JSON.stringify(body), {
@@ -244,7 +140,7 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
               : input.url;
         const method = (init?.method || 'GET').toUpperCase();
 
-        // Health/system
+        // Health / system
         if (url.includes('/api/v1/health')) {
           return Promise.resolve(jsonResponse({ status: 'ok' }));
         }
@@ -261,382 +157,270 @@ const setupProvenanceRoutes = async (page: import('@playwright/test').Page) => {
           );
         }
 
+        // Field-states endpoint
+        if (url.includes(`/api/v1/audiobooks/${injectedBookId}/field-states`)) {
+          return Promise.resolve(jsonResponse(fieldStates));
+        }
+
         // Book detail
         if (
           url.includes(`/api/v1/audiobooks/${injectedBookId}`) &&
-          !url.includes('/tags')
+          !url.includes('/field-states')
         ) {
           if (method === 'GET') {
-            return Promise.resolve(jsonResponse(book));
+            return Promise.resolve(jsonResponse(savedBook));
           }
           if (method === 'PUT') {
             const body = init?.body ? JSON.parse(init.body as string) : {};
-            book = { ...book, ...body };
-
-            // Handle overrides payload
-            if (body.overrides) {
-              Object.entries(
-                body.overrides as Record<
-                  string,
-                  { value?: unknown; clear?: boolean; locked?: boolean }
-                >
-              ).forEach(([key, override]) => {
-                const entry = tags.tags[key];
-                if (!entry) return;
-
-                if (override.clear) {
-                  entry.override_value = null;
-                  entry.override_locked = false;
-                  recompute(key);
-                  // Also update the book's top-level field to match effective value
-                  (book as Record<string, unknown>)[key] = entry.effective_value;
-                  return;
-                }
-
-                if (override.value !== undefined) {
-                  entry.override_value = override.value as never;
-                  entry.override_locked =
-                    override.locked !== undefined ? override.locked : true;
-                  recompute(key);
-                  // Also update the book's top-level field to match effective value
-                  (book as Record<string, unknown>)[key] = entry.effective_value;
-                }
-              });
+            savedBook = { ...savedBook, ...body };
+            // Store dirty fields info for test assertions
+            if (body._dirtyFields) {
+              lastSaveDirtyFields = body._dirtyFields;
             }
-
-            // Handle direct field updates
-            Object.keys(body).forEach((key) => {
-              if (key === 'overrides') return;
-              if (tags.tags[key]) {
-                tags.tags[key].stored_value = body[key];
-                recompute(key);
-              }
-            });
-
-            persistState();
-            return Promise.resolve(jsonResponse(book));
+            // Expose to window for test assertions
+            (window as unknown as Record<string, unknown>).__lastSavedBook = savedBook;
+            (window as unknown as Record<string, unknown>).__lastSaveDirtyFields = lastSaveDirtyFields;
+            return Promise.resolve(jsonResponse(savedBook));
           }
         }
 
-        // Tags endpoint - critical for provenance
-        if (url.includes(`/api/v1/audiobooks/${injectedBookId}/tags`)) {
-          return Promise.resolve(jsonResponse(tags));
-        }
-
         // Book list
-        if (url.endsWith('/api/v1/audiobooks')) {
+        if (url.includes('/api/v1/audiobooks') && !url.includes(injectedBookId)) {
           return Promise.resolve(
-            jsonResponse({ items: [book], audiobooks: [book] })
+            jsonResponse({ items: [savedBook], audiobooks: [savedBook], count: 1, limit: 50, offset: 0 })
           );
         }
 
-        // Fallback
         return originalFetch(input, init);
       };
     },
-    { bookId, bookData: bookState, tagsData: tagsState }
+    { injectedBookId: bookId, book: bookData, fieldStates: fieldStatesData }
   );
 };
 
-test.describe('Metadata Provenance E2E', () => {
+/**
+ * Navigates to book detail and opens the Edit Metadata dialog.
+ */
+const openEditDialog = async (page: import('@playwright/test').Page) => {
+  await page.goto(`/library/${bookId}`);
+  // Wait for book detail to load
+  await expect(page.getByRole('heading', { name: 'Provenance Test Book' })).toBeVisible();
+  // Click Edit Metadata button
+  await page.getByRole('button', { name: /Edit Metadata/i }).click();
+  // Wait for dialog to appear
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByText('Edit Metadata')).toBeVisible();
+};
+
+test.describe('MetadataEditDialog Provenance E2E', () => {
   test.beforeEach(async ({ page }) => {
     await skipWelcomeWizard(page);
     await mockEventSource(page);
   });
 
-  test('displays provenance data in Tags tab', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
+  test('dialog opens with all fields populated from audiobook data', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
 
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
+    // Verify dialog header text
+    await expect(
+      page.getByText('Edited fields are automatically locked to prevent overwrites from future fetches.')
+    ).toBeVisible();
 
-    // Assert - Check that effective values are displayed
+    // Verify fields are populated
+    await expect(page.getByLabel('Title *')).toHaveValue('Provenance Test Book');
+    await expect(page.getByLabel('Author')).toHaveValue('Test Author');
+    await expect(page.getByLabel('Narrator')).toHaveValue('User Override Narrator');
+    await expect(page.getByLabel('Series')).toHaveValue('DB Series');
+    await expect(page.getByLabel('Genre')).toHaveValue('Science Fiction');
+    await expect(page.getByLabel('Year')).toHaveValue('2024');
+    await expect(page.getByLabel('Language')).toHaveValue('en');
+    await expect(page.getByLabel('Publisher')).toHaveValue('Audible Studios');
+    await expect(page.getByLabel('ISBN-13')).toHaveValue('978-1234567890');
+
+    // Verify Cancel and Save buttons
+    await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+  });
+
+  test('locked fields show orange lock icon, unlocked show grey open lock', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Narrator has override_locked: true in field-states
+    // Find the lock icon near the Narrator field - it should be a closed lock (LockIcon)
+    const narratorField = page.getByLabel('Narrator');
+    const narratorContainer = narratorField.locator('..').locator('..');
+    // The lock button is a sibling before the text field wrapper
+    const narratorLockButton = narratorContainer.locator('button').first();
+    // Locked field should have the Lock icon (not LockOpen)
+    await expect(narratorLockButton.locator('[data-testid="LockIcon"]')).toBeVisible();
+
+    // Title has override_locked: false - should show open lock
+    const titleField = page.getByLabel('Title *');
+    const titleContainer = titleField.locator('..').locator('..');
+    const titleLockButton = titleContainer.locator('button').first();
+    await expect(titleLockButton.locator('[data-testid="LockOpenIcon"]')).toBeVisible();
+  });
+
+  test('editing a field automatically locks it (auto-lock on edit)', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Title starts unlocked
+    const titleField = page.getByLabel('Title *');
+    const titleContainer = titleField.locator('..').locator('..');
+    const titleLockButton = titleContainer.locator('button').first();
+    await expect(titleLockButton.locator('[data-testid="LockOpenIcon"]')).toBeVisible();
+
+    // Edit the title field
+    await titleField.fill('Modified Title');
+
+    // Now the lock should be closed (auto-locked because dirty)
+    await expect(titleLockButton.locator('[data-testid="LockIcon"]')).toBeVisible();
+
+    // Source label should show "Manual override"
+    await expect(page.getByText('Source: Manual override').first()).toBeVisible();
+  });
+
+  test('manual lock toggle changes lock state', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Title starts unlocked - click to lock
+    const titleField = page.getByLabel('Title *');
+    const titleContainer = titleField.locator('..').locator('..');
+    const titleLockButton = titleContainer.locator('button').first();
+    await expect(titleLockButton.locator('[data-testid="LockOpenIcon"]')).toBeVisible();
+
+    // Click to lock
+    await titleLockButton.click();
+    await expect(titleLockButton.locator('[data-testid="LockIcon"]')).toBeVisible();
+
+    // Click again to unlock
+    await titleLockButton.click();
+    await expect(titleLockButton.locator('[data-testid="LockOpenIcon"]')).toBeVisible();
+  });
+
+  test('source labels show correct source type', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Narrator has override_value set -> "Source: Manual override"
+    await expect(page.getByText('Source: Manual override').first()).toBeVisible();
+
+    // Author has fetched_value set (different from current) -> "Source: Fetched"
+    // Note: author current = "Test Author", fetched = "API Author" -> source = Fetched
+    await expect(page.getByText('Source: Fetched').first()).toBeVisible();
+
+    // Publisher has no fetched_value and no override_value -> "Source: File tags"
+    await expect(page.getByText('Source: File tags').first()).toBeVisible();
+  });
+
+  test('fetched comparison shows when fetched value differs from current', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Title has fetched_value "API: Provenance Test" which differs from "Provenance Test Book"
+    await expect(page.getByText('Fetched: API: Provenance Test')).toBeVisible();
+
+    // Author has fetched_value "API Author" which differs from "Test Author"
+    await expect(page.getByText('Fetched: API Author')).toBeVisible();
+
+    // Year has fetched_value 2023 which differs from current 2024
+    await expect(page.getByText('Fetched: 2023')).toBeVisible();
+
+    // Language has fetched_value "en" which matches current "en" -> should NOT show fetched
+    // (count how many "Fetched: en" labels appear - should be 0)
+    await expect(page.getByText('Fetched: en')).not.toBeVisible();
+  });
+
+  test('year field shows error for non-numeric input', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    const yearField = page.getByLabel('Year');
+    await yearField.fill('not-a-number');
+
+    // Should show year error
+    await expect(page.getByText('Year must be a number')).toBeVisible();
+
+    // Attempting to save should show error
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Year must be a number')).toBeVisible();
+
+    // Dialog should still be open (save was blocked)
+    await expect(page.getByRole('dialog')).toBeVisible();
+  });
+
+  test('cancel closes dialog without saving', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
+
+    // Edit a field
+    await page.getByLabel('Title *').fill('Should Not Be Saved');
+
+    // Click Cancel
+    await page.getByRole('button', { name: 'Cancel' }).click();
+
+    // Dialog should close
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+
+    // Book title should still be original
     await expect(page.getByRole('heading', { name: 'Provenance Test Book' })).toBeVisible();
-    await expect(page.getByText('Test Author').first()).toBeVisible();
-    // Narrator value comes from tags override - check in File Tags section
-    await expect(page.getByText('User Override Narrator').first()).toBeVisible();
-
-    // Assert - Check that source chips are visible
-    await expect(page.getByText('stored', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('override', { exact: true }).first()).toBeVisible();
-
-    // Assert - Check locked indicator
-    await expect(page.getByText('locked', { exact: true }).first()).toBeVisible();
   });
 
-  test('shows correct effective source for different fields', async ({
-    page,
-  }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
+  test('save sends updated data and closes dialog', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
 
-    // Act - Navigate to Tags tab (already done above)
+    // Edit author field
+    await page.getByLabel('Author').fill('New Author Name');
 
-    // Assert - Title uses 'stored' source (look for chip near title text in File Tags section)
-    await expect(page.getByText('stored', { exact: true }).first()).toBeVisible();
+    // Click Save
+    await page.getByRole('button', { name: 'Save' }).click();
 
-    // Assert - Narrator uses 'override' source and is locked
-    await expect(page.getByText('override', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('locked', { exact: true }).first()).toBeVisible();
-
-    // Assert - Publisher uses 'fetched' source (only source available)
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
-    await expect(publisherRow.getByText('Audible Studios').first()).toBeVisible();
-    await expect(publisherRow.getByText('fetched').first()).toBeVisible();
+    // Dialog should close
+    await expect(page.getByRole('dialog')).not.toBeVisible();
   });
 
-  test('applies override from file value', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    // Wait for table to be populated
-    await expect(page.getByRole('columnheader', { name: 'Field' })).toBeVisible();
+  test('locked field tooltip shows correct text', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
 
-    // Act - Apply file value for title
-    const titleRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'title' }) });
-    await titleRow.getByRole('button', { name: 'Use File' }).click();
+    // Hover over the narrator lock button (which is locked)
+    const narratorField = page.getByLabel('Narrator');
+    const narratorContainer = narratorField.locator('..').locator('..');
+    const narratorLockButton = narratorContainer.locator('button').first();
+    await narratorLockButton.hover();
 
-    // Assert - Title should now show file value in heading
+    // Should show locked tooltip
     await expect(
-      page.getByRole('heading', { name: 'File: Provenance Test' })
+      page.getByText(/Locked — will not be overwritten/)
     ).toBeVisible();
-
-    // Assert - Navigate to Tags tab to verify source changed
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const titleSection = page
-      .locator('text=File: Provenance Test')
-      .locator('..');
-    await expect(titleSection.getByText('override')).toBeVisible();
   });
 
-  test('applies override from fetched value', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
+  test('unlocked field tooltip shows correct text', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
 
-    // Act - Apply fetched value for author_name
-    const authorRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'author' }) });
-    await authorRow.getByRole('button', { name: 'Use Fetched' }).click();
+    // Hover over the title lock button (which is unlocked)
+    const titleField = page.getByLabel('Title *');
+    const titleContainer = titleField.locator('..').locator('..');
+    const titleLockButton = titleContainer.locator('button').first();
+    await titleLockButton.hover();
 
-    // Assert - Author should now show fetched value
-    await page.getByRole('tab', { name: 'Info' }).click();
-    await expect(page.getByText('API Author').first()).toBeVisible();
-  });
-
-  test('clears override and reverts to stored value', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Act - Clear override for narrator (which has override set)
-    const narratorRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'narrator' }) });
-    await expect(narratorRow.getByText('User Override Narrator')).toBeVisible();
-    await narratorRow.getByRole('button', { name: 'Clear' }).click();
-
-    // Assert - Narrator should revert to stored value
-    await expect(narratorRow.getByText('DB Narrator')).toBeVisible();
-
-    // Assert - Check Tags tab shows stored source now
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const narratorSection = page.locator('text=DB Narrator').locator('..');
-    await expect(narratorSection.getByText('stored')).toBeVisible();
-    await expect(narratorSection.getByText('locked')).not.toBeVisible();
-  });
-
-  test('lock toggle persists across page reloads', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Act - Apply override for series_name
-    const seriesRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: /^series name$/ }) });
-    await seriesRow.getByRole('button', { name: 'Use File' }).click();
-
-    // Assert - Verify override applied
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const seriesSection = page.getByText('File Series', { exact: true }).locator('..');
-    await expect(seriesSection.getByText('override')).toBeVisible();
-
-    // Act - Reload page
-    await page.reload();
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Override should still be present after reload
-    await expect(page.getByText('File Series').first()).toBeVisible();
-    const reloadedSeriesSection = page
-      .getByText('File Series', { exact: true })
-      .locator('..');
-    await expect(reloadedSeriesSection.getByText('override')).toBeVisible();
-  });
-
-  test('displays all source columns in Compare tab', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Verify table headers
+    // Should show unlocked tooltip
     await expect(
-      page.getByRole('columnheader', { name: 'Field' })
+      page.getByText(/Unlocked — may be updated/)
     ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'File Tag' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Fetched' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Database Stored' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Override' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('columnheader', { name: 'Actions' })
-    ).toBeVisible();
-
-    // Assert - Verify narrator row shows all sources
-    const narratorRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'narrator' }) });
-    await expect(narratorRow.getByText('File Narrator')).toBeVisible();
-    await expect(narratorRow.getByText('API Narrator')).toBeVisible();
-    await expect(narratorRow.getByText('DB Narrator')).toBeVisible();
-    await expect(narratorRow.getByText('User Override Narrator')).toBeVisible();
   });
 
-  test('handles field with only fetched source', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
+  test('ISBN-13 shows fetched comparison when values differ', async ({ page }) => {
+    await setupMockRoutes(page);
+    await openEditDialog(page);
 
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Publisher has no file or stored value, only fetched
-    const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
-    await expect(publisherRow.getByText('Audible Studios')).toBeVisible();
-
-    // Verify file and stored columns show placeholder
-    const cells = publisherRow.locator('td');
-    // File Tag column should be empty or show "—"
-    await expect(cells.nth(1)).toContainText('—');
-    // Stored column should be empty or show "—"
-    await expect(cells.nth(3)).toContainText('—');
-    // Fetched column should have value
-    await expect(cells.nth(2)).toContainText('Audible Studios');
-
-    // Assert - Source chip shows 'fetched'
-    await expect(publisherRow.getByText('fetched', { exact: true })).toBeVisible();
-  });
-
-  test('disables action buttons when source value is null', async ({
-    page,
-  }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Publisher "Use File" button should be disabled (file_value is null)
-    const publisherRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'publisher' }) });
-    const useFileButton = publisherRow.getByRole('button', {
-      name: 'Use File',
-    });
-    await expect(useFileButton).toBeDisabled();
-
-    // Assert - "Use Fetched" button should be enabled
-    const useFetchedButton = publisherRow.getByRole('button', {
-      name: 'Use Fetched',
-    });
-    await expect(useFetchedButton).toBeEnabled();
-  });
-
-  test('shows media info in Tags tab', async ({ page }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Media info should be visible (Tags tab shows Codec, Bitrate, Duration)
-    await expect(page.getByText('128 kbps')).toBeVisible();
-    await expect(page.getByText('Codec: M4B')).toBeVisible();
-    await expect(page.getByText(/Duration:/)).toBeVisible();
-  });
-
-  test('updates effective value when applying different source', async ({
-    page,
-  }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Act - Initially showing stored value for title
-    await expect(page.getByRole('heading', { name: 'Provenance Test Book' })).toBeVisible();
-
-    // Act - Switch to Compare and apply file value
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const titleRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'title' }) });
-    await titleRow.getByRole('button', { name: 'Use File' }).click();
-
-    // Assert - Should now show file value
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    await expect(page.getByText('File: Provenance Test').first()).toBeVisible();
-  });
-
-  test('shows correct effective source chip colors and styling', async ({
-    page,
-  }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-
-    // Act
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Assert - Check that source chips have proper variant (outlined)
-    const sourceChips = page
-      .locator('span.MuiChip-label')
-      .filter({ hasText: /^(stored|override|fetched|file)$/i });
-    await expect(sourceChips.first()).toBeVisible();
-
-    // Assert - Check that locked chip has warning color
-    const lockedChip = page
-      .locator('span.MuiChip-label')
-      .filter({ hasText: 'locked' });
-    await expect(lockedChip).toBeVisible();
-  });
-
-  test('applies override with numeric value (audiobook_release_year)', async ({
-    page,
-  }) => {
-    // Arrange
-    await setupProvenanceRoutes(page);
-    await page.goto(`/library/${bookId}`);
-    await page.getByRole('tab', { name: 'Tags' }).click();
-
-    // Act - Apply file value for release year (numeric field)
-    const yearRow = page.locator('table tr').filter({ has: page.locator('td:first-child', { hasText: 'audiobook release year' }) });
-    await expect(yearRow.getByText('2022')).toBeVisible(); // file_value
-    await yearRow.getByRole('button', { name: 'Use File' }).click();
-
-    // Assert - Tags tab should show file value (2022)
-    await page.getByRole('tab', { name: 'Tags' }).click();
-    const yearSection = page.locator('text=2022').locator('..');
-    await expect(yearSection.getByText('override')).toBeVisible();
+    // ISBN-13 has fetched "978-0000000000" vs current "978-1234567890"
+    await expect(page.getByText('Fetched: 978-0000000000')).toBeVisible();
   });
 });
