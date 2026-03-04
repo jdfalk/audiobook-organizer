@@ -1,5 +1,5 @@
 // file: internal/server/path_format.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b3c1d2-e4f5-6789-abcd-ef0123456789
 
 package server
@@ -148,6 +148,8 @@ func sanitizePathComponent(s string) string {
 		"<", "",
 		">", "",
 		"|", " -",
+		"[", "",
+		"]", "",
 	)
 	s = replacer.Replace(s)
 	for strings.Contains(s, "  ") {

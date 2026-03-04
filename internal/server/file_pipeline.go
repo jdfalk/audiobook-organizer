@@ -1,5 +1,5 @@
 // file: internal/server/file_pipeline.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f01234567890
 
 package server
@@ -100,11 +100,34 @@ func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *databa
 	return entries
 }
 
+// RenameResult holds the outcome of a rename operation.
+type RenameResult struct {
+	Succeeded []FileRenameEntry `json:"succeeded"`
+	Skipped   []FileRenameEntry `json:"skipped"` // source not found
+	Errors    []string          `json:"errors,omitempty"`
+}
+
 // RenameFiles performs atomic file renames using a temp intermediate step
 // to avoid conflicts when source and target overlap.
-func RenameFiles(entries []FileRenameEntry) error {
+// Missing source files are skipped (not fatal) and reported in the result.
+func RenameFiles(entries []FileRenameEntry) (*RenameResult, error) {
+	result := &RenameResult{}
 	if len(entries) == 0 {
-		return nil
+		return result, nil
+	}
+
+	// Pre-filter: skip entries where source doesn't exist
+	var valid []FileRenameEntry
+	for _, entry := range entries {
+		if _, err := os.Stat(entry.SourcePath); os.IsNotExist(err) {
+			result.Skipped = append(result.Skipped, entry)
+			continue
+		}
+		valid = append(valid, entry)
+	}
+
+	if len(valid) == 0 {
+		return result, nil
 	}
 
 	// Phase 1: rename source -> temp
@@ -114,16 +137,11 @@ func RenameFiles(entries []FileRenameEntry) error {
 	}
 	var temps []tempEntry
 
-	for _, entry := range entries {
+	for _, entry := range valid {
 		// Ensure target directory exists
 		targetDir := filepath.Dir(entry.TargetPath)
 		if err := os.MkdirAll(targetDir, 0o755); err != nil {
-			return fmt.Errorf("create target dir %s: %w", targetDir, err)
-		}
-
-		// Check source exists
-		if _, err := os.Stat(entry.SourcePath); os.IsNotExist(err) {
-			return fmt.Errorf("source file does not exist: %s", entry.SourcePath)
+			return result, fmt.Errorf("create target dir %s: %w", targetDir, err)
 		}
 
 		tempPath := entry.TargetPath + ".tmp-rename"
@@ -132,7 +150,7 @@ func RenameFiles(entries []FileRenameEntry) error {
 			for _, t := range temps {
 				_ = os.Rename(t.TempPath, t.Entry.SourcePath)
 			}
-			return fmt.Errorf("rename %s -> temp: %w", entry.SourcePath, err)
+			return result, fmt.Errorf("rename %s -> temp: %w", entry.SourcePath, err)
 		}
 		temps = append(temps, tempEntry{TempPath: tempPath, Entry: entry})
 	}
@@ -140,9 +158,23 @@ func RenameFiles(entries []FileRenameEntry) error {
 	// Phase 2: rename temp -> final
 	for _, t := range temps {
 		if err := os.Rename(t.TempPath, t.Entry.TargetPath); err != nil {
-			return fmt.Errorf("rename temp -> %s: %w", t.Entry.TargetPath, err)
+			return result, fmt.Errorf("rename temp -> %s: %w", t.Entry.TargetPath, err)
 		}
+		result.Succeeded = append(result.Succeeded, t.Entry)
 	}
 
-	return nil
+	return result, nil
+}
+
+// RelocateRequest represents a request to relocate book files.
+type RelocateRequest struct {
+	SegmentID  string `json:"segment_id,omitempty"`
+	NewPath    string `json:"new_path,omitempty"`
+	FolderPath string `json:"folder_path,omitempty"`
+}
+
+// RelocateResult holds the outcome of a relocate operation.
+type RelocateResult struct {
+	Updated int      `json:"updated"`
+	Errors  []string `json:"errors,omitempty"`
 }
