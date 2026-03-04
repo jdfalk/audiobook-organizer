@@ -1,9 +1,10 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnnouncementBanner } from '../components/AnnouncementBanner';
 import {
   Box,
   Typography,
@@ -292,6 +293,8 @@ export function Dashboard() {
       <Typography variant="h4" gutterBottom>
         Dashboard
       </Typography>
+
+      <AnnouncementBanner />
 
       {actionNotice && (
         <Alert severity="info" sx={{ mb: 2 }}>

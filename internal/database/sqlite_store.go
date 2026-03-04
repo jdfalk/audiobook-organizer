@@ -1096,6 +1096,20 @@ func (s *SQLiteStore) CreateAuthor(name string) (*Author, error) {
 	return &Author{ID: int(id), Name: name}, nil
 }
 
+func (s *SQLiteStore) DeleteAuthor(id int) error {
+	_, err := s.db.Exec("DELETE FROM book_authors WHERE author_id = ?", id)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec("DELETE FROM authors WHERE id = ?", id)
+	return err
+}
+
+func (s *SQLiteStore) UpdateAuthorName(id int, name string) error {
+	_, err := s.db.Exec("UPDATE authors SET name = ? WHERE id = ?", name, id)
+	return err
+}
+
 // Series operations
 
 func (s *SQLiteStore) GetAllSeries() ([]Series, error) {

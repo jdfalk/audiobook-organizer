@@ -45,7 +45,9 @@ type MockStore struct {
 	GetAllAuthorsFunc   func() ([]Author, error)
 	GetAuthorByIDFunc   func(id int) (*Author, error)
 	GetAuthorByNameFunc func(name string) (*Author, error)
-	CreateAuthorFunc    func(name string) (*Author, error)
+	CreateAuthorFunc      func(name string) (*Author, error)
+	DeleteAuthorFunc      func(id int) error
+	UpdateAuthorNameFunc  func(id int, name string) error
 
 	// Series methods
 	GetAllSeriesFunc    func() ([]Series, error)
@@ -252,6 +254,20 @@ func (m *MockStore) CreateAuthor(name string) (*Author, error) {
 		return m.CreateAuthorFunc(name)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) DeleteAuthor(id int) error {
+	if m.DeleteAuthorFunc != nil {
+		return m.DeleteAuthorFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) UpdateAuthorName(id int, name string) error {
+	if m.UpdateAuthorNameFunc != nil {
+		return m.UpdateAuthorNameFunc(id, name)
+	}
+	return nil
 }
 
 func (m *MockStore) GetAllSeries() ([]Series, error) {

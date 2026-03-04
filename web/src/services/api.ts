@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.34.0
+// version: 1.35.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -669,6 +669,52 @@ export async function countAuthors(): Promise<number> {
   }
   const data = await response.json();
   return data.count ?? 0;
+}
+
+export interface Announcement {
+  id: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  link?: string;
+}
+
+export async function getAnnouncements(): Promise<Announcement[]> {
+  const response = await fetch(`${API_BASE}/system/announcements`);
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.announcements || [];
+}
+
+export interface AuthorDedupGroup {
+  canonical: Author;
+  variants: Author[];
+  book_count: number;
+}
+
+export interface MergeAuthorsResult {
+  merged: number;
+  errors: string[];
+}
+
+export async function getAuthorDuplicates(): Promise<AuthorDedupGroup[]> {
+  const response = await fetch(`${API_BASE}/authors/duplicates`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch author duplicates');
+  }
+  const data = await response.json();
+  return data.groups || [];
+}
+
+export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<MergeAuthorsResult> {
+  const response = await fetch(`${API_BASE}/authors/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge authors');
+  }
+  return response.json();
 }
 
 // Series

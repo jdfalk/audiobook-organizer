@@ -596,6 +596,90 @@ func (_c *MockStore_CreateAuthor_Call) RunAndReturn(run func(name string) (*data
 	return _c
 }
 
+// DeleteAuthor provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteAuthor(id int) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAuthor")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_DeleteAuthor_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) DeleteAuthor(id interface{}) *MockStore_DeleteAuthor_Call {
+	return &MockStore_DeleteAuthor_Call{Call: _e.mock.On("DeleteAuthor", id)}
+}
+
+func (_c *MockStore_DeleteAuthor_Call) Run(run func(id int)) *MockStore_DeleteAuthor_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteAuthor_Call) Return(err error) *MockStore_DeleteAuthor_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteAuthor_Call) RunAndReturn(run func(int) error) *MockStore_DeleteAuthor_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateAuthorName provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateAuthorName(id int, name string) error {
+	ret := _mock.Called(id, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateAuthorName")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int, string) error); ok {
+		r0 = returnFunc(id, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_UpdateAuthorName_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) UpdateAuthorName(id interface{}, name interface{}) *MockStore_UpdateAuthorName_Call {
+	return &MockStore_UpdateAuthorName_Call{Call: _e.mock.On("UpdateAuthorName", id, name)}
+}
+
+func (_c *MockStore_UpdateAuthorName_Call) Run(run func(id int, name string)) *MockStore_UpdateAuthorName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateAuthorName_Call) Return(err error) *MockStore_UpdateAuthorName_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateAuthorName_Call) RunAndReturn(run func(int, string) error) *MockStore_UpdateAuthorName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateBook provides a mock function for the type MockStore
 func (_mock *MockStore) CreateBook(book *database.Book) (*database.Book, error) {
 	ret := _mock.Called(book)
