@@ -34,6 +34,21 @@ const bookSelectColumns = `
 	metadata_updated_at, last_written_at, metadata_review_status, cover_url, narrators_json
 `
 
+// bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
+const bookSelectColumnsQualified = `
+	books.id, books.title, books.author_id, books.series_id, books.series_sequence,
+	books.file_path, books.original_filename, books.format, books.duration,
+	books.work_id, books.narrator, books.edition, books.language, books.publisher,
+	books.print_year, books.audiobook_release_year, books.isbn10, books.isbn13, books.asin,
+	books.itunes_persistent_id, books.itunes_date_added, books.itunes_play_count,
+	books.itunes_last_played, books.itunes_rating, books.itunes_bookmark, books.itunes_import_source,
+	books.file_hash, books.file_size, books.bitrate_kbps, books.codec, books.sample_rate_hz, books.channels,
+	books.bit_depth, books.quality, books.is_primary_version, books.version_group_id, books.version_notes,
+	books.original_file_hash, books.organized_file_hash, books.library_state, books.quantity,
+	books.marked_for_deletion, books.marked_for_deletion_at, books.created_at, books.updated_at,
+	books.metadata_updated_at, books.last_written_at, books.metadata_review_status, books.cover_url, books.narrators_json
+`
+
 func scanBook(scanner rowScanner, book *Book) error {
 	var (
 		authorID, seriesID, seriesSequence, duration, printYear, releaseYear sql.NullInt64
@@ -1841,19 +1856,44 @@ func (s *SQLiteStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 		fetchLimit = 100
 	}
 
-	// Try FTS5 first for better performance and relevance ranking
+	// Search by title (FTS5) and author name (LIKE on authors table)
 	ftsQuery := sanitizeFTS5Query(query)
+	likeParam := "%" + query + "%"
+
+	// Try FTS5 for title + LIKE for author via UNION
+	bq := bookSelectColumnsQualified
 	searchSQL := fmt.Sprintf(
 		`SELECT %s FROM books
 		 JOIN books_fts ON books.rowid = books_fts.rowid
-		 WHERE books_fts MATCH ? AND COALESCE(marked_for_deletion, 0) = 0
-		 ORDER BY rank LIMIT ?`, bookSelectColumns)
+		 WHERE books_fts MATCH ? AND COALESCE(books.marked_for_deletion, 0) = 0
+		 UNION
+		 SELECT %s FROM books
+		 JOIN authors ON books.author_id = authors.id
+		 WHERE authors.name LIKE ? AND COALESCE(books.marked_for_deletion, 0) = 0
+		 UNION
+		 SELECT %s FROM books
+		 JOIN book_authors ba ON ba.book_id = books.id
+		 JOIN authors a2 ON ba.author_id = a2.id
+		 WHERE a2.name LIKE ? AND COALESCE(books.marked_for_deletion, 0) = 0
+		 LIMIT ?`, bq, bq, bq)
 
-	rows, err := s.db.Query(searchSQL, ftsQuery, fetchLimit)
+	rows, err := s.db.Query(searchSQL, ftsQuery, likeParam, likeParam, fetchLimit)
 	if err != nil {
-		// Fall back to LIKE if FTS5 table doesn't exist or query fails
-		likeSQL := fmt.Sprintf(`SELECT %s FROM books WHERE title LIKE ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ?`, bookSelectColumns)
-		rows, err = s.db.Query(likeSQL, "%"+query+"%", fetchLimit)
+		// Fall back to pure LIKE if FTS5 not available
+		likeSQL := fmt.Sprintf(
+			`SELECT %s FROM books
+			 WHERE books.title LIKE ? AND COALESCE(books.marked_for_deletion, 0) = 0
+			 UNION
+			 SELECT %s FROM books
+			 JOIN authors ON books.author_id = authors.id
+			 WHERE authors.name LIKE ? AND COALESCE(books.marked_for_deletion, 0) = 0
+			 UNION
+			 SELECT %s FROM books
+			 JOIN book_authors ba ON ba.book_id = books.id
+			 JOIN authors a2 ON ba.author_id = a2.id
+			 WHERE a2.name LIKE ? AND COALESCE(books.marked_for_deletion, 0) = 0
+			 LIMIT ?`, bq, bq, bq)
+		rows, err = s.db.Query(likeSQL, likeParam, likeParam, likeParam, fetchLimit)
 		if err != nil {
 			return nil, err
 		}

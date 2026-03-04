@@ -1419,7 +1419,9 @@ func (p *PebbleStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 	var filtered []Book
 	lowerQuery := strings.ToLower(query)
 	for _, book := range allBooks {
-		if strings.Contains(strings.ToLower(book.Title), lowerQuery) {
+		titleMatch := strings.Contains(strings.ToLower(book.Title), lowerQuery)
+		authorMatch := book.Narrator != nil && strings.Contains(strings.ToLower(*book.Narrator), lowerQuery)
+		if titleMatch || authorMatch {
 			filtered = append(filtered, book)
 		}
 	}
