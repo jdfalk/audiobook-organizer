@@ -1,9 +1,10 @@
 # file: Makefile
-# version: 2.3.0
+# version: 2.4.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
-WEB_DIR := web
+ROOT_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
+WEB_DIR := $(ROOT_DIR)/web
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo 'dev')
 LDFLAGS := -X main.version=$(VERSION)
 
