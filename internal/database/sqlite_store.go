@@ -1452,6 +1452,69 @@ func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
 	return duplicateGroups, nil
 }
 
+// GetFolderDuplicates detects potential duplicates by grouping books
+// that share the same parent directory and title (case-insensitive).
+// This catches M4B + MP3 versions of the same book in the same folder.
+// It prefers single-file M4B over multi-file formats.
+func (s *SQLiteStore) GetFolderDuplicates() ([][]Book, error) {
+	// Group by parent directory + lower(title) where there are 2+ books
+	query := fmt.Sprintf(`
+		WITH book_dirs AS (
+			SELECT id, LOWER(title) as ltitle,
+			       SUBSTR(file_path, 1, LENGTH(file_path) - LENGTH(REPLACE(file_path, '/', '')) - LENGTH(SUBSTR(file_path, LENGTH(file_path) - LENGTH(REPLACE(file_path, '/', '')) + 1))) as dir
+			FROM books
+			WHERE COALESCE(marked_for_deletion, 0) = 0
+			  AND (version_group_id IS NULL OR version_group_id = '')
+		)
+		SELECT dir, ltitle, COUNT(*) as cnt
+		FROM book_dirs
+		WHERE dir != '' AND ltitle != ''
+		GROUP BY dir, ltitle
+		HAVING cnt > 1
+	`)
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query folder duplicates: %w", err)
+	}
+	defer rows.Close()
+
+	var groups [][]Book
+	for rows.Next() {
+		var dir, ltitle string
+		var cnt int
+		if err := rows.Scan(&dir, &ltitle, &cnt); err != nil {
+			return nil, err
+		}
+		// Fetch the actual books
+		booksQuery := fmt.Sprintf(`
+			SELECT %s FROM books
+			WHERE LOWER(title) = ? AND file_path LIKE ?
+			  AND COALESCE(marked_for_deletion, 0) = 0
+			  AND (version_group_id IS NULL OR version_group_id = '')
+			ORDER BY CASE WHEN format = 'm4b' THEN 0 ELSE 1 END, file_path
+		`, bookSelectColumns)
+		bookRows, err := s.db.Query(booksQuery, ltitle, dir+"/%")
+		if err != nil {
+			return nil, err
+		}
+		var group []Book
+		for bookRows.Next() {
+			var book Book
+			if err := scanBook(bookRows, &book); err != nil {
+				bookRows.Close()
+				return nil, err
+			}
+			group = append(group, book)
+		}
+		bookRows.Close()
+		if len(group) >= 2 {
+			groups = append(groups, group)
+		}
+	}
+	return groups, nil
+}
+
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY series_sequence, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, seriesID)

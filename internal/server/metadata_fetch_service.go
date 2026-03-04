@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.10.0
+// version: 4.11.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -56,6 +56,7 @@ type MetadataCandidate struct {
 	Year           int     `json:"year,omitempty"`
 	Publisher      string  `json:"publisher,omitempty"`
 	ISBN           string  `json:"isbn,omitempty"`
+	ASIN           string  `json:"asin,omitempty"`
 	CoverURL       string  `json:"cover_url,omitempty"`
 	Description    string  `json:"description,omitempty"`
 	Language       string  `json:"language,omitempty"`
@@ -347,6 +348,18 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 		if err == nil && author != nil {
 			book.AuthorID = &author.ID
 		}
+	}
+
+	// Apply ISBN/ASIN
+	if meta.ISBN != "" {
+		if len(meta.ISBN) == 10 {
+			book.ISBN10 = stringPtr(meta.ISBN)
+		} else {
+			book.ISBN13 = stringPtr(meta.ISBN)
+		}
+	}
+	if meta.ASIN != "" {
+		book.ASIN = stringPtr(meta.ASIN)
 	}
 
 	// Apply series info if available
@@ -894,6 +907,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 				Year:           r.PublishYear,
 				Publisher:      r.Publisher,
 				ISBN:            r.ISBN,
+				ASIN:           r.ASIN,
 				CoverURL:       r.CoverURL,
 				Description:    r.Description,
 				Language:        r.Language,
@@ -935,6 +949,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 					Year:           result.PublishYear,
 					Publisher:      result.Publisher,
 					ISBN:            result.ISBN,
+					ASIN:           result.ASIN,
 					CoverURL:       result.CoverURL,
 					Description:    result.Description,
 					Language:        result.Language,

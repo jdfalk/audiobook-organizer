@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.85.0
+// version: 1.86.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -290,6 +290,82 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 	}
 
 	return authorName, seriesName
+}
+
+// enrichedBookResponse wraps a Book with resolved names for JSON responses.
+type enrichedBookResponse struct {
+	*database.Book
+	AuthorName *string         `json:"author_name,omitempty"`
+	SeriesName *string         `json:"series_name,omitempty"`
+	Authors    []authorEntry   `json:"authors,omitempty"`
+	Narrators  []narratorEntry `json:"narrators,omitempty"`
+}
+
+type authorEntry struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Position int    `json:"position"`
+}
+
+type narratorEntry struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
+	Position int    `json:"position"`
+}
+
+// enrichBookForResponse resolves author, series, and narrator names from join
+// tables so the JSON response contains all the fields the frontend expects.
+func enrichBookForResponse(book *database.Book) enrichedBookResponse {
+	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+	resp := enrichedBookResponse{Book: book}
+	if authorName != "" {
+		resp.AuthorName = &authorName
+	}
+	if seriesName != "" {
+		resp.SeriesName = &seriesName
+	}
+
+	if database.GlobalStore != nil {
+		if bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
+			for _, ba := range bookAuthors {
+				if author, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && author != nil {
+					resp.Authors = append(resp.Authors, authorEntry{
+						ID: author.ID, Name: author.Name, Role: ba.Role, Position: ba.Position,
+					})
+				}
+			}
+			if resp.AuthorName == nil && len(resp.Authors) > 0 {
+				names := make([]string, len(resp.Authors))
+				for i, a := range resp.Authors {
+					names[i] = a.Name
+				}
+				combined := strings.Join(names, " & ")
+				resp.AuthorName = &combined
+			}
+		}
+
+		if bookNarrators, err := database.GlobalStore.GetBookNarrators(book.ID); err == nil && len(bookNarrators) > 0 {
+			for _, bn := range bookNarrators {
+				if narrator, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
+					resp.Narrators = append(resp.Narrators, narratorEntry{
+						ID: narrator.ID, Name: narrator.Name, Role: bn.Role, Position: bn.Position,
+					})
+				}
+			}
+			if (book.Narrator == nil || *book.Narrator == "") && len(resp.Narrators) > 0 {
+				names := make([]string, len(resp.Narrators))
+				for i, n := range resp.Narrators {
+					names[i] = n.Name
+				}
+				combined := strings.Join(names, " & ")
+				book.Narrator = &combined
+			}
+		}
+	}
+
+	return resp
 }
 
 func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string) map[string]database.MetadataProvenanceEntry {
@@ -1598,79 +1674,7 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 
-	// Add author and series names, authors list, and narrators to response
-	type authorEntry struct {
-		ID       int    `json:"id"`
-		Name     string `json:"name"`
-		Role     string `json:"role"`
-		Position int    `json:"position"`
-	}
-	type narratorEntry struct {
-		ID       int    `json:"id"`
-		Name     string `json:"name"`
-		Role     string `json:"role"`
-		Position int    `json:"position"`
-	}
-	type bookResponse struct {
-		*database.Book
-		AuthorName *string          `json:"author_name,omitempty"`
-		SeriesName *string          `json:"series_name,omitempty"`
-		Authors    []authorEntry    `json:"authors,omitempty"`
-		Narrators  []narratorEntry  `json:"narrators,omitempty"`
-	}
-
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
-	resp := bookResponse{Book: book}
-	if authorName != "" {
-		resp.AuthorName = &authorName
-	}
-	if seriesName != "" {
-		resp.SeriesName = &seriesName
-	}
-
-	if database.GlobalStore != nil {
-		// Resolve book authors with names
-		if bookAuthors, err := database.GlobalStore.GetBookAuthors(id); err == nil && len(bookAuthors) > 0 {
-			for _, ba := range bookAuthors {
-				if author, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && author != nil {
-					resp.Authors = append(resp.Authors, authorEntry{
-						ID: author.ID, Name: author.Name, Role: ba.Role, Position: ba.Position,
-					})
-				}
-			}
-			// If we have multiple authors but no author_name set, combine them
-			if resp.AuthorName == nil && len(resp.Authors) > 0 {
-				names := make([]string, len(resp.Authors))
-				for i, a := range resp.Authors {
-					names[i] = a.Name
-				}
-				combined := strings.Join(names, " & ")
-				resp.AuthorName = &combined
-			}
-		}
-
-		// Resolve book narrators with names
-		if bookNarrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(bookNarrators) > 0 {
-			for _, bn := range bookNarrators {
-				if narrator, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
-					resp.Narrators = append(resp.Narrators, narratorEntry{
-						ID: narrator.ID, Name: narrator.Name, Role: bn.Role, Position: bn.Position,
-					})
-				}
-			}
-			// If book has no single narrator field but has narrators in join table, combine
-			if (book.Narrator == nil || *book.Narrator == "") && len(resp.Narrators) > 0 {
-				names := make([]string, len(resp.Narrators))
-				for i, n := range resp.Narrators {
-					names[i] = n.Name
-				}
-				combined := strings.Join(names, " & ")
-				book.Narrator = &combined
-			}
-		}
-	}
-
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusOK, enrichBookForResponse(book))
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
@@ -2159,7 +2163,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		GlobalWriteBackBatcher.Enqueue(id)
 	}
 
-	c.JSON(http.StatusOK, updatedBook)
+	c.JSON(http.StatusOK, enrichBookForResponse(updatedBook))
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
@@ -2797,14 +2801,13 @@ func (s *Server) startTranscode(c *gin.Context) {
 			groupID = ulid.Make().String()
 		}
 
-		// Mark original as non-primary version
+		// Mark original as non-primary version (modify fetched book to preserve all fields)
 		notPrimary := false
 		origNotes := "Original format"
-		if _, err := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
-			IsPrimaryVersion: &notPrimary,
-			VersionGroupID:   &groupID,
-			VersionNotes:     &origNotes,
-		}); err != nil {
+		originalBook.IsPrimaryVersion = &notPrimary
+		originalBook.VersionGroupID = &groupID
+		originalBook.VersionNotes = &origNotes
+		if _, err := database.GlobalStore.UpdateBook(req.BookID, originalBook); err != nil {
 			progress.Log("warn", fmt.Sprintf("Failed to update original book version info: %v", err), nil)
 		}
 
@@ -2843,19 +2846,18 @@ func (s *Server) startTranscode(c *gin.Context) {
 			VersionNotes:         &m4bNotes,
 		}
 		if _, err := database.GlobalStore.CreateBook(newBook); err != nil {
-			// Fallback: update original but preserve version info for traceability
+			// Fallback: update original in-place but preserve all existing fields
 			progress.Log("warn", fmt.Sprintf("Failed to create M4B version record, updating original: %v", err), nil)
 			isPrim := true
 			fallbackNotes := fmt.Sprintf("Transcoded to M4B (in-place, original was at %s)", originalBook.FilePath)
-			if _, updateErr := database.GlobalStore.UpdateBook(req.BookID, &database.Book{
-				FilePath:         outputPath,
-				Format:           m4bFormat,
-				Codec:            &aacCodec,
-				Bitrate:          &bitrateVal,
-				IsPrimaryVersion: &isPrim,
-				VersionGroupID:   &groupID,
-				VersionNotes:     &fallbackNotes,
-			}); updateErr != nil {
+			originalBook.FilePath = outputPath
+			originalBook.Format = m4bFormat
+			originalBook.Codec = &aacCodec
+			originalBook.Bitrate = &bitrateVal
+			originalBook.IsPrimaryVersion = &isPrim
+			originalBook.VersionGroupID = &groupID
+			originalBook.VersionNotes = &fallbackNotes
+			if _, updateErr := database.GlobalStore.UpdateBook(req.BookID, originalBook); updateErr != nil {
 				return updateErr
 			}
 			return nil
@@ -3704,9 +3706,14 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		GlobalWriteBackBatcher.Enqueue(id)
 	}
 
+	// Re-fetch to get fully enriched book with author/series/narrator names
+	enrichedBook := resp.Book
+	if fresh, err := database.GlobalStore.GetBookByID(id); err == nil && fresh != nil {
+		enrichedBook = fresh
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": resp.Message,
-		"book":    resp.Book,
+		"book":    enrichBookForResponse(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -3753,9 +3760,14 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	if GlobalWriteBackBatcher != nil {
 		GlobalWriteBackBatcher.Enqueue(id)
 	}
+	// Re-fetch to get fully enriched book with author/series/narrator names
+	enrichedBook := resp.Book
+	if fresh, err := database.GlobalStore.GetBookByID(id); err == nil && fresh != nil {
+		enrichedBook = fresh
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": resp.Message,
-		"book":    resp.Book,
+		"book":    enrichBookForResponse(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -4475,7 +4487,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "audiobook updated with AI-parsed metadata",
-		"book":       updatedBook,
+		"book":       enrichBookForResponse(updatedBook),
 		"confidence": metadata.Confidence,
 	})
 }

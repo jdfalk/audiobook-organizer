@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.26.0
+// version: 1.27.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -61,6 +61,38 @@ import { FileSelector } from '../components/audiobooks/FileSelector';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  author_name: 'Author',
+  narrator: 'Narrator',
+  publisher: 'Publisher',
+  language: 'Language',
+  series_name: 'Series',
+  series_position: 'Series Position',
+  audiobook_release_year: 'Release Year',
+  print_year: 'Print Year',
+  isbn10: 'ISBN 10',
+  isbn13: 'ISBN 13',
+  asin: 'ASIN',
+  cover_url: 'Cover Image',
+  description: 'Description',
+  codec: 'Codec',
+  bitrate: 'Bitrate',
+  sample_rate: 'Sample Rate',
+  channels: 'Channels',
+  bit_depth: 'Bit Depth',
+  track: 'Track',
+  disk: 'Disk',
+  album: 'Album',
+  genre: 'Genre',
+  year: 'Year',
+  codec_name: 'Codec',
+};
+
+function humanizeField(field: string): string {
+  return FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export const BookDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -74,7 +106,7 @@ export const BookDetail = () => {
   const [writingToFiles, setWritingToFiles] = useState(false);
   const [transcoding, setTranscoding] = useState(false);
   const [writeBackDialogOpen, setWriteBackDialogOpen] = useState(false);
-  const [preAIBook, setPreAIBook] = useState<Book | null>(null);
+  // preAIBook removed — use History to revert AI changes
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
     'info' | 'files' | 'versions' | 'tags'
@@ -407,55 +439,19 @@ export const BookDetail = () => {
 
   const handleParseWithAI = async () => {
     if (!book) return;
-    // Save current state for undo
-    setPreAIBook({ ...book });
     setParsingWithAI(true);
     try {
       const result = await api.parseAudiobookWithAI(book.id);
       setBook(result.book);
-      // Reload tags to reflect updated stored values in Tags tab
       await loadTags();
-      toast(result.message || 'AI parsing completed. Use "Undo AI Parse" to revert.', 'success');
+      toast(result.message || 'AI parsing completed. Use History to revert if needed.', 'success');
     } catch (error: unknown) {
       console.error('Failed to parse with AI', error);
-      setPreAIBook(null);
       const msg =
         error instanceof Error ? error.message : 'AI parsing failed.';
       toast(msg, 'error');
     } finally {
       setParsingWithAI(false);
-    }
-  };
-
-  const handleUndoAIParse = async () => {
-    if (!preAIBook || !book) return;
-    setActionLoading(true);
-    setActionLabel('Reverting AI parse...');
-    try {
-      const payload: Partial<Book> = {
-        title: preAIBook.title,
-        author_name: preAIBook.author_name,
-        series_name: preAIBook.series_name,
-        series_position: preAIBook.series_position,
-        narrator: preAIBook.narrator,
-        publisher: preAIBook.publisher,
-        language: preAIBook.language,
-        description: preAIBook.description,
-        audiobook_release_year: preAIBook.audiobook_release_year,
-        print_year: preAIBook.print_year,
-        isbn: preAIBook.isbn,
-      };
-      const saved = await api.updateBook(book.id, payload);
-      setBook(saved);
-      await loadTags();
-      setPreAIBook(null);
-      toast('AI parse reverted.', 'success');
-    } catch (error) {
-      console.error('Failed to undo AI parse', error);
-      toast('Failed to revert AI parse.', 'error');
-    } finally {
-      setActionLabel(null);
-      setActionLoading(false);
     }
   };
 
@@ -964,16 +960,6 @@ export const BookDetail = () => {
             >
               {parsingWithAI ? 'Parsing...' : 'Parse with AI'}
             </Button>
-            {preAIBook && (
-              <Button
-                variant="outlined"
-                color="warning"
-                onClick={handleUndoAIParse}
-                disabled={actionLoading}
-              >
-                Undo AI Parse
-              </Button>
-            )}
           </Stack>
           <Stack
             direction="row"
@@ -1174,29 +1160,37 @@ export const BookDetail = () => {
             <>
               {singleSelectedId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
               <Grid container spacing={2}>
-                {[
-                  { label: 'Title', value: book.title || 'Untitled' },
-                  {
-                    label: 'Author',
-                    value:
-                      book.authors && book.authors.length > 0
-                        ? book.authors.map((a) => a.name).join(' & ')
-                        : book.author_name || 'Unknown',
-                  },
-                  { label: 'Series', value: book.series_name },
-                  {
-                    label: 'Narrator',
-                    value:
-                      book.narrators && book.narrators.length > 0
-                        ? book.narrators.map((n) => n.name).join(' & ')
-                        : book.narrator,
-                  },
-                  { label: 'Language', value: book.language },
-                  { label: 'ISBN 13', value: book.isbn13 },
-                  { label: 'Work ID', value: book.work_id },
-                ]
-                  .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null)
-                  .map((item) => (
+                {(() => {
+                  const authorVal = book.authors && book.authors.length > 0
+                    ? book.authors.map((a) => a.name).join(' & ')
+                    : book.author_name || '';
+                  const narratorVal = book.narrators && book.narrators.length > 0
+                    ? book.narrators.map((n) => n.name).join(' & ')
+                    : book.narrator || '';
+                  // Core fields always shown
+                  const coreFields = [
+                    { label: 'Title', value: book.title || '' },
+                    { label: 'Author', value: authorVal },
+                    { label: 'Narrator', value: narratorVal },
+                    { label: 'Language', value: book.language || '' },
+                    { label: 'Series', value: book.series_name ? `${book.series_name}${book.series_position ? ` #${book.series_position}` : ''}` : '' },
+                  ];
+                  // Dynamic fields: only shown when set
+                  const dynamicFields = [
+                    { label: 'Publisher', value: book.publisher },
+                    { label: 'Release Year', value: book.audiobook_release_year ? String(book.audiobook_release_year) : undefined },
+                    { label: 'Print Year', value: book.print_year ? String(book.print_year) : undefined },
+                    { label: 'ISBN 13', value: book.isbn13 },
+                    { label: 'ISBN 10', value: book.isbn10 },
+                    { label: 'Genre', value: book.quality },
+                    { label: 'Format', value: book.format?.toUpperCase() },
+                    { label: 'Codec', value: book.codec },
+                    { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
+                    { label: 'Duration', value: book.duration ? formatDuration(book.duration) : undefined },
+                    { label: 'Edition', value: book.edition },
+                    { label: 'Work ID', value: book.work_id },
+                  ].filter((item) => item.value !== undefined && item.value !== '' && item.value !== null);
+                  return [...coreFields, ...dynamicFields].map((item) => (
                     <Grid item xs={12} sm={6} md={4} key={item.label}>
                       <Box
                         sx={{
@@ -1211,16 +1205,17 @@ export const BookDetail = () => {
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          sx={{ textTransform: 'uppercase' }}
+                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
                         >
                           {item.label}
                         </Typography>
-                        <Typography variant="body1">
-                          {item.value as string}
+                        <Typography variant="body1" sx={{ color: item.value ? 'text.primary' : 'text.disabled' }}>
+                          {item.value || '\u2014'}
                         </Typography>
                       </Box>
                     </Grid>
-                  ))}
+                  ));
+                })()}
               </Grid>
               {book.description && (
                 <Box mt={3}>
@@ -1569,7 +1564,7 @@ export const BookDetail = () => {
                         } : undefined}
                       >
                         <TableCell sx={{ textTransform: 'capitalize' }}>
-                          {field.replace(/_/g, ' ')}
+                          {humanizeField(field)}
                         </TableCell>
                         <TableCell>{fileVal || '\u2014'}</TableCell>
                         <TableCell
@@ -1714,7 +1709,7 @@ export const BookDetail = () => {
                     return (
                       <TableRow key={field}>
                         <TableCell sx={{ textTransform: 'capitalize' }}>
-                          {field.replace(/_/g, ' ')}
+                          {humanizeField(field)}
                         </TableCell>
                         <TableCell>
                           {allSame ? displayVal : (
@@ -1870,7 +1865,7 @@ export const BookDetail = () => {
                       return (
                         <TableRow key={field}>
                           <TableCell sx={{ textTransform: 'capitalize' }}>
-                            {field.replace(/_/g, ' ')}
+                            {humanizeField(field)}
                           </TableCell>
                           <TableCell>{entry?.file ?? '\u2014'}</TableCell>
                           <TableCell>{entry?.fetched ?? '\u2014'}</TableCell>

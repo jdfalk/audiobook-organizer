@@ -1313,6 +1313,7 @@ export interface MetadataCandidate {
   year?: number;
   publisher?: string;
   isbn?: string;
+  asin?: string;
   cover_url?: string;
   description?: string;
   language?: string;
