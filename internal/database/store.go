@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.28.0
+// version: 2.29.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -31,6 +31,8 @@ type Store interface {
 	GetAuthorByID(id int) (*Author, error)
 	GetAuthorByName(name string) (*Author, error)
 	CreateAuthor(name string) (*Author, error)
+	DeleteAuthor(id int) error
+	UpdateAuthorName(id int, name string) error
 
 	// Book-Author relationships
 	GetBookAuthors(bookID string) ([]BookAuthor, error)

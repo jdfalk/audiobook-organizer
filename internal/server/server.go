@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.89.0
+// version: 1.90.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1160,6 +1160,8 @@ func (s *Server) setupRoutes() {
 			// Author, narrator, and series routes
 			protected.GET("/authors", s.listAuthors)
 			protected.GET("/authors/count", s.countAuthors)
+			protected.GET("/authors/duplicates", s.listDuplicateAuthors)
+			protected.POST("/authors/merge", s.mergeAuthors)
 			protected.GET("/narrators", s.listNarrators)
 			protected.GET("/narrators/count", s.countNarrators)
 			protected.GET("/audiobooks/:id/narrators", s.listAudiobookNarrators)
@@ -1216,6 +1218,7 @@ func (s *Server) setupRoutes() {
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)
+			protected.GET("/system/announcements", s.getSystemAnnouncements)
 			protected.GET("/system/storage", s.getSystemStorage)
 			protected.GET("/system/logs", s.getSystemLogs)
 			protected.POST("/system/reset", s.resetSystem)
@@ -2459,6 +2462,104 @@ func (s *Server) countAuthors(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
+func (s *Server) listDuplicateAuthors(c *gin.Context) {
+	authors, err := database.GlobalStore.GetAllAuthors()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	bookCountFn := func(authorID int) int {
+		books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(authorID)
+		if err != nil {
+			return 0
+		}
+		return len(books)
+	}
+
+	groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
+	c.JSON(http.StatusOK, gin.H{"groups": groups, "count": len(groups)})
+}
+
+func (s *Server) mergeAuthors(c *gin.Context) {
+	var req struct {
+		KeepID    int   `json:"keep_id" binding:"required"`
+		MergeIDs  []int `json:"merge_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.MergeIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "merge_ids must not be empty"})
+		return
+	}
+
+	// Verify keep author exists
+	keepAuthor, err := database.GlobalStore.GetAuthorByID(req.KeepID)
+	if err != nil || keepAuthor == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "keep author not found"})
+		return
+	}
+
+	merged := 0
+	var errors []string
+	for _, mergeID := range req.MergeIDs {
+		if mergeID == req.KeepID {
+			continue
+		}
+		// Get all books by this author
+		books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(mergeID)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to get books for author %d: %v", mergeID, err))
+			continue
+		}
+
+		// For each book, replace the merged author with the keep author
+		for _, book := range books {
+			bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID)
+			if err != nil {
+				continue
+			}
+			// Check if keep author already exists on this book
+			hasKeep := false
+			for _, ba := range bookAuthors {
+				if ba.AuthorID == req.KeepID {
+					hasKeep = true
+					break
+				}
+			}
+
+			var newAuthors []database.BookAuthor
+			for _, ba := range bookAuthors {
+				if ba.AuthorID == mergeID {
+					if !hasKeep {
+						ba.AuthorID = req.KeepID
+						newAuthors = append(newAuthors, ba)
+						hasKeep = true
+					}
+					// else skip (keep author already present)
+				} else {
+					newAuthors = append(newAuthors, ba)
+				}
+			}
+			if err := database.GlobalStore.SetBookAuthors(book.ID, newAuthors); err != nil {
+				errors = append(errors, fmt.Sprintf("failed to update book %s: %v", book.ID, err))
+			}
+		}
+
+		// Delete the merged author
+		if err := database.GlobalStore.DeleteAuthor(mergeID); err != nil {
+			errors = append(errors, fmt.Sprintf("failed to delete author %d: %v", mergeID, err))
+		} else {
+			merged++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"merged": merged, "errors": errors})
+}
+
 func (s *Server) listNarrators(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -3301,6 +3402,61 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, status)
+}
+
+func (s *Server) getSystemAnnouncements(c *gin.Context) {
+	type Announcement struct {
+		ID       string `json:"id"`
+		Severity string `json:"severity"` // info, warning, error
+		Message  string `json:"message"`
+		Link     string `json:"link,omitempty"`
+	}
+
+	var announcements []Announcement
+
+	// Check for duplicate authors
+	authors, err := database.GlobalStore.GetAllAuthors()
+	if err == nil {
+		bookCountFn := func(authorID int) int {
+			books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(authorID)
+			if err != nil {
+				return 0
+			}
+			return len(books)
+		}
+		groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
+		if len(groups) > 0 {
+			announcements = append(announcements, Announcement{
+				ID:       "duplicate-authors",
+				Severity: "warning",
+				Message:  fmt.Sprintf("You have %d group(s) of duplicate authors to review", len(groups)),
+				Link:     "/authors/dedup",
+			})
+		}
+	}
+
+	// Check for missing files (sample first 100 books)
+	books, err := database.GlobalStore.GetAllBooks(100, 0)
+	if err == nil {
+		missingCount := 0
+		for _, book := range books {
+			if book.FilePath != "" {
+				if _, statErr := os.Stat(book.FilePath); os.IsNotExist(statErr) {
+					missingCount++
+				}
+			}
+		}
+		if missingCount > 0 {
+			announcements = append(announcements, Announcement{
+				ID:       "missing-files",
+				Severity: "warning",
+				Message:  fmt.Sprintf("%d book(s) have missing files on disk", missingCount),
+				Link:     "/library",
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"announcements": announcements})
 }
 
 func (s *Server) getSystemStorage(c *gin.Context) {

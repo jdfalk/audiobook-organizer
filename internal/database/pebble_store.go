@@ -288,6 +288,75 @@ func (p *PebbleStore) CreateAuthor(name string) (*Author, error) {
 	return author, nil
 }
 
+func (p *PebbleStore) DeleteAuthor(id int) error {
+	// Get the author to find name for index cleanup
+	author, err := p.GetAuthorByID(id)
+	if err != nil {
+		return err
+	}
+	if author == nil {
+		return nil
+	}
+
+	batch := p.db.NewBatch()
+	batch.Delete([]byte(fmt.Sprintf("author:%d", id)), nil)
+	batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil)
+
+	// Delete book_author entries for this author
+	iter, iterErr := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_author:"),
+		UpperBound: []byte("book_author;"),
+	})
+	if iterErr == nil {
+		defer iter.Close()
+		for iter.First(); iter.Valid(); iter.Next() {
+			val, valErr := iter.ValueAndErr()
+			if valErr != nil {
+				continue
+			}
+			var ba BookAuthor
+			if json.Unmarshal(val, &ba) == nil && ba.AuthorID == id {
+				batch.Delete(iter.Key(), nil)
+			}
+		}
+	}
+
+	return batch.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
+	author, err := p.GetAuthorByID(id)
+	if err != nil {
+		return err
+	}
+	if author == nil {
+		return fmt.Errorf("author %d not found", id)
+	}
+
+	batch := p.db.NewBatch()
+	// Remove old name index
+	batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil)
+
+	// Update author record
+	author.Name = name
+	data, err := json.Marshal(author)
+	if err != nil {
+		batch.Close()
+		return err
+	}
+	if err := batch.Set([]byte(fmt.Sprintf("author:%d", id)), data, nil); err != nil {
+		batch.Close()
+		return err
+	}
+	// Add new name index
+	if err := batch.Set([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(name))), []byte(strconv.Itoa(id)), nil); err != nil {
+		batch.Close()
+		return err
+	}
+
+	return batch.Commit(pebble.Sync)
+}
+
 // Series operations
 
 func (p *PebbleStore) GetAllSeries() ([]Series, error) {
