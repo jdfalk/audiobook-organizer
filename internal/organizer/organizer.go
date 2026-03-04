@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -286,6 +286,10 @@ func sanitizeFilename(name string) string {
 	for _, char := range invalid {
 		name = strings.ReplaceAll(name, char, "_")
 	}
+
+	// Strip brackets (ugly in paths, cause shell escaping issues)
+	name = strings.ReplaceAll(name, "[", "")
+	name = strings.ReplaceAll(name, "]", "")
 
 	re := regexp.MustCompile(`\s+`)
 	name = re.ReplaceAllString(name, " ")
