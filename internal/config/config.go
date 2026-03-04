@@ -509,6 +509,11 @@ func InitConfig() {
 		}
 	}
 
+	// Auto-enable ITL write-back when an ITL path is configured
+	if AppConfig.ITunesLibraryITLPath != "" && !AppConfig.ITLWriteBackEnabled {
+		AppConfig.ITLWriteBackEnabled = true
+	}
+
 	// Normalize database type
 	if AppConfig.DatabaseType == "sqlite3" {
 		AppConfig.DatabaseType = "sqlite"

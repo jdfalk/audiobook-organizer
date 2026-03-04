@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -53,6 +53,11 @@ func NewOrganizer(cfg *config.Config) *Organizer {
 func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 	if book == nil || book.FilePath == "" {
 		return "", fmt.Errorf("invalid book or file path")
+	}
+
+	// Skip directories — only organize individual files
+	if info, err := os.Stat(book.FilePath); err == nil && info.IsDir() {
+		return "", fmt.Errorf("source path is a directory, not a file: %s", book.FilePath)
 	}
 
 	// Generate target path
