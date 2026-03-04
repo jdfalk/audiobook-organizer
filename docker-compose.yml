@@ -1,5 +1,5 @@
 # file: docker-compose.yml
-# version: 1.1.0
+# version: 1.2.0
 # guid: 08a9b7c6-d5e4-4f3a-b2c1-0d9e8f7a6b5c
 
 services:
@@ -17,6 +17,9 @@ services:
     environment:
       - AO_DIR=/audiobooks
       - AO_DB=/data/audiobooks.pebble
+      - BASIC_AUTH_ENABLED=${BASIC_AUTH_ENABLED:-false}
+      - BASIC_AUTH_USERNAME=${BASIC_AUTH_USERNAME:-admin}
+      - BASIC_AUTH_PASSWORD=${BASIC_AUTH_PASSWORD:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8484/health"]

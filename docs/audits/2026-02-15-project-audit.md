@@ -1,5 +1,5 @@
 <!-- file: docs/audits/2026-02-15-project-audit.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: d4e5f6a7-b8c9-0123-4567-890abcdef012 -->
 
 # Project Audit — February 15, 2026 (Updated)
@@ -55,9 +55,9 @@
 | Issue | Detail |
 |-------|--------|
 | No authentication | Zero auth. Anyone on network can access everything |
-| Exposed API key | `.env` with real OpenAI key committed to git history |
+| ~~Exposed API key~~ | ~~RESOLVED: `.env` was never committed to git history. It's in `.gitignore`.~~ |
 | Manual QA | No documented verification run of all workflows |
-| Dockerfile.test Go version | Uses Go 1.23, should be 1.25 |
+| ~~Dockerfile Go version~~ | ~~RESOLVED: Both Dockerfiles already use Go 1.25~~ |
 
 ### P1 -- Needed for Real Use
 
