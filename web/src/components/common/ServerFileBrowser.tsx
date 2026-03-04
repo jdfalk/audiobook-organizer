@@ -1,5 +1,5 @@
 // file: web/src/components/common/ServerFileBrowser.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useState, useEffect, useCallback, MouseEvent } from 'react';
@@ -78,7 +78,8 @@ export function ServerFileBrowser({
     useState<api.FilesystemBrowseResult['disk_info']>();
   const [editingPath, setEditingPath] = useState(false);
   const [editPath, setEditPath] = useState(currentPath);
-  const [extensionFilter, setExtensionFilter] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
+  const [regexError, setRegexError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     message: string;
     severity: AlertColor;
@@ -124,7 +125,9 @@ export function ServerFileBrowser({
 
   const handleItemClick = (item: api.FileSystemItem) => {
     if (item.is_dir) {
-      // Navigate into directory
+      // Navigate into directory — clear search so all contents are visible
+      setSearchFilter('');
+      setRegexError(null);
       setCurrentPath(item.path);
     } else {
       // Select file if allowed
@@ -207,9 +210,10 @@ export function ServerFileBrowser({
   };
 
   const navigateToPath = (index: number) => {
+    setSearchFilter('');
+    setRegexError(null);
     const parts = getPathParts(currentPath);
     if (index === 0) {
-      // Navigate to filesystem root
       setCurrentPath('/');
     } else {
       const newPath = '/' + parts.slice(1, index + 1).join('/');
@@ -235,23 +239,22 @@ export function ServerFileBrowser({
     return a.name.localeCompare(b.name);
   });
 
-  const normalizedFilter = extensionFilter.trim().toLowerCase();
-  const extensionQuery =
-    normalizedFilter.length > 0 && !normalizedFilter.startsWith('.')
-      ? `.${normalizedFilter}`
-      : normalizedFilter;
-
   const filteredItems = sortedItems.filter((item) => {
-    if (item.is_dir) {
-      return true;
-    }
-    if (!showFiles) {
+    if (!item.is_dir && !showFiles) {
       return false;
     }
-    if (!extensionQuery) {
+    const trimmed = searchFilter.trim();
+    if (!trimmed) {
       return true;
     }
-    return item.name.toLowerCase().endsWith(extensionQuery);
+    try {
+      const re = new RegExp(trimmed, 'i');
+      if (regexError) setRegexError(null);
+      return re.test(item.name);
+    } catch {
+      // Fall back to plain substring match on invalid regex
+      return item.name.toLowerCase().includes(trimmed.toLowerCase());
+    }
   });
 
   const pathParts = getPathParts(currentPath);
@@ -364,16 +367,24 @@ export function ServerFileBrowser({
           alignItems={{ xs: 'stretch', md: 'center' }}
           sx={{ mt: 2 }}
         >
-          {showFiles && (
-            <TextField
-              size="small"
-              label="Filter extension"
-              placeholder=".m4b"
-              value={extensionFilter}
-              onChange={(e) => setExtensionFilter(e.target.value)}
-              sx={{ maxWidth: 220 }}
-            />
-          )}
+          <TextField
+            size="small"
+            label="Search (regex)"
+            placeholder="\.m4b$|\.mp3$"
+            value={searchFilter}
+            onChange={(e) => {
+              setSearchFilter(e.target.value);
+              try {
+                if (e.target.value.trim()) new RegExp(e.target.value.trim());
+                setRegexError(null);
+              } catch (err) {
+                setRegexError(err instanceof Error ? err.message : 'Invalid regex');
+              }
+            }}
+            error={!!regexError}
+            helperText={regexError}
+            sx={{ minWidth: 220, flexGrow: 1, maxWidth: 400 }}
+          />
           {availableLabel && (
             <Chip label={availableLabel} size="small" color="info" />
           )}
