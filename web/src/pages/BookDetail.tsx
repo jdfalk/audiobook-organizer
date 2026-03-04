@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.27.0
+// version: 1.28.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -29,7 +29,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  TextField,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -51,7 +50,7 @@ import StarIcon from '@mui/icons-material/Star.js';
 import StarBorderIcon from '@mui/icons-material/StarBorder.js';
 import LinkIcon from '@mui/icons-material/Link.js';
 import LinkOffIcon from '@mui/icons-material/LinkOff.js';
-import type { Book, BookTags, BookSegment, SegmentTags, OverridePayload } from '../services/api';
+import type { Book, BookSegment, SegmentTags, OverridePayload } from '../services/api';
 import * as api from '../services/api';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
@@ -61,38 +60,6 @@ import { FileSelector } from '../components/audiobooks/FileSelector';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
-const FIELD_LABELS: Record<string, string> = {
-  title: 'Title',
-  author_name: 'Author',
-  narrator: 'Narrator',
-  publisher: 'Publisher',
-  language: 'Language',
-  series_name: 'Series',
-  series_position: 'Series Position',
-  audiobook_release_year: 'Release Year',
-  print_year: 'Print Year',
-  isbn10: 'ISBN 10',
-  isbn13: 'ISBN 13',
-  asin: 'ASIN',
-  cover_url: 'Cover Image',
-  description: 'Description',
-  codec: 'Codec',
-  bitrate: 'Bitrate',
-  sample_rate: 'Sample Rate',
-  channels: 'Channels',
-  bit_depth: 'Bit Depth',
-  track: 'Track',
-  disk: 'Disk',
-  album: 'Album',
-  genre: 'Genre',
-  year: 'Year',
-  codec_name: 'Codec',
-};
-
-function humanizeField(field: string): string {
-  return FIELD_LABELS[field] || field.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export const BookDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -100,7 +67,6 @@ export const BookDetail = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionLabel, setActionLabel] = useState<string | null>(null);
-  const [loadingField, setLoadingField] = useState<string | null>(null);
   const [fetchingMetadata, setFetchingMetadata] = useState(false);
   const [parsingWithAI, setParsingWithAI] = useState(false);
   const [writingToFiles, setWritingToFiles] = useState(false);
@@ -109,7 +75,7 @@ export const BookDetail = () => {
   // preAIBook removed — use History to revert AI changes
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
-    'info' | 'files' | 'versions' | 'tags'
+    'info' | 'files' | 'versions'
   >('info');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({
@@ -128,23 +94,16 @@ export const BookDetail = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [metadataSearchOpen, setMetadataSearchOpen] = useState(false);
-  const [tags, setTags] = useState<BookTags | null>(null);
-  const [tagsLoading, setTagsLoading] = useState(false);
-  const [tagsError, setTagsError] = useState<string | null>(null);
   const [segments, setSegments] = useState<BookSegment[]>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
-  const [multiSegmentTags, setMultiSegmentTags] = useState<Map<string, SegmentTags>>(new Map());
   const [coverError, setCoverError] = useState(false);
   const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
-  const [editingField, setEditingField] = useState<string | null>(null);
-  const [editingValue, setEditingValue] = useState('');
 
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
-  const isMultiSelect = selectedSegmentIds.size > 1;
   const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
 
   // Reset cover error when cover URL changes (e.g. after metadata fetch)
@@ -203,26 +162,11 @@ export const BookDetail = () => {
     }
   }, [id]);
 
-  const loadTags = useCallback(async () => {
-    if (!id) return;
-    setTagsLoading(true);
-    setTagsError(null);
-    try {
-      const data = await api.getBookTags(id);
-      setTags(data);
-    } catch (error) {
-      console.error('Failed to load tags', error);
-      setTagsError('Unable to load file tags at the moment.');
-    } finally {
-      setTagsLoading(false);
-    }
-  }, [id]);
 
   useEffect(() => {
     loadBook();
     loadVersions();
-    loadTags();
-  }, [id, loadBook, loadTags, loadVersions]);
+  }, [id, loadBook, loadVersions]);
 
   // Load segments on mount (after book loads)
   useEffect(() => {
@@ -254,46 +198,13 @@ export const BookDetail = () => {
     }
   }, [id]);
 
-  // Load multiple segment tags in parallel for multi-select
-  const loadMultiSegmentTags = useCallback(async (segIds: string[]) => {
-    if (!id || segIds.length === 0) {
-      setMultiSegmentTags(new Map());
-      return;
-    }
-    setSegmentTagsLoading(true);
-    try {
-      const results = await Promise.all(
-        segIds.map(async (sid) => {
-          try {
-            const data = await api.getSegmentTags(id, sid);
-            return [sid, data] as const;
-          } catch {
-            return null;
-          }
-        })
-      );
-      const map = new Map<string, SegmentTags>();
-      for (const r of results) {
-        if (r) map.set(r[0], r[1]);
-      }
-      setMultiSegmentTags(map);
-    } finally {
-      setSegmentTagsLoading(false);
-    }
-  }, [id]);
-
   useEffect(() => {
     if (isSingleSelect && singleSelectedId) {
       loadSegmentTags(singleSelectedId);
-      setMultiSegmentTags(new Map());
-    } else if (isMultiSelect) {
-      setSegmentTags(null);
-      loadMultiSegmentTags(Array.from(selectedSegmentIds));
     } else {
       setSegmentTags(null);
-      setMultiSegmentTags(new Map());
     }
-  }, [selectedSegmentIds, isSingleSelect, isMultiSelect, singleSelectedId, loadSegmentTags, loadMultiSegmentTags]);
+  }, [selectedSegmentIds, isSingleSelect, singleSelectedId, loadSegmentTags]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '—';
@@ -388,7 +299,6 @@ export const BookDetail = () => {
       setBook(result.book);
       // Re-fetch enriched book (with populated authors array) and tags
       await refreshBook();
-      await loadTags();
       toast(
         result.message ||
           `Metadata refreshed from ${result.source || 'provider'}.`,
@@ -443,7 +353,6 @@ export const BookDetail = () => {
     try {
       const result = await api.parseAudiobookWithAI(book.id);
       setBook(result.book);
-      await loadTags();
       toast(result.message || 'AI parsing completed. Use History to revert if needed.', 'success');
     } catch (error: unknown) {
       console.error('Failed to parse with AI', error);
@@ -498,188 +407,28 @@ export const BookDetail = () => {
     work_id: current.work_id,
   });
 
-  const getFieldSources = (field: string) => {
-    const entry = tags?.tags?.[field];
-    if (!entry) return null;
-    const effective =
-      entry.effective_value ??
-      entry.override_value ??
-      entry.stored_value ??
-      entry.fetched_value ??
-      entry.file_value;
-    const effectiveSource =
-      entry.effective_source ||
-      (entry.override_value !== undefined && entry.override_value !== null
-        ? 'override'
-        : entry.stored_value !== undefined && entry.stored_value !== null
-          ? 'stored'
-          : entry.fetched_value !== undefined && entry.fetched_value !== null
-            ? 'fetched'
-            : entry.file_value !== undefined && entry.file_value !== null
-              ? 'file'
-              : undefined);
-    return {
-      file: entry.file_value,
-      fetched: entry.fetched_value,
-      stored: entry.stored_value,
-      override: entry.override_value,
-      locked: entry.override_locked,
-      effective,
-      source: effectiveSource,
-      updatedAt: entry.updated_at,
-    };
-  };
-
-  const applySourceValue = async (
-    field: string,
-    source: 'file' | 'fetched' | 'override'
-  ) => {
-    if (!book) return;
-    const entry = getFieldSources(field);
-    if (!entry) return;
-    const value =
-      source === 'file'
-        ? entry.file
-        : source === 'fetched'
-          ? entry.fetched
-          : entry.override;
-    if (value === undefined) return;
-    setLoadingField(`${field}-${source}`);
-    try {
-      const override: OverridePayload = { value, locked: true };
-      if (source === 'file') {
-        override.fetched_value = entry.fetched;
-      }
-      const payload: Partial<Book> & {
-        overrides: Record<string, OverridePayload>;
-      } = {
-        overrides: {
-          [field]: override,
-        },
-      };
-      const saved = await api.updateBook(book.id, payload);
-      setBook(saved);
-      // Update local tags state to reflect new stored/override value
-      setTags((prev) => {
-        if (!prev?.tags) return prev;
-        const updated = { ...prev.tags[field] };
-        updated.override_value = value;
-        updated.override_locked = true;
-        updated.fetched_value = entry.fetched ?? updated.fetched_value;
-        updated.effective_value = value as never;
-        updated.effective_source = 'override';
-        return {
-          ...prev,
-          tags: {
-            ...prev.tags,
-            [field]: updated,
-          },
-        };
-      });
-    } catch (error) {
-      console.error('Failed to apply field value', error);
-      toast('Failed to apply field value.', 'error');
-    } finally {
-      setLoadingField(null);
-    }
-  };
-
-  const clearOverride = async (field: string) => {
-    if (!book) return;
-    setLoadingField(`${field}-clear`);
-    try {
-      const payload: Partial<Book> & {
-        overrides: Record<string, { clear: boolean }>;
-      } = {
-        overrides: {
-          [field]: { clear: true },
-        },
-      } as never;
-      const saved = await api.updateBook(book.id, payload);
-      setBook(saved);
-      setTags((prev) => {
-        if (!prev?.tags) return prev;
-        const updated = { ...prev.tags[field] };
-        updated.override_value = null;
-        updated.override_locked = false;
-        const effectiveValue =
-          updated.stored_value ??
-          updated.fetched_value ??
-          updated.file_value ??
-          (updated as { effective_value?: unknown }).effective_value ??
-          null;
-        const effectiveSource =
-          (updated.stored_value ??
-            updated.fetched_value ??
-            updated.file_value) !== undefined
-            ? updated.stored_value !== undefined &&
-              updated.stored_value !== null
-              ? 'stored'
-              : updated.fetched_value !== undefined &&
-                  updated.fetched_value !== null
-                ? 'fetched'
-                : updated.file_value !== undefined &&
-                    updated.file_value !== null
-                  ? 'file'
-                  : undefined
-            : undefined;
-        updated.effective_value = effectiveValue as never;
-        updated.effective_source = effectiveSource;
-        return {
-          ...prev,
-          tags: {
-            ...prev.tags,
-            [field]: updated,
-          },
-        };
-      });
-    } catch (error) {
-      console.error('Failed to clear override', error);
-      toast('Failed to clear override.', 'error');
-    } finally {
-      setLoadingField(null);
-    }
-  };
-
-  const unlockOverride = async (field: string) => {
-    if (!book) return;
-    setLoadingField(`${field}-unlock`);
-    try {
-      const payload: Partial<Book> & {
-        overrides: Record<string, { locked: boolean }>;
-      } = {
-        overrides: {
-          [field]: { locked: false },
-        },
-      } as never;
-      const saved = await api.updateBook(book.id, payload);
-      setBook(saved);
-      setTags((prev) => {
-        if (!prev?.tags) return prev;
-        const updated = { ...prev.tags[field] };
-        updated.override_locked = false;
-        return {
-          ...prev,
-          tags: {
-            ...prev.tags,
-            [field]: updated,
-          },
-        };
-      });
-    } catch (error) {
-      console.error('Failed to unlock override', error);
-      toast('Failed to unlock override.', 'error');
-    } finally {
-      setLoadingField(null);
-    }
-  };
-
-  const handleEditSave = async (updated: Audiobook) => {
+  const handleEditSave = async (updated: Audiobook, dirtyFields?: Set<string>) => {
     if (!book) return;
     setActionLoading(true);
     setActionLabel('Saving changes...');
     try {
-      const payload: Partial<Book> = {
+      // Map form field names to API field names for overrides
+      const FIELD_TO_API: Record<string, string> = {
+        title: 'title',
+        author: 'author_name',
+        narrator: 'narrator',
+        series: 'series_name',
+        series_number: 'series_position',
+        genre: 'genre',
+        year: 'audiobook_release_year',
+        language: 'language',
+        publisher: 'publisher',
+        isbn10: 'isbn10',
+        isbn13: 'isbn13',
+        description: 'description',
+      };
+
+      const payload: Partial<Book> & { overrides?: Record<string, OverridePayload> } = {
         title: updated.title,
         description: updated.description,
         publisher: updated.publisher,
@@ -698,11 +447,28 @@ export const BookDetail = () => {
         author_name: updated.author,
         series_name: updated.series,
       };
+
+      // Auto-lock edited fields (Plex-style: edits are automatically locked)
+      if (dirtyFields && dirtyFields.size > 0) {
+        const overrides: Record<string, OverridePayload> = {};
+        for (const field of dirtyFields) {
+          const apiField = FIELD_TO_API[field];
+          if (!apiField) continue;
+          const value = field === 'year'
+            ? (updated.year ?? updated.audiobook_release_year ?? null)
+            : field === 'series_number'
+              ? (updated.series_number ?? null)
+              : ((updated as unknown as Record<string, unknown>)[field] ?? null);
+          overrides[apiField] = { value, locked: true };
+        }
+        if (Object.keys(overrides).length > 0) {
+          payload.overrides = overrides;
+        }
+      }
+
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
-      // Reload tags so Tags tab reflects the update immediately
-      await loadTags();
-      toast('Metadata saved to database. Use "Save to Files" to write tags to the audio file.', 'success');
+      toast('Metadata saved. Edited fields are now locked.', 'success');
       setEditDialogOpen(false);
     } catch (error) {
       if (error instanceof api.ApiError) {
@@ -1085,7 +851,6 @@ export const BookDetail = () => {
             label={`Versions${versionSummary?.linkedCount ? ` (${versionSummary.linkedCount})` : ''}`}
             value="versions"
           />
-          <Tab label="Tags" value="tags" />
         </Tabs>
       </Paper>
 
@@ -1333,7 +1098,7 @@ export const BookDetail = () => {
                         sx={{ cursor: 'pointer' }}
                         onClick={() => {
                           setSelectedSegmentIds(new Set([seg.id]));
-                          setActiveTab('tags');
+                          setActiveTab('info');
                         }}
                       >
                         <TableCell>{seg.track_number ?? '—'}</TableCell>
@@ -1491,497 +1256,6 @@ export const BookDetail = () => {
           >
             Link Another Version
           </Button>
-        </Paper>
-      )}
-
-      {activeTab === 'tags' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-            <CompareIcon />
-            <Typography variant="h6">Tags &amp; Compare</Typography>
-          </Stack>
-
-          {/* Segment selected: unified comparison table */}
-          {singleSelectedId && segmentTags ? (
-            <>
-              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Comparing tags for: {segmentTags.file_path.split('/').pop()}
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Field</TableCell>
-                    <TableCell>File Tag Value</TableCell>
-                    <TableCell>Book Effective Value</TableCell>
-                    <TableCell>Match</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {[
-                    { field: 'title', bookVal: book.title },
-                    {
-                      field: 'author',
-                      bookVal: book.authors?.length
-                        ? book.authors.map((a) => a.name).join(' & ')
-                        : book.author_name,
-                    },
-                    {
-                      field: 'narrator',
-                      bookVal: book.narrators?.length
-                        ? book.narrators.map((n) => n.name).join(' & ')
-                        : book.narrator,
-                    },
-                    { field: 'album', bookVal: book.title },
-                    { field: 'genre', bookVal: 'Audiobook' },
-                    { field: 'year', bookVal: String(book.audiobook_release_year || book.print_year || '') },
-                    { field: 'publisher', bookVal: book.publisher },
-                    { field: 'series', bookVal: book.series_name },
-                    { field: 'language', bookVal: book.language },
-                    { field: 'track', bookVal: '' },
-                    { field: 'disk', bookVal: '' },
-                  ].map(({ field, bookVal }) => {
-                    const fileVal = segmentTags.tags[field] || segmentTags.tags[field.replace(/ /g, '_')] || '';
-                    const bookStr = String(bookVal || '');
-                    const exactMatch = fileVal.toLowerCase() === bookStr.toLowerCase();
-                    // For title/album: treat "Part X of Y" patterns or file tags containing book title as partial match
-                    const isPartialTitleMatch = (field === 'title' || field === 'album') && !exactMatch && fileVal && bookStr && (
-                      /^part\s+\d+\s+of\s+\d+$/i.test(fileVal) ||
-                      /^\d+\s+of\s+\d+$/i.test(fileVal) ||
-                      fileVal.toLowerCase().includes(bookStr.toLowerCase()) ||
-                      bookStr.toLowerCase().includes(fileVal.toLowerCase())
-                    );
-                    const matches = exactMatch || isPartialTitleMatch;
-                    const isMismatch = !matches && fileVal && bookStr;
-                    return (
-                      <TableRow
-                        key={field}
-                        sx={isMismatch ? {
-                          bgcolor: 'error.dark',
-                          '& .MuiTableCell-root': { color: 'error.contrastText' },
-                          opacity: 0.85,
-                        } : undefined}
-                      >
-                        <TableCell sx={{ textTransform: 'capitalize' }}>
-                          {humanizeField(field)}
-                        </TableCell>
-                        <TableCell>{fileVal || '\u2014'}</TableCell>
-                        <TableCell
-                          onClick={() => {
-                            if (editingField !== field) {
-                              setEditingField(field);
-                              setEditingValue(bookStr);
-                            }
-                          }}
-                          sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' }, minWidth: 120 }}
-                        >
-                          {editingField === field ? (
-                            <TextField
-                              size="small"
-                              variant="standard"
-                              value={editingValue}
-                              onChange={(e) => setEditingValue(e.target.value)}
-                              onBlur={async () => {
-                                if (editingValue !== bookStr) {
-                                  const apiField = field === 'author' ? 'author_name' : field === 'year' ? 'audiobook_release_year' : field;
-                                  try {
-                                    const payload: Record<string, unknown> = {};
-                                    payload[apiField] = editingValue || null;
-                                    const saved = await api.updateBook(book.id, payload as Partial<api.Book>);
-                                    setBook(saved);
-                                    toast(`Updated ${field}`, 'success');
-                                  } catch {
-                                    toast(`Failed to update ${field}`, 'error');
-                                  }
-                                }
-                                setEditingField(null);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                if (e.key === 'Escape') { setEditingField(null); }
-                              }}
-                              autoFocus
-                              fullWidth
-                              inputProps={{ style: { fontSize: '0.875rem' } }}
-                            />
-                          ) : (
-                            bookStr || '\u2014'
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {!fileVal && !bookStr ? (
-                            <Chip size="small" label="empty" variant="outlined" />
-                          ) : exactMatch ? (
-                            <Chip size="small" label="match" color="success" variant="outlined" />
-                          ) : isPartialTitleMatch ? (
-                            <Chip size="small" label="partial" color="warning" variant="outlined" />
-                          ) : (
-                            <Chip size="small" label="mismatch" color="error" variant="outlined" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isMismatch && (
-                            <Stack direction="row" spacing={0.5}>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => applySourceValue(field === 'author' ? 'author_name' : field, 'file')}
-                                disabled={loadingField === `${field}-file`}
-                                sx={isMismatch ? { color: 'inherit', borderColor: 'inherit' } : undefined}
-                              >
-                                Use File
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => {
-                                  toast('Book value queued for write to file', 'info');
-                                }}
-                                sx={isMismatch ? { color: 'inherit', borderColor: 'inherit' } : undefined}
-                              >
-                                Use Book
-                              </Button>
-                            </Stack>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              {segmentTags.tags_read_error && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  Tag read error: {segmentTags.tags_read_error}
-                </Alert>
-              )}
-            </>
-          ) : isMultiSelect && multiSegmentTags.size > 0 ? (
-            /* Multi-select comparison table */
-            <>
-              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Comparing {multiSegmentTags.size} files
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Field</TableCell>
-                    <TableCell>File Values</TableCell>
-                    <TableCell>Book Value</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {[
-                    { field: 'title', bookVal: book.title },
-                    {
-                      field: 'author',
-                      bookVal: book.authors?.length
-                        ? book.authors.map((a) => a.name).join(' & ')
-                        : book.author_name,
-                    },
-                    {
-                      field: 'narrator',
-                      bookVal: book.narrators?.length
-                        ? book.narrators.map((n) => n.name).join(' & ')
-                        : book.narrator,
-                    },
-                    { field: 'album', bookVal: book.title },
-                    { field: 'genre', bookVal: 'Audiobook' },
-                    { field: 'year', bookVal: String(book.audiobook_release_year || book.print_year || '') },
-                    { field: 'publisher', bookVal: book.publisher },
-                    { field: 'series', bookVal: book.series_name },
-                    { field: 'language', bookVal: book.language },
-                  ].map(({ field, bookVal }) => {
-                    const bookStr = String(bookVal || '');
-                    const fileValues = Array.from(multiSegmentTags.values()).map(
-                      (st) => st.tags[field] || st.tags[field.replace(/ /g, '_')] || ''
-                    );
-                    const uniqueValues = [...new Set(fileValues.filter(Boolean))];
-                    const allSame = uniqueValues.length <= 1;
-                    const displayVal = allSame
-                      ? (uniqueValues[0] || '\u2014')
-                      : `${uniqueValues.length} different values`;
-                    const matchesBook = allSame && uniqueValues[0]?.toLowerCase() === bookStr.toLowerCase();
-
-                    return (
-                      <TableRow key={field}>
-                        <TableCell sx={{ textTransform: 'capitalize' }}>
-                          {humanizeField(field)}
-                        </TableCell>
-                        <TableCell>
-                          {allSame ? displayVal : (
-                            <Chip size="small" label={displayVal} color="warning" variant="outlined" />
-                          )}
-                        </TableCell>
-                        <TableCell>{bookStr || '\u2014'}</TableCell>
-                        <TableCell>
-                          {matchesBook ? (
-                            <Chip size="small" label="match" color="success" variant="outlined" />
-                          ) : allSame ? (
-                            <Chip size="small" label="mismatch" color="error" variant="outlined" />
-                          ) : (
-                            <Chip size="small" label="mixed" color="warning" variant="outlined" />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {!matchesBook && bookStr && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={async () => {
-                                try {
-                                  const segIds = Array.from(selectedSegmentIds);
-                                  await api.writeBackMetadata(book.id, segIds);
-                                  toast(`Book value applied to ${segIds.length} files`, 'success');
-                                  loadMultiSegmentTags(segIds);
-                                } catch {
-                                  toast('Failed to write metadata', 'error');
-                                }
-                              }}
-                            >
-                              Apply Book Value to All
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={async () => {
-                    try {
-                      setWritingToFiles(true);
-                      const segIds = Array.from(selectedSegmentIds);
-                      const result = await api.writeBackMetadata(book.id, segIds);
-                      toast(result.message || `Metadata written to ${segIds.length} files`, 'success');
-                      loadMultiSegmentTags(segIds);
-                    } catch {
-                      toast('Failed to write metadata to files', 'error');
-                    } finally {
-                      setWritingToFiles(false);
-                    }
-                  }}
-                  disabled={writingToFiles}
-                >
-                  {writingToFiles ? 'Writing...' : `Write Back Selected (${selectedSegmentIds.size})`}
-                </Button>
-              </Stack>
-            </>
-          ) : (
-            /* No segment selected: show field sources with resolve actions */
-            <>
-              {singleSelectedId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              {tagsError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {tagsError}
-                </Alert>
-              )}
-              {tagsLoading && (
-                <Stack direction="row" spacing={1} alignItems="center" mb={2}>
-                  <CircularProgress size={18} />
-                  <Typography variant="body2">Loading tags...</Typography>
-                </Stack>
-              )}
-
-              {/* Media Info Summary */}
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={12} md={6}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 1,
-                      bgcolor: 'background.default',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      height: '100%',
-                    }}
-                  >
-                    <Typography variant="subtitle2" gutterBottom>
-                      Media Info
-                    </Typography>
-                    <Stack spacing={0.5}>
-                      <Typography variant="body2">
-                        Codec: {tags?.media_info?.codec || book.codec || '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Bitrate:{' '}
-                        {tags?.media_info?.bitrate
-                          ? `${tags.media_info.bitrate} kbps`
-                          : book.bitrate
-                            ? `${book.bitrate} kbps`
-                            : '\u2014'}
-                      </Typography>
-                      <Typography variant="body2">
-                        Duration:{' '}
-                        {formatDuration(
-                          tags?.media_info?.duration || book.duration
-                        ) || '\u2014'}
-                      </Typography>
-                    </Stack>
-                  </Box>
-                </Grid>
-              </Grid>
-
-              {/* Field Sources Table */}
-              {!tags?.tags && !tagsLoading ? (
-                <Alert severity="info">No tag data available yet. Select a file above to compare tags.</Alert>
-              ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Field</TableCell>
-                      <TableCell>File Tag</TableCell>
-                      <TableCell>Fetched</TableCell>
-                      <TableCell>Database Stored</TableCell>
-                      <TableCell>Override</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {[
-                      'title',
-                      'author_name',
-                      'narrator',
-                      'series_name',
-                      'series_index',
-                      'album',
-                      'genre',
-                      'publisher',
-                      'language',
-                      'audiobook_release_year',
-                      'print_year',
-                      'edition',
-                      'isbn10',
-                      'isbn13',
-                    ].map((field) => {
-                      const entry = getFieldSources(field);
-                      return (
-                        <TableRow key={field}>
-                          <TableCell sx={{ textTransform: 'capitalize' }}>
-                            {humanizeField(field)}
-                          </TableCell>
-                          <TableCell>{entry?.file ?? '\u2014'}</TableCell>
-                          <TableCell>{entry?.fetched ?? '\u2014'}</TableCell>
-                          <TableCell>{entry?.stored ?? '\u2014'}</TableCell>
-                          <TableCell>
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              alignItems="center"
-                              flexWrap="wrap"
-                            >
-                              <span>{entry?.override ?? '\u2014'}</span>
-                              {entry?.locked && (
-                                <Chip
-                                  label="locked"
-                                  size="small"
-                                  color="warning"
-                                  sx={{ ml: 0.5 }}
-                                />
-                              )}
-                              {entry?.source && (
-                                <Chip
-                                  label={entry.source}
-                                  size="small"
-                                  variant="outlined"
-                                />
-                              )}
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction="row" spacing={1}>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => applySourceValue(field, 'file')}
-                                disabled={
-                                  (!entry?.file && entry?.file !== 0) ||
-                                  loadingField === `${field}-file`
-                                }
-                                startIcon={
-                                  loadingField === `${field}-file` ? (
-                                    <CircularProgress size={16} />
-                                  ) : undefined
-                                }
-                              >
-                                {loadingField === `${field}-file`
-                                  ? 'Applying...'
-                                  : 'Use File'}
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => applySourceValue(field, 'fetched')}
-                                disabled={
-                                  (!entry?.fetched && entry?.fetched !== 0) ||
-                                  loadingField === `${field}-fetched`
-                                }
-                                startIcon={
-                                  loadingField === `${field}-fetched` ? (
-                                    <CircularProgress size={16} />
-                                  ) : undefined
-                                }
-                              >
-                                {loadingField === `${field}-fetched`
-                                  ? 'Applying...'
-                                  : 'Use Fetched'}
-                              </Button>
-                              {entry?.override && (
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  color="secondary"
-                                  onClick={() => clearOverride(field)}
-                                  disabled={loadingField === `${field}-clear`}
-                                  startIcon={
-                                    loadingField === `${field}-clear` ? (
-                                      <CircularProgress size={16} />
-                                    ) : undefined
-                                  }
-                                >
-                                  {loadingField === `${field}-clear`
-                                    ? 'Clearing...'
-                                    : 'Clear'}
-                                </Button>
-                              )}
-                              {entry?.locked && (
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => unlockOverride(field)}
-                                  disabled={loadingField === `${field}-unlock`}
-                                  startIcon={
-                                    loadingField === `${field}-unlock` ? (
-                                      <CircularProgress size={16} />
-                                    ) : undefined
-                                  }
-                                >
-                                  {loadingField === `${field}-unlock`
-                                    ? 'Unlocking...'
-                                    : 'Unlock'}
-                                </Button>
-                              )}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-              <Alert severity="info" sx={{ mt: 2 }}>
-                Select a file above to compare file tags with book values.
-                Locked overrides prevent future fetch/tag updates from changing the field.
-              </Alert>
-            </>
-          )}
         </Paper>
       )}
 
@@ -2191,7 +1465,6 @@ export const BookDetail = () => {
         onClose={() => setHistoryDialogOpen(false)}
         onUndoComplete={() => {
           loadBook();
-          loadTags();
         }}
       />
       <MetadataSearchDialog
@@ -2200,7 +1473,6 @@ export const BookDetail = () => {
         onClose={() => setMetadataSearchOpen(false)}
         onApplied={(updatedBook) => {
           setBook(updatedBook);
-          loadTags();
         }}
         toast={toast}
       />
