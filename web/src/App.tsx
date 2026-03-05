@@ -22,7 +22,7 @@ import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { FileBrowser } from './pages/FileBrowser';
 import { Operations } from './pages/Operations';
-import { AuthorDedup } from './pages/AuthorDedup';
+import { BookDedup } from './pages/BookDedup';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
@@ -172,7 +172,9 @@ function App() {
             <Route path="/login" element={<Navigate to="/dashboard" replace />} />
             <Route path="/files" element={<FileBrowser />} />
             <Route path="/operations" element={<Operations />} />
-            <Route path="/authors/dedup" element={<AuthorDedup />} />
+            <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
+            <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
+            <Route path="/dedup" element={<BookDedup />} />
           </Routes>
         </MainLayout>
       )}

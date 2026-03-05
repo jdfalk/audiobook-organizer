@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.35.0
+// version: 1.37.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -711,7 +711,7 @@ export async function getAuthorDuplicates(): Promise<AuthorDedupGroup[]> {
   return data.groups || [];
 }
 
-export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<MergeAuthorsResult> {
+export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<Operation> {
   const response = await fetch(`${API_BASE}/authors/merge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -719,6 +719,38 @@ export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge authors');
+  }
+  return response.json();
+}
+
+// Book dedup — uses existing /audiobooks/duplicates endpoint which returns Book[][] groups
+export interface DuplicatesResponse {
+  groups: Book[][];
+  group_count: number;
+  duplicate_count: number;
+}
+
+export interface MergeBooksResult {
+  merged: number;
+  errors: string[];
+}
+
+export async function getBookDuplicates(): Promise<DuplicatesResponse> {
+  const response = await fetch(`${API_BASE}/audiobooks/duplicates`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book duplicates');
+  }
+  return response.json();
+}
+
+export async function mergeBooks(keepId: string, mergeIds: string[]): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/audiobooks/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge books');
   }
   return response.json();
 }
@@ -867,6 +899,23 @@ export async function getOperationStatus(id: string): Promise<Operation> {
     throw await buildApiError(response, 'Failed to fetch operation status');
   }
   return response.json();
+}
+
+// Poll an operation until it completes or fails. Calls onProgress with each update.
+export async function pollOperation(
+  id: string,
+  onProgress?: (op: Operation) => void,
+  intervalMs = 1000
+): Promise<Operation> {
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const op = await getOperationStatus(id);
+    onProgress?.(op);
+    if (op.status === 'completed' || op.status === 'failed' || op.status === 'cancelled') {
+      return op;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }
 
 export interface OptimizeDatabaseResult {
@@ -1341,6 +1390,64 @@ export async function getITunesImportStatus(
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch iTunes import status');
+  }
+  return response.json();
+}
+
+export async function getITunesImportStatusBulk(
+  operationIds: string[]
+): Promise<Record<string, ITunesImportStatus>> {
+  const response = await fetch(`${API_BASE}/itunes/import-status/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: operationIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch bulk import status');
+  }
+  const data = await response.json();
+  return data.statuses || {};
+}
+
+// Series dedup
+export interface SeriesDupGroup {
+  name: string;
+  count: number;
+  series: Series[];
+}
+
+export async function getSeriesDuplicates(): Promise<{ groups: SeriesDupGroup[]; count: number; total_series: number }> {
+  const response = await fetch(`${API_BASE}/series/duplicates`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch series duplicates');
+  }
+  return response.json();
+}
+
+export interface SeriesDedupResult {
+  merged: number;
+  remaining_series: number;
+  errors: string[];
+}
+
+export async function deduplicateSeries(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/series/deduplicate`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to deduplicate series');
+  }
+  return response.json();
+}
+
+export async function mergeSeriesGroup(keepId: number, mergeIds: number[]): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/series/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge series');
   }
   return response.json();
 }

@@ -156,8 +156,9 @@ func LoadConfigFromDatabase(store database.Store) error {
 		return nil
 	}
 
-	// Apply each setting
+	// Apply each setting, track secrets that failed to decrypt
 	applied := 0
+	var corruptSecrets []string
 	for _, setting := range settings {
 		value := setting.Value
 
@@ -172,6 +173,7 @@ func LoadConfigFromDatabase(store database.Store) error {
 			if err != nil {
 				log.Printf("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
 					setting.Key, err)
+				corruptSecrets = append(corruptSecrets, setting.Key)
 				continue
 			}
 			value = decrypted
@@ -190,6 +192,31 @@ func LoadConfigFromDatabase(store database.Store) error {
 	// Fall back to config file for anything the DB didn't provide (e.g. corrupted secrets)
 	if err := LoadConfigFromFile(); err != nil {
 		log.Printf("Warning: Config file fallback failed: %v", err)
+	}
+
+	// Re-encrypt any secrets that failed to decrypt but were recovered from config file
+	if len(corruptSecrets) > 0 {
+		log.Printf("[INFO] Re-encrypting %d corrupt secret(s) recovered from config file...", len(corruptSecrets))
+		for _, key := range corruptSecrets {
+			var plaintext string
+			switch key {
+			case "openai_api_key":
+				plaintext = AppConfig.OpenAIAPIKey
+			case "google_books_api_key":
+				plaintext = AppConfig.GoogleBooksAPIKey
+			case "hardcover_api_token":
+				plaintext = AppConfig.HardcoverAPIToken
+			case "basic_auth_password":
+				plaintext = AppConfig.BasicAuthPassword
+			}
+			if plaintext != "" {
+				if err := store.SetSetting(key, plaintext, "string", true); err != nil {
+					log.Printf("WARNING: Failed to re-encrypt setting %q: %v", key, err)
+				} else {
+					log.Printf("[INFO] Re-encrypted setting %q successfully", key)
+				}
+			}
+		}
 	}
 
 	log.Printf("[DEBUG] After config load: EnableAIParsing=%v, OpenAIAPIKey length=%d",

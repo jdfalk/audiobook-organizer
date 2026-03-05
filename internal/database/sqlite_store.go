@@ -226,6 +226,12 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 
+	// Deduplicate series records (NULL author_id bypasses UNIQUE constraint)
+	if err := store.deduplicateSeries(); err != nil {
+		// Non-fatal — log and continue
+		fmt.Printf("Warning: series deduplication failed: %v\n", err)
+	}
+
 	return store, nil
 }
 
@@ -536,6 +542,67 @@ func (s *SQLiteStore) createTables() error {
 
 	// Non-destructive migration for existing databases: add missing columns
 	return s.ensureExtendedBookColumns()
+}
+
+// deduplicateSeries merges duplicate series records that share the same (name, author_id).
+// SQL UNIQUE constraints don't catch NULL=NULL, so duplicates accumulate for series with no author.
+func (s *SQLiteStore) deduplicateSeries() error {
+	// Find duplicate groups: same LOWER(name) and same author_id (including NULL)
+	rows, err := s.db.Query(`
+		SELECT LOWER(name) as lname, COALESCE(author_id, -1) as aid, MIN(id) as keep_id, COUNT(*) as cnt
+		FROM series
+		GROUP BY LOWER(name), COALESCE(author_id, -1)
+		HAVING COUNT(*) > 1
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var totalMerged int
+	for rows.Next() {
+		var lname string
+		var aid, keepID, cnt int
+		if err := rows.Scan(&lname, &aid, &keepID, &cnt); err != nil {
+			return err
+		}
+
+		// Update books and works pointing to duplicate series IDs → keep the lowest ID
+		var updateQuery string
+		var deleteQuery string
+		if aid == -1 {
+			updateQuery = "UPDATE books SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL AND id != ?)"
+			deleteQuery = "DELETE FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL AND id != ?"
+		} else {
+			updateQuery = "UPDATE books SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ? AND id != ?)"
+			deleteQuery = "DELETE FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ? AND id != ?"
+		}
+
+		if aid == -1 {
+			if _, err := s.db.Exec(updateQuery, keepID, lname, keepID); err != nil {
+				return fmt.Errorf("failed to reassign books for series %q: %w", lname, err)
+			}
+			// Also update works table
+			s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL AND id != ?)", keepID, lname, keepID)
+			if _, err := s.db.Exec(deleteQuery, lname, keepID); err != nil {
+				return fmt.Errorf("failed to delete duplicate series %q: %w", lname, err)
+			}
+		} else {
+			if _, err := s.db.Exec(updateQuery, keepID, lname, aid, keepID); err != nil {
+				return fmt.Errorf("failed to reassign books for series %q: %w", lname, err)
+			}
+			s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ? AND id != ?)", keepID, lname, aid, keepID)
+			if _, err := s.db.Exec(deleteQuery, lname, aid, keepID); err != nil {
+				return fmt.Errorf("failed to delete duplicate series %q: %w", lname, err)
+			}
+		}
+		totalMerged += cnt - 1
+	}
+
+	if totalMerged > 0 {
+		fmt.Printf("Deduplicated %d series records\n", totalMerged)
+	}
+	return rows.Err()
 }
 
 // ensureExtendedBookColumns adds newly introduced optional metadata columns to the books table
@@ -1130,6 +1197,11 @@ func (s *SQLiteStore) GetAllSeries() ([]Series, error) {
 	return series, rows.Err()
 }
 
+func (s *SQLiteStore) DeleteSeries(id int) error {
+	_, err := s.db.Exec("DELETE FROM series WHERE id = ?", id)
+	return err
+}
+
 func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
 	var series Series
 	err := s.db.QueryRow("SELECT id, name, author_id FROM series WHERE id = ?", id).
@@ -1164,6 +1236,15 @@ func (s *SQLiteStore) GetSeriesByName(name string, authorID *int) (*Series, erro
 }
 
 func (s *SQLiteStore) CreateSeries(name string, authorID *int) (*Series, error) {
+	// Check for existing series first (handles NULL author_id which bypasses UNIQUE constraint)
+	existing, err := s.GetSeriesByName(name, authorID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
 	result, err := s.db.Exec("INSERT INTO series (name, author_id) VALUES (?, ?)", name, authorID)
 	if err != nil {
 		return nil, err

@@ -1,5 +1,5 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,6 +20,7 @@ import MonitorIcon from '@mui/icons-material/Monitor.js';
 import SettingsIcon from '@mui/icons-material/Settings.js';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import ListAltIcon from '@mui/icons-material/ListAlt.js';
+import MergeTypeIcon from '@mui/icons-material/MergeType.js';
 
 interface SidebarProps {
   open: boolean;
@@ -33,6 +34,7 @@ const menuItems = [
   { text: 'File Browser', icon: <FolderOpenIcon />, path: '/files' },
   { text: 'Works', icon: <MenuBookIcon />, path: '/works' },
   { text: 'Operations', icon: <ListAltIcon />, path: '/operations' },
+  { text: 'Dedup', icon: <MergeTypeIcon />, path: '/dedup' },
   { text: 'System', icon: <MonitorIcon />, path: '/system' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];

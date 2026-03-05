@@ -1162,12 +1162,16 @@ func (s *Server) setupRoutes() {
 			protected.GET("/authors/count", s.countAuthors)
 			protected.GET("/authors/duplicates", s.listDuplicateAuthors)
 			protected.POST("/authors/merge", s.mergeAuthors)
+			protected.POST("/audiobooks/merge", s.mergeBooks)
 			protected.GET("/narrators", s.listNarrators)
 			protected.GET("/narrators/count", s.countNarrators)
 			protected.GET("/audiobooks/:id/narrators", s.listAudiobookNarrators)
 			protected.PUT("/audiobooks/:id/narrators", s.setAudiobookNarrators)
 			protected.GET("/series", s.listSeries)
 			protected.GET("/series/count", s.countSeries)
+			protected.GET("/series/duplicates", s.listSeriesDuplicates)
+			protected.POST("/series/deduplicate", s.deduplicateSeriesHandler)
+			protected.POST("/series/merge", s.mergeSeriesGroup)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.getHomeDirectory)
@@ -1208,6 +1212,7 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/write-back/preview", s.handleITunesWriteBackPreview)
 				itunesGroup.GET("/books", s.handleListITunesBooks)
 				itunesGroup.GET("/import-status/:id", s.handleITunesImportStatus)
+				itunesGroup.POST("/import-status/bulk", s.handleITunesImportStatusBulk)
 				itunesGroup.GET("/library-status", s.handleITunesLibraryStatus)
 				itunesGroup.POST("/sync", s.handleITunesSync)
 			}
@@ -2483,8 +2488,8 @@ func (s *Server) listDuplicateAuthors(c *gin.Context) {
 
 func (s *Server) mergeAuthors(c *gin.Context) {
 	var req struct {
-		KeepID    int   `json:"keep_id" binding:"required"`
-		MergeIDs  []int `json:"merge_ids" binding:"required"`
+		KeepID   int   `json:"keep_id" binding:"required"`
+		MergeIDs []int `json:"merge_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -2496,68 +2501,456 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		return
 	}
 
-	// Verify keep author exists
-	keepAuthor, err := database.GlobalStore.GetAuthorByID(req.KeepID)
+	store := database.GlobalStore
+	keepAuthor, err := store.GetAuthorByID(req.KeepID)
 	if err != nil || keepAuthor == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "keep author not found"})
 		return
 	}
 
-	merged := 0
-	var errors []string
-	for _, mergeID := range req.MergeIDs {
-		if mergeID == req.KeepID {
-			continue
-		}
-		// Get all books by this author
-		books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(mergeID)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to get books for author %d: %v", mergeID, err))
-			continue
-		}
-
-		// For each book, replace the merged author with the keep author
-		for _, book := range books {
-			bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID)
-			if err != nil {
-				continue
-			}
-			// Check if keep author already exists on this book
-			hasKeep := false
-			for _, ba := range bookAuthors {
-				if ba.AuthorID == req.KeepID {
-					hasKeep = true
-					break
-				}
-			}
-
-			var newAuthors []database.BookAuthor
-			for _, ba := range bookAuthors {
-				if ba.AuthorID == mergeID {
-					if !hasKeep {
-						ba.AuthorID = req.KeepID
-						newAuthors = append(newAuthors, ba)
-						hasKeep = true
-					}
-					// else skip (keep author already present)
-				} else {
-					newAuthors = append(newAuthors, ba)
-				}
-			}
-			if err := database.GlobalStore.SetBookAuthors(book.ID, newAuthors); err != nil {
-				errors = append(errors, fmt.Sprintf("failed to update book %s: %v", book.ID, err))
-			}
-		}
-
-		// Delete the merged author
-		if err := database.GlobalStore.DeleteAuthor(mergeID); err != nil {
-			errors = append(errors, fmt.Sprintf("failed to delete author %d: %v", mergeID, err))
-		} else {
-			merged++
-		}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"merged": merged, "errors": errors})
+	opID := ulid.Make().String()
+	detail := fmt.Sprintf("merge-authors:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
+	op, err := store.CreateOperation(opID, "author-merge", &detail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	keepID := req.KeepID
+	mergeIDs := req.MergeIDs
+	keepName := keepAuthor.Name
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.Log("info", fmt.Sprintf("Merging %d author(s) into \"%s\"", len(mergeIDs), keepName), nil)
+		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting author merge...")
+
+		merged := 0
+		var mergeErrors []string
+		for i, mergeID := range mergeIDs {
+			if progress.IsCanceled() {
+				return fmt.Errorf("cancelled")
+			}
+			if mergeID == keepID {
+				continue
+			}
+			books, err := store.GetBooksByAuthorIDWithRole(mergeID)
+			if err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to get books for author %d: %v", mergeID, err))
+				continue
+			}
+
+			for _, book := range books {
+				bookAuthors, err := store.GetBookAuthors(book.ID)
+				if err != nil {
+					continue
+				}
+				hasKeep := false
+				for _, ba := range bookAuthors {
+					if ba.AuthorID == keepID {
+						hasKeep = true
+						break
+					}
+				}
+				var newAuthors []database.BookAuthor
+				for _, ba := range bookAuthors {
+					if ba.AuthorID == mergeID {
+						if !hasKeep {
+							ba.AuthorID = keepID
+							newAuthors = append(newAuthors, ba)
+							hasKeep = true
+						}
+					} else {
+						newAuthors = append(newAuthors, ba)
+					}
+				}
+				if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to update book %s: %v", book.ID, err))
+				}
+			}
+
+			if err := store.DeleteAuthor(mergeID); err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete author %d: %v", mergeID, err))
+			} else {
+				merged++
+			}
+
+			_ = progress.UpdateProgress(i+1, len(mergeIDs),
+				fmt.Sprintf("Merged %d/%d authors", i+1, len(mergeIDs)))
+		}
+
+		resultMsg := fmt.Sprintf("Author merge complete: merged %d, %d errors", merged, len(mergeErrors))
+		_ = progress.Log("info", resultMsg, nil)
+		if len(mergeErrors) > 0 {
+			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
+			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
+		}
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "author-merge", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// mergeSeriesGroup merges multiple series into one, reassigning all books.
+func (s *Server) mergeSeriesGroup(c *gin.Context) {
+	var req struct {
+		KeepID   int   `json:"keep_id" binding:"required"`
+		MergeIDs []int `json:"merge_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.MergeIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "merge_ids must not be empty"})
+		return
+	}
+
+	store := database.GlobalStore
+	keepSeries, err := store.GetSeriesByID(req.KeepID)
+	if err != nil || keepSeries == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "keep series not found"})
+		return
+	}
+
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	opID := ulid.Make().String()
+	detail := fmt.Sprintf("merge-series:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
+	op, err := store.CreateOperation(opID, "series-merge", &detail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	keepID := req.KeepID
+	mergeIDs := req.MergeIDs
+	keepName := keepSeries.Name
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.Log("info", fmt.Sprintf("Merging %d series into \"%s\"", len(mergeIDs), keepName), nil)
+		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting series merge...")
+
+		merged := 0
+		var mergeErrors []string
+		for i, mergeID := range mergeIDs {
+			if progress.IsCanceled() {
+				return fmt.Errorf("cancelled")
+			}
+			if mergeID == keepID {
+				continue
+			}
+			books, err := store.GetBooksBySeriesID(mergeID)
+			if err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to get books for series %d: %v", mergeID, err))
+				continue
+			}
+
+			for _, book := range books {
+				book.SeriesID = &keepID
+				if _, err := store.UpdateBook(book.ID, &book); err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to reassign book %s: %v", book.ID, err))
+				}
+			}
+
+			if err := store.DeleteSeries(mergeID); err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete series %d: %v", mergeID, err))
+			} else {
+				merged++
+			}
+
+			_ = progress.UpdateProgress(i+1, len(mergeIDs),
+				fmt.Sprintf("Merged %d/%d series", i+1, len(mergeIDs)))
+		}
+
+		resultMsg := fmt.Sprintf("Series merge complete: merged %d, %d errors", merged, len(mergeErrors))
+		_ = progress.Log("info", resultMsg, nil)
+		if len(mergeErrors) > 0 {
+			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
+			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
+		}
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "series-merge", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+func (s *Server) mergeBooks(c *gin.Context) {
+	var req struct {
+		KeepID   string   `json:"keep_id" binding:"required"`
+		MergeIDs []string `json:"merge_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.MergeIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "merge_ids must not be empty"})
+		return
+	}
+
+	store := database.GlobalStore
+	keepBook, err := store.GetBookByID(req.KeepID)
+	if err != nil || keepBook == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "keep book not found"})
+		return
+	}
+
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	opID := ulid.Make().String()
+	detail := fmt.Sprintf("merge-books:keep=%s,merge=%d", req.KeepID, len(req.MergeIDs))
+	op, err := store.CreateOperation(opID, "book-merge", &detail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	keepID := req.KeepID
+	mergeIDs := req.MergeIDs
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.Log("info", fmt.Sprintf("Merging %d book(s) into \"%s\"", len(mergeIDs), keepBook.Title), nil)
+		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting book merge...")
+
+		kBook, err := store.GetBookByID(keepID)
+		if err != nil || kBook == nil {
+			return fmt.Errorf("keep book %s not found", keepID)
+		}
+
+		merged := 0
+		var mergeErrors []string
+		for i, mergeID := range mergeIDs {
+			if progress.IsCanceled() {
+				return fmt.Errorf("cancelled")
+			}
+			if mergeID == keepID {
+				continue
+			}
+			mergeBook, err := store.GetBookByID(mergeID)
+			if err != nil || mergeBook == nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("book %s not found", mergeID))
+				continue
+			}
+
+			// Transfer useful metadata
+			if (kBook.ITunesPersistentID == nil || *kBook.ITunesPersistentID == "") &&
+				mergeBook.ITunesPersistentID != nil && *mergeBook.ITunesPersistentID != "" {
+				kBook.ITunesPersistentID = mergeBook.ITunesPersistentID
+			}
+			if kBook.ITunesPlayCount == nil && mergeBook.ITunesPlayCount != nil {
+				kBook.ITunesPlayCount = mergeBook.ITunesPlayCount
+			}
+			if kBook.ITunesRating == nil && mergeBook.ITunesRating != nil {
+				kBook.ITunesRating = mergeBook.ITunesRating
+			}
+			if kBook.ITunesDateAdded == nil && mergeBook.ITunesDateAdded != nil {
+				kBook.ITunesDateAdded = mergeBook.ITunesDateAdded
+			}
+			if kBook.ITunesLastPlayed == nil && mergeBook.ITunesLastPlayed != nil {
+				kBook.ITunesLastPlayed = mergeBook.ITunesLastPlayed
+			}
+			if kBook.ITunesBookmark == nil && mergeBook.ITunesBookmark != nil {
+				kBook.ITunesBookmark = mergeBook.ITunesBookmark
+			}
+
+			if err := store.DeleteBook(mergeID); err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete book %s: %v", mergeID, err))
+			} else {
+				merged++
+			}
+
+			_ = progress.UpdateProgress(i+1, len(mergeIDs),
+				fmt.Sprintf("Merged %d/%d books", i+1, len(mergeIDs)))
+		}
+
+		if _, err := store.UpdateBook(kBook.ID, kBook); err != nil {
+			mergeErrors = append(mergeErrors, fmt.Sprintf("failed to update keep book: %v", err))
+		}
+
+		resultMsg := fmt.Sprintf("Book merge complete: merged %d, %d errors", merged, len(mergeErrors))
+		_ = progress.Log("info", resultMsg, nil)
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "book-merge", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+func (s *Server) listSeriesDuplicates(c *gin.Context) {
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	allSeries, err := store.GetAllSeries()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Group by normalized name only
+	groups := make(map[string][]database.Series)
+	for _, s := range allSeries {
+		key := strings.ToLower(strings.TrimSpace(s.Name))
+		groups[key] = append(groups[key], s)
+	}
+
+	type seriesDupGroup struct {
+		Name    string            `json:"name"`
+		Count   int               `json:"count"`
+		Series  []database.Series `json:"series"`
+	}
+
+	var result []seriesDupGroup
+	for _, group := range groups {
+		if len(group) < 2 {
+			continue
+		}
+		result = append(result, seriesDupGroup{
+			Name:   group[0].Name,
+			Count:  len(group),
+			Series: group,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"groups": result, "count": len(result), "total_series": len(allSeries)})
+}
+
+func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	opID := ulid.Make().String()
+	detail := "series-deduplicate"
+	op, err := store.CreateOperation(opID, "series-dedup", &detail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.Log("info", "Starting series deduplication...", nil)
+
+		allSeries, err := store.GetAllSeries()
+		if err != nil {
+			return fmt.Errorf("failed to get series: %w", err)
+		}
+
+		_ = progress.UpdateProgress(0, len(allSeries), fmt.Sprintf("Scanning %d series for duplicates...", len(allSeries)))
+
+		// Group by normalized name only
+		groups := make(map[string][]database.Series)
+		for _, s := range allSeries {
+			key := strings.ToLower(strings.TrimSpace(s.Name))
+			groups[key] = append(groups[key], s)
+		}
+
+		// Count total duplicate groups
+		var dupGroups [][]database.Series
+		for _, group := range groups {
+			if len(group) >= 2 {
+				dupGroups = append(dupGroups, group)
+			}
+		}
+
+		msg := fmt.Sprintf("Found %d duplicate groups to merge", len(dupGroups))
+		_ = progress.Log("info", msg, nil)
+		_ = progress.UpdateProgress(0, len(dupGroups), msg)
+
+		totalMerged := 0
+		var mergeErrors []string
+		for gi, group := range dupGroups {
+			if progress.IsCanceled() {
+				_ = progress.Log("warn", "Operation cancelled by user", nil)
+				return fmt.Errorf("cancelled")
+			}
+
+			keepIdx := 0
+			for i, s := range group {
+				if s.AuthorID != nil && group[keepIdx].AuthorID == nil {
+					keepIdx = i
+				} else if (s.AuthorID != nil) == (group[keepIdx].AuthorID != nil) && s.ID < group[keepIdx].ID {
+					keepIdx = i
+				}
+			}
+			keepID := group[keepIdx].ID
+
+			for i, s := range group {
+				if i == keepIdx {
+					continue
+				}
+				books, err := store.GetBooksBySeriesID(s.ID)
+				if err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to get books for series %d: %v", s.ID, err))
+					continue
+				}
+				for _, book := range books {
+					book.SeriesID = &keepID
+					if _, err := store.UpdateBook(book.ID, &book); err != nil {
+						mergeErrors = append(mergeErrors, fmt.Sprintf("failed to reassign book %s: %v", book.ID, err))
+					}
+				}
+				if err := store.DeleteSeries(s.ID); err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete series %d: %v", s.ID, err))
+				} else {
+					totalMerged++
+				}
+			}
+
+			_ = progress.UpdateProgress(gi+1, len(dupGroups),
+				fmt.Sprintf("Merged %d/%d groups (%d series merged)", gi+1, len(dupGroups), totalMerged))
+		}
+
+		resultMsg := fmt.Sprintf("Series deduplication complete: merged %d duplicates, %d errors", totalMerged, len(mergeErrors))
+		_ = progress.Log("info", resultMsg, nil)
+		if len(mergeErrors) > 0 {
+			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
+			_ = progress.Log("warn", fmt.Sprintf("Merge errors: %s", errDetail), nil)
+		}
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "series-dedup", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
 }
 
 func (s *Server) listNarrators(c *gin.Context) {

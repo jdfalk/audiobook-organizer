@@ -54,6 +54,7 @@ type MockStore struct {
 	GetSeriesByIDFunc   func(id int) (*Series, error)
 	GetSeriesByNameFunc func(name string, authorID *int) (*Series, error)
 	CreateSeriesFunc    func(name string, authorID *int) (*Series, error)
+	DeleteSeriesFunc    func(id int) error
 
 	// Metadata
 	GetMetadataFieldStatesFunc   func(bookID string) ([]MetadataFieldState, error)
@@ -296,6 +297,13 @@ func (m *MockStore) CreateSeries(name string, authorID *int) (*Series, error) {
 		return m.CreateSeriesFunc(name, authorID)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) DeleteSeries(id int) error {
+	if m.DeleteSeriesFunc != nil {
+		return m.DeleteSeriesFunc(id)
+	}
+	return nil
 }
 
 func (m *MockStore) GetAllWorks() ([]Work, error) {

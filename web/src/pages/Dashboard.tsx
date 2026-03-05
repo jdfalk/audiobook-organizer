@@ -332,7 +332,7 @@ export function Dashboard() {
             value={authorCount ?? stats?.total_authors ?? 0}
             loading={authorsLoading}
             icon={<PersonIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/library')}
+            onClick={() => navigate('/library?sort=author')}
           />
         </Grid>
 
@@ -342,7 +342,7 @@ export function Dashboard() {
             value={seriesCount ?? stats?.total_series ?? 0}
             loading={seriesLoading}
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/library')}
+            onClick={() => navigate('/library?sort=series')}
           />
         </Grid>
 
