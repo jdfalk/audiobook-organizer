@@ -476,6 +476,27 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 	return series, nil
 }
 
+func (p *PebbleStore) DeleteSeries(id int) error {
+	key := []byte(fmt.Sprintf("series:%d", id))
+
+	// Read the series first to clean up the name index
+	val, closer, err := p.db.Get(key)
+	if err == nil {
+		var series Series
+		if json.Unmarshal(val, &series) == nil {
+			authorIDStr := "nil"
+			if series.AuthorID != nil {
+				authorIDStr = strconv.Itoa(*series.AuthorID)
+			}
+			indexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), authorIDStr))
+			_ = p.db.Delete(indexKey, pebble.Sync)
+		}
+		closer.Close()
+	}
+
+	return p.db.Delete(key, pebble.Sync)
+}
+
 // ---- Work operations (logical title-level grouping) ----
 
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {

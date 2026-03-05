@@ -1143,6 +1143,49 @@ func (_c *MockStore_CreateSeries_Call) RunAndReturn(run func(name string, author
 	return _c
 }
 
+// DeleteSeries provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteSeries(id int) error {
+	ret := _mock.Called(id)
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteSeries")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteSeries_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteSeries'
+type MockStore_DeleteSeries_Call struct {
+	*mock.Call
+}
+
+// DeleteSeries is a helper method to define mock.On call
+//   - id int
+func (_e *MockStore_Expecter) DeleteSeries(id interface{}) *MockStore_DeleteSeries_Call {
+	return &MockStore_DeleteSeries_Call{Call: _e.mock.On("DeleteSeries", id)}
+}
+
+func (_c *MockStore_DeleteSeries_Call) Run(run func(id int)) *MockStore_DeleteSeries_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteSeries_Call) Return(err error) *MockStore_DeleteSeries_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteSeries_Call) RunAndReturn(run func(int) error) *MockStore_DeleteSeries_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateSession provides a mock function for the type MockStore
 func (_mock *MockStore) CreateSession(userID string, ip string, userAgent string, ttl time.Duration) (*database.Session, error) {
 	ret := _mock.Called(userID, ip, userAgent, ttl)

@@ -99,6 +99,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           >
             <MenuItem value={SortField.Title}>Title</MenuItem>
             <MenuItem value={SortField.Author}>Author</MenuItem>
+            <MenuItem value={SortField.Series}>Series</MenuItem>
             <MenuItem value={SortField.Year}>Year</MenuItem>
             <MenuItem value={SortField.CreatedAt}>Date Added</MenuItem>
           </Select>

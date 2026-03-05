@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -53,6 +53,7 @@ import SearchIcon from '@mui/icons-material/Search.js';
 import SyncIcon from '@mui/icons-material/Sync.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
+import { ServerFileBrowser } from '../common/ServerFileBrowser';
 import {
   ApiError,
   cancelOperation,
@@ -213,11 +214,19 @@ export function ITunesImport() {
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleBrowseFile = () => {
-    const path = window.prompt('Enter path to iTunes Library.xml:');
-    if (path) {
+  const [browseTarget, setBrowseTarget] = useState<'xml' | 'itl' | null>(null);
+
+  const handleBrowseFile = () => setBrowseTarget('xml');
+  const handleBrowseItl = () => setBrowseTarget('itl');
+
+  const handleBrowseSelect = (path: string) => {
+    if (browseTarget === 'xml') {
       setSettings((prev) => ({ ...prev, libraryPath: path }));
+    } else if (browseTarget === 'itl') {
+      setSettings((prev) => ({ ...prev, itlPath: path }));
+      updateConfig({ itunes_library_itl_path: path }).catch(() => {});
     }
+    setBrowseTarget(null);
   };
 
   const handleValidate = async () => {
@@ -489,12 +498,18 @@ export function ITunesImport() {
             onChange={(event) => {
               const itlPath = event.target.value;
               setSettings((prev) => ({ ...prev, itlPath }));
-              // Save to backend config — enables automatic ITL write-back during organize
               updateConfig({ itunes_library_itl_path: itlPath }).catch(() => {});
             }}
             fullWidth
             placeholder="/path/to/iTunes Library.itl"
             helperText="Path to iTunes Library.itl binary file. When set, organize automatically writes back file locations to iTunes."
+            InputProps={{
+              endAdornment: (
+                <Button startIcon={<FolderOpenIcon />} onClick={handleBrowseItl}>
+                  Browse
+                </Button>
+              ),
+            }}
           />
         </Box>
 
@@ -1365,6 +1380,24 @@ export function ITunesImport() {
             >
               Force Sync
             </Button>
+          </DialogActions>
+        </Dialog>
+        {/* File browser dialog for selecting XML/ITL paths */}
+        <Dialog open={browseTarget !== null} onClose={() => setBrowseTarget(null)} maxWidth="md" fullWidth>
+          <DialogTitle>
+            {browseTarget === 'itl' ? 'Select iTunes Library ITL File' : 'Select iTunes Library XML File'}
+          </DialogTitle>
+          <DialogContent sx={{ height: 500, p: 0 }}>
+            <ServerFileBrowser
+              initialPath={browseTarget === 'itl' ? (settings.itlPath || '/') : (settings.libraryPath || '/')}
+              showFiles
+              allowFileSelect
+              allowDirSelect={false}
+              onSelect={(path) => handleBrowseSelect(path)}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBrowseTarget(null)}>Cancel</Button>
           </DialogActions>
         </Dialog>
       </CardContent>

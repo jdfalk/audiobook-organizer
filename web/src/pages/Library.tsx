@@ -672,6 +672,9 @@ export const Library = () => {
           case SortField.Author:
             comparison = (a.author || '').localeCompare(b.author || '');
             break;
+          case SortField.Series:
+            comparison = (a.series || '').localeCompare(b.series || '');
+            break;
           case SortField.Year: {
             const aYear = a.audiobook_release_year || a.print_year || 0;
             const bYear = b.audiobook_release_year || b.print_year || 0;

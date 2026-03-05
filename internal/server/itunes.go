@@ -663,6 +663,45 @@ func (s *Server) handleITunesImportStatus(c *gin.Context) {
 	})
 }
 
+func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		IDs []string `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	results := make(map[string]ITunesImportStatusResponse, len(req.IDs))
+	for _, opID := range req.IDs {
+		op, err := database.GlobalStore.GetOperationByID(opID)
+		if err != nil || op == nil {
+			continue
+		}
+		progress := calculatePercent(op.Progress, op.Total)
+		snapshot := snapshotITunesImportStatus(op.ID)
+		results[opID] = ITunesImportStatusResponse{
+			OperationID: op.ID,
+			Status:      op.Status,
+			Progress:    progress,
+			Message:     op.Message,
+			TotalBooks:  snapshot.Total,
+			Processed:   snapshot.Processed,
+			Imported:    snapshot.Imported,
+			Skipped:     snapshot.Skipped,
+			Failed:      snapshot.Failed,
+			Errors:      snapshot.Errors,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"statuses": results})
+}
+
 // albumGroup holds tracks belonging to the same album (book).
 type albumGroup struct {
 	key    string // "Artist|Album"
@@ -1592,12 +1631,16 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		return fmt.Errorf("failed to load books for index: %w", err)
 	}
 	pidIndex := make(map[string]*database.Book, len(allBooks))
+	pathIndex := make(map[string]*database.Book, len(allBooks))
+	titleIndex := make(map[string]*database.Book, len(allBooks))
 	for i := range allBooks {
 		if allBooks[i].ITunesPersistentID != nil && *allBooks[i].ITunesPersistentID != "" {
 			pidIndex[*allBooks[i].ITunesPersistentID] = &allBooks[i]
 		}
+		pathIndex[allBooks[i].FilePath] = &allBooks[i]
+		titleIndex[strings.ToLower(allBooks[i].Title)] = &allBooks[i]
 	}
-	_ = progress.Log("info", fmt.Sprintf("Indexed %d books with iTunes persistent IDs", len(pidIndex)), nil)
+	_ = progress.Log("info", fmt.Sprintf("Indexed %d books (%d with iTunes persistent IDs)", len(allBooks), len(pidIndex)), nil)
 
 	var updated, newBooks, unchanged int
 	for i, group := range groups {
@@ -1617,6 +1660,33 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		}
 
 		existing := pidIndex[persistentID]
+
+		// Fallback: match by title (case-insensitive) — fast, no I/O
+		if existing == nil {
+			title := strings.TrimSpace(firstTrack.Album)
+			if title == "" {
+				title = strings.TrimSpace(firstTrack.Name)
+			}
+			if title != "" {
+				existing = titleIndex[strings.ToLower(title)]
+			}
+		}
+
+		// Fallback: match by file path (requires building book, has os.Stat)
+		if existing == nil {
+			book, err := buildBookFromAlbumGroup(group, libraryPath, importOpts)
+			if err == nil {
+				if match := pathIndex[book.FilePath]; match != nil {
+					existing = match
+				}
+			}
+		}
+
+		// Backfill PersistentID on matched book so future imports match directly
+		if existing != nil && (existing.ITunesPersistentID == nil || *existing.ITunesPersistentID == "") {
+			existing.ITunesPersistentID = stringPtr(persistentID)
+			pidIndex[persistentID] = existing
+		}
 
 		if existing != nil {
 			// Compare fields and update if changed

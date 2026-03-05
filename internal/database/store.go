@@ -54,6 +54,7 @@ type Store interface {
 	GetSeriesByID(id int) (*Series, error)
 	GetSeriesByName(name string, authorID *int) (*Series, error)
 	CreateSeries(name string, authorID *int) (*Series, error)
+	DeleteSeries(id int) error
 
 	// Works (logical title-level grouping across editions/narrations)
 	GetAllWorks() ([]Work, error)

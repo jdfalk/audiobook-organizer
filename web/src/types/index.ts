@@ -116,6 +116,7 @@ export enum SortField {
   Title = 'title',
   Author = 'author',
   Year = 'year',
+  Series = 'series',
   CreatedAt = 'created_at',
 }
 
