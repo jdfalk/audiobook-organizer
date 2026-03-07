@@ -14,6 +14,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewOpenAIParser_Disabled(t *testing.T) {
@@ -912,42 +913,45 @@ func TestOpenAIParser_ErrorMessageFormat(t *testing.T) {
 // TestParseBatch_EmptyStringFilenames tests batch with empty filename strings
 func TestParseBatch_EmptyStringFilenames(t *testing.T) {
 	parser := NewOpenAIParser("test-key", true)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	filenames := []string{"", " ", "  "}
 	_, err := parser.ParseBatch(ctx, filenames)
 
-	// Should still attempt to process (API will handle the empty strings)
-	if err != nil && !strings.Contains(err.Error(), "OpenAI API call failed") {
-		t.Errorf("Unexpected error type: %v", err)
+	// Should fail with API error or timeout (no valid API key)
+	if err == nil {
+		t.Error("Expected error for fake API key")
 	}
 }
 
 // TestParseFilename_EmptyFilename tests parsing an empty filename
 func TestParseFilename_EmptyFilename(t *testing.T) {
 	parser := NewOpenAIParser("test-key", true)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	_, err := parser.ParseFilename(ctx, "")
 
-	// Should still attempt to process (API will handle the empty string)
-	if err != nil && !strings.Contains(err.Error(), "OpenAI API call failed") {
-		t.Errorf("Unexpected error type: %v", err)
+	// Should fail with API error or timeout (no valid API key)
+	if err == nil {
+		t.Error("Expected error for fake API key")
 	}
 }
 
 // TestParseFilename_VeryLongFilename tests parsing a very long filename
 func TestParseFilename_VeryLongFilename(t *testing.T) {
 	parser := NewOpenAIParser("test-key", true)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// Create a very long filename
 	longFilename := strings.Repeat("Very Long Book Title ", 100) + " - Author.mp3"
 	_, err := parser.ParseFilename(ctx, longFilename)
 
-	// Should handle long filenames
-	if err != nil && !strings.Contains(err.Error(), "OpenAI API call failed") {
-		t.Errorf("Unexpected error type: %v", err)
+	// Should fail with API error or timeout (no valid API key)
+	if err == nil {
+		t.Error("Expected error for fake API key")
 	}
 }
 
