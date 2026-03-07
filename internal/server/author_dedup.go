@@ -1,10 +1,11 @@
 // file: internal/server/author_dedup.go
-// version: 1.4.0
+// version: 1.8.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
 
 import (
+	"fmt"
 	"math"
 	"regexp"
 	"strings"
@@ -15,9 +16,48 @@ import (
 
 // AuthorDedupGroup represents a group of potentially duplicate authors.
 type AuthorDedupGroup struct {
-	Canonical database.Author   `json:"canonical"`
-	Variants  []database.Author `json:"variants"`
-	BookCount int               `json:"book_count"`
+	Canonical           database.Author   `json:"canonical"`
+	Variants            []database.Author `json:"variants"`
+	BookCount           int               `json:"book_count"`
+	SuggestedName       string            `json:"suggested_name,omitempty"`
+	SplitNames          []string          `json:"split_names,omitempty"`          // for composite authors like "A / B"
+	IsProductionCompany bool              `json:"is_production_company,omitempty"` // true if canonical is a production company
+}
+
+// knownProductionCompanies maps lowercased names of audiobook production companies.
+var knownProductionCompanies = map[string]bool{
+	"soundbooth theater":    true,
+	"graphic audio":         true,
+	"podium audio":          true,
+	"tantor media":          true,
+	"tantor audio":          true,
+	"blackstone audio":      true,
+	"blackstone publishing": true,
+	"recorded books":        true,
+	"brilliance audio":      true,
+	"marvel":                true,
+	"dc comics":             true,
+	"audible studios":       true,
+	"audible originals":     true,
+	"macmillan audio":       true,
+	"random house audio":    true,
+	"harpercollins":         true,
+	"simon & schuster audio": true,
+}
+
+// isProductionCompany returns true if the name matches a known audiobook production company.
+func isProductionCompany(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if knownProductionCompanies[lower] {
+		return true
+	}
+	// Check keyword suffixes
+	for _, suffix := range []string{" theater", " theatre"} {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // NormalizeAuthorName normalizes whitespace around initials and trims.
@@ -99,33 +139,255 @@ func isDirtyAuthorName(name string) bool {
 		}
 	}
 
+	if isProductionCompany(name) {
+		return true
+	}
+
 	return false
+}
+
+// SplitCompositeAuthorName splits "Author1 / Author2" or "Author1, Author2" into parts.
+// Returns nil or single-element slice if the name doesn't look composite.
+func SplitCompositeAuthorName(name string) []string {
+	// Don't split AKA patterns
+	if regexp.MustCompile(`(?i)\(aka\s`).MatchString(name) {
+		return nil
+	}
+
+	// Try slash first: "Author1 / Author2"
+	if strings.Contains(name, "/") {
+		parts := strings.Split(name, "/")
+		var result []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if len(p) > 2 {
+				result = append(result, NormalizeAuthorName(p))
+			}
+		}
+		if len(result) > 1 {
+			return result
+		}
+	}
+
+	// Try comma: "Author1, Author2" — but not "Last, First" format
+	// "Last, First" has exactly 2 parts where the second is a single name without spaces
+	// "Author1, Author2" has parts where both sides have spaces
+	parts := strings.Split(name, ",")
+	if len(parts) >= 2 {
+		var result []string
+		allLookLikeNames := true
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			// A name part should contain a space (first + last) to be a separate author
+			if !strings.Contains(p, " ") {
+				allLookLikeNames = false
+				break
+			}
+			result = append(result, NormalizeAuthorName(p))
+		}
+		if allLookLikeNames && len(result) > 1 {
+			return result
+		}
+	}
+
+	// Try parentheses or brackets: "Author (Author 2)" or "Author [Author 2]"
+	if m := regexp.MustCompile(`^(.+?)\s*[\(\[]\s*(.+?)\s*[\)\]]\s*$`).FindStringSubmatch(name); len(m) == 3 {
+		outer := strings.TrimSpace(m[1])
+		inner := strings.TrimSpace(m[2])
+		// Both parts must look like author names (contain a space for first+last)
+		if len(outer) > 2 && len(inner) > 2 && strings.Contains(outer, " ") && strings.Contains(inner, " ") {
+			return []string{NormalizeAuthorName(outer), NormalizeAuthorName(inner)}
+		}
+	}
+
+	// Try semicolon: "Author1; Author2"
+	if strings.Contains(name, ";") {
+		parts := strings.Split(name, ";")
+		var result []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if len(p) > 2 && strings.Contains(p, " ") {
+				result = append(result, NormalizeAuthorName(p))
+			}
+		}
+		if len(result) > 1 {
+			return result
+		}
+	}
+
+	// Try " and " or " & ": "Author1 and Author2"
+	for _, sep := range []string{" and ", " & "} {
+		if strings.Contains(strings.ToLower(name), sep) {
+			parts := strings.SplitN(strings.ToLower(name), sep, -1)
+			// Use original casing by finding separator positions
+			var result []string
+			remaining := name
+			for {
+				idx := -1
+				for _, s := range []string{" and ", " And ", " AND ", " & "} {
+					if i := strings.Index(remaining, s); i >= 0 && (idx < 0 || i < idx) {
+						idx = i
+					}
+				}
+				if idx < 0 {
+					p := strings.TrimSpace(remaining)
+					if len(p) > 2 && strings.Contains(p, " ") {
+						result = append(result, NormalizeAuthorName(p))
+					}
+					break
+				}
+				p := strings.TrimSpace(remaining[:idx])
+				if len(p) > 2 && strings.Contains(p, " ") {
+					result = append(result, NormalizeAuthorName(p))
+				}
+				// Skip past separator
+				for _, s := range []string{" and ", " And ", " AND ", " & "} {
+					if strings.HasPrefix(remaining[idx:], s) {
+						remaining = remaining[idx+len(s):]
+						break
+					}
+				}
+			}
+			_ = parts // used for detection
+			if len(result) > 1 {
+				return result
+			}
+		}
+	}
+
+	// Try space-concatenated full names: "R.A. Mejia Charles Dean"
+	// Heuristic: try splitting at each word boundary and check if both halves
+	// look like valid author names (each has at least first+last).
+	// Only attempt this for names with 4+ words (minimum for two "First Last" names).
+	words := strings.Fields(name)
+	if len(words) >= 4 {
+		result := trySplitConcatenatedAuthors(name, words)
+		if len(result) > 1 {
+			return result
+		}
+	}
+
+	return nil
+}
+
+// trySplitConcatenatedAuthors tries to find a split point in a space-concatenated
+// string of author names like "R.A. Mejia Charles Dean" → ["R.A. Mejia", "Charles Dean"].
+// It tries each possible split point and checks if both halves look like valid names.
+func trySplitConcatenatedAuthors(name string, words []string) []string {
+	type candidate struct {
+		parts []string
+		score int
+	}
+	var candidates []candidate
+
+	// Try splitting into 2 authors at each word boundary
+	for i := 2; i <= len(words)-2; i++ {
+		left := strings.Join(words[:i], " ")
+		right := strings.Join(words[i:], " ")
+		if looksLikeAuthorName(left) && looksLikeAuthorName(right) {
+			score := scoreAuthorSplit(left, right)
+			candidates = append(candidates, candidate{
+				parts: []string{NormalizeAuthorName(left), NormalizeAuthorName(right)},
+				score: score,
+			})
+		}
+	}
+
+	// Try splitting into 3 authors (for 6+ words)
+	if len(words) >= 6 {
+		for i := 2; i <= len(words)-4; i++ {
+			for j := i + 2; j <= len(words)-2; j++ {
+				left := strings.Join(words[:i], " ")
+				mid := strings.Join(words[i:j], " ")
+				right := strings.Join(words[j:], " ")
+				if looksLikeAuthorName(left) && looksLikeAuthorName(mid) && looksLikeAuthorName(right) {
+					score := scoreAuthorSplit(left, mid, right)
+					candidates = append(candidates, candidate{
+						parts: []string{NormalizeAuthorName(left), NormalizeAuthorName(mid), NormalizeAuthorName(right)},
+						score: score,
+					})
+				}
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// Pick highest-scoring split
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.score > best.score {
+			best = c
+		}
+	}
+	return best.parts
+}
+
+// looksLikeAuthorName returns true if the string looks like a plausible author name.
+// Must have at least 2 parts (first+last), start with uppercase, and have a
+// real surname (not just an initial like "A." which is likely a middle initial).
+func looksLikeAuthorName(s string) bool {
+	s = strings.TrimSpace(s)
+	parts := strings.Fields(s)
+	if len(parts) < 2 {
+		return false
+	}
+	// First part should start with uppercase letter
+	first := parts[0]
+	if len(first) == 0 {
+		return false
+	}
+	r := rune(first[0])
+	if r < 'A' || r > 'Z' {
+		return false
+	}
+	// Last part (surname) must be a real name, not an initial
+	// "A." or "B" are initials, not surnames
+	last := parts[len(parts)-1]
+	lastTrimmed := strings.TrimRight(last, ".")
+	if len(lastTrimmed) < 3 {
+		return false // too short to be a surname — likely an initial
+	}
+	r = rune(last[0])
+	return r >= 'A' && r <= 'Z'
+}
+
+// scoreAuthorSplit scores a split of names. Higher = more likely correct.
+// Prefers splits where each part has a typical name structure.
+func scoreAuthorSplit(parts ...string) int {
+	score := 0
+	for _, p := range parts {
+		words := strings.Fields(p)
+		// Prefer 2-3 word names (First Last, First Middle Last)
+		if len(words) == 2 {
+			score += 10
+		} else if len(words) == 3 {
+			score += 8
+		} else {
+			score += 3
+		}
+		// Bonus for initials (common in author names like "R.A.")
+		for _, w := range words[:len(words)-1] { // skip last name
+			if len(strings.TrimRight(w, ".")) <= 2 {
+				score += 2 // initial like "R." or "J.K."
+			}
+		}
+		// Bonus if last word (surname) has >3 chars
+		if len(words[len(words)-1]) > 3 {
+			score += 3
+		}
+	}
+	return score
 }
 
 // isCompositeAuthorName returns true if the name contains multiple real authors
 func isCompositeAuthorName(name string) bool {
-	if regexp.MustCompile(`(?i)\(aka\s`).MatchString(name) {
-		return false
-	}
-
-	if idx := strings.Index(name, "/"); idx > 0 {
-		left := strings.TrimSpace(name[:idx])
-		right := strings.TrimSpace(name[idx+1:])
-		if len(left) > 2 && len(right) > 2 {
-			return true
-		}
-	}
-
-	parts := strings.SplitN(name, ",", 2)
-	if len(parts) == 2 {
-		left := strings.TrimSpace(parts[0])
-		right := strings.TrimSpace(parts[1])
-		if strings.Contains(right, " ") && strings.Contains(left, " ") {
-			return true
-		}
-	}
-
-	return false
+	return len(SplitCompositeAuthorName(name)) > 1
 }
 
 // areAuthorsDuplicate determines if two author names refer to the same person.
@@ -314,6 +576,7 @@ func isMultiAuthorString(name string) bool {
 }
 
 // authorNameScore returns a penalty score for a name. Lower = cleaner/better.
+// Prefers full names over initials: "James S. A. Corey" scores better than "J.S.A. Corey".
 func authorNameScore(name string) int {
 	score := 0
 	if strings.Contains(name, "/") {
@@ -325,8 +588,105 @@ func authorNameScore(name string) int {
 	if strings.Contains(name, " - ") {
 		score += 20
 	}
+
+	// Penalize names that are mostly initials — prefer full names
+	parts := strings.Fields(name)
+	initialCount := 0
+	for _, p := range parts {
+		trimmed := strings.TrimRight(p, ".")
+		if len(trimmed) == 1 && trimmed >= "A" && trimmed <= "Z" {
+			initialCount++
+		}
+	}
+	// Heavy penalty per initial (we want "James" over "J.")
+	score += initialCount * 15
+
+	// Penalize bare initials missing their period: "John F Kennedy" vs "John F. Kennedy"
+	// A single uppercase letter NOT followed by a period is an unpunctuated initial.
+	for _, p := range parts {
+		if len(p) == 1 && p >= "A" && p <= "Z" {
+			score += 20 // strongly prefer "F." over "F"
+		}
+	}
+
+	// Small length penalty to break ties (shorter is slightly better)
 	score += len(name)
 	return score
+}
+
+// buildSuggestedName picks the best version of each name part across all variants.
+// E.g., given "J. S. A. Corey" and "James S.A. Corey" → "James S. A. Corey"
+func buildSuggestedName(authors []database.Author) string {
+	if len(authors) == 0 {
+		return ""
+	}
+	if len(authors) == 1 {
+		return NormalizeAuthorName(authors[0].Name)
+	}
+
+	// Split each name into parts, pick the longest version for each position
+	type nameParts struct {
+		first string
+		last  string
+		parts []string // all first/middle parts
+	}
+
+	var all []nameParts
+	maxParts := 0
+	for _, a := range authors {
+		norm := NormalizeAuthorName(a.Name)
+		first, last := splitAuthorParts(norm)
+		fp := strings.Fields(first)
+		all = append(all, nameParts{first: first, last: last, parts: fp})
+		if len(fp) > maxParts {
+			maxParts = len(fp)
+		}
+	}
+
+	// For each position, pick the longest (most expanded) version
+	bestParts := make([]string, maxParts)
+	for pos := 0; pos < maxParts; pos++ {
+		best := ""
+		for _, np := range all {
+			if pos < len(np.parts) {
+				candidate := np.parts[pos]
+				// Prefer non-initial over initial
+				candidateTrimmed := strings.TrimRight(candidate, ".")
+				bestTrimmed := strings.TrimRight(best, ".")
+				if best == "" {
+					best = candidate
+				} else if len(candidateTrimmed) > 1 && len(bestTrimmed) <= 1 {
+					// candidate is a full name, best is initial — use candidate
+					best = candidate
+				} else if len(candidateTrimmed) > len(bestTrimmed) && strings.HasPrefix(strings.ToLower(candidateTrimmed), strings.ToLower(bestTrimmed)) {
+					best = candidate
+				}
+			}
+		}
+		// Ensure initials have trailing dot
+		trimmed := strings.TrimRight(best, ".")
+		if len(trimmed) == 1 && trimmed >= "A" && trimmed <= "Z" {
+			best = trimmed + "."
+		}
+		bestParts[pos] = best
+	}
+
+	// Pick longest last name
+	bestLast := ""
+	for _, np := range all {
+		if len(np.last) > len(bestLast) {
+			bestLast = np.last
+		}
+	}
+
+	result := strings.Join(bestParts, " ")
+	if bestLast != "" {
+		if result != "" {
+			result += " "
+		}
+		result += bestLast
+	}
+	return result
 }
 
 // pickCanonicalAuthor selects the cleanest author name from a group.
@@ -350,58 +710,268 @@ func pickCanonicalAuthor(authors []database.Author, bookCountFn func(int) int) d
 	return authors[best]
 }
 
+// ProgressCallback is called periodically during long-running dedup operations.
+// current is the number of items processed, total is the total number of items.
+type ProgressCallback func(current, total int, message string)
+
+// authorPrecomputed holds pre-computed data for an author to avoid redundant
+// string operations during O(n²) comparison.
+type authorPrecomputed struct {
+	index     int
+	author    database.Author
+	skip      bool   // dirty, multi-author, or composite
+	norm      string // lowercased normalized name
+	base      string // lowercased base author (before slash etc.)
+	first     string // first name part
+	last      string // last name part
+	lastLower string // lowercased last name for bucketing
+}
+
 // FindDuplicateAuthors groups authors by similarity using structured name comparison.
 // The threshold parameter is kept for API compatibility but the actual matching
 // uses areAuthorsDuplicate which compares first/last names separately.
-func FindDuplicateAuthors(authors []database.Author, threshold float64, bookCountFn func(int) int) []AuthorDedupGroup {
+//
+// Performance: Pre-computes normalized names and buckets by last name to reduce
+// comparisons from O(n²) to O(n × avg_bucket_size). For 5,000 authors with
+// ~2,000 unique last names, this reduces comparisons by ~60-80%.
+func FindDuplicateAuthors(authors []database.Author, threshold float64, bookCountFn func(int) int, progressFn ...ProgressCallback) []AuthorDedupGroup {
+	var reportProgress ProgressCallback
+	if len(progressFn) > 0 && progressFn[0] != nil {
+		reportProgress = progressFn[0]
+	}
+
+	// Phase 1: Pre-compute normalized names and filter skippable authors
+	precomputed := make([]authorPrecomputed, len(authors))
+	lastNameBuckets := make(map[string][]int) // lastLower → indices into precomputed
+	for i, a := range authors {
+		pre := authorPrecomputed{
+			index:  i,
+			author: a,
+		}
+		if isMultiAuthorString(a.Name) || isCompositeAuthorName(a.Name) || isDirtyAuthorName(a.Name) {
+			pre.skip = true
+		} else {
+			pre.norm = strings.ToLower(NormalizeAuthorName(a.Name))
+			pre.base = strings.ToLower(extractBaseAuthor(NormalizeAuthorName(a.Name)))
+			pre.first, pre.last = splitAuthorParts(pre.base)
+			if pre.last != "" {
+				pre.lastLower = strings.ToLower(pre.last)
+			}
+		}
+		precomputed[i] = pre
+
+		// Bucket by last name for faster comparison
+		if !pre.skip && pre.lastLower != "" {
+			lastNameBuckets[pre.lastLower] = append(lastNameBuckets[pre.lastLower], i)
+		}
+	}
+
+	if reportProgress != nil {
+		reportProgress(0, len(authors), fmt.Sprintf("Pre-computed %d authors into %d last-name buckets", len(authors), len(lastNameBuckets)))
+	}
+
 	used := make(map[int]bool)
 	var groups []AuthorDedupGroup
 
-	for i := 0; i < len(authors); i++ {
-		if used[authors[i].ID] || isMultiAuthorString(authors[i].Name) || isCompositeAuthorName(authors[i].Name) || isDirtyAuthorName(authors[i].Name) {
-			continue
-		}
-
-		group := AuthorDedupGroup{
-			Canonical: authors[i],
-		}
-
-		for j := i + 1; j < len(authors); j++ {
-			if used[authors[j].ID] || isMultiAuthorString(authors[j].Name) || isCompositeAuthorName(authors[j].Name) || isDirtyAuthorName(authors[j].Name) {
+	// Phase 2: Compare within last-name buckets (exact last name match)
+	// Plus check similar last names via Jaro-Winkler >= 0.95
+	processed := 0
+	for _, bucket := range lastNameBuckets {
+		for bi := 0; bi < len(bucket); bi++ {
+			i := bucket[bi]
+			pi := &precomputed[i]
+			if used[pi.author.ID] || pi.skip {
 				continue
 			}
 
-			if areAuthorsDuplicate(authors[i].Name, authors[j].Name) {
-				group.Variants = append(group.Variants, authors[j])
-				used[authors[j].ID] = true
-			}
-		}
+			group := AuthorDedupGroup{Canonical: pi.author, Variants: []database.Author{}}
 
-		if len(group.Variants) > 0 {
-			// Pick the cleanest name as canonical
-			allInGroup := make([]database.Author, 0, 1+len(group.Variants))
-			allInGroup = append(allInGroup, authors[i])
-			allInGroup = append(allInGroup, group.Variants...)
-			canonical := pickCanonicalAuthor(allInGroup, bookCountFn)
-			group.Canonical = canonical
-			// Rebuild variants excluding canonical
-			var variants []database.Author
-			for _, a := range allInGroup {
-				if a.ID != canonical.ID {
-					variants = append(variants, a)
+			// Compare against rest of same bucket
+			for bj := bi + 1; bj < len(bucket); bj++ {
+				j := bucket[bj]
+				pj := &precomputed[j]
+				if used[pj.author.ID] || pj.skip {
+					continue
+				}
+				if areAuthorsDuplicatePrecomputed(pi, pj) {
+					group.Variants = append(group.Variants, pj.author)
+					used[pj.author.ID] = true
 				}
 			}
-			group.Variants = variants
 
-			used[authors[i].ID] = true
-			totalBooks := bookCountFn(canonical.ID)
-			for _, v := range group.Variants {
-				totalBooks += bookCountFn(v.ID)
+			if len(group.Variants) > 0 {
+				allInGroup := make([]database.Author, 0, 1+len(group.Variants))
+				allInGroup = append(allInGroup, pi.author)
+				allInGroup = append(allInGroup, group.Variants...)
+				canonical := pickCanonicalAuthor(allInGroup, bookCountFn)
+				group.Canonical = canonical
+				var variants []database.Author
+				for _, a := range allInGroup {
+					if a.ID != canonical.ID {
+						variants = append(variants, a)
+					}
+				}
+				group.Variants = variants
+
+				suggested := buildSuggestedName(allInGroup)
+				if suggested != "" && suggested != canonical.Name {
+					group.SuggestedName = suggested
+				}
+
+				used[pi.author.ID] = true
+				totalBooks := bookCountFn(canonical.ID)
+				for _, v := range group.Variants {
+					totalBooks += bookCountFn(v.ID)
+				}
+				group.BookCount = totalBooks
+				groups = append(groups, group)
 			}
-			group.BookCount = totalBooks
-			groups = append(groups, group)
+		}
+		processed += len(bucket)
+		if reportProgress != nil && processed%200 == 0 {
+			reportProgress(processed, len(authors), fmt.Sprintf("Comparing authors... (%d/%d, %d groups found)", processed, len(authors), len(groups)))
+		}
+	}
+
+	// Phase 3: Cross-bucket comparison for similar (not exact) last names.
+	// Build list of unique last names, compare pairs with JW >= 0.95.
+	lastNames := make([]string, 0, len(lastNameBuckets))
+	for ln := range lastNameBuckets {
+		lastNames = append(lastNames, ln)
+	}
+	for li := 0; li < len(lastNames); li++ {
+		for lj := li + 1; lj < len(lastNames); lj++ {
+			if lastNames[li] == lastNames[lj] {
+				continue // already handled in same-bucket phase
+			}
+			if jaroWinklerSimilarity(lastNames[li], lastNames[lj]) < 0.95 {
+				continue
+			}
+			// Similar last names — compare all pairs across these two buckets
+			bucketI := lastNameBuckets[lastNames[li]]
+			bucketJ := lastNameBuckets[lastNames[lj]]
+			for _, i := range bucketI {
+				pi := &precomputed[i]
+				if used[pi.author.ID] || pi.skip {
+					continue
+				}
+				for _, j := range bucketJ {
+					pj := &precomputed[j]
+					if used[pj.author.ID] || pj.skip {
+						continue
+					}
+					if areAuthorsDuplicatePrecomputed(pi, pj) {
+						// Add to existing group if pi already has one, else create new
+						found := false
+						for gi := range groups {
+							if groups[gi].Canonical.ID == pi.author.ID {
+								groups[gi].Variants = append(groups[gi].Variants, pj.author)
+								used[pj.author.ID] = true
+								groups[gi].BookCount += bookCountFn(pj.author.ID)
+								found = true
+								break
+							}
+						}
+						if !found {
+							used[pi.author.ID] = true
+							used[pj.author.ID] = true
+							allInGroup := []database.Author{pi.author, pj.author}
+							canonical := pickCanonicalAuthor(allInGroup, bookCountFn)
+							var variants []database.Author
+							for _, a := range allInGroup {
+								if a.ID != canonical.ID {
+									variants = append(variants, a)
+								}
+							}
+							groups = append(groups, AuthorDedupGroup{
+								Canonical: canonical,
+								Variants:  variants,
+								BookCount: bookCountFn(pi.author.ID) + bookCountFn(pj.author.ID),
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if reportProgress != nil {
+		reportProgress(len(authors), len(authors), fmt.Sprintf("Comparison complete: %d groups found", len(groups)))
+	}
+
+	// Phase 4: Add composite/multi-author entries as separate groups with split info
+	for i := 0; i < len(authors); i++ {
+		if used[authors[i].ID] {
+			continue
+		}
+		splitNames := SplitCompositeAuthorName(authors[i].Name)
+		if len(splitNames) > 1 {
+			groups = append(groups, AuthorDedupGroup{
+				Canonical:  authors[i],
+				Variants:   []database.Author{},
+				BookCount:  bookCountFn(authors[i].ID),
+				SplitNames: splitNames,
+			})
+			used[authors[i].ID] = true
+		}
+	}
+
+	// Phase 5: Surface standalone production company authors as their own groups
+	for i := 0; i < len(authors); i++ {
+		if used[authors[i].ID] {
+			continue
+		}
+		if isProductionCompany(authors[i].Name) {
+			bc := bookCountFn(authors[i].ID)
+			if bc > 0 {
+				groups = append(groups, AuthorDedupGroup{
+					Canonical:           authors[i],
+					Variants:            []database.Author{},
+					BookCount:           bc,
+					IsProductionCompany: true,
+				})
+				used[authors[i].ID] = true
+			}
 		}
 	}
 
 	return groups
+}
+
+// areAuthorsDuplicatePrecomputed is a faster version of areAuthorsDuplicate
+// that uses pre-computed normalized names to avoid redundant string operations.
+func areAuthorsDuplicatePrecomputed(a, b *authorPrecomputed) bool {
+	// Exact normalized match
+	if a.norm == b.norm {
+		return true
+	}
+
+	// Base author match (handles "Author / Narrator" style)
+	if a.base == b.base {
+		return true
+	}
+
+	// Both must have a last name
+	if a.last == "" || b.last == "" {
+		return false
+	}
+
+	// Last names must be very similar
+	lastSim := jaroWinklerSimilarity(a.last, b.last)
+	if lastSim < 0.95 {
+		return false
+	}
+
+	// If one has no first name, only match if last names are identical
+	if a.first == "" || b.first == "" {
+		return a.last == b.last
+	}
+
+	// First names/initials must also be similar
+	if isInitialMatch(a.first, b.first) {
+		return true
+	}
+
+	firstSim := jaroWinklerSimilarity(a.first, b.first)
+	return firstSim >= 0.85
 }

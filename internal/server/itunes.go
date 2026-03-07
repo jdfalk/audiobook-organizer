@@ -882,8 +882,13 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			}
 		}
 
-		// Populate book_authors junction table
-		if created.AuthorID != nil {
+		// Populate book_authors junction table (multi-author aware)
+		if created.AuthorID != nil && len(book.Authors) > 0 {
+			for i := range book.Authors {
+				book.Authors[i].BookID = created.ID
+			}
+			_ = database.GlobalStore.SetBookAuthors(created.ID, book.Authors)
+		} else if created.AuthorID != nil {
 			_ = database.GlobalStore.SetBookAuthors(created.ID, []database.BookAuthor{
 				{BookID: created.ID, AuthorID: *created.AuthorID, Role: "author", Position: 0},
 			})
@@ -1015,10 +1020,16 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 
 		consecutiveErrors = 0
 		enriched++
+		// If metadata found a new author, add to book_authors without clobbering existing multi-author links
 		if resp.Book != nil && resp.Book.AuthorID != nil {
-			_ = database.GlobalStore.SetBookAuthors(book.ID, []database.BookAuthor{
-				{BookID: book.ID, AuthorID: *resp.Book.AuthorID, Role: "author", Position: 0},
-			})
+			existing, _ := database.GlobalStore.GetBookAuthors(book.ID)
+			if len(existing) <= 1 {
+				// Only one or zero authors — safe to replace with metadata result
+				_ = database.GlobalStore.SetBookAuthors(book.ID, []database.BookAuthor{
+					{BookID: book.ID, AuthorID: *resp.Book.AuthorID, Role: "author", Position: 0},
+				})
+			}
+			// If multiple authors already linked, don't overwrite — keep the split authors
 		}
 
 		// Rate limit: pause every 10 enrichments to avoid hammering external APIs
@@ -1204,15 +1215,30 @@ func commonParentDir(tracks []*itunes.Track, opts itunes.ImportOptions) string {
 	return common
 }
 
+// assignAuthorAndSeries resolves the track's Artist into one or more author
+// records (splitting composites like "A / B") and links them to the book.
+// The first author becomes the primary AuthorID; all are stored in book_authors.
+// This is called both during import and sync for new books.
 func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {
 	if book == nil || track == nil {
 		return
 	}
 
 	if track.Artist != "" {
-		authorID, err := ensureAuthorID(track.Artist)
-		if err == nil {
-			book.AuthorID = authorID
+		ids, err := ensureAuthorIDs(track.Artist)
+		if err == nil && len(ids) > 0 {
+			book.AuthorID = &ids[0]
+			// Store multi-author links (needs book.ID set — caller must
+			// call this after CreateBook for the sync path, or we defer
+			// to the post-create hook)
+			book.Authors = make([]database.BookAuthor, 0, len(ids))
+			for i, id := range ids {
+				book.Authors = append(book.Authors, database.BookAuthor{
+					AuthorID: id,
+					Role:     "author",
+					Position: i,
+				})
+			}
 		}
 	}
 
@@ -1225,19 +1251,49 @@ func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {
 	}
 }
 
+// ensureAuthorIDs resolves an author name string (which may be composite like
+// "Author1 / Author2") into individual author records. Returns all author IDs
+// with the first being the primary. If the name is not composite, returns a
+// single-element slice.
+func ensureAuthorIDs(name string) ([]int, error) {
+	parts := SplitCompositeAuthorName(name)
+	if len(parts) == 0 {
+		// Not composite — treat as single author
+		parts = []string{name}
+	}
+
+	var ids []int
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		author, err := database.GlobalStore.GetAuthorByName(part)
+		if err != nil {
+			return nil, err
+		}
+		if author == nil {
+			author, err = database.GlobalStore.CreateAuthor(part)
+			if err != nil {
+				return nil, err
+			}
+		}
+		ids = append(ids, author.ID)
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no valid author names in %q", name)
+	}
+	return ids, nil
+}
+
+// ensureAuthorID resolves a (possibly composite) author name and returns the
+// primary author ID. For backwards compatibility with callers that only need one ID.
 func ensureAuthorID(name string) (*int, error) {
-	author, err := database.GlobalStore.GetAuthorByName(name)
+	ids, err := ensureAuthorIDs(name)
 	if err != nil {
 		return nil, err
 	}
-	if author != nil {
-		return &author.ID, nil
-	}
-	author, err = database.GlobalStore.CreateAuthor(name)
-	if err != nil {
-		return nil, err
-	}
-	return &author.ID, nil
+	return &ids[0], nil
 }
 
 func ensureSeriesID(name string, authorID *int) (*int, error) {
@@ -1737,10 +1793,22 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 			assignAuthorAndSeries(book, firstTrack)
 			book.LibraryState = stringPtr("imported")
 
-			if _, err := store.CreateBook(book); err != nil {
+			created, err := store.CreateBook(book)
+			if err != nil {
 				_ = progress.Log("error", fmt.Sprintf("Failed to create '%s': %v", book.Title, err), nil)
 			} else {
 				newBooks++
+				// Set up book_authors junction table
+				if created.AuthorID != nil && len(book.Authors) > 0 {
+					for i := range book.Authors {
+						book.Authors[i].BookID = created.ID
+					}
+					_ = store.SetBookAuthors(created.ID, book.Authors)
+				} else if created.AuthorID != nil {
+					_ = store.SetBookAuthors(created.ID, []database.BookAuthor{
+						{BookID: created.ID, AuthorID: *created.AuthorID, Role: "author", Position: 0},
+					})
+				}
 			}
 		}
 

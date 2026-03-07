@@ -7,7 +7,7 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -55,7 +55,7 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(resp)
+		_ = json.MarshalWrite(w, resp)
 	}))
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	require.NoError(t, err)
