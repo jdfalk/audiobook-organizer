@@ -724,6 +724,229 @@ func (_c *MockStore_UpdateAuthorName_Call) RunAndReturn(run func(int, string) er
 	return _c
 }
 
+// GetAuthorAliases provides a mock function for the type MockStore
+func (_mock *MockStore) GetAuthorAliases(authorID int) ([]database.AuthorAlias, error) {
+	ret := _mock.Called(authorID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuthorAliases")
+	}
+
+	var r0 []database.AuthorAlias
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int) ([]database.AuthorAlias, error)); ok {
+		return rf(authorID)
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.AuthorAlias)
+	}
+	r1, _ = ret.Get(1).(error)
+	return r0, r1
+}
+
+// GetAllAuthorAliases provides a mock function for the type MockStore
+func (_mock *MockStore) GetAllAuthorAliases() ([]database.AuthorAlias, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAllAuthorAliases")
+	}
+
+	var r0 []database.AuthorAlias
+	var r1 error
+	if rf, ok := ret.Get(0).(func() ([]database.AuthorAlias, error)); ok {
+		return rf()
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.AuthorAlias)
+	}
+	r1, _ = ret.Get(1).(error)
+	return r0, r1
+}
+
+// CreateAuthorAlias provides a mock function for the type MockStore
+func (_mock *MockStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*database.AuthorAlias, error) {
+	ret := _mock.Called(authorID, aliasName, aliasType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateAuthorAlias")
+	}
+
+	var r0 *database.AuthorAlias
+	var r1 error
+	if rf, ok := ret.Get(0).(func(int, string, string) (*database.AuthorAlias, error)); ok {
+		return rf(authorID, aliasName, aliasType)
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.AuthorAlias)
+	}
+	r1, _ = ret.Get(1).(error)
+	return r0, r1
+}
+
+// DeleteAuthorAlias provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteAuthorAlias(id int) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAuthorAlias")
+	}
+
+	var r0 error
+	r0, _ = ret.Get(0).(error)
+	return r0
+}
+
+// FindAuthorByAlias provides a mock function for the type MockStore
+func (_mock *MockStore) FindAuthorByAlias(aliasName string) (*database.Author, error) {
+	ret := _mock.Called(aliasName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindAuthorByAlias")
+	}
+
+	var r0 *database.Author
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (*database.Author, error)); ok {
+		return rf(aliasName)
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.Author)
+	}
+	r1, _ = ret.Get(1).(error)
+	return r0, r1
+}
+
+// MockStore_GetAuthorAliases_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuthorAliases'
+type MockStore_GetAuthorAliases_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetAuthorAliases(authorID interface{}) *MockStore_GetAuthorAliases_Call {
+	return &MockStore_GetAuthorAliases_Call{Call: _e.mock.On("GetAuthorAliases", authorID)}
+}
+
+func (_c *MockStore_GetAuthorAliases_Call) Run(run func(authorID int)) *MockStore_GetAuthorAliases_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAuthorAliases_Call) Return(aliases []database.AuthorAlias, err error) *MockStore_GetAuthorAliases_Call {
+	_c.Call.Return(aliases, err)
+	return _c
+}
+
+func (_c *MockStore_GetAuthorAliases_Call) RunAndReturn(run func(int) ([]database.AuthorAlias, error)) *MockStore_GetAuthorAliases_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_GetAllAuthorAliases_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllAuthorAliases'
+type MockStore_GetAllAuthorAliases_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetAllAuthorAliases() *MockStore_GetAllAuthorAliases_Call {
+	return &MockStore_GetAllAuthorAliases_Call{Call: _e.mock.On("GetAllAuthorAliases")}
+}
+
+func (_c *MockStore_GetAllAuthorAliases_Call) Run(run func()) *MockStore_GetAllAuthorAliases_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAllAuthorAliases_Call) Return(aliases []database.AuthorAlias, err error) *MockStore_GetAllAuthorAliases_Call {
+	_c.Call.Return(aliases, err)
+	return _c
+}
+
+func (_c *MockStore_GetAllAuthorAliases_Call) RunAndReturn(run func() ([]database.AuthorAlias, error)) *MockStore_GetAllAuthorAliases_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_CreateAuthorAlias_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateAuthorAlias'
+type MockStore_CreateAuthorAlias_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CreateAuthorAlias(authorID interface{}, aliasName interface{}, aliasType interface{}) *MockStore_CreateAuthorAlias_Call {
+	return &MockStore_CreateAuthorAlias_Call{Call: _e.mock.On("CreateAuthorAlias", authorID, aliasName, aliasType)}
+}
+
+func (_c *MockStore_CreateAuthorAlias_Call) Run(run func(authorID int, aliasName string, aliasType string)) *MockStore_CreateAuthorAlias_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateAuthorAlias_Call) Return(alias *database.AuthorAlias, err error) *MockStore_CreateAuthorAlias_Call {
+	_c.Call.Return(alias, err)
+	return _c
+}
+
+func (_c *MockStore_CreateAuthorAlias_Call) RunAndReturn(run func(int, string, string) (*database.AuthorAlias, error)) *MockStore_CreateAuthorAlias_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_DeleteAuthorAlias_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAuthorAlias'
+type MockStore_DeleteAuthorAlias_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) DeleteAuthorAlias(id interface{}) *MockStore_DeleteAuthorAlias_Call {
+	return &MockStore_DeleteAuthorAlias_Call{Call: _e.mock.On("DeleteAuthorAlias", id)}
+}
+
+func (_c *MockStore_DeleteAuthorAlias_Call) Run(run func(id int)) *MockStore_DeleteAuthorAlias_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteAuthorAlias_Call) Return(err error) *MockStore_DeleteAuthorAlias_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteAuthorAlias_Call) RunAndReturn(run func(int) error) *MockStore_DeleteAuthorAlias_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MockStore_FindAuthorByAlias_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindAuthorByAlias'
+type MockStore_FindAuthorByAlias_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) FindAuthorByAlias(aliasName interface{}) *MockStore_FindAuthorByAlias_Call {
+	return &MockStore_FindAuthorByAlias_Call{Call: _e.mock.On("FindAuthorByAlias", aliasName)}
+}
+
+func (_c *MockStore_FindAuthorByAlias_Call) Run(run func(aliasName string)) *MockStore_FindAuthorByAlias_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_FindAuthorByAlias_Call) Return(author *database.Author, err error) *MockStore_FindAuthorByAlias_Call {
+	_c.Call.Return(author, err)
+	return _c
+}
+
+func (_c *MockStore_FindAuthorByAlias_Call) RunAndReturn(run func(string) (*database.Author, error)) *MockStore_FindAuthorByAlias_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateBook provides a mock function for the type MockStore
 func (_mock *MockStore) CreateBook(book *database.Book) (*database.Book, error) {
 	ret := _mock.Called(book)

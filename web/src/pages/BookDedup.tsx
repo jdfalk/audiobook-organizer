@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 2.10.0
+// version: 2.11.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -52,8 +52,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Collapse from '@mui/material/Collapse';
 import type { AIAuthorSuggestion, ApplyAISuggestion, AIReviewMode } from '../services/api';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 
 /** Strip "(Unabridged)", "(Abridged)", and leading "[Series X]" from display titles */
 function cleanDisplayTitle(title: string): string {
@@ -450,13 +448,6 @@ function normalizeGroups(groups: AuthorDedupGroup[]): AuthorDedupGroup[] {
 
 // ---- Author Dedup Tab ----
 function AuthorDedupTab() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const authorSubTab = searchParams.get('subtab') === 'ai' ? 1 : 0;
-  const setAuthorSubTab = (v: number) => {
-    const next = new URLSearchParams(searchParams);
-    if (v === 1) next.set('subtab', 'ai'); else next.delete('subtab');
-    setSearchParams(next, { replace: true });
-  };
   const [groups, setGroups] = useState<AuthorDedupGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -473,57 +464,7 @@ function AuthorDedupTab() {
   const [popoverAnchor, setPopoverAnchor] = useState<HTMLElement | null>(null);
   const [popoverAuthorIds, setPopoverAuthorIds] = useState<number[]>([]);
   const [resolvingAuthor, setResolvingAuthor] = useState<number | null>(null);
-  // AI Review state — per-mode cache so switching modes shows correct results
-  type AIModeCache = {
-    suggestions: AIAuthorSuggestion[] | null;
-    groups: AuthorDedupGroup[];
-    selected: Set<number>;
-    combinedSections: {
-      agreed: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-      full_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-      groups_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-    } | null;
-  };
-  const [aiCache, setAiCache] = useState<Record<string, AIModeCache>>({});
-  const [aiSuggestions, setAiSuggestions] = useState<AIAuthorSuggestion[] | null>(null);
-  const [aiGroups, setAiGroups] = useState<AuthorDedupGroup[]>([]); // groups snapshot from when AI review ran
-  const [selectedAiSuggestions, setSelectedAiSuggestions] = useState<Set<number>>(new Set());
-  const [aiConfidenceFilter, setAiConfidenceFilter] = useState<string>('all');
-  const [aiConfirmOpen, setAiConfirmOpen] = useState(false);
-  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
-  const aiModeParam = searchParams.get('aimode');
-  const aiMode: AIReviewMode | 'combined' = aiModeParam === 'full' || aiModeParam === 'combined' ? aiModeParam : 'groups';
-  const setAiMode = (v: AIReviewMode | 'combined') => {
-    // Save current results to cache before switching
-    if (aiSuggestions) {
-      setAiCache((prev) => ({
-        ...prev,
-        [aiMode]: { suggestions: aiSuggestions, groups: aiGroups, selected: selectedAiSuggestions, combinedSections },
-      }));
-    }
-    const next = new URLSearchParams(searchParams);
-    if (v === 'groups') next.delete('aimode'); else next.set('aimode', v);
-    setSearchParams(next, { replace: true });
-  };
-  // Restore cached results when mode changes
-  useEffect(() => {
-    const cached = aiCache[aiMode];
-    if (cached?.suggestions) {
-      setAiSuggestions(cached.suggestions);
-      setAiGroups(cached.groups);
-      setSelectedAiSuggestions(cached.selected);
-      setCombinedSections(cached.combinedSections);
-    }
-  }, [aiMode]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [activeOp2, setActiveOp2] = useState<Operation | null>(null);
-  // Combined mode sections
-  const [combinedSections, setCombinedSections] = useState<{
-    agreed: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-    full_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-    groups_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-  } | null>(null);
-  const [combinedFilter, setCombinedFilter] = useState<'all' | 'agreed' | 'full_only' | 'groups_only'>('all');
-  const pagination = usePagination(aiSuggestions ? aiSuggestions.length : groups.length);
+  const pagination = usePagination(groups.length);
 
   const fetchDuplicates = useCallback(async () => {
     setLoading(true);
@@ -675,273 +616,6 @@ function AuthorDedupTab() {
     fetchDuplicates();
   };
 
-  const loadAiSuggestionsFromOp = async (opId: string) => {
-    try {
-      const result = await api.getOperationResult(opId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = result.result_data as any;
-      if (!data) {
-        setError(`AI review returned no data (op: ${opId}). Check server logs.`);
-        return;
-      }
-
-      setCombinedSections(null);
-
-      // Standard format: { suggestions, groups } (full or groups mode)
-      if (data.suggestions) {
-        const sug = data.suggestions as AIAuthorSuggestion[];
-        const grps = normalizeGroups((data.groups || []) as AuthorDedupGroup[]);
-        if (sug.length === 0) {
-          setError(`AI review returned no suggestions (op: ${opId}). Check server logs.`);
-          return;
-        }
-        const sel = new Set(sug.map((_, i) => i));
-        setAiSuggestions(sug);
-        setAiGroups(grps);
-        setSelectedAiSuggestions(sel);
-        // Cache for this mode
-        setAiCache((prev) => ({ ...prev, [aiMode]: { suggestions: sug, groups: grps, selected: sel, combinedSections: null } }));
-        return;
-      }
-
-      // Legacy format: bare array
-      if (Array.isArray(data)) {
-        const suggestions = data as AIAuthorSuggestion[];
-        if (suggestions.length === 0) {
-          setError(`AI review returned no suggestions (op: ${opId}). Check server logs.`);
-          return;
-        }
-        const sel = new Set(suggestions.map((_, i) => i));
-        setAiSuggestions(suggestions);
-        setAiGroups(groups);
-        setSelectedAiSuggestions(sel);
-        setAiCache((prev) => ({ ...prev, [aiMode]: { suggestions, groups, selected: sel, combinedSections: null } }));
-        return;
-      }
-
-      setError(`AI review returned unexpected format (op: ${opId}).`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load AI suggestions');
-    }
-  };
-
-  // Load suggestions from the most recent completed ai-author-review operation matching current mode
-  const loadLastAiReview = useCallback(async () => {
-    setAiSuggestionsLoading(true);
-    setError(null);
-    try {
-      const ops = await api.listOperations(50, 0);
-      // Map mode to operation type
-      const modeOpType: Record<string, string[]> = {
-        full: ['ai-author-review-full'],
-        groups: ['ai-author-review-groups', 'ai-author-review'],
-        combined: ['ai-author-review-full', 'ai-author-review-groups', 'ai-author-review'],
-      };
-      const validTypes = modeOpType[aiMode] || ['ai-author-review'];
-      const lastReview = ops.items.find(
-        (op) => validTypes.includes(op.type) && op.status === 'completed'
-      );
-      if (!lastReview) {
-        setAiSuggestionsLoading(false);
-        return;
-      }
-      await loadAiSuggestionsFromOp(lastReview.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load AI review');
-    }
-    setAiSuggestionsLoading(false);
-  }, [aiMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-load suggestions when switching to AI Review sub-tab (only if no cache for current mode)
-  useEffect(() => {
-    if (authorSubTab === 1 && !aiSuggestions && !aiSuggestionsLoading && !aiCache[aiMode]?.suggestions) {
-      loadLastAiReview();
-    }
-  }, [authorSubTab, aiMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleAIReview = async () => {
-    setError(null);
-    setAuthorSubTab(1); // switch to AI Review tab
-    setCombinedSections(null);
-
-    if (aiMode === 'combined') {
-      // Fire both modes in parallel, each with its own progress bar
-      try {
-        const fullInitial = await api.requestAIAuthorReview('full');
-        setActiveOp(fullInitial);
-        const groupsInitial = await api.requestAIAuthorReview('groups');
-        setActiveOp2(groupsInitial);
-
-        const [fullFinal, groupsFinal] = await Promise.all([
-          api.pollOperation(fullInitial.id, (update) => setActiveOp(update)),
-          api.pollOperation(groupsInitial.id, (update) => setActiveOp2(update)),
-        ]);
-        setActiveOp(null);
-        setActiveOp2(null);
-
-        // Load results from both
-        const fullResult = await api.getOperationResult(fullFinal.id);
-        const groupsResult = await api.getOperationResult(groupsFinal.id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fullData = fullResult.result_data as any;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const groupsData = groupsResult.result_data as any;
-
-        const fullSugs: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[] =
-          (fullData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
-            suggestion: s,
-            group: normalizeGroups(fullData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
-          }));
-        const groupsSugs: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[] =
-          (groupsData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
-            suggestion: s,
-            group: normalizeGroups(groupsData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
-          }));
-
-        // Client-side comparison: ≥50% author ID overlap + same action = agreed
-        const getAuthorIds = (grp: AuthorDedupGroup): Set<number> => {
-          const ids = new Set<number>();
-          if (grp?.canonical?.id) ids.add(grp.canonical.id);
-          for (const v of grp?.variants || []) ids.add(v.id);
-          return ids;
-        };
-        const overlapRatio = (a: Set<number>, b: Set<number>): number => {
-          if (a.size === 0 || b.size === 0) return 0;
-          let count = 0;
-          for (const id of a) { if (b.has(id)) count++; }
-          return count / Math.min(a.size, b.size);
-        };
-
-        const agreed: typeof fullSugs = [];
-        const fullOnly: typeof fullSugs = [];
-        const groupsOnly: typeof fullSugs = [];
-        const grMatched = new Set<number>();
-
-        for (const fItem of fullSugs) {
-          const fIds = getAuthorIds(fItem.group);
-          let matched = false;
-          for (let j = 0; j < groupsSugs.length; j++) {
-            if (grMatched.has(j)) continue;
-            const gIds = getAuthorIds(groupsSugs[j].group);
-            if (overlapRatio(fIds, gIds) >= 0.5 && fItem.suggestion.action === groupsSugs[j].suggestion.action) {
-              agreed.push(fItem);
-              grMatched.add(j);
-              matched = true;
-              break;
-            }
-          }
-          if (!matched) fullOnly.push(fItem);
-        }
-        for (let j = 0; j < groupsSugs.length; j++) {
-          if (!grMatched.has(j)) groupsOnly.push(groupsSugs[j]);
-        }
-
-        const combinedSecs = { agreed, full_only: fullOnly, groups_only: groupsOnly };
-        setCombinedSections(combinedSecs);
-        // Flatten into suggestions + groups for existing UI
-        const allItems = [...agreed, ...fullOnly, ...groupsOnly];
-        const sug = allItems.map((item, i) => ({ ...item.suggestion, group_index: i }));
-        const grps = normalizeGroups(allItems.map((item) => item.group));
-        const sel = new Set(agreed.map((_, i) => i));
-        setAiSuggestions(sug);
-        setAiGroups(grps);
-        setSelectedAiSuggestions(sel);
-        // Cache combined results, and also cache the individual full/groups results
-        setAiCache((prev) => ({
-          ...prev,
-          combined: { suggestions: sug, groups: grps, selected: sel, combinedSections: combinedSecs },
-          full: {
-            suggestions: (fullData?.suggestions || []) as AIAuthorSuggestion[],
-            groups: normalizeGroups(fullData?.groups || []),
-            selected: new Set((fullData?.suggestions || []).map((_: unknown, i: number) => i)),
-            combinedSections: null,
-          },
-          groups: {
-            suggestions: (groupsData?.suggestions || []) as AIAuthorSuggestion[],
-            groups: normalizeGroups(groupsData?.groups || []),
-            selected: new Set((groupsData?.suggestions || []).map((_: unknown, i: number) => i)),
-            combinedSections: null,
-          },
-        }));
-      } catch (err) {
-        setActiveOp(null);
-        setActiveOp2(null);
-        setError(err instanceof Error ? err.message : 'Combined review failed');
-      }
-      return;
-    }
-
-    await runOperationWithPolling(
-      () => api.requestAIAuthorReview(aiMode),
-      setActiveOp,
-      async (op) => {
-        await loadAiSuggestionsFromOp(op.id);
-      },
-      (msg) => setError(msg),
-    );
-  };
-
-  const handleApplyAISuggestions = async () => {
-    setAiConfirmOpen(false);
-    if (!aiSuggestions) return;
-
-    const toApply: ApplyAISuggestion[] = [];
-    for (const idx of selectedAiSuggestions) {
-      const sug = aiSuggestions[idx];
-      if (!sug || sug.action === 'skip') continue;
-      const group = aiGroups[sug.group_index];
-      if (!group) continue;
-      toApply.push({
-        group_index: sug.group_index,
-        action: sug.action,
-        canonical_name: sug.canonical_name,
-        keep_id: group.canonical.id,
-        merge_ids: group.variants.map((v) => v.id),
-        rename: sug.canonical_name !== group.canonical.name,
-      });
-    }
-
-    if (toApply.length === 0) {
-      setError('No applicable suggestions selected');
-      return;
-    }
-
-    await runOperationWithPolling(
-      () => api.applyAIAuthorReview(toApply),
-      setActiveOp,
-      () => {
-        setMergeSuccess(`Applied ${toApply.length} AI suggestion(s)`);
-        setAiSuggestions(null);
-        setSelectedAiSuggestions(new Set());
-        fetchDuplicates();
-      },
-      (msg) => setError(msg),
-    );
-  };
-
-  const filteredAiSuggestions = useMemo(() => {
-    if (!aiSuggestions) return [];
-    let items = aiSuggestions.map((s, i) => ({ ...s, _idx: i }));
-
-    // Apply combined section filter
-    if (combinedFilter !== 'all' && combinedSections) {
-      const agreedCount = combinedSections.agreed.length;
-      const fullOnlyCount = combinedSections.full_only.length;
-      if (combinedFilter === 'agreed') {
-        items = items.filter((s) => s._idx < agreedCount);
-      } else if (combinedFilter === 'full_only') {
-        items = items.filter((s) => s._idx >= agreedCount && s._idx < agreedCount + fullOnlyCount);
-      } else if (combinedFilter === 'groups_only') {
-        items = items.filter((s) => s._idx >= agreedCount + fullOnlyCount);
-      }
-    }
-
-    if (aiConfidenceFilter !== 'all') {
-      items = items.filter((s) => s.confidence === aiConfidenceFilter);
-    }
-    return items;
-  }, [aiSuggestions, aiConfidenceFilter, combinedFilter, combinedSections]);
-
   const toggleGroup = (key: string) => {
     setSelectedGroups((prev) => {
       const next = new Set(prev);
@@ -958,206 +632,14 @@ function AuthorDedupTab() {
     }
   };
 
-  const busy = activeOp !== null || activeOp2 !== null;
+  const busy = activeOp !== null;
 
   return (
     <Box>
-      <Tabs value={authorSubTab} onChange={(_, v) => setAuthorSubTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab label="Manual Review" />
-        <Tab label={aiSuggestions ? `AI Review (${aiSuggestions.length})` : 'AI Review'} icon={<AutoAwesomeIcon />} iconPosition="start" />
-      </Tabs>
-
-      <OperationProgress operation={activeOp} label={activeOp2 ? 'Full Mode' : undefined} />
-      <OperationProgress operation={activeOp2} label="Groups Mode" />
+      <OperationProgress operation={activeOp} />
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {mergeSuccess && <Alert severity="success" sx={{ mb: 2 }} icon={<CheckCircleIcon />} onClose={() => setMergeSuccess(null)}>{mergeSuccess}</Alert>}
 
-      {/* ---- AI Review Sub-Tab ---- */}
-      {authorSubTab === 1 && (
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">Mode:</Typography>
-            <ToggleButtonGroup
-              value={aiMode} exclusive
-              onChange={(_, v) => { if (v) setAiMode(v as AIReviewMode | 'combined'); }}
-              size="small"
-            >
-              <ToggleButton value="full">Full</ToggleButton>
-              <ToggleButton value="groups">Groups</ToggleButton>
-              <ToggleButton value="combined">Combined</ToggleButton>
-            </ToggleButtonGroup>
-            <Typography variant="caption" color="text.secondary">
-              {aiMode === 'full' ? 'AI discovers all duplicates from scratch' :
-               aiMode === 'groups' ? 'AI validates heuristic-detected groups' :
-               'Runs both modes, shows where they agree vs. disagree'}
-            </Typography>
-          </Box>
-
-          {aiSuggestionsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-          ) : aiSuggestions === null ? (
-            <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-                No AI suggestions loaded. Run an AI Review or reload the last one.
-              </Typography>
-              <Stack direction="row" spacing={2} justifyContent="center">
-                <Button variant="contained" color="secondary" startIcon={<AutoAwesomeIcon />}
-                  onClick={handleAIReview} disabled={busy || (aiMode !== 'full' && groups.length === 0)}>
-                  Run AI Review ({aiMode})
-                </Button>
-                <Button variant="outlined" onClick={loadLastAiReview} disabled={busy}>
-                  Load Last AI Review
-                </Button>
-              </Stack>
-            </Paper>
-          ) : (
-            <Paper sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                  {aiSuggestions.length} suggestions
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  {['all', 'high', 'medium', 'low'].map((level) => (
-                    <Chip key={level} label={level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
-                      variant={aiConfidenceFilter === level ? 'filled' : 'outlined'}
-                      color={level === 'high' ? 'success' : level === 'medium' ? 'warning' : level === 'low' ? 'error' : 'default'}
-                      onClick={() => setAiConfidenceFilter(level)} size="small" />
-                  ))}
-                  <Tooltip title="Re-run AI Review">
-                    <IconButton onClick={handleAIReview} disabled={busy || (aiMode !== 'full' && groups.length === 0)} size="small">
-                      <RefreshIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Box>
-
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <Button size="small" onClick={() => setSelectedAiSuggestions(new Set(filteredAiSuggestions.map((s) => s._idx)))}>
-                  Select All
-                </Button>
-                <Button size="small" onClick={() => setSelectedAiSuggestions(new Set())}>
-                  Deselect All
-                </Button>
-                <Box sx={{ flexGrow: 1 }} />
-                <Button variant="contained" color="primary" disabled={busy || selectedAiSuggestions.size === 0}
-                  onClick={() => setAiConfirmOpen(true)}>
-                  Apply {selectedAiSuggestions.size} Selected
-                </Button>
-              </Box>
-
-              {combinedSections && (
-                <Box sx={{ mb: 2 }}>
-                  <Stack direction="row" spacing={2}>
-                    <Chip label={`Agreed: ${combinedSections.agreed.length}`} color="success" size="small"
-                      variant={combinedFilter === 'agreed' ? 'filled' : 'outlined'}
-                      onClick={() => setCombinedFilter(combinedFilter === 'agreed' ? 'all' : 'agreed')}
-                      sx={{ cursor: 'pointer' }} />
-                    <Chip label={`AI Discovered: ${combinedSections.full_only.length}`} color="info" size="small"
-                      variant={combinedFilter === 'full_only' ? 'filled' : 'outlined'}
-                      onClick={() => setCombinedFilter(combinedFilter === 'full_only' ? 'all' : 'full_only')}
-                      sx={{ cursor: 'pointer' }} />
-                    <Chip label={`Heuristic Only: ${combinedSections.groups_only.length}`} color="default" size="small"
-                      variant={combinedFilter === 'groups_only' ? 'filled' : 'outlined'}
-                      onClick={() => setCombinedFilter(combinedFilter === 'groups_only' ? 'all' : 'groups_only')}
-                      sx={{ cursor: 'pointer' }} />
-                  </Stack>
-                </Box>
-              )}
-
-              {filteredAiSuggestions.map((sug) => {
-                const group = aiGroups[sug.group_index];
-                const nameChanged = group && sug.canonical_name !== group.canonical.name;
-
-                // Combined mode section headers
-                let sectionHeader: React.ReactNode = null;
-                if (combinedSections) {
-                  const agreedCount = combinedSections.agreed.length;
-                  const fullOnlyCount = combinedSections.full_only.length;
-                  if (sug._idx === 0 && agreedCount > 0) {
-                    sectionHeader = <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, color: 'success.main', fontWeight: 'bold' }}>Agreed ({agreedCount})</Typography>;
-                  } else if (sug._idx === agreedCount && fullOnlyCount > 0) {
-                    sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'info.main', fontWeight: 'bold' }}>AI Discovered ({fullOnlyCount})</Typography>;
-                  } else if (sug._idx === agreedCount + fullOnlyCount && combinedSections.groups_only.length > 0) {
-                    sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'text.secondary', fontWeight: 'bold' }}>Heuristic Only ({combinedSections.groups_only.length})</Typography>;
-                  }
-                }
-
-                return (
-                  <Box key={sug._idx}>
-                  {sectionHeader}
-                  <Card sx={{ mb: 1 }} variant="outlined">
-                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Checkbox checked={selectedAiSuggestions.has(sug._idx)}
-                          onChange={() => {
-                            setSelectedAiSuggestions((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(sug._idx)) next.delete(sug._idx); else next.add(sug._idx);
-                              return next;
-                            });
-                          }} size="small" />
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 200 }}>
-                          {group ? group.canonical.name : `Group ${sug.group_index}`}
-                          {nameChanged && (
-                            <> → <span style={{ color: '#1976d2' }}>{sug.canonical_name}</span></>
-                          )}
-                        </Typography>
-                        <Chip size="small" label={sug.action}
-                          color={sug.action === 'merge' ? 'primary' : sug.action === 'rename' ? 'warning' : sug.action === 'split' ? 'secondary' : 'default'} />
-                        <Chip size="small" label={sug.confidence}
-                          color={sug.confidence === 'high' ? 'success' : sug.confidence === 'medium' ? 'warning' : 'error'} />
-                        {group && (
-                          <Typography variant="caption" color="text.secondary">
-                            {group.variants.length} variant(s), {group.book_count} books
-                          </Typography>
-                        )}
-                      </Box>
-                      <Divider sx={{ my: 0.5, ml: 5 }} />
-                      <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>
-                        {sug.reason}
-                      </Typography>
-                      {group && group.variants.length > 0 && (
-                        <Typography variant="caption" sx={{ ml: 5, display: 'block' }}>
-                          Variants: {group.variants.map((v) => v.name).join(', ')}
-                        </Typography>
-                      )}
-                      {sug.is_narrator && sug.is_narrator.length > 0 && (
-                        <Typography variant="caption" color="warning.main" sx={{ ml: 5, display: 'block' }}>
-                          Narrator(s) detected at indices: {sug.is_narrator.join(', ')}
-                        </Typography>
-                      )}
-                      {sug.is_publisher && sug.is_publisher.length > 0 && (
-                        <Typography variant="caption" color="info.main" sx={{ ml: 5, display: 'block' }}>
-                          Publisher(s) detected at indices: {sug.is_publisher.join(', ')}
-                        </Typography>
-                      )}
-                    </CardContent>
-                  </Card>
-                  </Box>
-                );
-              })}
-
-              {/* AI Apply Confirmation Dialog */}
-              <Dialog open={aiConfirmOpen} onClose={() => setAiConfirmOpen(false)}>
-                <DialogTitle>Apply AI Suggestions</DialogTitle>
-                <DialogContent>
-                  <DialogContentText>
-                    This will apply {selectedAiSuggestions.size} correction(s) to your author data. Continue?
-                  </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                  <Button onClick={() => setAiConfirmOpen(false)}>Cancel</Button>
-                  <Button onClick={handleApplyAISuggestions} color="primary" variant="contained">Apply</Button>
-                </DialogActions>
-              </Dialog>
-            </Paper>
-          )}
-        </Box>
-      )}
-
-      {/* ---- Manual Review Sub-Tab ---- */}
-      {authorSubTab === 0 && (
-        <>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
           Uses structured name comparison to detect author name variants like &quot;James S. A. Corey&quot; vs &quot;James S.A. Corey&quot;.
@@ -1177,10 +659,6 @@ function AuthorDedupTab() {
               <Button variant="contained" color="warning" startIcon={<MergeIcon />}
                 onClick={() => setConfirmOpen(true)} disabled={busy}>
                 Merge All ({groups.length})
-              </Button>
-              <Button variant="outlined" color="secondary" startIcon={<AutoAwesomeIcon />}
-                onClick={handleAIReview} disabled={busy || (aiMode !== 'full' && groups.length === 0)}>
-                AI Review
               </Button>
             </>
           )}
@@ -1409,8 +887,6 @@ function AuthorDedupTab() {
           <Button onClick={handleMergeAll} color="warning" variant="contained">Confirm</Button>
         </DialogActions>
       </Dialog>
-        </>
-      )}
     </Box>
   );
 }
@@ -1895,8 +1371,474 @@ function SeriesDedupTab() {
   );
 }
 
+// ---- AI Author Sub-Page (self-contained per mode) ----
+function AIAuthorSubPage({ mode }: { mode: AIReviewMode }) {
+  const [suggestions, setSuggestions] = useState<AIAuthorSuggestion[] | null>(null);
+  const [groups, setGroups] = useState<AuthorDedupGroup[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeOp, setActiveOp] = useState<Operation | null>(null);
+  const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const busy = activeOp !== null;
+
+  const loadFromOp = async (opId: string) => {
+    try {
+      const result = await api.getOperationResult(opId);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = result.result_data as any;
+      if (!data?.suggestions) { setError('AI review returned no data'); return; }
+      const sug = data.suggestions as AIAuthorSuggestion[];
+      const grps = normalizeGroups((data.groups || []) as AuthorDedupGroup[]);
+      setSuggestions(sug);
+      setGroups(grps);
+      setSelected(new Set(sug.map((_, i) => i)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load AI suggestions');
+    }
+  };
+
+  const loadLast = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const ops = await api.listOperations(50, 0);
+      const validTypes = mode === 'full'
+        ? ['ai-author-review-full']
+        : ['ai-author-review-groups', 'ai-author-review'];
+      const lastReview = ops.items.find(
+        (op) => validTypes.includes(op.type) && op.status === 'completed'
+      );
+      if (lastReview) await loadFromOp(lastReview.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load');
+    }
+    setLoading(false);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (!suggestions) loadLast(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRun = async () => {
+    setError(null);
+    await runOperationWithPolling(
+      () => api.requestAIAuthorReview(mode),
+      setActiveOp,
+      async (op) => { await loadFromOp(op.id); },
+      (msg) => setError(msg),
+    );
+  };
+
+  const handleApply = async () => {
+    setConfirmOpen(false);
+    if (!suggestions) return;
+    const toApply: ApplyAISuggestion[] = [];
+    for (const idx of selected) {
+      const sug = suggestions[idx];
+      if (!sug || sug.action === 'skip') continue;
+      const group = groups[sug.group_index];
+      if (!group) continue;
+      toApply.push({
+        group_index: sug.group_index, action: sug.action,
+        canonical_name: sug.canonical_name, keep_id: group.canonical.id,
+        merge_ids: group.variants.map((v) => v.id),
+        rename: sug.canonical_name !== group.canonical.name,
+      });
+    }
+    if (toApply.length === 0) { setError('No applicable suggestions'); return; }
+    await runOperationWithPolling(
+      () => api.applyAIAuthorReview(toApply),
+      setActiveOp,
+      () => { setSuccess(`Applied ${toApply.length} suggestion(s)`); setSuggestions(null); setSelected(new Set()); },
+      (msg) => setError(msg),
+    );
+  };
+
+  const filtered = useMemo(() => {
+    if (!suggestions) return [];
+    let items = suggestions.map((s, i) => ({ ...s, _idx: i }));
+    if (confidenceFilter !== 'all') items = items.filter((s) => s.confidence === confidenceFilter);
+    return items;
+  }, [suggestions, confidenceFilter]);
+
+  return (
+    <Box>
+      <OperationProgress operation={activeOp} />
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : suggestions === null ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            {mode === 'full' ? 'AI discovers all duplicates from scratch.' : 'AI validates heuristic-detected groups.'}
+          </Typography>
+          <Stack direction="row" spacing={2} justifyContent="center">
+            <Button variant="contained" color="secondary" startIcon={<AutoAwesomeIcon />}
+              onClick={handleRun} disabled={busy}>Run AI Review ({mode})</Button>
+            <Button variant="outlined" onClick={loadLast} disabled={busy}>Load Last</Button>
+          </Stack>
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>{suggestions.length} suggestions</Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              {['all', 'high', 'medium', 'low'].map((level) => (
+                <Chip key={level} label={level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+                  variant={confidenceFilter === level ? 'filled' : 'outlined'}
+                  color={level === 'high' ? 'success' : level === 'medium' ? 'warning' : level === 'low' ? 'error' : 'default'}
+                  onClick={() => setConfidenceFilter(level)} size="small" />
+              ))}
+              <Tooltip title="Re-run AI Review">
+                <IconButton onClick={handleRun} disabled={busy} size="small"><RefreshIcon /></IconButton>
+              </Tooltip>
+            </Stack>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Button size="small" onClick={() => setSelected(new Set(filtered.map((s) => s._idx)))}>Select All</Button>
+            <Button size="small" onClick={() => setSelected(new Set())}>Deselect All</Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button variant="contained" color="primary" disabled={busy || selected.size === 0}
+              onClick={() => setConfirmOpen(true)}>Apply {selected.size} Selected</Button>
+          </Box>
+
+          {filtered.map((sug) => {
+            const group = groups[sug.group_index];
+            const nameChanged = group && sug.canonical_name !== group.canonical.name;
+            return (
+              <Card key={sug._idx} sx={{ mb: 1 }} variant="outlined">
+                <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Checkbox checked={selected.has(sug._idx)}
+                      onChange={() => setSelected((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(sug._idx)) next.delete(sug._idx); else next.add(sug._idx);
+                        return next;
+                      })} size="small" />
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 200 }}>
+                      {group ? group.canonical.name : `Group ${sug.group_index}`}
+                      {nameChanged && <> → <span style={{ color: '#1976d2' }}>{sug.canonical_name}</span></>}
+                    </Typography>
+                    <Chip size="small" label={sug.action}
+                      color={sug.action === 'merge' ? 'primary' : sug.action === 'rename' ? 'warning' : sug.action === 'alias' ? 'info' : sug.action === 'split' ? 'secondary' : 'default'} />
+                    <Chip size="small" label={sug.confidence}
+                      color={sug.confidence === 'high' ? 'success' : sug.confidence === 'medium' ? 'warning' : 'error'} />
+                    {group && <Typography variant="caption" color="text.secondary">{group.variants.length} variant(s), {group.book_count} books</Typography>}
+                  </Box>
+                  <Divider sx={{ my: 0.5, ml: 5 }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>{sug.reason}</Typography>
+                  {group && group.variants.length > 0 && (
+                    <Typography variant="caption" sx={{ ml: 5, display: 'block' }}>Variants: {group.variants.map((v) => v.name).join(', ')}</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+            <DialogTitle>Apply AI Suggestions</DialogTitle>
+            <DialogContent><DialogContentText>Apply {selected.size} correction(s)?</DialogContentText></DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+              <Button onClick={handleApply} color="primary" variant="contained">Apply</Button>
+            </DialogActions>
+          </Dialog>
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
+// ---- AI Combined Sub-Page ----
+function AIAuthorCombinedSubPage() {
+  const [suggestions, setSuggestions] = useState<AIAuthorSuggestion[] | null>(null);
+  const [groups, setGroups] = useState<AuthorDedupGroup[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [activeOp, setActiveOp] = useState<Operation | null>(null);
+  const [activeOp2, setActiveOp2] = useState<Operation | null>(null);
+  const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [combinedSections, setCombinedSections] = useState<{
+    agreed: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
+    full_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
+    groups_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
+  } | null>(null);
+  const [combinedFilter, setCombinedFilter] = useState<'all' | 'agreed' | 'full_only' | 'groups_only'>('all');
+
+  const busy = activeOp !== null || activeOp2 !== null;
+
+  const handleRun = async () => {
+    setError(null);
+    setCombinedSections(null);
+    try {
+      const fullInitial = await api.requestAIAuthorReview('full');
+      setActiveOp(fullInitial);
+      const groupsInitial = await api.requestAIAuthorReview('groups');
+      setActiveOp2(groupsInitial);
+
+      const [fullFinal, groupsFinal] = await Promise.all([
+        api.pollOperation(fullInitial.id, (update) => setActiveOp(update)),
+        api.pollOperation(groupsInitial.id, (update) => setActiveOp2(update)),
+      ]);
+      setActiveOp(null);
+      setActiveOp2(null);
+
+      const fullResult = await api.getOperationResult(fullFinal.id);
+      const groupsResult = await api.getOperationResult(groupsFinal.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fullData = fullResult.result_data as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const groupsData = groupsResult.result_data as any;
+
+      const fullSugs = (fullData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
+        suggestion: s,
+        group: normalizeGroups(fullData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
+      }));
+      const groupsSugs = (groupsData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
+        suggestion: s,
+        group: normalizeGroups(groupsData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
+      }));
+
+      const getAuthorIds = (grp: AuthorDedupGroup): Set<number> => {
+        const ids = new Set<number>();
+        if (grp?.canonical?.id) ids.add(grp.canonical.id);
+        for (const v of grp?.variants || []) ids.add(v.id);
+        return ids;
+      };
+      const overlapRatio = (a: Set<number>, b: Set<number>): number => {
+        if (a.size === 0 || b.size === 0) return 0;
+        let count = 0;
+        for (const id of a) { if (b.has(id)) count++; }
+        return count / Math.min(a.size, b.size);
+      };
+
+      const agreed: typeof fullSugs = [];
+      const fullOnly: typeof fullSugs = [];
+      const groupsOnly: typeof fullSugs = [];
+      const grMatched = new Set<number>();
+
+      for (const fItem of fullSugs) {
+        const fIds = getAuthorIds(fItem.group);
+        let matched = false;
+        for (let j = 0; j < groupsSugs.length; j++) {
+          if (grMatched.has(j)) continue;
+          const gIds = getAuthorIds(groupsSugs[j].group);
+          if (overlapRatio(fIds, gIds) >= 0.5 && fItem.suggestion.action === groupsSugs[j].suggestion.action) {
+            agreed.push(fItem);
+            grMatched.add(j);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) fullOnly.push(fItem);
+      }
+      for (let j = 0; j < groupsSugs.length; j++) {
+        if (!grMatched.has(j)) groupsOnly.push(groupsSugs[j]);
+      }
+
+      const secs = { agreed, full_only: fullOnly, groups_only: groupsOnly };
+      setCombinedSections(secs);
+      const allItems = [...agreed, ...fullOnly, ...groupsOnly];
+      const sug = allItems.map((item, i) => ({ ...item.suggestion, group_index: i }));
+      const grps = normalizeGroups(allItems.map((item) => item.group));
+      setSuggestions(sug);
+      setGroups(grps);
+      setSelected(new Set(agreed.map((_: unknown, i: number) => i)));
+    } catch (err) {
+      setActiveOp(null);
+      setActiveOp2(null);
+      setError(err instanceof Error ? err.message : 'Combined review failed');
+    }
+  };
+
+  const handleApply = async () => {
+    setConfirmOpen(false);
+    if (!suggestions) return;
+    const toApply: ApplyAISuggestion[] = [];
+    for (const idx of selected) {
+      const sug = suggestions[idx];
+      if (!sug || sug.action === 'skip') continue;
+      const group = groups[sug.group_index];
+      if (!group) continue;
+      toApply.push({
+        group_index: sug.group_index, action: sug.action,
+        canonical_name: sug.canonical_name, keep_id: group.canonical.id,
+        merge_ids: group.variants.map((v) => v.id),
+        rename: sug.canonical_name !== group.canonical.name,
+      });
+    }
+    if (toApply.length === 0) { setError('No applicable suggestions'); return; }
+    await runOperationWithPolling(
+      () => api.applyAIAuthorReview(toApply),
+      setActiveOp,
+      () => { setSuccess(`Applied ${toApply.length} suggestion(s)`); setSuggestions(null); setSelected(new Set()); },
+      (msg) => setError(msg),
+    );
+  };
+
+  const filtered = useMemo(() => {
+    if (!suggestions) return [];
+    let items = suggestions.map((s, i) => ({ ...s, _idx: i }));
+    if (combinedFilter !== 'all' && combinedSections) {
+      const ac = combinedSections.agreed.length;
+      const fc = combinedSections.full_only.length;
+      if (combinedFilter === 'agreed') items = items.filter((s) => s._idx < ac);
+      else if (combinedFilter === 'full_only') items = items.filter((s) => s._idx >= ac && s._idx < ac + fc);
+      else if (combinedFilter === 'groups_only') items = items.filter((s) => s._idx >= ac + fc);
+    }
+    if (confidenceFilter !== 'all') items = items.filter((s) => s.confidence === confidenceFilter);
+    return items;
+  }, [suggestions, confidenceFilter, combinedFilter, combinedSections]);
+
+  useEffect(() => { if (!suggestions && !busy) handleRun(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <Box>
+      <OperationProgress operation={activeOp} label="Full Mode" />
+      <OperationProgress operation={activeOp2} label="Groups Mode" />
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
+
+      {busy && !suggestions ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : suggestions === null ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            Runs both Full and Groups modes, then shows where they agree vs. disagree.
+          </Typography>
+          <Button variant="contained" color="secondary" startIcon={<AutoAwesomeIcon />}
+            onClick={handleRun} disabled={busy}>Run Combined Review</Button>
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ flexGrow: 1 }}>{suggestions.length} suggestions</Typography>
+            <Stack direction="row" spacing={1} alignItems="center">
+              {['all', 'high', 'medium', 'low'].map((level) => (
+                <Chip key={level} label={level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+                  variant={confidenceFilter === level ? 'filled' : 'outlined'}
+                  color={level === 'high' ? 'success' : level === 'medium' ? 'warning' : level === 'low' ? 'error' : 'default'}
+                  onClick={() => setConfidenceFilter(level)} size="small" />
+              ))}
+              <Tooltip title="Re-run"><IconButton onClick={handleRun} disabled={busy} size="small"><RefreshIcon /></IconButton></Tooltip>
+            </Stack>
+          </Box>
+
+          {combinedSections && (
+            <Box sx={{ mb: 2 }}>
+              <Stack direction="row" spacing={2}>
+                <Chip label={`Agreed: ${combinedSections.agreed.length}`} color="success" size="small"
+                  variant={combinedFilter === 'agreed' ? 'filled' : 'outlined'}
+                  onClick={() => setCombinedFilter(combinedFilter === 'agreed' ? 'all' : 'agreed')} sx={{ cursor: 'pointer' }} />
+                <Chip label={`AI Discovered: ${combinedSections.full_only.length}`} color="info" size="small"
+                  variant={combinedFilter === 'full_only' ? 'filled' : 'outlined'}
+                  onClick={() => setCombinedFilter(combinedFilter === 'full_only' ? 'all' : 'full_only')} sx={{ cursor: 'pointer' }} />
+                <Chip label={`Heuristic Only: ${combinedSections.groups_only.length}`} color="default" size="small"
+                  variant={combinedFilter === 'groups_only' ? 'filled' : 'outlined'}
+                  onClick={() => setCombinedFilter(combinedFilter === 'groups_only' ? 'all' : 'groups_only')} sx={{ cursor: 'pointer' }} />
+              </Stack>
+            </Box>
+          )}
+
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Button size="small" onClick={() => setSelected(new Set(filtered.map((s) => s._idx)))}>Select All</Button>
+            <Button size="small" onClick={() => setSelected(new Set())}>Deselect All</Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Button variant="contained" color="primary" disabled={busy || selected.size === 0}
+              onClick={() => setConfirmOpen(true)}>Apply {selected.size} Selected</Button>
+          </Box>
+
+          {filtered.map((sug) => {
+            const group = groups[sug.group_index];
+            const nameChanged = group && sug.canonical_name !== group.canonical.name;
+            let sectionHeader: React.ReactNode = null;
+            if (combinedSections) {
+              const ac = combinedSections.agreed.length;
+              const fc = combinedSections.full_only.length;
+              if (sug._idx === 0 && ac > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, color: 'success.main', fontWeight: 'bold' }}>Agreed ({ac})</Typography>;
+              else if (sug._idx === ac && fc > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'info.main', fontWeight: 'bold' }}>AI Discovered ({fc})</Typography>;
+              else if (sug._idx === ac + fc && combinedSections.groups_only.length > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'text.secondary', fontWeight: 'bold' }}>Heuristic Only ({combinedSections.groups_only.length})</Typography>;
+            }
+            return (
+              <Box key={sug._idx}>
+                {sectionHeader}
+                <Card sx={{ mb: 1 }} variant="outlined">
+                  <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Checkbox checked={selected.has(sug._idx)}
+                        onChange={() => setSelected((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(sug._idx)) next.delete(sug._idx); else next.add(sug._idx);
+                          return next;
+                        })} size="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 200 }}>
+                        {group ? group.canonical.name : `Group ${sug.group_index}`}
+                        {nameChanged && <> → <span style={{ color: '#1976d2' }}>{sug.canonical_name}</span></>}
+                      </Typography>
+                      <Chip size="small" label={sug.action}
+                        color={sug.action === 'merge' ? 'primary' : sug.action === 'rename' ? 'warning' : sug.action === 'alias' ? 'info' : sug.action === 'split' ? 'secondary' : 'default'} />
+                      <Chip size="small" label={sug.confidence}
+                        color={sug.confidence === 'high' ? 'success' : sug.confidence === 'medium' ? 'warning' : 'error'} />
+                      {group && <Typography variant="caption" color="text.secondary">{group.variants.length} variant(s), {group.book_count} books</Typography>}
+                    </Box>
+                    <Divider sx={{ my: 0.5, ml: 5 }} />
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>{sug.reason}</Typography>
+                    {group && group.variants.length > 0 && (
+                      <Typography variant="caption" sx={{ ml: 5, display: 'block' }}>Variants: {group.variants.map((v) => v.name).join(', ')}</Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Box>
+            );
+          })}
+
+          <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+            <DialogTitle>Apply AI Suggestions</DialogTitle>
+            <DialogContent><DialogContentText>Apply {selected.size} correction(s)?</DialogContentText></DialogContent>
+            <DialogActions>
+              <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+              <Button onClick={handleApply} color="primary" variant="contained">Apply</Button>
+            </DialogActions>
+          </Dialog>
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
+// ---- AI Review Top-Level Tab ----
+function AIReviewTab() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const aiSub = searchParams.get('aisub') || 'author-full';
+  const setAiSub = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('aisub', v);
+    setSearchParams(next, { replace: true });
+  };
+
+  return (
+    <Box>
+      <Tabs value={aiSub} onChange={(_, v) => setAiSub(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab value="author-full" label="Author Full" icon={<AutoAwesomeIcon />} iconPosition="start" />
+        <Tab value="author-groups" label="Author Groups" icon={<AutoAwesomeIcon />} iconPosition="start" />
+        <Tab value="author-combined" label="Author Combined" icon={<AutoAwesomeIcon />} iconPosition="start" />
+      </Tabs>
+
+      {aiSub === 'author-full' && <AIAuthorSubPage mode="full" />}
+      {aiSub === 'author-groups' && <AIAuthorSubPage mode="groups" />}
+      {aiSub === 'author-combined' && <AIAuthorCombinedSubPage />}
+    </Box>
+  );
+}
+
 // ---- Main Dedup Page ----
-const TAB_NAMES = ['books', 'authors', 'series'] as const;
+const TAB_NAMES = ['books', 'authors', 'series', 'ai'] as const;
 
 export function BookDedup() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1918,11 +1860,13 @@ export function BookDedup() {
         <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Books" iconPosition="start" />
         <Tab icon={<Badge color="default"><PersonIcon /></Badge>} label="Authors" iconPosition="start" />
         <Tab icon={<Badge color="default"><ListIcon /></Badge>} label="Series" iconPosition="start" />
+        <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
       </Tabs>
 
       {tab === 0 && <BookDedupTab />}
       {tab === 1 && <AuthorDedupTab />}
       {tab === 2 && <SeriesDedupTab />}
+      {tab === 3 && <AIReviewTab />}
     </Box>
   );
 }

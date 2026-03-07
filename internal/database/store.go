@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.33.0
+// version: 2.34.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -33,6 +33,13 @@ type Store interface {
 	CreateAuthor(name string) (*Author, error)
 	DeleteAuthor(id int) error
 	UpdateAuthorName(id int, name string) error
+
+	// Author Aliases
+	GetAuthorAliases(authorID int) ([]AuthorAlias, error)
+	GetAllAuthorAliases() ([]AuthorAlias, error)
+	CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error)
+	DeleteAuthorAlias(id int) error
+	FindAuthorByAlias(aliasName string) (*Author, error)
 
 	// Book-Author relationships
 	GetBookAuthors(bookID string) ([]BookAuthor, error)
@@ -230,6 +237,15 @@ type Store interface {
 type Author struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+// AuthorAlias represents a pen name, handle, or alternative name for an author
+type AuthorAlias struct {
+	ID        int       `json:"id"`
+	AuthorID  int       `json:"author_id"`
+	AliasName string    `json:"alias_name"`
+	AliasType string    `json:"alias_type"` // pen_name, real_name, handle, abbreviation, alias
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // BookAuthor represents the many-to-many relationship between books and authors

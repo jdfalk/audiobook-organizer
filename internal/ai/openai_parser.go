@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -485,7 +485,11 @@ func (p *OpenAIParser) reviewAuthorBatch(ctx context.Context, batch []AuthorDedu
 
 Also identify entries that are actually narrators or publishers, not authors.
 
-Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|split|rename|skip", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [indices], "is_publisher": [indices]}]}`
+INITIALS FORMATTING: Always use spaces after periods in initials: "C. B. Lee" not "C.B. Lee", "J. R. R. Tolkien" not "J.R.R. Tolkien".
+
+PEN NAMES & ALIASES: When names are clearly pen names, handles, or stage names for the same person (e.g., "Mark Twain" / "Samuel Clemens", "KamikazePotato" / "Rafael Kalleen"), use action "alias" instead of "merge". The canonical_name should be the real/professional name, and the other name becomes an alias.
+
+Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|split|rename|skip|alias", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [indices], "is_publisher": [indices]}]}`
 
 	batchJSON, err := json.Marshal(batch)
 	if err != nil {
@@ -587,8 +591,10 @@ CRITICAL RULES:
 - If unsure, use action "skip" — false negatives are far better than false positives.
 - Identify narrators or publishers incorrectly listed as authors.
 - When a compound entry contains multiple real authors, use action "split" and list the individual canonical names in the reason field.
+- INITIALS FORMATTING: Always use spaces after periods in initials: "C. B. Lee" not "C.B. Lee", "J. R. R. Tolkien" not "J.R.R. Tolkien".
+- PEN NAMES & ALIASES: When names are clearly pen names, handles, or stage names for the same person, use action "alias" instead of "merge". The canonical_name should be the real/professional name, and the other name becomes an alias.
 
-Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merge|rename|split|skip", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [ids], "is_publisher": [ids]}]}
+Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merge|rename|split|skip|alias", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [ids], "is_publisher": [ids]}]}
 
 Only include groups where you find actual duplicates or issues. Do not return entries for authors that look fine.`
 

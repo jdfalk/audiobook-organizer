@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -252,6 +252,17 @@ func (s *SQLiteStore) createTables() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name);
+
+	CREATE TABLE IF NOT EXISTS author_aliases (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		author_id INTEGER NOT NULL REFERENCES authors(id) ON DELETE CASCADE,
+		alias_name TEXT NOT NULL,
+		alias_type TEXT NOT NULL DEFAULT 'alias',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_author_aliases_author ON author_aliases(author_id);
+	CREATE INDEX IF NOT EXISTS idx_author_aliases_name ON author_aliases(alias_name);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_author_aliases_unique ON author_aliases(author_id, alias_name);
 
 	CREATE TABLE IF NOT EXISTS series (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1187,6 +1198,75 @@ func (s *SQLiteStore) DeleteAuthor(id int) error {
 func (s *SQLiteStore) UpdateAuthorName(id int, name string) error {
 	_, err := s.db.Exec("UPDATE authors SET name = ? WHERE id = ?", name, id)
 	return err
+}
+
+// Author Alias operations
+
+func (s *SQLiteStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
+	rows, err := s.db.Query("SELECT id, author_id, alias_name, alias_type, created_at FROM author_aliases WHERE author_id = ? ORDER BY alias_name", authorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var aliases []AuthorAlias
+	for rows.Next() {
+		var a AuthorAlias
+		if err := rows.Scan(&a.ID, &a.AuthorID, &a.AliasName, &a.AliasType, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		aliases = append(aliases, a)
+	}
+	return aliases, rows.Err()
+}
+
+func (s *SQLiteStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
+	rows, err := s.db.Query("SELECT id, author_id, alias_name, alias_type, created_at FROM author_aliases ORDER BY alias_name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var aliases []AuthorAlias
+	for rows.Next() {
+		var a AuthorAlias
+		if err := rows.Scan(&a.ID, &a.AuthorID, &a.AliasName, &a.AliasType, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		aliases = append(aliases, a)
+	}
+	return aliases, rows.Err()
+}
+
+func (s *SQLiteStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
+	result, err := s.db.Exec("INSERT INTO author_aliases (author_id, alias_name, alias_type) VALUES (?, ?, ?)", authorID, aliasName, aliasType)
+	if err != nil {
+		return nil, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return &AuthorAlias{
+		ID:        int(id),
+		AuthorID:  authorID,
+		AliasName: aliasName,
+		AliasType: aliasType,
+	}, nil
+}
+
+func (s *SQLiteStore) DeleteAuthorAlias(id int) error {
+	_, err := s.db.Exec("DELETE FROM author_aliases WHERE id = ?", id)
+	return err
+}
+
+func (s *SQLiteStore) FindAuthorByAlias(aliasName string) (*Author, error) {
+	var a Author
+	err := s.db.QueryRow("SELECT a.id, a.name FROM authors a JOIN author_aliases aa ON a.id = aa.author_id WHERE LOWER(aa.alias_name) = LOWER(?)", aliasName).Scan(&a.ID, &a.Name)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
 }
 
 // Series operations

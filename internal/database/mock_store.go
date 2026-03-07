@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -48,6 +48,13 @@ type MockStore struct {
 	CreateAuthorFunc      func(name string) (*Author, error)
 	DeleteAuthorFunc      func(id int) error
 	UpdateAuthorNameFunc  func(id int, name string) error
+
+	// Author Alias methods
+	GetAuthorAliasesFunc    func(authorID int) ([]AuthorAlias, error)
+	GetAllAuthorAliasesFunc func() ([]AuthorAlias, error)
+	CreateAuthorAliasFunc   func(authorID int, aliasName string, aliasType string) (*AuthorAlias, error)
+	DeleteAuthorAliasFunc   func(id int) error
+	FindAuthorByAliasFunc   func(aliasName string) (*Author, error)
 
 	// Series methods
 	GetAllSeriesFunc    func() ([]Series, error)
@@ -270,6 +277,41 @@ func (m *MockStore) UpdateAuthorName(id int, name string) error {
 		return m.UpdateAuthorNameFunc(id, name)
 	}
 	return nil
+}
+
+func (m *MockStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
+	if m.GetAuthorAliasesFunc != nil {
+		return m.GetAuthorAliasesFunc(authorID)
+	}
+	return []AuthorAlias{}, nil
+}
+
+func (m *MockStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
+	if m.GetAllAuthorAliasesFunc != nil {
+		return m.GetAllAuthorAliasesFunc()
+	}
+	return []AuthorAlias{}, nil
+}
+
+func (m *MockStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
+	if m.CreateAuthorAliasFunc != nil {
+		return m.CreateAuthorAliasFunc(authorID, aliasName, aliasType)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) DeleteAuthorAlias(id int) error {
+	if m.DeleteAuthorAliasFunc != nil {
+		return m.DeleteAuthorAliasFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) FindAuthorByAlias(aliasName string) (*Author, error) {
+	if m.FindAuthorByAliasFunc != nil {
+		return m.FindAuthorByAliasFunc(aliasName)
+	}
+	return nil, nil
 }
 
 func (m *MockStore) GetAllSeries() ([]Series, error) {
