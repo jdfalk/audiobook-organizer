@@ -1,5 +1,5 @@
 // file: web/src/pages/Operations.tsx
-// version: 2.0.0
+// version: 2.2.0
 // guid: 3b2a1c4d-5e6f-7081-9a0b-1c2d3e4f5a6b
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +21,11 @@ import {
   Pagination,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -73,6 +79,7 @@ export function Operations() {
     api.ActiveOperationSummary[]
   >([]);
   const [history, setHistory] = useState<api.Operation[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
   const [logDialogOpen, setLogDialogOpen] = useState(false);
   const [selectedOperation, setSelectedOperation] =
@@ -84,24 +91,36 @@ export function Operations() {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [expandedChanges, setExpandedChanges] = useState<string | null>(null);
+  const [changes, setChanges] = useState<api.OperationChange[]>([]);
+  const [changesLoading, setChangesLoading] = useState(false);
+  const [revertConfirmOp, setRevertConfirmOp] = useState<api.Operation | null>(null);
+  const [reverting, setReverting] = useState(false);
   const logContainerRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    loadHistory();
-    loadActiveOperations();
-    const interval = window.setInterval(loadActiveOperations, 2000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const loadHistory = async () => {
+  const loadHistory = async (page = historyPage) => {
     try {
-      const status = await api.getSystemStatus();
-      setHistory(status.operations?.recent || []);
+      const data = await api.listOperations(HISTORY_PAGE_SIZE, (page - 1) * HISTORY_PAGE_SIZE);
+      setHistory(data.items || []);
+      setHistoryTotal(data.total || 0);
     } catch (error) {
       console.error('Failed to load operations history', error);
       setNotice('Failed to load operations history.');
     }
   };
+
+  useEffect(() => {
+    loadHistory(historyPage);
+  }, [historyPage]);
+
+  useEffect(() => {
+    loadActiveOperations();
+    const interval = window.setInterval(() => {
+      loadActiveOperations();
+      loadHistory(historyPage);
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [historyPage]);
 
   const loadActiveOperations = async () => {
     try {
@@ -163,7 +182,7 @@ export function Operations() {
   const handleClearCompleted = async () => {
     try {
       await api.deleteOperationHistory('completed');
-      loadHistory();
+      loadHistory(historyPage);
     } catch (err) {
       console.error('Failed to clear completed operations:', err);
     }
@@ -172,7 +191,7 @@ export function Operations() {
   const handleClearFailed = async () => {
     try {
       await api.deleteOperationHistory('failed,canceled');
-      loadHistory();
+      loadHistory(historyPage);
     } catch (err) {
       console.error('Failed to clear failed operations:', err);
     }
@@ -181,7 +200,7 @@ export function Operations() {
   const handleClearStuck = async () => {
     try {
       await api.clearStaleOperations();
-      loadHistory();
+      loadHistory(historyPage);
       loadActiveOperations();
     } catch (err) {
       console.error('Failed to clear stuck operations:', err);
@@ -197,6 +216,40 @@ export function Operations() {
     setErrorDialogOpen(true);
   };
 
+  const handleToggleChanges = async (opId: string) => {
+    if (expandedChanges === opId) {
+      setExpandedChanges(null);
+      return;
+    }
+    setExpandedChanges(opId);
+    setChangesLoading(true);
+    try {
+      const data = await api.getOperationChanges(opId);
+      setChanges(data);
+    } catch (error) {
+      console.error('Failed to load changes', error);
+      setChanges([]);
+    } finally {
+      setChangesLoading(false);
+    }
+  };
+
+  const handleRevertOperation = async () => {
+    if (!revertConfirmOp) return;
+    setReverting(true);
+    try {
+      await api.revertOperation(revertConfirmOp.id);
+      setNotice('Operation reverted successfully.');
+      await loadHistory();
+    } catch (error) {
+      console.error('Failed to revert operation', error);
+      setNotice('Failed to revert operation.');
+    } finally {
+      setReverting(false);
+      setRevertConfirmOp(null);
+    }
+  };
+
   const filteredLogs = useMemo(() => {
     if (logFilter === 'all') return logs;
     return logs.filter((log) => log.level === logFilter);
@@ -208,14 +261,7 @@ export function Operations() {
     logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
   }, [filteredLogs, logDialogOpen]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(history.length / HISTORY_PAGE_SIZE)
-  );
-  const pagedHistory = history.slice(
-    (historyPage - 1) * HISTORY_PAGE_SIZE,
-    historyPage * HISTORY_PAGE_SIZE
-  );
+  const totalPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
 
   return (
     <Box sx={{ height: '100%', overflow: 'auto' }}>
@@ -421,15 +467,15 @@ export function Operations() {
             </Button>
           </Box>
         </Stack>
-        {pagedHistory.length === 0 ? (
+        {history.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
             No historical operations yet.
           </Typography>
         ) : (
           <List disablePadding>
-            {pagedHistory.map((op) => (
+            {history.map((op) => (
+              <Box key={op.id}>
               <ListItem
-                key={op.id}
                 divider
                 sx={{ px: 0 }}
                 secondaryAction={
@@ -437,10 +483,27 @@ export function Operations() {
                     <Button
                       size="small"
                       variant="outlined"
+                      onClick={() => handleToggleChanges(op.id)}
+                    >
+                      {expandedChanges === op.id ? 'Hide' : 'Changes'}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
                       onClick={() => handleViewLogs(op)}
                     >
                       Logs
                     </Button>
+                    {op.status === 'completed' && (op.type === 'organize' || op.type === 'metadata_fetch') && (
+                      <Button
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        onClick={() => setRevertConfirmOp(op)}
+                      >
+                        Revert
+                      </Button>
+                    )}
                     {op.status === 'failed' && (
                       <>
                         <Button
@@ -503,6 +566,51 @@ export function Operations() {
                   }
                 />
               </ListItem>
+              <Collapse in={expandedChanges === op.id} timeout="auto" unmountOnExit>
+                <Box sx={{ pl: 2, pr: 2, pb: 1, bgcolor: 'action.hover' }}>
+                  {changesLoading ? (
+                    <LinearProgress sx={{ my: 1 }} />
+                  ) : changes.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                      No tracked changes for this operation.
+                    </Typography>
+                  ) : (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Field</TableCell>
+                          <TableCell>Old Value</TableCell>
+                          <TableCell>New Value</TableCell>
+                          <TableCell>Reverted</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {changes.map((ch) => (
+                          <TableRow key={ch.id}>
+                            <TableCell>
+                              <Chip size="small" label={ch.change_type.replace(/_/g, ' ')} />
+                            </TableCell>
+                            <TableCell>{ch.field_name}</TableCell>
+                            <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {ch.old_value || '—'}
+                            </TableCell>
+                            <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {ch.new_value || '—'}
+                            </TableCell>
+                            <TableCell>
+                              {ch.reverted_at ? (
+                                <Chip size="small" color="warning" label="Reverted" />
+                              ) : '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </Box>
+              </Collapse>
+              </Box>
             ))}
           </List>
         )}
@@ -612,6 +720,32 @@ export function Operations() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLogDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Revert Confirmation Dialog */}
+      <Dialog
+        open={!!revertConfirmOp}
+        onClose={() => setRevertConfirmOp(null)}
+      >
+        <DialogTitle>Revert Operation?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            This will undo all tracked changes from this{' '}
+            <strong>{revertConfirmOp ? formatOperationType(revertConfirmOp.type) : ''}</strong>{' '}
+            operation, including file moves and metadata updates. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRevertConfirmOp(null)}>Cancel</Button>
+          <Button
+            color="warning"
+            variant="contained"
+            onClick={handleRevertOperation}
+            disabled={reverting}
+          >
+            {reverting ? 'Reverting...' : 'Revert'}
+          </Button>
         </DialogActions>
       </Dialog>
 
