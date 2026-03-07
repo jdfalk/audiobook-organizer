@@ -1,5 +1,5 @@
 // file: web/tests/e2e/utils/test-helpers.ts
-// version: 2.6.0
+// version: 2.7.0
 // guid: a1b2c3d4-e5f6-7890-abcd-e1f2a3b4c5d6
 // last-edited: 2026-02-15
 
@@ -216,6 +216,22 @@ interface MockFailures {
   operationLogs?: number;
 }
 
+export interface MockAuthorDedupGroup {
+  canonical: { id: number; name: string };
+  variants: Array<{ id: number; name: string }>;
+  book_count: number;
+  suggested_name?: string;
+  split_names?: string[];
+  is_production_company?: boolean;
+}
+
+export interface MockSeriesDupGroup {
+  canonical: { id: number; name: string };
+  variants: Array<{ id: number; name: string }>;
+  book_count: number;
+  books?: Array<{ id: string; title: string; series_name?: string }>;
+}
+
 export interface MockApiOptions {
   books?: TestBook[];
   config?: Partial<MockConfig>;
@@ -233,6 +249,8 @@ export interface MockApiOptions {
   auth?: MockAuthState;
   failures?: MockFailures;
   systemStatus?: Record<string, unknown>;
+  authorDedup?: { groups: MockAuthorDedupGroup[]; needs_refresh?: boolean };
+  seriesDedup?: { groups: MockSeriesDupGroup[]; total_series?: number };
 }
 
 interface TestBook {
@@ -354,6 +372,8 @@ export async function setupMockApiRoutes(
     itunes: options.itunes || {},
     auth: buildAuthState(options.auth),
     failures: options.failures || {},
+    authorDedup: options.authorDedup || { groups: [] },
+    seriesDedup: options.seriesDedup || { groups: [], total_series: 0 },
   };
 
   // Use addInitScript to set localStorage and basic state
@@ -731,6 +751,93 @@ export async function setupMockApiRoutes(
 
     if (pathname === '/api/v1/audiobooks/duplicates' && method === 'GET') {
       return route.fulfill(jsonResponse({ items: [], count: 0 }));
+    }
+
+    // Author dedup endpoints
+    if (pathname === '/api/v1/authors/duplicates' && method === 'GET') {
+      const dedup = mockState.authorDedup as { groups: MockAuthorDedupGroup[]; needs_refresh?: boolean };
+      return route.fulfill(jsonResponse({ groups: dedup.groups, needs_refresh: dedup.needs_refresh || false }));
+    }
+    if (pathname === '/api/v1/authors/duplicates/refresh' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'dedup-refresh-1', type: 'author-dedup-scan', status: 'running', progress: 0, total: 100, message: 'Starting...' }));
+    }
+    if (pathname === '/api/v1/authors/merge' && method === 'POST') {
+      const body = request.postDataJSON();
+      return route.fulfill(jsonResponse({ id: 'merge-op-1', type: 'author-merge', status: 'completed', message: `Merged ${(body?.merge_ids?.length || 0)} authors` }));
+    }
+    if (pathname.match(/\/api\/v1\/authors\/\d+\/rename/) && method === 'PUT') {
+      return route.fulfill(jsonResponse({ message: 'Author renamed' }));
+    }
+    if (pathname.match(/\/api\/v1\/authors\/\d+\/name/) && method === 'PUT') {
+      return route.fulfill(jsonResponse({ message: 'Author renamed' }));
+    }
+    if (pathname.match(/\/api\/v1\/authors\/\d+\/split/) && method === 'POST') {
+      return route.fulfill(jsonResponse({ authors: [{ id: 100, name: 'Author A' }, { id: 101, name: 'Author B' }], books_updated: 3 }));
+    }
+    if (pathname.match(/\/api\/v1\/authors\/\d+\/resolve-production/) && method === 'POST') {
+      return route.fulfill(jsonResponse({
+        operation: { id: 'resolve-prod-1', type: 'resolve-production-author', status: 'running', progress: 0, total: 100, message: 'Resolving...' },
+      }));
+    }
+    if (pathname.match(/\/api\/v1\/authors\/\d+\/reclassify-as-narrator/) && method === 'POST') {
+      return route.fulfill(jsonResponse({ message: 'Reclassified', books_updated: 1 }));
+    }
+    if (pathname === '/api/v1/authors/duplicates/ai-review' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'ai-review-1', type: 'ai-author-review', status: 'running', progress: 0, total: 100, message: 'Starting AI review...' }, 202));
+    }
+    if (pathname === '/api/v1/authors/duplicates/ai-review/apply' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'ai-apply-1', type: 'ai-author-merge-apply', status: 'running', progress: 0, total: 100, message: 'Applying...' }, 202));
+    }
+    if (pathname.match(/\/api\/v1\/operations\/[^/]+\/result/) && method === 'GET') {
+      return route.fulfill(jsonResponse({
+        result_data: [
+          { group_index: 0, action: 'merge', canonical_name: 'Test Author', reason: 'Same author', confidence: 'high' },
+        ],
+      }));
+    }
+
+    // Series dedup endpoints
+    if (pathname === '/api/v1/series/duplicates' && method === 'GET') {
+      const dedup = mockState.seriesDedup as { groups: MockSeriesDupGroup[]; total_series?: number };
+      // Transform MockSeriesDupGroup to the real SeriesDupGroup shape
+      const groups = (dedup.groups || []).map((g) => ({
+        name: g.canonical.name,
+        count: g.book_count,
+        series: [
+          { id: g.canonical.id, name: g.canonical.name, created_at: new Date().toISOString(), books: (g.books || []) },
+          ...g.variants.map((v) => ({ id: v.id, name: v.name, created_at: new Date().toISOString(), books: [] })),
+        ],
+        suggested_name: g.canonical.name,
+        match_type: 'fuzzy',
+      }));
+      return route.fulfill(jsonResponse({ groups, count: groups.length, total_series: dedup.total_series || 0 }));
+    }
+    if (pathname === '/api/v1/series/duplicates/refresh' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'series-refresh-1', type: 'series-dedup-scan', status: 'running', progress: 0, total: 100, message: 'Starting...' }));
+    }
+    if (pathname === '/api/v1/series/deduplicate' && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'series-merge-1', type: 'series-merge', status: 'completed', message: 'Series merged' }));
+    }
+    if (pathname.match(/\/api\/v1\/series\/\d+\/name/) && method === 'PUT') {
+      return route.fulfill(jsonResponse({ message: 'Series renamed' }));
+    }
+
+    // Dedup validation
+    if (pathname === '/api/v1/dedup/validate' && method === 'POST') {
+      const body = request.postDataJSON();
+      return route.fulfill(jsonResponse({ results: [{ source: 'openlibrary', title: body?.query || 'Test', author: 'Test Author' }], query: body?.query || '', type: body?.type || 'author' }));
+    }
+
+    // System tasks (scheduler)
+    if (pathname === '/api/v1/system/tasks' && method === 'GET') {
+      return route.fulfill(jsonResponse({ tasks: [
+        { name: 'library_scan', description: 'Scan library folders', category: 'library', enabled: true, interval_minutes: 0, run_on_startup: false },
+        { name: 'dedup_refresh', description: 'Refresh author & series dedup cache', category: 'maintenance', enabled: true, interval_minutes: 360, run_on_startup: false },
+        { name: 'resolve_production_authors', description: 'Resolve real authors for production companies', category: 'maintenance', enabled: false, interval_minutes: 0, run_on_startup: false },
+      ] }));
+    }
+    if (pathname.match(/\/api\/v1\/system\/tasks\/[^/]+\/run/) && method === 'POST') {
+      return route.fulfill(jsonResponse({ id: 'task-run-1', type: 'task', status: 'running', progress: 0, total: 100, message: 'Running...' }));
     }
 
     // Audiobook versions sub-endpoint

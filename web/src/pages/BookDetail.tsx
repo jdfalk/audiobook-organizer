@@ -3,7 +3,7 @@
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Avatar,
   Box,
@@ -78,9 +78,13 @@ export const BookDetail = () => {
   const [writeBackDialogOpen, setWriteBackDialogOpen] = useState(false);
   // preAIBook removed — use History to revert AI changes
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<
-    'info' | 'files' | 'versions'
-  >('info');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (['info', 'files', 'versions'].includes(searchParams.get('tab') || '')
+    ? searchParams.get('tab')
+    : 'info') as 'info' | 'files' | 'versions';
+  const setActiveTab = (v: 'info' | 'files' | 'versions') => {
+    setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', v); return next; }, { replace: true });
+  };
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({
     softDelete: true,

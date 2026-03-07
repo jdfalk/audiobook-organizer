@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.37.0
+// version: 1.43.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -274,6 +274,26 @@ export interface Operation {
   completed_at?: string;
   error_message?: string;
   errors?: string[];
+  result_data?: string;
+}
+
+export interface AIAuthorSuggestion {
+  group_index: number;
+  action: 'merge' | 'split' | 'rename' | 'skip';
+  canonical_name: string;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low';
+  is_narrator?: number[];
+  is_publisher?: number[];
+}
+
+export interface ApplyAISuggestion {
+  group_index: number;
+  action: string;
+  canonical_name: string;
+  keep_id: number;
+  merge_ids: number[];
+  rename: boolean;
 }
 
 export interface OperationLog {
@@ -695,6 +715,9 @@ export interface AuthorDedupGroup {
   canonical: Author;
   variants: Author[];
   book_count: number;
+  suggested_name?: string;
+  split_names?: string[];
+  is_production_company?: boolean;
 }
 
 export interface MergeAuthorsResult {
@@ -702,13 +725,21 @@ export interface MergeAuthorsResult {
   errors: string[];
 }
 
-export async function getAuthorDuplicates(): Promise<AuthorDedupGroup[]> {
+export async function getAuthorDuplicates(): Promise<{ groups: AuthorDedupGroup[]; needs_refresh?: boolean }> {
   const response = await fetch(`${API_BASE}/authors/duplicates`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch author duplicates');
   }
   const data = await response.json();
-  return data.groups || [];
+  return { groups: data.groups || [], needs_refresh: data.needs_refresh };
+}
+
+export async function refreshAuthorDuplicates(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/authors/duplicates/refresh`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start author dedup scan');
+  }
+  return response.json();
 }
 
 export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<Operation> {
@@ -721,6 +752,24 @@ export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<
     throw await buildApiError(response, 'Failed to merge authors');
   }
   return response.json();
+}
+
+export async function getBooksByAuthor(authorId: number): Promise<Book[]> {
+  const response = await fetch(`${API_BASE}/audiobooks?author_id=${authorId}`);
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.items || [];
+}
+
+export async function resolveProductionAuthor(authorId: number): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/resolve-production`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to resolve production author');
+  }
+  const data = await response.json();
+  return data.operation;
 }
 
 // Book dedup — uses existing /audiobooks/duplicates endpoint which returns Book[][] groups
@@ -976,6 +1025,14 @@ export async function clearStaleOperations(): Promise<{ cleared: number }> {
   return response.json();
 }
 
+export async function listOperations(limit = 50, offset = 0): Promise<{ items: Operation[]; total: number; limit: number; offset: number }> {
+  const response = await fetch(`${API_BASE}/operations?limit=${limit}&offset=${offset}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch operations');
+  }
+  return response.json();
+}
+
 export async function deleteOperationHistory(
   status: string
 ): Promise<{ deleted: number }> {
@@ -987,6 +1044,45 @@ export async function deleteOperationHistory(
     throw await buildApiError(response, 'Failed to delete operation history');
   }
   return response.json();
+}
+
+export interface OperationChange {
+  id: string;
+  operation_id: string;
+  book_id: string;
+  change_type: string;
+  field_name: string;
+  old_value: string;
+  new_value: string;
+  reverted_at: string | null;
+  created_at: string;
+}
+
+export async function getOperationChanges(operationId: string): Promise<OperationChange[]> {
+  const response = await fetch(`${API_BASE}/operations/${operationId}/changes`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch operation changes');
+  }
+  const data = await response.json();
+  return data.changes || [];
+}
+
+export async function revertOperation(operationId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/operations/${operationId}/revert`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to revert operation');
+  }
+}
+
+export async function getBookChanges(bookId: string): Promise<OperationChange[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/changes`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book changes');
+  }
+  const data = await response.json();
+  return data.changes || [];
 }
 
 export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
@@ -1410,16 +1506,60 @@ export async function getITunesImportStatusBulk(
 }
 
 // Series dedup
+export interface SeriesBookSummary {
+  id: string;
+  title: string;
+  cover_url?: string;
+}
+
+export interface SeriesWithBooks extends Series {
+  books?: SeriesBookSummary[];
+  author_name?: string;
+}
+
 export interface SeriesDupGroup {
   name: string;
   count: number;
-  series: Series[];
+  series: SeriesWithBooks[];
+  suggested_name?: string;
+  match_type?: string;
 }
 
-export async function getSeriesDuplicates(): Promise<{ groups: SeriesDupGroup[]; count: number; total_series: number }> {
+export async function getSeriesDuplicates(): Promise<{ groups: SeriesDupGroup[]; count: number; total_series: number; needs_refresh?: boolean }> {
   const response = await fetch(`${API_BASE}/series/duplicates`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series duplicates');
+  }
+  return response.json();
+}
+
+export async function refreshSeriesDuplicates(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/series/duplicates/refresh`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start series dedup scan');
+  }
+  return response.json();
+}
+
+// Dedup validation
+export interface ValidationResult {
+  source: string;
+  title: string;
+  author: string;
+  series?: string;
+  series_position?: string;
+  cover_url?: string;
+  isbn?: string;
+}
+
+export async function validateDedupEntry(query: string, type: 'series' | 'author' | 'book' = 'series'): Promise<{ results: ValidationResult[]; query: string; type: string }> {
+  const response = await fetch(`${API_BASE}/dedup/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, type }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to validate dedup entry');
   }
   return response.json();
 }
@@ -1448,6 +1588,18 @@ export async function mergeSeriesGroup(keepId: number, mergeIds: number[]): Prom
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge series');
+  }
+  return response.json();
+}
+
+export async function updateSeriesName(id: number, name: string): Promise<Series> {
+  const response = await fetch(`${API_BASE}/series/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update series name');
   }
   return response.json();
 }
@@ -2179,4 +2331,115 @@ export async function applyUpdate(): Promise<void> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply update');
   }
+}
+
+export async function splitCompositeAuthor(authorId: number, names?: string[]): Promise<{ authors: { id: number; name: string }[]; books_updated: number }> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(names ? { names } : {}),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to split author');
+  }
+  return response.json();
+}
+
+export async function renameAuthor(authorId: number, name: string): Promise<{ id: number; name: string }> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/name`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to rename author');
+  }
+  return response.json();
+}
+
+export async function reclassifyAuthorAsNarrator(authorId: number): Promise<{ narrator_id: number; books_updated: number }> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/reclassify-as-narrator`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to reclassify author as narrator');
+  }
+  return response.json();
+}
+
+// --- Unified Task/Scheduler API ---
+
+export interface TaskInfo {
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  interval_minutes: number;
+  run_on_startup: boolean;
+  last_run?: string;
+}
+
+export async function getRegisteredTasks(): Promise<TaskInfo[]> {
+  const response = await fetch(`${API_BASE}/tasks`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch tasks');
+  }
+  return response.json();
+}
+
+export async function runTask(name: string): Promise<Operation | { message: string }> {
+  const response = await fetch(`${API_BASE}/tasks/${name}/run`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to run task');
+  }
+  return response.json();
+}
+
+export async function updateTaskConfig(
+  name: string,
+  updates: { enabled?: boolean; interval_minutes?: number; run_on_startup?: boolean }
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/tasks/${name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update task config');
+  }
+}
+
+// AI Author Review
+export type AIReviewMode = 'full' | 'groups';
+
+export async function requestAIAuthorReview(mode: AIReviewMode = 'groups'): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/authors/duplicates/ai-review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start AI author review');
+  }
+  return response.json();
+}
+
+export async function getOperationResult(id: string): Promise<{ result_data: unknown }> {
+  const response = await fetch(`${API_BASE}/operations/${id}/result`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get operation result');
+  }
+  return response.json();
+}
+
+export async function applyAIAuthorReview(
+  suggestions: ApplyAISuggestion[]
+): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/authors/duplicates/ai-review/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ suggestions }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to apply AI author review');
+  }
+  return response.json();
 }

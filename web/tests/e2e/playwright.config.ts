@@ -1,5 +1,5 @@
 // file: tests/e2e/playwright.config.ts
-// version: 1.5.0
+// version: 1.6.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { defineConfig, devices } from '@playwright/test';
@@ -57,7 +57,8 @@ export default defineConfig({
   webServer: {
     // Build full app (frontend + embedded backend) and run single Go binary
     // Disable TLS for testing by passing empty cert/key flags
-    command: `bash -c 'cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && rm -rf /tmp/ao-e2e-db && mkdir -p /tmp/ao-e2e-db /tmp/ao-e2e-books && ./audiobook-organizer serve --tls-cert "" --tls-key "" --host 127.0.0.1 --db /tmp/ao-e2e-db/e2e.pebble --dir /tmp/ao-e2e-books'`,
+    // GOEXPERIMENT=jsonv2 is required for the Go backend (encoding/json/v2)
+    command: `bash -c 'export GOEXPERIMENT=jsonv2 && cd ${__dirname}/../../.. && cd web && npm run build && cd .. && go build -tags embed_frontend -o audiobook-organizer . && rm -rf /tmp/ao-e2e-db && mkdir -p /tmp/ao-e2e-db /tmp/ao-e2e-books && ./audiobook-organizer serve --tls-cert "" --tls-key "" --host 127.0.0.1 --db /tmp/ao-e2e-db/e2e.pebble --dir /tmp/ao-e2e-books'`,
     url: 'http://127.0.0.1:8484',
     timeout: 120000,
     reuseExistingServer: !process.env.CI,
