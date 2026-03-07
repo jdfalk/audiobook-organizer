@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.13.0
+// version: 4.15.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -319,6 +319,99 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 	return nil, fmt.Errorf("no metadata found for '%s' from any source", book.Title)
 }
 
+// FetchMetadataForBookByTitle searches metadata sources using only the book's title,
+// suppressing the author name. This is useful when the current author is a production
+// company and we want to discover the real author from external sources.
+func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchMetadataResponse, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	var sources []metadata.MetadataSource
+	if len(mfs.overrideSources) > 0 {
+		sources = mfs.overrideSources
+	} else {
+		sources = mfs.BuildSourceChain()
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no metadata sources enabled")
+	}
+
+	searchTitle := stripChapterFromTitle(book.Title)
+
+	var lastErr error
+	for _, src := range sources {
+		results, searchErr := src.SearchByTitle(searchTitle)
+		if searchErr != nil {
+			lastErr = searchErr
+			continue
+		}
+		if len(results) == 0 && searchTitle != book.Title {
+			results, searchErr = src.SearchByTitle(book.Title)
+			if searchErr != nil {
+				lastErr = searchErr
+				continue
+			}
+		}
+		if len(results) == 0 {
+			strippedTitle := stripSubtitle(searchTitle)
+			if strippedTitle != searchTitle {
+				results, searchErr = src.SearchByTitle(strippedTitle)
+				if searchErr != nil {
+					lastErr = searchErr
+					continue
+				}
+			}
+		}
+		if len(results) == 0 {
+			continue
+		}
+
+		scored := bestTitleMatch(results, searchTitle, book.Title)
+		if len(scored) == 0 {
+			continue
+		}
+		meta := scored[0]
+
+		parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
+		if parsedSeries == "" && meta.Series != "" {
+			parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
+			if parsedTitle == "" {
+				parsedTitle = meta.Title
+			}
+		}
+		if parsedSeries != "" {
+			meta.Series = parsedSeries
+			meta.SeriesPosition = parsedPosition
+			if parsedTitle != "" {
+				meta.Title = parsedTitle
+			}
+		}
+
+		mfs.recordChangeHistory(book, meta, src.Name())
+		mfs.applyMetadataToBook(book, meta)
+
+		updatedBook, updateErr := mfs.db.UpdateBook(id, book)
+		if updateErr != nil {
+			return nil, fmt.Errorf("failed to update book: %w", updateErr)
+		}
+
+		mfs.persistFetchedMetadata(id, meta)
+
+		return &FetchMetadataResponse{
+			Message: "metadata fetched by title only",
+			Book:    updatedBook,
+			Source:  src.Name(),
+		}, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("no metadata found from any source (last error: %v)", lastErr)
+	}
+	return nil, fmt.Errorf("no metadata found for '%s' from any source (title-only search)", book.Title)
+}
+
 func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
 	if meta.Title != "" && isBetterValue(book.Title, meta.Title) {
 		book.Title = meta.Title
@@ -548,7 +641,18 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	if meta.Title != "" {
 		tagMap["title"] = meta.Title
 	}
-	if meta.Author != "" {
+	// Resolve multi-author from DB (join table), fall back to meta.Author
+	if bookAuthors, err := mfs.db.GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
+		var names []string
+		for _, ba := range bookAuthors {
+			if author, aerr := mfs.db.GetAuthorByID(ba.AuthorID); aerr == nil && author != nil {
+				names = append(names, author.Name)
+			}
+		}
+		if len(names) > 0 {
+			tagMap["artist"] = strings.Join(names, ", ")
+		}
+	} else if meta.Author != "" {
 		tagMap["artist"] = meta.Author
 	}
 	if meta.Publisher != "" {
@@ -557,6 +661,27 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	if meta.PublishYear != 0 {
 		tagMap["year"] = meta.PublishYear
 	}
+	// Include custom AUDIOBOOK_ORGANIZER_* tags for book tracking and re-linking
+	tagMap["book_id"] = book.ID
+	if book.ISBN10 != nil {
+		tagMap["isbn10"] = *book.ISBN10
+	}
+	if book.ISBN13 != nil {
+		tagMap["isbn13"] = *book.ISBN13
+	}
+	if book.ASIN != nil {
+		tagMap["asin"] = *book.ASIN
+	}
+	if book.OpenLibraryID != nil {
+		tagMap["open_library_id"] = *book.OpenLibraryID
+	}
+	if book.HardcoverID != nil {
+		tagMap["hardcover_id"] = *book.HardcoverID
+	}
+	if book.GoogleBooksID != nil {
+		tagMap["google_books_id"] = *book.GoogleBooksID
+	}
+
 	if len(tagMap) == 0 {
 		return
 	}
@@ -1166,7 +1291,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			authorNames = append(authorNames, author.Name)
 		}
 	}
-	artistStr := strings.Join(authorNames, " & ")
+	artistStr := strings.Join(authorNames, ", ")
 
 	// --- Resolve narrator names ---
 	var narratorNames []string

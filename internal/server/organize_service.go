@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -35,6 +35,7 @@ type OrganizeRequest struct {
 	FolderPath         *string
 	Priority           *int
 	FetchMetadataFirst bool
+	OperationID        string
 }
 
 type OrganizeStats struct {
@@ -46,6 +47,7 @@ type OrganizeStats struct {
 // PerformOrganizeWithID executes organization with checkpoint support.
 func (orgSvc *OrganizeService) PerformOrganizeWithID(ctx context.Context, opID string, req *OrganizeRequest, progress operations.ProgressReporter) error {
 	_ = operations.SaveParams(orgSvc.db, opID, operations.OrganizeParams{})
+	req.OperationID = opID
 	err := orgSvc.PerformOrganize(ctx, req, progress)
 	_ = operations.ClearState(orgSvc.db, opID)
 	return err
@@ -101,7 +103,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	log.Printf("[DEBUG] Organize: %s", logMsg)
 
 	// Perform organization
-	stats := orgSvc.organizeBooks(ctx, booksToOrganize, progress)
+	stats := orgSvc.organizeBooks(ctx, booksToOrganize, progress, req.OperationID)
 
 	// Trigger automatic rescan if any books were organized
 	if stats.Organized > 0 {
@@ -153,7 +155,7 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 	return booksToOrganize
 }
 
-func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, progress operations.ProgressReporter) *OrganizeStats {
+func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, progress operations.ProgressReporter, operationID string) *OrganizeStats {
 	org := organizer.NewOrganizer(&config.AppConfig)
 	stats := &OrganizeStats{Total: len(booksToOrganize)}
 
@@ -177,10 +179,42 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			continue
 		}
 
+		// Record file move change for undo
+		if operationID != "" && oldPath != newPath {
+			_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
+				OperationID: operationID,
+				BookID:      book.ID,
+				ChangeType:  "file_move",
+				FieldName:   "file_path",
+				OldValue:    oldPath,
+				NewValue:    newPath,
+			})
+		}
+
+		// Record metadata changes for undo
+		oldState := book.LibraryState
 		// Update book's file path and state in database
 		book.FilePath = newPath
 		book.LibraryState = stringPtr("organized")
 		applyOrganizedFileMetadata(&book, newPath)
+
+		if operationID != "" {
+			if oldState == nil || *oldState != "organized" {
+				oldVal := ""
+				if oldState != nil {
+					oldVal = *oldState
+				}
+				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
+					OperationID: operationID,
+					BookID:      book.ID,
+					ChangeType:  "metadata_update",
+					FieldName:   "library_state",
+					OldValue:    oldVal,
+					NewValue:    "organized",
+				})
+			}
+		}
+
 		if _, err := orgSvc.db.UpdateBook(book.ID, &book); err != nil {
 			errDetails := fmt.Sprintf("Failed to update book path for %s: %s — rolling back file move", book.ID, err.Error())
 			_ = progress.Log("error", errDetails, nil)

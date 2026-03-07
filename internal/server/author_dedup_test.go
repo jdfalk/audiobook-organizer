@@ -1,5 +1,5 @@
 // file: internal/server/author_dedup_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -124,6 +124,11 @@ func TestIsCompositeAuthorName(t *testing.T) {
 	composite := []string{
 		"Orson Scott Card/A Johnston",
 		"Mark Tufo, Sean Runnette",
+		"Author One (Author Two)",
+		"Author One [Author Two]",
+		"R.A. Mejia Charles Dean",
+		"John Smith Jane Doe",
+		"Author One; Author Two",
 	}
 	for _, name := range composite {
 		if !isCompositeAuthorName(name) {
@@ -136,10 +141,48 @@ func TestIsCompositeAuthorName(t *testing.T) {
 		"Smith, John",
 		"J. K. Rowling",
 		"Natalie Maher (aka Thundamoo)",
+		"James S. A. Corey",
+		"Brandon Sanderson",
+		"Robert Jordan",
 	}
 	for _, name := range single {
 		if isCompositeAuthorName(name) {
 			t.Errorf("expected %q to NOT be composite", name)
+		}
+	}
+}
+
+func TestSplitCompositeAuthorName_NewPatterns(t *testing.T) {
+	tests := []struct {
+		name   string
+		expect []string
+	}{
+		{"R.A. Mejia Charles Dean", []string{"R. A. Mejia", "Charles Dean"}},
+		{"Author One (Author Two)", []string{"Author One", "Author Two"}},
+		{"Author One [Author Two]", []string{"Author One", "Author Two"}},
+		{"John Smith Jane Doe", []string{"John Smith", "Jane Doe"}},
+		{"Author One; Author Two", []string{"Author One", "Author Two"}},
+		// Should NOT split
+		{"James S. A. Corey", nil},
+		{"Brandon Sanderson", nil},
+		{"J. K. Rowling", nil},
+	}
+	for _, tt := range tests {
+		got := SplitCompositeAuthorName(tt.name)
+		if tt.expect == nil {
+			if got != nil {
+				t.Errorf("SplitCompositeAuthorName(%q) = %v, want nil", tt.name, got)
+			}
+		} else {
+			if len(got) != len(tt.expect) {
+				t.Errorf("SplitCompositeAuthorName(%q) = %v, want %v", tt.name, got, tt.expect)
+				continue
+			}
+			for i := range tt.expect {
+				if got[i] != tt.expect[i] {
+					t.Errorf("SplitCompositeAuthorName(%q)[%d] = %q, want %q", tt.name, i, got[i], tt.expect[i])
+				}
+			}
 		}
 	}
 }
@@ -172,6 +215,64 @@ func TestAreAuthorsDuplicate(t *testing.T) {
 		if areAuthorsDuplicate(tt.a, tt.b) {
 			t.Errorf("expected %q and %q to NOT match", tt.a, tt.b)
 		}
+	}
+}
+
+func TestIsProductionCompany(t *testing.T) {
+	companies := []string{
+		"Soundbooth Theater",
+		"Graphic Audio",
+		"Podium Audio",
+		"Tantor Media",
+		"Blackstone Audio",
+		"Marvel",
+		"DC Comics",
+		"Audible Studios",
+		"Random House Audio",
+		"HarperCollins",
+		"Macmillan Audio",
+		"Simon & Schuster Audio",
+		"Some Theatre", // suffix match
+	}
+	for _, name := range companies {
+		if !isProductionCompany(name) {
+			t.Errorf("expected %q to be a production company", name)
+		}
+	}
+
+	notCompanies := []string{
+		"Brandon Sanderson",
+		"James S. A. Corey",
+		"Neal Stephenson",
+		"Michael Grant",
+	}
+	for _, name := range notCompanies {
+		if isProductionCompany(name) {
+			t.Errorf("expected %q to NOT be a production company", name)
+		}
+	}
+}
+
+func TestFindDuplicateAuthors_ProductionCompanies(t *testing.T) {
+	authors := []database.Author{
+		{ID: 1, Name: "Brandon Sanderson"},
+		{ID: 2, Name: "Graphic Audio"},
+		{ID: 3, Name: "Soundbooth Theater"},
+	}
+	bookCountFn := func(id int) int { return 2 }
+	groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
+
+	prodCount := 0
+	for _, g := range groups {
+		if g.IsProductionCompany {
+			prodCount++
+			if g.Canonical.Name != "Graphic Audio" && g.Canonical.Name != "Soundbooth Theater" {
+				t.Errorf("unexpected production company: %s", g.Canonical.Name)
+			}
+		}
+	}
+	if prodCount != 2 {
+		t.Errorf("expected 2 production company groups, got %d", prodCount)
 	}
 }
 

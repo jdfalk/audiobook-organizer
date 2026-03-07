@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.90.0
+// version: 1.98.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -89,6 +89,9 @@ type aiParser interface {
 	IsEnabled() bool
 	ParseFilename(ctx context.Context, filename string) (*ai.ParsedMetadata, error)
 	ParseAudiobook(ctx context.Context, abCtx ai.AudiobookContext) (*ai.ParsedMetadata, error)
+	ParseCoverArt(ctx context.Context, imageBytes []byte, mimeType string) (*ai.ParsedMetadata, error)
+	ReviewAuthorDuplicates(ctx context.Context, groups []ai.AuthorDedupInput) ([]ai.AuthorDedupSuggestion, error)
+	DiscoverAuthorDuplicates(ctx context.Context, inputs []ai.AuthorDiscoveryInput) ([]ai.AuthorDiscoverySuggestion, error)
 	TestConnection(ctx context.Context) error
 }
 
@@ -544,9 +547,11 @@ type Server struct {
 	dashboardService       *DashboardService
 	dashboardCache         *cache.Cache[gin.H]
 	olService              *OpenLibraryService
+	dedupCache             *cache.Cache[gin.H]
 	libraryWatcher         *itunes.LibraryWatcher
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
+	scheduler              *TaskScheduler
 }
 
 // ServerConfig holds server configuration
@@ -594,6 +599,7 @@ func NewServer() *Server {
 		metadataStateService:   NewMetadataStateService(database.GlobalStore),
 		dashboardService:       NewDashboardService(database.GlobalStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
+		dedupCache:             cache.New[gin.H](5 * time.Minute),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 	}
@@ -848,8 +854,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	shutdown := make(chan struct{})
 	var backgroundWG sync.WaitGroup
 
-	// Start iTunes sync scheduler if enabled
-	s.startITunesSyncScheduler(shutdown, &backgroundWG)
+	// Start unified task scheduler (replaces individual iTunes sync and purge tickers)
+	s.scheduler = NewTaskScheduler(s)
+	s.scheduler.Start(shutdown, &backgroundWG)
 
 	ticker := time.NewTicker(5 * time.Second)
 	backgroundWG.Add(1)
@@ -893,26 +900,6 @@ func (s *Server) Start(cfg ServerConfig) error {
 			}
 		}
 	}()
-
-	// Background purge of soft-deleted books (configurable retention)
-	if config.AppConfig.PurgeSoftDeletedAfterDays > 0 {
-		purgeTicker := time.NewTicker(6 * time.Hour)
-		backgroundWG.Add(1)
-		go func() {
-			defer backgroundWG.Done()
-			defer purgeTicker.Stop()
-			// Initial run on startup
-			s.runAutoPurgeSoftDeleted()
-			for {
-				select {
-				case <-purgeTicker.C:
-					s.runAutoPurgeSoftDeleted()
-				case <-shutdown:
-					return
-				}
-			}
-		}()
-	}
 
 	// Start auto-scan file watcher if enabled
 	var fileWatcher *watcher.Watcher
@@ -1156,12 +1143,20 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/metadata-history/:field", s.getFieldMetadataHistory)
 			protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.undoMetadataChange)
 			protected.GET("/audiobooks/:id/field-states", s.getAudiobookFieldStates)
+			protected.GET("/audiobooks/:id/changes", s.getBookChanges)
 
 			// Author, narrator, and series routes
 			protected.GET("/authors", s.listAuthors)
 			protected.GET("/authors/count", s.countAuthors)
 			protected.GET("/authors/duplicates", s.listDuplicateAuthors)
+			protected.POST("/authors/duplicates/refresh", s.refreshDuplicateAuthors)
+			protected.POST("/authors/duplicates/ai-review", s.aiReviewDuplicateAuthors)
+			protected.POST("/authors/duplicates/ai-review/apply", s.applyAIAuthorReview)
 			protected.POST("/authors/merge", s.mergeAuthors)
+			protected.POST("/authors/:id/reclassify-as-narrator", s.reclassifyAuthorAsNarrator)
+			protected.PUT("/authors/:id/name", s.renameAuthor)
+			protected.POST("/authors/:id/split", s.splitCompositeAuthor)
+			protected.POST("/authors/:id/resolve-production", s.resolveProductionAuthor)
 			protected.POST("/audiobooks/merge", s.mergeBooks)
 			protected.GET("/narrators", s.listNarrators)
 			protected.GET("/narrators/count", s.countNarrators)
@@ -1170,8 +1165,11 @@ func (s *Server) setupRoutes() {
 			protected.GET("/series", s.listSeries)
 			protected.GET("/series/count", s.countSeries)
 			protected.GET("/series/duplicates", s.listSeriesDuplicates)
+			protected.POST("/series/duplicates/refresh", s.refreshSeriesDuplicates)
 			protected.POST("/series/deduplicate", s.deduplicateSeriesHandler)
 			protected.POST("/series/merge", s.mergeSeriesGroup)
+			protected.PATCH("/series/:id", s.updateSeriesName)
+			protected.POST("/dedup/validate", s.validateDedupEntry)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.getHomeDirectory)
@@ -1185,6 +1183,7 @@ func (s *Server) setupRoutes() {
 			protected.DELETE("/import-paths/:id", s.removeImportPath)
 
 			// Operation routes
+			protected.GET("/operations", s.listOperations)
 			protected.GET("/operations/active", s.listActiveOperations)
 			protected.GET("/operations/stale", s.listStaleOperations)
 			protected.POST("/operations/scan", s.startScan)
@@ -1192,12 +1191,15 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/transcode", s.startTranscode)
 			protected.GET("/operations/:id/status", s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.getOperationLogs)
+			protected.GET("/operations/:id/result", s.getOperationResult)
 			protected.DELETE("/operations/:id", s.cancelOperation)
 			protected.POST("/operations/clear-stale", s.clearStaleOperations)
 			protected.DELETE("/operations/history", s.deleteOperationHistory)
 			protected.POST("/operations/optimize-database", s.optimizeDatabase)
 			protected.POST("/operations/sweep-tombstones", s.sweepTombstones)
 			protected.GET("/operations/audit-files", s.auditFileConsistency)
+			protected.GET("/operations/:id/changes", s.getOperationChanges)
+			protected.POST("/operations/:id/revert", s.revertOperation)
 
 			// Import routes
 			protected.POST("/import/file", s.importFile)
@@ -1220,6 +1222,11 @@ func (s *Server) setupRoutes() {
 			// Cover art
 			protected.GET("/covers/proxy", s.handleCoverProxy)
 			protected.GET("/covers/local/:filename", s.handleLocalCover)
+
+			// Unified task/scheduler routes
+			protected.GET("/tasks", s.listTasks)
+			protected.POST("/tasks/:name/run", s.runTask)
+			protected.PUT("/tasks/:name", s.updateTaskConfig)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)
@@ -1420,17 +1427,24 @@ func (s *Server) searchAudiobooks(c *gin.Context) {
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
+	if cached, ok := s.dedupCache.Get("book-duplicates"); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	result, err := s.audiobookService.GetDuplicateBooks(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"groups":          result.Groups,
 		"group_count":     result.GroupCount,
 		"duplicate_count": result.DuplicateCount,
-	})
+	}
+	s.dedupCache.Set("book-duplicates", resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
@@ -2278,7 +2292,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 					}
 				}
 				if len(names) > 0 {
-					tagMap["artist"] = strings.Join(names, " & ")
+					tagMap["artist"] = strings.Join(names, ", ")
 				}
 			}
 		}
@@ -2468,22 +2482,426 @@ func (s *Server) countAuthors(c *gin.Context) {
 }
 
 func (s *Server) listDuplicateAuthors(c *gin.Context) {
-	authors, err := database.GlobalStore.GetAllAuthors()
+	if cached, ok := s.dedupCache.Get("author-duplicates"); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
+	// No cache — return empty with needs_refresh flag so frontend triggers async scan
+	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "count": 0, "needs_refresh": true})
+}
+
+func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "author-dedup-scan", nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	bookCountFn := func(authorID int) int {
-		books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(authorID)
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Fetching authors...")
+
+		authors, err := store.GetAllAuthors()
 		if err != nil {
-			return 0
+			return err
 		}
-		return len(books)
+		_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Loaded %d authors, fetching book counts...", len(authors)))
+
+		bookCounts, err := store.GetAllAuthorBookCounts()
+		if err != nil {
+			return err
+		}
+		bookCountFn := func(authorID int) int { return bookCounts[authorID] }
+		_ = progress.UpdateProgress(20, 100, "Finding duplicate authors...")
+
+		progressFn := func(current, total int, message string) {
+			// Map author comparison progress to 20-90% range
+			pct := 20 + (current*70)/max(total, 1)
+			_ = progress.UpdateProgress(pct, 100, message)
+		}
+
+		groups := FindDuplicateAuthors(authors, 0.9, bookCountFn, progressFn)
+
+		result := gin.H{"groups": groups, "count": len(groups)}
+		s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
+
+		_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups", len(groups)))
+		return nil
 	}
 
-	groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
-	c.JSON(http.StatusOK, gin.H{"groups": groups, "count": len(groups)})
+	if err := operations.GlobalQueue.Enqueue(opID, "author-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+
+	store := database.GlobalStore
+	author, err := store.GetAuthorByID(authorID)
+	if err != nil || author == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
+		return
+	}
+
+	// Create or find narrator with same name
+	narrator, err := store.GetNarratorByName(author.Name)
+	if err != nil || narrator == nil {
+		narrator, err = store.CreateNarrator(author.Name)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create narrator: %v", err)})
+			return
+		}
+	}
+
+	// Get all books linked to this author
+	books, err := store.GetBooksByAuthorIDWithRole(authorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get books: %v", err)})
+		return
+	}
+
+	booksUpdated := 0
+	for _, book := range books {
+		// Remove author link
+		bookAuthors, err := store.GetBookAuthors(book.ID)
+		if err != nil {
+			continue
+		}
+		var newAuthors []database.BookAuthor
+		for _, ba := range bookAuthors {
+			if ba.AuthorID != authorID {
+				newAuthors = append(newAuthors, ba)
+			}
+		}
+		if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
+			continue
+		}
+
+		// Add narrator link if not already present
+		bookNarrators, err := store.GetBookNarrators(book.ID)
+		if err != nil {
+			continue
+		}
+		hasNarrator := false
+		for _, bn := range bookNarrators {
+			if bn.NarratorID == narrator.ID {
+				hasNarrator = true
+				break
+			}
+		}
+		if !hasNarrator {
+			bookNarrators = append(bookNarrators, database.BookNarrator{
+				BookID:     book.ID,
+				NarratorID: narrator.ID,
+				Role:       "narrator",
+				Position:   len(bookNarrators),
+			})
+			if err := store.SetBookNarrators(book.ID, bookNarrators); err != nil {
+				continue
+			}
+		}
+		booksUpdated++
+	}
+
+	// Delete the author record
+	if err := store.DeleteAuthor(authorID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete author: %v", err)})
+		return
+	}
+
+	s.dedupCache.Invalidate("author-duplicates")
+	c.JSON(http.StatusOK, gin.H{"narrator_id": narrator.ID, "books_updated": booksUpdated})
+}
+
+func (s *Server) renameAuthor(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must not be empty"})
+		return
+	}
+
+	store := database.GlobalStore
+	if err := store.UpdateAuthorName(authorID, name); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	s.dedupCache.Invalidate("author-duplicates")
+	c.JSON(http.StatusOK, gin.H{"id": authorID, "name": name})
+}
+
+// splitCompositeAuthor splits an author like "Author1 / Author2" or "Author1, Author2"
+// into individual author records, relinking all books to each new author.
+func (s *Server) splitCompositeAuthor(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+
+	store := database.GlobalStore
+	author, err := store.GetAuthorByID(authorID)
+	if err != nil || author == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
+		return
+	}
+
+	// Optional: caller can provide explicit names to split into
+	var req struct {
+		Names []string `json:"names"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	// If no explicit names, auto-detect split
+	names := req.Names
+	if len(names) == 0 {
+		names = SplitCompositeAuthorName(author.Name)
+	}
+	if len(names) <= 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "author name does not appear to be composite"})
+		return
+	}
+
+	// Create or find each individual author
+	var newAuthors []database.Author
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		existing, err := store.GetAuthorByName(name)
+		if err == nil && existing != nil {
+			newAuthors = append(newAuthors, *existing)
+			continue
+		}
+		created, err := store.CreateAuthor(name)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create author %q: %v", name, err)})
+			return
+		}
+		newAuthors = append(newAuthors, *created)
+	}
+
+	// Get all books linked to the composite author
+	books, err := store.GetBooksByAuthorIDWithRole(authorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get books: %v", err)})
+		return
+	}
+
+	booksUpdated := 0
+	for _, book := range books {
+		bookAuthors, err := store.GetBookAuthors(book.ID)
+		if err != nil {
+			continue
+		}
+
+		// Find the role/position of the composite author entry
+		role := "author"
+		for _, ba := range bookAuthors {
+			if ba.AuthorID == authorID {
+				role = ba.Role
+				break
+			}
+		}
+
+		// Remove composite author, add individual authors
+		var updated []database.BookAuthor
+		for _, ba := range bookAuthors {
+			if ba.AuthorID != authorID {
+				updated = append(updated, ba)
+			}
+		}
+		for i, na := range newAuthors {
+			// Check not already linked
+			alreadyLinked := false
+			for _, ba := range updated {
+				if ba.AuthorID == na.ID {
+					alreadyLinked = true
+					break
+				}
+			}
+			if !alreadyLinked {
+				updated = append(updated, database.BookAuthor{
+					BookID:   book.ID,
+					AuthorID: na.ID,
+					Role:     role,
+					Position: len(updated) + i,
+				})
+			}
+		}
+		if err := store.SetBookAuthors(book.ID, updated); err != nil {
+			continue
+		}
+		booksUpdated++
+	}
+
+	// Delete the composite author
+	if err := store.DeleteAuthor(authorID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete composite author: %v", err)})
+		return
+	}
+
+	result := make([]gin.H, len(newAuthors))
+	for i, a := range newAuthors {
+		result[i] = gin.H{"id": a.ID, "name": a.Name}
+	}
+
+	s.dedupCache.Invalidate("author-duplicates")
+	c.JSON(http.StatusOK, gin.H{"authors": result, "books_updated": booksUpdated})
+}
+
+// resolveProductionAuthor attempts to find real authors for books attributed to
+// a production company by searching metadata sources by title only and optionally
+// using AI cover art analysis.
+func (s *Server) resolveProductionAuthor(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+
+	store := database.GlobalStore
+	author, err := store.GetAuthorByID(authorID)
+	if err != nil || author == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
+		return
+	}
+
+	if !isProductionCompany(author.Name) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%q is not a recognized production company", author.Name)})
+		return
+	}
+
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "resolve-production-author", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	prodAuthorName := author.Name
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		books, err := store.GetBooksByAuthorIDWithRole(authorID)
+		if err != nil {
+			return fmt.Errorf("failed to get books: %w", err)
+		}
+		_ = progress.Log("info", fmt.Sprintf("Resolving %d books for production company %q", len(books), prodAuthorName), nil)
+
+		resolved := 0
+		failed := 0
+		for i, book := range books {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			_ = progress.UpdateProgress(i, len(books), fmt.Sprintf("Processing %d/%d: %s", i+1, len(books), book.Title))
+
+			// Try metadata fetch by title only
+			resp, fetchErr := s.metadataFetchService.FetchMetadataForBookByTitle(book.ID)
+			if fetchErr == nil && resp != nil && resp.Book != nil && resp.Book.AuthorID != nil {
+				// Check if the found author is different from the production company
+				newAuthor, _ := store.GetAuthorByID(*resp.Book.AuthorID)
+				if newAuthor != nil && !isProductionCompany(newAuthor.Name) {
+					_ = progress.Log("info", fmt.Sprintf("Resolved %q → author %q (source: %s)", book.Title, newAuthor.Name, resp.Source), nil)
+					// Reclassify production company as publisher
+					if book.Publisher == nil || *book.Publisher == "" {
+						pub := prodAuthorName
+						book.Publisher = &pub
+						store.UpdateBook(book.ID, &database.Book{Publisher: &pub})
+					}
+					resolved++
+					continue
+				}
+			}
+
+			// If metadata failed and AI is enabled, try cover art analysis
+			aiParser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+			if aiParser.IsEnabled() && book.FilePath != "" {
+				imgData, mime, imgErr := metadata.ExtractCoverArtBytes(book.FilePath)
+				if imgErr == nil && len(imgData) > 0 {
+					parsed, aiErr := aiParser.ParseCoverArt(ctx, imgData, mime)
+					if aiErr == nil && parsed != nil && parsed.Author != "" && parsed.Confidence != "low" {
+						_ = progress.Log("info", fmt.Sprintf("AI cover analysis for %q found author: %q (confidence: %s)", book.Title, parsed.Author, parsed.Confidence), nil)
+						// Look up or create the discovered author
+						existing, _ := store.GetAuthorByName(parsed.Author)
+						if existing == nil {
+							existing, _ = store.CreateAuthor(parsed.Author)
+						}
+						if existing != nil {
+							aid := existing.ID
+							book.AuthorID = &aid
+							store.UpdateBook(book.ID, &database.Book{AuthorID: &aid})
+							// Update book_authors
+							bookAuthors, _ := store.GetBookAuthors(book.ID)
+							var updated []database.BookAuthor
+							for _, ba := range bookAuthors {
+								if ba.AuthorID != authorID {
+									updated = append(updated, ba)
+								}
+							}
+							updated = append(updated, database.BookAuthor{
+								BookID:   book.ID,
+								AuthorID: existing.ID,
+								Role:     "author",
+								Position: 0,
+							})
+							store.SetBookAuthors(book.ID, updated)
+							resolved++
+							continue
+						}
+					}
+				}
+			}
+
+			failed++
+			_ = progress.Log("debug", fmt.Sprintf("Could not resolve author for %q", book.Title), nil)
+		}
+
+		if s.dedupCache != nil {
+			s.dedupCache.Invalidate("author-duplicates")
+		}
+
+		resultMsg := fmt.Sprintf("Resolved %d/%d books for %q (%d unresolved)", resolved, len(books), prodAuthorName, failed)
+		_ = progress.Log("info", resultMsg, nil)
+		_ = progress.UpdateProgress(len(books), len(books), resultMsg)
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "resolve-production-author", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{"operation": op})
 }
 
 func (s *Server) mergeAuthors(c *gin.Context) {
@@ -2589,6 +3007,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
 			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
 		}
+		s.dedupCache.InvalidateAll()
 		return nil
 	}
 
@@ -2598,6 +3017,35 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, op)
+}
+
+func (s *Server) updateSeriesName(c *gin.Context) {
+	idStr := c.Param("id")
+	id := 0
+	if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series id"})
+		return
+	}
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
+		return
+	}
+	store := database.GlobalStore
+	if err := store.UpdateSeriesName(id, name); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	s.dedupCache.Invalidate("series-duplicates")
+	series, _ := store.GetSeriesByID(id)
+	c.JSON(http.StatusOK, series)
 }
 
 // mergeSeriesGroup merges multiple series into one, reassigning all books.
@@ -2644,6 +3092,16 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		_ = progress.Log("info", fmt.Sprintf("Merging %d series into \"%s\"", len(mergeIDs), keepName), nil)
 		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting series merge...")
 
+		// Collect all unique author IDs from all series being merged (including keep)
+		allAuthorIDs := make(map[int]bool)
+		allSeriesIDs := append([]int{keepID}, mergeIDs...)
+		for _, sid := range allSeriesIDs {
+			s, err := store.GetSeriesByID(sid)
+			if err == nil && s != nil && s.AuthorID != nil {
+				allAuthorIDs[*s.AuthorID] = true
+			}
+		}
+
 		merged := 0
 		var mergeErrors []string
 		for i, mergeID := range mergeIDs {
@@ -2676,12 +3134,39 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 				fmt.Sprintf("Merged %d/%d series", i+1, len(mergeIDs)))
 		}
 
+		// Link all books in the kept series to all unique authors
+		if len(allAuthorIDs) > 1 {
+			_ = progress.Log("info", fmt.Sprintf("Linking books to %d authors", len(allAuthorIDs)), nil)
+			allBooks, err := store.GetBooksBySeriesID(keepID)
+			if err == nil {
+				for _, book := range allBooks {
+					existing, _ := store.GetBookAuthors(book.ID)
+					existingMap := make(map[int]bool)
+					for _, ba := range existing {
+						existingMap[ba.AuthorID] = true
+					}
+					authors := existing
+					for aid := range allAuthorIDs {
+						if !existingMap[aid] {
+							authors = append(authors, database.BookAuthor{BookID: book.ID, AuthorID: aid})
+						}
+					}
+					if len(authors) > len(existing) {
+						if err := store.SetBookAuthors(book.ID, authors); err != nil {
+							mergeErrors = append(mergeErrors, fmt.Sprintf("failed to set authors for book %s: %v", book.ID, err))
+						}
+					}
+				}
+			}
+		}
+
 		resultMsg := fmt.Sprintf("Series merge complete: merged %d, %d errors", merged, len(mergeErrors))
 		_ = progress.Log("info", resultMsg, nil)
 		if len(mergeErrors) > 0 {
 			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
 			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
 		}
+		s.dedupCache.InvalidateAll()
 		return nil
 	}
 
@@ -2792,6 +3277,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 
 		resultMsg := fmt.Sprintf("Book merge complete: merged %d, %d errors", merged, len(mergeErrors))
 		_ = progress.Log("info", resultMsg, nil)
+		s.dedupCache.InvalidateAll()
 		return nil
 	}
 
@@ -2803,45 +3289,300 @@ func (s *Server) mergeBooks(c *gin.Context) {
 	c.JSON(http.StatusAccepted, op)
 }
 
+// extractSeriesNameForDedup tries to extract the actual series name from patterns like
+// "Book Title: Series Name" or "Series Name, Book 3". Returns the suggested
+// series name and whether a suggestion was made.
+func extractSeriesNameForDedup(name string) (string, bool) {
+	// Pattern: "Book Title: Series Name" — the part after colon is often the series
+	if idx := strings.LastIndex(name, ": "); idx > 0 {
+		after := strings.TrimSpace(name[idx+2:])
+		before := strings.TrimSpace(name[:idx])
+		// Heuristic: if after-colon part looks like a series (shorter, no numbers at end),
+		// prefer it. If before-colon part looks like a series, prefer that.
+		// Series names are typically the longer, more generic portion.
+		if len(after) > 3 && len(after) < len(before) {
+			return after, true
+		}
+		if len(before) > 3 && len(before) < len(after) {
+			return before, true
+		}
+	}
+	// Pattern: "Series Name, Book N" or "Series Name, Vol N"
+	commaPatterns := []string{", book ", ", vol ", ", volume ", ", #"}
+	lower := strings.ToLower(name)
+	for _, pat := range commaPatterns {
+		if idx := strings.Index(lower, pat); idx > 0 {
+			return strings.TrimSpace(name[:idx]), true
+		}
+	}
+	return "", false
+}
+
 func (s *Server) listSeriesDuplicates(c *gin.Context) {
-	store := database.GlobalStore
-	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+	if cached, ok := s.dedupCache.Get("series-duplicates"); ok {
+		c.JSON(http.StatusOK, cached)
 		return
 	}
 
-	allSeries, err := store.GetAllSeries()
+	// No cache — return empty with needs_refresh flag so frontend triggers async scan
+	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "count": 0, "total_series": 0, "needs_refresh": true})
+}
+
+func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "series-dedup-scan", nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Group by normalized name only
-	groups := make(map[string][]database.Series)
-	for _, s := range allSeries {
-		key := strings.ToLower(strings.TrimSpace(s.Name))
-		groups[key] = append(groups[key], s)
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Fetching series...")
+
+		allSeries, err := store.GetAllSeries()
+		if err != nil {
+			return err
+		}
+		_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Loaded %d series, grouping...", len(allSeries)))
+
+		// Reuse the same logic from listSeriesDuplicates
+		isGarbageSeries := func(name string) bool {
+			trimmed := strings.TrimSpace(name)
+			if len(trimmed) == 0 {
+				return true
+			}
+			for _, r := range trimmed {
+				if r < '0' || r > '9' {
+					return false
+				}
+			}
+			return true
+		}
+
+		exactGroups := make(map[string][]database.Series)
+		for _, s := range allSeries {
+			if isGarbageSeries(s.Name) {
+				continue
+			}
+			key := strings.ToLower(strings.TrimSpace(s.Name))
+			exactGroups[key] = append(exactGroups[key], s)
+		}
+
+		_ = progress.UpdateProgress(20, 100, "Building author lookup...")
+
+		type seriesBookSummary struct {
+			ID       string `json:"id"`
+			Title    string `json:"title"`
+			CoverURL string `json:"cover_url,omitempty"`
+		}
+		type seriesWithBooks struct {
+			database.Series
+			Books      []seriesBookSummary `json:"books"`
+			AuthorName string              `json:"author_name,omitempty"`
+		}
+
+		allAuthors, _ := store.GetAllAuthors()
+		authorNameMap := make(map[int]string, len(allAuthors))
+		for _, a := range allAuthors {
+			authorNameMap[a.ID] = a.Name
+		}
+
+		type seriesDupGroup struct {
+			Name          string            `json:"name"`
+			Count         int               `json:"count"`
+			Series        []seriesWithBooks `json:"series"`
+			SuggestedName string            `json:"suggested_name,omitempty"`
+			MatchType     string            `json:"match_type"`
+		}
+
+		enrichSeries := func(seriesList []database.Series) []seriesWithBooks {
+			result := make([]seriesWithBooks, 0, len(seriesList))
+			for _, s := range seriesList {
+				authorName := ""
+				if s.AuthorID != nil {
+					authorName = authorNameMap[*s.AuthorID]
+				}
+				sw := seriesWithBooks{Series: s, AuthorName: authorName}
+				if books, err := store.GetBooksBySeriesID(s.ID); err == nil {
+					limit := 5
+					if len(books) < limit {
+						limit = len(books)
+					}
+					for _, b := range books[:limit] {
+						cover := ""
+						if b.CoverURL != nil {
+							cover = *b.CoverURL
+						}
+						sw.Books = append(sw.Books, seriesBookSummary{
+							ID:       b.ID,
+							Title:    b.Title,
+							CoverURL: cover,
+						})
+					}
+				}
+				result = append(result, sw)
+			}
+			return result
+		}
+
+		var result []seriesDupGroup
+		seen := make(map[int]bool)
+
+		_ = progress.UpdateProgress(30, 100, "Finding exact duplicates...")
+
+		groupKeys := make([]string, 0, len(exactGroups))
+		for k := range exactGroups {
+			groupKeys = append(groupKeys, k)
+		}
+
+		processed := 0
+		totalGroups := len(groupKeys)
+		for _, k := range groupKeys {
+			group := exactGroups[k]
+			if len(group) < 2 {
+				continue
+			}
+			for _, s := range group {
+				seen[s.ID] = true
+			}
+			suggested, _ := extractSeriesNameForDedup(group[0].Name)
+			result = append(result, seriesDupGroup{
+				Name:          group[0].Name,
+				Count:         len(group),
+				Series:        enrichSeries(group),
+				SuggestedName: suggested,
+				MatchType:     "exact",
+			})
+			processed++
+			if processed%10 == 0 {
+				pct := 30 + (processed*40)/max(totalGroups, 1)
+				_ = progress.UpdateProgress(min(pct, 70), 100, fmt.Sprintf("Processing groups... (%d/%d)", processed, totalGroups))
+			}
+		}
+
+		_ = progress.UpdateProgress(70, 100, "Finding sub-series patterns...")
+
+		seriesByNormalizedName := make(map[string][]database.Series)
+		for _, s := range allSeries {
+			seriesByNormalizedName[strings.ToLower(strings.TrimSpace(s.Name))] = append(
+				seriesByNormalizedName[strings.ToLower(strings.TrimSpace(s.Name))], s)
+		}
+
+		for _, s := range allSeries {
+			if seen[s.ID] || isGarbageSeries(s.Name) {
+				continue
+			}
+			suggested, ok := extractSeriesNameForDedup(s.Name)
+			if !ok {
+				continue
+			}
+			suggestedKey := strings.ToLower(strings.TrimSpace(suggested))
+			if matches, exists := seriesByNormalizedName[suggestedKey]; exists {
+				group := []database.Series{s}
+				seen[s.ID] = true
+				for _, m := range matches {
+					if !seen[m.ID] {
+						group = append(group, m)
+						seen[m.ID] = true
+					}
+				}
+				if len(group) >= 2 {
+					result = append(result, seriesDupGroup{
+						Name:          s.Name,
+						Count:         len(group),
+						Series:        enrichSeries(group),
+						SuggestedName: suggested,
+						MatchType:     "subseries",
+					})
+				}
+			}
+		}
+
+		resp := gin.H{"groups": result, "count": len(result), "total_series": len(allSeries)}
+		s.dedupCache.Set("series-duplicates", resp)
+
+		_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups", len(result)))
+		return nil
 	}
 
-	type seriesDupGroup struct {
-		Name    string            `json:"name"`
-		Count   int               `json:"count"`
-		Series  []database.Series `json:"series"`
+	if err := operations.GlobalQueue.Enqueue(opID, "series-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	var result []seriesDupGroup
-	for _, group := range groups {
-		if len(group) < 2 {
+	c.JSON(http.StatusAccepted, op)
+}
+
+// validateDedupEntry searches metadata sources (OpenLibrary, Audible, etc.) to validate
+// a series name, author name, or book title during dedup review.
+func (s *Server) validateDedupEntry(c *gin.Context) {
+	var req struct {
+		Query string `json:"query" binding:"required"`
+		Type  string `json:"type"` // "series", "author", "book"
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+		return
+	}
+	if req.Type == "" {
+		req.Type = "series"
+	}
+
+	chain := s.metadataFetchService.BuildSourceChain()
+	if len(chain) == 0 {
+		c.JSON(http.StatusOK, gin.H{"results": []interface{}{}, "message": "no metadata sources configured"})
+		return
+	}
+
+	type validationResult struct {
+		Source         string `json:"source"`
+		Title          string `json:"title"`
+		Author         string `json:"author"`
+		Series         string `json:"series,omitempty"`
+		SeriesPosition string `json:"series_position,omitempty"`
+		CoverURL       string `json:"cover_url,omitempty"`
+		ISBN           string `json:"isbn,omitempty"`
+	}
+
+	var results []validationResult
+	for _, src := range chain {
+		matches, err := src.SearchByTitle(req.Query)
+		if err != nil {
 			continue
 		}
-		result = append(result, seriesDupGroup{
-			Name:   group[0].Name,
-			Count:  len(group),
-			Series: group,
-		})
+		for _, m := range matches {
+			r := validationResult{
+				Source:         src.Name(),
+				Title:          m.Title,
+				Author:         m.Author,
+				Series:         m.Series,
+				SeriesPosition: m.SeriesPosition,
+				CoverURL:       m.CoverURL,
+				ISBN:            m.ISBN,
+			}
+			// For series validation, prioritize results that have series info
+			if req.Type == "series" && m.Series == "" {
+				continue
+			}
+			results = append(results, r)
+		}
+		// Limit total results
+		if len(results) >= 20 {
+			results = results[:20]
+			break
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"groups": result, "count": len(result), "total_series": len(allSeries)})
+	if results == nil {
+		results = []validationResult{}
+	}
+	c.JSON(http.StatusOK, gin.H{"results": results, "query": req.Query, "type": req.Type})
 }
 
 func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
@@ -2942,6 +3683,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
 			_ = progress.Log("warn", fmt.Sprintf("Merge errors: %s", errDetail), nil)
 		}
+		s.dedupCache.InvalidateAll()
 		return nil
 	}
 
@@ -3355,8 +4097,9 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 	// Create operation function that delegates to service
 	organizeReq := &OrganizeRequest{
-		FolderPath: req.FolderPath,
-		Priority:   req.Priority,
+		FolderPath:  req.FolderPath,
+		Priority:    req.Priority,
+		OperationID: op.ID,
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -3717,6 +4460,24 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress
+func (s *Server) listOperations(c *gin.Context) {
+	params := ParsePaginationParams(c)
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusOK, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
+		return
+	}
+	ops, total, err := store.ListOperations(params.Limit, params.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if ops == nil {
+		ops = []database.Operation{}
+	}
+	c.JSON(http.StatusOK, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
+}
+
 func (s *Server) listActiveOperations(c *gin.Context) {
 	if operations.GlobalQueue == nil {
 		c.JSON(http.StatusOK, gin.H{"operations": []gin.H{}})
@@ -5488,4 +6249,580 @@ func ptrStr(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// listTasks returns all registered tasks with their status and schedule.
+func (s *Server) listTasks(c *gin.Context) {
+	if s.scheduler == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		return
+	}
+	c.JSON(http.StatusOK, s.scheduler.ListTasks())
+}
+
+// runTask triggers a task by name.
+func (s *Server) runTask(c *gin.Context) {
+	if s.scheduler == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		return
+	}
+	name := c.Param("name")
+	op, err := s.scheduler.RunTask(name)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if op == nil {
+		c.JSON(http.StatusAccepted, gin.H{"message": "task triggered"})
+		return
+	}
+	c.JSON(http.StatusAccepted, op)
+}
+
+// updateTaskConfig updates schedule config for a task.
+func (s *Server) updateTaskConfig(c *gin.Context) {
+	name := c.Param("name")
+
+	var req struct {
+		Enabled         *bool `json:"enabled"`
+		IntervalMinutes *int  `json:"interval_minutes"`
+		RunOnStartup    *bool `json:"run_on_startup"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Map task name to config fields and apply
+	switch name {
+	case "dedup_refresh":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledDedupRefreshEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ScheduledDedupRefreshInterval = *req.IntervalMinutes
+		}
+		if req.RunOnStartup != nil {
+			config.AppConfig.ScheduledDedupRefreshOnStartup = *req.RunOnStartup
+		}
+	case "author_split_scan":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledAuthorSplitEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ScheduledAuthorSplitInterval = *req.IntervalMinutes
+		}
+		if req.RunOnStartup != nil {
+			config.AppConfig.ScheduledAuthorSplitOnStartup = *req.RunOnStartup
+		}
+	case "db_optimize":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledDbOptimizeEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ScheduledDbOptimizeInterval = *req.IntervalMinutes
+		}
+		if req.RunOnStartup != nil {
+			config.AppConfig.ScheduledDbOptimizeOnStartup = *req.RunOnStartup
+		}
+	case "metadata_refresh":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledMetadataRefreshEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ScheduledMetadataRefreshInterval = *req.IntervalMinutes
+		}
+		if req.RunOnStartup != nil {
+			config.AppConfig.ScheduledMetadataRefreshOnStartup = *req.RunOnStartup
+		}
+	case "itunes_sync":
+		if req.Enabled != nil {
+			config.AppConfig.ITunesSyncEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ITunesSyncInterval = *req.IntervalMinutes
+		}
+	case "purge_deleted":
+		if req.IntervalMinutes != nil {
+			// purge interval is fixed at 6h, but we can update retention days
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task %q config is not configurable", name)})
+		return
+	}
+
+	// Persist to database
+	if database.GlobalStore != nil {
+		if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+			log.Printf("[WARN] Failed to save task config: %v", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "task config updated"})
+}
+
+func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
+	parser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	if !parser.IsEnabled() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled"})
+		return
+	}
+
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	// Parse optional mode from request body
+	var reqBody struct {
+		Mode string `json:"mode"`
+	}
+	_ = c.ShouldBindJSON(&reqBody)
+	mode := reqBody.Mode
+	if mode == "" {
+		mode = "groups"
+	}
+	if mode != "full" && mode != "groups" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q; must be full or groups", mode)})
+		return
+	}
+
+	store := database.GlobalStore
+
+	// Check for an already-running ai-author-review of the same mode — block concurrent same-mode runs
+	opType := "ai-author-review-" + mode
+	recentOps, _, _ := store.ListOperations(50, 0)
+	for _, existing := range recentOps {
+		if existing.Type == opType && (existing.Status == "pending" || existing.Status == "running") {
+			c.JSON(http.StatusAccepted, existing)
+			return
+		}
+	}
+
+	// For groups mode, we need cached dedup groups
+	var dedupGroups []AuthorDedupGroup
+	if mode == "groups" {
+		cached, ok := s.dedupCache.Get("author-duplicates")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no dedup groups cached; run refresh first"})
+			return
+		} else {
+			groupsRaw, ok2 := cached["groups"]
+			if ok2 {
+				groupsJSON, err := json.Marshal(groupsRaw)
+				if err == nil {
+					_ = json.Unmarshal(groupsJSON, &dedupGroups)
+				}
+			}
+		}
+		if mode == "groups" && len(dedupGroups) == 0 {
+			c.JSON(http.StatusOK, gin.H{"message": "no duplicate groups to review"})
+			return
+		}
+	}
+
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, opType, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		switch mode {
+		case "groups":
+			return s.aiReviewGroupsMode(ctx, progress, parser, store, opID, dedupGroups)
+		case "full":
+			return s.aiReviewFullMode(ctx, progress, parser, store, opID)
+		}
+		return fmt.Errorf("unknown mode: %s", mode)
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, opType, operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// aiReviewGroupsMode is the existing Groups mode — local heuristics build groups, AI validates.
+func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string, dedupGroups []AuthorDedupGroup) error {
+	_ = progress.Log("info", fmt.Sprintf("Starting AI review (groups mode) of %d duplicate author groups", len(dedupGroups)), nil)
+	_ = progress.UpdateProgress(0, len(dedupGroups), "Building AI review input...")
+
+	var inputs []ai.AuthorDedupInput
+	for i, group := range dedupGroups {
+		var variantNames []string
+		for _, v := range group.Variants {
+			variantNames = append(variantNames, v.Name)
+		}
+		var sampleTitles []string
+		if group.Canonical.ID > 0 {
+			books, err := store.GetBooksByAuthorIDWithRole(group.Canonical.ID)
+			if err == nil {
+				for j, b := range books {
+					if j >= 3 {
+						break
+					}
+					sampleTitles = append(sampleTitles, b.Title)
+				}
+			}
+		}
+		inputs = append(inputs, ai.AuthorDedupInput{
+			Index:         i,
+			CanonicalName: group.Canonical.Name,
+			VariantNames:  variantNames,
+			BookCount:     group.BookCount,
+			SampleTitles:  sampleTitles,
+		})
+	}
+
+	_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Sending %d groups to AI for review...", len(inputs)))
+
+	suggestions, err := parser.ReviewAuthorDuplicates(ctx, inputs)
+	if err != nil {
+		return fmt.Errorf("AI review failed: %w", err)
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("Received %d suggestions from AI", len(suggestions)), nil)
+
+	resultPayload := map[string]interface{}{
+		"mode":        "groups",
+		"suggestions": suggestions,
+		"groups":      dedupGroups,
+	}
+	resultJSON, err := json.Marshal(resultPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal suggestions: %w", err)
+	}
+	if err := store.UpdateOperationResultData(opID, string(resultJSON)); err != nil {
+		return fmt.Errorf("failed to store results: %w", err)
+	}
+
+	_ = progress.UpdateProgress(100, 100, fmt.Sprintf("AI review complete: %d suggestions", len(suggestions)))
+	return nil
+}
+
+// aiReviewFullMode sends all authors to AI for duplicate discovery.
+func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string) error {
+	_ = progress.Log("info", "Starting AI review (full mode) — discovering duplicates from all authors", nil)
+	_ = progress.UpdateProgress(0, 100, "Loading all authors...")
+
+	allAuthors, err := store.GetAllAuthors()
+	if err != nil {
+		return fmt.Errorf("failed to get authors: %w", err)
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("Building discovery input for %d authors", len(allAuthors)), nil)
+	_ = progress.UpdateProgress(5, 100, fmt.Sprintf("Building input for %d authors...", len(allAuthors)))
+
+	var inputs []ai.AuthorDiscoveryInput
+	for _, author := range allAuthors {
+		var sampleTitles []string
+		books, err := store.GetBooksByAuthorIDWithRole(author.ID)
+		if err == nil {
+			for j, b := range books {
+				if j >= 3 {
+					break
+				}
+				sampleTitles = append(sampleTitles, b.Title)
+			}
+		}
+		inputs = append(inputs, ai.AuthorDiscoveryInput{
+			ID:           author.ID,
+			Name:         author.Name,
+			BookCount:    len(books),
+			SampleTitles: sampleTitles,
+		})
+	}
+
+	_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Sending %d authors to AI for discovery...", len(inputs)))
+
+	discoveries, err := parser.DiscoverAuthorDuplicates(ctx, inputs)
+	if err != nil {
+		return fmt.Errorf("AI discovery failed: %w", err)
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("AI discovered %d duplicate groups", len(discoveries)), nil)
+
+	// Build author ID→Author map for lookup
+	authorMap := make(map[int]database.Author)
+	for _, a := range allAuthors {
+		authorMap[a.ID] = a
+	}
+
+	// Convert discovery suggestions to standard AuthorDedupSuggestion + AuthorDedupGroup format
+	var suggestions []ai.AuthorDedupSuggestion
+	var groups []AuthorDedupGroup
+	for _, disc := range discoveries {
+		if len(disc.AuthorIDs) < 2 && disc.Action != "rename" {
+			continue
+		}
+		// First ID = canonical, rest = variants
+		canonicalID := disc.AuthorIDs[0]
+		canonical, ok := authorMap[canonicalID]
+		if !ok {
+			continue
+		}
+		var variants []database.Author
+		for _, aid := range disc.AuthorIDs[1:] {
+			if a, ok := authorMap[aid]; ok {
+				variants = append(variants, a)
+			}
+		}
+		groups = append(groups, AuthorDedupGroup{
+			Canonical: canonical,
+			Variants:  variants,
+			BookCount: disc.AuthorIDs[0], // placeholder; we just need a count
+		})
+		// Fix book count — count books for all authors in the group
+		totalBooks := 0
+		for _, aid := range disc.AuthorIDs {
+			bks, err := store.GetBooksByAuthorIDWithRole(aid)
+			if err == nil {
+				totalBooks += len(bks)
+			}
+		}
+		groups[len(groups)-1].BookCount = totalBooks
+
+		suggestions = append(suggestions, ai.AuthorDedupSuggestion{
+			GroupIndex:    len(groups) - 1, // index into groups slice, not discoveries
+			Action:        disc.Action,
+			CanonicalName: disc.CanonicalName,
+			Reason:        disc.Reason,
+			Confidence:    disc.Confidence,
+			IsNarrator:    disc.IsNarrator,
+			IsPublisher:   disc.IsPublisher,
+		})
+	}
+
+	resultPayload := map[string]interface{}{
+		"mode":        "full",
+		"suggestions": suggestions,
+		"groups":      groups,
+	}
+	resultJSON, err := json.Marshal(resultPayload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal results: %w", err)
+	}
+	if err := store.UpdateOperationResultData(opID, string(resultJSON)); err != nil {
+		return fmt.Errorf("failed to store results: %w", err)
+	}
+
+	_ = progress.UpdateProgress(100, 100, fmt.Sprintf("AI discovery complete: %d groups found", len(groups)))
+	return nil
+}
+
+
+func (s *Server) getOperationResult(c *gin.Context) {
+	id := c.Param("id")
+	store := database.GlobalStore
+	op, err := store.GetOperationByID(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if op == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		return
+	}
+
+	if op.ResultData == nil {
+		c.JSON(http.StatusOK, gin.H{"result_data": nil})
+		return
+	}
+
+	// Parse the JSON result data to return as structured JSON
+	var resultData json.RawMessage
+	if err := json.Unmarshal([]byte(*op.ResultData), &resultData); err != nil {
+		c.JSON(http.StatusOK, gin.H{"result_data": *op.ResultData})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result_data": resultData})
+}
+
+func (s *Server) applyAIAuthorReview(c *gin.Context) {
+	var req struct {
+		Suggestions []struct {
+			GroupIndex    int    `json:"group_index"`
+			Action        string `json:"action"`
+			CanonicalName string `json:"canonical_name"`
+			KeepID        int    `json:"keep_id"`
+			MergeIDs      []int  `json:"merge_ids"`
+			Rename        bool   `json:"rename"`
+		} `json:"suggestions"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.Suggestions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no suggestions provided"})
+		return
+	}
+
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "ai-author-merge-apply", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	suggestions := req.Suggestions
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		total := len(suggestions)
+		applied := 0
+		var applyErrors []string
+
+		_ = progress.Log("info", fmt.Sprintf("Starting AI author review apply: %d suggestion(s)", total), nil)
+
+		for i, sug := range suggestions {
+			if progress.IsCanceled() {
+				_ = progress.Log("warn", "Operation cancelled by user", nil)
+				return fmt.Errorf("cancelled")
+			}
+
+			_ = progress.UpdateProgress(i, total, fmt.Sprintf("Applying suggestion %d/%d...", i+1, total))
+
+			switch sug.Action {
+			case "skip":
+				_ = progress.Log("info", fmt.Sprintf("Skipped group %d", sug.GroupIndex), nil)
+				continue
+
+			case "rename":
+				if sug.KeepID > 0 && sug.CanonicalName != "" {
+					if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+						applyErrors = append(applyErrors, fmt.Sprintf("rename author %d: %v", sug.KeepID, err))
+					} else {
+						applied++
+						_ = progress.Log("info", fmt.Sprintf("Renamed author %d to \"%s\"", sug.KeepID, sug.CanonicalName), nil)
+					}
+				}
+
+			case "merge":
+				// Rename canonical if needed
+				if sug.Rename && sug.KeepID > 0 && sug.CanonicalName != "" {
+					if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+						applyErrors = append(applyErrors, fmt.Sprintf("rename before merge %d: %v", sug.KeepID, err))
+					}
+				}
+
+				// Merge variant authors
+				for _, mergeID := range sug.MergeIDs {
+					if mergeID == sug.KeepID {
+						continue
+					}
+					books, err := store.GetBooksByAuthorIDWithRole(mergeID)
+					if err != nil {
+						applyErrors = append(applyErrors, fmt.Sprintf("get books for author %d: %v", mergeID, err))
+						continue
+					}
+
+					// Snapshot affected books
+					_ = progress.Log("info", fmt.Sprintf("Snapshotting %d books before merge of author %d", len(books), mergeID), nil)
+
+					for _, book := range books {
+						bookAuthors, err := store.GetBookAuthors(book.ID)
+						if err != nil {
+							continue
+						}
+						hasKeep := false
+						for _, ba := range bookAuthors {
+							if ba.AuthorID == sug.KeepID {
+								hasKeep = true
+								break
+							}
+						}
+						var newAuthors []database.BookAuthor
+						for _, ba := range bookAuthors {
+							if ba.AuthorID == mergeID {
+								if !hasKeep {
+									ba.AuthorID = sug.KeepID
+									newAuthors = append(newAuthors, ba)
+									hasKeep = true
+								}
+							} else {
+								newAuthors = append(newAuthors, ba)
+							}
+						}
+						if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
+							applyErrors = append(applyErrors, fmt.Sprintf("update book %s: %v", book.ID, err))
+						}
+					}
+
+					if err := store.DeleteAuthor(mergeID); err != nil {
+						applyErrors = append(applyErrors, fmt.Sprintf("delete author %d: %v", mergeID, err))
+					}
+				}
+				applied++
+				_ = progress.Log("info", fmt.Sprintf("Merged group %d: %d variants into \"%s\"", sug.GroupIndex, len(sug.MergeIDs), sug.CanonicalName), nil)
+
+			case "split":
+				_ = progress.Log("info", fmt.Sprintf("Split action for group %d — manual intervention needed", sug.GroupIndex), nil)
+				applied++
+			}
+		}
+
+		s.dedupCache.InvalidateAll()
+
+		resultMsg := fmt.Sprintf("AI review applied: %d actions, %d errors", applied, len(applyErrors))
+		_ = progress.Log("info", resultMsg, nil)
+		if len(applyErrors) > 0 {
+			errDetail := strings.Join(applyErrors[:min(len(applyErrors), 10)], "; ")
+			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
+		}
+
+		_ = progress.UpdateProgress(total, total, resultMsg)
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "ai-author-merge-apply", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// getOperationChanges returns change tracking records for an operation.
+func (s *Server) getOperationChanges(c *gin.Context) {
+	id := c.Param("id")
+	changes, err := database.GlobalStore.GetOperationChanges(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"changes": changes})
+}
+
+// revertOperation undoes all changes from a given operation.
+func (s *Server) revertOperation(c *gin.Context) {
+	id := c.Param("id")
+	revertSvc := NewRevertService(database.GlobalStore)
+	if err := revertSvc.RevertOperation(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "operation reverted successfully"})
+}
+
+// getBookChanges returns change tracking records for a book.
+func (s *Server) getBookChanges(c *gin.Context) {
+	id := c.Param("id")
+	changes, err := database.GlobalStore.GetBookChanges(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"changes": changes})
 }

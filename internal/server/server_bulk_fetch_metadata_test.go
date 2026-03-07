@@ -7,7 +7,7 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -30,10 +30,10 @@ func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 		q := r.URL.Query()
 		title := q.Get("title")
 		if title == url.QueryEscape("NoResults") || title == "NoResults" {
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"numFound": 0, "start": 0, "docs": []interface{}{}})
+			_ = json.MarshalWrite(w, map[string]interface{}{"numFound": 0, "start": 0, "docs": []interface{}{}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.MarshalWrite(w, map[string]interface{}{
 			"numFound": 1,
 			"start":    0,
 			"docs": []map[string]interface{}{
@@ -120,7 +120,7 @@ func TestBulkFetchMetadata_OnlyMissingFalse_AllowsOverwrite(t *testing.T) {
 	// Stub OpenLibrary with a different publisher.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search.json", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.MarshalWrite(w, map[string]interface{}{
 			"numFound": 1,
 			"start":    0,
 			"docs": []map[string]interface{}{

@@ -9,7 +9,7 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -176,7 +176,7 @@ func TestSearchAndFetchMetadata(t *testing.T) {
 				},
 			},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		_ = json.MarshalWrite(w, resp)
 	})
 	openLibrary := httptest.NewServer(mux)
 	defer openLibrary.Close()
