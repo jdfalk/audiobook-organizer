@@ -1024,7 +1024,7 @@ function AuthorDedupTab() {
                       onClick={() => setAiConfidenceFilter(level)} size="small" />
                   ))}
                   <Tooltip title="Re-run AI Review">
-                    <IconButton onClick={handleAIReview} disabled={busy || groups.length === 0} size="small">
+                    <IconButton onClick={handleAIReview} disabled={busy || (aiMode !== 'full' && groups.length === 0)} size="small">
                       <RefreshIcon />
                     </IconButton>
                   </Tooltip>
@@ -1179,7 +1179,7 @@ function AuthorDedupTab() {
                 Merge All ({groups.length})
               </Button>
               <Button variant="outlined" color="secondary" startIcon={<AutoAwesomeIcon />}
-                onClick={handleAIReview} disabled={busy || groups.length === 0}>
+                onClick={handleAIReview} disabled={busy || (aiMode !== 'full' && groups.length === 0)}>
                 AI Review
               </Button>
             </>
