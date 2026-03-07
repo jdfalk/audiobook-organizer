@@ -1,16 +1,20 @@
 // file: internal/ai/openai_parser.go
-// version: 1.4.0
+// version: 1.9.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -31,11 +35,15 @@ type ParsedMetadata struct {
 
 // OpenAIParser handles AI-powered metadata parsing using OpenAI
 type OpenAIParser struct {
-	client     *openai.Client
-	model      string
-	maxRetries int
-	enabled    bool
+	client        *openai.Client
+	model         string
+	maxRetries    int
+	enabled       bool
+	responseCache *cache.Cache[*ParsedMetadata] // Application-level response cache
 }
+
+// Default cache TTL for AI responses (24 hours — metadata doesn't change often)
+const aiResponseCacheTTL = 24 * time.Hour
 
 // NewOpenAIParser creates a new OpenAI parser
 func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
@@ -51,10 +59,32 @@ func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
 	client := openai.NewClient(clientOptions...)
 
 	return &OpenAIParser{
-		client:     &client,
-		model:      "gpt-4o-mini", // Fast and cost-effective
-		maxRetries: 2,
-		enabled:    true,
+		client:        &client,
+		model:         "gpt-5-mini", // Primary model for all AI operations
+		maxRetries:    2,
+		enabled:       true,
+		responseCache: cache.New[*ParsedMetadata](aiResponseCacheTTL),
+	}
+}
+
+// cacheKey generates a deterministic hash key for caching AI responses.
+func cacheKey(prefix string, input string) string {
+	h := sha256.Sum256([]byte(prefix + ":" + input))
+	return hex.EncodeToString(h[:16]) // 128-bit key is plenty
+}
+
+// CacheStats returns the number of cached entries (for diagnostics).
+func (p *OpenAIParser) CacheStats() int {
+	if p.responseCache == nil {
+		return 0
+	}
+	return p.responseCache.Len()
+}
+
+// InvalidateCache clears the AI response cache.
+func (p *OpenAIParser) InvalidateCache() {
+	if p.responseCache != nil {
+		p.responseCache.InvalidateAll()
 	}
 }
 
@@ -63,14 +93,19 @@ func (p *OpenAIParser) IsEnabled() bool {
 	return p.enabled
 }
 
-// ParseFilename uses OpenAI to parse a filename into structured metadata
-// Uses prompt caching by setting system prompt as a cached message
+// ParseFilename uses OpenAI to parse a filename into structured metadata.
+// Results are cached locally for 24h and uses OpenAI prompt caching for cost reduction.
 func (p *OpenAIParser) ParseFilename(ctx context.Context, filename string) (*ParsedMetadata, error) {
 	if !p.enabled {
 		return nil, fmt.Errorf("OpenAI parser is not enabled")
 	}
 
-	// Create the system prompt (will be cached by OpenAI)
+	// Check application-level cache
+	key := cacheKey("filename", filename)
+	if cached, ok := p.responseCache.Get(key); ok {
+		return cached, nil
+	}
+
 	systemPrompt := `You are an expert at parsing audiobook filenames. Extract structured metadata from the filename.
 
 Common patterns:
@@ -94,10 +129,8 @@ Return ONLY valid JSON with these fields (omit if not found):
 
 Set confidence based on clarity of the filename structure.`
 
-	// User prompt with the actual filename
 	userPrompt := fmt.Sprintf("Parse this audiobook filename:\n\n%s", filename)
 
-	// Create chat completion with response format for JSON
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
 	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
@@ -105,9 +138,9 @@ Set confidence based on clarity of the filename structure.`
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:       shared.ChatModel(p.model),
-		Temperature: param.NewOpt(0.1),
-		MaxTokens:   param.NewOpt[int64](500),
+		Model:          shared.ChatModel(p.model),
+		MaxCompletionTokens: param.NewOpt[int64](500),
+		PromptCacheKey: param.NewOpt("audiobook-filename-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -121,9 +154,15 @@ Set confidence based on clarity of the filename structure.`
 		return nil, fmt.Errorf("no response from OpenAI")
 	}
 
-	// Parse the JSON response
 	content := completion.Choices[0].Message.Content
-	return parseMetadataFromJSON(content)
+	result, err := parseMetadataFromJSON(content)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the result
+	p.responseCache.Set(key, result)
+	return result, nil
 }
 
 // AudiobookContext provides rich context for AI parsing beyond just a filename.
@@ -138,9 +177,16 @@ type AudiobookContext struct {
 
 // ParseAudiobook uses OpenAI to parse audiobook metadata from rich context
 // (full file path, existing metadata, file count, duration) rather than just a filename.
+// Results are cached locally for 24h by file path.
 func (p *OpenAIParser) ParseAudiobook(ctx context.Context, abCtx AudiobookContext) (*ParsedMetadata, error) {
 	if !p.enabled {
 		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	// Check application-level cache by file path
+	key := cacheKey("audiobook", abCtx.FilePath)
+	if cached, ok := p.responseCache.Get(key); ok {
+		return cached, nil
 	}
 
 	systemPrompt := `You are an expert at identifying audiobook metadata. Extract structured metadata from ALL available context: folder hierarchy, existing metadata, file details.
@@ -194,9 +240,9 @@ Set confidence based on how much context was available and how unambiguous it is
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:       shared.ChatModel(p.model),
-		Temperature: param.NewOpt(0.1),
-		MaxTokens:   param.NewOpt[int64](500),
+		Model:          shared.ChatModel(p.model),
+		MaxCompletionTokens: param.NewOpt[int64](500),
+		PromptCacheKey: param.NewOpt("audiobook-context-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -211,7 +257,13 @@ Set confidence based on how much context was available and how unambiguous it is
 	}
 
 	content := completion.Choices[0].Message.Content
-	return parseMetadataFromJSON(content)
+	result, err := parseMetadataFromJSON(content)
+	if err != nil {
+		return nil, err
+	}
+
+	p.responseCache.Set(key, result)
+	return result, nil
 }
 
 // ParseBatch parses multiple filenames in a single request (more efficient).
@@ -279,9 +331,9 @@ Set confidence based on clarity of the filename structure.`
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:       shared.ChatModel(p.model),
-			Temperature: param.NewOpt(0.1),
-			MaxTokens:   param.NewOpt[int64](2000),
+			Model:          shared.ChatModel(p.model),
+			MaxCompletionTokens: param.NewOpt[int64](2000),
+			PromptCacheKey: param.NewOpt("audiobook-batch-parser-v1"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
@@ -302,6 +354,68 @@ Set confidence based on clarity of the filename structure.`
 	}
 
 	return nil, lastErr
+}
+
+// ParseCoverArt uses OpenAI vision to extract metadata from audiobook cover art.
+// It sends the cover image to gpt-5-mini and asks it to read the title, author,
+// series, and other information visible on the cover.
+func (p *OpenAIParser) ParseCoverArt(ctx context.Context, imageBytes []byte, mimeType string) (*ParsedMetadata, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+	if len(imageBytes) == 0 {
+		return nil, fmt.Errorf("empty image data")
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(imageBytes)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mimeType, b64)
+
+	systemPrompt := `You are an expert at reading audiobook cover art. Extract the title, author, series name, and any other metadata visible on the cover image.
+
+Return ONLY valid JSON with these fields (omit if not visible):
+{
+  "title": "book title",
+  "author": "author name",
+  "series": "series name",
+  "series_number": 1,
+  "narrator": "narrator name",
+  "publisher": "publisher name",
+  "year": 2020,
+  "confidence": "high|medium|low"
+}
+
+Set confidence based on how clearly the text is readable on the cover.`
+
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
+	completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(systemPrompt),
+			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
+				openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+					URL: dataURL,
+				}),
+				openai.TextContentPart("Read the metadata from this audiobook cover image."),
+			}),
+		},
+		Model:          shared.ChatModel(p.model),
+		PromptCacheKey:      param.NewOpt("audiobook-cover-parser-v1"),
+		MaxCompletionTokens: param.NewOpt[int64](500),
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONObject: &jsonObjectFormat,
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("OpenAI API call failed: %w", err)
+	}
+
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("no response from OpenAI")
+	}
+
+	content := completion.Choices[0].Message.Content
+	return parseMetadataFromJSON(content)
 }
 
 // TestConnection tests the OpenAI API connection
@@ -326,6 +440,213 @@ func parseMetadataFromJSON(content string) (*ParsedMetadata, error) {
 		return nil, fmt.Errorf("failed to parse OpenAI response: %w", err)
 	}
 	return &metadata, nil
+}
+
+// AuthorDedupInput represents a group of potential duplicate authors for AI review.
+type AuthorDedupInput struct {
+	Index         int      `json:"index"`
+	CanonicalName string   `json:"canonical_name"`
+	VariantNames  []string `json:"variant_names"`
+	BookCount     int      `json:"book_count"`
+	SampleTitles  []string `json:"sample_titles"`
+}
+
+// AuthorDedupSuggestion represents an AI suggestion for handling a duplicate author group.
+type AuthorDedupSuggestion struct {
+	GroupIndex    int    `json:"group_index"`
+	Action        string `json:"action"`
+	CanonicalName string `json:"canonical_name"`
+	Reason        string `json:"reason"`
+	Confidence    string `json:"confidence"`
+	IsNarrator    []int  `json:"is_narrator,omitempty"`
+	IsPublisher   []int  `json:"is_publisher,omitempty"`
+}
+
+// ReviewAuthorDuplicates sends duplicate author groups to OpenAI for review.
+// Groups are batched in chunks of 50 to manage token limits.
+func (p *OpenAIParser) ReviewAuthorDuplicates(ctx context.Context, groups []AuthorDedupInput) ([]AuthorDedupSuggestion, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+	if len(groups) == 0 {
+		return []AuthorDedupSuggestion{}, nil
+	}
+
+	return p.reviewAuthorBatch(ctx, groups)
+}
+
+func (p *OpenAIParser) reviewAuthorBatch(ctx context.Context, batch []AuthorDedupInput) ([]AuthorDedupSuggestion, error) {
+	systemPrompt := `You are an expert audiobook metadata reviewer. You will receive groups of potentially duplicate author names. For each group, determine the correct action:
+
+- "merge": The variants are the same author with different name formats. Provide the correct canonical name.
+- "split": The names represent different people incorrectly grouped together.
+- "rename": The canonical name needs correction (e.g., "TOLKIEN, J.R.R." → "J.R.R. Tolkien").
+- "skip": The group is fine as-is or you're unsure.
+
+Also identify entries that are actually narrators or publishers, not authors.
+
+Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|split|rename|skip", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [indices], "is_publisher": [indices]}]}`
+
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal batch: %w", err)
+	}
+
+	userPrompt := fmt.Sprintf("Review these duplicate author groups:\n\n%s", string(batchJSON))
+
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
+	var lastErr error
+	for attempt := 0; attempt <= p.maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * 2 * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(systemPrompt),
+				openai.UserMessage(userPrompt),
+			},
+			Model:               shared.ChatModel(p.model),
+			MaxCompletionTokens: param.NewOpt[int64](32000),
+			PromptCacheKey:      param.NewOpt("audiobook-author-dedup-v2"),
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONObject: &jsonObjectFormat,
+			},
+		})
+
+		if err != nil {
+			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
+			continue
+		}
+
+		if len(completion.Choices) == 0 {
+			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
+			continue
+		}
+
+		content := completion.Choices[0].Message.Content
+		var result struct {
+			Suggestions []AuthorDedupSuggestion `json:"suggestions"`
+		}
+		if err := json.Unmarshal([]byte(content), &result); err != nil {
+			lastErr = fmt.Errorf("failed to parse response (attempt %d): %w", attempt+1, err)
+			continue
+		}
+		return result.Suggestions, nil
+	}
+
+	return nil, lastErr
+}
+
+// AuthorDiscoveryInput represents a single author for AI-driven duplicate discovery (Full mode).
+type AuthorDiscoveryInput struct {
+	ID           int      `json:"id"`
+	Name         string   `json:"name"`
+	BookCount    int      `json:"book_count"`
+	SampleTitles []string `json:"sample_titles"`
+}
+
+// AuthorDiscoverySuggestion represents an AI suggestion from full-discovery mode.
+type AuthorDiscoverySuggestion struct {
+	AuthorIDs     []int  `json:"author_ids"`
+	Action        string `json:"action"`
+	CanonicalName string `json:"canonical_name"`
+	Reason        string `json:"reason"`
+	Confidence    string `json:"confidence"`
+	IsNarrator    []int  `json:"is_narrator,omitempty"`
+	IsPublisher   []int  `json:"is_publisher,omitempty"`
+}
+
+// DiscoverAuthorDuplicates sends the full list of authors to OpenAI in a single request
+// so the AI can see cross-author relationships and avoid nonsensical matches.
+func (p *OpenAIParser) DiscoverAuthorDuplicates(ctx context.Context, inputs []AuthorDiscoveryInput) ([]AuthorDiscoverySuggestion, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+	if len(inputs) == 0 {
+		return []AuthorDiscoverySuggestion{}, nil
+	}
+
+	return p.discoverAuthorBatch(ctx, inputs)
+}
+
+func (p *OpenAIParser) discoverAuthorBatch(ctx context.Context, batch []AuthorDiscoveryInput) ([]AuthorDiscoverySuggestion, error) {
+	systemPrompt := `You are an expert audiobook metadata reviewer. You will receive a list of authors with their IDs, book counts, and sample book titles. Find groups of authors that are likely the same person (different name formats, typos, abbreviations, last-name-first, etc).
+
+CRITICAL RULES:
+- COMPOUND NAMES: Many author entries contain multiple people separated by commas, ampersands, "and", or semicolons. For example "Crosby, Stills, & Nash" is THREE people, "Stephen King & Peter Straub" is TWO people, "Patterson, James & Paetro, Maxine" is TWO people. When you find a compound entry that matches an individual author entry, suggest a merge with the individual as canonical. Be smart about "Last, First" format vs actual multi-author — "Tolkien, J.R.R." is ONE person, but "King, Stephen & Koontz, Dean" is TWO.
+- Use sample_titles to distinguish authors from narrators. A narrator reads many different authors' books. An author writes their own books.
+- NEVER merge two genuinely different people. "Ramon De Ocampo" (narrator) and "Michael Crichton" (author) are completely unrelated.
+- Only merge when names clearly refer to the same person: e.g. "J.R.R. Tolkien" and "Tolkien, J.R.R."
+- If unsure, use action "skip" — false negatives are far better than false positives.
+- Identify narrators or publishers incorrectly listed as authors.
+- When a compound entry contains multiple real authors, use action "split" and list the individual canonical names in the reason field.
+
+Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merge|rename|split|skip", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [ids], "is_publisher": [ids]}]}
+
+Only include groups where you find actual duplicates or issues. Do not return entries for authors that look fine.`
+
+	batchJSON, err := json.Marshal(batch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal batch: %w", err)
+	}
+
+	userPrompt := fmt.Sprintf("Find duplicate authors in this list:\n\n%s", string(batchJSON))
+
+	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
+
+	var lastErr error
+	for attempt := 0; attempt <= p.maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * 2 * time.Second
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(systemPrompt),
+				openai.UserMessage(userPrompt),
+			},
+			Model:               shared.ChatModel(p.model),
+			MaxCompletionTokens: param.NewOpt[int64](16000),
+			PromptCacheKey:      param.NewOpt("audiobook-author-discover-v2"),
+			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+				OfJSONObject: &jsonObjectFormat,
+			},
+		})
+
+		if err != nil {
+			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
+			continue
+		}
+
+		if len(completion.Choices) == 0 {
+			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
+			continue
+		}
+
+		content := completion.Choices[0].Message.Content
+		var result struct {
+			Suggestions []AuthorDiscoverySuggestion `json:"suggestions"`
+		}
+		if err := json.Unmarshal([]byte(content), &result); err != nil {
+			lastErr = fmt.Errorf("failed to parse response (attempt %d): %w", attempt+1, err)
+			continue
+		}
+		return result.Suggestions, nil
+	}
+
+	return nil, lastErr
 }
 
 // parseBatchMetadataFromJSON parses batch results from JSON.
