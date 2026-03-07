@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.29.0
+// version: 2.33.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -38,6 +38,7 @@ type Store interface {
 	GetBookAuthors(bookID string) ([]BookAuthor, error)
 	SetBookAuthors(bookID string, authors []BookAuthor) error
 	GetBooksByAuthorIDWithRole(authorID int) ([]Book, error)
+	GetAllAuthorBookCounts() (map[int]int, error)
 
 	// Narrators
 	CreateNarrator(name string) (*Narrator, error)
@@ -55,6 +56,7 @@ type Store interface {
 	GetSeriesByName(name string, authorID *int) (*Series, error)
 	CreateSeries(name string, authorID *int) (*Series, error)
 	DeleteSeries(id int) error
+	UpdateSeriesName(id int, name string) error
 
 	// Works (logical title-level grouping across editions/narrations)
 	GetAllWorks() ([]Work, error)
@@ -117,8 +119,10 @@ type Store interface {
 	CreateOperation(id, opType string, folderPath *string) (*Operation, error)
 	GetOperationByID(id string) (*Operation, error)
 	GetRecentOperations(limit int) ([]Operation, error)
+	ListOperations(limit, offset int) ([]Operation, int, error)
 	UpdateOperationStatus(id, status string, progress, total int, message string) error
 	UpdateOperationError(id, errorMessage string) error
+	UpdateOperationResultData(id string, resultData string) error
 
 	// Operation State Persistence (resumable operations)
 	SaveOperationState(opID string, state []byte) error
@@ -127,6 +131,12 @@ type Store interface {
 	GetOperationParams(opID string) ([]byte, error)
 	DeleteOperationState(opID string) error
 	GetInterruptedOperations() ([]Operation, error)
+
+	// Operation Change Tracking (for undo/rollback)
+	CreateOperationChange(change *OperationChange) error
+	GetOperationChanges(operationID string) ([]*OperationChange, error)
+	GetBookChanges(bookID string) ([]*OperationChange, error)
+	RevertOperationChanges(operationID string) error
 
 	// Operation Logs
 	AddOperationLog(operationID, level, message string, details *string) error
@@ -208,6 +218,9 @@ type Store interface {
 	// iTunes Library Fingerprints (change detection)
 	SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32 uint32) error
 	GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error)
+
+	// Database maintenance
+	Optimize() error
 }
 
 // Common data structures used by all store implementations
@@ -270,6 +283,10 @@ type Book struct {
 	ISBN10               *string `json:"isbn10,omitempty"`
 	ISBN13               *string `json:"isbn13,omitempty"`
 	ASIN                 *string `json:"asin,omitempty"`
+	// External provider IDs
+	OpenLibraryID *string `json:"open_library_id,omitempty"`
+	HardcoverID   *string `json:"hardcover_id,omitempty"`
+	GoogleBooksID *string `json:"google_books_id,omitempty"`
 	// iTunes import fields
 	ITunesPersistentID *string    `json:"itunes_persistent_id,omitempty"`
 	ITunesDateAdded    *time.Time `json:"itunes_date_added,omitempty"`
@@ -383,6 +400,7 @@ type Operation struct {
 	StartedAt    *time.Time `json:"started_at,omitempty"`
 	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 	ErrorMessage *string    `json:"error_message,omitempty"`
+	ResultData   *string    `json:"result_data,omitempty"`
 }
 
 // OperationLog represents a log entry for an operation
@@ -393,6 +411,19 @@ type OperationLog struct {
 	Message     string    `json:"message"`
 	Details     *string   `json:"details,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// OperationChange tracks a single destructive change made during an operation for undo support.
+type OperationChange struct {
+	ID          string     `json:"id"`
+	OperationID string     `json:"operation_id"`
+	BookID      string     `json:"book_id"`
+	ChangeType  string     `json:"change_type"`  // "file_move", "metadata_update", "tag_write"
+	FieldName   string     `json:"field_name"`
+	OldValue    string     `json:"old_value"`
+	NewValue    string     `json:"new_value"`
+	RevertedAt  *time.Time `json:"reverted_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // OperationSummaryLog represents a completed operation persisted for history across restarts.

@@ -5,7 +5,7 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,7 +48,7 @@ func TestAudibleClient_SearchByTitle(t *testing.T) {
 			},
 			TotalResult: 1,
 		}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer server.Close()
 
@@ -102,7 +102,7 @@ func TestAudibleClient_LookupByASIN(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer server.Close()
 
@@ -140,7 +140,7 @@ func TestAudibleClient_HTMLStripping(t *testing.T) {
 				},
 			},
 		}
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer server.Close()
 

@@ -5,7 +5,7 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -110,7 +110,7 @@ func (c *AudnexusClient) SearchByTitleAndAuthor(title, author string) ([]BookMet
 	}
 
 	var authors []audnexusAuthor
-	if err := json.NewDecoder(resp.Body).Decode(&authors); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &authors); err != nil {
 		return nil, fmt.Errorf("failed to decode Audnexus author response: %w", err)
 	}
 
@@ -147,7 +147,7 @@ func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
 
 		if resp.StatusCode == http.StatusOK {
 			var book audnexusBook
-			if err := json.NewDecoder(resp.Body).Decode(&book); err != nil {
+			if err := json.UnmarshalRead(resp.Body, &book); err != nil {
 				resp.Body.Close()
 				lastErr = fmt.Errorf("failed to decode Audnexus book: %w", err)
 				continue

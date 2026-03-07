@@ -5,7 +5,7 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -125,7 +125,7 @@ func (c *AudibleClient) LookupByASIN(asin string) (*BookMetadata, error) {
 	}
 
 	var result audibleProductResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &result); err != nil {
 		return nil, fmt.Errorf("failed to decode Audible response: %w", err)
 	}
 
@@ -155,7 +155,7 @@ func (c *AudibleClient) searchCatalog(searchURL string) ([]BookMetadata, error) 
 	}
 
 	var catalog audibleCatalogResponse
-	if err := json.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &catalog); err != nil {
 		return nil, fmt.Errorf("failed to decode Audible response: %w", err)
 	}
 

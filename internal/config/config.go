@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.21.0
+// version: 1.23.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -186,6 +186,26 @@ type Config struct {
 	AutoWriteTagsOnApply bool   `json:"auto_write_tags_on_apply"`
 	VerifyAfterWrite     bool   `json:"verify_after_write"`
 
+	// Scheduled maintenance tasks
+	ScheduledDedupRefreshEnabled   bool `json:"scheduled_dedup_refresh_enabled"`
+	ScheduledDedupRefreshInterval  int  `json:"scheduled_dedup_refresh_interval"`  // minutes, default 360
+	ScheduledDedupRefreshOnStartup bool `json:"scheduled_dedup_refresh_on_startup"`
+
+	ScheduledAuthorSplitEnabled   bool `json:"scheduled_author_split_enabled"`
+	ScheduledAuthorSplitInterval  int  `json:"scheduled_author_split_interval"`  // minutes, default 0 (manual)
+	ScheduledAuthorSplitOnStartup bool `json:"scheduled_author_split_on_startup"`
+
+	ScheduledDbOptimizeEnabled   bool `json:"scheduled_db_optimize_enabled"`
+	ScheduledDbOptimizeInterval  int  `json:"scheduled_db_optimize_interval"`  // minutes, default 1440
+	ScheduledDbOptimizeOnStartup bool `json:"scheduled_db_optimize_on_startup"`
+
+	ScheduledMetadataRefreshEnabled   bool `json:"scheduled_metadata_refresh_enabled"`
+	ScheduledMetadataRefreshInterval  int  `json:"scheduled_metadata_refresh_interval"`  // minutes
+	ScheduledMetadataRefreshOnStartup bool `json:"scheduled_metadata_refresh_on_startup"`
+
+	ScheduledResolveProductionAuthorsEnabled  bool `json:"scheduled_resolve_production_authors_enabled"`
+	ScheduledResolveProductionAuthorsInterval int  `json:"scheduled_resolve_production_authors_interval"` // minutes, 0 = manual only
+
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
 }
@@ -264,6 +284,20 @@ func InitConfig() {
 	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("enable_json_logging", false)
+
+	// Scheduled maintenance task defaults
+	viper.SetDefault("scheduled_dedup_refresh_enabled", false)
+	viper.SetDefault("scheduled_dedup_refresh_interval", 360)
+	viper.SetDefault("scheduled_dedup_refresh_on_startup", false)
+	viper.SetDefault("scheduled_author_split_enabled", false)
+	viper.SetDefault("scheduled_author_split_interval", 0)
+	viper.SetDefault("scheduled_author_split_on_startup", false)
+	viper.SetDefault("scheduled_db_optimize_enabled", false)
+	viper.SetDefault("scheduled_db_optimize_interval", 1440)
+	viper.SetDefault("scheduled_db_optimize_on_startup", false)
+	viper.SetDefault("scheduled_metadata_refresh_enabled", false)
+	viper.SetDefault("scheduled_metadata_refresh_interval", 0)
+	viper.SetDefault("scheduled_metadata_refresh_on_startup", false)
 
 	// iTunes sync defaults
 	viper.SetDefault("itunes_sync_enabled", true)

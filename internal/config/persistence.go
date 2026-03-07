@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.6.0
+// version: 1.8.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -454,6 +454,65 @@ func applySetting(key, value, typ string) error {
 			AppConfig.ITunesPathMappings = mappings
 		}
 
+	// Scheduled maintenance tasks
+	case "scheduled_dedup_refresh_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledDedupRefreshEnabled = b
+		}
+	case "scheduled_dedup_refresh_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledDedupRefreshInterval = i
+		}
+	case "scheduled_dedup_refresh_on_startup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledDedupRefreshOnStartup = b
+		}
+	case "scheduled_author_split_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledAuthorSplitEnabled = b
+		}
+	case "scheduled_author_split_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledAuthorSplitInterval = i
+		}
+	case "scheduled_author_split_on_startup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledAuthorSplitOnStartup = b
+		}
+	case "scheduled_db_optimize_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledDbOptimizeEnabled = b
+		}
+	case "scheduled_db_optimize_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledDbOptimizeInterval = i
+		}
+	case "scheduled_db_optimize_on_startup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledDbOptimizeOnStartup = b
+		}
+	case "scheduled_metadata_refresh_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledMetadataRefreshEnabled = b
+		}
+	case "scheduled_metadata_refresh_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledMetadataRefreshInterval = i
+		}
+	case "scheduled_metadata_refresh_on_startup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledMetadataRefreshOnStartup = b
+		}
+
+	case "scheduled_resolve_production_authors_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledResolveProductionAuthorsEnabled = b
+		}
+	case "scheduled_resolve_production_authors_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledResolveProductionAuthorsInterval = i
+		}
+
 	// Basic auth
 	case "basic_auth_enabled":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -585,6 +644,22 @@ func SaveConfigToDatabase(store database.Store) error {
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
 		"basic_auth_username": {AppConfig.BasicAuthUsername, "string", false},
 		"basic_auth_password": {AppConfig.BasicAuthPassword, "string", true},
+
+		// Scheduled maintenance tasks
+		"scheduled_dedup_refresh_enabled":      {strconv.FormatBool(AppConfig.ScheduledDedupRefreshEnabled), "bool", false},
+		"scheduled_dedup_refresh_interval":     {strconv.Itoa(AppConfig.ScheduledDedupRefreshInterval), "int", false},
+		"scheduled_dedup_refresh_on_startup":   {strconv.FormatBool(AppConfig.ScheduledDedupRefreshOnStartup), "bool", false},
+		"scheduled_author_split_enabled":       {strconv.FormatBool(AppConfig.ScheduledAuthorSplitEnabled), "bool", false},
+		"scheduled_author_split_interval":      {strconv.Itoa(AppConfig.ScheduledAuthorSplitInterval), "int", false},
+		"scheduled_author_split_on_startup":    {strconv.FormatBool(AppConfig.ScheduledAuthorSplitOnStartup), "bool", false},
+		"scheduled_db_optimize_enabled":        {strconv.FormatBool(AppConfig.ScheduledDbOptimizeEnabled), "bool", false},
+		"scheduled_db_optimize_interval":       {strconv.Itoa(AppConfig.ScheduledDbOptimizeInterval), "int", false},
+		"scheduled_db_optimize_on_startup":     {strconv.FormatBool(AppConfig.ScheduledDbOptimizeOnStartup), "bool", false},
+		"scheduled_metadata_refresh_enabled":   {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshEnabled), "bool", false},
+		"scheduled_metadata_refresh_interval":  {strconv.Itoa(AppConfig.ScheduledMetadataRefreshInterval), "int", false},
+		"scheduled_metadata_refresh_on_startup": {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshOnStartup), "bool", false},
+		"scheduled_resolve_production_authors_enabled":  {strconv.FormatBool(AppConfig.ScheduledResolveProductionAuthorsEnabled), "bool", false},
+		"scheduled_resolve_production_authors_interval": {strconv.Itoa(AppConfig.ScheduledResolveProductionAuthorsInterval), "int", false},
 	}
 
 	saved := 0

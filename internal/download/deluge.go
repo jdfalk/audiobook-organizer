@@ -7,7 +7,8 @@ package download
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -40,7 +41,7 @@ type delugeRPCRequest struct {
 }
 
 type delugeRPCResponse struct {
-	Result json.RawMessage `json:"result"`
+	Result jsontext.Value `json:"result"`
 	Error  *struct {
 		Message string `json:"message"`
 		Code    int    `json:"code"`
@@ -48,7 +49,7 @@ type delugeRPCResponse struct {
 	ID int64 `json:"id"`
 }
 
-func (d *DelugeClient) call(ctx context.Context, method string, params ...any) (json.RawMessage, error) {
+func (d *DelugeClient) call(ctx context.Context, method string, params ...any) (jsontext.Value, error) {
 	id := d.rpcID.Add(1)
 	body, _ := json.Marshal(delugeRPCRequest{Method: method, Params: params, ID: id})
 
@@ -65,7 +66,7 @@ func (d *DelugeClient) call(ctx context.Context, method string, params ...any) (
 	defer resp.Body.Close()
 
 	var rpcResp delugeRPCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &rpcResp); err != nil {
 		return nil, fmt.Errorf("deluge: failed to parse response: %w", err)
 	}
 	if rpcResp.Error != nil {

@@ -1,10 +1,11 @@
 // file: internal/database/pebble_store.go
-// version: 1.23.0
+// version: 1.25.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -497,6 +498,43 @@ func (p *PebbleStore) DeleteSeries(id int) error {
 	return p.db.Delete(key, pebble.Sync)
 }
 
+func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
+	key := []byte(fmt.Sprintf("series:%d", id))
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		return fmt.Errorf("series %d not found: %w", id, err)
+	}
+	var series Series
+	if err := json.Unmarshal(val, &series); err != nil {
+		closer.Close()
+		return err
+	}
+	closer.Close()
+
+	// Delete old name index
+	oldAuthorIDStr := "nil"
+	if series.AuthorID != nil {
+		oldAuthorIDStr = strconv.Itoa(*series.AuthorID)
+	}
+	oldIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), oldAuthorIDStr))
+	_ = p.db.Delete(oldIndexKey, pebble.Sync)
+
+	// Update name
+	series.Name = name
+	data, err := json.Marshal(series)
+	if err != nil {
+		return err
+	}
+	if err := p.db.Set(key, data, pebble.Sync); err != nil {
+		return err
+	}
+
+	// Create new name index
+	newIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(name), oldAuthorIDStr))
+	idBytes := []byte(fmt.Sprintf("%d", id))
+	return p.db.Set(newIndexKey, idBytes, pebble.Sync)
+}
+
 // ---- Work operations (logical title-level grouping) ----
 
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
@@ -961,6 +999,19 @@ func (p *PebbleStore) SetBookAuthors(bookID string, authors []BookAuthor) error 
 func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	// For Pebble, fall back to the same logic as GetBooksByAuthorID
 	return p.GetBooksByAuthorID(authorID)
+}
+
+func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
+	authors, err := p.GetAllAuthors()
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int, len(authors))
+	for _, a := range authors {
+		books, _ := p.GetBooksByAuthorID(a.ID)
+		counts[a.ID] = len(books)
+	}
+	return counts, nil
 }
 
 func (p *PebbleStore) CreateNarrator(name string) (*Narrator, error) {
@@ -2070,6 +2121,45 @@ func (p *PebbleStore) GetRecentOperations(limit int) ([]Operation, error) {
 	return operations, nil
 }
 
+func (p *PebbleStore) ListOperations(limit, offset int) ([]Operation, int, error) {
+	var operations []Operation
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("operation:"),
+		UpperBound: []byte("operation:~"),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var op Operation
+		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+			continue
+		}
+		operations = append(operations, op)
+	}
+
+	// Sort by created_at descending
+	for i := 0; i < len(operations)-1; i++ {
+		for j := i + 1; j < len(operations); j++ {
+			if operations[j].CreatedAt.After(operations[i].CreatedAt) {
+				operations[i], operations[j] = operations[j], operations[i]
+			}
+		}
+	}
+
+	total := len(operations)
+	if offset >= len(operations) {
+		return []Operation{}, total, nil
+	}
+	end := offset + limit
+	if end > len(operations) {
+		end = len(operations)
+	}
+	return operations[offset:end], total, nil
+}
+
 func (p *PebbleStore) UpdateOperationStatus(id, status string, progress, total int, message string) error {
 	op, err := p.GetOperationByID(id)
 	if err != nil {
@@ -2121,6 +2211,22 @@ func (p *PebbleStore) UpdateOperationError(id, errorMessage string) error {
 
 	key := []byte(fmt.Sprintf("operation:%s", id))
 	return p.db.Set(key, data, pebble.Sync)
+}
+
+func (p *PebbleStore) UpdateOperationResultData(id string, resultData string) error {
+	op, err := p.GetOperationByID(id)
+	if err != nil {
+		return err
+	}
+	if op == nil {
+		return fmt.Errorf("operation not found: %s", id)
+	}
+	op.ResultData = &resultData
+	data, err := json.Marshal(op)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte(fmt.Sprintf("operation:%s", id)), data, pebble.Sync)
 }
 
 // Operation Log operations
@@ -3387,5 +3493,96 @@ func (p *PebbleStore) Reset() error {
 		return fmt.Errorf("failed to flush after reset: %w", err)
 	}
 
+	return nil
+}
+
+// Optimize compacts the PebbleDB database to reclaim space.
+func (p *PebbleStore) Optimize() error {
+	return p.db.Compact(context.Background(), nil, []byte{0xff}, false)
+}
+
+// CreateOperationChange stores an operation change in PebbleDB.
+func (p *PebbleStore) CreateOperationChange(change *OperationChange) error {
+	if change.ID == "" {
+		change.ID = ulid.Make().String()
+	}
+	change.CreatedAt = time.Now()
+	data, err := json.Marshal(change)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("opchange:%s:%s", change.OperationID, change.ID)
+	return p.db.Set([]byte(key), data, pebble.Sync)
+}
+
+// GetOperationChanges returns all changes for a given operation.
+func (p *PebbleStore) GetOperationChanges(operationID string) ([]*OperationChange, error) {
+	prefix := []byte(fmt.Sprintf("opchange:%s:", operationID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var changes []*OperationChange
+	for iter.First(); iter.Valid(); iter.Next() {
+		var c OperationChange
+		if err := json.Unmarshal(iter.Value(), &c); err != nil {
+			return nil, err
+		}
+		changes = append(changes, &c)
+	}
+	return changes, iter.Error()
+}
+
+// GetBookChanges returns all changes for a given book.
+func (p *PebbleStore) GetBookChanges(bookID string) ([]*OperationChange, error) {
+	prefix := []byte("opchange:")
+	upperBound := []byte("opchange;") // ':' + 1 = ';'
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var changes []*OperationChange
+	for iter.First(); iter.Valid(); iter.Next() {
+		var c OperationChange
+		if err := json.Unmarshal(iter.Value(), &c); err != nil {
+			return nil, err
+		}
+		if c.BookID == bookID {
+			changes = append(changes, &c)
+		}
+	}
+	return changes, iter.Error()
+}
+
+// RevertOperationChanges marks all changes for an operation as reverted.
+func (p *PebbleStore) RevertOperationChanges(operationID string) error {
+	changes, err := p.GetOperationChanges(operationID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for _, c := range changes {
+		if c.RevertedAt == nil {
+			c.RevertedAt = &now
+			data, err := json.Marshal(c)
+			if err != nil {
+				return err
+			}
+			key := fmt.Sprintf("opchange:%s:%s", c.OperationID, c.ID)
+			if err := p.db.Set([]byte(key), data, pebble.Sync); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }

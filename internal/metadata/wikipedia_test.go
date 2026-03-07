@@ -5,7 +5,8 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
+	"encoding/json/jsontext"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,14 +34,14 @@ func TestWikipediaClient_SearchByTitle(t *testing.T) {
 			{Title: "Gatsby (audiobook)", PageID: 5678, Snippet: "Audiobook version"},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer mw.Close()
 
 	// Wikidata server that returns no results (skip enrichment)
 	wd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(wikidataSearchResponse{})
+		json.MarshalWrite(w, wikidataSearchResponse{})
 	}))
 	defer wd.Close()
 
@@ -64,13 +65,13 @@ func TestWikipediaClient_SearchByTitleAndAuthor(t *testing.T) {
 			{Title: "1984 (novel)", PageID: 42},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer mw.Close()
 
 	wd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(wikidataSearchResponse{})
+		json.MarshalWrite(w, wikidataSearchResponse{})
 	}))
 	defer wd.Close()
 
@@ -95,7 +96,7 @@ func TestWikipediaClient_APIError(t *testing.T) {
 
 	wd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(wikidataSearchResponse{})
+		json.MarshalWrite(w, wikidataSearchResponse{})
 	}))
 	defer wd.Close()
 
@@ -113,7 +114,7 @@ func TestWikipediaClient_WikidataEnrichment(t *testing.T) {
 			{Title: "Dune (novel)", PageID: 100},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		json.MarshalWrite(w, resp)
 	}))
 	defer mw.Close()
 
@@ -125,7 +126,7 @@ func TestWikipediaClient_WikidataEnrichment(t *testing.T) {
 		switch action {
 		case "wbsearchentities":
 			callCount++
-			json.NewEncoder(w).Encode(wikidataSearchResponse{
+			json.MarshalWrite(w, wikidataSearchResponse{
 				Search: []wikidataSearchResult{
 					{ID: "Q190228", Label: "Dune", Description: "novel by Frank Herbert"},
 				},
@@ -136,7 +137,7 @@ func TestWikipediaClient_WikidataEnrichment(t *testing.T) {
 
 			if props == "labels" {
 				// Author label resolution
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				json.MarshalWrite(w, map[string]interface{}{
 					"entities": map[string]interface{}{
 						ids: map[string]interface{}{
 							"labels": map[string]interface{}{
@@ -149,21 +150,21 @@ func TestWikipediaClient_WikidataEnrichment(t *testing.T) {
 			}
 
 			// Entity claims
-			json.NewEncoder(w).Encode(wikidataEntityResponse{
+			json.MarshalWrite(w, wikidataEntityResponse{
 				Entities: map[string]wikidataEntity{
 					"Q190228": {
 						Claims: map[string][]wikidataClaim{
 							"P50": {{MainSnak: wikidataSnak{DataValue: &wikidataDataValue{
 								Type:  "wikibase-entityid",
-								Value: json.RawMessage(`{"id":"Q44804"}`),
+								Value: jsontext.Value(`{"id":"Q44804"}`),
 							}}}},
 							"P577": {{MainSnak: wikidataSnak{DataValue: &wikidataDataValue{
 								Type:  "time",
-								Value: json.RawMessage(`{"time":"+1965-08-01T00:00:00Z"}`),
+								Value: jsontext.Value(`{"time":"+1965-08-01T00:00:00Z"}`),
 							}}}},
 							"P212": {{MainSnak: wikidataSnak{DataValue: &wikidataDataValue{
 								Type:  "string",
-								Value: json.RawMessage(`"978-0441172719"`),
+								Value: jsontext.Value(`"978-0441172719"`),
 							}}}},
 						},
 					},

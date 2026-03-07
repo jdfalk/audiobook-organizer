@@ -5,7 +5,7 @@
 package updater
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"log"
@@ -135,7 +135,7 @@ func (u *Updater) checkStable() (*UpdateInfo, error) {
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &release); err != nil {
 		return nil, fmt.Errorf("failed to decode release: %w", err)
 	}
 
@@ -177,7 +177,7 @@ func (u *Updater) checkDevelop() (*UpdateInfo, error) {
 	}
 
 	var commit githubCommit
-	if err := json.NewDecoder(resp.Body).Decode(&commit); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &commit); err != nil {
 		return nil, fmt.Errorf("failed to decode commit: %w", err)
 	}
 
@@ -310,7 +310,7 @@ func (u *Updater) findAssetURL(info *UpdateInfo) (string, error) {
 	}
 
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &release); err != nil {
 		return "", fmt.Errorf("failed to decode release: %w", err)
 	}
 

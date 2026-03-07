@@ -1,5 +1,5 @@
 // file: internal/cache/cache.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package cache
@@ -65,4 +65,11 @@ func (c *Cache[T]) InvalidateAll() {
 	c.mu.Lock()
 	c.items = make(map[string]entry[T])
 	c.mu.Unlock()
+}
+
+// Len returns the number of entries (including expired ones not yet evicted).
+func (c *Cache[T]) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.items)
 }

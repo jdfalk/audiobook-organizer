@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.16.0
+// version: 1.19.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -193,6 +193,24 @@ var migrations = []Migration{
 		Version:     26,
 		Description: "Create book_tombstones table",
 		Up:          migration026Up,
+		Down:        nil,
+	},
+	{
+		Version:     27,
+		Description: "Add result_data column to operations",
+		Up:          migration027Up,
+		Down:        nil,
+	},
+	{
+		Version:     28,
+		Description: "Add external provider ID columns (open_library_id, hardcover_id, google_books_id)",
+		Up:          migration028Up,
+		Down:        nil,
+	},
+	{
+		Version:     29,
+		Description: "Add operation_changes table for undo/rollback tracking",
+		Up:          migration029Up,
 		Down:        nil,
 	},
 }
@@ -1483,5 +1501,91 @@ func migration026Up(store Store) error {
 	}
 
 	log.Println("  - book_tombstones table created successfully")
+	return nil
+}
+
+// migration027Up adds result_data column to operations table.
+func migration027Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Skipping migration 27 for non-SQLite store (PebbleDB uses JSON)")
+		return nil
+	}
+
+	_, err := sqliteStore.db.Exec(`ALTER TABLE operations ADD COLUMN result_data TEXT`)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate column") {
+			log.Println("  - result_data column already exists")
+			return nil
+		}
+		return fmt.Errorf("failed to add result_data column: %w", err)
+	}
+
+	log.Println("  - result_data column added to operations")
+	return nil
+}
+
+// migration028Up adds external provider ID columns to books table.
+func migration028Up(store Store) error {
+	log.Println("  - Adding external provider ID columns (open_library_id, hardcover_id, google_books_id)")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	columns := []string{
+		"ALTER TABLE books ADD COLUMN open_library_id TEXT",
+		"ALTER TABLE books ADD COLUMN hardcover_id TEXT",
+		"ALTER TABLE books ADD COLUMN google_books_id TEXT",
+	}
+
+	for _, stmt := range columns {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column") {
+				continue
+			}
+			return fmt.Errorf("migration 28 failed: %w", err)
+		}
+	}
+
+	log.Println("  - External provider ID columns added successfully")
+	return nil
+}
+
+func migration029Up(store Store) error {
+	log.Println("  - Creating operation_changes table for undo/rollback tracking")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS operation_changes (
+			id TEXT PRIMARY KEY,
+			operation_id TEXT NOT NULL,
+			book_id TEXT NOT NULL,
+			change_type TEXT NOT NULL,
+			field_name TEXT,
+			old_value TEXT,
+			new_value TEXT,
+			reverted_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (operation_id) REFERENCES operations(id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_operation_changes_op ON operation_changes(operation_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_operation_changes_book ON operation_changes(book_id)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 29 failed: %w", err)
+		}
+	}
+
+	log.Println("  - operation_changes table created successfully")
 	return nil
 }

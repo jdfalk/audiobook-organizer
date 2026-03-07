@@ -5,7 +5,8 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -87,7 +88,7 @@ type wikidataSnak struct {
 
 type wikidataDataValue struct {
 	Type  string          `json:"type"`
-	Value json.RawMessage `json:"value"`
+	Value jsontext.Value `json:"value"`
 }
 
 type wikidataTimeValue struct {
@@ -121,7 +122,7 @@ func (c *WikipediaClient) search(query string) ([]BookMetadata, error) {
 	}
 
 	var mwResp mediawikiSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&mwResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &mwResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Wikipedia response: %w", err)
 	}
 
@@ -157,7 +158,7 @@ func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
 	}
 
 	var wdSearch wikidataSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&wdSearch); err != nil || len(wdSearch.Search) == 0 {
+	if err := json.UnmarshalRead(resp.Body, &wdSearch); err != nil || len(wdSearch.Search) == 0 {
 		return
 	}
 
@@ -178,7 +179,7 @@ func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
 	}
 
 	var entityResp wikidataEntityResponse
-	if err := json.NewDecoder(resp2.Body).Decode(&entityResp); err != nil {
+	if err := json.UnmarshalRead(resp2.Body, &entityResp); err != nil {
 		return
 	}
 
@@ -246,7 +247,7 @@ func (c *WikipediaClient) resolveEntityLabel(entityID string) string {
 			} `json:"labels"`
 		} `json:"entities"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &result); err != nil {
 		return ""
 	}
 

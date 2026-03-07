@@ -160,6 +160,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 		}, nil).Once()
 
 		AppConfig = Config{OpenAIAPIKey: "keep-me"}
+		store.EXPECT().SetSetting("openai_api_key", "keep-me", "string", true).Return(nil).Maybe()
 
 		err := LoadConfigFromDatabase(store)
 		if err != nil {

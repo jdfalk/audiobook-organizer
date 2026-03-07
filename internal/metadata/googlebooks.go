@@ -5,7 +5,7 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -107,7 +107,7 @@ func (c *GoogleBooksClient) search(escapedQuery string) ([]BookMetadata, error) 
 	}
 
 	var gbResp googleBooksResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gbResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &gbResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Google Books response: %w", err)
 	}
 

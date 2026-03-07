@@ -6,7 +6,8 @@ package download
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
+	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -34,7 +35,7 @@ func NewSABnzbdClient(cfg config.SABnzbdConfig) *SABnzbdClient {
 	}
 }
 
-func (s *SABnzbdClient) apiCall(ctx context.Context, mode string, extra url.Values) (json.RawMessage, error) {
+func (s *SABnzbdClient) apiCall(ctx context.Context, mode string, extra url.Values) (jsontext.Value, error) {
 	params := url.Values{
 		"apikey": {s.cfg.APIKey},
 		"output": {"json"},
@@ -59,8 +60,8 @@ func (s *SABnzbdClient) apiCall(ctx context.Context, mode string, extra url.Valu
 		return nil, fmt.Errorf("sabnzbd: API returned status %d", resp.StatusCode)
 	}
 
-	var raw json.RawMessage
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	var raw jsontext.Value
+	if err := json.UnmarshalRead(resp.Body, &raw); err != nil {
 		return nil, fmt.Errorf("sabnzbd: failed to parse response: %w", err)
 	}
 	return raw, nil

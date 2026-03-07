@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -331,6 +331,18 @@ func writeMP3Metadata(filePath string, metadata map[string]interface{}, config f
 	if track, ok := metadata["track"].(string); ok && track != "" {
 		args = append(args, "--track-num", track)
 	}
+	// Write custom AUDIOBOOK_ORGANIZER_* TXXX frames
+	customPairs := [][2]string{
+		{TagBookID, "book_id"}, {TagISBN10, "isbn10"}, {TagISBN13, "isbn13"},
+		{TagASIN, "asin"}, {TagOpenLibrary, "open_library_id"},
+		{TagHardcover, "hardcover_id"}, {TagGoogleBooks, "google_books_id"},
+	}
+	for _, pair := range customPairs {
+		if val, ok := metadata[pair[1]].(string); ok && val != "" {
+			args = append(args, "--user-text-frame="+pair[0]+":"+val)
+		}
+	}
+	args = append(args, "--user-text-frame="+TagVersion+":"+CustomTagVersion)
 	args = append(args, filePath)
 
 	cmd := exec.Command("eyeD3", args...)
@@ -392,6 +404,18 @@ func writeFLACMetadata(filePath string, metadata map[string]interface{}, config 
 	if track, ok := metadata["track"].(string); ok && track != "" {
 		args = append(args, "--set-tag=TRACKNUMBER="+track)
 	}
+	// Write custom AUDIOBOOK_ORGANIZER_* Vorbis comments
+	customPairs := [][2]string{
+		{TagBookID, "book_id"}, {TagISBN10, "isbn10"}, {TagISBN13, "isbn13"},
+		{TagASIN, "asin"}, {TagOpenLibrary, "open_library_id"},
+		{TagHardcover, "hardcover_id"}, {TagGoogleBooks, "google_books_id"},
+	}
+	for _, pair := range customPairs {
+		if val, ok := metadata[pair[1]].(string); ok && val != "" {
+			args = append(args, "--set-tag="+pair[0]+"="+val)
+		}
+	}
+	args = append(args, "--set-tag="+TagVersion+"="+CustomTagVersion)
 	args = append(args, filePath)
 
 	cmd := exec.Command("metaflac", args...)

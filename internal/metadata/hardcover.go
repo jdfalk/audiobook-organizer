@@ -6,7 +6,7 @@ package metadata
 
 import (
 	"bytes"
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -195,7 +195,7 @@ func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 	}
 
 	var gqlResp hardcoverGraphQLResponse
-	if err := json.NewDecoder(resp.Body).Decode(&gqlResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &gqlResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Hardcover response: %w", err)
 	}
 
