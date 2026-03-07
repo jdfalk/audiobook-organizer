@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.98.0
+// version: 1.99.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1157,6 +1157,9 @@ func (s *Server) setupRoutes() {
 			protected.PUT("/authors/:id/name", s.renameAuthor)
 			protected.POST("/authors/:id/split", s.splitCompositeAuthor)
 			protected.POST("/authors/:id/resolve-production", s.resolveProductionAuthor)
+			protected.GET("/authors/:id/aliases", s.getAuthorAliases)
+			protected.POST("/authors/:id/aliases", s.createAuthorAlias)
+			protected.DELETE("/authors/:id/aliases/:aliasId", s.deleteAuthorAlias)
 			protected.POST("/audiobooks/merge", s.mergeBooks)
 			protected.GET("/narrators", s.listNarrators)
 			protected.GET("/narrators/count", s.countNarrators)
@@ -6485,6 +6488,11 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 		return fmt.Errorf("AI review failed: %w", err)
 	}
 
+	// Normalize initials formatting in AI-returned canonical names
+	for i := range suggestions {
+		suggestions[i].CanonicalName = NormalizeAuthorName(suggestions[i].CanonicalName)
+	}
+
 	_ = progress.Log("info", fmt.Sprintf("Received %d suggestions from AI", len(suggestions)), nil)
 
 	resultPayload := map[string]interface{}{
@@ -6589,7 +6597,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 		suggestions = append(suggestions, ai.AuthorDedupSuggestion{
 			GroupIndex:    len(groups) - 1, // index into groups slice, not discoveries
 			Action:        disc.Action,
-			CanonicalName: disc.CanonicalName,
+			CanonicalName: NormalizeAuthorName(disc.CanonicalName),
 			Reason:        disc.Reason,
 			Confidence:    disc.Confidence,
 			IsNarrator:    disc.IsNarrator,
@@ -6614,6 +6622,64 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 	return nil
 }
 
+
+// Author alias handlers
+
+func (s *Server) getAuthorAliases(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+	aliases, err := database.GlobalStore.GetAuthorAliases(authorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"aliases": aliases})
+}
+
+func (s *Server) createAuthorAlias(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+	var req struct {
+		AliasName string `json:"alias_name"`
+		AliasType string `json:"alias_type"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.AliasName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "alias_name is required"})
+		return
+	}
+	if req.AliasType == "" {
+		req.AliasType = "alias"
+	}
+	alias, err := database.GlobalStore.CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, alias)
+}
+
+func (s *Server) deleteAuthorAlias(c *gin.Context) {
+	aliasID, err := strconv.Atoi(c.Param("aliasId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid alias ID"})
+		return
+	}
+	if err := database.GlobalStore.DeleteAuthorAlias(aliasID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
 
 func (s *Server) getOperationResult(c *gin.Context) {
 	id := c.Param("id")
@@ -6766,6 +6832,66 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 				}
 				applied++
 				_ = progress.Log("info", fmt.Sprintf("Merged group %d: %d variants into \"%s\"", sug.GroupIndex, len(sug.MergeIDs), sug.CanonicalName), nil)
+
+			case "alias":
+				// Keep canonical author, add variants as aliases instead of merging
+				if sug.KeepID > 0 && sug.CanonicalName != "" {
+					if sug.Rename {
+						if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+							applyErrors = append(applyErrors, fmt.Sprintf("rename for alias %d: %v", sug.KeepID, err))
+						}
+					}
+					for _, mergeID := range sug.MergeIDs {
+						if mergeID == sug.KeepID {
+							continue
+						}
+						variant, err := store.GetAuthorByID(mergeID)
+						if err != nil || variant == nil {
+							continue
+						}
+						if _, err := store.CreateAuthorAlias(sug.KeepID, variant.Name, "pen_name"); err != nil {
+							applyErrors = append(applyErrors, fmt.Sprintf("create alias for author %d: %v", sug.KeepID, err))
+						}
+						// Re-link books and delete the variant author
+						books, err := store.GetBooksByAuthorIDWithRole(mergeID)
+						if err != nil {
+							continue
+						}
+						for _, book := range books {
+							bookAuthors, err := store.GetBookAuthors(book.ID)
+							if err != nil {
+								continue
+							}
+							hasKeep := false
+							for _, ba := range bookAuthors {
+								if ba.AuthorID == sug.KeepID {
+									hasKeep = true
+									break
+								}
+							}
+							var newAuthors []database.BookAuthor
+							for _, ba := range bookAuthors {
+								if ba.AuthorID == mergeID {
+									if !hasKeep {
+										ba.AuthorID = sug.KeepID
+										newAuthors = append(newAuthors, ba)
+										hasKeep = true
+									}
+								} else {
+									newAuthors = append(newAuthors, ba)
+								}
+							}
+							if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
+								applyErrors = append(applyErrors, fmt.Sprintf("update book %s for alias: %v", book.ID, err))
+							}
+						}
+						if err := store.DeleteAuthor(mergeID); err != nil {
+							applyErrors = append(applyErrors, fmt.Sprintf("delete aliased author %d: %v", mergeID, err))
+						}
+					}
+					applied++
+					_ = progress.Log("info", fmt.Sprintf("Created aliases for group %d: canonical \"%s\"", sug.GroupIndex, sug.CanonicalName), nil)
+				}
 
 			case "split":
 				_ = progress.Log("info", fmt.Sprintf("Split action for group %d — manual intervention needed", sug.GroupIndex), nil)

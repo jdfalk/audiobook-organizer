@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -356,6 +356,28 @@ func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
 	}
 
 	return batch.Commit(pebble.Sync)
+}
+
+// Author Alias operations (stub — PebbleStore does not support aliases)
+
+func (p *PebbleStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
+	return []AuthorAlias{}, nil
+}
+
+func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
+	return []AuthorAlias{}, nil
+}
+
+func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
+	return nil, fmt.Errorf("author aliases not supported in PebbleStore")
+}
+
+func (p *PebbleStore) DeleteAuthorAlias(id int) error {
+	return fmt.Errorf("author aliases not supported in PebbleStore")
+}
+
+func (p *PebbleStore) FindAuthorByAlias(aliasName string) (*Author, error) {
+	return nil, nil
 }
 
 // Series operations

@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -206,6 +206,11 @@ type Config struct {
 	ScheduledResolveProductionAuthorsEnabled  bool `json:"scheduled_resolve_production_authors_enabled"`
 	ScheduledResolveProductionAuthorsInterval int  `json:"scheduled_resolve_production_authors_interval"` // minutes, 0 = manual only
 
+	// AI Batch API
+	ScheduledAIDedupBatchEnabled   bool `json:"scheduled_ai_dedup_batch_enabled"`
+	ScheduledAIDedupBatchInterval  int  `json:"scheduled_ai_dedup_batch_interval"`   // minutes, default 1440 (24h)
+	ScheduledAIDedupBatchOnStartup bool `json:"scheduled_ai_dedup_batch_on_startup"`
+
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
 }
@@ -298,6 +303,10 @@ func InitConfig() {
 	viper.SetDefault("scheduled_metadata_refresh_enabled", false)
 	viper.SetDefault("scheduled_metadata_refresh_interval", 0)
 	viper.SetDefault("scheduled_metadata_refresh_on_startup", false)
+
+	viper.SetDefault("scheduled_ai_dedup_batch_enabled", false)
+	viper.SetDefault("scheduled_ai_dedup_batch_interval", 1440)
+	viper.SetDefault("scheduled_ai_dedup_batch_on_startup", false)
 
 	// iTunes sync defaults
 	viper.SetDefault("itunes_sync_enabled", true)

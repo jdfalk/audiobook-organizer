@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.43.0
+// version: 1.44.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -279,7 +279,7 @@ export interface Operation {
 
 export interface AIAuthorSuggestion {
   group_index: number;
-  action: 'merge' | 'split' | 'rename' | 'skip';
+  action: 'merge' | 'split' | 'rename' | 'skip' | 'alias';
   canonical_name: string;
   reason: string;
   confidence: 'high' | 'medium' | 'low';
@@ -759,6 +759,42 @@ export async function getBooksByAuthor(authorId: number): Promise<Book[]> {
   if (!response.ok) return [];
   const data = await response.json();
   return data.items || [];
+}
+
+export interface AuthorAlias {
+  id: number;
+  author_id: number;
+  alias_name: string;
+  alias_type: string;
+  created_at: string;
+}
+
+export async function getAuthorAliases(authorId: number): Promise<AuthorAlias[]> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/aliases`);
+  if (!response.ok) return [];
+  const data = await response.json();
+  return data.aliases || [];
+}
+
+export async function createAuthorAlias(authorId: number, aliasName: string, aliasType: string = 'alias'): Promise<AuthorAlias> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/aliases`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alias_name: aliasName, alias_type: aliasType }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to create author alias');
+  }
+  return response.json();
+}
+
+export async function deleteAuthorAlias(authorId: number, aliasId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/aliases/${aliasId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete author alias');
+  }
 }
 
 export async function resolveProductionAuthor(authorId: number): Promise<Operation> {

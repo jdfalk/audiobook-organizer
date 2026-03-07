@@ -1,17 +1,19 @@
 // file: internal/server/scheduler.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -526,6 +528,136 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return time.Duration(mins) * time.Minute
 		},
 		RunOnStart: func() bool { return config.AppConfig.ScheduledMetadataRefreshOnStartup },
+	})
+
+	// AI Dedup Batch — uses OpenAI Batch API at 50% cost
+	ts.registerTask(TaskDefinition{
+		Name:        "ai_dedup_batch",
+		Description: "Run AI author dedup via Batch API (50% cheaper, up to 24h)",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			store := database.GlobalStore
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
+			if operations.GlobalQueue == nil {
+				return nil, fmt.Errorf("operation queue not initialized")
+			}
+			opID := ulid.Make().String()
+			op, err := store.CreateOperation(opID, "ai-dedup-batch", nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create operation: %w", err)
+			}
+			if err := operations.GlobalQueue.Enqueue(op.ID, "ai-dedup-batch", operations.PriorityLow, func(ctx context.Context, progress operations.ProgressReporter) error {
+				parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+				if !parser.IsEnabled() {
+					return fmt.Errorf("AI parsing is not enabled")
+				}
+
+				_ = progress.Log("info", "Building author list for batch AI dedup", nil)
+				_ = progress.UpdateProgress(0, 100, "Loading authors...")
+
+				allAuthors, err := store.GetAllAuthors()
+				if err != nil {
+					return fmt.Errorf("failed to get authors: %w", err)
+				}
+
+				var inputs []ai.AuthorDiscoveryInput
+				for _, author := range allAuthors {
+					var sampleTitles []string
+					books, bErr := store.GetBooksByAuthorIDWithRole(author.ID)
+					if bErr == nil {
+						for j, b := range books {
+							if j >= 3 {
+								break
+							}
+							sampleTitles = append(sampleTitles, b.Title)
+						}
+					}
+					inputs = append(inputs, ai.AuthorDiscoveryInput{
+						ID: author.ID, Name: author.Name,
+						BookCount: len(books), SampleTitles: sampleTitles,
+					})
+				}
+
+				if len(inputs) == 0 {
+					_ = progress.Log("info", "No authors to process", nil)
+					return nil
+				}
+
+				_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Submitting %d authors to OpenAI Batch API...", len(inputs)))
+
+				batchID, err := parser.CreateBatchAuthorDedup(ctx, inputs)
+				if err != nil {
+					return fmt.Errorf("failed to create batch: %w", err)
+				}
+
+				_ = progress.Log("info", fmt.Sprintf("Batch created: %s — polling for completion", batchID), nil)
+
+				// Poll for completion (up to 24h, check every 5 min)
+				pollInterval := 5 * time.Minute
+				maxPolls := 288 // 24h / 5min
+				for i := 0; i < maxPolls; i++ {
+					if progress.IsCanceled() {
+						return fmt.Errorf("cancelled")
+					}
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-time.After(pollInterval):
+					}
+
+					status, outputFileID, sErr := parser.CheckBatchStatus(ctx, batchID)
+					if sErr != nil {
+						_ = progress.Log("warn", fmt.Sprintf("Poll error: %v", sErr), nil)
+						continue
+					}
+
+					_ = progress.UpdateProgress(10+i, maxPolls, fmt.Sprintf("Batch status: %s", status))
+
+					switch status {
+					case "completed":
+						_ = progress.Log("info", "Batch completed, downloading results", nil)
+						discoveries, dErr := parser.DownloadBatchResults(ctx, outputFileID)
+						if dErr != nil {
+							return fmt.Errorf("failed to download results: %w", dErr)
+						}
+						resultPayload := map[string]any{
+							"mode":        "batch-full",
+							"suggestions": discoveries,
+							"batch_id":    batchID,
+						}
+						resultJSON, jErr := json.Marshal(resultPayload)
+						if jErr != nil {
+							return fmt.Errorf("failed to marshal results: %w", jErr)
+						}
+						if err := store.UpdateOperationResultData(opID, string(resultJSON)); err != nil {
+							return fmt.Errorf("failed to store results: %w", err)
+						}
+						_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Batch complete: %d suggestions", len(discoveries)))
+						return nil
+
+					case "failed", "expired", "cancelled":
+						return fmt.Errorf("batch %s: %s", batchID, status)
+					}
+				}
+				return fmt.Errorf("batch timed out after 24h")
+			}); err != nil {
+				return nil, err
+			}
+			return op, nil
+		},
+		IsEnabled: func() bool {
+			return config.AppConfig.ScheduledAIDedupBatchEnabled && config.AppConfig.EnableAIParsing
+		},
+		GetInterval: func() time.Duration {
+			mins := config.AppConfig.ScheduledAIDedupBatchInterval
+			if mins <= 0 {
+				return 24 * time.Hour
+			}
+			return time.Duration(mins) * time.Minute
+		},
+		RunOnStart: func() bool { return config.AppConfig.ScheduledAIDedupBatchOnStartup },
 	})
 }
 

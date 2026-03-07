@@ -36,8 +36,8 @@ func TestNewOpenAIParser_Enabled(t *testing.T) {
 	if !parser.enabled {
 		t.Error("Expected parser to be enabled with valid API key")
 	}
-	if parser.model != "gpt-4o-mini" {
-		t.Errorf("Expected model gpt-4o-mini, got %s", parser.model)
+	if parser.model != "gpt-5-mini" {
+		t.Errorf("Expected model gpt-5-mini, got %s", parser.model)
 	}
 	if parser.maxRetries != 2 {
 		t.Errorf("Expected maxRetries 2, got %d", parser.maxRetries)
@@ -257,7 +257,7 @@ func TestOpenAIParser_ModelConfiguration(t *testing.T) {
 	}
 
 	// Verify it's the expected model
-	expectedModel := "gpt-4o-mini"
+	expectedModel := "gpt-5-mini"
 	if parser.model != expectedModel {
 		t.Errorf("Expected model %s, got %s", expectedModel, parser.model)
 	}
@@ -1237,7 +1237,7 @@ func TestOpenAIParser_DefaultValues(t *testing.T) {
 			name:       "enabled with key",
 			apiKey:     "test-key",
 			enabled:    true,
-			wantModel:  "gpt-4o-mini",
+			wantModel:  "gpt-5-mini",
 			wantRetry:  2,
 			wantClient: true,
 		},
