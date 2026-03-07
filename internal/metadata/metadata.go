@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.10.0
+// version: 1.12.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -47,6 +47,12 @@ type Metadata struct {
 	Publisher string
 	ISBN10    string
 	ISBN13    string
+	// Custom organizer tags (read from embedded AUDIOBOOK_ORGANIZER_* tags)
+	BookOrganizerID string
+	ASIN            string
+	OpenLibraryID   string
+	HardcoverID     string
+	GoogleBooksID   string
 	// UsedFilenameFallback indicates filename parsing filled metadata gaps.
 	UsedFilenameFallback bool
 }
@@ -367,6 +373,13 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 			setFieldSource(fieldSources, "isbn10", isbn10Source)
 		}
 	}
+
+	// Read custom AUDIOBOOK_ORGANIZER_* tags (TXXX frames for MP3, plain keys for FLAC/M4B)
+	metadata.BookOrganizerID = cleanTagValue(getRawString(raw, "TXXX:"+TagBookID, TagBookID))
+	metadata.ASIN = cleanTagValue(getRawString(raw, "TXXX:"+TagASIN, TagASIN))
+	metadata.OpenLibraryID = cleanTagValue(getRawString(raw, "TXXX:"+TagOpenLibrary, TagOpenLibrary))
+	metadata.HardcoverID = cleanTagValue(getRawString(raw, "TXXX:"+TagHardcover, TagHardcover))
+	metadata.GoogleBooksID = cleanTagValue(getRawString(raw, "TXXX:"+TagGoogleBooks, TagGoogleBooks))
 
 	if seriesIndexSource == "" && metadata.SeriesIndex > 0 {
 		seriesIndexSource = "detected"
@@ -800,4 +813,30 @@ func ExtractCoverArt(filePath string) (string, error) {
 
 	log.Printf("[DEBUG] metadata: extracted cover art from %s → %s", filePath, coverPath)
 	return coverPath, nil
+}
+
+// ExtractCoverArtBytes extracts embedded cover art from an audio file and returns
+// the raw image bytes and MIME type. Returns nil data if no cover art is found.
+func ExtractCoverArtBytes(filePath string) (data []byte, mimeType string, err error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("error opening file: %w", err)
+	}
+	defer f.Close()
+
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return nil, "", fmt.Errorf("error reading tags: %w", err)
+	}
+
+	pic := m.Picture()
+	if pic == nil || len(pic.Data) == 0 {
+		return nil, "", nil
+	}
+
+	mime := pic.MIMEType
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	return pic.Data, mime, nil
 }

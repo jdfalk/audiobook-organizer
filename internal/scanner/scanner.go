@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -63,16 +63,21 @@ func isExcludedPath(path string) bool {
 
 // Book represents an audiobook file
 type Book struct {
-	FilePath  string
-	Title     string
-	Author    string
-	Series    string
-	Position  int
-	Format    string
-	Duration  int
-	Narrator  string
-	Language  string
-	Publisher string
+	FilePath        string
+	Title           string
+	Author          string
+	Series          string
+	Position        int
+	Format          string
+	Duration        int
+	Narrator        string
+	Language        string
+	Publisher       string
+	BookOrganizerID string // Embedded AUDIOBOOK_ORGANIZER_ID for re-linking
+	ASIN            string
+	OpenLibraryID   string
+	HardcoverID     string
+	GoogleBooksID   string
 }
 
 // ScanDirectory scans the given directory for audiobook files
@@ -349,6 +354,22 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 					}
 					if meta.SeriesIndex > 0 {
 						books[idx].Position = meta.SeriesIndex
+					}
+					// Propagate custom organizer tags for re-linking
+					if meta.BookOrganizerID != "" {
+						books[idx].BookOrganizerID = meta.BookOrganizerID
+					}
+					if meta.ASIN != "" {
+						books[idx].ASIN = meta.ASIN
+					}
+					if meta.OpenLibraryID != "" {
+						books[idx].OpenLibraryID = meta.OpenLibraryID
+					}
+					if meta.HardcoverID != "" {
+						books[idx].HardcoverID = meta.HardcoverID
+					}
+					if meta.GoogleBooksID != "" {
+						books[idx].GoogleBooksID = meta.GoogleBooksID
 					}
 				}
 			}
@@ -857,12 +878,30 @@ func saveBookToDatabase(book *Book) error {
 			Narrator:          nullablePtr(book.Narrator),
 			Language:          nullablePtr(book.Language),
 			Publisher:         nullablePtr(book.Publisher),
+			ASIN:              nullablePtr(book.ASIN),
+			OpenLibraryID:     nullablePtr(book.OpenLibraryID),
+			HardcoverID:       nullablePtr(book.HardcoverID),
+			GoogleBooksID:     nullablePtr(book.GoogleBooksID),
 			FileHash:          fileHash,
 			FileSize:          fileSize,
 			OriginalFileHash:  originalFileHash,
 			OrganizedFileHash: organizedFileHash,
 			LibraryState:      stringPtr("imported"),
 			Quantity:          intPtr(1),
+		}
+
+		// Re-link by embedded AUDIOBOOK_ORGANIZER_ID: if the file contains our ID tag,
+		// find the existing record and update its path (handles file moves/renames).
+		if book.BookOrganizerID != "" {
+			existingByOrgID, orgErr := database.GlobalStore.GetBookByID(book.BookOrganizerID)
+			if orgErr == nil && existingByOrgID != nil && existingByOrgID.FilePath != book.FilePath {
+				log.Printf("[INFO] scanner: re-linking book %s (moved from %s to %s)",
+					book.BookOrganizerID, existingByOrgID.FilePath, book.FilePath)
+				existingByOrgID.FilePath = book.FilePath
+				preserveExistingFields(dbBook, existingByOrgID)
+				_, err = database.GlobalStore.UpdateBook(existingByOrgID.ID, existingByOrgID)
+				return err
+			}
 		}
 
 		// Upsert semantics with duplicate detection:
@@ -1206,8 +1245,21 @@ func preserveExistingFields(scanned *database.Book, existing *database.Book) {
 	if scanned.ISBN13 == nil && existing.ISBN13 != nil {
 		scanned.ISBN13 = existing.ISBN13
 	}
+	if scanned.ASIN == nil && existing.ASIN != nil {
+		scanned.ASIN = existing.ASIN
+	}
 	if scanned.Edition == nil && existing.Edition != nil {
 		scanned.Edition = existing.Edition
+	}
+	// Preserve external provider IDs
+	if scanned.OpenLibraryID == nil && existing.OpenLibraryID != nil {
+		scanned.OpenLibraryID = existing.OpenLibraryID
+	}
+	if scanned.HardcoverID == nil && existing.HardcoverID != nil {
+		scanned.HardcoverID = existing.HardcoverID
+	}
+	if scanned.GoogleBooksID == nil && existing.GoogleBooksID != nil {
+		scanned.GoogleBooksID = existing.GoogleBooksID
 	}
 	// Preserve iTunes fields
 	if scanned.ITunesPersistentID == nil && existing.ITunesPersistentID != nil {

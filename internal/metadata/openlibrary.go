@@ -5,7 +5,7 @@
 package metadata
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -148,7 +148,7 @@ func (c *OpenLibraryClient) SearchByTitle(title string) ([]BookMetadata, error) 
 
 	// Parse response
 	var searchResp SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &searchResp); err != nil {
 		return nil, fmt.Errorf("failed to decode search response: %w", err)
 	}
 
@@ -206,7 +206,7 @@ func (c *OpenLibraryClient) SearchByTitleAndAuthor(title, author string) ([]Book
 
 	// Parse response
 	var searchResp SearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &searchResp); err != nil {
 		return nil, fmt.Errorf("failed to decode search response: %w", err)
 	}
 
@@ -275,7 +275,7 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error) {
 
 	// Parse response
 	var book map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&book); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &book); err != nil {
 		return nil, fmt.Errorf("failed to decode book response: %w", err)
 	}
 

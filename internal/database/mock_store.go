@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.11.0
+// version: 1.14.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -79,7 +79,8 @@ type MockStore struct {
 	GetOperationByIDFunc      func(id string) (*Operation, error)
 	GetRecentOperationsFunc   func(limit int) ([]Operation, error)
 	UpdateOperationStatusFunc func(id, status string, progress, total int, message string) error
-	UpdateOperationErrorFunc  func(id, errorMessage string) error
+	UpdateOperationErrorFunc       func(id, errorMessage string) error
+	UpdateOperationResultDataFunc  func(id string, resultData string) error
 
 	// Operation State Persistence
 	SaveOperationStateFunc    func(opID string, state []byte) error
@@ -306,6 +307,10 @@ func (m *MockStore) DeleteSeries(id int) error {
 	return nil
 }
 
+func (m *MockStore) UpdateSeriesName(id int, name string) error {
+	return nil
+}
+
 func (m *MockStore) GetAllWorks() ([]Work, error) {
 	if m.GetAllWorksFunc != nil {
 		return m.GetAllWorksFunc()
@@ -436,6 +441,10 @@ func (m *MockStore) SetBookAuthors(bookID string, authors []BookAuthor) error {
 
 func (m *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	return m.GetBooksByAuthorID(authorID)
+}
+
+func (m *MockStore) GetAllAuthorBookCounts() (map[int]int, error) {
+	return map[int]int{}, nil
 }
 
 func (m *MockStore) CreateNarrator(name string) (*Narrator, error) {
@@ -637,6 +646,10 @@ func (m *MockStore) GetRecentOperations(limit int) ([]Operation, error) {
 	return nil, nil
 }
 
+func (m *MockStore) ListOperations(limit, offset int) ([]Operation, int, error) {
+	return nil, 0, nil
+}
+
 func (m *MockStore) UpdateOperationStatus(id, status string, progress, total int, message string) error {
 	if m.UpdateOperationStatusFunc != nil {
 		return m.UpdateOperationStatusFunc(id, status, progress, total, message)
@@ -647,6 +660,13 @@ func (m *MockStore) UpdateOperationStatus(id, status string, progress, total int
 func (m *MockStore) UpdateOperationError(id, errorMessage string) error {
 	if m.UpdateOperationErrorFunc != nil {
 		return m.UpdateOperationErrorFunc(id, errorMessage)
+	}
+	return nil
+}
+
+func (m *MockStore) UpdateOperationResultData(id string, resultData string) error {
+	if m.UpdateOperationResultDataFunc != nil {
+		return m.UpdateOperationResultDataFunc(id, resultData)
 	}
 	return nil
 }
@@ -1075,4 +1095,24 @@ func (m *MockStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) 
 
 func (m *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
 	return 0, nil
+}
+
+func (m *MockStore) Optimize() error {
+	return nil
+}
+
+func (m *MockStore) CreateOperationChange(change *OperationChange) error {
+	return nil
+}
+
+func (m *MockStore) GetOperationChanges(operationID string) ([]*OperationChange, error) {
+	return nil, nil
+}
+
+func (m *MockStore) GetBookChanges(bookID string) ([]*OperationChange, error) {
+	return nil, nil
+}
+
+func (m *MockStore) RevertOperationChanges(operationID string) error {
+	return nil
 }

@@ -6,7 +6,7 @@ package download
 
 import (
 	"context"
-	"encoding/json"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -91,7 +91,7 @@ func (q *QBittorrentClient) fetchTorrents(ctx context.Context, params url.Values
 	}
 
 	var torrents []qbTorrent
-	if err := json.NewDecoder(resp.Body).Decode(&torrents); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &torrents); err != nil {
 		return nil, fmt.Errorf("qbittorrent: failed to parse response: %w", err)
 	}
 	return torrents, nil
@@ -150,7 +150,7 @@ func (q *QBittorrentClient) GetTorrent(ctx context.Context, id string) (*Torrent
 				Name string `json:"name"`
 				Size int64  `json:"size"`
 			}
-			if json.NewDecoder(resp.Body).Decode(&files) == nil {
+			if json.UnmarshalRead(resp.Body, &files) == nil {
 				for _, f := range files {
 					info.Files = append(info.Files, TorrentFile{Path: f.Name, Size: f.Size})
 				}

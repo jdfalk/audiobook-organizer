@@ -5,7 +5,7 @@
 package updater
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +36,7 @@ func TestCheckStable(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(release)
+		json.MarshalWrite(w, release)
 	}))
 	defer srv.Close()
 

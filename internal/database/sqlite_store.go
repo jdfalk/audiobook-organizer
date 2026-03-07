@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.30.0
+// version: 1.34.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -25,6 +25,7 @@ const bookSelectColumns = `
 	file_path, original_filename, format, duration,
 	work_id, narrator, edition, language, publisher,
 	print_year, audiobook_release_year, isbn10, isbn13, asin,
+	open_library_id, hardcover_id, google_books_id,
 	itunes_persistent_id, itunes_date_added, itunes_play_count,
 	itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source,
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
@@ -40,6 +41,7 @@ const bookSelectColumnsQualified = `
 	books.file_path, books.original_filename, books.format, books.duration,
 	books.work_id, books.narrator, books.edition, books.language, books.publisher,
 	books.print_year, books.audiobook_release_year, books.isbn10, books.isbn13, books.asin,
+	books.open_library_id, books.hardcover_id, books.google_books_id,
 	books.itunes_persistent_id, books.itunes_date_added, books.itunes_play_count,
 	books.itunes_last_played, books.itunes_rating, books.itunes_bookmark, books.itunes_import_source,
 	books.file_hash, books.file_size, books.bitrate_kbps, books.codec, books.sample_rate_hz, books.channels,
@@ -59,7 +61,9 @@ func scanBook(scanner rowScanner, book *Book) error {
 		workID, narrator, edition, language, publisher                       sql.NullString
 		itunesPersistentID, itunesImportSource                               sql.NullString
 		itunesDateAdded, itunesLastPlayed                                    sql.NullTime
-		isbn10, isbn13, asin, fileHash, quality, codec                       sql.NullString
+		isbn10, isbn13, asin                                                  sql.NullString
+		openLibraryID, hardcoverID, googleBooksID                              sql.NullString
+		fileHash, quality, codec                                               sql.NullString
 		originalFileHash, organizedFileHash                                  sql.NullString
 		versionGroupID, versionNotes                                         sql.NullString
 		coverURL, narratorsJSON, metadataReviewStatus                         sql.NullString
@@ -75,6 +79,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&filePath, &originalFilename, &format, &duration,
 		&workID, &narrator, &edition, &language, &publisher,
 		&printYear, &releaseYear, &isbn10, &isbn13, &asin,
+		&openLibraryID, &hardcoverID, &googleBooksID,
 		&itunesPersistentID, &itunesDateAdded, &itunesPlayCount,
 		&itunesLastPlayed, &itunesRating, &itunesBookmark, &itunesImportSource,
 		&fileHash, &fileSize, &bitrate, &codec, &sampleRate, &channels,
@@ -104,6 +109,9 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.ISBN10 = nullableString(isbn10)
 	book.ISBN13 = nullableString(isbn13)
 	book.ASIN = nullableString(asin)
+	book.OpenLibraryID = nullableString(openLibraryID)
+	book.HardcoverID = nullableString(hardcoverID)
+	book.GoogleBooksID = nullableString(googleBooksID)
 	book.ITunesPersistentID = nullableString(itunesPersistentID)
 	if itunesDateAdded.Valid {
 		book.ITunesDateAdded = &itunesDateAdded.Time
@@ -288,6 +296,9 @@ func (s *SQLiteStore) createTables() error {
 		isbn10 TEXT,
 		isbn13 TEXT,
 		asin TEXT,
+		open_library_id TEXT,
+		hardcover_id TEXT,
+		google_books_id TEXT,
 		itunes_persistent_id TEXT,
 		itunes_date_added TIMESTAMP,
 		itunes_play_count INTEGER DEFAULT 0,
@@ -406,7 +417,8 @@ func (s *SQLiteStore) createTables() error {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		started_at DATETIME,
 		completed_at DATETIME,
-		error_message TEXT
+		error_message TEXT,
+		result_data TEXT
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_operations_status ON operations(status);
@@ -1202,6 +1214,11 @@ func (s *SQLiteStore) DeleteSeries(id int) error {
 	return err
 }
 
+func (s *SQLiteStore) UpdateSeriesName(id int, name string) error {
+	_, err := s.db.Exec("UPDATE series SET name = ? WHERE id = ?", name, id)
+	return err
+}
+
 func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
 	var series Series
 	err := s.db.QueryRow("SELECT id, name, author_id FROM series WHERE id = ?", id).
@@ -1732,6 +1749,27 @@ func (s *SQLiteStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	return books, rows.Err()
 }
 
+func (s *SQLiteStore) GetAllAuthorBookCounts() (map[int]int, error) {
+	rows, err := s.db.Query(`SELECT ba.author_id, COUNT(DISTINCT ba.book_id)
+		FROM book_authors ba
+		JOIN books b ON b.id = ba.book_id
+		WHERE COALESCE(b.marked_for_deletion, 0) = 0
+		GROUP BY ba.author_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[int]int)
+	for rows.Next() {
+		var authorID, count int
+		if err := rows.Scan(&authorID, &count); err != nil {
+			return nil, err
+		}
+		counts[authorID] = count
+	}
+	return counts, rows.Err()
+}
+
 // --- Narrator methods ---
 
 func (s *SQLiteStore) CreateNarrator(name string) (*Narrator, error) {
@@ -1848,17 +1886,19 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
 		format, duration, work_id, narrator, edition, language, publisher,
 		print_year, audiobook_release_year, isbn10, isbn13, asin,
+		open_library_id, hardcover_id, google_books_id,
 		itunes_persistent_id, itunes_date_added, itunes_play_count, itunes_last_played,
 		itunes_rating, itunes_bookmark, itunes_import_source,
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
+		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
 		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
@@ -1965,6 +2005,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		file_path = ?, original_filename = ?, format = ?, duration = ?,
 		work_id = ?, narrator = ?, edition = ?, language = ?, publisher = ?,
 		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?, asin = ?,
+		open_library_id = ?, hardcover_id = ?, google_books_id = ?,
 		itunes_persistent_id = ?, itunes_date_added = ?, itunes_play_count = ?, itunes_last_played = ?,
 		itunes_rating = ?, itunes_bookmark = ?, itunes_import_source = ?,
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
@@ -1979,6 +2020,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.FilePath, book.OriginalFilename, book.Format, book.Duration,
 		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
+		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
 		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
@@ -2474,11 +2516,11 @@ func (s *SQLiteStore) CreateOperation(id, opType string, folderPath *string) (*O
 func (s *SQLiteStore) GetOperationByID(id string) (*Operation, error) {
 	var op Operation
 	query := `SELECT id, type, status, progress, total, message, folder_path,
-			  created_at, started_at, completed_at, error_message
+			  created_at, started_at, completed_at, error_message, result_data
 			  FROM operations WHERE id = ?`
 	err := s.db.QueryRow(query, id).Scan(&op.ID, &op.Type, &op.Status, &op.Progress,
 		&op.Total, &op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
-		&op.CompletedAt, &op.ErrorMessage)
+		&op.CompletedAt, &op.ErrorMessage, &op.ResultData)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -2490,7 +2532,7 @@ func (s *SQLiteStore) GetOperationByID(id string) (*Operation, error) {
 
 func (s *SQLiteStore) GetRecentOperations(limit int) ([]Operation, error) {
 	query := `SELECT id, type, status, progress, total, message, folder_path,
-			  created_at, started_at, completed_at, error_message
+			  created_at, started_at, completed_at, error_message, result_data
 			  FROM operations ORDER BY created_at DESC LIMIT ?`
 	rows, err := s.db.Query(query, limit)
 	if err != nil {
@@ -2503,12 +2545,39 @@ func (s *SQLiteStore) GetRecentOperations(limit int) ([]Operation, error) {
 		var op Operation
 		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total,
 			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
-			&op.CompletedAt, &op.ErrorMessage); err != nil {
+			&op.CompletedAt, &op.ErrorMessage, &op.ResultData); err != nil {
 			return nil, err
 		}
 		operations = append(operations, op)
 	}
 	return operations, rows.Err()
+}
+
+func (s *SQLiteStore) ListOperations(limit, offset int) ([]Operation, int, error) {
+	var total int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM operations").Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := `SELECT id, type, status, progress, total, message, folder_path,
+			  created_at, started_at, completed_at, error_message, result_data
+			  FROM operations ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	rows, err := s.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var operations []Operation
+	for rows.Next() {
+		var op Operation
+		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total,
+			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
+			&op.CompletedAt, &op.ErrorMessage, &op.ResultData); err != nil {
+			return nil, 0, err
+		}
+		operations = append(operations, op)
+	}
+	return operations, total, rows.Err()
 }
 
 func (s *SQLiteStore) UpdateOperationStatus(id, status string, progress, total int, message string) error {
@@ -2685,9 +2754,14 @@ func (s *SQLiteStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 	return int(n), nil
 }
 
+func (s *SQLiteStore) UpdateOperationResultData(id string, resultData string) error {
+	_, err := s.db.Exec("UPDATE operations SET result_data = ? WHERE id = ?", resultData, id)
+	return err
+}
+
 func (s *SQLiteStore) GetInterruptedOperations() ([]Operation, error) {
 	query := `SELECT id, type, status, progress, total, message, folder_path,
-		created_at, started_at, completed_at, error_message
+		created_at, started_at, completed_at, error_message, result_data
 		FROM operations WHERE status IN ('running', 'queued')`
 	rows, err := s.db.Query(query)
 	if err != nil {
@@ -2700,7 +2774,7 @@ func (s *SQLiteStore) GetInterruptedOperations() ([]Operation, error) {
 		var op Operation
 		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total,
 			&op.Message, &op.FolderPath, &op.CreatedAt, &op.StartedAt,
-			&op.CompletedAt, &op.ErrorMessage); err != nil {
+			&op.CompletedAt, &op.ErrorMessage, &op.ResultData); err != nil {
 			return nil, err
 		}
 		ops = append(ops, op)
@@ -3120,4 +3194,75 @@ func (s *SQLiteStore) RevertBookToVersion(id string, ts time.Time) (*Book, error
 // PruneBookVersions is a stub — book versioning is not yet supported in SQLite store.
 func (s *SQLiteStore) PruneBookVersions(id string, keepCount int) (int, error) {
 	return 0, nil
+}
+
+// Optimize runs PRAGMA optimize and VACUUM to compact and optimize the SQLite database.
+func (s *SQLiteStore) Optimize() error {
+	if _, err := s.db.Exec("PRAGMA analysis_limit=1000; PRAGMA optimize"); err != nil {
+		return fmt.Errorf("PRAGMA optimize failed: %w", err)
+	}
+	if _, err := s.db.Exec("VACUUM"); err != nil {
+		return fmt.Errorf("VACUUM failed: %w", err)
+	}
+	return nil
+}
+
+// CreateOperationChange inserts a new operation change record.
+func (s *SQLiteStore) CreateOperationChange(change *OperationChange) error {
+	if change.ID == "" {
+		change.ID = ulid.Make().String()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO operation_changes (id, operation_id, book_id, change_type, field_name, old_value, new_value, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		change.ID, change.OperationID, change.BookID, change.ChangeType, change.FieldName, change.OldValue, change.NewValue,
+	)
+	return err
+}
+
+// GetOperationChanges returns all changes for a given operation.
+func (s *SQLiteStore) GetOperationChanges(operationID string) ([]*OperationChange, error) {
+	rows, err := s.db.Query(
+		`SELECT id, operation_id, book_id, change_type, field_name, old_value, new_value, reverted_at, created_at
+		 FROM operation_changes WHERE operation_id = ? ORDER BY created_at ASC`, operationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanOperationChanges(rows)
+}
+
+// GetBookChanges returns all changes for a given book.
+func (s *SQLiteStore) GetBookChanges(bookID string) ([]*OperationChange, error) {
+	rows, err := s.db.Query(
+		`SELECT id, operation_id, book_id, change_type, field_name, old_value, new_value, reverted_at, created_at
+		 FROM operation_changes WHERE book_id = ? ORDER BY created_at DESC`, bookID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanOperationChanges(rows)
+}
+
+// RevertOperationChanges marks all changes for an operation as reverted.
+func (s *SQLiteStore) RevertOperationChanges(operationID string) error {
+	_, err := s.db.Exec(
+		`UPDATE operation_changes SET reverted_at = CURRENT_TIMESTAMP WHERE operation_id = ? AND reverted_at IS NULL`,
+		operationID,
+	)
+	return err
+}
+
+func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
+	var changes []*OperationChange
+	for rows.Next() {
+		c := &OperationChange{}
+		if err := rows.Scan(&c.ID, &c.OperationID, &c.BookID, &c.ChangeType, &c.FieldName, &c.OldValue, &c.NewValue, &c.RevertedAt, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		changes = append(changes, c)
+	}
+	return changes, rows.Err()
 }

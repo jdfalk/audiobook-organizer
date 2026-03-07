@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 // TagLib native writer support (default). Falls back to CLI tools on failure.
@@ -71,6 +71,19 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	if isbn13, ok := metadata["isbn13"].(string); ok && isbn13 != "" {
 		tags["ISBN13"] = []string{isbn13}
 	}
+
+	// Write custom AUDIOBOOK_ORGANIZER_* tags for book tracking
+	customPairs := [][2]string{
+		{TagBookID, "book_id"}, {TagISBN10, "isbn10"}, {TagISBN13, "isbn13"},
+		{TagASIN, "asin"}, {TagOpenLibrary, "open_library_id"},
+		{TagHardcover, "hardcover_id"}, {TagGoogleBooks, "google_books_id"},
+	}
+	for _, pair := range customPairs {
+		if val, ok := metadata[pair[1]].(string); ok && val != "" {
+			tags[pair[0]] = []string{val}
+		}
+	}
+	tags[TagVersion] = []string{CustomTagVersion}
 
 	if len(tags) == 0 {
 		return fmt.Errorf("no writable metadata supplied")
