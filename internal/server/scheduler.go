@@ -16,6 +16,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -780,6 +781,31 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return 5 * time.Minute // Poll every 5 minutes
 		},
 		RunOnStart: func() bool { return false },
+	})
+
+	// Log Retention Pruning — prune old operation logs and system activity logs
+	ts.registerTask(TaskDefinition{
+		Name:        "purge_old_logs",
+		Description: "Prune operation logs and system activity logs older than retention period",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			opID := ulid.Make().String()
+			op, err := database.GlobalStore.CreateOperation(opID, "purge_old_logs", nil)
+			if err != nil {
+				return nil, err
+			}
+			_ = operations.GlobalQueue.Enqueue(opID, "purge_old_logs", operations.PriorityLow,
+				func(ctx context.Context, progress operations.ProgressReporter) error {
+					retLog := logger.New("purge_old_logs")
+					_, err := logger.PruneOldLogs(database.GlobalStore, config.AppConfig.LogRetentionDays, retLog)
+					return err
+				},
+			)
+			return op, nil
+		},
+		IsEnabled:   func() bool { return config.AppConfig.LogRetentionDays > 0 },
+		GetInterval: func() time.Duration { return 7 * 24 * time.Hour },
+		RunOnStart:  func() bool { return false },
 	})
 }
 
