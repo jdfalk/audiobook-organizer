@@ -333,9 +333,12 @@ func TestConvertTrack(t *testing.T) {
 		t.Errorf("Narrator = %v, want %q", book.Narrator, "Rob Inglis")
 	}
 
-	// Edition from Comments
-	if book.Edition == nil || *book.Edition != "Unabridged Edition" {
-		t.Errorf("Edition = %v, want %q", book.Edition, "Unabridged Edition")
+	// Comments should map to Description, not Edition
+	if book.Edition != nil {
+		t.Errorf("Edition = %v, want nil (comments should not populate edition)", book.Edition)
+	}
+	if book.Description == nil || *book.Description != "Unabridged Edition" {
+		t.Errorf("Description = %v, want %q (from Comments field)", book.Description, "Unabridged Edition")
 	}
 
 	// Year

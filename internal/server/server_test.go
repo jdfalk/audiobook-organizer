@@ -614,6 +614,7 @@ func TestExportMetadata(t *testing.T) {
 
 func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	server, cleanup := setupTestServer(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	tempDir := t.TempDir()

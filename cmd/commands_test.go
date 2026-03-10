@@ -187,6 +187,12 @@ func (s *stubStore) MergeBookSegments(bookNumericID int, newSegment *database.Bo
 func (s *stubStore) UpdateBookSegment(segment *database.BookSegment) error {
 	return nil
 }
+func (s *stubStore) GetBookSegmentByID(segmentID string) (*database.BookSegment, error) {
+	return nil, fmt.Errorf("not found")
+}
+func (s *stubStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
+	return nil
+}
 func (s *stubStore) AddPlaybackEvent(event *database.PlaybackEvent) error { return nil }
 func (s *stubStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error) {
 	return []database.PlaybackEvent{}, nil
@@ -269,6 +275,32 @@ func (s *stubStore) DeleteSeries(id int) error                               { r
 func (s *stubStore) UpdateAuthorName(id int, name string) error              { return nil }
 func (s *stubStore) UpdateSeriesName(id int, name string) error              { return nil }
 func (s *stubStore) Optimize() error                                         { return nil }
+func (s *stubStore) GetDuplicateBooksByMetadata(threshold float64) ([][]database.Book, error) {
+	return [][]database.Book{}, nil
+}
+func (s *stubStore) CreateAuthorTombstone(oldID, canonicalID int) error { return nil }
+func (s *stubStore) GetAuthorTombstone(oldID int) (int, error)         { return 0, nil }
+func (s *stubStore) ResolveTombstoneChains() (int, error)              { return 0, nil }
+func (s *stubStore) GetAuthorAliases(authorID int) ([]database.AuthorAlias, error) {
+	return []database.AuthorAlias{}, nil
+}
+func (s *stubStore) GetAllAuthorAliases() ([]database.AuthorAlias, error) {
+	return []database.AuthorAlias{}, nil
+}
+func (s *stubStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*database.AuthorAlias, error) {
+	return &database.AuthorAlias{}, nil
+}
+func (s *stubStore) DeleteAuthorAlias(id int) error                            { return nil }
+func (s *stubStore) FindAuthorByAlias(aliasName string) (*database.Author, error) { return nil, nil }
+func (s *stubStore) UpdateOperationResultData(id string, resultData string) error { return nil }
+func (s *stubStore) CreateOperationChange(change *database.OperationChange) error { return nil }
+func (s *stubStore) GetOperationChanges(operationID string) ([]*database.OperationChange, error) {
+	return nil, nil
+}
+func (s *stubStore) GetBookChanges(bookID string) ([]*database.OperationChange, error) {
+	return nil, nil
+}
+func (s *stubStore) RevertOperationChanges(operationID string) error { return nil }
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
