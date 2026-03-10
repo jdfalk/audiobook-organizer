@@ -34,7 +34,6 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext.js';
 import SkipNextIcon from '@mui/icons-material/SkipNext.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import UndoIcon from '@mui/icons-material/Undo.js';
-import FilterListIcon from '@mui/icons-material/FilterList.js';
 import type { Audiobook } from '../../types';
 import type { MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
@@ -263,20 +262,6 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
             Search Metadata — Book {currentIndex + 1} of {filteredBooks.length}{skipApplied && alreadyAppliedCount > 0 ? ` (${alreadyAppliedCount} filtered)` : ''}
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center">
-            {alreadyAppliedCount > 0 && (
-              <Tooltip title={`${alreadyAppliedCount} book(s) already have metadata applied. Toggle to skip them.`}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={skipApplied}
-                      onChange={(e) => handleToggleSkipApplied(e.target.checked)}
-                      size="small"
-                    />
-                  }
-                  label={<Typography variant="caption"><FilterListIcon sx={{ fontSize: 14, mr: 0.3, verticalAlign: 'middle' }} />Skip applied</Typography>}
-                />
-              </Tooltip>
-            )}
             {appliedCount > 0 && (
               <Chip icon={<CheckCircleIcon />} label={`${appliedCount} applied`} color="success" size="small" />
             )}
@@ -407,12 +392,18 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
           </Stack>
         </Collapse>
 
-        {/* Write-to-files toggle and undo */}
+        {/* Toggles and undo */}
         <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
           <Tooltip title="Write applied metadata to audio file tags (MP3/M4B/M4A)">
             <FormControlLabel
               control={<Switch checked={writeToFiles} onChange={(e) => setWriteToFiles(e.target.checked)} size="small" />}
               label={<Typography variant="body2">Write to files</Typography>}
+            />
+          </Tooltip>
+          <Tooltip title={`Skip books that already have metadata applied${alreadyAppliedCount > 0 ? ` (${alreadyAppliedCount} books)` : ''}`}>
+            <FormControlLabel
+              control={<Switch checked={skipApplied} onChange={(e) => handleToggleSkipApplied(e.target.checked)} size="small" />}
+              label={<Typography variant="body2">Skip applied</Typography>}
             />
           </Tooltip>
           {status === 'applied' && (
