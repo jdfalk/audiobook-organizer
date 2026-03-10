@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.112.0
+// version: 1.113.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -726,7 +726,7 @@ func (s *Server) resumeInterruptedOperations() {
 			}
 		case "organize":
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, progress)
+				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			}
 		default:
 			log.Printf("[WARN] Unknown operation type %s for %s, marking as failed", opType, opID)
@@ -5336,7 +5336,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.organizeService.PerformOrganize(ctx, organizeReq, progress)
+		return s.organizeService.PerformOrganize(ctx, organizeReq, operations.LoggerFromReporter(progress))
 	}
 
 	// Enqueue the operation

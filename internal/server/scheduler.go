@@ -101,7 +101,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				if s.organizeService == nil {
 					return fmt.Errorf("organize service not initialized")
 				}
-				return s.organizeService.PerformOrganize(ctx, &OrganizeRequest{}, progress)
+				return s.organizeService.PerformOrganize(ctx, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			})
 		},
 		IsEnabled:   func() bool { return true },

@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -588,6 +588,41 @@ func (r *loggerProgressReporter) IsCanceled() bool {
 // canceled returns whether the operation was marked canceled (via the logger).
 func (r *loggerProgressReporter) canceled() bool {
 	return r.logger.IsCanceled()
+}
+
+// simpleLoggerReporter wraps a logger.Logger to implement ProgressReporter.
+// Used when callers have a logger.Logger but need to pass a ProgressReporter.
+type simpleLoggerReporter struct {
+	log logger.Logger
+}
+
+// ReporterFromLogger wraps a logger.Logger as a ProgressReporter.
+// UpdateProgress delegates to Logger.UpdateProgress and Log delegates via level.
+func ReporterFromLogger(l logger.Logger) ProgressReporter {
+	return &simpleLoggerReporter{log: l}
+}
+
+func (r *simpleLoggerReporter) UpdateProgress(current, total int, message string) error {
+	r.log.UpdateProgress(current, total, message)
+	return nil
+}
+
+func (r *simpleLoggerReporter) Log(level, message string, _ *string) error {
+	switch level {
+	case "warn":
+		r.log.Warn("%s", message)
+	case "error":
+		r.log.Error("%s", message)
+	case "debug":
+		r.log.Debug("%s", message)
+	default:
+		r.log.Info("%s", message)
+	}
+	return nil
+}
+
+func (r *simpleLoggerReporter) IsCanceled() bool {
+	return r.log.IsCanceled()
 }
 
 // Global queue instance

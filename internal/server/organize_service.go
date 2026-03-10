@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"hash/crc32"
-	"log"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -19,6 +18,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -49,25 +49,25 @@ type OrganizeStats struct {
 }
 
 // PerformOrganizeWithID executes organization with checkpoint support.
-func (orgSvc *OrganizeService) PerformOrganizeWithID(ctx context.Context, opID string, req *OrganizeRequest, progress operations.ProgressReporter) error {
+func (orgSvc *OrganizeService) PerformOrganizeWithID(ctx context.Context, opID string, req *OrganizeRequest, log logger.Logger) error {
 	_ = operations.SaveParams(orgSvc.db, opID, operations.OrganizeParams{})
 	req.OperationID = opID
-	err := orgSvc.PerformOrganize(ctx, req, progress)
+	err := orgSvc.PerformOrganize(ctx, req, log)
 	_ = operations.ClearState(orgSvc.db, opID)
 	return err
 }
 
 // PerformOrganize executes the library organization operation
-func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *OrganizeRequest, progress operations.ProgressReporter) error {
-	_ = progress.Log("info", "Starting file organization", nil)
+func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *OrganizeRequest, log logger.Logger) error {
+	log.Info("Starting file organization")
 
 	// Optional: sync iTunes library first to ensure all books are up to date
 	if req.SyncITunesFirst {
-		orgSvc.syncITunesBeforeOrganize(ctx, progress)
+		orgSvc.syncITunesBeforeOrganize(ctx, log)
 	}
 
 	// Auto-backup database before organizing
-	orgSvc.autoBackup(progress)
+	orgSvc.autoBackup(log)
 
 	// Get ALL books by paginating through the database
 	var allBooks []database.Book
@@ -75,8 +75,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	for offset := 0; ; offset += fetchPageSize {
 		page, fetchErr := orgSvc.db.GetAllBooks(fetchPageSize, offset)
 		if fetchErr != nil {
-			errDetails := fetchErr.Error()
-			_ = progress.Log("error", "Failed to fetch books", &errDetails)
+			log.Error("Failed to fetch books: %s", fetchErr.Error())
 			return fmt.Errorf("failed to fetch books: %w", fetchErr)
 		}
 		allBooks = append(allBooks, page...)
@@ -86,12 +85,12 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	}
 
 	logMsg := fmt.Sprintf("Fetched %d total books from database", len(allBooks))
-	_ = progress.Log("info", logMsg, nil)
-	log.Printf("[DEBUG] Organize: %s", logMsg)
+	log.Info("%s", logMsg)
+	log.Debug("Organize: %s", logMsg)
 
 	// Optional: fetch metadata before organizing to normalize author names
 	if req.FetchMetadataFirst {
-		_ = progress.Log("info", "Fetching metadata before organizing...", nil)
+		log.Info("Fetching metadata before organizing...")
 		mfs := NewMetadataFetchService(orgSvc.db)
 		enriched := 0
 		for i := range allBooks {
@@ -103,7 +102,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 				enriched++
 			}
 		}
-		_ = progress.Log("info", fmt.Sprintf("Metadata enriched for %d books", enriched), nil)
+		log.Info("Metadata enriched for %d books", enriched)
 
 		// Re-fetch all books since metadata may have changed
 		allBooks = nil
@@ -120,28 +119,28 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	}
 
 	// Filter books that need organizing
-	booksToOrganize := orgSvc.filterBooksNeedingOrganization(allBooks, progress)
+	booksToOrganize := orgSvc.filterBooksNeedingOrganization(allBooks, log)
 
 	logMsg = fmt.Sprintf("Found %d books that need organizing (out of %d total)", len(booksToOrganize), len(allBooks))
-	_ = progress.Log("info", logMsg, nil)
-	log.Printf("[DEBUG] Organize: %s", logMsg)
+	log.Info("%s", logMsg)
+	log.Debug("Organize: %s", logMsg)
 
 	// Perform organization
-	stats := orgSvc.organizeBooks(ctx, booksToOrganize, progress, req.OperationID)
+	stats := orgSvc.organizeBooks(ctx, booksToOrganize, log, req.OperationID)
 
 	// Trigger automatic rescan if any books were organized
 	if stats.Organized > 0 {
-		orgSvc.triggerAutomaticRescan(ctx, progress)
+		orgSvc.triggerAutomaticRescan(ctx, log)
 	}
 
 	return nil
 }
 
-func (orgSvc *OrganizeService) autoBackup(progress operations.ProgressReporter) {
+func (orgSvc *OrganizeService) autoBackup(log logger.Logger) {
 	dbPath := config.AppConfig.DatabasePath
 	dbType := config.AppConfig.DatabaseType
 	if dbPath == "" {
-		_ = progress.Log("warn", "Skipping auto-backup: no database path configured", nil)
+		log.Warn("Skipping auto-backup: no database path configured")
 		return
 	}
 
@@ -152,44 +151,40 @@ func (orgSvc *OrganizeService) autoBackup(progress operations.ProgressReporter) 
 
 	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
 	if err != nil {
-		errDetails := fmt.Sprintf("Auto-backup failed: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("Auto-backup failed: %s", err.Error())
 		return
 	}
-	_ = progress.Log("info", fmt.Sprintf("Auto-backup created: %s (%d bytes)", info.Filename, info.Size), nil)
+	log.Info("Auto-backup created: %s (%d bytes)", info.Filename, info.Size)
 }
 
-func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, progress operations.ProgressReporter) {
+func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log logger.Logger) {
 	libraryPath := discoverITunesLibraryPath()
 	if libraryPath == "" {
-		_ = progress.Log("info", "Skipping iTunes sync: no library found", nil)
+		log.Info("Skipping iTunes sync: no library found")
 		return
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("Running iTunes sync before organize: %s", libraryPath), nil)
+	log.Info("Running iTunes sync before organize: %s", libraryPath)
 
-	if err := executeITunesSync(ctx, progress, libraryPath, nil); err != nil {
-		errDetails := fmt.Sprintf("iTunes pre-sync failed (continuing with organize): %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+	if err := executeITunesSync(ctx, operations.ReporterFromLogger(log), libraryPath, nil); err != nil {
+		log.Warn("iTunes pre-sync failed (continuing with organize): %s", err.Error())
 		return
 	}
 
-	_ = progress.Log("info", "iTunes sync completed successfully", nil)
+	log.Info("iTunes sync completed successfully")
 }
 
-func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, progress operations.ProgressReporter) []database.Book {
+func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
 	booksToOrganize := make([]database.Book, 0)
 	for _, book := range allBooks {
 		// Skip if already in root directory
 		if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
-			logMsg := fmt.Sprintf("Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
-			log.Printf("[DEBUG] Organize: %s", logMsg)
+			log.Debug("Organize: Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
 			continue
 		}
 		// Skip if file doesn't exist
 		if _, err := os.Stat(book.FilePath); os.IsNotExist(err) {
-			logMsg := fmt.Sprintf("Skipping non-existent file: %s", book.FilePath)
-			log.Printf("[DEBUG] Organize: %s", logMsg)
+			log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
 			continue
 		}
 		booksToOrganize = append(booksToOrganize, book)
@@ -197,7 +192,7 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 	return booksToOrganize
 }
 
-func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, progress operations.ProgressReporter, operationID string) *OrganizeStats {
+func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, log logger.Logger, operationID string) *OrganizeStats {
 	org := organizer.NewOrganizer(&config.AppConfig)
 	stats := &OrganizeStats{Total: len(booksToOrganize)}
 
@@ -205,12 +200,12 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 	var itlUpdates []itunes.ITLLocationUpdate
 
 	for i, book := range booksToOrganize {
-		if progress.IsCanceled() {
-			_ = progress.Log("info", "Organize canceled", nil)
+		if log.IsCanceled() {
+			log.Info("Organize canceled")
 			break
 		}
 
-		_ = progress.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
+		log.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
 
 		oldPath := book.FilePath
 		isDir := false
@@ -223,14 +218,13 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 
 		if isDir {
 			// Multi-file book: organize each segment file into the target directory
-			newPath, err = orgSvc.organizeDirectoryBook(org, &book, progress)
+			newPath, err = orgSvc.organizeDirectoryBook(org, &book, log)
 		} else {
 			newPath, err = org.OrganizeBook(&book)
 		}
 
 		if err != nil {
-			errDetails := fmt.Sprintf("Failed to organize %s: %s", book.Title, err.Error())
-			_ = progress.Log("warn", errDetails, nil)
+			log.Warn("Failed to organize %s: %s", book.Title, err.Error())
 			stats.Failed++
 
 			// Track failed books
@@ -249,7 +243,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		}
 
 		if oldPath == newPath {
-			_ = progress.Log("info", fmt.Sprintf("Skipped %s: already in correct location", book.Title), nil)
+			log.Info("Skipped %s: already in correct location", book.Title)
 			stats.Skipped++
 
 			if operationID != "" {
@@ -269,14 +263,14 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		// Version-aware organize: create a new book record for the organized copy,
 		// keep the original record pointing at the source (e.g. iTunes).
 		// Link them as versions with the organized copy as primary.
-		createdBook, err := orgSvc.createOrganizedVersion(org, &book, newPath, isDir, operationID, progress)
+		createdBook, err := orgSvc.createOrganizedVersion(org, &book, newPath, isDir, operationID, log)
 		if err != nil {
 			stats.Failed++
 			continue
 		}
 
-		_ = progress.Log("info", fmt.Sprintf("Organized %s: created version %s → %s (original kept at %s)",
-			book.Title, createdBook.ID, newPath, oldPath), nil)
+		log.Info("Organized %s: created version %s → %s (original kept at %s)",
+			book.Title, createdBook.ID, newPath, oldPath)
 
 		stats.Organized++
 
@@ -291,12 +285,12 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 
 	// Write back location changes to iTunes Library.itl
 	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
-		orgSvc.writeBackITLLocations(itlUpdates, progress)
+		orgSvc.writeBackITLLocations(itlUpdates, log)
 	}
 
 	summary := fmt.Sprintf("Organization completed: %d organized, %d skipped, %d failed (of %d total)",
 		stats.Organized, stats.Skipped, stats.Failed, stats.Total)
-	_ = progress.Log("info", summary, nil)
+	log.Info("%s", summary)
 
 	// Record summary as operation change
 	if operationID != "" {
@@ -316,7 +310,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 
 // organizeDirectoryBook handles organizing a multi-file book where file_path is a directory.
 // It finds all segment files, organizes them into the target directory, and returns the new directory path.
-func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, book *database.Book, progress operations.ProgressReporter) (string, error) {
+func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, book *database.Book, log logger.Logger) (string, error) {
 	// Get segment files from DB
 	numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
 	segments, err := orgSvc.db.ListBookSegments(numericID)
@@ -356,7 +350,7 @@ func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, b
 		return "", fmt.Errorf("no audio files found in directory: %s", book.FilePath)
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("Organizing %d segment files for %s", len(segmentPaths), book.Title), nil)
+	log.Info("Organizing %d segment files for %s", len(segmentPaths), book.Title)
 
 	targetDir, _, err := org.OrganizeBookDirectory(book, segmentPaths)
 	if err != nil {
@@ -367,7 +361,7 @@ func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, b
 }
 
 // createOrganizedVersion creates a new book record for the organized copy and links it to the original.
-func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, book *database.Book, newPath string, isDir bool, operationID string, progress operations.ProgressReporter) (*database.Book, error) {
+func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, book *database.Book, newPath string, isDir bool, operationID string, log logger.Logger) (*database.Book, error) {
 	newBookID := ulid.Make().String()
 	isPrimary := true
 	isNotPrimary := false
@@ -425,8 +419,7 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 
 	createdBook, err := orgSvc.db.CreateBook(&newBook)
 	if err != nil {
-		errDetails := fmt.Sprintf("Failed to create organized book record for %s: %v", book.Title, err)
-		_ = progress.Log("error", errDetails, nil)
+		log.Error("Failed to create organized book record for %s: %v", book.Title, err)
 		if !isDir {
 			os.Remove(newPath)
 		}
@@ -471,7 +464,7 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 	book.VersionGroupID = &versionGroupID
 	book.IsPrimaryVersion = &isNotPrimary
 	if _, err := orgSvc.db.UpdateBook(book.ID, book); err != nil {
-		_ = progress.Log("warn", fmt.Sprintf("Failed to update original book %s version group: %v", book.ID, err), nil)
+		log.Warn("Failed to update original book %s version group: %v", book.ID, err)
 	}
 
 	// Record operation changes for undo
@@ -499,80 +492,76 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 	return createdBook, nil
 }
 
-func (orgSvc *OrganizeService) writeBackITLLocations(updates []itunes.ITLLocationUpdate, progress operations.ProgressReporter) {
+func (orgSvc *OrganizeService) writeBackITLLocations(updates []itunes.ITLLocationUpdate, log logger.Logger) {
 	itlPath := config.AppConfig.ITunesLibraryITLPath
 
 	// Create backup before modifying
 	backupPath := itlPath + ".bak"
 	srcData, err := os.ReadFile(itlPath)
 	if err != nil {
-		errDetails := fmt.Sprintf("ITL write-back: failed to read %s: %s", itlPath, err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("ITL write-back: failed to read %s: %s", itlPath, err.Error())
 		return
 	}
 	if err := os.WriteFile(backupPath, srcData, 0644); err != nil {
-		errDetails := fmt.Sprintf("ITL write-back: failed to create backup: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("ITL write-back: failed to create backup: %s", err.Error())
 		return
 	}
 
 	result, err := itunes.UpdateITLLocations(itlPath, itlPath, updates)
 	if err != nil {
-		errDetails := fmt.Sprintf("ITL write-back failed: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("ITL write-back failed: %s", err.Error())
 		// Restore backup on failure
 		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
-			_ = progress.Log("error", fmt.Sprintf("ITL restore from backup also failed: %s", restoreErr.Error()), nil)
+			log.Error("ITL restore from backup also failed: %s", restoreErr.Error())
 		}
 		return
 	}
 
 	// Validate the written file
 	if err := itunes.ValidateITL(itlPath); err != nil {
-		errDetails := fmt.Sprintf("ITL validation failed after write-back: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("ITL validation failed after write-back: %s", err.Error())
 		// Restore backup
 		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
-			_ = progress.Log("error", fmt.Sprintf("ITL restore from backup also failed: %s", restoreErr.Error()), nil)
+			log.Error("ITL restore from backup also failed: %s", restoreErr.Error())
 		}
 		return
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("ITL write-back: updated %d/%d locations in %s", result.UpdatedCount, len(updates), itlPath), nil)
+	log.Info("ITL write-back: updated %d/%d locations in %s", result.UpdatedCount, len(updates), itlPath)
 }
 
-func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, progress operations.ProgressReporter) {
+func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, log logger.Logger) {
 	if config.AppConfig.RootDir == "" {
 		return
 	}
 
-	_ = progress.Log("info", "Starting automatic rescan of library path...", nil)
+	log.Info("Starting automatic rescan of library path...")
 
 	// Create a new scan operation
 	scanID := ulid.Make().String()
 	scanOp, err := orgSvc.db.CreateOperation(scanID, "scan", &config.AppConfig.RootDir)
 	if err != nil {
-		errDetails := fmt.Sprintf("Failed to create rescan operation: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("Failed to create rescan operation: %s", err.Error())
 		return
 	}
 
 	// Enqueue the scan operation with low priority
 	scanFunc := func(ctx context.Context, scanProgress operations.ProgressReporter) error {
-		_ = scanProgress.Log("info", fmt.Sprintf("Scanning organized books in: %s", config.AppConfig.RootDir), nil)
+		scanLog := operations.LoggerFromReporter(scanProgress)
+		scanLog.Info("Scanning organized books in: %s", config.AppConfig.RootDir)
 
 		workers := config.AppConfig.ConcurrentScans
 		if workers < 1 {
 			workers = 4
 		}
 
-		_ = scanProgress.Log("info", fmt.Sprintf("Starting directory scan with %d workers", workers), nil)
-		books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers, nil)
+		scanLog.Info("Starting directory scan with %d workers", workers)
+		books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers, scanLog)
 		if err != nil {
 			return fmt.Errorf("failed to rescan root directory: %w", err)
 		}
 
-		_ = scanProgress.Log("info", fmt.Sprintf("Found %d books in root directory, processing metadata", len(books)), nil)
+		scanLog.Info("Found %d books in root directory, processing metadata", len(books))
 
 		// Process the books to extract metadata with progress reporting
 		if len(books) > 0 {
@@ -589,24 +578,23 @@ func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, progr
 				if bookPath != "" {
 					message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
 				}
-				_ = scanProgress.UpdateProgress(int(current), displayTotal, message)
+				scanLog.UpdateProgress(int(current), displayTotal, message)
 			}
 
-			_ = scanProgress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", totalBooks, workers), nil)
-			if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, nil); err != nil {
+			scanLog.Info("Processing metadata for %d books using %d workers", totalBooks, workers)
+			if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, scanLog); err != nil {
 				return fmt.Errorf("failed to process books: %w", err)
 			}
-			_ = scanProgress.Log("info", fmt.Sprintf("Metadata processing complete: %d books processed", processedFiles.Load()), nil)
+			scanLog.Info("Metadata processing complete: %d books processed", processedFiles.Load())
 		}
 
-		_ = scanProgress.Log("info", "Rescan completed successfully", nil)
+		scanLog.Info("Rescan completed successfully")
 		return nil
 	}
 
 	if err := operations.GlobalQueue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
-		errDetails := fmt.Sprintf("Failed to enqueue rescan: %s", err.Error())
-		_ = progress.Log("warn", errDetails, nil)
+		log.Warn("Failed to enqueue rescan: %s", err.Error())
 	} else {
-		_ = progress.Log("info", "Rescan operation queued successfully", nil)
+		log.Info("Rescan operation queued successfully")
 	}
 }

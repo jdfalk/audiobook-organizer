@@ -1,5 +1,5 @@
 // file: internal/server/organize_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
 package server
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 func TestOrganizeService_FilterBooksNeedingOrganization(t *testing.T) {
@@ -20,8 +21,8 @@ func TestOrganizeService_FilterBooksNeedingOrganization(t *testing.T) {
 		{ID: "2", Title: "Book 2", FilePath: "/library/book2.m4b"},
 	}
 
-	mockProgress := &mockProgressReporter{}
-	filtered := os.filterBooksNeedingOrganization(books, mockProgress)
+	testLog := logger.New("test")
+	filtered := os.filterBooksNeedingOrganization(books, testLog)
 
 	// Should filter out books already in library
 	if len(filtered) > 1 {
@@ -38,10 +39,10 @@ func TestOrganizeService_PerformOrganize_NoBooksToOrganize(t *testing.T) {
 	os := NewOrganizeService(mockDB)
 
 	ctx := context.Background()
-	mockProgress := &mockProgressReporter{}
+	testLog := logger.New("test")
 	req := &OrganizeRequest{}
 
-	err := os.PerformOrganize(ctx, req, mockProgress)
+	err := os.PerformOrganize(ctx, req, testLog)
 
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
