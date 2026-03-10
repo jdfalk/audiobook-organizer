@@ -53,6 +53,7 @@ export interface Audiobook {
   marked_for_deletion?: boolean;
   marked_for_deletion_at?: string;
   organize_error?: string;
+  metadata_review_status?: string; // null, "matched", "no_match"
 
   created_at: string;
   updated_at: string;

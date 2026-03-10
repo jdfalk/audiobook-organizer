@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/BulkMetadataSearchDialog.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -34,6 +34,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext.js';
 import SkipNextIcon from '@mui/icons-material/SkipNext.js';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import UndoIcon from '@mui/icons-material/Undo.js';
+import FilterListIcon from '@mui/icons-material/FilterList.js';
 import type { Audiobook } from '../../types';
 import type { MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
@@ -92,10 +93,21 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
   const [bookStatuses, setBookStatuses] = useState<Map<string, BookStatus>>(new Map());
   const [writeToFiles, setWriteToFiles] = useState(true);
   const [undoing, setUndoing] = useState(false);
+  const [skipApplied, setSkipApplied] = useState(false);
 
-  const currentBook = books[currentIndex];
+  const handleToggleSkipApplied = (checked: boolean) => {
+    setSkipApplied(checked);
+    setCurrentIndex(0); // Reset to first book when filter changes
+  };
+
+  // Filter books based on skipApplied toggle
+  const filteredBooks = skipApplied
+    ? books.filter((b) => b.metadata_review_status !== 'matched')
+    : books;
+  const currentBook = filteredBooks[currentIndex];
   const appliedCount = [...bookStatuses.values()].filter((s) => s === 'applied').length;
   const skippedCount = [...bookStatuses.values()].filter((s) => s === 'skipped').length;
+  const alreadyAppliedCount = books.filter((b) => b.metadata_review_status === 'matched').length;
 
   // Search when the current book changes
   const doSearch = useCallback(async (searchQuery: string, author?: string, narrator?: string, series?: string) => {
@@ -194,7 +206,7 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
   };
 
   const advanceToNext = () => {
-    if (currentIndex < books.length - 1) {
+    if (currentIndex < filteredBooks.length - 1) {
       setCurrentIndex((i) => i + 1);
     }
   };
@@ -219,7 +231,28 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
 
   if (!open || books.length === 0) return null;
 
-  const progress = ((appliedCount + skippedCount) / books.length) * 100;
+  // All books filtered out — show message instead of closing
+  if (filteredBooks.length === 0) {
+    return (
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+        <DialogTitle>Search Metadata</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+            All {books.length} book(s) already have metadata applied.
+            <br />
+            <Button size="small" onClick={() => handleToggleSkipApplied(false)} sx={{ mt: 1 }}>
+              Show all books
+            </Button>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} variant="outlined">Close</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  const progress = ((appliedCount + skippedCount) / filteredBooks.length) * 100;
   const status = bookStatuses.get(currentBook?.id);
 
   return (
@@ -227,9 +260,23 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
       <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6">
-            Search Metadata — Book {currentIndex + 1} of {books.length}
+            Search Metadata — Book {currentIndex + 1} of {filteredBooks.length}{skipApplied && alreadyAppliedCount > 0 ? ` (${alreadyAppliedCount} filtered)` : ''}
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center">
+            {alreadyAppliedCount > 0 && (
+              <Tooltip title={`${alreadyAppliedCount} book(s) already have metadata applied. Toggle to skip them.`}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={skipApplied}
+                      onChange={(e) => handleToggleSkipApplied(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={<Typography variant="caption"><FilterListIcon sx={{ fontSize: 14, mr: 0.3, verticalAlign: 'middle' }} />Skip applied</Typography>}
+                />
+              </Tooltip>
+            )}
             {appliedCount > 0 && (
               <Chip icon={<CheckCircleIcon />} label={`${appliedCount} applied`} color="success" size="small" />
             )}
@@ -496,15 +543,15 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
             Previous
           </Button>
           <Button
-            onClick={() => setCurrentIndex((i) => Math.min(books.length - 1, i + 1))}
-            disabled={currentIndex >= books.length - 1}
+            onClick={() => setCurrentIndex((i) => Math.min(filteredBooks.length - 1, i + 1))}
+            disabled={currentIndex >= filteredBooks.length - 1}
             endIcon={<NavigateNextIcon />}
             size="small"
           >
             Next
           </Button>
           <Button onClick={handleClose} variant="outlined">
-            {appliedCount + skippedCount >= books.length ? 'Done' : 'Close'}
+            {appliedCount + skippedCount >= filteredBooks.length ? 'Done' : 'Close'}
           </Button>
         </Stack>
       </DialogActions>
