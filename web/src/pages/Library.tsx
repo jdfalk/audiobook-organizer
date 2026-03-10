@@ -55,6 +55,7 @@ import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
+import { BulkMetadataSearchDialog } from '../components/audiobooks/BulkMetadataSearchDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
@@ -138,7 +139,7 @@ export const Library = () => {
   );
   const initialItemsPerPage = Math.max(
     10,
-    parseInt(searchParams.get('limit') || '20', 10)
+    parseInt(searchParams.get('limit') || localStorage.getItem('library_items_per_page') || '20', 10)
   );
   const initialFilters: FilterOptions = {
     author: searchParams.get('author') || undefined,
@@ -241,6 +242,7 @@ export const Library = () => {
   const [removingPathId, setRemovingPathId] = useState<string | null>(null);
 
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
+  const [bulkSearchOpen, setBulkSearchOpen] = useState(false);
   const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
   const [bulkFetchProgress, setBulkFetchProgress] =
     useState<BulkActionProgress | null>(null);
@@ -1053,6 +1055,8 @@ export const Library = () => {
 
   const handleClick = useCallback(
     (audiobook: Audiobook) => {
+      // Save current library URL so BookDetail can return here directly
+      sessionStorage.setItem('library_return_url', window.location.pathname + window.location.search);
       navigate(`/library/${audiobook.id}`);
     },
     [navigate]
@@ -1656,6 +1660,15 @@ export const Library = () => {
             Bulk Fetch Metadata
           </Button>
           <Button
+            startIcon={<SearchIcon />}
+            onClick={() => setBulkSearchOpen(true)}
+            variant="outlined"
+            size="small"
+            disabled={!hasSelection}
+          >
+            Search Metadata
+          </Button>
+          <Button
             variant="outlined"
             size="small"
             startIcon={
@@ -2100,6 +2113,21 @@ export const Library = () => {
                     </span>
                   </Tooltip>
                   <Tooltip
+                    title={!hasSelection ? 'Select books first' : ''}
+                    disableHoverListener={hasSelection}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setBulkSearchOpen(true)}
+                        disabled={!hasSelection}
+                      >
+                        Search Metadata
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
                     title={
                       !selectedHasImport
                         ? hasSelection
@@ -2227,7 +2255,11 @@ export const Library = () => {
                   size="small"
                   label="Items per page"
                   value={itemsPerPage}
-                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setItemsPerPage(val);
+                    localStorage.setItem('library_items_per_page', String(val));
+                  }}
                   sx={{ minWidth: 150 }}
                 >
                   <MenuItem value={20}>20</MenuItem>
@@ -2240,6 +2272,7 @@ export const Library = () => {
                     page={page}
                     onChange={(_, value) => setPage(value)}
                     color="primary"
+                    siblingCount={3}
                   />
                 )}
               </Stack>
@@ -2682,6 +2715,14 @@ export const Library = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <BulkMetadataSearchDialog
+          open={bulkSearchOpen}
+          books={selectedAudiobooks}
+          onClose={() => setBulkSearchOpen(false)}
+          onComplete={() => { loadAudiobooks(); setSelectedAudiobooks([]); }}
+          toast={toast}
+        />
 
         <VersionManagement
           audiobookId={versionManagingAudiobook?.id || ''}

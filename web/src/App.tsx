@@ -24,6 +24,8 @@ import { FileBrowser } from './pages/FileBrowser';
 import { Operations } from './pages/Operations';
 import { Maintenance } from './pages/Maintenance';
 import { BookDedup } from './pages/BookDedup';
+import { Series } from './pages/Series';
+import { Authors } from './pages/Authors';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
@@ -177,6 +179,8 @@ function App() {
             <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
             <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
             <Route path="/dedup" element={<BookDedup />} />
+            <Route path="/series" element={<Series />} />
+            <Route path="/authors" element={<Authors />} />
           </Routes>
         </MainLayout>
       )}

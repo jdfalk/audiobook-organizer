@@ -1,0 +1,524 @@
+// file: web/src/components/audiobooks/BulkMetadataSearchDialog.tsx
+// version: 1.1.0
+// guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
+
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Avatar,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
+  InputAdornment,
+  LinearProgress,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search.js';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess.js';
+import HeadphonesIcon from '@mui/icons-material/Headphones.js';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore.js';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext.js';
+import SkipNextIcon from '@mui/icons-material/SkipNext.js';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
+import UndoIcon from '@mui/icons-material/Undo.js';
+import type { Audiobook } from '../../types';
+import type { MetadataCandidate } from '../../services/api';
+import * as api from '../../services/api';
+
+interface BulkMetadataSearchDialogProps {
+  open: boolean;
+  books: Audiobook[];
+  onClose: () => void;
+  onComplete: () => void;
+  toast: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
+}
+
+const FIELD_OPTIONS = [
+  'title', 'author', 'narrator', 'series', 'series_position',
+  'year', 'publisher', 'isbn', 'cover_url', 'description', 'language',
+] as const;
+
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Title', author: 'Author', narrator: 'Narrator', series: 'Series',
+  series_position: 'Series Position', year: 'Year', publisher: 'Publisher',
+  isbn: 'ISBN', cover_url: 'Cover Image', description: 'Description', language: 'Language',
+};
+
+const SOURCE_COLORS: Record<string, 'primary' | 'secondary' | 'success' | 'warning' | 'info'> = {
+  openlibrary: 'primary', google_books: 'secondary', audible: 'success', goodreads: 'warning', manual: 'info',
+};
+
+type BookStatus = 'pending' | 'applied' | 'skipped';
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+}
+
+export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toast }: BulkMetadataSearchDialogProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [query, setQuery] = useState('');
+  const [authorQuery, setAuthorQuery] = useState('');
+  const [narratorQuery, setNarratorQuery] = useState('');
+  const [seriesQuery, setSeriesQuery] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [results, setResults] = useState<MetadataCandidate[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [previewCover, setPreviewCover] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set());
+  const [bookStatuses, setBookStatuses] = useState<Map<string, BookStatus>>(new Map());
+  const [writeToFiles, setWriteToFiles] = useState(true);
+  const [undoing, setUndoing] = useState(false);
+
+  const currentBook = books[currentIndex];
+  const appliedCount = [...bookStatuses.values()].filter((s) => s === 'applied').length;
+  const skippedCount = [...bookStatuses.values()].filter((s) => s === 'skipped').length;
+
+  // Search when the current book changes
+  const doSearch = useCallback(async (searchQuery: string, author?: string, narrator?: string, series?: string) => {
+    if (!currentBook?.id) return;
+    setLoading(true);
+    setResults([]);
+    setExpandedCard(null);
+    setSelectedFields(new Set());
+    try {
+      const resp = await api.searchMetadataForBook(currentBook.id, searchQuery, author || undefined, narrator || undefined, series || undefined);
+      setResults(resp.results || []);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentBook?.id]);
+
+  // Auto-search when navigating to a new book
+  useEffect(() => {
+    if (open && currentBook) {
+      const q = currentBook.title || '';
+      const a = currentBook.author || '';
+      const n = currentBook.narrator || '';
+      const s = currentBook.series || '';
+      setQuery(q);
+      setAuthorQuery(a);
+      setNarratorQuery(n);
+      setSeriesQuery(s);
+      setShowAdvanced(false);
+      // Always search with author + narrator + series for better results
+      doSearch(q, a, n, s);
+    }
+  }, [open, currentIndex, currentBook, doSearch]);
+
+  const handleSearch = () => doSearch(query, authorQuery, narratorQuery, seriesQuery);
+
+  const handleApplyAll = async (candidate: MetadataCandidate) => {
+    setApplying(true);
+    try {
+      await api.applyMetadataCandidate(currentBook.id, candidate, undefined, writeToFiles);
+      toast(`Applied metadata to "${currentBook.title}" from ${candidate.source}`, 'success');
+      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'applied'));
+      advanceToNext();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to apply metadata', 'error');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleApplySelected = async (candidate: MetadataCandidate) => {
+    if (selectedFields.size === 0) {
+      toast('Select at least one field to apply', 'warning');
+      return;
+    }
+    setApplying(true);
+    try {
+      await api.applyMetadataCandidate(currentBook.id, candidate, Array.from(selectedFields), writeToFiles);
+      toast(`Applied selected fields to "${currentBook.title}"`, 'success');
+      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'applied'));
+      advanceToNext();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to apply metadata', 'error');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleUndoCurrentBook = async () => {
+    setUndoing(true);
+    try {
+      const resp = await api.undoLastApply(currentBook.id);
+      toast(`Undid ${resp.undone_fields.length} field(s) for "${currentBook.title}"`, 'success');
+      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'pending'));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to undo', 'error');
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const handleSkip = () => {
+    setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'skipped'));
+    advanceToNext();
+  };
+
+  const handleMarkNoMatch = async () => {
+    try {
+      await api.markNoMatch(currentBook.id);
+      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'skipped'));
+      advanceToNext();
+    } catch {
+      toast('Failed to mark as no match', 'error');
+    }
+  };
+
+  const advanceToNext = () => {
+    if (currentIndex < books.length - 1) {
+      setCurrentIndex((i) => i + 1);
+    }
+  };
+
+  const handleClose = () => {
+    if (appliedCount > 0) {
+      onComplete();
+    }
+    setCurrentIndex(0);
+    setBookStatuses(new Map());
+    onClose();
+  };
+
+  const toggleField = (field: string) => {
+    setSelectedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(field)) next.delete(field);
+      else next.add(field);
+      return next;
+    });
+  };
+
+  if (!open || books.length === 0) return null;
+
+  const progress = ((appliedCount + skippedCount) / books.length) * 100;
+  const status = bookStatuses.get(currentBook?.id);
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ pb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6">
+            Search Metadata — Book {currentIndex + 1} of {books.length}
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {appliedCount > 0 && (
+              <Chip icon={<CheckCircleIcon />} label={`${appliedCount} applied`} color="success" size="small" />
+            )}
+            {skippedCount > 0 && (
+              <Chip label={`${skippedCount} skipped`} size="small" variant="outlined" />
+            )}
+          </Stack>
+        </Box>
+        <LinearProgress variant="determinate" value={progress} sx={{ mt: 1, borderRadius: 1 }} />
+      </DialogTitle>
+
+      <DialogContent>
+        {/* Current book info — click to enlarge cover */}
+        <Box
+          sx={{
+            p: 1.5, mb: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover',
+            cursor: currentBook.cover_url ? 'pointer' : 'default',
+            '&:hover': currentBook.cover_url ? { borderColor: 'primary.main', bgcolor: 'action.selected' } : {},
+          }}
+          onClick={() => { if (currentBook.cover_url) setPreviewCover(currentBook.cover_url); }}
+        >
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            {currentBook.cover_url && (
+              <Avatar
+                src={currentBook.cover_url}
+                variant="rounded"
+                sx={{ width: 48, height: 64 }}
+              >
+                {currentBook.title?.[0]}
+              </Avatar>
+            )}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle1" fontWeight="bold" noWrap>
+                {currentBook.title || 'Untitled'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {currentBook.author || 'Unknown author'}
+                {currentBook.narrator ? ` — Narrated by ${currentBook.narrator}` : ''}
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                {currentBook.duration_seconds != null && currentBook.duration_seconds > 0 && (
+                  <Chip
+                    label={formatDuration(currentBook.duration_seconds)}
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+                {currentBook.format && (
+                  <Chip label={currentBook.format.toUpperCase()} size="small" variant="outlined" />
+                )}
+                {currentBook.series && (
+                  <Chip
+                    label={`${currentBook.series}${currentBook.series_number ? ` #${currentBook.series_number}` : ''}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+                {currentBook.file_size_bytes != null && currentBook.file_size_bytes > 0 && (
+                  <Chip label={formatFileSize(currentBook.file_size_bytes)} size="small" variant="outlined" />
+                )}
+                {currentBook.language && (
+                  <Chip label={currentBook.language} size="small" variant="outlined" />
+                )}
+              </Stack>
+              {currentBook.file_path && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
+                  {currentBook.file_path.split('/').slice(-2).join('/')}
+                </Typography>
+              )}
+            </Box>
+            {status === 'applied' && <Chip label="Applied" color="success" size="small" />}
+            {status === 'skipped' && <Chip label="Skipped" size="small" variant="outlined" />}
+          </Stack>
+        </Box>
+
+        {/* Search */}
+        <TextField
+          fullWidth size="small"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+          placeholder="Search by title, ISBN, or ASIN..."
+          sx={{ mb: 1 }}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton onClick={handleSearch} disabled={loading} size="small"><SearchIcon /></IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Button
+          size="small"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          endIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          sx={{ mb: 1, textTransform: 'none' }}
+        >
+          Advanced
+        </Button>
+        <Collapse in={showAdvanced}>
+          <Stack spacing={1.5} sx={{ mb: 2 }}>
+            <TextField
+              fullWidth size="small"
+              value={authorQuery}
+              onChange={(e) => setAuthorQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              placeholder="Author name (narrows results)"
+              label="Author"
+            />
+            <TextField
+              fullWidth size="small"
+              value={narratorQuery}
+              onChange={(e) => setNarratorQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              placeholder="Narrator name (boosts matching results)"
+              label="Narrator"
+            />
+            <TextField
+              fullWidth size="small"
+              value={seriesQuery}
+              onChange={(e) => setSeriesQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+              placeholder="Series name (boosts matching series)"
+              label="Series"
+            />
+          </Stack>
+        </Collapse>
+
+        {/* Write-to-files toggle and undo */}
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
+          <Tooltip title="Write applied metadata to audio file tags (MP3/M4B/M4A)">
+            <FormControlLabel
+              control={<Switch checked={writeToFiles} onChange={(e) => setWriteToFiles(e.target.checked)} size="small" />}
+              label={<Typography variant="body2">Write to files</Typography>}
+            />
+          </Tooltip>
+          {status === 'applied' && (
+            <Button
+              size="small"
+              color="warning"
+              startIcon={<UndoIcon />}
+              onClick={handleUndoCurrentBook}
+              disabled={undoing}
+            >
+              {undoing ? 'Undoing...' : 'Undo'}
+            </Button>
+          )}
+        </Stack>
+
+        {/* Results */}
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {!loading && results.length === 0 && (
+          <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+            No results found. Try a different query or paste an Audible ASIN.
+          </Typography>
+        )}
+
+        <Stack spacing={1.5} sx={{ maxHeight: '50vh', overflow: 'auto' }}>
+          {results.map((candidate, idx) => (
+            <Box key={idx} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
+              <Stack direction="row" spacing={2} alignItems="flex-start">
+                <Avatar
+                  src={candidate.cover_url}
+                  variant="rounded"
+                  sx={{ width: 50, height: 65, cursor: candidate.cover_url ? 'pointer' : 'default', '&:hover': candidate.cover_url ? { opacity: 0.8 } : {} }}
+                  onClick={() => { if (candidate.cover_url) setPreviewCover(candidate.cover_url); }}
+                >
+                  {candidate.title?.[0] || '?'}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body1" fontWeight="bold" noWrap>{candidate.title}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {candidate.author}{candidate.year ? ` (${candidate.year})` : ''}
+                  </Typography>
+                  {candidate.series && (
+                    <Typography variant="body2" color="text.secondary">
+                      Series: {candidate.series}{candidate.series_position ? ` #${candidate.series_position}` : ''}
+                    </Typography>
+                  )}
+                  {candidate.narrator && (
+                    <Typography variant="body2" color="text.secondary">Narrator: {candidate.narrator}</Typography>
+                  )}
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+                    <Chip label={candidate.source} size="small" color={SOURCE_COLORS[candidate.source] || 'default'} />
+                    <Chip label={`${Math.round(candidate.score * 100)}%`} size="small" variant="outlined" />
+                    {candidate.narrator && <Chip icon={<HeadphonesIcon />} label="Audiobook" size="small" color="info" variant="outlined" />}
+                  </Stack>
+                </Box>
+                <Button variant="contained" size="small" onClick={() => handleApplyAll(candidate)} disabled={applying}>
+                  Apply
+                </Button>
+              </Stack>
+
+              {/* Field selector */}
+              <Box sx={{ mt: 0.5 }}>
+                <Button
+                  size="small"
+                  onClick={() => setExpandedCard(expandedCard === idx ? null : idx)}
+                  endIcon={expandedCard === idx ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                >
+                  Select fields...
+                </Button>
+                <Collapse in={expandedCard === idx}>
+                  <Box sx={{ mt: 0.5, pl: 1 }}>
+                    {FIELD_OPTIONS.map((field) => {
+                      const value = candidate[field as keyof MetadataCandidate];
+                      if (value === undefined || value === null || value === '') return null;
+                      return (
+                        <FormControlLabel
+                          key={field}
+                          control={<Checkbox checked={selectedFields.has(field)} onChange={() => toggleField(field)} size="small" />}
+                          label={<Typography variant="body2">{FIELD_LABELS[field] || field}: {String(value)}</Typography>}
+                        />
+                      );
+                    })}
+                    <Box sx={{ mt: 0.5 }}>
+                      <Button variant="outlined" size="small" onClick={() => handleApplySelected(candidate)} disabled={applying || selectedFields.size === 0}>
+                        Apply Selected
+                      </Button>
+                    </Box>
+                  </Box>
+                </Collapse>
+              </Box>
+            </Box>
+          ))}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, py: 2 }}>
+        <Stack direction="row" spacing={1}>
+          <Button color="warning" onClick={handleMarkNoMatch} disabled={applying} size="small">
+            No Match
+          </Button>
+          <Button onClick={handleSkip} startIcon={<SkipNextIcon />} size="small">
+            Skip
+          </Button>
+          {status === 'applied' && (
+            <Button
+              color="warning"
+              startIcon={<UndoIcon />}
+              onClick={handleUndoCurrentBook}
+              disabled={undoing}
+              size="small"
+              variant="outlined"
+            >
+              Undo
+            </Button>
+          )}
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <Button
+            onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+            disabled={currentIndex === 0}
+            startIcon={<NavigateBeforeIcon />}
+            size="small"
+          >
+            Previous
+          </Button>
+          <Button
+            onClick={() => setCurrentIndex((i) => Math.min(books.length - 1, i + 1))}
+            disabled={currentIndex >= books.length - 1}
+            endIcon={<NavigateNextIcon />}
+            size="small"
+          >
+            Next
+          </Button>
+          <Button onClick={handleClose} variant="outlined">
+            {appliedCount + skippedCount >= books.length ? 'Done' : 'Close'}
+          </Button>
+        </Stack>
+      </DialogActions>
+
+      {/* Cover Preview */}
+      <Dialog open={!!previewCover} onClose={() => setPreviewCover(null)} maxWidth="sm">
+        <Box
+          component="img"
+          src={previewCover ?? ''}
+          alt="Cover preview"
+          onClick={() => setPreviewCover(null)}
+          sx={{ maxWidth: '100%', maxHeight: '80vh', cursor: 'pointer', display: 'block' }}
+        />
+      </Dialog>
+    </Dialog>
+  );
+}

@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.3.0
+// version: 1.5.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -86,6 +86,10 @@ export function MetadataSearchDialog({
   toast,
 }: MetadataSearchDialogProps) {
   const [query, setQuery] = useState('');
+  const [authorQuery, setAuthorQuery] = useState('');
+  const [narratorQuery, setNarratorQuery] = useState('');
+  const [seriesQuery, setSeriesQuery] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [results, setResults] = useState<MetadataCandidate[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedCard, setExpandedCard] = useState<number | null>(null);
@@ -93,26 +97,31 @@ export function MetadataSearchDialog({
   const [applying, setApplying] = useState(false);
   const [sourcesTried, setSourcesTried] = useState<string[]>([]);
   const [sourcesFailed, setSourcesFailed] = useState<Record<string, string>>({});
+  const [previewCover, setPreviewCover] = useState<string | null>(null);
 
   // Auto-populate query and search on open
   useEffect(() => {
     if (open && book) {
-      const q = [book.title, book.author_name].filter(Boolean).join(' ');
+      const q = book.title || '';
       setQuery(q);
+      setAuthorQuery(book.author_name || '');
+      setNarratorQuery(book.narrator || '');
+      setSeriesQuery(book.series_name || '');
+      setShowAdvanced(false);
       setResults([]);
       setExpandedCard(null);
       setSelectedFields(new Set());
-      doSearch(q);
+      doSearch(q, '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, book?.id]);
 
   const doSearch = useCallback(
-    async (searchQuery: string) => {
+    async (searchQuery: string, author?: string, narrator?: string, series?: string) => {
       if (!book?.id) return;
       setLoading(true);
       try {
-        const resp = await api.searchMetadataForBook(book.id, searchQuery);
+        const resp = await api.searchMetadataForBook(book.id, searchQuery, author || undefined, narrator || undefined, series || undefined);
         setResults(resp.results || []);
         setSourcesTried(resp.sources_tried || []);
         setSourcesFailed(resp.sources_failed || {});
@@ -130,7 +139,7 @@ export function MetadataSearchDialog({
   );
 
   const handleSearch = () => {
-    doSearch(query);
+    doSearch(query, authorQuery, narratorQuery, seriesQuery);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -210,13 +219,75 @@ export function MetadataSearchDialog({
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Search Metadata</DialogTitle>
       <DialogContent>
+        {/* Book info bar — click to enlarge cover */}
+        <Box
+          sx={{
+            p: 1.5, mb: 2, border: 1, borderColor: 'divider', borderRadius: 1, bgcolor: 'action.hover',
+            cursor: book.cover_url ? 'pointer' : 'default',
+            '&:hover': book.cover_url ? { borderColor: 'primary.main', bgcolor: 'action.selected' } : {},
+          }}
+          onClick={() => { if (book.cover_url) setPreviewCover(book.cover_url); }}
+        >
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            {book.cover_url && (
+              <Avatar src={book.cover_url} variant="rounded" sx={{ width: 48, height: 64 }}>
+                {book.title?.[0]}
+              </Avatar>
+            )}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle1" fontWeight="bold" noWrap>
+                {book.title || 'Untitled'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {book.author_name || 'Unknown author'}
+                {book.narrator ? ` — Narrated by ${book.narrator}` : ''}
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                {book.duration != null && book.duration > 0 && (
+                  <Chip
+                    label={`${Math.floor(book.duration / 3600)}h ${Math.floor((book.duration % 3600) / 60)}m`}
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+                {book.format && (
+                  <Chip label={book.format.toUpperCase()} size="small" variant="outlined" />
+                )}
+                {book.series_name && (
+                  <Chip
+                    label={`${book.series_name}${book.series_position ? ` #${book.series_position}` : ''}`}
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
+                )}
+                {book.file_size != null && book.file_size > 0 && (
+                  <Chip
+                    label={book.file_size >= 1073741824 ? `${(book.file_size / 1073741824).toFixed(1)} GB` : `${(book.file_size / 1048576).toFixed(0)} MB`}
+                    size="small"
+                    variant="outlined"
+                  />
+                )}
+                {book.language && (
+                  <Chip label={book.language} size="small" variant="outlined" />
+                )}
+              </Stack>
+              {book.file_path && (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
+                  {book.file_path.split('/').slice(-2).join('/')}
+                </Typography>
+              )}
+            </Box>
+          </Stack>
+        </Box>
+
         <TextField
           fullWidth
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search by title, author, ISBN, or Audible ASIN..."
-          sx={{ mt: 1, mb: 2 }}
+          placeholder="Search by title, ISBN, or Audible ASIN..."
+          sx={{ mt: 1, mb: 1 }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -232,6 +303,46 @@ export function MetadataSearchDialog({
             ),
           }}
         />
+
+        <Button
+          size="small"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          endIcon={showAdvanced ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          sx={{ mb: 1, textTransform: 'none' }}
+        >
+          Advanced Search
+        </Button>
+        <Collapse in={showAdvanced}>
+          <Stack spacing={1.5} sx={{ mb: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              value={authorQuery}
+              onChange={(e) => setAuthorQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Author name (narrows results)"
+              label="Author"
+            />
+            <TextField
+              fullWidth
+              size="small"
+              value={narratorQuery}
+              onChange={(e) => setNarratorQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Narrator name (boosts matching results)"
+              label="Narrator"
+            />
+            <TextField
+              fullWidth
+              size="small"
+              value={seriesQuery}
+              onChange={(e) => setSeriesQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Series name (boosts matching series)"
+              label="Series"
+            />
+          </Stack>
+        </Collapse>
 
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -276,7 +387,8 @@ export function MetadataSearchDialog({
                 <Avatar
                   src={candidate.cover_url}
                   variant="rounded"
-                  sx={{ width: 60, height: 80 }}
+                  sx={{ width: 60, height: 80, cursor: candidate.cover_url ? 'pointer' : 'default', '&:hover': candidate.cover_url ? { opacity: 0.8 } : {} }}
+                  onClick={() => { if (candidate.cover_url) setPreviewCover(candidate.cover_url); }}
                 >
                   {candidate.title?.[0] || '?'}
                 </Avatar>
@@ -398,6 +510,17 @@ export function MetadataSearchDialog({
         </Button>
         <Button onClick={onClose}>Cancel</Button>
       </DialogActions>
+
+      {/* Cover Preview */}
+      <Dialog open={!!previewCover} onClose={() => setPreviewCover(null)} maxWidth="sm">
+        <Box
+          component="img"
+          src={previewCover ?? ''}
+          alt="Cover preview"
+          onClick={() => setPreviewCover(null)}
+          sx={{ maxWidth: '100%', maxHeight: '80vh', cursor: 'pointer', display: 'block' }}
+        />
+      </Dialog>
     </Dialog>
   );
 }
