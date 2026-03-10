@@ -171,6 +171,9 @@ func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string
 	if isbn13, ok := aus.ExtractStringField(payload, "isbn13"); ok {
 		updates.ISBN13 = &isbn13
 	}
+	if desc, ok := aus.ExtractStringField(payload, "description"); ok {
+		updates.Description = &desc
+	}
 
 	if overridesMap, ok := aus.ExtractOverrides(payload); ok {
 		updates.Overrides = make(map[string]OverridePayload)

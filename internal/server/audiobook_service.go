@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -217,6 +217,16 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 			meta = m
 		} else {
 			log.Printf("[WARN] GetAudiobook: failed to extract metadata for %s: %v", book.FilePath, err)
+		}
+	}
+
+	// Backfill duration (and other media info) from file if DB fields are missing
+	if book.FilePath != "" && book.Duration == nil {
+		if mi, miErr := mediainfo.Extract(book.FilePath); miErr == nil && mi.Duration > 0 {
+			book.Duration = &mi.Duration
+			if _, updErr := svc.store.UpdateBook(book.ID, book); updErr != nil {
+				log.Printf("[WARN] GetAudiobook: failed to backfill duration for %s: %v", book.ID, updErr)
+			}
 		}
 	}
 

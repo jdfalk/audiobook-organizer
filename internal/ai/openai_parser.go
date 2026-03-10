@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -442,6 +442,21 @@ func parseMetadataFromJSON(content string) (*ParsedMetadata, error) {
 	return &metadata, nil
 }
 
+// SuggestionRole represents a detected role (author, narrator, or publisher) in an AI suggestion.
+type SuggestionRole struct {
+	Name     string   `json:"name,omitempty"`
+	IDs      []int    `json:"ids,omitempty"`
+	Variants []string `json:"variants,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
+}
+
+// SuggestionRoles contains the structured role decomposition for an AI suggestion.
+type SuggestionRoles struct {
+	Author    *SuggestionRole `json:"author,omitempty"`
+	Narrator  *SuggestionRole `json:"narrator,omitempty"`
+	Publisher *SuggestionRole `json:"publisher,omitempty"`
+}
+
 // AuthorDedupInput represents a group of potential duplicate authors for AI review.
 type AuthorDedupInput struct {
 	Index         int      `json:"index"`
@@ -453,13 +468,14 @@ type AuthorDedupInput struct {
 
 // AuthorDedupSuggestion represents an AI suggestion for handling a duplicate author group.
 type AuthorDedupSuggestion struct {
-	GroupIndex    int    `json:"group_index"`
-	Action        string `json:"action"`
-	CanonicalName string `json:"canonical_name"`
-	Reason        string `json:"reason"`
-	Confidence    string `json:"confidence"`
-	IsNarrator    []int  `json:"is_narrator,omitempty"`
-	IsPublisher   []int  `json:"is_publisher,omitempty"`
+	GroupIndex    int              `json:"group_index"`
+	Action        string           `json:"action"`
+	CanonicalName string           `json:"canonical_name"`
+	Reason        string           `json:"reason"`
+	Confidence    string           `json:"confidence"`
+	IsNarrator    []int            `json:"is_narrator,omitempty"`  // Deprecated: use Roles
+	IsPublisher   []int            `json:"is_publisher,omitempty"` // Deprecated: use Roles
+	Roles         *SuggestionRoles `json:"roles,omitempty"`
 }
 
 // ReviewAuthorDuplicates sends duplicate author groups to OpenAI for review.
@@ -478,18 +494,32 @@ func (p *OpenAIParser) ReviewAuthorDuplicates(ctx context.Context, groups []Auth
 func (p *OpenAIParser) reviewAuthorBatch(ctx context.Context, batch []AuthorDedupInput) ([]AuthorDedupSuggestion, error) {
 	systemPrompt := `You are an expert audiobook metadata reviewer. You will receive groups of potentially duplicate author names. For each group, determine the correct action:
 
-- "merge": The variants are the same author with different name formats. Provide the correct canonical name.
-- "split": The names represent different people incorrectly grouped together.
+- "merge": The variants are the same single author with different name formats. Provide the correct canonical name.
+- "split": An entry contains multiple different people combined into one string. ALWAYS use split when a single entry contains two or more real people separated by commas, ampersands, "and", brackets, etc. Examples: "V. A. Lewis, Azrie" is TWO people and must be split. "Stephen King & Peter Straub" must be split. "Graphic Audio [R.A. Salvatore]" must be split into author + publisher.
 - "rename": The canonical name needs correction (e.g., "TOLKIEN, J.R.R." → "J.R.R. Tolkien").
 - "skip": The group is fine as-is or you're unsure.
+- "alias": Pen names or stage names for the same person (e.g., "Mark Twain" / "Samuel Clemens"). The canonical_name should be the real/professional name.
+- "reclassify": Entry is not an author at all (narrator/publisher misclassified as author).
 
-Also identify entries that are actually narrators or publishers, not authors.
+COMPOUND ENTRIES — THIS IS CRITICAL:
+- If a SINGLE entry contains two or more real people, the action MUST be "split", NEVER "merge".
+- "V. A. Lewis, Azrie" → action: "split" — these are two separate authors.
+- "Patterson, James" → action: "merge" or "rename" — this is ONE person in "Last, First" format.
+- To distinguish: check if the parts after the comma are a first name matching the surname before it (one person) vs a completely different name (two people). When in doubt, check the sample_titles.
+- For compound entries with publishers (Graphic Audio, Marvel, DC, Brilliance Audio, Full Cast Audio), use "split" and populate the roles object.
 
 INITIALS FORMATTING: Always use spaces after periods in initials: "C. B. Lee" not "C.B. Lee", "J. R. R. Tolkien" not "J.R.R. Tolkien".
 
-PEN NAMES & ALIASES: When names are clearly pen names, handles, or stage names for the same person (e.g., "Mark Twain" / "Samuel Clemens", "KamikazePotato" / "Rafael Kalleen"), use action "alias" instead of "merge". The canonical_name should be the real/professional name, and the other name becomes an alias.
+SELF-NARRATING AUTHORS: Some authors narrate their own audiobooks (e.g., Neil Gaiman, Stephen Fry, David Sedaris). If a name appears as both author and narrator, do NOT reclassify them as a narrator. Only reclassify as narrator if the person EXCLUSIVELY narrates other people's books and never writes their own. Check sample_titles — if their name appears as author on the books they narrate, they are a self-narrating author and should be kept as an author.
 
-Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|split|rename|skip|alias", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [indices], "is_publisher": [indices]}]}`
+ROLE DECOMPOSITION: For every suggestion, populate the "roles" object to classify each name:
+- "author": the actual book author with name variants
+- "narrator": a voice actor identified by reading many different authors' books (NOT self-narrating authors)
+- "publisher": a production company or publisher (e.g., Graphic Audio, Brilliance Audio, Marvel)
+
+Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|split|rename|skip|alias|reclassify", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [indices], "is_publisher": [indices], "roles": {"author": {"name": "Author Name", "variants": ["Variant1"], "reason": "why"}, "narrator": {"name": "Narrator Name", "ids": [indices], "reason": "why"}, "publisher": {"name": "Publisher Name", "ids": [indices], "reason": "why"}}}]}
+
+The roles object fields are all optional — only include roles that are detected.`
 
 	batchJSON, err := json.Marshal(batch)
 	if err != nil {
@@ -518,7 +548,7 @@ Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|spl
 			},
 			Model:               shared.ChatModel(p.model),
 			MaxCompletionTokens: param.NewOpt[int64](32000),
-			PromptCacheKey:      param.NewOpt("audiobook-author-dedup-v2"),
+			PromptCacheKey:      param.NewOpt("audiobook-author-dedup-v4"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
@@ -558,13 +588,14 @@ type AuthorDiscoveryInput struct {
 
 // AuthorDiscoverySuggestion represents an AI suggestion from full-discovery mode.
 type AuthorDiscoverySuggestion struct {
-	AuthorIDs     []int  `json:"author_ids"`
-	Action        string `json:"action"`
-	CanonicalName string `json:"canonical_name"`
-	Reason        string `json:"reason"`
-	Confidence    string `json:"confidence"`
-	IsNarrator    []int  `json:"is_narrator,omitempty"`
-	IsPublisher   []int  `json:"is_publisher,omitempty"`
+	AuthorIDs     []int            `json:"author_ids"`
+	Action        string           `json:"action"`
+	CanonicalName string           `json:"canonical_name"`
+	Reason        string           `json:"reason"`
+	Confidence    string           `json:"confidence"`
+	IsNarrator    []int            `json:"is_narrator,omitempty"`  // Deprecated: use Roles
+	IsPublisher   []int            `json:"is_publisher,omitempty"` // Deprecated: use Roles
+	Roles         *SuggestionRoles `json:"roles,omitempty"`
 }
 
 // DiscoverAuthorDuplicates sends the full list of authors to OpenAI in a single request
@@ -581,22 +612,48 @@ func (p *OpenAIParser) DiscoverAuthorDuplicates(ctx context.Context, inputs []Au
 }
 
 func (p *OpenAIParser) discoverAuthorBatch(ctx context.Context, batch []AuthorDiscoveryInput) ([]AuthorDiscoverySuggestion, error) {
-	systemPrompt := `You are an expert audiobook metadata reviewer. You will receive a list of authors with their IDs, book counts, and sample book titles. Find groups of authors that are likely the same person (different name formats, typos, abbreviations, last-name-first, etc).
+	systemPrompt := `You are an expert audiobook metadata reviewer. You will receive a list of authors with their IDs, book counts, and sample book titles. Find groups of authors that are likely the same person, and identify compound entries, misclassified narrators/publishers, etc.
+
+ACTIONS:
+- "merge": Two or more entries are the same single person with different name formats. Provide the correct canonical name.
+- "split": A SINGLE entry contains multiple different people combined into one string. ALWAYS use split for these — NEVER merge.
+- "rename": A single entry needs its name corrected (e.g., "TOLKIEN, J.R.R." → "J.R.R. Tolkien").
+- "skip": Fine as-is or you're unsure.
+- "alias": Pen names or stage names for the same person. canonical_name = real/professional name.
+- "reclassify": Entry is not an author (narrator/publisher misclassified as author).
+
+COMPOUND ENTRIES — THIS IS THE MOST IMPORTANT RULE:
+- If a SINGLE author entry contains two or more real people, the action MUST be "split", NEVER "merge".
+- "V. A. Lewis, Azrie" → TWO different people → action: "split", list both names in reason.
+- "Stephen King & Peter Straub" → TWO people → action: "split".
+- "Graphic Audio [R.A. Salvatore]" → author + publisher → action: "split", populate roles.
+- "Patterson, James" → ONE person in "Last, First" format → NOT a compound. action: "rename" to "James Patterson".
+- HOW TO TELL: If the part after the comma/ampersand is a first name that belongs with the surname before it, it's one person. If it's a completely different name, it's two people. Use sample_titles to verify — do both names appear as separate authors elsewhere?
+- Even if one component matches an existing individual author entry, the compound entry itself must be SPLIT, not merged. The individual components can then be merged separately after splitting.
 
 CRITICAL RULES:
-- COMPOUND NAMES: Many author entries contain multiple people separated by commas, ampersands, "and", or semicolons. For example "Crosby, Stills, & Nash" is THREE people, "Stephen King & Peter Straub" is TWO people, "Patterson, James & Paetro, Maxine" is TWO people. When you find a compound entry that matches an individual author entry, suggest a merge with the individual as canonical. Be smart about "Last, First" format vs actual multi-author — "Tolkien, J.R.R." is ONE person, but "King, Stephen & Koontz, Dean" is TWO.
-- Use sample_titles to distinguish authors from narrators. A narrator reads many different authors' books. An author writes their own books.
-- NEVER merge two genuinely different people. "Ramon De Ocampo" (narrator) and "Michael Crichton" (author) are completely unrelated.
+- Use sample_titles to distinguish authors from narrators. A narrator reads many different authors' books.
+- SELF-NARRATING AUTHORS: Some authors narrate their own audiobooks (e.g., Neil Gaiman, Stephen Fry, David Sedaris). If a name appears as both author and narrator, do NOT reclassify them as a narrator. Only reclassify as narrator if the person EXCLUSIVELY narrates other people's books and never writes their own.
+- NEVER merge two genuinely different people.
 - Only merge when names clearly refer to the same person: e.g. "J.R.R. Tolkien" and "Tolkien, J.R.R."
 - If unsure, use action "skip" — false negatives are far better than false positives.
-- Identify narrators or publishers incorrectly listed as authors.
-- When a compound entry contains multiple real authors, use action "split" and list the individual canonical names in the reason field.
-- INITIALS FORMATTING: Always use spaces after periods in initials: "C. B. Lee" not "C.B. Lee", "J. R. R. Tolkien" not "J.R.R. Tolkien".
-- PEN NAMES & ALIASES: When names are clearly pen names, handles, or stage names for the same person, use action "alias" instead of "merge". The canonical_name should be the real/professional name, and the other name becomes an alias.
+- INITIALS FORMATTING: Always use spaces after periods in initials: "C. B. Lee" not "C.B. Lee".
+- Identify narrators or publishers incorrectly listed as authors (but NOT self-narrating authors).
 
-Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merge|rename|split|skip|alias", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [ids], "is_publisher": [ids]}]}
+COMPOUND ENTRIES WITH PUBLISHERS:
+- "Graphic Audio [John Smith]" → action: "split", Author: John Smith, Publisher: Graphic Audio
+- "Name, Marvel" or "Name, DC" → action: "split", Author: Name, Publisher: Marvel/DC
+- "Full Cast Audio" alone → action: "reclassify" (publisher, not author)
+- Populate the roles object with structured data.
 
-Only include groups where you find actual duplicates or issues. Do not return entries for authors that look fine.`
+ROLE DECOMPOSITION: For every suggestion, populate the "roles" object:
+- "author": the actual book author with name variants
+- "narrator": a voice actor identified by reading many different authors' books (NOT self-narrating authors)
+- "publisher": a production company or publisher (e.g., Graphic Audio, Brilliance Audio, Marvel)
+
+Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merge|rename|split|skip|alias|reclassify", "canonical_name": "Correct Name", "reason": "brief explanation", "confidence": "high|medium|low", "is_narrator": [ids], "is_publisher": [ids], "roles": {"author": {"name": "Author Name", "variants": ["Variant1"], "reason": "why"}, "narrator": {"name": "Narrator Name", "ids": [ids], "reason": "why"}, "publisher": {"name": "Publisher Name", "ids": [ids], "reason": "why"}}}]}
+
+The roles object fields are all optional — only include roles that are detected. Only include groups where you find actual duplicates or issues. Do not return entries for authors that look fine.`
 
 	batchJSON, err := json.Marshal(batch)
 	if err != nil {
@@ -625,7 +682,7 @@ Only include groups where you find actual duplicates or issues. Do not return en
 			},
 			Model:               shared.ChatModel(p.model),
 			MaxCompletionTokens: param.NewOpt[int64](16000),
-			PromptCacheKey:      param.NewOpt("audiobook-author-discover-v2"),
+			PromptCacheKey:      param.NewOpt("audiobook-author-discover-v4"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},

@@ -172,6 +172,11 @@ func (rs *RevertService) revertTagWrite(c *database.OperationChange) error {
 		return nil
 	}
 
+	if isProtectedPath(book.FilePath) {
+		log.Printf("[INFO] skipping tag revert for protected path: %s", book.FilePath)
+		return nil
+	}
+
 	tagMap := map[string]interface{}{
 		c.FieldName: c.OldValue,
 	}

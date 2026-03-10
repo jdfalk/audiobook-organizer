@@ -330,9 +330,9 @@ func ConvertTrack(track *Track, opts ImportOptions) (*models.Audiobook, error) {
 		book.Narrator = stringPtr(track.AlbumArtist)
 	}
 
-	// Extract edition or publisher from comments
+	// Comments field typically contains the book description/synopsis
 	if track.Comments != "" {
-		book.Edition = stringPtr(track.Comments)
+		book.Description = stringPtr(track.Comments)
 	}
 
 	// Try to extract series information from Album field

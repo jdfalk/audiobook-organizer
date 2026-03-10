@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.20.0
+// version: 1.22.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -286,6 +286,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				progressCh <- books[idx].FilePath
 			}()
 
+			// Check context cancellation at start of each worker
+			if ctx.Err() != nil {
+				return
+			}
+
 			// Extract metadata from the file. For multi-file books where the filename
 			// is a generic part number (e.g. "01 Part 1 of 67.mp3"), use folder path
 			// hierarchy combined with first-file tags for richer metadata.
@@ -385,11 +390,24 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				log.Printf("[DEBUG] scanner: mediainfo extract failed for %s: %v", books[idx].FilePath, miErr)
 			}
 
-			// Mark books needing AI parsing for batch processing later
+			// Mark books needing AI parsing for batch processing later.
+			// AI only fills EMPTY fields (title, author, series, narrator, publisher),
+			// so if the DB already has title+author from a previous scan, re-running AI
+			// would be a no-op. Skip to avoid thousands of redundant API calls on rescan.
 			if aiEnabled && (fallbackUsed || books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
-				aiCandidatesMu.Lock()
-				aiCandidates = append(aiCandidates, idx)
-				aiCandidatesMu.Unlock()
+				needsAI := true
+				if database.GlobalStore != nil {
+					if dbExisting, dbErr := database.GlobalStore.GetBookByFilePath(books[idx].FilePath); dbErr == nil && dbExisting != nil {
+						if dbExisting.Title != "" && dbExisting.AuthorID != nil && *dbExisting.AuthorID != 0 {
+							needsAI = false
+						}
+					}
+				}
+				if needsAI {
+					aiCandidatesMu.Lock()
+					aiCandidates = append(aiCandidates, idx)
+					aiCandidatesMu.Unlock()
+				}
 			}
 
 			// Fallback to filepath extraction if title/author still unknown
@@ -408,6 +426,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			}
 			if books[idx].Position == 0 && position > 0 {
 				books[idx].Position = position
+			}
+
+			// Check cancellation before saving
+			if ctx.Err() != nil {
+				return
 			}
 
 			// Save to database (database operations are thread-safe)
@@ -932,13 +955,36 @@ func saveBookToDatabase(book *Book) error {
 			if existing != nil {
 				log.Printf("[DEBUG] Found duplicate book by hash: %s (existing: %s, new: %s)",
 					existing.Title, existing.FilePath, book.FilePath)
+
+				// Check if these are already version-linked
+				alreadyLinked := existing.VersionGroupID != nil && *existing.VersionGroupID != ""
+
 				if config.AppConfig.RootDir != "" &&
 					strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
 					!strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir) {
 					log.Printf("[DEBUG] Promoting organized path for %s", existing.Title)
-				} else {
-					log.Printf("[DEBUG] Skipping duplicate: keeping existing path %s", existing.FilePath)
+				} else if alreadyLinked {
+					log.Printf("[DEBUG] Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
 					return nil
+				} else {
+					// Not linked — create a version link between the two copies
+					h := sha256.Sum256([]byte(existing.FilePath + "|" + book.FilePath))
+					groupID := fmt.Sprintf("vg-%x", h[:8])
+					isNotPrimary := false
+
+					// Determine primary: prefer the one in RootDir, else the existing one
+					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir)
+					existing.VersionGroupID = &groupID
+					existing.IsPrimaryVersion = &existingInRoot
+					if _, uerr := database.GlobalStore.UpdateBook(existing.ID, existing); uerr != nil {
+						log.Printf("[WARN] Failed to set version group on existing book %s: %v", existing.ID, uerr)
+					}
+
+					dbBook.VersionGroupID = &groupID
+					dbBook.IsPrimaryVersion = &isNotPrimary
+					log.Printf("[INFO] Auto-linked duplicate as version group %s: %s <-> %s", groupID, existing.FilePath, book.FilePath)
+					// Fall through to create the new book record below
+					existing = nil
 				}
 			}
 		}
@@ -1039,6 +1085,24 @@ func saveBookToDatabase(book *Book) error {
 		book.Title, authorIDInt, seriesID, book.Position, book.Format, book.Duration,
 	)
 	return err
+}
+
+// ComputeSegmentFileHash computes SHA256 of the first 1MB of a file for use as
+// a segment-level fingerprint. This lighter hash enables auto-relinking when
+// files are moved on disk.
+func ComputeSegmentFileHash(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	const maxBytes = 1024 * 1024 // 1 MB
+	h := sha256.New()
+	if _, err := io.CopyN(h, f, maxBytes); err != nil && err != io.EOF {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // ComputeFileHash computes a SHA256 hash of the file, using a chunked strategy
@@ -1250,6 +1314,9 @@ func preserveExistingFields(scanned *database.Book, existing *database.Book) {
 	}
 	if scanned.Edition == nil && existing.Edition != nil {
 		scanned.Edition = existing.Edition
+	}
+	if scanned.Description == nil && existing.Description != nil {
+		scanned.Description = existing.Description
 	}
 	// Preserve external provider IDs
 	if scanned.OpenLibraryID == nil && existing.OpenLibraryID != nil {

@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -543,9 +543,19 @@ func extractFromFilename(filePath string) Metadata {
 	// Remove extension
 	filename = strings.TrimSuffix(filename, filepath.Ext(filename))
 
-	// Remove leading track/chapter numbers (e.g., "01 - Title" or "001 Title")
+	// Remove leading track/chapter/disc prefixes
+	// "Track 01 - Title", "Track01 - Title"
+	trackWordRe := regexp.MustCompile(`(?i)^[Tt]rack\s*\d+\s*[-–._]\s*`)
+	filename = trackWordRe.ReplaceAllString(filename, "")
+	// "Disc 1 - Title", "Disc01 - Title"
+	discWordRe := regexp.MustCompile(`(?i)^[Dd]is[ck]\s*\d+\s*[-–._]\s*`)
+	filename = discWordRe.ReplaceAllString(filename, "")
+	// "01 - Title", "01. Title", "001-Title"
+	numDashRe := regexp.MustCompile(`^\d{1,3}\s*[-–._]\s*`)
+	filename = numDashRe.ReplaceAllString(filename, "")
+	// "01 Title" (bare number prefix)
 	parts := strings.Split(filename, " ")
-	if len(parts) > 0 {
+	if len(parts) > 1 {
 		if _, err := strconv.Atoi(parts[0]); err == nil {
 			filename = strings.Join(parts[1:], " ")
 		}

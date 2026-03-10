@@ -1,5 +1,5 @@
 // file: internal/mediainfo/mediainfo.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f1e2d3c4-b5a6-7c8d-9e0f-1a2b3c4d5e6f
 
 package mediainfo
@@ -55,6 +55,18 @@ func Extract(filePath string) (*MediaInfo, error) {
 		extractOGGInfo(m, info)
 	default:
 		return inferFromFormat(filePath, info)
+	}
+
+	// Estimate duration from file size and bitrate when the tag library
+	// doesn't provide it directly (which is most cases).
+	if info.Duration == 0 && info.Bitrate > 0 {
+		if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+			// bitrate is in kbps; convert to bytes/sec then divide file size
+			bytesPerSec := (info.Bitrate * 1000) / 8
+			if bytesPerSec > 0 {
+				info.Duration = int(fi.Size()) / bytesPerSec
+			}
+		}
 	}
 
 	info.Quality = generateQualityString(info)
@@ -165,6 +177,21 @@ func extractOGGInfo(m tag.Metadata, info *MediaInfo) {
 	info.Channels = 2
 }
 
+func estimateDurationFromFile(filePath string, bitrateKbps int) int {
+	if bitrateKbps <= 0 {
+		return 0
+	}
+	fi, err := os.Stat(filePath)
+	if err != nil || fi.Size() == 0 {
+		return 0
+	}
+	bytesPerSec := (bitrateKbps * 1000) / 8
+	if bytesPerSec <= 0 {
+		return 0
+	}
+	return int(fi.Size()) / bytesPerSec
+}
+
 func inferFromFormat(filePath string, info *MediaInfo) (*MediaInfo, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
@@ -200,6 +227,11 @@ func inferFromFormat(filePath string, info *MediaInfo) (*MediaInfo, error) {
 
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", ext)
+	}
+
+	// Estimate duration from file size and bitrate
+	if info.Duration == 0 && info.Bitrate > 0 {
+		info.Duration = estimateDurationFromFile(filePath, info.Bitrate)
 	}
 
 	return info, nil

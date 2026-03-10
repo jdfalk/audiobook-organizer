@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -222,6 +222,48 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	if patterns, ok := extractStringSlice(payload, "exclude_patterns"); ok {
 		config.AppConfig.ExcludePatterns = patterns
 		updated = append(updated, "exclude_patterns")
+	}
+
+	// Metadata sources (enabled state, priority, credentials)
+	if raw, ok := payload["metadata_sources"]; ok {
+		if sourcesSlice, ok2 := raw.([]any); ok2 {
+			var sources []config.MetadataSource
+			for _, item := range sourcesSlice {
+				if m, ok3 := item.(map[string]any); ok3 {
+					id, _ := m["id"].(string)
+					name, _ := m["name"].(string)
+					if id == "" {
+						continue
+					}
+					src := config.MetadataSource{
+						ID:   id,
+						Name: name,
+					}
+					if enabled, ok4 := m["enabled"].(bool); ok4 {
+						src.Enabled = enabled
+					}
+					if priority, ok4 := m["priority"].(float64); ok4 {
+						src.Priority = int(priority)
+					}
+					if creds, ok4 := m["credentials"].(map[string]any); ok4 {
+						src.Credentials = make(map[string]string)
+						for k, v := range creds {
+							if s, ok5 := v.(string); ok5 {
+								src.Credentials[k] = s
+							}
+						}
+					}
+					if reqAuth, ok4 := m["requires_auth"].(bool); ok4 {
+						src.RequiresAuth = reqAuth
+					}
+					sources = append(sources, src)
+				}
+			}
+			if len(sources) > 0 {
+				config.AppConfig.MetadataSources = sources
+				updated = append(updated, "metadata_sources")
+			}
+		}
 	}
 
 	// iTunes path mappings

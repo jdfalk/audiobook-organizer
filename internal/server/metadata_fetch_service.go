@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.15.0
+// version: 4.18.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -153,22 +153,43 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 
 	searchTitle := stripChapterFromTitle(book.Title)
 
-	// Resolve author name for fallback searches
-	var authorName string
-	if book.AuthorID != nil {
-		author, authorErr := mfs.db.GetAuthorByID(*book.AuthorID)
-		if authorErr == nil && author != nil {
-			authorName = author.Name
+	// Resolve current author and narrator for search refinement and scoring
+	currentAuthor := ""
+	if book.Author != nil {
+		currentAuthor = book.Author.Name
+	} else if book.AuthorID != nil {
+		if author, aErr := mfs.db.GetAuthorByID(*book.AuthorID); aErr == nil && author != nil {
+			currentAuthor = author.Name
 		}
+	}
+	if isGarbageValue(currentAuthor) {
+		currentAuthor = ""
+	}
+	currentNarrator := ""
+	if book.Narrator != nil && *book.Narrator != "" && !isGarbageValue(*book.Narrator) {
+		currentNarrator = *book.Narrator
 	}
 
 	var lastErr error
 	for _, src := range sources {
-		results, searchErr := src.SearchByTitle(searchTitle)
-		if searchErr != nil {
-			log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
-			lastErr = searchErr
-			continue
+		var results []metadata.BookMetadata
+		var searchErr error
+
+		// Try title+author search first for better match quality
+		if currentAuthor != "" {
+			results, searchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+			if searchErr != nil {
+				log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
+			}
+		}
+
+		// Fall back to title-only search
+		if len(results) == 0 {
+			results, searchErr = src.SearchByTitle(searchTitle)
+			if searchErr != nil {
+				log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
+				lastErr = searchErr
+			}
 		}
 
 		// Try original title if cleaned title returned nothing
@@ -180,48 +201,15 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 		}
 
-		// Try with author if we have one and still no results
-		if len(results) == 0 && authorName != "" {
-			results, searchErr = src.SearchByTitleAndAuthor(searchTitle, authorName)
-			if searchErr != nil {
-				lastErr = searchErr
-				continue
-			}
-			if len(results) == 0 && searchTitle != book.Title {
-				results, searchErr = src.SearchByTitleAndAuthor(book.Title, authorName)
-				if searchErr != nil {
-					lastErr = searchErr
-					continue
-				}
-			}
-		}
-
-		// Step 4: Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
+		// Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
 		if len(results) == 0 {
 			strippedTitle := stripSubtitle(searchTitle)
 			if strippedTitle != searchTitle && strippedTitle != book.Title {
-				if authorName != "" {
-					results, searchErr = src.SearchByTitleAndAuthor(strippedTitle, authorName)
-				} else {
-					results, searchErr = src.SearchByTitle(strippedTitle)
-				}
+				results, searchErr = src.SearchByTitle(strippedTitle)
 				if searchErr != nil {
 					lastErr = searchErr
 					continue
 				}
-			}
-		}
-
-		// Step 5: Author-only search — pick best match from results
-		if len(results) == 0 && authorName != "" {
-			results, searchErr = src.SearchByTitle(authorName)
-			if searchErr != nil {
-				lastErr = searchErr
-				continue
-			}
-			// Filter results to find best title match
-			if len(results) > 0 {
-				results = bestTitleMatch(results, searchTitle, book.Title)
 			}
 		}
 
@@ -230,7 +218,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		}
 		if len(results) > 0 {
 			// Score all results and pick the best; reject if below quality threshold.
-			scored := bestTitleMatch(results, searchTitle, book.Title)
+			scored := bestTitleMatchWithContext(results, currentAuthor, currentNarrator, searchTitle, book.Title)
 			if len(scored) == 0 {
 				log.Printf("[DEBUG] %s: all %d results rejected by quality scorer for %q",
 					src.Name(), len(results), searchTitle)
@@ -340,6 +328,12 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 
 	searchTitle := stripChapterFromTitle(book.Title)
 
+	// Resolve narrator for scoring (author intentionally suppressed in this path)
+	titleOnlyNarrator := ""
+	if book.Narrator != nil && *book.Narrator != "" && !isGarbageValue(*book.Narrator) {
+		titleOnlyNarrator = *book.Narrator
+	}
+
 	var lastErr error
 	for _, src := range sources {
 		results, searchErr := src.SearchByTitle(searchTitle)
@@ -368,7 +362,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 			continue
 		}
 
-		scored := bestTitleMatch(results, searchTitle, book.Title)
+		scored := bestTitleMatchWithContext(results, "", titleOnlyNarrator, searchTitle, book.Title)
 		if len(scored) == 0 {
 			continue
 		}
@@ -454,6 +448,9 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	if meta.ASIN != "" {
 		book.ASIN = stringPtr(meta.ASIN)
 	}
+	if meta.Description != "" {
+		book.Description = stringPtr(meta.Description)
+	}
 
 	// Apply series info if available
 	if meta.Series != "" && !isGarbageValue(meta.Series) {
@@ -475,11 +472,17 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 // isGarbageValue returns true if a string value is effectively useless metadata.
 func isGarbageValue(s string) bool {
 	lower := strings.ToLower(strings.TrimSpace(s))
-	garbage := []string{"unknown", "narrator", "various", "n/a", "none", "null", "undefined", ""}
+	garbage := []string{"unknown", "narrator", "various", "n/a", "none", "null", "undefined", "",
+		"test", "untitled", "no title", "no author", "various authors", "various artists"}
 	for _, g := range garbage {
 		if lower == g {
 			return true
 		}
+	}
+	// Reject HTML fragments or error messages that may leak from Wikipedia/API errors
+	if strings.Contains(lower, "<html") || strings.Contains(lower, "<!doctype") ||
+		strings.Contains(lower, "403 forbidden") || strings.Contains(lower, "error") {
+		return true
 	}
 	return false
 }
@@ -688,6 +691,13 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 
 	opConfig := fileops.OperationConfig{VerifyChecksums: true}
 
+	// CRITICAL: Never write metadata to files in protected paths (import paths,
+	// iTunes Media folders). Only write to files in our organized library.
+	if isProtectedPath(book.FilePath) {
+		log.Printf("[INFO] skipping write-back for protected path: %s", book.FilePath)
+		return
+	}
+
 	// Write to primary file
 	if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 		log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
@@ -707,6 +717,10 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	}
 	for _, seg := range segments {
 		if !seg.Active {
+			continue
+		}
+		if isProtectedPath(seg.FilePath) {
+			log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
 			continue
 		}
 		if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
@@ -745,10 +759,22 @@ var compilationPhrases = []string{
 // that are not stop-words, all lowercased.
 func significantWords(s string) map[string]bool {
 	words := map[string]bool{}
+	var allWords []string
 	for _, w := range strings.Fields(strings.ToLower(s)) {
 		// Strip leading/trailing punctuation (apostrophes, commas, etc.)
 		w = strings.Trim(w, ".,;:!?\"'()")
+		if w == "" {
+			continue
+		}
+		allWords = append(allWords, w)
 		if len(w) > 2 && !scoreTitleStop[w] {
+			words[w] = true
+		}
+	}
+	// If all words were filtered out (e.g. title is "14", "IT", "Us"),
+	// include them all so scoring can still work.
+	if len(words) == 0 {
+		for _, w := range allWords {
 			words[w] = true
 		}
 	}
@@ -860,6 +886,10 @@ func applySeriesPositionFilter(
 // at least 0.35 to be returned; if none qualify, nil is returned so the
 // caller can fall through to the next source or report "no metadata found".
 func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
+	return bestTitleMatchWithContext(results, "", "", titles...)
+}
+
+func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, bookNarrator string, titles ...string) []metadata.BookMetadata {
 	const minScore = 0.35
 
 	// Union of significant words from all title variants.
@@ -874,6 +904,32 @@ func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadat
 	bestScore := 0.0
 	for i, r := range results {
 		score := scoreOneResult(r, searchWords)
+
+		// Author-based scoring: boost matches, penalize mismatches
+		if bookAuthor != "" && r.Author != "" {
+			rAuthorLower := strings.ToLower(r.Author)
+			bAuthorLower := strings.ToLower(bookAuthor)
+			if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+				score *= 1.5
+			} else {
+				score *= 0.7
+			}
+		}
+
+		// Narrator-based scoring: boost matches as secondary tiebreaker
+		if bookNarrator != "" && r.Narrator != "" {
+			rNarrLower := strings.ToLower(r.Narrator)
+			bNarrLower := strings.ToLower(bookNarrator)
+			if strings.Contains(rNarrLower, bNarrLower) || strings.Contains(bNarrLower, rNarrLower) {
+				score *= 1.3
+			}
+		}
+
+		// Small boost for audiobook sources (results with narrators are more likely correct)
+		if r.Narrator != "" {
+			score *= 1.05
+		}
+
 		if score > bestScore {
 			bestScore = score
 			bestIdx = i
@@ -925,7 +981,7 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 
 // SearchMetadataForBook searches all configured metadata sources and returns
 // scored candidates for manual matching.
-func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) (*SearchMetadataResponse, error) {
+func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, authorHint ...string) (*SearchMetadataResponse, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
@@ -933,16 +989,9 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 
 	searchTitle := query
 	if searchTitle == "" {
-		searchTitle = stripChapterFromTitle(book.Title)
+		searchTitle = book.Title
 	}
-
-	// Resolve author name
-	var authorName string
-	if book.AuthorID != nil {
-		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
-			authorName = author.Name
-		}
-	}
+	searchTitle = stripChapterFromTitle(searchTitle)
 
 	var sources []metadata.MetadataSource
 	if len(mfs.overrideSources) > 0 {
@@ -952,6 +1001,39 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 	}
 	if len(sources) == 0 {
 		return nil, fmt.Errorf("no metadata sources enabled")
+	}
+
+	// Extract author, narrator, and series hints from variadic parameter
+	searchAuthor := ""
+	if len(authorHint) > 0 && authorHint[0] != "" {
+		searchAuthor = strings.TrimSpace(authorHint[0])
+	}
+	searchNarrator := ""
+	if len(authorHint) > 1 && authorHint[1] != "" {
+		searchNarrator = strings.TrimSpace(authorHint[1])
+	}
+	searchSeries := ""
+	if len(authorHint) > 2 && authorHint[2] != "" {
+		searchSeries = strings.TrimSpace(authorHint[2])
+	}
+
+	// Always resolve the book's own author and narrator for scoring tiebreaks,
+	// even when no explicit hints were provided in the search request
+	bookAuthor := searchAuthor
+	if bookAuthor == "" && book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			bookAuthor = author.Name
+		}
+	}
+	if isGarbageValue(bookAuthor) {
+		bookAuthor = ""
+	}
+	bookNarrator := searchNarrator
+	if bookNarrator == "" && book.Narrator != nil && *book.Narrator != "" {
+		bookNarrator = *book.Narrator
+	}
+	if isGarbageValue(bookNarrator) {
+		bookNarrator = ""
 	}
 
 	searchWords := significantWords(searchTitle)
@@ -972,7 +1054,17 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		var lastErr error
 		sourcesTried = append(sourcesTried, src.Name())
 
-		// SearchByTitle with query
+		// If author hint provided, use title+author search for better results
+		if searchAuthor != "" {
+			if results, serr := src.SearchByTitleAndAuthor(searchTitle, searchAuthor); serr == nil {
+				allResults = append(allResults, results...)
+			} else {
+				lastErr = serr
+				log.Printf("[DEBUG] metadata-search: %s SearchByTitleAndAuthor(%q, %q) error: %v", src.Name(), searchTitle, searchAuthor, serr)
+			}
+		}
+
+		// Always also search by title only to get broader results
 		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
 			allResults = append(allResults, results...)
 		} else {
@@ -985,21 +1077,6 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 				allResults = append(allResults, results...)
 			} else {
 				lastErr = serr
-			}
-		}
-		// SearchByTitleAndAuthor
-		if authorName != "" {
-			if results, serr := src.SearchByTitleAndAuthor(searchTitle, authorName); serr == nil {
-				allResults = append(allResults, results...)
-			} else {
-				lastErr = serr
-			}
-			if searchTitle != book.Title {
-				if results, serr := src.SearchByTitleAndAuthor(book.Title, authorName); serr == nil {
-					allResults = append(allResults, results...)
-				} else {
-					lastErr = serr
-				}
 			}
 		}
 
@@ -1021,6 +1098,40 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 			if score <= 0 {
 				log.Printf("[DEBUG] metadata-search: score=0 for %q by %q from %s", r.Title, r.Author, src.Name())
 				continue
+			}
+
+			// Author-based scoring: boost matches, penalize mismatches
+			if bookAuthor != "" && r.Author != "" {
+				rAuthorLower := strings.ToLower(r.Author)
+				bAuthorLower := strings.ToLower(bookAuthor)
+				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+					score *= 1.5 // Strong boost for author match
+				} else {
+					score *= 0.7 // Penalize non-matching authors
+				}
+			}
+
+			// Narrator-based scoring: boost matches as secondary tiebreaker
+			if bookNarrator != "" && r.Narrator != "" {
+				rNarrLower := strings.ToLower(r.Narrator)
+				bNarrLower := strings.ToLower(bookNarrator)
+				if strings.Contains(rNarrLower, bNarrLower) || strings.Contains(bNarrLower, rNarrLower) {
+					score *= 1.3 // Boost for narrator match
+				}
+			}
+
+			// Series-based scoring: boost results in the matching series
+			if searchSeries != "" && r.Series != "" {
+				rSeriesLower := strings.ToLower(r.Series)
+				sSeriesLower := strings.ToLower(searchSeries)
+				if strings.Contains(rSeriesLower, sSeriesLower) || strings.Contains(sSeriesLower, rSeriesLower) {
+					score *= 1.4 // Boost for series match
+				}
+			}
+
+			// Small boost for audiobook sources (results with narrators are more likely correct)
+			if r.Narrator != "" {
+				score *= 1.05
 			}
 
 			candidates = append(candidates, MetadataCandidate{
@@ -1092,9 +1203,9 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string) 
 		return candidates[i].Score > candidates[j].Score
 	})
 
-	// Cap at 10
-	if len(candidates) > 10 {
-		candidates = candidates[:10]
+	// Cap at 50 to support large series
+	if len(candidates) > 50 {
+		candidates = candidates[:50]
 	}
 
 	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
@@ -1363,6 +1474,11 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				writtenCount++ // nothing to change, count as success
 				continue
 			}
+			if isProtectedPath(seg.FilePath) {
+				log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
+				writtenCount++
+				continue
+			}
 			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
 				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
 			} else {
@@ -1371,14 +1487,19 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		}
 	} else {
 		// Single-file or no segments: write to book.FilePath
-		tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
-		tagMap = filterUnchangedTags(book.FilePath, tagMap)
-		if len(tagMap) == 0 {
-			writtenCount++ // nothing to change, count as success
-		} else if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
-			log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
-		} else {
+		if isProtectedPath(book.FilePath) {
+			log.Printf("[INFO] skipping write-back for protected path: %s", book.FilePath)
 			writtenCount++
+		} else {
+			tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
+			tagMap = filterUnchangedTags(book.FilePath, tagMap)
+			if len(tagMap) == 0 {
+				writtenCount++ // nothing to change, count as success
+			} else if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+			} else {
+				writtenCount++
+			}
 		}
 	}
 
