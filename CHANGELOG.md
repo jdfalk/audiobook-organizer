@@ -1,13 +1,44 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.7.0 -->
+<!-- version: 1.8.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-02-26 -->
+<!-- last-edited: 2026-03-10 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### March 10, 2026 — Metadata Search Scoring & Bulk UX (v1.8.0)
+
+##### Metadata Search Improvements
+- **Author/narrator scoring tiebreaks**: When results have equal base scores, author match (1.5x), mismatch (0.7x), missing (0.75x) multipliers differentiate rankings
+- **Narrator scoring**: Narrator match (1.3x), presence (1.15x), absence (0.85x) multipliers prioritize audiobook-specific sources
+- **Series search**: Added series field to advanced search in both single and bulk metadata dialogs; 1.4x boost for series match
+- **Result limit**: Increased from 10 to 50 for large series
+- **Open Library deprioritization**: Results missing author/narrator metadata rank below Audible results with full metadata
+- **Garbage value filtering**: "Unknown", "Various", "N/A", HTML fragments, etc. excluded from scoring logic
+
+##### Bulk Metadata Search UX
+- **Write-to-files toggle**: Controls whether applied metadata gets written to audio file tags
+- **Undo button**: Reverts all fields from the last apply, including re-writing original values to files
+- **History recording**: All metadata changes stored in history for undo capability
+- **Filter already-applied toggle**: Skip books that already have manually fetched metadata (in progress)
+
+##### API
+- `POST /api/v1/audiobooks/:id/undo-last-apply` — reverts batch changes within 2-second window
+- `write_back` flag on apply-metadata endpoint — controls file tag writing (defaults true)
+- `series` parameter on search-metadata endpoint
+
+##### Testing
+- 15 new metadata scoring tests (author/narrator/series tiebreaks, garbage filtering, result cap)
+- 10 new undo/write-back tests (batch revert, old change skip, nil previous value, batcher enqueue)
+- 15 new bulk delete endpoint tests (authors + series, with mock store error paths)
+- Fixed `MockStore` missing `GetAllSeriesBookCounts` (blocked all server test compilation)
+
+##### Developer Experience
+- `.envrc` for direnv: auto-sets `GOEXPERIMENT=jsonv2`
+- `.vscode/settings.json`: Go extension configured for jsonv2 experiment build tag
 
 #### February 26, 2026 — P1/P2 Sweep & Critical Bug Fixes (v1.7.0)
 
