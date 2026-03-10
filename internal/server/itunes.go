@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -876,6 +876,9 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 					TotalTracks: &totalTracks,
 					Active:      true,
 				}
+				if segHash, hashErr := scanner.ComputeSegmentFileHash(trackPath); hashErr == nil {
+					segment.FileHash = &segHash
+				}
 				if _, segErr := database.GlobalStore.CreateBookSegment(bookNumericID, segment); segErr != nil {
 					_ = progress.Log("warn", fmt.Sprintf("Failed to create segment for track %d of '%s': %v", track.TrackNumber, book.Title, segErr), nil)
 				}
@@ -1168,8 +1171,9 @@ func buildBookFromAlbumGroup(group albumGroup, libraryPath string, opts itunes.I
 	if firstTrack.AlbumArtist != "" && firstTrack.AlbumArtist != firstTrack.Artist {
 		book.Narrator = stringPtr(firstTrack.AlbumArtist)
 	}
+	// Comments field typically contains the book description/synopsis
 	if firstTrack.Comments != "" {
-		book.Edition = stringPtr(firstTrack.Comments)
+		book.Description = stringPtr(firstTrack.Comments)
 	}
 	if totalSize > 0 {
 		book.FileSize = &totalSize
@@ -1202,10 +1206,10 @@ func commonParentDir(tracks []*itunes.Track, opts itunes.ImportOptions) string {
 		return ""
 	}
 
-	// Find common prefix
+	// Find common parent directory (must match on path boundaries, not substring)
 	common := paths[0]
 	for _, p := range paths[1:] {
-		for !strings.HasPrefix(p, common) {
+		for common != p && !strings.HasPrefix(p, common+string(filepath.Separator)) {
 			common = filepath.Dir(common)
 			if common == "/" || common == "." {
 				return common

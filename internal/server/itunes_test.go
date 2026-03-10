@@ -91,8 +91,12 @@ func TestBuildBookFromAlbumGroup(t *testing.T) {
 	if book.Narrator == nil || *book.Narrator != "Narrator" {
 		t.Fatalf("narrator not set correctly")
 	}
-	if book.Edition == nil || *book.Edition != "First edition" {
-		t.Fatalf("edition not set correctly")
+	// Comments should map to Description, not Edition
+	if book.Edition != nil {
+		t.Fatalf("edition should be nil, got %q", *book.Edition)
+	}
+	if book.Description == nil || *book.Description != "First edition" {
+		t.Fatalf("description should be %q from Comments field", "First edition")
 	}
 	if book.FileSize == nil || *book.FileSize != 4096 {
 		t.Fatalf("file size = %d, want 4096", valueOrZero(book.FileSize))
