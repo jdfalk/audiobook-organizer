@@ -1,5 +1,5 @@
 // file: internal/server/scan_edge_cases_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9012-3456-789012abcdef
 
 package server
@@ -152,7 +152,7 @@ func TestScanService_OrphanBooks_FileDeleted(t *testing.T) {
 	// Organize should skip books with missing files
 	config.AppConfig.AutoOrganize = false
 	svc := NewOrganizeService(env.Store)
-	err = svc.PerformOrganize(context.Background(), &OrganizeRequest{}, &mockProgressReporter{})
+	err = svc.PerformOrganize(context.Background(), &OrganizeRequest{}, logger.New("test"))
 	require.NoError(t, err)
 
 	// Book should still be in DB (not deleted, just skipped)
