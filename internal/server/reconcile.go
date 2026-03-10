@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	stdlog "log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/oklog/ulid/v2"
@@ -103,7 +104,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		result, err := buildReconcilePreviewWithProgress(store, progress)
+		result, err := buildReconcilePreviewWithProgress(store, operations.LoggerFromReporter(progress))
 		if err != nil {
 			return fmt.Errorf("reconcile scan failed: %w", err)
 		}
@@ -201,7 +202,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 
 	matches := req.Matches
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeReconcile(ctx, store, id, matches, progress)
+		return executeReconcile(ctx, store, id, matches, operations.LoggerFromReporter(progress))
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile", operations.PriorityNormal, operationFunc); err != nil {
@@ -218,17 +219,24 @@ func buildReconcilePreview(store database.Store) (*ReconcilePreviewResult, error
 }
 
 // buildReconcilePreviewWithProgress builds the full reconciliation preview with
-// progress reporting for background operations. progress may be nil.
-func buildReconcilePreviewWithProgress(store database.Store, progress operations.ProgressReporter) (*ReconcilePreviewResult, error) {
+// progress reporting for background operations. log may be nil.
+func buildReconcilePreviewWithProgress(store database.Store, log logger.Logger) (*ReconcilePreviewResult, error) {
+	if log == nil {
+		log = logger.New("reconcile")
+	}
 	report := func(current, total int, msg string) {
-		if progress != nil {
-			_ = progress.UpdateProgress(current, total, msg)
-		}
+		log.UpdateProgress(current, total, msg)
 	}
 	logMsg := func(level, msg string) {
-		log.Printf("[%s] reconcile: %s", strings.ToUpper(level), msg)
-		if progress != nil {
-			_ = progress.Log(level, msg, nil)
+		switch level {
+		case "info":
+			log.Info("reconcile: %s", msg)
+		case "warn":
+			log.Warn("reconcile: %s", msg)
+		case "error":
+			log.Error("reconcile: %s", msg)
+		default:
+			log.Debug("reconcile: %s", msg)
 		}
 	}
 
@@ -465,7 +473,7 @@ func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]str
 	// Priority 2: Import paths
 	importPaths, err := store.GetAllImportPaths()
 	if err != nil {
-		log.Printf("[WARN] reconcile: failed to get import paths: %v", err)
+		stdlog.Printf("[WARN] reconcile: failed to get import paths: %v", err)
 	} else {
 		for _, ip := range importPaths {
 			if ip.Enabled {
@@ -505,7 +513,7 @@ func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]str
 
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); err != nil {
-			log.Printf("[WARN] reconcile: directory does not exist: %s", dir)
+			stdlog.Printf("[WARN] reconcile: directory does not exist: %s", dir)
 			continue
 		}
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -530,7 +538,7 @@ func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]str
 			return nil
 		})
 		if err != nil {
-			log.Printf("[WARN] reconcile: error walking %s: %v", dir, err)
+			stdlog.Printf("[WARN] reconcile: error walking %s: %v", dir, err)
 		}
 	}
 
@@ -538,18 +546,18 @@ func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]str
 }
 
 // executeReconcile applies confirmed matches: updates DB file_path and records OperationChanges.
-func executeReconcile(ctx context.Context, store database.Store, operationID string, matches []ReconcileApplyItem, progress operations.ProgressReporter) error {
+func executeReconcile(ctx context.Context, store database.Store, operationID string, matches []ReconcileApplyItem, log logger.Logger) error {
 	result := &ReconcileApplyResult{
 		Errors: []string{},
 	}
 
 	total := len(matches)
 	for i, m := range matches {
-		if progress.IsCanceled() {
+		if log.IsCanceled() {
 			break
 		}
 
-		_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("Updating %s", m.BookID))
+		log.UpdateProgress(i+1, total, fmt.Sprintf("Updating %s", m.BookID))
 
 		book, err := store.GetBookByID(m.BookID)
 		if err != nil || book == nil {
@@ -591,18 +599,18 @@ func executeReconcile(ctx context.Context, store database.Store, operationID str
 			continue
 		}
 
-		_ = progress.Log("info", fmt.Sprintf("Updated book %s: %s -> %s", book.ID, oldPath, m.NewPath), nil)
+		log.Info("Updated book %s: %s -> %s", book.ID, oldPath, m.NewPath)
 		result.Applied++
 	}
 
 	// Store result data on the operation
 	resultJSON, _ := json.Marshal(result)
 	_ = store.UpdateOperationResultData(operationID, string(resultJSON))
-	_ = progress.UpdateProgress(total, total, fmt.Sprintf("Reconciliation complete: %d applied, %d skipped", result.Applied, result.Skipped))
+	log.UpdateProgress(total, total, fmt.Sprintf("Reconciliation complete: %d applied, %d skipped", result.Applied, result.Skipped))
 
 	if len(result.Errors) > 0 {
 		for _, e := range result.Errors {
-			_ = progress.Log("error", e, nil)
+			log.Error("%s", e)
 		}
 		return fmt.Errorf("completed with %d errors: %s", len(result.Errors), result.Errors[0])
 	}
