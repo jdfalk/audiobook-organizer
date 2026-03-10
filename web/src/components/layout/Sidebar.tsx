@@ -1,11 +1,14 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
+  Collapse,
   Drawer,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
@@ -13,6 +16,8 @@ import {
   ListItemText,
   Toolbar,
 } from '@mui/material';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess.js';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import DashboardIcon from '@mui/icons-material/Dashboard.js';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks.js';
 import MenuBookIcon from '@mui/icons-material/MenuBook.js';
@@ -22,6 +27,8 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import ListAltIcon from '@mui/icons-material/ListAlt.js';
 import MergeTypeIcon from '@mui/icons-material/MergeType.js';
 import BuildIcon from '@mui/icons-material/Build.js';
+import CollectionsBookmarkIcon from '@mui/icons-material/CollectionsBookmark.js';
+import PeopleIcon from '@mui/icons-material/People.js';
 
 interface SidebarProps {
   open: boolean;
@@ -29,9 +36,14 @@ interface SidebarProps {
   drawerWidth: number;
 }
 
+const librarySubItems = [
+  { text: 'All Books', icon: <LibraryBooksIcon />, path: '/library' },
+  { text: 'Series', icon: <CollectionsBookmarkIcon />, path: '/series' },
+  { text: 'Authors', icon: <PeopleIcon />, path: '/authors' },
+];
+
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-  { text: 'Library', icon: <LibraryBooksIcon />, path: '/library' },
   { text: 'File Browser', icon: <FolderOpenIcon />, path: '/files' },
   { text: 'Works', icon: <MenuBookIcon />, path: '/works' },
   { text: 'Operations', icon: <ListAltIcon />, path: '/operations' },
@@ -45,6 +57,8 @@ export function Sidebar({ open, onClose, drawerWidth }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [libraryOpen, setLibraryOpen] = useState(true);
+
   const handleNavigation = (path: string) => {
     navigate(path);
     onClose();
@@ -54,7 +68,51 @@ export function Sidebar({ open, onClose, drawerWidth }: SidebarProps) {
     <Box>
       <Toolbar />
       <List>
-        {menuItems.map((item) => (
+        {/* Dashboard */}
+        <ListItem disablePadding>
+          <ListItemButton
+            selected={location.pathname === '/dashboard'}
+            onClick={() => handleNavigation('/dashboard')}
+          >
+            <ListItemIcon><DashboardIcon /></ListItemIcon>
+            <ListItemText primary="Dashboard" />
+          </ListItemButton>
+        </ListItem>
+
+        {/* Library group */}
+        <ListItem disablePadding secondaryAction={
+          <IconButton edge="end" size="small" onClick={() => setLibraryOpen(!libraryOpen)}>
+            {libraryOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
+        }>
+          <ListItemButton
+            selected={location.pathname === '/library'}
+            onClick={() => handleNavigation('/library')}
+            sx={{ pr: 5 }}
+          >
+            <ListItemIcon><LibraryBooksIcon /></ListItemIcon>
+            <ListItemText primary="Library" />
+          </ListItemButton>
+        </ListItem>
+        <Collapse in={libraryOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            {librarySubItems.map((item) => (
+              <ListItem key={item.text} disablePadding>
+                <ListItemButton
+                  sx={{ pl: 4 }}
+                  selected={location.pathname === item.path}
+                  onClick={() => handleNavigation(item.path)}
+                >
+                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+
+        {/* Other menu items */}
+        {menuItems.slice(1).map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton
               selected={location.pathname === item.path}
@@ -80,7 +138,7 @@ export function Sidebar({ open, onClose, drawerWidth }: SidebarProps) {
         open={open}
         onClose={onClose}
         ModalProps={{
-          keepMounted: true, // Better open performance on mobile
+          keepMounted: true,
         }}
         sx={{
           display: { xs: 'block', sm: 'none' },

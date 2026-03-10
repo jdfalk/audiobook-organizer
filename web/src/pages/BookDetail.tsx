@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.30.0
+// version: 1.34.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -29,8 +29,10 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  IconButton,
+  TextField,
   Tooltip,
+  Collapse,
+  IconButton,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
 import DeleteIcon from '@mui/icons-material/Delete.js';
@@ -42,23 +44,24 @@ import CompareIcon from '@mui/icons-material/Compare.js';
 import HistoryIcon from '@mui/icons-material/History.js';
 import InfoIcon from '@mui/icons-material/Info.js';
 import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
-import StorageIcon from '@mui/icons-material/Storage.js';
+// StorageIcon removed — not used in Sonarr-style layout
 import SaveIcon from '@mui/icons-material/Save.js';
 import SearchIcon from '@mui/icons-material/Search.js';
 import TransformIcon from '@mui/icons-material/Transform.js';
-import StarIcon from '@mui/icons-material/Star.js';
-import StarBorderIcon from '@mui/icons-material/StarBorder.js';
 import LinkIcon from '@mui/icons-material/Link.js';
 import LinkOffIcon from '@mui/icons-material/LinkOff.js';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline.js';
-import type { Book, BookSegment, SegmentTags, OverridePayload } from '../services/api';
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline.js';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown.js';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp.js';
+import StarIcon from '@mui/icons-material/Star.js';
+import StarBorderIcon from '@mui/icons-material/StarBorder.js';
+import type { Book, BookSegment, BookTags, SegmentTags, OverridePayload, RenamePreview } from '../services/api';
 import * as api from '../services/api';
-import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { MetadataHistory } from '../components/MetadataHistory';
 import { MetadataSearchDialog } from '../components/audiobooks/MetadataSearchDialog';
-import { FileSelector } from '../components/audiobooks/FileSelector';
 import { RelocateFileDialog } from '../components/audiobooks/RelocateFileDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
@@ -79,10 +82,10 @@ export const BookDetail = () => {
   // preAIBook removed — use History to revert AI changes
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (['info', 'files', 'versions'].includes(searchParams.get('tab') || '')
+  const activeTab = (['info', 'files'].includes(searchParams.get('tab') || '')
     ? searchParams.get('tab')
-    : 'info') as 'info' | 'files' | 'versions';
-  const setActiveTab = (v: 'info' | 'files' | 'versions') => {
+    : 'info') as 'info' | 'files';
+  const setActiveTab = (v: 'info' | 'files') => {
     setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', v); return next; }, { replace: true });
   };
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -96,9 +99,10 @@ export const BookDetail = () => {
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
-  const [versionsLoading, setVersionsLoading] = useState(false);
-  const [versionsError, setVersionsError] = useState<string | null>(null);
-  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [linkSearchOpen, setLinkSearchOpen] = useState(false);
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
+  const [linkSearchResults, setLinkSearchResults] = useState<Book[]>([]);
+  const [linkSearchLoading, setLinkSearchLoading] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [metadataSearchOpen, setMetadataSearchOpen] = useState(false);
@@ -110,6 +114,18 @@ export const BookDetail = () => {
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
   const [coverError, setCoverError] = useState(false);
   const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
+  const [splittingVersion, setSplittingVersion] = useState(false);
+  const [splittingToBooks, setSplittingToBooks] = useState(false);
+  // moveToVersionDialogOpen removed — "Move to Existing Version" is now inline
+  const [renamePreviewDialogOpen, setRenamePreviewDialogOpen] = useState(false);
+  const [renamePreview, setRenamePreview] = useState<RenamePreview | null>(null);
+  const [renamePreviewLoading, setRenamePreviewLoading] = useState(false);
+  const [applyingRename, setApplyingRename] = useState(false);
+  // Sonarr-style version expansion
+  const [expandedVersionIds, setExpandedVersionIds] = useState<Set<string>>(new Set());
+  const [versionSegments, setVersionSegments] = useState<Record<string, BookSegment[]>>({});
+  const [versionFileTags, setVersionFileTags] = useState<Record<string, BookTags | null>>({});
+  const [versionFileTagsLoading, setVersionFileTagsLoading] = useState<Set<string>>(new Set());
 
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
@@ -158,16 +174,11 @@ export const BookDetail = () => {
 
   const loadVersions = useCallback(async () => {
     if (!id) return;
-    setVersionsLoading(true);
-    setVersionsError(null);
     try {
       const data = await api.getBookVersions(id);
       setVersions(data);
     } catch (error) {
       console.error('Failed to load versions', error);
-      setVersionsError('Unable to load linked versions right now.');
-    } finally {
-      setVersionsLoading(false);
     }
   }, [id]);
 
@@ -176,6 +187,40 @@ export const BookDetail = () => {
     loadBook();
     loadVersions();
   }, [id, loadBook, loadVersions]);
+
+  // Inline version link search
+  useEffect(() => {
+    if (!linkSearchOpen) {
+      setLinkSearchQuery('');
+      setLinkSearchResults([]);
+      return;
+    }
+    const q = linkSearchQuery.trim();
+    if (!q) { setLinkSearchResults([]); return; }
+    let cancelled = false;
+    setLinkSearchLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const results = await api.searchBooks(q, 10);
+        if (!cancelled) setLinkSearchResults(results.filter(r => r.id !== book?.id && !versions.some(v => v.id === r.id)));
+      } catch { /* ignore */ }
+      finally { if (!cancelled) setLinkSearchLoading(false); }
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [linkSearchOpen, linkSearchQuery, book?.id, versions]);
+
+  const handleInlineLinkVersion = async (targetId: string) => {
+    if (!book) return;
+    try {
+      await api.linkBookVersion(book.id, targetId);
+      setLinkSearchOpen(false);
+      loadVersions();
+      loadBook();
+      toast('Version linked', 'success');
+    } catch {
+      toast('Failed to link version', 'error');
+    }
+  };
 
   // Load segments on mount (after book loads)
   useEffect(() => {
@@ -353,6 +398,158 @@ export const BookDetail = () => {
       toast(msg, 'error');
     } finally {
       setWritingToFiles(false);
+    }
+  };
+
+  const handlePreviewRename = async () => {
+    if (!book) return;
+    setRenamePreviewLoading(true);
+    try {
+      const preview = await api.previewRename(book.id);
+      setRenamePreview(preview);
+      setRenamePreviewDialogOpen(true);
+    } catch (error: unknown) {
+      console.error('Failed to preview rename', error);
+      const msg =
+        error instanceof Error ? error.message : 'Preview rename failed.';
+      toast(msg, 'error');
+    } finally {
+      setRenamePreviewLoading(false);
+    }
+  };
+
+  const handleApplyRename = async () => {
+    if (!book) return;
+    setApplyingRename(true);
+    setRenamePreviewDialogOpen(false);
+    try {
+      const result = await api.applyRename(book.id);
+      toast(result.message || 'Rename applied successfully.', 'success');
+      await refreshBook();
+    } catch (error: unknown) {
+      console.error('Failed to apply rename', error);
+      const msg =
+        error instanceof Error ? error.message : 'Apply rename failed.';
+      toast(msg, 'error');
+    } finally {
+      setApplyingRename(false);
+    }
+  };
+
+  const handleSplitVersion = async () => {
+    if (!book || selectedSegmentIds.size === 0) return;
+    setSplittingVersion(true);
+    try {
+      const newBook = await api.splitVersion(book.id, Array.from(selectedSegmentIds));
+      toast(`Created new version: ${newBook.title}`, 'success');
+      setSelectedSegmentIds(new Set());
+      loadBook();
+      loadVersions();
+      // Reload segments since some moved
+      const segs = await api.getBookSegments(book.id);
+      setSegments(segs);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to split version';
+      toast(msg, 'error');
+    } finally {
+      setSplittingVersion(false);
+    }
+  };
+
+  const handleSplitToBooks = async () => {
+    if (!book || selectedSegmentIds.size === 0) return;
+    setSplittingToBooks(true);
+    try {
+      const result = await api.splitSegmentsToBooks(book.id, Array.from(selectedSegmentIds));
+      toast(`Created ${result.count} new book${result.count !== 1 ? 's' : ''}`, 'success');
+      setSelectedSegmentIds(new Set());
+      loadBook();
+      const segs = await api.getBookSegments(book.id);
+      setSegments(segs);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to split to books';
+      toast(msg, 'error');
+    } finally {
+      setSplittingToBooks(false);
+    }
+  };
+
+  const handleMoveToVersion = async (targetBookId: string) => {
+    if (!book || selectedSegmentIds.size === 0) return;
+    try {
+      await api.moveSegments(book.id, Array.from(selectedSegmentIds), targetBookId);
+      toast('Segments moved to version', 'success');
+      setSelectedSegmentIds(new Set());
+      // Dialog removed — move-to-version is now inline
+      loadBook();
+      loadVersions();
+      const segs = await api.getBookSegments(book.id);
+      setSegments(segs);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Failed to move segments';
+      toast(msg, 'error');
+    }
+  };
+
+  // Auto-expand current book's version when versions load
+  useEffect(() => {
+    if (id && versions.length > 0) {
+      setExpandedVersionIds(new Set([id]));
+    }
+  }, [id, versions.length]);
+
+  const toggleVersionExpanded = useCallback(async (versionId: string) => {
+    setExpandedVersionIds(prev => {
+      const next = new Set(prev);
+      if (next.has(versionId)) {
+        next.delete(versionId);
+      } else {
+        next.add(versionId);
+      }
+      return next;
+    });
+    // Load segments for this version if not already loaded
+    if (!versionSegments[versionId]) {
+      try {
+        const segs = await api.getBookSegments(versionId);
+        setVersionSegments(prev => ({ ...prev, [versionId]: segs }));
+      } catch {
+        setVersionSegments(prev => ({ ...prev, [versionId]: [] }));
+      }
+    }
+    // Load file tags if not already loaded
+    if (versionFileTags[versionId] === undefined) {
+      setVersionFileTagsLoading(prev => new Set(prev).add(versionId));
+      try {
+        const tags = await api.getBookTags(versionId);
+        setVersionFileTags(prev => ({ ...prev, [versionId]: tags }));
+      } catch {
+        setVersionFileTags(prev => ({ ...prev, [versionId]: null }));
+      } finally {
+        setVersionFileTagsLoading(prev => {
+          const next = new Set(prev);
+          next.delete(versionId);
+          return next;
+        });
+      }
+    }
+  }, [versionSegments, versionFileTags]);
+
+  // Keep current book's segments synced
+  useEffect(() => {
+    if (id && segments.length > 0) {
+      setVersionSegments(prev => ({ ...prev, [id]: segments }));
+    }
+  }, [id, segments]);
+
+  const handleSetPrimary = async (versionId: string) => {
+    try {
+      await api.setPrimaryVersion(versionId);
+      toast('Primary version updated', 'success');
+      loadVersions();
+      loadBook();
+    } catch {
+      toast('Failed to set primary version', 'error');
     }
   };
 
@@ -576,7 +773,11 @@ export const BookDetail = () => {
         <Button
           startIcon={<ArrowBackIcon />}
           sx={{ mt: 2 }}
-          onClick={() => navigate('/library')}
+          onClick={() => {
+            const returnUrl = sessionStorage.getItem('library_return_url');
+            if (returnUrl) navigate(returnUrl);
+            else navigate('/library');
+          }}
         >
           Back to Library
         </Button>
@@ -612,7 +813,11 @@ export const BookDetail = () => {
         <Button
           startIcon={<ArrowBackIcon />}
           variant="text"
-          onClick={() => navigate('/library')}
+          onClick={() => {
+            const returnUrl = sessionStorage.getItem('library_return_url');
+            if (returnUrl) navigate(returnUrl);
+            else navigate('/library');
+          }}
         >
           Back to Library
         </Button>
@@ -732,6 +937,13 @@ export const BookDetail = () => {
         </Alert>
       )}
 
+      {book.file_exists === false && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          File missing: The audio file at <strong>{book.file_path}</strong> could not be found on disk.
+          The file may have been moved, renamed, or deleted.
+        </Alert>
+      )}
+
       <Paper sx={{ p: 2, mb: 3 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
@@ -831,6 +1043,20 @@ export const BookDetail = () => {
             <Button
               variant="outlined"
               startIcon={
+                renamePreviewLoading || applyingRename ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <DriveFileRenameOutlineIcon />
+                )
+              }
+              onClick={handlePreviewRename}
+              disabled={renamePreviewLoading || applyingRename || actionLoading}
+            >
+              {applyingRename ? 'Renaming...' : renamePreviewLoading ? 'Loading...' : 'Preview Rename'}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={
                 writingToFiles ? (
                   <CircularProgress size={20} />
                 ) : (
@@ -870,21 +1096,7 @@ export const BookDetail = () => {
         </Stack>
       </Paper>
 
-      {segments.length > 1 && (
-        <Paper sx={{ px: 2, py: 1.5, mb: 1 }}>
-          <FileSelector
-            segments={segments}
-            selectedIds={selectedSegmentIds}
-            onToggle={(id) => setSelectedSegmentIds(prev => {
-              const next = new Set(prev);
-              if (next.has(id)) next.delete(id); else next.add(id);
-              return next;
-            })}
-            onSelectAll={() => setSelectedSegmentIds(new Set(segments.map(s => s.id)))}
-            onClearAll={() => setSelectedSegmentIds(new Set())}
-          />
-        </Paper>
-      )}
+      {/* File selector chip bar removed — checkboxes are now in the files table */}
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Tabs
@@ -895,10 +1107,9 @@ export const BookDetail = () => {
           variant="scrollable"
         >
           <Tab label="Info" value="info" />
-          <Tab label="Files" value="files" />
           <Tab
-            label={`Versions${versionSummary?.linkedCount ? ` (${versionSummary.linkedCount})` : ''}`}
-            value="versions"
+            label={`Files${versionSummary?.linkedCount ? ` & Versions (${versionSummary.linkedCount + 1})` : ''}`}
+            value="files"
           />
         </Tabs>
       </Paper>
@@ -1001,11 +1212,12 @@ export const BookDetail = () => {
                     { label: 'Codec', value: book.codec },
                     { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
                     { label: 'Duration', value: book.duration ? formatDuration(book.duration) : undefined },
-                    { label: 'Edition', value: book.edition },
+                    { label: 'Edition', value: book.edition && book.edition !== '0' && book.edition.length <= 50 ? book.edition : undefined },
+                    { label: 'Description', value: book.description || (book.edition && book.edition.length > 50 ? book.edition : undefined) },
                     { label: 'Work ID', value: book.work_id },
                   ].filter((item) => item.value !== undefined && item.value !== '' && item.value !== null);
                   return [...coreFields, ...dynamicFields].map((item) => (
-                    <Grid item xs={12} sm={6} md={4} key={item.label}>
+                    <Grid item xs={12} sm={item.label === 'Description' ? 12 : 6} md={item.label === 'Description' ? 12 : 4} key={item.label}>
                       <Box
                         sx={{
                           p: 2,
@@ -1031,313 +1243,360 @@ export const BookDetail = () => {
                   ));
                 })()}
               </Grid>
-              {book.description && (
-                <Box mt={3}>
-                  <Typography variant="h6" gutterBottom>
-                    Description
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    {book.description}
-                  </Typography>
-                </Box>
-              )}
             </>
           )}
         </Paper>
       )}
 
       {activeTab === 'files' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <StorageIcon fontSize="small" />
-              <Typography variant="h6">Files &amp; Media</Typography>
-            </Stack>
-            <Grid container spacing={2}>
-              {[
-                { label: 'File Path', value: book.file_path },
-                { label: 'Original Filename', value: book.original_filename },
-                { label: 'Format', value: book.format?.toUpperCase() },
-                { label: 'Codec', value: book.codec },
-                {
-                  label: 'Bitrate',
-                  value: book.bitrate ? `${book.bitrate} kbps` : undefined,
-                },
-                {
-                  label: 'Sample Rate',
-                  value: book.sample_rate
-                    ? `${book.sample_rate} Hz`
-                    : undefined,
-                },
-                { label: 'Channels', value: book.channels },
-                { label: 'Bit Depth', value: book.bit_depth },
-                { label: 'Duration', value: formatDuration(book.duration) },
-              ]
-                .filter((item) => item.value !== undefined && item.value !== '')
-                .map((item) => (
-                  <Grid item xs={12} sm={6} md={4} key={item.label}>
-                    <Box
-                      sx={{
-                        p: 2,
-                        borderRadius: 1,
-                        bgcolor: 'background.default',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        height: '100%',
-                      }}
-                    >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ textTransform: 'uppercase' }}
-                      >
-                        {item.label}
-                      </Typography>
-                      <Typography
-                        variant="body1"
-                        sx={{ wordBreak: 'break-all' }}
-                      >
-                        {item.value as string}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-            </Grid>
+        <Stack spacing={0}>
+          {/* Version sections — Sonarr-style expandable panels */}
+          {(versions.length > 0 ? versions : [book]).map((version) => {
+            const isExpanded = expandedVersionIds.has(version.id);
+            const isCurrent = version.id === book.id;
+            const isPrimary = version.is_primary_version;
+            const vSegs = isCurrent ? segments : (versionSegments[version.id] || []);
+            const vTags = versionFileTags[version.id];
+            const tagsLoading = versionFileTagsLoading.has(version.id);
+            const fileCount = vSegs.length || 1;
 
-            {segments.length > 0 && (() => {
-              const missingCount = segments.filter((s) => s.file_exists === false).length;
-              return (
-              <Box>
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 2, mb: 1 }}>
-                  <Typography variant="h6">Individual Files</Typography>
-                  {segments.length > 1 && (
-                    <Button
+            return (
+              <Paper key={version.id} sx={{ mb: 1, overflow: 'hidden' }}>
+                {/* Version header bar */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1,
+                    bgcolor: isCurrent ? 'primary.dark' : 'background.paper',
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: isCurrent ? 'primary.dark' : 'action.hover' },
+                    borderBottom: isExpanded ? '1px solid' : 'none',
+                    borderColor: 'divider',
+                  }}
+                  onClick={() => toggleVersionExpanded(version.id)}
+                >
+                  <IconButton size="small" sx={{ mr: 1, color: 'inherit' }}>
+                    {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                  </IconButton>
+                  {isPrimary ? (
+                    <StarIcon fontSize="small" sx={{ mr: 1, color: 'warning.main' }} />
+                  ) : (
+                    <StarBorderIcon fontSize="small" sx={{ mr: 1, opacity: 0.4 }} />
+                  )}
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
+                    {version.title || 'Untitled'}
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 2, flexShrink: 0 }}>
+                    {version.format && (
+                      <Chip label={version.format.toUpperCase()} size="small" variant="outlined" />
+                    )}
+                    <Chip
+                      label={`${fileCount} file${fileCount !== 1 ? 's' : ''}`}
                       size="small"
                       variant="outlined"
-                      onClick={async () => {
-                        try {
-                          const result = await api.extractTrackInfo(book.id);
-                          toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
-                          if (id) {
-                            const segs = await api.getBookSegments(id);
-                            setSegments(segs);
-                          }
-                        } catch (err) {
-                          toast('Failed to extract track info', 'error');
-                        }
-                      }}
-                    >
-                      Auto-fill Track Numbers
-                    </Button>
-                  )}
-                </Stack>
-                {missingCount > 0 && (
-                  <Alert severity="warning" sx={{ mb: 2 }}>
-                    {missingCount} of {segments.length} file{segments.length !== 1 ? 's' : ''} could not be found on disk.
-                    Click a missing file to relocate it.
-                  </Alert>
-                )}
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Track #</TableCell>
-                      <TableCell>File Name</TableCell>
-                      <TableCell>Duration</TableCell>
-                      <TableCell>Format</TableCell>
-                      <TableCell align="right">Size</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {segments.map((seg) => {
-                      const isMissing = seg.file_exists === false;
-                      return (
-                      <TableRow
-                        key={seg.id}
-                        hover
-                        sx={{
-                          cursor: 'pointer',
-                          ...(isMissing && {
-                            bgcolor: 'error.50',
-                            '&:hover': { bgcolor: 'error.100' },
-                          }),
-                        }}
-                        onClick={() => {
-                          if (isMissing) {
-                            setRelocateSegment(seg);
-                          } else {
-                            setSelectedSegmentIds(new Set([seg.id]));
-                            setActiveTab('info');
-                          }
-                        }}
-                      >
-                        <TableCell>
-                          <Stack direction="row" alignItems="center" spacing={0.5}>
-                            {isMissing && (
-                              <Tooltip title={`Missing: ${seg.file_path}`}>
-                                <ErrorOutlineIcon color="error" fontSize="small" />
-                              </Tooltip>
-                            )}
-                            <span>{seg.track_number ?? '—'}</span>
-                          </Stack>
-                        </TableCell>
-                        <TableCell sx={{ wordBreak: 'break-all', ...(isMissing && { color: 'error.main' }) }}>
-                          {seg.file_path.split('/').pop()}
-                        </TableCell>
-                        <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
-                        <TableCell>{seg.format?.toUpperCase()}</TableCell>
-                        <TableCell align="right">
-                          {seg.size_bytes > 0
-                            ? `${(seg.size_bytes / 1048576).toFixed(1)} MB`
-                            : '—'}
-                        </TableCell>
-                      </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </Box>
-              );
-            })()}
-          </Stack>
-        </Paper>
-      )}
-
-      {activeTab === 'versions' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-            <CompareIcon />
-            <Typography variant="h6">Versions</Typography>
-          </Stack>
-          {versionSummary?.linkedCount ? (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Part of version group with {versionSummary.linkedCount + 1} books.
-            </Alert>
-          ) : null}
-          {versionsError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {versionsError}
-            </Alert>
-          )}
-          {versionsLoading ? (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CircularProgress size={20} />
-              <Typography variant="body2">Loading versions...</Typography>
-            </Stack>
-          ) : versions.length === 0 ? (
-            <Alert severity="info">No additional versions linked yet.</Alert>
-          ) : (
-            <Stack spacing={2}>
-              {versions.map((version) => (
-                <Box
-                  key={version.id}
-                  sx={{
-                    p: 2,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor:
-                      version.id === book.id ? 'primary.main' : 'divider',
-                    bgcolor:
-                      version.id === book.id
-                        ? 'primary.light'
-                        : 'background.paper',
-                  }}
-                >
-                  <Stack
-                    direction={{ xs: 'column', md: 'row' }}
-                    spacing={1}
-                    alignItems="center"
-                  >
-                    <Tooltip title={version.is_primary_version ? 'Primary version' : 'Set as primary'}>
-                      <IconButton
-                        size="small"
-                        color={version.is_primary_version ? 'primary' : 'default'}
-                        onClick={async () => {
-                          try {
-                            await api.setPrimaryVersion(version.id);
-                            loadVersions();
-                            loadBook();
-                          } catch {
-                            toast('Failed to set primary version', 'error');
-                          }
-                        }}
-                      >
-                        {version.is_primary_version ? <StarIcon /> : <StarBorderIcon />}
-                      </IconButton>
-                    </Tooltip>
-                    <Box
-                      flex={1}
-                      sx={{ cursor: version.id === book.id ? 'default' : 'pointer' }}
-                      onClick={() => {
-                        if (version.id !== book.id) {
-                          navigate(`/library/${version.id}`);
-                        }
-                      }}
-                    >
-                      <Typography variant="subtitle1">
-                        {version.title}{' '}
-                        {version.id === book.id ? '(Current)' : ''}
+                    />
+                    {version.duration && (
+                      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 50 }}>
+                        {formatDuration(version.duration)}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        display="block"
-                      >
-                        {version.file_path}
-                      </Typography>
-                    </Box>
-                    <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-                      {version.is_primary_version && (
-                        <Chip label="Primary" color="primary" size="small" />
-                      )}
-                      {version.quality && (
-                        <Chip label={version.quality} color="success" size="small" />
-                      )}
-                      {version.codec && (
-                        <Chip label={version.codec} variant="outlined" size="small" />
-                      )}
-                      {version.format && (
-                        <Chip
-                          label={version.format.toUpperCase()}
-                          variant="outlined"
-                          size="small"
-                        />
-                      )}
-                      {version.id !== book.id && (
-                        <Tooltip title="Unlink this version">
-                          <IconButton
-                            size="small"
-                            color="secondary"
-                            onClick={async () => {
-                              try {
-                                await api.unlinkBookVersion(book.id, version.id);
-                                loadVersions();
-                                loadBook();
-                                toast('Version unlinked', 'success');
-                              } catch {
-                                toast('Failed to unlink version', 'error');
-                              }
-                            }}
-                          >
-                            <LinkOffIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Stack>
+                    )}
+                    {isPrimary && (
+                      <Chip label="Primary" size="small" color="warning" />
+                    )}
                   </Stack>
                 </Box>
-              ))}
-            </Stack>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<LinkIcon />}
-            sx={{ mt: 2 }}
-            onClick={() => setVersionDialogOpen(true)}
-          >
-            Link Another Version
-          </Button>
-        </Paper>
+
+                {/* Expanded content */}
+                <Collapse in={isExpanded}>
+                  <Box sx={{ p: 2 }}>
+                    {/* Version action buttons */}
+                    <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+                      {!isPrimary && versions.length > 1 && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<StarIcon />}
+                          onClick={(e) => { e.stopPropagation(); handleSetPrimary(version.id); }}
+                        >
+                          Set as Primary
+                        </Button>
+                      )}
+                      {!isCurrent && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/library/${version.id}`); }}
+                        >
+                          View Details
+                        </Button>
+                      )}
+                      {!isCurrent && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<LinkOffIcon />}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await api.unlinkBookVersion(book.id, version.id);
+                              loadVersions(); loadBook();
+                              toast('Version unlinked', 'success');
+                            } catch { toast('Failed to unlink version', 'error'); }
+                          }}
+                        >
+                          Unlink
+                        </Button>
+                      )}
+                    </Stack>
+
+                    {/* Version metadata comparison table */}
+                    <Table size="small" sx={{ mb: 2 }}>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', width: 140, color: 'text.secondary' }}>Path</TableCell>
+                          <TableCell sx={{ wordBreak: 'break-all', fontSize: '0.85rem' }}>{version.file_path}</TableCell>
+                        </TableRow>
+                        {version.format && (
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Format</TableCell>
+                            <TableCell>{version.format.toUpperCase()}{version.codec ? ` (${version.codec})` : ''}</TableCell>
+                          </TableRow>
+                        )}
+                        {version.bitrate && (
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Bitrate</TableCell>
+                            <TableCell>{version.bitrate} kbps</TableCell>
+                          </TableRow>
+                        )}
+                        {version.sample_rate && (
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Sample Rate</TableCell>
+                            <TableCell>{version.sample_rate} Hz</TableCell>
+                          </TableRow>
+                        )}
+                        {version.duration && (
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Duration</TableCell>
+                            <TableCell>{formatDuration(version.duration)}</TableCell>
+                          </TableRow>
+                        )}
+                        {version.file_size && (
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>File Size</TableCell>
+                            <TableCell>{(version.file_size / 1048576).toFixed(1)} MB</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+
+                    {/* File tags from actual M4B/audio file */}
+                    {tagsLoading && <LinearProgress sx={{ mb: 1 }} />}
+                    {vTags?.tags && Object.keys(vTags.tags).length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                          Embedded File Tags (from audio file)
+                        </Typography>
+                        <Table size="small" sx={{ '& td, & th': { py: 0.5 } }}>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold', width: 180 }}>Tag</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>File Value</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold' }}>DB Value</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {Object.entries(vTags.tags).map(([tagName, tagValues]) => {
+                              const fileVal = tagValues.file_value != null ? String(tagValues.file_value) : '—';
+                              const storedVal = tagValues.stored_value != null ? String(tagValues.stored_value) : '—';
+                              const differs = fileVal !== storedVal && fileVal !== '—' && storedVal !== '—';
+                              return (
+                                <TableRow key={tagName} sx={differs ? { bgcolor: 'warning.900' } : {}}>
+                                  <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '0.8rem' }}>
+                                    {tagName}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                                    {fileVal}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: '0.8rem', wordBreak: 'break-all', ...(differs && { color: 'warning.main' }) }}>
+                                    {storedVal}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </Box>
+                    )}
+
+                    {/* Segments/files table for multi-file books */}
+                    {vSegs.length > 0 && (() => {
+                      const missingCount = vSegs.filter((s) => s.file_exists === false).length;
+                      const isCurrentBook = isCurrent;
+                      const allSelected = isCurrentBook && vSegs.length > 0 && selectedSegmentIds.size === vSegs.length;
+                      const someSelected = isCurrentBook && selectedSegmentIds.size > 0 && !allSelected;
+                      return (
+                        <Box>
+                          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                              Files ({vSegs.length})
+                            </Typography>
+                            {isCurrentBook && vSegs.length > 1 && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={async () => {
+                                  try {
+                                    const result = await api.extractTrackInfo(book.id);
+                                    toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
+                                    if (id) {
+                                      const segs = await api.getBookSegments(id);
+                                      setSegments(segs);
+                                    }
+                                  } catch {
+                                    toast('Failed to extract track info', 'error');
+                                  }
+                                }}
+                              >
+                                Auto-fill Track Numbers
+                              </Button>
+                            )}
+                          </Stack>
+                          {missingCount > 0 && (
+                            <Alert severity="warning" sx={{ mb: 1 }}>
+                              {missingCount} of {vSegs.length} file{vSegs.length !== 1 ? 's' : ''} missing on disk.
+                            </Alert>
+                          )}
+                          {/* Segment action bar for current version */}
+                          {isCurrentBook && selectedSegmentIds.size > 0 && vSegs.length > 1 && (
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, p: 1, bgcolor: 'action.selected', borderRadius: 1 }}>
+                              <Typography variant="body2">{selectedSegmentIds.size} selected</Typography>
+                              <Button size="small" variant="contained" startIcon={<TransformIcon />}
+                                disabled={splittingVersion} onClick={handleSplitVersion}>
+                                {splittingVersion ? 'Splitting...' : 'Split to New Version'}
+                              </Button>
+                              <Button size="small" variant="contained" color="secondary" startIcon={<TransformIcon />}
+                                disabled={splittingToBooks} onClick={handleSplitToBooks}>
+                                {splittingToBooks ? 'Splitting...' : 'Split to New Books'}
+                              </Button>
+                              {versions.length > 1 && versions
+                                .filter((v) => v.id !== book.id)
+                                .map((v) => (
+                                  <Button key={v.id} size="small" variant="outlined"
+                                    onClick={() => handleMoveToVersion(v.id)}>
+                                    Move to: {v.title}{v.format ? ` (${v.format.toUpperCase()})` : ''}
+                                  </Button>
+                                ))}
+                            </Stack>
+                          )}
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                {isCurrentBook && vSegs.length > 1 && (
+                                  <TableCell padding="checkbox">
+                                    <Checkbox size="small" checked={allSelected} indeterminate={someSelected}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedSegmentIds(new Set(vSegs.map((s) => s.id)));
+                                        } else {
+                                          setSelectedSegmentIds(new Set());
+                                        }
+                                      }} />
+                                  </TableCell>
+                                )}
+                                <TableCell>#</TableCell>
+                                <TableCell>File Path</TableCell>
+                                <TableCell>Duration</TableCell>
+                                <TableCell>Format</TableCell>
+                                <TableCell align="right">Size</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {vSegs.map((seg) => {
+                                const isMissing = seg.file_exists === false;
+                                const isSelected = isCurrentBook && selectedSegmentIds.has(seg.id);
+                                return (
+                                  <TableRow key={seg.id} hover selected={isSelected}
+                                    sx={{ cursor: isCurrentBook ? 'pointer' : 'default',
+                                      ...(isMissing && { bgcolor: 'error.50', '&:hover': { bgcolor: 'error.100' } }) }}
+                                    onClick={() => {
+                                      if (!isCurrentBook) return;
+                                      if (isMissing) { setRelocateSegment(seg); }
+                                      else { setSelectedSegmentIds(new Set([seg.id])); setActiveTab('info'); }
+                                    }}>
+                                    {isCurrentBook && vSegs.length > 1 && (
+                                      <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                                        <Checkbox size="small" checked={isSelected}
+                                          onChange={(e) => {
+                                            const next = new Set(selectedSegmentIds);
+                                            if (e.target.checked) next.add(seg.id); else next.delete(seg.id);
+                                            setSelectedSegmentIds(next);
+                                          }} />
+                                      </TableCell>
+                                    )}
+                                    <TableCell>
+                                      <Stack direction="row" alignItems="center" spacing={0.5}>
+                                        {isMissing && (
+                                          <Tooltip title={`Missing: ${seg.file_path}`}>
+                                            <ErrorOutlineIcon color="error" fontSize="small" />
+                                          </Tooltip>
+                                        )}
+                                        <span>{seg.track_number ?? '—'}</span>
+                                      </Stack>
+                                    </TableCell>
+                                    <TableCell sx={{ wordBreak: 'break-all', fontSize: '0.8rem', ...(isMissing && { color: 'error.main' }) }}>
+                                      <Tooltip title={seg.file_path}><span>{seg.file_path}</span></Tooltip>
+                                    </TableCell>
+                                    <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
+                                    <TableCell>{seg.format?.toUpperCase()}</TableCell>
+                                    <TableCell align="right">
+                                      {seg.size_bytes > 0 ? `${(seg.size_bytes / 1048576).toFixed(1)} MB` : '—'}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </Box>
+                      );
+                    })()}
+                  </Box>
+                </Collapse>
+              </Paper>
+            );
+          })}
+
+          {/* Link another version */}
+          <Box sx={{ mt: 1 }}>
+            {!linkSearchOpen ? (
+              <Button size="small" variant="text" startIcon={<LinkIcon />}
+                onClick={() => setLinkSearchOpen(true)}>
+                Link Another Version
+              </Button>
+            ) : (
+              <Stack spacing={1} sx={{ maxWidth: 400 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Typography variant="caption">Search for a book to link as a version</Typography>
+                  <Button size="small" onClick={() => setLinkSearchOpen(false)}>Cancel</Button>
+                </Stack>
+                <TextField size="small" autoFocus placeholder="Search by title or author..."
+                  value={linkSearchQuery} onChange={(e) => setLinkSearchQuery(e.target.value)} fullWidth />
+                {linkSearchLoading && <CircularProgress size={16} />}
+                {linkSearchResults.map((result) => (
+                  <Button key={result.id} variant="outlined" size="small"
+                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    onClick={() => handleInlineLinkVersion(result.id)}>
+                    {result.title} — {result.author_name}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+          </Box>
+        </Stack>
       )}
+
 
       <Dialog
         open={deleteDialogOpen}
@@ -1395,6 +1654,92 @@ export const BookDetail = () => {
             disabled={actionLoading}
           >
             {deleteOptions.softDelete ? 'Soft Delete' : 'Delete Now'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rename preview dialog */}
+      <Dialog
+        open={renamePreviewDialogOpen}
+        onClose={() => setRenamePreviewDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Preview Rename</DialogTitle>
+        <DialogContent>
+          {renamePreview && (
+            <>
+              <Typography variant="subtitle2" gutterBottom>
+                File Path
+              </Typography>
+              <Table size="small" sx={{ mb: 2 }}>
+                <TableBody>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Current</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+                      {renamePreview.current_path}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Proposed</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>
+                      {renamePreview.proposed_path}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+
+              {renamePreview.current_path === renamePreview.proposed_path && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  File path will not change.
+                </Alert>
+              )}
+
+              {renamePreview.tag_changes.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Tag Changes
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Field</TableCell>
+                        <TableCell>Current</TableCell>
+                        <TableCell>Proposed</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {renamePreview.tag_changes.map((change) => (
+                        <TableRow key={change.field}>
+                          <TableCell sx={{ fontWeight: 'bold' }}>{change.field}</TableCell>
+                          <TableCell sx={{ color: 'text.secondary' }}>
+                            {change.current || '(empty)'}
+                          </TableCell>
+                          <TableCell>{change.proposed || '(empty)'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )}
+
+              {renamePreview.tag_changes.length === 0 && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  No tag changes to apply.
+                </Alert>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenamePreviewDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            startIcon={<DriveFileRenameOutlineIcon />}
+            onClick={handleApplyRename}
+            disabled={applyingRename}
+          >
+            Apply Rename
           </Button>
         </DialogActions>
       </Dialog>
@@ -1528,16 +1873,6 @@ export const BookDetail = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <VersionManagement
-        audiobookId={book.id}
-        open={versionDialogOpen}
-        onClose={() => setVersionDialogOpen(false)}
-        onUpdate={() => {
-          loadVersions();
-          loadBook();
-        }}
-      />
 
       <MetadataHistory
         bookId={book.id}

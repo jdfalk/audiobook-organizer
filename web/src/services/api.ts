@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.44.0
+// version: 1.52.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -89,6 +89,7 @@ export interface Book {
   version_group_id?: string;
   version_notes?: string;
   file_hash?: string;
+  file_size?: number;
   original_file_hash?: string;
   organized_file_hash?: string;
   itunes_persistent_id?: string;
@@ -104,6 +105,7 @@ export interface Book {
   metadata_updated_at?: string;
   metadata_review_status?: string;
   last_written_at?: string;
+  file_exists?: boolean;
 }
 
 export interface Author {
@@ -117,6 +119,22 @@ export interface Series {
   name: string;
   author_id?: number;
   created_at: string;
+}
+
+export interface AuthorWithCount {
+  id: number;
+  name: string;
+  book_count: number;
+  aliases: AuthorAlias[];
+}
+
+export interface SeriesWithCount {
+  id: number;
+  name: string;
+  author_id?: number;
+  created_at: string;
+  book_count: number;
+  author_name?: string;
 }
 
 export interface Work {
@@ -277,14 +295,28 @@ export interface Operation {
   result_data?: string;
 }
 
+export interface SuggestionRole {
+  name?: string;
+  ids?: number[];
+  variants?: string[];
+  reason?: string;
+}
+
+export interface SuggestionRoles {
+  author?: SuggestionRole;
+  narrator?: SuggestionRole;
+  publisher?: SuggestionRole;
+}
+
 export interface AIAuthorSuggestion {
   group_index: number;
-  action: 'merge' | 'split' | 'rename' | 'skip' | 'alias';
+  action: 'merge' | 'split' | 'rename' | 'skip' | 'alias' | 'reclassify';
   canonical_name: string;
   reason: string;
   confidence: 'high' | 'medium' | 'low';
   is_narrator?: number[];
   is_publisher?: number[];
+  roles?: SuggestionRoles;
 }
 
 export interface ApplyAISuggestion {
@@ -685,7 +717,7 @@ export async function getAuthors(): Promise<Author[]> {
     throw await buildApiError(response, 'Failed to fetch authors');
   }
   const data = await response.json();
-  return data.authors || [];
+  return data.items || data.authors || [];
 }
 
 export async function countAuthors(): Promise<number> {
@@ -840,14 +872,71 @@ export async function mergeBooks(keepId: string, mergeIds: string[]): Promise<Op
   return response.json();
 }
 
+// Book dedup scan — advanced duplicate detection with confidence levels
+export interface BookDedupGroup {
+  books: Book[];
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
+  group_key: string;
+}
+
+export interface BookDedupScanResponse {
+  groups: BookDedupGroup[];
+  group_count: number;
+  duplicate_count: number;
+  needs_refresh?: boolean;
+}
+
+export async function getBookDedupScanResults(): Promise<BookDedupScanResponse> {
+  const response = await fetch(`${API_BASE}/audiobooks/duplicates/scan-results`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch book dedup scan results');
+  }
+  return response.json();
+}
+
+export async function scanBookDuplicates(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/audiobooks/duplicates/scan`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start book dedup scan');
+  }
+  return response.json();
+}
+
+export async function mergeBookDuplicatesAsVersions(bookIds: string[]): Promise<{ message: string; version_group_id: string; primary_id: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/duplicates/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge book duplicates as versions');
+  }
+  return response.json();
+}
+
+export async function dismissBookDuplicateGroup(groupKey: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE}/audiobooks/duplicates/dismiss`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ group_key: groupKey }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to dismiss duplicate group');
+  }
+  return response.json();
+}
+
 // Series
-export async function getSeries(): Promise<Series[]> {
+export async function getSeries(): Promise<SeriesWithCount[]> {
   const response = await fetch(`${API_BASE}/series`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series');
   }
   const data = await response.json();
-  return data.series || [];
+  return data.items || data.series || [];
 }
 
 export async function countSeries(): Promise<number> {
@@ -857,6 +946,98 @@ export async function countSeries(): Promise<number> {
   }
   const data = await response.json();
   return data.count ?? 0;
+}
+
+export async function getSeriesBooks(seriesId: number): Promise<Book[]> {
+  const response = await fetch(`${API_BASE}/series/${seriesId}/books`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch series books');
+  }
+  const data = await response.json();
+  return data.items || data.books || [];
+}
+
+export async function renameSeries(seriesId: number, name: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/series/${seriesId}/name`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to rename series');
+  }
+}
+
+export async function splitSeries(seriesId: number, bookIds: string[]): Promise<{ new_series_id: number; books_moved: number }> {
+  const response = await fetch(`${API_BASE}/series/${seriesId}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to split series');
+  }
+  return response.json();
+}
+
+export async function deleteSeries(seriesId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/series/${seriesId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete series');
+  }
+}
+
+export async function getAuthorsWithCounts(): Promise<AuthorWithCount[]> {
+  const response = await fetch(`${API_BASE}/authors`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch authors');
+  }
+  const data = await response.json();
+  return data.items || data.authors || [];
+}
+
+export async function getAuthorBooks(authorId: number): Promise<Book[]> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}/books`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch author books');
+  }
+  const data = await response.json();
+  return data.items || data.books || [];
+}
+
+export async function deleteAuthor(authorId: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/authors/${authorId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete author');
+  }
+}
+
+export async function bulkDeleteAuthors(ids: number[]): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
+  const response = await fetch(`${API_BASE}/authors/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to bulk delete authors');
+  }
+  return response.json();
+}
+
+export async function bulkDeleteSeries(ids: number[]): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
+  const response = await fetch(`${API_BASE}/series/bulk-delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to bulk delete series');
+  }
+  return response.json();
 }
 
 // Works
@@ -1163,7 +1344,8 @@ export async function factoryReset(confirm: string): Promise<{ message: string }
 export async function startOrganize(
   folderPath?: string,
   priority?: number,
-  bookIds?: string[]
+  bookIds?: string[],
+  options?: { fetchMetadataFirst?: boolean; syncITunesFirst?: boolean }
 ): Promise<Operation> {
   const response = await fetch(`${API_BASE}/operations/organize`, {
     method: 'POST',
@@ -1172,6 +1354,8 @@ export async function startOrganize(
       folder_path: folderPath,
       priority,
       book_ids: bookIds,
+      fetch_metadata_first: options?.fetchMetadataFirst,
+      sync_itunes_first: options?.syncITunesFirst,
     }),
   });
   if (!response.ok) {
@@ -1362,6 +1546,45 @@ export async function getVersionGroup(groupId: string): Promise<Book[]> {
   }
   const data = await response.json();
   return data.audiobooks || [];
+}
+
+// Split selected segments into a new version (new book in same version group)
+export async function splitVersion(bookId: string, segmentIds: string[]): Promise<Book> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/split-version`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ segment_ids: segmentIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to split version');
+  }
+  return response.json();
+}
+
+// Split selected segments into independent new books (one per segment).
+// Unlike splitVersion, new books are NOT version-linked to the source.
+export async function splitSegmentsToBooks(bookId: string, segmentIds: string[]): Promise<{ created_books: Book[]; count: number }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/split-to-books`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ segment_ids: segmentIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to split segments to books');
+  }
+  return response.json();
+}
+
+// Move segments from one book to another (must be in same version group)
+export async function moveSegments(bookId: string, segmentIds: string[], targetBookId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/move-segments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ segment_ids: segmentIds, target_book_id: targetBookId }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to move segments');
+  }
 }
 
 // File Import
@@ -1628,6 +1851,39 @@ export async function mergeSeriesGroup(keepId: number, mergeIds: number[]): Prom
   return response.json();
 }
 
+export interface SeriesPrunePreviewGroup {
+  name: string;
+  canonical_id: number;
+  merge_ids: number[] | null;
+  book_count: number;
+  type: 'duplicate' | 'orphan';
+}
+
+export interface SeriesPrunePreview {
+  groups: SeriesPrunePreviewGroup[];
+  duplicate_count: number;
+  orphan_count: number;
+  total_count: number;
+}
+
+export async function seriesPrunePreview(): Promise<SeriesPrunePreview> {
+  const response = await fetch(`${API_BASE}/series/prune/preview`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get series prune preview');
+  }
+  return response.json();
+}
+
+export async function seriesPrune(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/series/prune`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to prune series');
+  }
+  return response.json();
+}
+
 export async function updateSeriesName(id: number, name: string): Promise<Series> {
   const response = await fetch(`${API_BASE}/series/${id}`, {
     method: 'PATCH',
@@ -1709,14 +1965,21 @@ export async function fetchBookMetadata(
 
 export async function searchMetadataForBook(
   bookId: string,
-  query?: string
+  query?: string,
+  author?: string,
+  narrator?: string,
+  series?: string
 ): Promise<SearchMetadataResponse> {
+  const body: { query: string; author?: string; narrator?: string; series?: string } = { query: query || '' };
+  if (author) body.author = author;
+  if (narrator) body.narrator = narrator;
+  if (series) body.series = series;
   const response = await fetch(
     `${API_BASE}/audiobooks/${bookId}/search-metadata`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: query || '' }),
+      body: JSON.stringify(body),
     }
   );
   if (!response.ok) {
@@ -1728,14 +1991,22 @@ export async function searchMetadataForBook(
 export async function applyMetadataCandidate(
   bookId: string,
   candidate: MetadataCandidate,
-  fields?: string[]
+  fields?: string[],
+  writeBack?: boolean
 ): Promise<{ message: string; book: Book; source: string }> {
+  const payload: { candidate: MetadataCandidate; fields: string[]; write_back?: boolean } = {
+    candidate,
+    fields: fields || [],
+  };
+  if (writeBack !== undefined) {
+    payload.write_back = writeBack;
+  }
   const response = await fetch(
     `${API_BASE}/audiobooks/${bookId}/apply-metadata`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ candidate, fields: fields || [] }),
+      body: JSON.stringify(payload),
     }
   );
   if (!response.ok) {
@@ -2141,6 +2412,12 @@ export async function getFieldMetadataHistory(bookId: string, field: string): Pr
   return data.history || [];
 }
 
+export async function undoLastApply(bookId: string): Promise<{ message: string; undone_fields: string[] }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/undo-last-apply`, { method: 'POST' });
+  if (!response.ok) throw await buildApiError(response, 'Failed to undo last apply');
+  return response.json();
+}
+
 export async function undoMetadataChange(bookId: string, field: string): Promise<{ message: string }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/metadata-history/${field}/undo`, { method: 'POST' });
   if (!response.ok) throw await buildApiError(response, 'Failed to undo change');
@@ -2476,6 +2753,247 @@ export async function applyAIAuthorReview(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply AI author review');
+  }
+  return response.json();
+}
+
+// --- AI Scan Pipeline Types ---
+
+export interface AIScan {
+  id: number;
+  status: 'pending' | 'scanning' | 'enriching' | 'cross_validating' | 'complete' | 'failed' | 'canceled';
+  mode: 'batch' | 'realtime';
+  models: { groups: string; full: string };
+  author_count: number;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface AIScanPhase {
+  scan_id: number;
+  phase_type: string;
+  status: string;
+  batch_id?: string;
+  model: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface AIScanResult {
+  id: number;
+  scan_id: number;
+  agreement: 'agreed' | 'groups_only' | 'full_only' | 'disagreed';
+  suggestion: {
+    action: string;
+    canonical_name: string;
+    reason: string;
+    confidence: string;
+    author_ids?: number[];
+    roles?: SuggestionRoles;
+    source: string;
+  };
+  applied: boolean;
+  applied_at?: string;
+}
+
+export interface AIScanDetail extends AIScan {
+  phases: AIScanPhase[];
+}
+
+export interface AIScanComparison {
+  new_in_b: AIScanResult[];
+  resolved_from_a: AIScanResult[];
+  unchanged: AIScanResult[];
+}
+
+// --- AI Scan Pipeline API Functions ---
+
+export async function startAIScan(mode: 'batch' | 'realtime'): Promise<AIScan> {
+  const response = await fetch(`${API_BASE}/ai/scans`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start AI scan');
+  }
+  return response.json();
+}
+
+export async function listAIScans(): Promise<AIScan[]> {
+  const response = await fetch(`${API_BASE}/ai/scans`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list AI scans');
+  }
+  const data = await response.json();
+  return data.scans || [];
+}
+
+export async function getAIScan(id: number): Promise<AIScanDetail> {
+  const response = await fetch(`${API_BASE}/ai/scans/${id}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get AI scan');
+  }
+  const data = await response.json();
+  return { ...data.scan, phases: data.phases || [] };
+}
+
+export async function getAIScanResults(id: number, agreement?: string): Promise<AIScanResult[]> {
+  const params = agreement ? `?agreement=${agreement}` : '';
+  const response = await fetch(`${API_BASE}/ai/scans/${id}/results${params}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get scan results');
+  }
+  const data = await response.json();
+  return data.results || [];
+}
+
+export async function applyAIScanResults(scanID: number, resultIDs: number[]): Promise<{ applied: number; errors: string[] }> {
+  const response = await fetch(`${API_BASE}/ai/scans/${scanID}/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ result_ids: resultIDs }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to apply scan results');
+  }
+  return response.json();
+}
+
+export async function cancelAIScan(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/ai/scans/${id}/cancel`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to cancel scan');
+  }
+}
+
+export async function deleteAIScan(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/ai/scans/${id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to delete scan');
+  }
+}
+
+export async function compareAIScans(a: number, b: number): Promise<AIScanComparison> {
+  const response = await fetch(`${API_BASE}/ai/scans/compare?a=${a}&b=${b}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to compare scans');
+  }
+  return response.json();
+}
+
+// --- Rename Preview & Apply ---
+
+export interface TagChange {
+  field: string;
+  current: string;
+  proposed: string;
+}
+
+export interface RenamePreview {
+  book_id: string;
+  current_path: string;
+  proposed_path: string;
+  tag_changes: TagChange[];
+}
+
+export interface RenameApplyResult {
+  book_id: string;
+  old_path: string;
+  new_path: string;
+  tags_written: number;
+  message: string;
+}
+
+export async function previewRename(bookId: string): Promise<RenamePreview> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/rename/preview`,
+    { method: 'POST' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to preview rename');
+  }
+  return response.json();
+}
+
+export async function applyRename(bookId: string): Promise<RenameApplyResult> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/rename/apply`,
+    { method: 'POST' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to apply rename');
+  }
+  return response.json();
+}
+
+// ---- Reconciliation ----
+
+export interface ReconcileMatch {
+  book_id: string;
+  book_title: string;
+  old_path: string;
+  new_path: string;
+  match_type: 'hash' | 'original_hash' | 'filename';
+  confidence: 'high' | 'medium' | 'low';
+  score: number;
+}
+
+export interface ReconcileBrokenRecord {
+  book_id: string;
+  title: string;
+  file_path: string;
+  file_hash?: string;
+}
+
+export interface ReconcilePreview {
+  broken_records: ReconcileBrokenRecord[];
+  untracked_files: string[];
+  matches: ReconcileMatch[];
+  unmatched_books: ReconcileBrokenRecord[];
+}
+
+export async function getReconcilePreview(): Promise<ReconcilePreview> {
+  const response = await fetch(`${API_BASE}/operations/reconcile/preview`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get reconcile preview');
+  }
+  return response.json();
+}
+
+export async function startReconcile(
+  matches: Array<{ book_id: string; new_path: string }>
+): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/operations/reconcile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ matches }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start reconciliation');
+  }
+  return response.json();
+}
+
+export async function startReconcileScan(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/operations/reconcile/scan`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start reconcile scan');
+  }
+  return response.json();
+}
+
+export interface LatestReconcileScan {
+  operation: Operation | null;
+  preview: ReconcilePreview | null;
+}
+
+export async function getLatestReconcileScan(): Promise<LatestReconcileScan> {
+  const response = await fetch(`${API_BASE}/operations/reconcile/scan/latest`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get latest reconcile scan');
   }
   return response.json();
 }

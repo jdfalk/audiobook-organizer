@@ -1,5 +1,5 @@
 // file: web/src/pages/Operations.tsx
-// version: 2.2.0
+// version: 2.3.0
 // guid: 3b2a1c4d-5e6f-7081-9a0b-1c2d3e4f5a6b
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -299,7 +299,7 @@ export function Operations() {
               />
             )}
           </Typography>
-          <Button variant="outlined" size="small" onClick={loadActiveOperations}>
+          <Button variant="outlined" size="small" onClick={() => { loadActiveOperations(); loadHistory(); }}>
             Refresh
           </Button>
         </Stack>

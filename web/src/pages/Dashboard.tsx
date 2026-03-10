@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect, useCallback } from 'react';
@@ -26,6 +26,8 @@ import {
   ListItemText,
   Chip,
   CardActionArea,
+  Checkbox,
+  FormControlLabel,
   Skeleton,
 } from '@mui/material';
 import {
@@ -73,6 +75,7 @@ export function Dashboard() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
+  const [syncITunesFirst, setSyncITunesFirst] = useState(true);
   const [scanInProgress, setScanInProgress] = useState(false);
 
   const loadStats = useCallback(async () => {
@@ -208,7 +211,9 @@ export function Dashboard() {
     setOrganizeInProgress(true);
     setActionNotice(null);
     try {
-      const op = await api.startOrganize();
+      const op = await api.startOrganize(undefined, undefined, undefined, {
+        syncITunesFirst,
+      });
       useOperationsStore.getState().startPolling(op.id, 'organize');
       setActionNotice('Organize operation started.');
       setOrganizeDialogOpen(false);
@@ -332,7 +337,7 @@ export function Dashboard() {
             value={authorCount ?? stats?.total_authors ?? 0}
             loading={authorsLoading}
             icon={<PersonIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/library?sort=author')}
+            onClick={() => navigate('/authors')}
           />
         </Grid>
 
@@ -342,7 +347,7 @@ export function Dashboard() {
             value={seriesCount ?? stats?.total_series ?? 0}
             loading={seriesLoading}
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
-            onClick={() => navigate('/library?sort=series')}
+            onClick={() => navigate('/series')}
           />
         </Grid>
 
@@ -468,9 +473,18 @@ export function Dashboard() {
       >
         <DialogTitle>Organize All Scanned Books</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             This will organize all books currently scanned but not yet imported to the library.
           </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={syncITunesFirst}
+                onChange={(e) => setSyncITunesFirst(e.target.checked)}
+              />
+            }
+            label="Sync iTunes library first"
+          />
         </DialogContent>
         <DialogActions>
           <Button

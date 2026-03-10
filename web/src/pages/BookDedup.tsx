@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 2.11.0
+// version: 3.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -35,6 +35,8 @@ import {
   TextField,
   TablePagination,
   Popover,
+  Drawer,
+  Switch,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -46,12 +48,17 @@ import ListIcon from '@mui/icons-material/List';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
-import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation } from '../services/api';
+import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation, BookDedupGroup } from '../services/api';
 import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Collapse from '@mui/material/Collapse';
-import type { AIAuthorSuggestion, ApplyAISuggestion, AIReviewMode } from '../services/api';
+import MicIcon from '@mui/icons-material/Mic';
+import BusinessIcon from '@mui/icons-material/Business';
+import CleaningServicesIcon from '@mui/icons-material/CleaningServices';
+import type { SuggestionRoles } from '../services/api';
 
 /** Strip "(Unabridged)", "(Abridged)", and leading "[Series X]" from display titles */
 function cleanDisplayTitle(title: string): string {
@@ -59,6 +66,64 @@ function cleanDisplayTitle(title: string): string {
     .replace(/\s*\((un)?abridged\)/gi, '')
     .replace(/^\[.*?\]\s*/g, '')
     .trim();
+}
+
+/** Structured role display for AI suggestions with role decomposition */
+function RoleDetails({ roles }: { roles: SuggestionRoles }) {
+  return (
+    <Box sx={{ ml: 5, mt: 0.5 }}>
+      {roles.author && (
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
+          <PersonIcon sx={{ fontSize: 16, mt: 0.3, color: 'primary.main' }} />
+          <Box>
+            <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+              Author: {roles.author.name}
+            </Typography>
+            {roles.author.variants && roles.author.variants.length > 0 && (
+              <Typography variant="caption" display="block" color="text.secondary">
+                Variants: {roles.author.variants.join(', ')}
+              </Typography>
+            )}
+            {roles.author.reason && (
+              <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                &ldquo;{roles.author.reason}&rdquo;
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+      {roles.narrator && (
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
+          <MicIcon sx={{ fontSize: 16, mt: 0.3, color: 'secondary.main' }} />
+          <Box>
+            <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+              Narrator: {roles.narrator.name}
+            </Typography>
+            {roles.narrator.reason && (
+              <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                &ldquo;{roles.narrator.reason}&rdquo;
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+      {roles.publisher && (
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
+          <BusinessIcon sx={{ fontSize: 16, mt: 0.3, color: 'warning.main' }} />
+          <Box>
+            <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+              Publisher: {roles.publisher.name}
+            </Typography>
+            {roles.publisher.reason && (
+              <Typography variant="caption" display="block" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                &ldquo;{roles.publisher.reason}&rdquo;
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 /** Popover showing books for a set of author IDs */
@@ -437,6 +502,240 @@ function BookDedupTab() {
           <Button onClick={handleMergeAll} color="warning" variant="contained">Confirm</Button>
         </DialogActions>
       </Dialog>
+    </Box>
+  );
+}
+
+// ---- Advanced Book Dedup Scan Tab ----
+function BookDedupScanTab() {
+  const [groups, setGroups] = useState<BookDedupGroup[]>([]);
+  const [totalDuplicates, setTotalDuplicates] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeOp, setActiveOp] = useState<Operation | null>(null);
+  const [mergeSuccess, setMergeSuccess] = useState<string | null>(null);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [confidenceFilter, setConfidenceFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const pagination = usePagination(groups.length);
+
+  const fetchResults = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.getBookDedupScanResults();
+      setGroups(data.groups || []);
+      setTotalDuplicates(data.duplicate_count || 0);
+      setNeedsRefresh(data.needs_refresh || false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch scan results');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchResults(); }, [fetchResults]);
+
+  const handleScan = async () => {
+    setMergeSuccess(null);
+    await runOperationWithPolling(
+      () => api.scanBookDuplicates(),
+      setActiveOp,
+      (final) => {
+        if (final.status === 'failed') {
+          setError(final.error_message || 'Scan failed');
+        } else {
+          setMergeSuccess('Scan complete');
+          fetchResults();
+        }
+      },
+      (msg) => setError(msg),
+    );
+  };
+
+  const handleMerge = async (group: BookDedupGroup) => {
+    setMergeSuccess(null);
+    setError(null);
+    try {
+      const bookIds = group.books.map(b => b.id);
+      const result = await api.mergeBookDuplicatesAsVersions(bookIds);
+      setMergeSuccess(result.message);
+      setGroups(prev => prev.filter(g => g.group_key !== group.group_key));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Merge failed');
+    }
+  };
+
+  const handleDismiss = async (group: BookDedupGroup) => {
+    setError(null);
+    try {
+      await api.dismissBookDuplicateGroup(group.group_key);
+      setGroups(prev => prev.filter(g => g.group_key !== group.group_key));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dismiss failed');
+    }
+  };
+
+  const filteredGroups = confidenceFilter === 'all'
+    ? groups
+    : groups.filter(g => g.confidence === confidenceFilter);
+
+  const confidenceCounts = useMemo(() => {
+    const counts = { high: 0, medium: 0, low: 0 };
+    for (const g of groups) {
+      if (g.confidence in counts) counts[g.confidence as keyof typeof counts]++;
+    }
+    return counts;
+  }, [groups]);
+
+  const confidenceColor = (c: string) => {
+    switch (c) {
+      case 'high': return 'error';
+      case 'medium': return 'warning';
+      case 'low': return 'info';
+      default: return 'default';
+    }
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '--';
+    if (bytes > 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+  const formatDuration = (secs?: number) => {
+    if (!secs) return '--';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  const busy = activeOp !== null;
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+          Advanced duplicate detection using file hashes, folder structure, and fuzzy title/author matching.
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          <Button variant="contained" startIcon={<SearchIcon />} onClick={handleScan} disabled={busy}>
+            {needsRefresh ? 'Run Scan' : 'Re-Scan'}
+          </Button>
+          <Tooltip title="Refresh cached results">
+            <IconButton onClick={fetchResults} disabled={loading || busy}><RefreshIcon /></IconButton>
+          </Tooltip>
+        </Stack>
+      </Box>
+
+      <OperationProgress operation={activeOp} label="Book Duplicate Scan" />
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {mergeSuccess && <Alert severity="success" sx={{ mb: 2 }} icon={<CheckCircleIcon />} onClose={() => setMergeSuccess(null)}>{mergeSuccess}</Alert>}
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : needsRefresh && groups.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <ContentCopyIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+          <Typography variant="h6">No scan results yet</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Click "Run Scan" to detect duplicate books using hashes, folder structure, and metadata matching.
+          </Typography>
+        </Paper>
+      ) : groups.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <CheckCircleIcon sx={{ fontSize: 48, color: 'success.main', mb: 1 }} />
+          <Typography variant="h6">No duplicate books found</Typography>
+        </Paper>
+      ) : (
+        <>
+          {/* Confidence filter tabs */}
+          <Tabs value={confidenceFilter} onChange={(_, v) => setConfidenceFilter(v)} sx={{ mb: 2 }}>
+            <Tab value="all" label={`All (${groups.length})`} />
+            <Tab value="high" label={`High (${confidenceCounts.high})`} />
+            <Tab value="medium" label={`Medium (${confidenceCounts.medium})`} />
+            <Tab value="low" label={`Low (${confidenceCounts.low})`} />
+          </Tabs>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {totalDuplicates} total duplicates across {groups.length} groups
+          </Typography>
+
+          <PaginationControls total={filteredGroups.length} page={pagination.page} rowsPerPage={pagination.rowsPerPage}
+            onPageChange={pagination.setPage} onRowsPerPageChange={pagination.setRowsPerPage} />
+
+          <Stack spacing={2}>
+            {filteredGroups.slice(pagination.startIdx, pagination.endIdx).map((group) => (
+              <Card key={group.group_key} variant="outlined">
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      {cleanDisplayTitle(group.books[0]?.title || 'Unknown')}
+                    </Typography>
+                    {group.books[0]?.author_name && (
+                      <Typography variant="body2" color="text.secondary">
+                        by {group.books[0].author_name}
+                      </Typography>
+                    )}
+                    <Chip label={`${group.books.length} copies`} size="small" color="warning" variant="outlined" />
+                    <Chip label={group.confidence} size="small" color={confidenceColor(group.confidence) as 'error' | 'warning' | 'info' | 'default'} />
+                    <Typography variant="caption" color="text.secondary">{group.reason}</Typography>
+                  </Box>
+                  <Divider sx={{ my: 1 }} />
+                  {/* Table of duplicate books */}
+                  <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', '& td, & th': { py: 0.5, px: 1, fontSize: '0.85rem' } }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left' }}>File Path</th>
+                        <th>Format</th>
+                        <th>Bitrate</th>
+                        <th>Duration</th>
+                        <th>Size</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.books.map((book) => (
+                        <tr key={book.id}>
+                          <td>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <FolderIcon fontSize="small" color="action" />
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }} noWrap title={book.file_path}>
+                                {book.file_path}
+                              </Typography>
+                              {book.itunes_persistent_id && <Chip label="iTunes" size="small" color="info" variant="outlined" sx={{ ml: 0.5 }} />}
+                            </Box>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {book.format ? <Chip label={book.format.toUpperCase()} size="small" variant="outlined" /> : '--'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {book.bitrate ? `${book.bitrate} kbps` : '--'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{formatDuration(book.duration)}</td>
+                          <td style={{ textAlign: 'center' }}>{formatFileSize(book.file_size)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Box>
+                </CardContent>
+                <CardActions>
+                  <Button startIcon={<MergeIcon />} variant="contained" size="small"
+                    onClick={() => handleMerge(group)} disabled={busy}>
+                    Merge as Versions
+                  </Button>
+                  <Button startIcon={<VisibilityOffIcon />} size="small" color="inherit"
+                    onClick={() => handleDismiss(group)} disabled={busy}>
+                    Dismiss
+                  </Button>
+                </CardActions>
+              </Card>
+            ))}
+          </Stack>
+
+          <PaginationControls total={filteredGroups.length} page={pagination.page} rowsPerPage={pagination.rowsPerPage}
+            onPageChange={pagination.setPage} onRowsPerPageChange={pagination.setRowsPerPage} />
+        </>
+      )}
     </Box>
   );
 }
@@ -910,6 +1209,9 @@ function SeriesDedupTab() {
   const [floatingCovers, setFloatingCovers] = useState<{ src: string; title: string; author: string }[]>([]);
   const [bubbleSize, setBubbleSize] = useState(500);
   const [narratorFlags, setNarratorFlags] = useState<Record<string, Set<number>>>({});
+  const [prunePreview, setPrunePreview] = useState<api.SeriesPrunePreview | null>(null);
+  const [pruneLoading, setPruneLoading] = useState(false);
+  const [pruneConfirmOpen, setPruneConfirmOpen] = useState(false);
   const pagination = usePagination(groups.length);
 
   const handleValidate = async (groupKey: string, query: string) => {
@@ -1074,6 +1376,44 @@ function SeriesDedupTab() {
     }
   };
 
+  const handlePrunePreview = async () => {
+    setPruneLoading(true);
+    setError(null);
+    try {
+      const preview = await api.seriesPrunePreview();
+      setPrunePreview(preview);
+      if (preview.total_count > 0) {
+        setPruneConfirmOpen(true);
+      } else {
+        setMergeSuccess('No series to prune - library is clean!');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get prune preview');
+    } finally {
+      setPruneLoading(false);
+    }
+  };
+
+  const handlePruneExecute = async () => {
+    setPruneConfirmOpen(false);
+    setPrunePreview(null);
+    setMergeSuccess(null);
+    setError(null);
+    await runOperationWithPolling(
+      () => api.seriesPrune(),
+      setActiveOp,
+      (final) => {
+        if (final.status === 'failed') {
+          setError(final.error_message || 'Series prune failed');
+        } else {
+          setMergeSuccess(final.message || 'Series prune complete');
+          fetchDuplicates();
+        }
+      },
+      setError,
+    );
+  };
+
   const busy = activeOp !== null;
 
   return (
@@ -1084,6 +1424,10 @@ function SeriesDedupTab() {
           Total series: {totalSeries}.
         </Typography>
         <Stack direction="row" spacing={1}>
+          <Button variant="outlined" color="secondary" startIcon={<CleaningServicesIcon />}
+            onClick={handlePrunePreview} disabled={busy || pruneLoading}>
+            {pruneLoading ? 'Checking...' : 'Prune Series'}
+          </Button>
           {groups.length > 0 && (
             <>
               <Button size="small" onClick={toggleAll} disabled={busy}>
@@ -1339,6 +1683,31 @@ function SeriesDedupTab() {
         </DialogActions>
       </Dialog>
 
+      <Dialog open={pruneConfirmOpen} onClose={() => setPruneConfirmOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Prune Series</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {prunePreview && (
+              <>
+                This will clean up {prunePreview.total_count} series entries:
+                <br />
+                - {prunePreview.duplicate_count} duplicate series will be merged (books reassigned to canonical entry)
+                <br />
+                - {prunePreview.orphan_count} orphan series (0 books) will be deleted
+                <br /><br />
+                This action cannot be undone.
+              </>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPruneConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handlePruneExecute} color="secondary" variant="contained" startIcon={<CleaningServicesIcon />}>
+            Prune {prunePreview?.total_count} Series
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Floating cover bubble — fixed to right side, resizable */}
       {floatingCovers.length > 0 && (
         <Paper elevation={8} sx={{ position: 'fixed', top: 80, right: 16, zIndex: 1300, p: 1.5, maxWidth: '60vw', maxHeight: '85vh', overflowY: 'auto', borderRadius: 2 }}>
@@ -1372,442 +1741,324 @@ function SeriesDedupTab() {
 }
 
 // ---- AI Author Sub-Page (self-contained per mode) ----
-function AIAuthorSubPage({ mode }: { mode: AIReviewMode }) {
-  const [suggestions, setSuggestions] = useState<AIAuthorSuggestion[] | null>(null);
-  const [groups, setGroups] = useState<AuthorDedupGroup[]>([]);
+// ---- AI Author Pipeline Page (unified scan-based view) ----
+function AIAuthorPipelinePage() {
+  const [scan, setScan] = useState<api.AIScanDetail | null>(null);
+  const [results, setResults] = useState<api.AIScanResult[]>([]);
+  const [scans, setScans] = useState<api.AIScan[]>([]);
+  const [batchMode, setBatchMode] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [agreementFilter, setAgreementFilter] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeOp, setActiveOp] = useState<Operation | null>(null);
-  const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const busy = activeOp !== null;
+  // Load scan list on mount
+  useEffect(() => {
+    api.listAIScans().then(setScans).catch(() => {});
+  }, []);
 
-  const loadFromOp = async (opId: string) => {
-    try {
-      const result = await api.getOperationResult(opId);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = result.result_data as any;
-      if (!data?.suggestions) { setError('AI review returned no data'); return; }
-      const sug = data.suggestions as AIAuthorSuggestion[];
-      const grps = normalizeGroups((data.groups || []) as AuthorDedupGroup[]);
-      setSuggestions(sug);
-      setGroups(grps);
-      setSelected(new Set(sug.map((_, i) => i)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load AI suggestions');
-    }
-  };
+  // Poll active scan status
+  useEffect(() => {
+    if (!scan || scan.status === 'complete' || scan.status === 'failed') return;
+    const interval = setInterval(async () => {
+      try {
+        const updated = await api.getAIScan(scan.id);
+        setScan(updated);
+        if (updated.status === 'complete') {
+          const res = await api.getAIScanResults(scan.id);
+          setResults(res);
+          clearInterval(interval);
+        }
+      } catch { /* ignore polling errors */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [scan?.id, scan?.status]);
 
-  const loadLast = useCallback(async () => {
+  const startScan = async () => {
     setLoading(true);
     setError(null);
     try {
-      const ops = await api.listOperations(50, 0);
-      const validTypes = mode === 'full'
-        ? ['ai-author-review-full']
-        : ['ai-author-review-groups', 'ai-author-review'];
-      const lastReview = ops.items.find(
-        (op) => validTypes.includes(op.type) && op.status === 'completed'
-      );
-      if (lastReview) await loadFromOp(lastReview.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load');
+      const newScan = await api.startAIScan(batchMode ? 'batch' : 'realtime');
+      const detail = await api.getAIScan(newScan.id);
+      setScan(detail);
+      // Refresh scan list
+      api.listAIScans().then(setScans).catch(() => {});
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to start scan');
     }
     setLoading(false);
-  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
-  useEffect(() => { if (!suggestions) loadLast(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleRun = async () => {
+  const loadScan = async (scanId: number) => {
+    setLoading(true);
     setError(null);
-    await runOperationWithPolling(
-      () => api.requestAIAuthorReview(mode),
-      setActiveOp,
-      async (op) => { await loadFromOp(op.id); },
-      (msg) => setError(msg),
-    );
-  };
-
-  const handleApply = async () => {
-    setConfirmOpen(false);
-    if (!suggestions) return;
-    const toApply: ApplyAISuggestion[] = [];
-    for (const idx of selected) {
-      const sug = suggestions[idx];
-      if (!sug || sug.action === 'skip') continue;
-      const group = groups[sug.group_index];
-      if (!group) continue;
-      toApply.push({
-        group_index: sug.group_index, action: sug.action,
-        canonical_name: sug.canonical_name, keep_id: group.canonical.id,
-        merge_ids: group.variants.map((v) => v.id),
-        rename: sug.canonical_name !== group.canonical.name,
-      });
+    try {
+      const detail = await api.getAIScan(scanId);
+      setScan(detail);
+      if (detail.status === 'complete') {
+        const res = await api.getAIScanResults(scanId);
+        setResults(res);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load scan');
     }
-    if (toApply.length === 0) { setError('No applicable suggestions'); return; }
-    await runOperationWithPolling(
-      () => api.applyAIAuthorReview(toApply),
-      setActiveOp,
-      () => { setSuccess(`Applied ${toApply.length} suggestion(s)`); setSuggestions(null); setSelected(new Set()); },
-      (msg) => setError(msg),
-    );
+    setLoading(false);
   };
 
-  const filtered = useMemo(() => {
-    if (!suggestions) return [];
-    let items = suggestions.map((s, i) => ({ ...s, _idx: i }));
-    if (confidenceFilter !== 'all') items = items.filter((s) => s.confidence === confidenceFilter);
-    return items;
-  }, [suggestions, confidenceFilter]);
+  const applySelected = async () => {
+    if (!scan || selected.size === 0) return;
+    try {
+      await api.applyAIScanResults(scan.id, Array.from(selected));
+      const res = await api.getAIScanResults(scan.id);
+      setResults(res);
+      setSelected(new Set());
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to apply results');
+    }
+  };
+
+  const filteredResults = agreementFilter === 'all'
+    ? results
+    : results.filter(r => r.agreement === agreementFilter);
+
+  const toggleSelect = (id: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   return (
     <Box>
-      <OperationProgress operation={activeOp} />
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
+      {/* Header Bar */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
+        <Button
+          variant="contained"
+          onClick={startScan}
+          disabled={loading || (scan != null && scan.status !== 'complete' && scan.status !== 'failed')}
+          startIcon={<AutoAwesomeIcon />}
+        >
+          Run Scan
+        </Button>
+        <FormControlLabel
+          control={<Switch checked={batchMode} onChange={(_, v) => setBatchMode(v)} />}
+          label={batchMode ? 'Batch (cheaper, hours)' : 'Realtime (faster, more expensive)'}
+        />
+        <Box sx={{ flex: 1 }} />
+        <Button variant="outlined" onClick={() => setHistoryOpen(true)}>
+          Scan History
+        </Button>
+      </Box>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-      ) : suggestions === null ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-            {mode === 'full' ? 'AI discovers all duplicates from scratch.' : 'AI validates heuristic-detected groups.'}
-          </Typography>
-          <Stack direction="row" spacing={2} justifyContent="center">
-            <Button variant="contained" color="secondary" startIcon={<AutoAwesomeIcon />}
-              onClick={handleRun} disabled={busy}>Run AI Review ({mode})</Button>
-            <Button variant="outlined" onClick={loadLast} disabled={busy}>Load Last</Button>
-          </Stack>
-        </Paper>
-      ) : (
-        <Paper sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>{suggestions.length} suggestions</Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {['all', 'high', 'medium', 'low'].map((level) => (
-                <Chip key={level} label={level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
-                  variant={confidenceFilter === level ? 'filled' : 'outlined'}
-                  color={level === 'high' ? 'success' : level === 'medium' ? 'warning' : level === 'low' ? 'error' : 'default'}
-                  onClick={() => setConfidenceFilter(level)} size="small" />
+      {error && (
+        <Alert severity="error" sx={{ mx: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Active Scan Status */}
+      {scan && scan.status !== 'complete' && scan.status !== 'failed' && scan.status !== 'canceled' && (
+        <Paper
+          elevation={3}
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            mx: 2,
+            mb: 2,
+            p: 2,
+            borderRadius: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="subtitle2">Scan #{scan.id} — {scan.status}</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              {(scan.phases || []).map(phase => (
+                <Chip
+                  key={phase.phase_type}
+                  label={`${phase.phase_type.replace('_', ' ')}: ${phase.status}`}
+                  color={phase.status === 'complete' ? 'success' : phase.status === 'failed' ? 'error' : 'default'}
+                  size="small"
+                />
               ))}
-              <Tooltip title="Re-run AI Review">
-                <IconButton onClick={handleRun} disabled={busy} size="small"><RefreshIcon /></IconButton>
-              </Tooltip>
-            </Stack>
+            </Box>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={async () => {
+                try {
+                  await api.cancelAIScan(scan.id);
+                  const updated = await api.getAIScan(scan.id);
+                  setScan(updated);
+                } catch (e: any) {
+                  setError(e.message || 'Failed to cancel scan');
+                }
+              }}
+            >
+              Cancel Scan
+            </Button>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <Button size="small" onClick={() => setSelected(new Set(filtered.map((s) => s._idx)))}>Select All</Button>
-            <Button size="small" onClick={() => setSelected(new Set())}>Deselect All</Button>
-            <Box sx={{ flexGrow: 1 }} />
-            <Button variant="contained" color="primary" disabled={busy || selected.size === 0}
-              onClick={() => setConfirmOpen(true)}>Apply {selected.size} Selected</Button>
-          </Box>
-
-          {filtered.map((sug) => {
-            const group = groups[sug.group_index];
-            const nameChanged = group && sug.canonical_name !== group.canonical.name;
-            return (
-              <Card key={sug._idx} sx={{ mb: 1 }} variant="outlined">
-                <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Checkbox checked={selected.has(sug._idx)}
-                      onChange={() => setSelected((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(sug._idx)) next.delete(sug._idx); else next.add(sug._idx);
-                        return next;
-                      })} size="small" />
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 200 }}>
-                      {group ? group.canonical.name : `Group ${sug.group_index}`}
-                      {nameChanged && <> → <span style={{ color: '#1976d2' }}>{sug.canonical_name}</span></>}
-                    </Typography>
-                    <Chip size="small" label={sug.action}
-                      color={sug.action === 'merge' ? 'primary' : sug.action === 'rename' ? 'warning' : sug.action === 'alias' ? 'info' : sug.action === 'split' ? 'secondary' : 'default'} />
-                    <Chip size="small" label={sug.confidence}
-                      color={sug.confidence === 'high' ? 'success' : sug.confidence === 'medium' ? 'warning' : 'error'} />
-                    {group && <Typography variant="caption" color="text.secondary">{group.variants.length} variant(s), {group.book_count} books</Typography>}
-                  </Box>
-                  <Divider sx={{ my: 0.5, ml: 5 }} />
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>{sug.reason}</Typography>
-                  {group && group.variants.length > 0 && (
-                    <Typography variant="caption" sx={{ ml: 5, display: 'block' }}>Variants: {group.variants.map((v) => v.name).join(', ')}</Typography>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-            <DialogTitle>Apply AI Suggestions</DialogTitle>
-            <DialogContent><DialogContentText>Apply {selected.size} correction(s)?</DialogContentText></DialogContent>
-            <DialogActions>
-              <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-              <Button onClick={handleApply} color="primary" variant="contained">Apply</Button>
-            </DialogActions>
-          </Dialog>
+          <LinearProgress sx={{ mt: 1 }} />
         </Paper>
       )}
-    </Box>
-  );
-}
 
-// ---- AI Combined Sub-Page ----
-function AIAuthorCombinedSubPage() {
-  const [suggestions, setSuggestions] = useState<AIAuthorSuggestion[] | null>(null);
-  const [groups, setGroups] = useState<AuthorDedupGroup[]>([]);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const [activeOp, setActiveOp] = useState<Operation | null>(null);
-  const [activeOp2, setActiveOp2] = useState<Operation | null>(null);
-  const [confidenceFilter, setConfidenceFilter] = useState<string>('all');
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [combinedSections, setCombinedSections] = useState<{
-    agreed: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-    full_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-    groups_only: { suggestion: AIAuthorSuggestion; group: AuthorDedupGroup }[];
-  } | null>(null);
-  const [combinedFilter, setCombinedFilter] = useState<'all' | 'agreed' | 'full_only' | 'groups_only'>('all');
+      {/* Canceled scan message */}
+      {scan && scan.status === 'canceled' && (
+        <Alert severity="warning" sx={{ mx: 2, mb: 2 }}>
+          Scan #{scan.id} was canceled.
+        </Alert>
+      )}
 
-  const busy = activeOp !== null || activeOp2 !== null;
-
-  const handleRun = async () => {
-    setError(null);
-    setCombinedSections(null);
-    try {
-      const fullInitial = await api.requestAIAuthorReview('full');
-      setActiveOp(fullInitial);
-      const groupsInitial = await api.requestAIAuthorReview('groups');
-      setActiveOp2(groupsInitial);
-
-      const [fullFinal, groupsFinal] = await Promise.all([
-        api.pollOperation(fullInitial.id, (update) => setActiveOp(update)),
-        api.pollOperation(groupsInitial.id, (update) => setActiveOp2(update)),
-      ]);
-      setActiveOp(null);
-      setActiveOp2(null);
-
-      const fullResult = await api.getOperationResult(fullFinal.id);
-      const groupsResult = await api.getOperationResult(groupsFinal.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fullData = fullResult.result_data as any;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const groupsData = groupsResult.result_data as any;
-
-      const fullSugs = (fullData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
-        suggestion: s,
-        group: normalizeGroups(fullData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
-      }));
-      const groupsSugs = (groupsData?.suggestions || []).map((s: AIAuthorSuggestion, i: number) => ({
-        suggestion: s,
-        group: normalizeGroups(groupsData?.groups || [])[s.group_index ?? i] || { canonical: { id: 0, name: '' }, variants: [], book_count: 0 },
-      }));
-
-      const getAuthorIds = (grp: AuthorDedupGroup): Set<number> => {
-        const ids = new Set<number>();
-        if (grp?.canonical?.id) ids.add(grp.canonical.id);
-        for (const v of grp?.variants || []) ids.add(v.id);
-        return ids;
-      };
-      const overlapRatio = (a: Set<number>, b: Set<number>): number => {
-        if (a.size === 0 || b.size === 0) return 0;
-        let count = 0;
-        for (const id of a) { if (b.has(id)) count++; }
-        return count / Math.min(a.size, b.size);
-      };
-
-      const agreed: typeof fullSugs = [];
-      const fullOnly: typeof fullSugs = [];
-      const groupsOnly: typeof fullSugs = [];
-      const grMatched = new Set<number>();
-
-      for (const fItem of fullSugs) {
-        const fIds = getAuthorIds(fItem.group);
-        let matched = false;
-        for (let j = 0; j < groupsSugs.length; j++) {
-          if (grMatched.has(j)) continue;
-          const gIds = getAuthorIds(groupsSugs[j].group);
-          if (overlapRatio(fIds, gIds) >= 0.5 && fItem.suggestion.action === groupsSugs[j].suggestion.action) {
-            agreed.push(fItem);
-            grMatched.add(j);
-            matched = true;
-            break;
-          }
-        }
-        if (!matched) fullOnly.push(fItem);
-      }
-      for (let j = 0; j < groupsSugs.length; j++) {
-        if (!grMatched.has(j)) groupsOnly.push(groupsSugs[j]);
-      }
-
-      const secs = { agreed, full_only: fullOnly, groups_only: groupsOnly };
-      setCombinedSections(secs);
-      const allItems = [...agreed, ...fullOnly, ...groupsOnly];
-      const sug = allItems.map((item, i) => ({ ...item.suggestion, group_index: i }));
-      const grps = normalizeGroups(allItems.map((item) => item.group));
-      setSuggestions(sug);
-      setGroups(grps);
-      setSelected(new Set(agreed.map((_: unknown, i: number) => i)));
-    } catch (err) {
-      setActiveOp(null);
-      setActiveOp2(null);
-      setError(err instanceof Error ? err.message : 'Combined review failed');
-    }
-  };
-
-  const handleApply = async () => {
-    setConfirmOpen(false);
-    if (!suggestions) return;
-    const toApply: ApplyAISuggestion[] = [];
-    for (const idx of selected) {
-      const sug = suggestions[idx];
-      if (!sug || sug.action === 'skip') continue;
-      const group = groups[sug.group_index];
-      if (!group) continue;
-      toApply.push({
-        group_index: sug.group_index, action: sug.action,
-        canonical_name: sug.canonical_name, keep_id: group.canonical.id,
-        merge_ids: group.variants.map((v) => v.id),
-        rename: sug.canonical_name !== group.canonical.name,
-      });
-    }
-    if (toApply.length === 0) { setError('No applicable suggestions'); return; }
-    await runOperationWithPolling(
-      () => api.applyAIAuthorReview(toApply),
-      setActiveOp,
-      () => { setSuccess(`Applied ${toApply.length} suggestion(s)`); setSuggestions(null); setSelected(new Set()); },
-      (msg) => setError(msg),
-    );
-  };
-
-  const filtered = useMemo(() => {
-    if (!suggestions) return [];
-    let items = suggestions.map((s, i) => ({ ...s, _idx: i }));
-    if (combinedFilter !== 'all' && combinedSections) {
-      const ac = combinedSections.agreed.length;
-      const fc = combinedSections.full_only.length;
-      if (combinedFilter === 'agreed') items = items.filter((s) => s._idx < ac);
-      else if (combinedFilter === 'full_only') items = items.filter((s) => s._idx >= ac && s._idx < ac + fc);
-      else if (combinedFilter === 'groups_only') items = items.filter((s) => s._idx >= ac + fc);
-    }
-    if (confidenceFilter !== 'all') items = items.filter((s) => s.confidence === confidenceFilter);
-    return items;
-  }, [suggestions, confidenceFilter, combinedFilter, combinedSections]);
-
-  useEffect(() => { if (!suggestions && !busy) handleRun(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <Box>
-      <OperationProgress operation={activeOp} label="Full Mode" />
-      <OperationProgress operation={activeOp2} label="Groups Mode" />
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>{success}</Alert>}
-
-      {busy && !suggestions ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-      ) : suggestions === null ? (
-        <Paper sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-            Runs both Full and Groups modes, then shows where they agree vs. disagree.
+      {/* No scan loaded */}
+      {!scan && !loading && (
+        <Paper sx={{ p: 4, mx: 2, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            Run a scan to discover author duplicates using multi-pass AI analysis, or load a previous scan from history.
           </Typography>
-          <Button variant="contained" color="secondary" startIcon={<AutoAwesomeIcon />}
-            onClick={handleRun} disabled={busy}>Run Combined Review</Button>
         </Paper>
-      ) : (
-        <Paper sx={{ p: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>{suggestions.length} suggestions</Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {['all', 'high', 'medium', 'low'].map((level) => (
-                <Chip key={level} label={level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
-                  variant={confidenceFilter === level ? 'filled' : 'outlined'}
-                  color={level === 'high' ? 'success' : level === 'medium' ? 'warning' : level === 'low' ? 'error' : 'default'}
-                  onClick={() => setConfidenceFilter(level)} size="small" />
-              ))}
-              <Tooltip title="Re-run"><IconButton onClick={handleRun} disabled={busy} size="small"><RefreshIcon /></IconButton></Tooltip>
-            </Stack>
-          </Box>
+      )}
 
-          {combinedSections && (
-            <Box sx={{ mb: 2 }}>
-              <Stack direction="row" spacing={2}>
-                <Chip label={`Agreed: ${combinedSections.agreed.length}`} color="success" size="small"
-                  variant={combinedFilter === 'agreed' ? 'filled' : 'outlined'}
-                  onClick={() => setCombinedFilter(combinedFilter === 'agreed' ? 'all' : 'agreed')} sx={{ cursor: 'pointer' }} />
-                <Chip label={`AI Discovered: ${combinedSections.full_only.length}`} color="info" size="small"
-                  variant={combinedFilter === 'full_only' ? 'filled' : 'outlined'}
-                  onClick={() => setCombinedFilter(combinedFilter === 'full_only' ? 'all' : 'full_only')} sx={{ cursor: 'pointer' }} />
-                <Chip label={`Heuristic Only: ${combinedSections.groups_only.length}`} color="default" size="small"
-                  variant={combinedFilter === 'groups_only' ? 'filled' : 'outlined'}
-                  onClick={() => setCombinedFilter(combinedFilter === 'groups_only' ? 'all' : 'groups_only')} sx={{ cursor: 'pointer' }} />
-              </Stack>
-            </Box>
+      {loading && !scan && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+      )}
+
+      {/* Scan failed */}
+      {scan?.status === 'failed' && (
+        <Alert severity="error" sx={{ mx: 2 }}>
+          Scan #{scan.id} failed. Try running a new scan.
+        </Alert>
+      )}
+
+      {/* Results */}
+      {scan?.status === 'complete' && results.length > 0 && (
+        <Box sx={{ px: 2 }}>
+          {/* Filter Tabs */}
+          <Tabs value={agreementFilter} onChange={(_, v) => setAgreementFilter(v)} sx={{ mb: 2 }}>
+            <Tab value="all" label={`All (${results.length})`} />
+            <Tab value="agreed" label={`Agreed (${results.filter(r => r.agreement === 'agreed').length})`} />
+            <Tab value="groups_only" label={`Groups Only (${results.filter(r => r.agreement === 'groups_only').length})`} />
+            <Tab value="full_only" label={`Full Only (${results.filter(r => r.agreement === 'full_only').length})`} />
+            <Tab value="disagreed" label={`Disagreed (${results.filter(r => r.agreement === 'disagreed').length})`} />
+          </Tabs>
+
+          {/* Floating Apply Bar */}
+          {selected.size > 0 && (
+            <Paper
+              elevation={4}
+              sx={{
+                position: 'sticky',
+                bottom: 16,
+                zIndex: 10,
+                p: 1.5,
+                mx: -2,
+                mb: 2,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                borderRadius: 2,
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Button variant="contained" color="primary" onClick={applySelected}>
+                Apply Selected ({selected.size})
+              </Button>
+              <Button variant="outlined" size="small" onClick={() => setSelected(new Set())}>
+                Clear Selection
+              </Button>
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
+                {selected.size} of {filteredResults.filter(r => !r.applied).length} selected
+              </Typography>
+            </Paper>
           )}
 
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <Button size="small" onClick={() => setSelected(new Set(filtered.map((s) => s._idx)))}>Select All</Button>
-            <Button size="small" onClick={() => setSelected(new Set())}>Deselect All</Button>
-            <Box sx={{ flexGrow: 1 }} />
-            <Button variant="contained" color="primary" disabled={busy || selected.size === 0}
-              onClick={() => setConfirmOpen(true)}>Apply {selected.size} Selected</Button>
-          </Box>
-
-          {filtered.map((sug) => {
-            const group = groups[sug.group_index];
-            const nameChanged = group && sug.canonical_name !== group.canonical.name;
-            let sectionHeader: React.ReactNode = null;
-            if (combinedSections) {
-              const ac = combinedSections.agreed.length;
-              const fc = combinedSections.full_only.length;
-              if (sug._idx === 0 && ac > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 1, mb: 0.5, color: 'success.main', fontWeight: 'bold' }}>Agreed ({ac})</Typography>;
-              else if (sug._idx === ac && fc > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'info.main', fontWeight: 'bold' }}>AI Discovered ({fc})</Typography>;
-              else if (sug._idx === ac + fc && combinedSections.groups_only.length > 0) sectionHeader = <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5, color: 'text.secondary', fontWeight: 'bold' }}>Heuristic Only ({combinedSections.groups_only.length})</Typography>;
-            }
-            return (
-              <Box key={sug._idx}>
-                {sectionHeader}
-                <Card sx={{ mb: 1 }} variant="outlined">
-                  <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Checkbox checked={selected.has(sug._idx)}
-                        onChange={() => setSelected((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(sug._idx)) next.delete(sug._idx); else next.add(sug._idx);
-                          return next;
-                        })} size="small" />
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: 200 }}>
-                        {group ? group.canonical.name : `Group ${sug.group_index}`}
-                        {nameChanged && <> → <span style={{ color: '#1976d2' }}>{sug.canonical_name}</span></>}
-                      </Typography>
-                      <Chip size="small" label={sug.action}
-                        color={sug.action === 'merge' ? 'primary' : sug.action === 'rename' ? 'warning' : sug.action === 'alias' ? 'info' : sug.action === 'split' ? 'secondary' : 'default'} />
-                      <Chip size="small" label={sug.confidence}
-                        color={sug.confidence === 'high' ? 'success' : sug.confidence === 'medium' ? 'warning' : 'error'} />
-                      {group && <Typography variant="caption" color="text.secondary">{group.variants.length} variant(s), {group.book_count} books</Typography>}
-                    </Box>
+          {/* Result Cards */}
+          {filteredResults.map(result => (
+            <Card key={result.id} sx={{ mb: 1, opacity: result.applied ? 0.5 : 1 }} variant="outlined">
+              <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Checkbox
+                    checked={selected.has(result.id)}
+                    onChange={() => toggleSelect(result.id)}
+                    disabled={result.applied}
+                    size="small"
+                  />
+                  <Chip
+                    label={result.agreement}
+                    size="small"
+                    color={result.agreement === 'agreed' ? 'success' : result.agreement === 'disagreed' ? 'error' : 'default'}
+                  />
+                  <Chip label={result.suggestion.action} size="small" variant="outlined"
+                    color={result.suggestion.action === 'merge' ? 'primary' : result.suggestion.action === 'rename' ? 'warning' : result.suggestion.action === 'alias' ? 'info' : 'default'} />
+                  <Chip label={result.suggestion.confidence} size="small" variant="outlined"
+                    color={result.suggestion.confidence === 'high' ? 'success' : result.suggestion.confidence === 'medium' ? 'warning' : 'error'} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body2" fontWeight="bold">
+                      {result.suggestion.canonical_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {result.suggestion.reason}
+                    </Typography>
+                  </Box>
+                  {result.applied && <Chip label="Applied" size="small" color="info" />}
+                </Box>
+                {result.suggestion.roles && (
+                  <>
                     <Divider sx={{ my: 0.5, ml: 5 }} />
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 5 }}>{sug.reason}</Typography>
-                    {group && group.variants.length > 0 && (
-                      <Typography variant="caption" sx={{ ml: 5, display: 'block' }}>Variants: {group.variants.map((v) => v.name).join(', ')}</Typography>
-                    )}
-                  </CardContent>
-                </Card>
-              </Box>
-            );
-          })}
+                    <RoleDetails roles={result.suggestion.roles} />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ))}
 
-          <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-            <DialogTitle>Apply AI Suggestions</DialogTitle>
-            <DialogContent><DialogContentText>Apply {selected.size} correction(s)?</DialogContentText></DialogContent>
-            <DialogActions>
-              <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-              <Button onClick={handleApply} color="primary" variant="contained">Apply</Button>
-            </DialogActions>
-          </Dialog>
+          {/* No results for this filter */}
+          {filteredResults.length === 0 && (
+            <Typography color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+              No results matching this filter.
+            </Typography>
+          )}
+        </Box>
+      )}
+
+      {/* Scan complete but no results */}
+      {scan?.status === 'complete' && results.length === 0 && (
+        <Paper sx={{ p: 4, mx: 2, textAlign: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            Scan complete — no duplicate authors found.
+          </Typography>
         </Paper>
       )}
+
+      {/* Scan History Drawer */}
+      <Drawer anchor="right" open={historyOpen} onClose={() => setHistoryOpen(false)}>
+        <Box sx={{ width: 400, p: 2 }}>
+          <Typography variant="h6" gutterBottom>Scan History</Typography>
+          {scans.map(s => (
+            <Card
+              key={s.id}
+              sx={{ mb: 1, cursor: 'pointer', border: scan?.id === s.id ? 2 : undefined, borderColor: scan?.id === s.id ? 'primary.main' : undefined }}
+              variant="outlined"
+              onClick={() => { loadScan(s.id); setHistoryOpen(false); }}
+            >
+              <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                <Typography variant="body2" fontWeight="bold">
+                  Scan #{s.id} — {s.status}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {new Date(s.created_at).toLocaleString()} · {s.author_count} authors · {s.mode}
+                </Typography>
+              </CardContent>
+            </Card>
+          ))}
+          {scans.length === 0 && (
+            <Typography color="text.secondary">No scan history yet.</Typography>
+          )}
+        </Box>
+      </Drawer>
     </Box>
   );
 }
@@ -1815,7 +2066,7 @@ function AIAuthorCombinedSubPage() {
 // ---- AI Review Top-Level Tab ----
 function AIReviewTab() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const aiSub = searchParams.get('aisub') || 'author-full';
+  const aiSub = searchParams.get('aisub') || 'authors';
   const setAiSub = (v: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('aisub', v);
@@ -1825,20 +2076,336 @@ function AIReviewTab() {
   return (
     <Box>
       <Tabs value={aiSub} onChange={(_, v) => setAiSub(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab value="author-full" label="Author Full" icon={<AutoAwesomeIcon />} iconPosition="start" />
-        <Tab value="author-groups" label="Author Groups" icon={<AutoAwesomeIcon />} iconPosition="start" />
-        <Tab value="author-combined" label="Author Combined" icon={<AutoAwesomeIcon />} iconPosition="start" />
+        <Tab value="authors" label="Authors" icon={<PersonIcon />} iconPosition="start" />
+        <Tab value="books" label="Books" icon={<MenuBookIcon />} iconPosition="start" />
       </Tabs>
 
-      {aiSub === 'author-full' && <AIAuthorSubPage mode="full" />}
-      {aiSub === 'author-groups' && <AIAuthorSubPage mode="groups" />}
-      {aiSub === 'author-combined' && <AIAuthorCombinedSubPage />}
+      {aiSub === 'authors' && <AIAuthorPipelinePage />}
+      {aiSub === 'books' && (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">Book deduplication coming soon.</Typography>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// ---- Reconcile Tab ----
+import BuildIcon from '@mui/icons-material/Build';
+import type { ReconcileMatch, ReconcilePreview, ReconcileBrokenRecord } from '../services/api';
+
+function ReconcileTab() {
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState<{ progress: number; total: number; message: string } | null>(null);
+  const [preview, setPreview] = useState<ReconcilePreview | null>(null);
+  const [lastScanTime, setLastScanTime] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<string | null>(null);
+
+  const autoSelectHighConfidence = (data: ReconcilePreview) => {
+    const autoSelect = new Set<string>();
+    for (const m of data.matches) {
+      if (m.confidence === 'high') autoSelect.add(m.book_id);
+    }
+    setSelected(autoSelect);
+  };
+
+  // On mount, load the latest scan result from DB
+  useEffect(() => {
+    const loadLatest = async () => {
+      try {
+        const { operation, preview: data } = await api.getLatestReconcileScan();
+        if (operation && operation.status === 'running') {
+          // A scan is already in progress — poll for it
+          setScanning(true);
+    
+          pollForResult(operation.id);
+        } else if (data) {
+          setPreview(data);
+          autoSelectHighConfidence(data);
+          if (operation?.completed_at) setLastScanTime(operation.completed_at);
+        }
+      } catch {
+        // No previous scan, that's fine
+      }
+    };
+    loadLatest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pollForResult = async (opId: string) => {
+    try {
+      const result = await api.pollOperation(opId, (op) => {
+        setScanProgress({ progress: op.progress, total: op.total, message: op.message });
+      });
+      if (result.status === 'completed') {
+        const { preview: data } = await api.getLatestReconcileScan();
+        if (data) {
+          setPreview(data);
+          autoSelectHighConfidence(data);
+        }
+        setLastScanTime(new Date().toISOString());
+      } else {
+        setError(`Scan ${result.status}: ${result.message || result.error_message || ''}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+      setScanProgress(null);
+    }
+  };
+
+  const startScan = async () => {
+    setScanning(true);
+    setError(null);
+    setApplyResult(null);
+    try {
+      const op = await api.startReconcileScan();
+
+      pollForResult(op.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start scan');
+      setScanning(false);
+    }
+  };
+
+  const toggleMatch = (bookId: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (!preview) return;
+    setSelected(new Set(preview.matches.map(m => m.book_id)));
+  };
+
+  const deselectAll = () => setSelected(new Set());
+
+  const applyFixes = async () => {
+    if (!preview || selected.size === 0) return;
+    setApplying(true);
+    setApplyResult(null);
+    try {
+      const matches = preview.matches
+        .filter(m => selected.has(m.book_id))
+        .map(m => ({ book_id: m.book_id, new_path: m.new_path }));
+      const op = await api.startReconcile(matches);
+      const result = await api.pollOperation(op.id);
+      if (result.status === 'completed') {
+        setApplyResult('Reconciliation completed successfully.');
+        // Re-scan to refresh
+        startScan();
+      } else {
+        setApplyResult(`Reconciliation ${result.status}: ${result.message || result.error_message || ''}`);
+      }
+    } catch (err) {
+      setApplyResult(err instanceof Error ? err.message : 'Failed to apply fixes');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const confidenceColor = (confidence: string): 'success' | 'warning' | 'error' => {
+    switch (confidence) {
+      case 'high': return 'success';
+      case 'medium': return 'warning';
+      default: return 'error';
+    }
+  };
+
+  const matchTypeLabel = (type: string): string => {
+    switch (type) {
+      case 'hash': return 'File Hash';
+      case 'original_hash': return 'Original Hash';
+      case 'filename': return 'Filename';
+      default: return type;
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Scan the library to find books whose file paths no longer exist on disk,
+        then match them against untracked audio files by hash or filename.
+        Scans run in the background — you can refresh the page and results will persist.
+      </Typography>
+
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+        <Button
+          variant="contained"
+          startIcon={scanning ? <CircularProgress size={16} /> : <SearchIcon />}
+          onClick={startScan}
+          disabled={scanning}
+        >
+          {scanning ? 'Scanning...' : 'Scan for Broken Links'}
+        </Button>
+        {lastScanTime && (
+          <Typography variant="caption" color="text.secondary">
+            Last scan: {new Date(lastScanTime).toLocaleString()}
+          </Typography>
+        )}
+      </Stack>
+
+      {scanning && (
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Stack spacing={1}>
+            <Typography variant="subtitle2">Scan in progress...</Typography>
+            {scanProgress && (
+              <>
+                <LinearProgress
+                  variant={scanProgress.total > 0 ? 'determinate' : 'indeterminate'}
+                  value={scanProgress.total > 0 ? (scanProgress.progress / scanProgress.total) * 100 : 0}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  {scanProgress.message}
+                </Typography>
+              </>
+            )}
+            {!scanProgress && <LinearProgress />}
+            <Typography variant="caption" color="text.secondary">
+              You can navigate away and come back — results will be saved.
+            </Typography>
+          </Stack>
+        </Paper>
+      )}
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {applyResult && <Alert severity="info" sx={{ mb: 2 }}>{applyResult}</Alert>}
+
+      {preview && (
+        <>
+          {/* Summary */}
+          <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+            <Chip
+              label={`${preview.broken_records.length} broken records`}
+              color={preview.broken_records.length > 0 ? 'error' : 'success'}
+            />
+            <Chip label={`${preview.untracked_files.length} untracked files`} color="default" />
+            <Chip label={`${preview.matches.length} matches found`} color="primary" />
+            <Chip
+              label={`${preview.unmatched_books.length} unmatched`}
+              color={preview.unmatched_books.length > 0 ? 'warning' : 'success'}
+            />
+          </Stack>
+
+          {/* Matches */}
+          {preview.matches.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="h6">Matches ({preview.matches.length})</Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button size="small" onClick={selectAll}>Select All</Button>
+                  <Button size="small" onClick={deselectAll}>Deselect All</Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    onClick={applyFixes}
+                    disabled={applying || selected.size === 0}
+                    startIcon={applying ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+                  >
+                    Apply {selected.size} Fix{selected.size !== 1 ? 'es' : ''}
+                  </Button>
+                </Stack>
+              </Stack>
+
+              {preview.matches.map((m: ReconcileMatch) => {
+                // Find common path prefix to avoid repeating long identical paths
+                const oldParts = m.old_path.split('/');
+                const newParts = m.new_path.split('/');
+                let commonIdx = 0;
+                while (commonIdx < oldParts.length - 1 && commonIdx < newParts.length - 1 && oldParts[commonIdx] === newParts[commonIdx]) {
+                  commonIdx++;
+                }
+                const commonPrefix = oldParts.slice(0, commonIdx).join('/');
+                const oldSuffix = oldParts.slice(commonIdx).join('/');
+                const newSuffix = newParts.slice(commonIdx).join('/');
+                const hasCommon = commonIdx > 1;
+
+                return (
+                <Card key={m.book_id} variant="outlined" sx={{ mb: 1 }}>
+                  <CardContent sx={{ pb: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="flex-start">
+                      <Checkbox
+                        checked={selected.has(m.book_id)}
+                        onChange={() => toggleMatch(m.book_id)}
+                        sx={{ mt: -0.5 }}
+                      />
+                      <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                          <Typography variant="subtitle2">{m.book_title}</Typography>
+                          <Chip
+                            label={matchTypeLabel(m.match_type)}
+                            color={confidenceColor(m.confidence)}
+                            size="small"
+                          />
+                          <Chip
+                            label={m.confidence}
+                            color={confidenceColor(m.confidence)}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Stack>
+                        {hasCommon && (
+                          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', opacity: 0.6 }}>
+                            {commonPrefix}/
+                          </Typography>
+                        )}
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'error.main', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                          - {hasCommon ? oldSuffix : m.old_path}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'success.main', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                          + {hasCommon ? newSuffix : m.new_path}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </CardContent>
+                </Card>
+                );
+              })}
+            </Paper>
+          )}
+
+          {/* Unmatched books */}
+          {preview.unmatched_books.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Unmatched Books ({preview.unmatched_books.length})
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                These books have missing files and no matching file was found on disk.
+              </Typography>
+              {preview.unmatched_books.map((b: ReconcileBrokenRecord) => (
+                <Card key={b.book_id} variant="outlined" sx={{ mb: 1 }}>
+                  <CardContent sx={{ pb: 1 }}>
+                    <Typography variant="subtitle2">{b.title}</Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      {b.file_path}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              ))}
+            </Paper>
+          )}
+
+          {preview.broken_records.length === 0 && (
+            <Alert severity="success">All book file paths are valid. No reconciliation needed.</Alert>
+          )}
+        </>
+      )}
     </Box>
   );
 }
 
 // ---- Main Dedup Page ----
-const TAB_NAMES = ['books', 'authors', 'series', 'ai'] as const;
+const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile'] as const;
 
 export function BookDedup() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1857,16 +2424,20 @@ export function BookDedup() {
       <Typography variant="h5" sx={{ mb: 2 }}>Deduplication</Typography>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Books" iconPosition="start" />
+        <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Version Groups" iconPosition="start" />
+        <Tab icon={<Badge color="default"><ContentCopyIcon /></Badge>} label="Duplicate Scan" iconPosition="start" />
         <Tab icon={<Badge color="default"><PersonIcon /></Badge>} label="Authors" iconPosition="start" />
         <Tab icon={<Badge color="default"><ListIcon /></Badge>} label="Series" iconPosition="start" />
         <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
+        <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
       </Tabs>
 
       {tab === 0 && <BookDedupTab />}
-      {tab === 1 && <AuthorDedupTab />}
-      {tab === 2 && <SeriesDedupTab />}
-      {tab === 3 && <AIReviewTab />}
+      {tab === 1 && <BookDedupScanTab />}
+      {tab === 2 && <AuthorDedupTab />}
+      {tab === 3 && <SeriesDedupTab />}
+      {tab === 4 && <AIReviewTab />}
+      {tab === 5 && <ReconcileTab />}
     </Box>
   );
 }
