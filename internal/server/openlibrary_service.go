@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -153,19 +153,59 @@ func (s *Server) startOLDownload(c *gin.Context) {
 	}
 
 	tracker := s.olService.tracker
-	go func() {
-		for _, dumpType := range req.Types {
-			log.Printf("[INFO] Starting OL dump download: %s", dumpType)
-			err := openlibrary.DownloadDump(dumpType, targetDir, tracker)
-			if err != nil {
-				log.Printf("[ERROR] OL dump download failed for %s: %v", dumpType, err)
-			} else {
-				log.Printf("[INFO] OL dump download complete: %s", dumpType)
-			}
-		}
-	}()
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	folderPath := targetDir
+	if store != nil {
+		_, _ = store.CreateOperation(opID, "ol_dump_download", &folderPath)
+	}
 
-	c.JSON(http.StatusAccepted, gin.H{"message": "download started", "types": req.Types})
+	oq := operations.GlobalQueue
+	if oq != nil {
+		err := oq.Enqueue(opID, "ol_dump_download", operations.PriorityNormal,
+			func(ctx context.Context, progress operations.ProgressReporter) error {
+				for i, dumpType := range req.Types {
+					if progress != nil && progress.IsCanceled() {
+						return fmt.Errorf("download canceled")
+					}
+					if progress != nil {
+						_ = progress.Log("info", fmt.Sprintf("Starting OL dump download: %s", dumpType), nil)
+						_ = progress.UpdateProgress(i, len(req.Types), fmt.Sprintf("Downloading %s...", dumpType))
+					}
+					err := openlibrary.DownloadDump(dumpType, targetDir, tracker)
+					if err != nil {
+						if progress != nil {
+							_ = progress.Log("error", fmt.Sprintf("OL dump download failed for %s: %v", dumpType, err), nil)
+						}
+						return fmt.Errorf("download failed for %s: %w", dumpType, err)
+					}
+					if progress != nil {
+						_ = progress.Log("info", fmt.Sprintf("OL dump download complete: %s", dumpType), nil)
+					}
+				}
+				if progress != nil {
+					_ = progress.UpdateProgress(len(req.Types), len(req.Types), "All downloads complete")
+				}
+				return nil
+			},
+		)
+		if err != nil {
+			log.Printf("[WARN] Failed to enqueue OL download, running directly: %v", err)
+			go func() {
+				for _, dumpType := range req.Types {
+					_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
+				}
+			}()
+		}
+	} else {
+		go func() {
+			for _, dumpType := range req.Types {
+				_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
+			}
+		}()
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{"message": "download started", "types": req.Types, "operation_id": opID})
 }
 
 func (s *Server) startOLImport(c *gin.Context) {
