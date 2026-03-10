@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.99.0
+// version: 1.112.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -302,6 +303,7 @@ type enrichedBookResponse struct {
 	SeriesName *string         `json:"series_name,omitempty"`
 	Authors    []authorEntry   `json:"authors,omitempty"`
 	Narrators  []narratorEntry `json:"narrators,omitempty"`
+	FileExists *bool           `json:"file_exists,omitempty"`
 }
 
 type authorEntry struct {
@@ -328,6 +330,13 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 	}
 	if seriesName != "" {
 		resp.SeriesName = &seriesName
+	}
+
+	// Check if the book's file exists on disk (single-file books only).
+	if book.FilePath != "" {
+		_, statErr := os.Stat(book.FilePath)
+		exists := statErr == nil
+		resp.FileExists = &exists
 	}
 
 	if database.GlobalStore != nil {
@@ -552,6 +561,8 @@ type Server struct {
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
 	scheduler              *TaskScheduler
+	aiScanStore            *database.AIScanStore
+	pipelineManager        *PipelineManager
 }
 
 // ServerConfig holds server configuration
@@ -619,6 +630,21 @@ func NewServer() *Server {
 	// Wire OL dump store into metadata fetch service for local-first lookups
 	if server.olService != nil && server.olService.Store() != nil {
 		server.metadataFetchService.SetOLStore(server.olService.Store())
+	}
+
+	// Open AI scan store alongside main DB
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
+		aiScanDBPath := filepath.Join(filepath.Dir(dbPath), "ai_scans.db")
+		aiScanStore, err := database.NewAIScanStore(aiScanDBPath)
+		if err != nil {
+			log.Printf("[WARN] Failed to open AI scan store: %v", err)
+		} else {
+			server.aiScanStore = aiScanStore
+			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
+				server.pipelineManager = NewPipelineManager(aiScanStore, database.GlobalStore, p, server)
+			}
+		}
 	}
 
 	server.setupRoutes()
@@ -1003,6 +1029,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	log.Println("Shutting down server...")
 
+	// Close AI scan store
+	if s.aiScanStore != nil {
+		if err := s.aiScanStore.Close(); err != nil {
+			log.Printf("[WARN] Failed to close AI scan store: %v", err)
+		} else {
+			log.Println("[INFO] AI scan store closed")
+		}
+	}
+
 	// Stop file watcher
 	if fileWatcher != nil {
 		fileWatcher.Stop()
@@ -1124,6 +1159,10 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/search", s.searchAudiobooks)
 			protected.GET("/audiobooks/count", s.countAudiobooks)
 			protected.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
+			protected.GET("/audiobooks/duplicates/scan-results", s.listBookDuplicateScanResults)
+			protected.POST("/audiobooks/duplicates/scan", s.scanBookDuplicates)
+			protected.POST("/audiobooks/duplicates/merge", s.mergeBookDuplicatesAsVersions)
+			protected.POST("/audiobooks/duplicates/dismiss", s.dismissBookDuplicateGroup)
 			protected.GET("/audiobooks/soft-deleted", s.listSoftDeletedAudiobooks)
 			protected.DELETE("/audiobooks/purge-soft-deleted", s.purgeSoftDeletedAudiobooks)
 			protected.POST("/audiobooks/:id/restore", s.restoreAudiobook)
@@ -1142,6 +1181,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
 			protected.GET("/audiobooks/:id/metadata-history/:field", s.getFieldMetadataHistory)
 			protected.POST("/audiobooks/:id/metadata-history/:field/undo", s.undoMetadataChange)
+			protected.POST("/audiobooks/:id/undo-last-apply", s.undoLastApply)
 			protected.GET("/audiobooks/:id/field-states", s.getAudiobookFieldStates)
 			protected.GET("/audiobooks/:id/changes", s.getBookChanges)
 
@@ -1171,7 +1211,17 @@ func (s *Server) setupRoutes() {
 			protected.POST("/series/duplicates/refresh", s.refreshSeriesDuplicates)
 			protected.POST("/series/deduplicate", s.deduplicateSeriesHandler)
 			protected.POST("/series/merge", s.mergeSeriesGroup)
+			protected.GET("/series/prune/preview", s.seriesPrunePreview)
+			protected.POST("/series/prune", s.seriesPrune)
 			protected.PATCH("/series/:id", s.updateSeriesName)
+			protected.GET("/series/:id/books", s.getSeriesBooks)
+			protected.PUT("/series/:id/name", s.renameSeriesHandler)
+			protected.POST("/series/:id/split", s.splitSeriesHandler)
+			protected.DELETE("/series/:id", s.deleteEmptySeries)
+			protected.GET("/authors/:id/books", s.getAuthorBooks)
+			protected.DELETE("/authors/:id", s.deleteAuthorHandler)
+			protected.POST("/authors/bulk-delete", s.bulkDeleteAuthors)
+			protected.POST("/series/bulk-delete", s.bulkDeleteSeries)
 			protected.POST("/dedup/validate", s.validateDedupEntry)
 
 			// File system routes
@@ -1201,6 +1251,10 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/optimize-database", s.optimizeDatabase)
 			protected.POST("/operations/sweep-tombstones", s.sweepTombstones)
 			protected.GET("/operations/audit-files", s.auditFileConsistency)
+			protected.GET("/operations/reconcile/preview", s.reconcilePreview)
+			protected.POST("/operations/reconcile", s.startReconcile)
+			protected.POST("/operations/reconcile/scan", s.startReconcileScan)
+			protected.GET("/operations/reconcile/scan/latest", s.latestReconcileScan)
 			protected.GET("/operations/:id/changes", s.getOperationChanges)
 			protected.POST("/operations/:id/revert", s.revertOperation)
 
@@ -1265,9 +1319,24 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/cow-versions/prune", s.pruneBookCOWVersions)
 			protected.POST("/audiobooks/:id/write-back", s.writeBackAudiobookMetadata)
 
+			// Rename preview and apply
+			protected.POST("/audiobooks/:id/rename/preview", s.previewRename)
+			protected.POST("/audiobooks/:id/rename/apply", s.applyRename)
+
 			// AI-powered parsing routes
 			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
 			protected.POST("/ai/test-connection", s.testAIConnection)
+
+			// AI Scan Pipeline
+			aiScans := protected.Group("/ai/scans")
+			aiScans.POST("", s.startAIScan)
+			aiScans.GET("", s.listAIScans)
+			aiScans.GET("/compare", s.compareAIScans) // Must be before /:id to avoid conflict
+			aiScans.GET("/:id", s.getAIScan)
+			aiScans.GET("/:id/results", s.getAIScanResults)
+			aiScans.POST("/:id/apply", s.applyAIScanResults)
+			aiScans.POST("/:id/cancel", s.cancelAIScan)
+			aiScans.DELETE("/:id", s.deleteAIScan)
 			protected.POST("/metadata-sources/test", s.testMetadataSource)
 			protected.POST("/audiobooks/:id/parse-with-ai", s.parseAudiobookWithAI)
 
@@ -1290,6 +1359,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/versions", s.listAudiobookVersions)
 			protected.POST("/audiobooks/:id/versions", s.linkAudiobookVersion)
 			protected.PUT("/audiobooks/:id/set-primary", s.setAudiobookPrimary)
+			protected.POST("/audiobooks/:id/split-version", s.splitVersion)
+			protected.POST("/audiobooks/:id/split-to-books", s.splitSegmentsToBooks)
+			protected.POST("/audiobooks/:id/move-segments", s.moveSegments)
 			protected.GET("/version-groups/:id", s.getVersionGroup)
 
 			// Work queue routes (alternative singular form for compatibility)
@@ -1305,6 +1377,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/blocked-hashes", s.listBlockedHashes)
 			protected.POST("/blocked-hashes", s.addBlockedHash)
 			protected.DELETE("/blocked-hashes/:hash", s.removeBlockedHash)
+
+			// Bench routes (only available with -tags bench)
+			s.setupBenchRoutes(protected)
 		}
 	}
 
@@ -1448,6 +1523,354 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 	}
 	s.dedupCache.Set("book-duplicates", resp)
 	c.JSON(http.StatusOK, resp)
+}
+
+// listBookDuplicateScanResults returns cached results from the last async book-dedup scan.
+func (s *Server) listBookDuplicateScanResults(c *gin.Context) {
+	if cached, ok := s.dedupCache.Get("book-dedup-scan"); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "group_count": 0, "duplicate_count": 0, "needs_refresh": true})
+}
+
+// scanBookDuplicates triggers an async scan for book duplicates using metadata matching.
+func (s *Server) scanBookDuplicates(c *gin.Context) {
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	store := database.GlobalStore
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "book-dedup-scan", nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Scanning for duplicate books...")
+
+		// Step 1: Hash-based duplicates (high confidence)
+		_ = progress.UpdateProgress(10, 100, "Finding hash-based duplicates...")
+		hashGroups, err := store.GetDuplicateBooks()
+		if err != nil {
+			return fmt.Errorf("hash-based dedup failed: %w", err)
+		}
+
+		// Step 2: Folder duplicates (same title in same folder)
+		_ = progress.UpdateProgress(30, 100, "Finding folder-based duplicates...")
+		folderGroups, err := store.GetFolderDuplicates()
+		if err != nil {
+			log.Printf("[WARN] folder dedup failed: %v", err)
+			folderGroups = nil
+		}
+
+		// Step 3: Metadata-based fuzzy matching
+		_ = progress.UpdateProgress(50, 100, "Finding metadata-based duplicates...")
+		metadataGroups, err := store.GetDuplicateBooksByMetadata(0.85)
+		if err != nil {
+			log.Printf("[WARN] metadata dedup failed: %v", err)
+			metadataGroups = nil
+		}
+
+		_ = progress.UpdateProgress(80, 100, "Merging results...")
+
+		// Load dismissed groups
+		dismissed := loadDismissedDedupGroups(store)
+
+		// Combine all groups, deduplicating by book ID
+		seenBookIDs := map[string]bool{}
+		type dupGroup struct {
+			Books      []database.Book `json:"books"`
+			Confidence string          `json:"confidence"` // "high", "medium", "low"
+			Reason     string          `json:"reason"`
+			GroupKey   string          `json:"group_key"`
+		}
+		var allGroups []dupGroup
+
+		addGroups := func(groups [][]database.Book, confidence, reason string) {
+			for _, group := range groups {
+				allSeen := true
+				for _, b := range group {
+					if !seenBookIDs[b.ID] {
+						allSeen = false
+						break
+					}
+				}
+				if allSeen {
+					continue
+				}
+				// Generate a stable group key from sorted book IDs
+				ids := make([]string, len(group))
+				for i, b := range group {
+					ids[i] = b.ID
+				}
+				groupKey := strings.Join(ids, "+")
+				if dismissed[groupKey] {
+					continue
+				}
+				allGroups = append(allGroups, dupGroup{
+					Books:      group,
+					Confidence: confidence,
+					Reason:     reason,
+					GroupKey:   groupKey,
+				})
+				for _, b := range group {
+					seenBookIDs[b.ID] = true
+				}
+			}
+		}
+
+		addGroups(hashGroups, "high", "Identical file hash")
+		addGroups(folderGroups, "medium", "Same title in same folder")
+		addGroups(metadataGroups, "low", "Similar title and author")
+
+		totalDuplicates := 0
+		for _, g := range allGroups {
+			totalDuplicates += len(g.Books) - 1
+		}
+
+		result := gin.H{
+			"groups":          allGroups,
+			"group_count":     len(allGroups),
+			"duplicate_count": totalDuplicates,
+		}
+		s.dedupCache.SetWithTTL("book-dedup-scan", result, 30*time.Minute)
+
+		_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (%d duplicates)", len(allGroups), totalDuplicates))
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "book-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// mergeBookDuplicatesAsVersions merges a group of duplicate books into a version group.
+func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
+	var req struct {
+		BookIDs []string `json:"book_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.BookIDs) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "need at least 2 book IDs"})
+		return
+	}
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Fetch all books
+	var books []*database.Book
+	for _, id := range req.BookIDs {
+		book, err := store.GetBookByID(id)
+		if err != nil || book == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("book %s not found", id)})
+			return
+		}
+		books = append(books, book)
+	}
+
+	// Pick the best as primary: M4B preferred, then highest bitrate, then largest file
+	bestIdx := 0
+	for i := 1; i < len(books); i++ {
+		if bookIsBetter(books[i], books[bestIdx]) {
+			bestIdx = i
+		}
+	}
+
+	// Determine version group ID (reuse if any book already has one)
+	versionGroupID := ""
+	for _, b := range books {
+		if b.VersionGroupID != nil && *b.VersionGroupID != "" {
+			versionGroupID = *b.VersionGroupID
+			break
+		}
+	}
+	if versionGroupID == "" {
+		versionGroupID = ulid.Make().String()
+	}
+
+	// Update all books
+	for i, book := range books {
+		book.VersionGroupID = &versionGroupID
+		isPrimary := i == bestIdx
+		book.IsPrimaryVersion = &isPrimary
+		if _, err := store.UpdateBook(book.ID, book); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update book %s: %v", book.ID, err)})
+			return
+		}
+	}
+
+	s.dedupCache.Invalidate("book-dedup-scan")
+	s.dedupCache.Invalidate("book-duplicates")
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          fmt.Sprintf("Merged %d books into version group", len(books)),
+		"version_group_id": versionGroupID,
+		"primary_id":       books[bestIdx].ID,
+	})
+}
+
+// segmentsCommonDir finds the common parent directory of all segment file paths.
+func segmentsCommonDir(segments []database.BookSegment) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	common := filepath.Dir(segments[0].FilePath)
+	for _, seg := range segments[1:] {
+		segDir := filepath.Dir(seg.FilePath)
+		for common != segDir && !strings.HasPrefix(segDir, common+string(filepath.Separator)) {
+			common = filepath.Dir(common)
+			if common == "/" || common == "." {
+				return common
+			}
+		}
+	}
+	return common
+}
+
+// isProtectedPath returns true if the given file path is under an import path
+// or the iTunes library folder. Files in protected paths must NEVER be moved,
+// renamed, or deleted — only hardlinked or copied to the organized library.
+func isProtectedPath(filePath string) bool {
+	absPath, _ := filepath.Abs(filePath)
+
+	// Check import paths
+	if database.GlobalStore != nil {
+		importPaths, err := database.GlobalStore.GetAllImportPaths()
+		if err == nil {
+			for _, ip := range importPaths {
+				ipAbs, _ := filepath.Abs(ip.Path)
+				if strings.HasPrefix(absPath, ipAbs+"/") || absPath == ipAbs {
+					return true
+				}
+			}
+		}
+	}
+
+	// Check iTunes library paths
+	if config.AppConfig.ITunesLibraryXMLPath != "" {
+		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryXMLPath)
+		itunesAbs, _ := filepath.Abs(itunesDir)
+		if strings.HasPrefix(absPath, itunesAbs+"/") || absPath == itunesAbs {
+			return true
+		}
+	}
+	if config.AppConfig.ITunesLibraryITLPath != "" {
+		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryITLPath)
+		itunesAbs, _ := filepath.Abs(itunesDir)
+		if strings.HasPrefix(absPath, itunesAbs+"/") || absPath == itunesAbs {
+			return true
+		}
+	}
+
+	// Also check if path contains "iTunes Media" as a safety net
+	if strings.Contains(absPath, "iTunes Media") || strings.Contains(absPath, "iTunes%20Media") {
+		return true
+	}
+
+	return false
+}
+
+// bookIsBetter returns true if a is a "better" primary version than b.
+// Preference: M4B > other formats, higher bitrate, larger file.
+func bookIsBetter(a, b *database.Book) bool {
+	aM4B := strings.EqualFold(a.Format, "m4b")
+	bM4B := strings.EqualFold(b.Format, "m4b")
+	if aM4B != bM4B {
+		return aM4B
+	}
+	aBitrate := 0
+	if a.Bitrate != nil {
+		aBitrate = *a.Bitrate
+	}
+	bBitrate := 0
+	if b.Bitrate != nil {
+		bBitrate = *b.Bitrate
+	}
+	if aBitrate != bBitrate {
+		return aBitrate > bBitrate
+	}
+	aSize := int64(0)
+	if a.FileSize != nil {
+		aSize = *a.FileSize
+	}
+	bSize := int64(0)
+	if b.FileSize != nil {
+		bSize = *b.FileSize
+	}
+	return aSize > bSize
+}
+
+// dismissBookDuplicateGroup marks a book duplicate group as not-duplicates.
+func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
+	var req struct {
+		GroupKey string `json:"group_key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Load existing dismissed groups
+	dismissed := loadDismissedDedupGroups(store)
+	dismissed[req.GroupKey] = true
+	saveDismissedDedupGroups(store, dismissed)
+
+	s.dedupCache.Invalidate("book-dedup-scan")
+
+	c.JSON(http.StatusOK, gin.H{"message": "Group dismissed"})
+}
+
+// loadDismissedDedupGroups loads the set of dismissed dedup group keys from user preferences.
+func loadDismissedDedupGroups(store database.Store) map[string]bool {
+	dismissed := map[string]bool{}
+	pref, err := store.GetUserPreference("dedup_dismissed_groups")
+	if err != nil || pref == nil || pref.Value == nil || *pref.Value == "" {
+		return dismissed
+	}
+	var keys []string
+	if err := json.Unmarshal([]byte(*pref.Value), &keys); err != nil {
+		return dismissed
+	}
+	for _, k := range keys {
+		dismissed[k] = true
+	}
+	return dismissed
+}
+
+// saveDismissedDedupGroups saves the set of dismissed dedup group keys to user preferences.
+func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
+	keys := make([]string, 0, len(dismissed))
+	for k := range dismissed {
+		keys = append(keys, k)
+	}
+	data, err := json.Marshal(keys)
+	if err != nil {
+		log.Printf("[WARN] failed to marshal dismissed dedup groups: %v", err)
+		return
+	}
+	if err := store.SetUserPreference("dedup_dismissed_groups", string(data)); err != nil {
+		log.Printf("[WARN] failed to save dismissed dedup groups: %v", err)
+	}
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
@@ -2158,6 +2581,107 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
 }
 
+// undoLastApply reverts all fields changed in the most recent metadata apply for a book.
+func (s *Server) undoLastApply(c *gin.Context) {
+	id := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Get recent history for this book (enough to find the last apply batch)
+	history, err := database.GlobalStore.GetBookChangeHistory(id, 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(history) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no change history found"})
+		return
+	}
+
+	// Find the most recent non-undo change timestamp to identify the batch
+	var batchTime time.Time
+	for _, rec := range history {
+		if rec.ChangeType != "undo" {
+			batchTime = rec.ChangedAt
+			break
+		}
+	}
+	if batchTime.IsZero() {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no changes to undo"})
+		return
+	}
+
+	// Collect all changes from this batch (within 2 seconds of each other)
+	var batchRecords []*database.MetadataChangeRecord
+	for i := range history {
+		rec := &history[i]
+		if rec.ChangeType == "undo" {
+			continue
+		}
+		diff := batchTime.Sub(rec.ChangedAt)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= 2*time.Second {
+			batchRecords = append(batchRecords, rec)
+		}
+	}
+
+	if len(batchRecords) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no changes to undo"})
+		return
+	}
+
+	// Undo each field in the batch
+	undoneFields := []string{}
+	for _, rec := range batchRecords {
+		if rec.PreviousValue != nil {
+			var prevValue any
+			if jsonErr := json.Unmarshal([]byte(*rec.PreviousValue), &prevValue); jsonErr != nil {
+				prevValue = *rec.PreviousValue
+			}
+			if setErr := s.metadataStateService.SetOverride(id, rec.Field, prevValue, false); setErr != nil {
+				log.Printf("[WARN] undo-last-apply: failed to revert %s for %s: %v", rec.Field, id, setErr)
+				continue
+			}
+		} else {
+			if clrErr := s.metadataStateService.ClearOverride(id, rec.Field); clrErr != nil {
+				if !strings.Contains(clrErr.Error(), "not found") {
+					log.Printf("[WARN] undo-last-apply: failed to clear %s for %s: %v", rec.Field, id, clrErr)
+					continue
+				}
+			}
+		}
+		undoneFields = append(undoneFields, rec.Field)
+
+		// Record the undo
+		undoRec := &database.MetadataChangeRecord{
+			BookID:        id,
+			Field:         rec.Field,
+			PreviousValue: rec.NewValue,
+			NewValue:      rec.PreviousValue,
+			ChangeType:    "undo",
+			Source:        "bulk-search-undo",
+			ChangedAt:     time.Now(),
+		}
+		if recErr := database.GlobalStore.RecordMetadataChange(undoRec); recErr != nil {
+			log.Printf("[WARN] undo-last-apply: failed to record undo for %s/%s: %v", id, rec.Field, recErr)
+		}
+	}
+
+	// Re-write tags to files if write-back is enabled, restoring original values
+	if len(undoneFields) > 0 && GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       fmt.Sprintf("Undid %d field(s)", len(undoneFields)),
+		"undone_fields": undoneFields,
+	})
+}
+
 func (s *Server) getAudiobookTags(c *gin.Context) {
 	id := c.Param("id")
 	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id)
@@ -2314,13 +2838,17 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			}
 		}
 		if len(tagMap) > 0 {
-			opConfig := fileops.OperationConfig{VerifyChecksums: true}
-			if writeErr := metadata.WriteMetadataToFile(updatedBook.FilePath, tagMap, opConfig); writeErr != nil {
-				log.Printf("[WARN] write-back failed for %s: %v", updatedBook.FilePath, writeErr)
+			if isProtectedPath(updatedBook.FilePath) {
+				log.Printf("[INFO] skipping write-back for protected path: %s", updatedBook.FilePath)
 			} else {
-				// Stamp last_written_at after successful write-back.
-				if stampErr := database.GlobalStore.SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
-					log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", updatedBook.ID, stampErr)
+				opConfig := fileops.OperationConfig{VerifyChecksums: true}
+				if writeErr := metadata.WriteMetadataToFile(updatedBook.FilePath, tagMap, opConfig); writeErr != nil {
+					log.Printf("[WARN] write-back failed for %s: %v", updatedBook.FilePath, writeErr)
+				} else {
+					// Stamp last_written_at after successful write-back.
+					if stampErr := database.GlobalStore.SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
+						log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", updatedBook.ID, stampErr)
+					}
 				}
 			}
 		}
@@ -2467,7 +2995,7 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 }
 
 func (s *Server) listAuthors(c *gin.Context) {
-	resp, err := s.authorSeriesService.ListAuthors()
+	resp, err := s.authorSeriesService.ListAuthorsWithCounts()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -2532,10 +3060,13 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 
 		groups := FindDuplicateAuthors(authors, 0.9, bookCountFn, progressFn)
 
+		// Filter out groups already reviewed by AI scans
+		groups = s.filterReviewedAuthorGroups(groups)
+
 		result := gin.H{"groups": groups, "count": len(groups)}
 		s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 
-		_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups", len(groups)))
+		_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
 		return nil
 	}
 
@@ -2545,6 +3076,58 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, op)
+}
+
+// filterReviewedAuthorGroups removes author dedup groups where all author IDs
+// have already been reviewed via AI scans (applied results with skip/split/merge).
+func (s *Server) filterReviewedAuthorGroups(groups []AuthorDedupGroup) []AuthorDedupGroup {
+	if s.aiScanStore == nil {
+		return groups
+	}
+	applied, err := s.aiScanStore.GetAllAppliedResults()
+	if err != nil || len(applied) == 0 {
+		return groups
+	}
+
+	// Build set of reviewed author ID sets (key = sorted comma-joined IDs)
+	reviewedSets := make(map[string]bool)
+	for _, r := range applied {
+		if len(r.Suggestion.AuthorIDs) < 2 {
+			continue
+		}
+		ids := make([]int, len(r.Suggestion.AuthorIDs))
+		copy(ids, r.Suggestion.AuthorIDs)
+		sort.Ints(ids)
+		parts := make([]string, len(ids))
+		for i, id := range ids {
+			parts[i] = strconv.Itoa(id)
+		}
+		reviewedSets[strings.Join(parts, ",")] = true
+	}
+
+	if len(reviewedSets) == 0 {
+		return groups
+	}
+
+	// Filter: exclude groups whose author IDs match a reviewed set
+	filtered := make([]AuthorDedupGroup, 0, len(groups))
+	for _, g := range groups {
+		ids := make([]int, 0, 1+len(g.Variants))
+		ids = append(ids, g.Canonical.ID)
+		for _, v := range g.Variants {
+			ids = append(ids, v.ID)
+		}
+		sort.Ints(ids)
+		parts := make([]string, len(ids))
+		for i, id := range ids {
+			parts[i] = strconv.Itoa(id)
+		}
+		key := strings.Join(parts, ",")
+		if !reviewedSets[key] {
+			filtered = append(filtered, g)
+		}
+	}
+	return filtered
 }
 
 func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
@@ -2965,6 +3548,12 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 				continue
 			}
 
+			mergeAuthor, _ := store.GetAuthorByID(mergeID)
+			mergeAuthorName := ""
+			if mergeAuthor != nil {
+				mergeAuthorName = mergeAuthor.Name
+			}
+
 			for _, book := range books {
 				bookAuthors, err := store.GetBookAuthors(book.ID)
 				if err != nil {
@@ -2991,12 +3580,32 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 				}
 				if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
 					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to update book %s: %v", book.ID, err))
+				} else {
+					_ = store.CreateOperationChange(&database.OperationChange{
+						ID:          ulid.Make().String(),
+						OperationID: opID,
+						BookID:      book.ID,
+						ChangeType:  "author_reassign",
+						FieldName:   "book_authors",
+						OldValue:    fmt.Sprintf("author_id:%d (%s)", mergeID, mergeAuthorName),
+						NewValue:    fmt.Sprintf("author_id:%d (%s)", keepID, keepName),
+					})
 				}
 			}
 
 			if err := store.DeleteAuthor(mergeID); err != nil {
 				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete author %d: %v", mergeID, err))
 			} else {
+				_ = store.CreateAuthorTombstone(mergeID, keepID)
+				_ = store.CreateOperationChange(&database.OperationChange{
+					ID:          ulid.Make().String(),
+					OperationID: opID,
+					BookID:      "",
+					ChangeType:  "author_delete",
+					FieldName:   "author",
+					OldValue:    fmt.Sprintf("%d:%s", mergeID, mergeAuthorName),
+					NewValue:    fmt.Sprintf("merged_into:%d:%s", keepID, keepName),
+				})
 				merged++
 			}
 
@@ -3121,16 +3730,45 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 			}
 
 			for _, book := range books {
+				oldSeriesID := ""
+				if book.SeriesID != nil {
+					oldSeriesID = fmt.Sprintf("%d", *book.SeriesID)
+				}
 				book.SeriesID = &keepID
 				if _, err := store.UpdateBook(book.ID, &book); err != nil {
 					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to reassign book %s: %v", book.ID, err))
+				} else {
+					_ = store.CreateOperationChange(&database.OperationChange{
+						ID:          ulid.Make().String(),
+						OperationID: opID,
+						BookID:      book.ID,
+						ChangeType:  "metadata_update",
+						FieldName:   "series_id",
+						OldValue:    oldSeriesID,
+						NewValue:    fmt.Sprintf("%d", keepID),
+					})
 				}
 			}
 
+			// Record the series deletion
+			mergeSeries, _ := store.GetSeriesByID(mergeID)
+			mergeSeriesName := ""
+			if mergeSeries != nil {
+				mergeSeriesName = mergeSeries.Name
+			}
 			if err := store.DeleteSeries(mergeID); err != nil {
 				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete series %d: %v", mergeID, err))
 			} else {
 				merged++
+				_ = store.CreateOperationChange(&database.OperationChange{
+					ID:          ulid.Make().String(),
+					OperationID: opID,
+					BookID:      "",
+					ChangeType:  "series_delete",
+					FieldName:   "series",
+					OldValue:    fmt.Sprintf("%d:%s", mergeID, mergeSeriesName),
+					NewValue:    fmt.Sprintf("merged_into:%d", keepID),
+				})
 			}
 
 			_ = progress.UpdateProgress(i+1, len(mergeIDs),
@@ -3149,14 +3787,26 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 						existingMap[ba.AuthorID] = true
 					}
 					authors := existing
+					var addedAuthors []int
 					for aid := range allAuthorIDs {
 						if !existingMap[aid] {
 							authors = append(authors, database.BookAuthor{BookID: book.ID, AuthorID: aid})
+							addedAuthors = append(addedAuthors, aid)
 						}
 					}
 					if len(authors) > len(existing) {
 						if err := store.SetBookAuthors(book.ID, authors); err != nil {
 							mergeErrors = append(mergeErrors, fmt.Sprintf("failed to set authors for book %s: %v", book.ID, err))
+						} else {
+							_ = store.CreateOperationChange(&database.OperationChange{
+								ID:          ulid.Make().String(),
+								OperationID: opID,
+								BookID:      book.ID,
+								ChangeType:  "author_link",
+								FieldName:   "book_authors",
+								OldValue:    fmt.Sprintf("%d authors", len(existing)),
+								NewValue:    fmt.Sprintf("%d authors (added %v)", len(authors), addedAuthors),
+							})
 						}
 					}
 				}
@@ -3267,6 +3917,15 @@ func (s *Server) mergeBooks(c *gin.Context) {
 			if err := store.DeleteBook(mergeID); err != nil {
 				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete book %s: %v", mergeID, err))
 			} else {
+				_ = store.CreateOperationChange(&database.OperationChange{
+					ID:          ulid.Make().String(),
+					OperationID: opID,
+					BookID:      mergeID,
+					ChangeType:  "book_delete",
+					FieldName:   "book",
+					OldValue:    fmt.Sprintf("%s (%s)", mergeBook.Title, mergeBook.FilePath),
+					NewValue:    fmt.Sprintf("merged_into:%s", keepID),
+				})
 				merged++
 			}
 
@@ -3698,6 +4357,335 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	c.JSON(http.StatusAccepted, op)
 }
 
+// seriesPruneResult holds the result of a series prune operation.
+type seriesPruneResult struct {
+	DuplicatesMerged int `json:"duplicates_merged"`
+	OrphansDeleted   int `json:"orphans_deleted"`
+	TotalCleaned     int `json:"total_cleaned"`
+}
+
+// seriesPrunePreviewGroup describes a duplicate group or orphan for the preview endpoint.
+type seriesPrunePreviewGroup struct {
+	Name       string   `json:"name"`
+	CanonicalID int    `json:"canonical_id"`
+	MergeIDs   []int   `json:"merge_ids"`
+	BookCount  int     `json:"book_count"`
+	Type       string  `json:"type"` // "duplicate" or "orphan"
+}
+
+// seriesPrunePreviewResult holds the dry-run result.
+type seriesPrunePreviewResult struct {
+	Groups         []seriesPrunePreviewGroup `json:"groups"`
+	DuplicateCount int                       `json:"duplicate_count"`
+	OrphanCount    int                       `json:"orphan_count"`
+	TotalCount     int                       `json:"total_count"`
+}
+
+// computeSeriesPrunePreview builds the preview of what a series prune would do.
+func computeSeriesPrunePreview(store database.Store) (*seriesPrunePreviewResult, error) {
+	allSeries, err := store.GetAllSeries()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get series: %w", err)
+	}
+
+	// Group by LOWER(TRIM(name)) + author_id
+	type groupKey struct {
+		name     string
+		authorID int // 0 means nil
+	}
+	groups := make(map[groupKey][]database.Series)
+	for _, s := range allSeries {
+		aid := 0
+		if s.AuthorID != nil {
+			aid = *s.AuthorID
+		}
+		key := groupKey{name: strings.ToLower(strings.TrimSpace(s.Name)), authorID: aid}
+		groups[key] = append(groups[key], s)
+	}
+
+	result := &seriesPrunePreviewResult{}
+
+	// Find duplicate groups (>1 entry with same normalized name + author_id)
+	for _, group := range groups {
+		if len(group) < 2 {
+			continue
+		}
+
+		// Pick canonical: most books attached, then lowest ID
+		canonicalIdx := 0
+		canonicalBookCount := 0
+		for i, s := range group {
+			books, err := store.GetBooksBySeriesID(s.ID)
+			if err != nil {
+				continue
+			}
+			bc := len(books)
+			if bc > canonicalBookCount || (bc == canonicalBookCount && s.ID < group[canonicalIdx].ID) {
+				canonicalIdx = i
+				canonicalBookCount = bc
+			}
+		}
+
+		var mergeIDs []int
+		totalBooks := 0
+		for i, s := range group {
+			if i == canonicalIdx {
+				continue
+			}
+			mergeIDs = append(mergeIDs, s.ID)
+			books, _ := store.GetBooksBySeriesID(s.ID)
+			totalBooks += len(books)
+		}
+		books, _ := store.GetBooksBySeriesID(group[canonicalIdx].ID)
+		totalBooks += len(books)
+
+		result.Groups = append(result.Groups, seriesPrunePreviewGroup{
+			Name:        group[canonicalIdx].Name,
+			CanonicalID: group[canonicalIdx].ID,
+			MergeIDs:    mergeIDs,
+			BookCount:   totalBooks,
+			Type:        "duplicate",
+		})
+		result.DuplicateCount += len(mergeIDs)
+	}
+
+	// Find orphan series with 0 books
+	for _, s := range allSeries {
+		books, err := store.GetBooksBySeriesID(s.ID)
+		if err != nil {
+			continue
+		}
+		if len(books) == 0 {
+			result.Groups = append(result.Groups, seriesPrunePreviewGroup{
+				Name:        s.Name,
+				CanonicalID: s.ID,
+				MergeIDs:    nil,
+				BookCount:   0,
+				Type:        "orphan",
+			})
+			result.OrphanCount++
+		}
+	}
+
+	result.TotalCount = result.DuplicateCount + result.OrphanCount
+	return result, nil
+}
+
+func (s *Server) seriesPrunePreview(c *gin.Context) {
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	preview, err := computeSeriesPrunePreview(store)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, preview)
+}
+
+func (s *Server) seriesPrune(c *gin.Context) {
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	opID := ulid.Make().String()
+	detail := "series-prune"
+	op, err := store.CreateOperation(opID, "series-prune", &detail)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return s.executeSeriesPrune(ctx, store, progress, op.ID)
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "series-prune", operations.PriorityNormal, operationFunc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// executeSeriesPrune performs the actual series prune logic (used by both HTTP handler and scheduler).
+func (s *Server) executeSeriesPrune(ctx context.Context, store database.Store, progress operations.ProgressReporter, operationID string) error {
+	_ = progress.Log("info", "Starting series auto-prune...", nil)
+
+	allSeries, err := store.GetAllSeries()
+	if err != nil {
+		return fmt.Errorf("failed to get series: %w", err)
+	}
+
+	_ = progress.UpdateProgress(0, len(allSeries), fmt.Sprintf("Scanning %d series...", len(allSeries)))
+
+	// Group by LOWER(TRIM(name)) + author_id
+	type groupKey struct {
+		name     string
+		authorID int
+	}
+	groups := make(map[groupKey][]database.Series)
+	for _, s := range allSeries {
+		aid := 0
+		if s.AuthorID != nil {
+			aid = *s.AuthorID
+		}
+		key := groupKey{name: strings.ToLower(strings.TrimSpace(s.Name)), authorID: aid}
+		groups[key] = append(groups[key], s)
+	}
+
+	// Phase 1: Merge duplicates
+	totalMerged := 0
+	var mergeErrors []string
+	dupGroupCount := 0
+
+	for _, group := range groups {
+		if len(group) < 2 {
+			continue
+		}
+		dupGroupCount++
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Pick canonical: most books, then lowest ID
+		canonicalIdx := 0
+		canonicalBookCount := 0
+		for i, s := range group {
+			books, err := store.GetBooksBySeriesID(s.ID)
+			if err != nil {
+				continue
+			}
+			bc := len(books)
+			if bc > canonicalBookCount || (bc == canonicalBookCount && s.ID < group[canonicalIdx].ID) {
+				canonicalIdx = i
+				canonicalBookCount = bc
+			}
+		}
+		keepID := group[canonicalIdx].ID
+
+		for i, ser := range group {
+			if i == canonicalIdx {
+				continue
+			}
+			books, err := store.GetBooksBySeriesID(ser.ID)
+			if err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to get books for series %d: %v", ser.ID, err))
+				continue
+			}
+			for _, book := range books {
+				oldSeriesID := ser.ID
+				book.SeriesID = &keepID
+				if _, err := store.UpdateBook(book.ID, &book); err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to reassign book %s: %v", book.ID, err))
+				} else if operationID != "" {
+					_ = store.CreateOperationChange(&database.OperationChange{
+						ID:          ulid.Make().String(),
+						OperationID: operationID,
+						BookID:      book.ID,
+						ChangeType:  "series_merge",
+						FieldName:   "series_id",
+						OldValue:    fmt.Sprintf("%d (%s)", oldSeriesID, ser.Name),
+						NewValue:    fmt.Sprintf("%d (%s)", keepID, group[canonicalIdx].Name),
+					})
+				}
+			}
+			if err := store.DeleteSeries(ser.ID); err != nil {
+				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete series %d: %v", ser.ID, err))
+			} else {
+				totalMerged++
+				if operationID != "" {
+					_ = store.CreateOperationChange(&database.OperationChange{
+						ID:          ulid.Make().String(),
+						OperationID: operationID,
+						ChangeType:  "series_delete",
+						FieldName:   "series",
+						OldValue:    fmt.Sprintf("%d: %s", ser.ID, ser.Name),
+						NewValue:    fmt.Sprintf("merged into %d: %s", keepID, group[canonicalIdx].Name),
+					})
+				}
+			}
+		}
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("Phase 1 complete: merged %d duplicate series from %d groups", totalMerged, dupGroupCount), nil)
+	_ = progress.UpdateProgress(50, 100, "Scanning for orphan series...")
+
+	// Phase 2: Delete orphan series (0 books)
+	orphansDeleted := 0
+	// Re-fetch series to account for merges
+	refreshedSeries, err := store.GetAllSeries()
+	if err != nil {
+		_ = progress.Log("warn", fmt.Sprintf("Failed to refresh series list: %v", err), nil)
+	} else {
+		for _, ser := range refreshedSeries {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			books, err := store.GetBooksBySeriesID(ser.ID)
+			if err != nil {
+				continue
+			}
+			if len(books) == 0 {
+				if err := store.DeleteSeries(ser.ID); err != nil {
+					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete orphan series %d: %v", ser.ID, err))
+				} else {
+					orphansDeleted++
+					if operationID != "" {
+						_ = store.CreateOperationChange(&database.OperationChange{
+							ID:          ulid.Make().String(),
+							OperationID: operationID,
+							ChangeType:  "series_delete",
+							FieldName:   "orphan_series",
+							OldValue:    fmt.Sprintf("%d: %s", ser.ID, ser.Name),
+							NewValue:    "deleted (0 books)",
+						})
+					}
+				}
+			}
+		}
+	}
+
+	totalCleaned := totalMerged + orphansDeleted
+	resultMsg := fmt.Sprintf("Series prune complete: %d duplicates merged, %d orphans deleted (%d total cleaned, %d errors)",
+		totalMerged, orphansDeleted, totalCleaned, len(mergeErrors))
+	_ = progress.Log("info", resultMsg, nil)
+
+	// Record summary change
+	if operationID != "" {
+		_ = store.CreateOperationChange(&database.OperationChange{
+			ID:          ulid.Make().String(),
+			OperationID: operationID,
+			ChangeType:  "series_prune_summary",
+			FieldName:   "summary",
+			OldValue:    fmt.Sprintf("%d total series scanned", len(allSeries)),
+			NewValue:    resultMsg,
+		})
+	}
+	if len(mergeErrors) > 0 {
+		errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
+		_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
+	}
+	_ = progress.UpdateProgress(100, 100, resultMsg)
+
+	if s.dedupCache != nil {
+		s.dedupCache.InvalidateAll()
+	}
+
+	return nil
+}
+
 func (s *Server) listNarrators(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -3769,12 +4757,249 @@ func (s *Server) countSeries(c *gin.Context) {
 }
 
 func (s *Server) listSeries(c *gin.Context) {
-	resp, err := s.authorSeriesService.ListSeries()
+	resp, err := s.authorSeriesService.ListSeriesWithCounts()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) getSeriesBooks(c *gin.Context) {
+	seriesID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
+		return
+	}
+	store := database.GlobalStore
+	books, err := store.GetBooksBySeriesID(seriesID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	enriched := make([]enrichedBookResponse, len(books))
+	for i := range books {
+		enriched[i] = enrichBookForResponse(&books[i])
+	}
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched)})
+}
+
+func (s *Server) renameSeriesHandler(c *gin.Context) {
+	seriesID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || seriesID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
+		return
+	}
+	var req struct {
+		Name string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name must not be empty"})
+		return
+	}
+	store := database.GlobalStore
+	if err := store.UpdateSeriesName(seriesID, name); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if s.dedupCache != nil {
+		s.dedupCache.Invalidate("series-duplicates")
+	}
+	series, _ := store.GetSeriesByID(seriesID)
+	c.JSON(http.StatusOK, series)
+}
+
+func (s *Server) splitSeriesHandler(c *gin.Context) {
+	seriesID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || seriesID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
+		return
+	}
+	var req struct {
+		BookIDs []string `json:"book_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.BookIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must not be empty"})
+		return
+	}
+	store := database.GlobalStore
+	oldSeries, err := store.GetSeriesByID(seriesID)
+	if err != nil || oldSeries == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "series not found"})
+		return
+	}
+	newSeries, err := store.CreateSeries(oldSeries.Name+" (Split)", oldSeries.AuthorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create new series: %v", err)})
+		return
+	}
+	moved := 0
+	for _, bookID := range req.BookIDs {
+		book, err := store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			continue
+		}
+		if book.SeriesID == nil || *book.SeriesID != seriesID {
+			continue
+		}
+		book.SeriesID = &newSeries.ID
+		if _, err := store.UpdateBook(book.ID, book); err != nil {
+			continue
+		}
+		moved++
+	}
+	if s.dedupCache != nil {
+		s.dedupCache.Invalidate("series-duplicates")
+	}
+	c.JSON(http.StatusOK, gin.H{"new_series": newSeries, "books_moved": moved})
+}
+
+func (s *Server) deleteEmptySeries(c *gin.Context) {
+	seriesID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || seriesID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
+		return
+	}
+	store := database.GlobalStore
+	books, err := store.GetBooksBySeriesID(seriesID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(books) > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "cannot delete series with books"})
+		return
+	}
+	if err := store.DeleteSeries(seriesID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "series deleted"})
+}
+
+func (s *Server) getAuthorBooks(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+	store := database.GlobalStore
+	books, err := store.GetBooksByAuthorID(authorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	enriched := make([]enrichedBookResponse, len(books))
+	for i := range books {
+		enriched[i] = enrichBookForResponse(&books[i])
+	}
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched)})
+}
+
+func (s *Server) deleteAuthorHandler(c *gin.Context) {
+	authorID, err := strconv.Atoi(c.Param("id"))
+	if err != nil || authorID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
+		return
+	}
+	store := database.GlobalStore
+	books, err := store.GetBooksByAuthorID(authorID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if len(books) > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "cannot delete author with books"})
+		return
+	}
+	if err := store.DeleteAuthor(authorID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "author deleted"})
+}
+
+// bulkDeleteAuthors deletes multiple zero-book authors at once.
+func (s *Server) bulkDeleteAuthors(c *gin.Context) {
+	var req struct {
+		IDs []int `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	store := database.GlobalStore
+	deleted := 0
+	skipped := 0
+	var errors []string
+	for _, id := range req.IDs {
+		books, err := store.GetBooksByAuthorID(id)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("author %d: %v", id, err))
+			continue
+		}
+		if len(books) > 0 {
+			skipped++
+			continue
+		}
+		if err := store.DeleteAuthor(id); err != nil {
+			errors = append(errors, fmt.Sprintf("author %d: %v", id, err))
+			continue
+		}
+		deleted++
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"deleted": deleted,
+		"skipped": skipped,
+		"errors":  errors,
+		"total":   len(req.IDs),
+	})
+}
+
+// bulkDeleteSeries deletes multiple empty series at once.
+func (s *Server) bulkDeleteSeries(c *gin.Context) {
+	var req struct {
+		IDs []int `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	store := database.GlobalStore
+	deleted := 0
+	skipped := 0
+	var errors []string
+	for _, id := range req.IDs {
+		books, err := store.GetBooksBySeriesID(id)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("series %d: %v", id, err))
+			continue
+		}
+		if len(books) > 0 {
+			skipped++
+			continue
+		}
+		if err := store.DeleteSeries(id); err != nil {
+			errors = append(errors, fmt.Sprintf("series %d: %v", id, err))
+			continue
+		}
+		deleted++
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"deleted": deleted,
+		"skipped": skipped,
+		"errors":  errors,
+		"total":   len(req.IDs),
+	})
 }
 
 // getHomeDirectory returns the server user's home directory path.
@@ -4080,8 +5305,10 @@ func (s *Server) startOrganize(c *gin.Context) {
 	}
 
 	var req struct {
-		FolderPath *string `json:"folder_path"`
-		Priority   *int    `json:"priority"`
+		FolderPath         *string `json:"folder_path"`
+		Priority           *int    `json:"priority"`
+		FetchMetadataFirst bool    `json:"fetch_metadata_first"`
+		SyncITunesFirst    bool    `json:"sync_itunes_first"`
 	}
 	_ = c.ShouldBindJSON(&req)
 
@@ -4100,9 +5327,11 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 	// Create operation function that delegates to service
 	organizeReq := &OrganizeRequest{
-		FolderPath:  req.FolderPath,
-		Priority:    req.Priority,
-		OperationID: op.ID,
+		FolderPath:         req.FolderPath,
+		Priority:           req.Priority,
+		FetchMetadataFirst: req.FetchMetadataFirst,
+		SyncITunesFirst:    req.SyncITunesFirst,
+		OperationID:        op.ID,
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -4277,25 +5506,35 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
-		return
-	}
 
 	id := c.Param("id")
 
-	// Try cancel via queue first (for running operations)
-	if err := operations.GlobalQueue.Cancel(id); err != nil {
-		// Queue doesn't know about it (e.g., stale after restart) — force-update DB
-		if database.GlobalStore != nil {
-			if dbErr := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": dbErr.Error()})
+	// Check if this is an AI scan operation — cancel via pipeline manager
+	if s.pipelineManager != nil && s.aiScanStore != nil {
+		scans, _ := s.aiScanStore.ListScans()
+		for _, scan := range scans {
+			if scan.OperationID == id {
+				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
+					log.Printf("[cancelOperation] AI scan %d cancel warning: %v", scan.ID, err)
+				}
+				c.Status(http.StatusNoContent)
 				return
 			}
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+	}
+
+	// Try cancel via queue (for running queue operations)
+	if operations.GlobalQueue != nil {
+		if err := operations.GlobalQueue.Cancel(id); err == nil {
+			c.Status(http.StatusNoContent)
 			return
 		}
+	}
+
+	// Fallback: force-update DB status (e.g., stale after restart)
+	if dbErr := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": dbErr.Error()})
+		return
 	}
 	c.Status(http.StatusNoContent)
 }
@@ -4581,13 +5820,13 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 			}
 			return len(books)
 		}
-		groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
+		groups := s.filterReviewedAuthorGroups(FindDuplicateAuthors(authors, 0.9, bookCountFn))
 		if len(groups) > 0 {
 			announcements = append(announcements, Announcement{
 				ID:       "duplicate-authors",
 				Severity: "warning",
 				Message:  fmt.Sprintf("You have %d group(s) of duplicate authors to review", len(groups)),
-				Link:     "/authors/dedup",
+				Link:     "/dedup?tab=authors",
 			})
 		}
 	}
@@ -5109,6 +6348,22 @@ func (s *Server) searchMetadata(c *gin.Context) {
 func stripChapterFromTitle(title string) string {
 	cleaned := title
 
+	// Strip leading track/disc number prefixes from filenames
+	// e.g. "01 - Title", "01. Title", "1 - Title", "123 - Title"
+	trackNumPrefix := regexp.MustCompile(`^\d{1,3}\s*[-–.]\s*`)
+	cleaned = trackNumPrefix.ReplaceAllString(cleaned, "")
+	// e.g. "01 Title" (bare number prefix followed by non-numeric text)
+	bareNumPrefix := regexp.MustCompile(`^\d{1,3}\s+`)
+	if stripped := strings.TrimSpace(bareNumPrefix.ReplaceAllString(cleaned, "")); stripped != "" {
+		cleaned = stripped
+	}
+	// e.g. "Track 01 - Title", "Track01 - Title"
+	trackWordPrefix := regexp.MustCompile(`(?i)^[Tt]rack\s*\d+\s*[-–.]\s*`)
+	cleaned = trackWordPrefix.ReplaceAllString(cleaned, "")
+	// e.g. "Disc 1 - Title", "Disc01 - Title"
+	discWordPrefix := regexp.MustCompile(`(?i)^[Dd]is[ck]\s*\d+\s*[-–.]\s*`)
+	cleaned = discWordPrefix.ReplaceAllString(cleaned, "")
+
 	// Strip leading bracketed series info like "[The Expanse 9.0]" or "[Series Name]"
 	bracketPrefix := regexp.MustCompile(`^\[.*?\]\s*`)
 	cleaned = bracketPrefix.ReplaceAllString(cleaned, "")
@@ -5135,8 +6390,13 @@ func stripChapterFromTitle(title string) string {
 
 	// Strip trailing " - " artifacts from removals
 	cleaned = strings.TrimRight(cleaned, " -")
+	cleaned = strings.TrimSpace(cleaned)
 
-	return strings.TrimSpace(cleaned)
+	// If stripping removed everything, return the original title
+	if cleaned == "" {
+		return strings.TrimSpace(title)
+	}
+	return cleaned
 }
 
 // stripSubtitle removes subtitle portions from a title, e.g.
@@ -5198,10 +6458,13 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Query string `json:"query"`
+		Query    string `json:"query"`
+		Author   string `json:"author"`
+		Narrator string `json:"narrator"`
+		Series   string `json:"series"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	resp, err := s.metadataFetchService.SearchMetadataForBook(id, body.Query)
+	resp, err := s.metadataFetchService.SearchMetadataForBook(id, body.Query, body.Author, body.Narrator, body.Series)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -5219,6 +6482,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	var body struct {
 		Candidate MetadataCandidate `json:"candidate"`
 		Fields    []string          `json:"fields"`
+		WriteBack *bool             `json:"write_back"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -5229,7 +6493,9 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if GlobalWriteBackBatcher != nil {
+	// Write back to files: defaults to true if not specified
+	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
+	if shouldWriteBack && GlobalWriteBackBatcher != nil {
 		GlobalWriteBackBatcher.Enqueue(id)
 	}
 	// Re-fetch to get fully enriched book with author/series/narrator names
@@ -5408,8 +6674,8 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 	sourceChain := s.metadataFetchService.BuildSourceChain()
 	if len(sourceChain) == 0 {
-		// Fallback to OpenLibrary if no sources configured
-		sourceChain = []metadata.MetadataSource{metadata.NewOpenLibraryClient()}
+		// Fallback to Audible if no sources configured (best for audiobooks)
+		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
 	}
 	results := make([]bulkFetchMetadataResult, 0, len(req.BookIDs))
 	updatedCount := 0
@@ -5445,28 +6711,54 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			state = map[string]metadataFieldState{}
 		}
 
-		authorName := ""
+		// Resolve current author for post-search verification (NOT for search query)
+		currentAuthor := ""
 		if book.Author != nil {
-			authorName = book.Author.Name
+			currentAuthor = book.Author.Name
 		} else if book.AuthorID != nil {
 			if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
-				authorName = author.Name
+				currentAuthor = author.Name
 			}
 		}
 
+		// Clean title: strip track number prefixes like "01 - ", chapter markers, etc.
+		searchTitle := stripChapterFromTitle(book.Title)
+
+		// Search using both title and author (like the manual search dialog does)
+		// for better match quality. Author is used as a filter, not as the primary query.
 		var metaResults []metadata.BookMetadata
 		var sourceName string
 		for _, src := range sourceChain {
-			if authorName != "" {
-				metaResults, err = src.SearchByTitleAndAuthor(book.Title, authorName)
-			} else {
-				metaResults, err = src.SearchByTitle(book.Title)
+			// If we have an author, try title+author search first for more precise results
+			if currentAuthor != "" {
+				metaResults, err = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				if err == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
 			}
+			// Fall back to title-only search
+			metaResults, err = src.SearchByTitle(searchTitle)
 			if err == nil && len(metaResults) > 0 {
 				sourceName = src.Name()
 				break
 			}
-			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), book.Title)
+			// Try original title if stripped version returned nothing
+			if searchTitle != book.Title {
+				if currentAuthor != "" {
+					metaResults, err = src.SearchByTitleAndAuthor(book.Title, currentAuthor)
+					if err == nil && len(metaResults) > 0 {
+						sourceName = src.Name()
+						break
+					}
+				}
+				metaResults, err = src.SearchByTitle(book.Title)
+				if err == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), searchTitle)
 		}
 		if len(metaResults) == 0 {
 			result.Status = "not_found"
@@ -5474,9 +6766,18 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			results = append(results, result)
 			continue
 		}
-		_ = sourceName
 
+		// Pick best match: prefer result whose author matches current author if known
 		meta := metaResults[0]
+		if currentAuthor != "" && len(metaResults) > 1 {
+			lowerAuthor := strings.ToLower(currentAuthor)
+			for _, r := range metaResults {
+				if strings.EqualFold(r.Author, currentAuthor) || strings.Contains(strings.ToLower(r.Author), lowerAuthor) {
+					meta = r
+					break
+				}
+			}
+		}
 		fetchedValues := map[string]any{}
 		appliedFields := []string{}
 		fetchedFields := []string{}
@@ -5520,7 +6821,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		didUpdate := false
 
-		if meta.Title != "" {
+		if meta.Title != "" && !isGarbageValue(meta.Title) {
 			addFetched("title", meta.Title)
 			if shouldApply("title", hasBookValue("title")) {
 				book.Title = meta.Title
@@ -5529,7 +6830,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Author != "" {
+		if meta.Author != "" && !isGarbageValue(meta.Author) {
 			addFetched("author_name", meta.Author)
 			if shouldApply("author_name", hasBookValue("author_name")) {
 				author, err := database.GlobalStore.GetAuthorByName(meta.Author)
@@ -5554,7 +6855,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Publisher != "" {
+		if meta.Publisher != "" && !isGarbageValue(meta.Publisher) {
 			addFetched("publisher", meta.Publisher)
 			if shouldApply("publisher", hasBookValue("publisher")) {
 				book.Publisher = stringPtr(meta.Publisher)
@@ -5563,7 +6864,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Language != "" {
+		if meta.Language != "" && !isGarbageValue(meta.Language) {
 			addFetched("language", meta.Language)
 			if shouldApply("language", hasBookValue("language")) {
 				book.Language = stringPtr(meta.Language)
@@ -5607,6 +6908,9 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		}
 
 		if didUpdate {
+			// Record change history before applying
+			s.metadataFetchService.recordChangeHistory(book, meta, sourceName)
+
 			if _, err := database.GlobalStore.UpdateBook(bookID, book); err != nil {
 				result.Status = "error"
 				result.Message = fmt.Sprintf("failed to update book: %v", err)
@@ -5628,7 +6932,6 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		"updated_count": updatedCount,
 		"total_count":   len(req.BookIDs),
 		"results":       results,
-		"source":        "Open Library",
 	})
 }
 
@@ -5778,6 +7081,337 @@ func (s *Server) getVersionGroup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"audiobooks": books})
+}
+
+// splitVersion moves selected segments from a book into a new version (a new book
+// in the same version group).
+func (s *Server) splitVersion(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		SegmentIDs []string `json:"segment_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.SegmentIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "segment_ids must not be empty"})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// 1. Get source book
+	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// 2. Ensure source book has a version group
+	versionGroupID := ""
+	if sourceBook.VersionGroupID != nil && *sourceBook.VersionGroupID != "" {
+		versionGroupID = *sourceBook.VersionGroupID
+	} else {
+		versionGroupID = ulid.Make().String()
+		sourceBook.VersionGroupID = &versionGroupID
+		if _, err := database.GlobalStore.UpdateBook(id, sourceBook); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update source book version group"})
+			return
+		}
+	}
+
+	// 3. Count existing versions to determine suffix
+	existingVersions, _ := database.GlobalStore.GetBooksByVersionGroup(versionGroupID)
+	versionNum := len(existingVersions) + 1
+
+	// 4. Create new book entry (copy metadata from source, but NOT FilePath —
+	// the new version's path will be derived from its segments after they're moved)
+	newTitle := fmt.Sprintf("%s (Version %d)", sourceBook.Title, versionNum)
+	primaryFlag := false
+	newBook := &database.Book{
+		Title:            newTitle,
+		AuthorID:         sourceBook.AuthorID,
+		SeriesID:         sourceBook.SeriesID,
+		SeriesSequence:   sourceBook.SeriesSequence,
+		FilePath:         "", // Will be set from segments below
+		Format:           sourceBook.Format,
+		WorkID:           sourceBook.WorkID,
+		Narrator:         sourceBook.Narrator,
+		Language:         sourceBook.Language,
+		Publisher:        sourceBook.Publisher,
+		VersionGroupID:   &versionGroupID,
+		IsPrimaryVersion: &primaryFlag,
+	}
+
+	createdBook, err := database.GlobalStore.CreateBook(newBook)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create new version: %v", err)})
+		return
+	}
+
+	// 5. Move segments to the new book (DB-only, does NOT touch files on disk)
+	targetNumericID := int(crc32.ChecksumIEEE([]byte(createdBook.ID)))
+	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to move segments: %v", err)})
+		return
+	}
+
+	// 6. Derive the new book's FilePath from its segments.
+	// For multi-file books, FilePath is the common parent directory.
+	// For single-file books, FilePath is the file path itself.
+	newSegments, _ := database.GlobalStore.ListBookSegments(targetNumericID)
+	if len(newSegments) > 0 {
+		if len(newSegments) == 1 {
+			createdBook.FilePath = newSegments[0].FilePath
+		} else {
+			// Find common parent directory of all segment file paths
+			createdBook.FilePath = segmentsCommonDir(newSegments)
+		}
+		database.GlobalStore.UpdateBook(createdBook.ID, createdBook)
+	}
+
+	// 7. Also update the source book's FilePath from its remaining segments
+	sourceNumericID := int(crc32.ChecksumIEEE([]byte(sourceBook.ID)))
+	remainingSegments, _ := database.GlobalStore.ListBookSegments(sourceNumericID)
+	if len(remainingSegments) > 0 {
+		if len(remainingSegments) == 1 {
+			sourceBook.FilePath = remainingSegments[0].FilePath
+		} else {
+			sourceBook.FilePath = segmentsCommonDir(remainingSegments)
+		}
+		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"book":             createdBook,
+		"version_group_id": versionGroupID,
+		"segments_moved":   len(req.SegmentIDs),
+	})
+}
+
+// splitSegmentsToBooks splits selected segments out of a multi-file book into
+// independent new books (one per segment), extracting titles from filenames.
+// Unlike splitVersion, the new books are NOT version-linked to the source.
+func (s *Server) splitSegmentsToBooks(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		SegmentIDs []string `json:"segment_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.SegmentIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "segment_ids must not be empty"})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || sourceBook == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// Build a lookup of segment ID → segment
+	sourceNumericID := int(crc32.ChecksumIEEE([]byte(sourceBook.ID)))
+	allSegments, err := database.GlobalStore.ListBookSegments(sourceNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list segments"})
+		return
+	}
+	segMap := make(map[string]database.BookSegment, len(allSegments))
+	for _, seg := range allSegments {
+		segMap[seg.ID] = seg
+	}
+
+	// Create one new book per selected segment
+	var createdBooks []interface{}
+	for _, segID := range req.SegmentIDs {
+		seg, ok := segMap[segID]
+		if !ok {
+			continue
+		}
+
+		// Extract title from segment filename
+		// e.g. "01 ASoIaF 1 - A Game of Thrones.m4b" → "A Game of Thrones"
+		title := extractTitleFromSegmentFilename(filepath.Base(seg.FilePath))
+		if title == "" {
+			title = sourceBook.Title + " (split)"
+		}
+
+		newBook := &database.Book{
+			Title:    title,
+			AuthorID: sourceBook.AuthorID,
+			SeriesID: sourceBook.SeriesID,
+			FilePath: seg.FilePath,
+			Format:   seg.Format,
+			Narrator: sourceBook.Narrator,
+			Language: sourceBook.Language,
+			Publisher: sourceBook.Publisher,
+			Duration: &seg.DurationSec,
+			FileSize: &seg.SizeBytes,
+		}
+
+		created, createErr := database.GlobalStore.CreateBook(newBook)
+		if createErr != nil {
+			log.Printf("[WARN] splitSegmentsToBooks: failed to create book for segment %s: %v", segID, createErr)
+			continue
+		}
+
+		// Copy book_authors from source
+		if authors, aErr := database.GlobalStore.GetBookAuthors(sourceBook.ID); aErr == nil && len(authors) > 0 {
+			var newAuthors []database.BookAuthor
+			for _, ba := range authors {
+				newAuthors = append(newAuthors, database.BookAuthor{
+					BookID:   created.ID,
+					AuthorID: ba.AuthorID,
+					Role:     ba.Role,
+				})
+			}
+			_ = database.GlobalStore.SetBookAuthors(created.ID, newAuthors)
+		}
+
+		// Move the segment to the new book
+		newNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
+		_ = database.GlobalStore.MoveSegmentsToBook([]string{segID}, newNumericID)
+
+		createdBooks = append(createdBooks, created)
+	}
+
+	// Update source book's FilePath from remaining segments
+	remainingSegments, _ := database.GlobalStore.ListBookSegments(sourceNumericID)
+	if len(remainingSegments) > 0 {
+		if len(remainingSegments) == 1 {
+			sourceBook.FilePath = remainingSegments[0].FilePath
+		} else {
+			sourceBook.FilePath = segmentsCommonDir(remainingSegments)
+		}
+		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"created_books": createdBooks,
+		"count":         len(createdBooks),
+	})
+}
+
+// extractTitleFromSegmentFilename tries to extract a meaningful book title
+// from a segment filename like "01 ASoIaF 1 - A Game of Thrones.m4b".
+func extractTitleFromSegmentFilename(filename string) string {
+	// Strip extension
+	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	// Try to find title after " - " separator (common pattern)
+	if idx := strings.Index(name, " - "); idx >= 0 {
+		title := strings.TrimSpace(name[idx+3:])
+		if title != "" {
+			return title
+		}
+	}
+
+	// Try after " – " (em dash)
+	if idx := strings.Index(name, " – "); idx >= 0 {
+		title := strings.TrimSpace(name[idx+len(" – "):])
+		if title != "" {
+			return title
+		}
+	}
+
+	// Strip leading track numbers like "01 ", "01. "
+	stripped := regexp.MustCompile(`^\d{1,3}[\s.\-]+`).ReplaceAllString(name, "")
+	if stripped != "" {
+		return strings.TrimSpace(stripped)
+	}
+
+	return name
+}
+
+// moveSegments moves segments from one book to another within the same version group.
+func (s *Server) moveSegments(c *gin.Context) {
+	id := c.Param("id")
+
+	var req struct {
+		SegmentIDs   []string `json:"segment_ids" binding:"required"`
+		TargetBookID string   `json:"target_book_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.SegmentIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "segment_ids must not be empty"})
+		return
+	}
+
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// 1. Get source and target books
+	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "source audiobook not found"})
+		return
+	}
+
+	targetBook, err := database.GlobalStore.GetBookByID(req.TargetBookID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "target audiobook not found"})
+		return
+	}
+
+	// 2. Verify both books are in the same version group
+	if sourceBook.VersionGroupID == nil || targetBook.VersionGroupID == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "both books must be in a version group"})
+		return
+	}
+	if *sourceBook.VersionGroupID != *targetBook.VersionGroupID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "books must be in the same version group"})
+		return
+	}
+
+	// 3. Verify the segments belong to the source book
+	sourceNumericID := int(crc32.ChecksumIEEE([]byte(id)))
+	sourceSegments, err := database.GlobalStore.ListBookSegments(sourceNumericID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list source segments"})
+		return
+	}
+	sourceSegMap := make(map[string]bool, len(sourceSegments))
+	for _, seg := range sourceSegments {
+		sourceSegMap[seg.ID] = true
+	}
+	for _, segID := range req.SegmentIDs {
+		if !sourceSegMap[segID] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("segment %s does not belong to source book", segID)})
+			return
+		}
+	}
+
+	// 4. Move segments
+	targetNumericID := int(crc32.ChecksumIEEE([]byte(req.TargetBookID)))
+	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to move segments: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"segments_moved": len(req.SegmentIDs),
+		"source_book_id": id,
+		"target_book_id": req.TargetBookID,
+	})
 }
 
 // parseFilenameWithAI uses OpenAI to parse a filename into structured metadata
@@ -6345,6 +7979,16 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		if req.IntervalMinutes != nil {
 			config.AppConfig.ITunesSyncInterval = *req.IntervalMinutes
 		}
+	case "series_prune":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledSeriesPruneEnabled = *req.Enabled
+		}
+		if req.IntervalMinutes != nil {
+			config.AppConfig.ScheduledSeriesPruneInterval = *req.IntervalMinutes
+		}
+		if req.RunOnStartup != nil {
+			config.AppConfig.ScheduledSeriesPruneOnStartup = *req.RunOnStartup
+		}
 	case "purge_deleted":
 		if req.IntervalMinutes != nil {
 			// purge interval is fixed at 6h, but we can update retention days
@@ -6402,14 +8046,11 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		}
 	}
 
-	// For groups mode, we need cached dedup groups
+	// For groups mode, we need dedup groups — use cache if available, otherwise compute inline
 	var dedupGroups []AuthorDedupGroup
 	if mode == "groups" {
 		cached, ok := s.dedupCache.Get("author-duplicates")
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "no dedup groups cached; run refresh first"})
-			return
-		} else {
+		if ok {
 			groupsRaw, ok2 := cached["groups"]
 			if ok2 {
 				groupsJSON, err := json.Marshal(groupsRaw)
@@ -6418,7 +8059,25 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 				}
 			}
 		}
-		if mode == "groups" && len(dedupGroups) == 0 {
+		if len(dedupGroups) == 0 {
+			// Cache is cold — compute dedup groups inline instead of requiring a separate refresh
+			authors, err := store.GetAllAuthors()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch authors: " + err.Error()})
+				return
+			}
+			bookCounts, err := store.GetAllAuthorBookCounts()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch book counts: " + err.Error()})
+				return
+			}
+			bookCountFn := func(authorID int) int { return bookCounts[authorID] }
+			dedupGroups = FindDuplicateAuthors(authors, 0.9, bookCountFn, nil)
+			// Warm the cache for subsequent requests
+			result := gin.H{"groups": dedupGroups, "count": len(dedupGroups)}
+			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
+		}
+		if len(dedupGroups) == 0 {
 			c.JSON(http.StatusOK, gin.H{"message": "no duplicate groups to review"})
 			return
 		}
@@ -6828,6 +8487,8 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 
 					if err := store.DeleteAuthor(mergeID); err != nil {
 						applyErrors = append(applyErrors, fmt.Sprintf("delete author %d: %v", mergeID, err))
+					} else {
+						_ = store.CreateAuthorTombstone(mergeID, sug.KeepID)
 					}
 				}
 				applied++
@@ -6887,6 +8548,8 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 						}
 						if err := store.DeleteAuthor(mergeID); err != nil {
 							applyErrors = append(applyErrors, fmt.Sprintf("delete aliased author %d: %v", mergeID, err))
+						} else {
+							_ = store.CreateAuthorTombstone(mergeID, sug.KeepID)
 						}
 					}
 					applied++
@@ -6951,4 +8614,281 @@ func (s *Server) getBookChanges(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"changes": changes})
+}
+
+// --- AI Scan Pipeline Handlers ---
+
+// startAIScan kicks off a new multi-pass AI author dedup scan.
+func (s *Server) startAIScan(c *gin.Context) {
+	if s.pipelineManager == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI scan pipeline not configured"})
+		return
+	}
+	var req struct {
+		Mode string `json:"mode"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		req.Mode = "realtime"
+	}
+	if req.Mode != "batch" && req.Mode != "realtime" {
+		req.Mode = "realtime"
+	}
+	scan, err := s.pipelineManager.StartScan(c.Request.Context(), req.Mode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusAccepted, scan)
+}
+
+// listAIScans returns all AI scan pipeline runs.
+func (s *Server) listAIScans(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusOK, gin.H{"scans": []interface{}{}})
+		return
+	}
+	scans, err := s.aiScanStore.ListScans()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if scans == nil {
+		scans = []database.Scan{}
+	}
+	c.JSON(http.StatusOK, gin.H{"scans": scans})
+}
+
+// getAIScan returns a single scan with its phases.
+func (s *Server) getAIScan(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		return
+	}
+	scan, err := s.aiScanStore.GetScan(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if scan == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		return
+	}
+	phases, _ := s.aiScanStore.GetPhases(id)
+	c.JSON(http.StatusOK, gin.H{"scan": scan, "phases": phases})
+}
+
+// getAIScanResults returns results for a scan, with optional agreement filter.
+func (s *Server) getAIScanResults(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		return
+	}
+	results, err := s.aiScanStore.GetScanResults(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Optional agreement filter
+	agreement := c.Query("agreement")
+	if agreement != "" {
+		var filtered []database.ScanResult
+		for _, r := range results {
+			if r.Agreement == agreement {
+				filtered = append(filtered, r)
+			}
+		}
+		results = filtered
+	}
+
+	if results == nil {
+		results = []database.ScanResult{}
+	}
+	c.JSON(http.StatusOK, gin.H{"results": results})
+}
+
+// applyAIScanResults marks selected scan results as applied.
+func (s *Server) applyAIScanResults(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		return
+	}
+	scanID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		return
+	}
+	var req struct {
+		ResultIDs []int `json:"result_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	applied := 0
+	var errors []string
+	for _, resultID := range req.ResultIDs {
+		if err := s.aiScanStore.MarkResultApplied(scanID, resultID); err != nil {
+			errors = append(errors, fmt.Sprintf("result %d: %v", resultID, err))
+		} else {
+			applied++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"applied": applied, "errors": errors})
+}
+
+// deleteAIScan removes a scan and all its associated data.
+func (s *Server) deleteAIScan(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		return
+	}
+	if err := s.aiScanStore.DeleteScan(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
+
+// cancelAIScan cancels a running AI scan, including any in-flight batch jobs.
+func (s *Server) cancelAIScan(c *gin.Context) {
+	if s.pipelineManager == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI scan pipeline not configured"})
+		return
+	}
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		return
+	}
+	if err := s.pipelineManager.CancelScan(id); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "canceled"})
+}
+
+// compareAIScans compares results between two scans.
+func (s *Server) compareAIScans(c *gin.Context) {
+	if s.aiScanStore == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		return
+	}
+	aID, err := strconv.Atoi(c.Query("a"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID 'a'"})
+		return
+	}
+	bID, err := strconv.Atoi(c.Query("b"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID 'b'"})
+		return
+	}
+
+	resultsA, _ := s.aiScanStore.GetScanResults(aID)
+	resultsB, _ := s.aiScanStore.GetScanResults(bID)
+
+	// Build comparison: new in B, resolved from A, unchanged
+	aMap := make(map[string]database.ScanResult)
+	for _, r := range resultsA {
+		key := fmt.Sprintf("%s:%s", r.Suggestion.Action, r.Suggestion.CanonicalName)
+		aMap[key] = r
+	}
+
+	var newInB, unchanged []database.ScanResult
+	bSeen := make(map[string]bool)
+	for _, r := range resultsB {
+		key := fmt.Sprintf("%s:%s", r.Suggestion.Action, r.Suggestion.CanonicalName)
+		bSeen[key] = true
+		if _, found := aMap[key]; found {
+			unchanged = append(unchanged, r)
+		} else {
+			newInB = append(newInB, r)
+		}
+	}
+
+	var resolvedFromA []database.ScanResult
+	for key, r := range aMap {
+		if !bSeen[key] {
+			resolvedFromA = append(resolvedFromA, r)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"new_in_b":        newInB,
+		"resolved_from_a": resolvedFromA,
+		"unchanged":       unchanged,
+	})
+}
+
+// --- Preview Rename & Metadata Writeback Handlers ---
+
+// previewRename returns current path, proposed path, and tag diff for a book.
+func (s *Server) previewRename(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+
+	svc := NewRenameService(database.GlobalStore)
+	preview, err := svc.PreviewRename(id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, preview)
+}
+
+// applyRename executes the rename + tag write + DB update for a book.
+func (s *Server) applyRename(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+
+	// Create an operation for tracking and undo support
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "rename", stringPtr(id))
+	if err != nil {
+		log.Printf("[ERROR] rename: failed to create operation: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
+		return
+	}
+
+	svc := NewRenameService(database.GlobalStore)
+	result, err := svc.ApplyRename(id, op.ID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
