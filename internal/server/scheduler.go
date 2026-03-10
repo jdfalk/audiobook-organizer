@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -579,6 +579,55 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return time.Duration(mins) * time.Minute
 		},
 		RunOnStart: func() bool { return config.AppConfig.ScheduledMetadataRefreshOnStartup },
+	})
+
+	// Reconcile — find broken file paths and match to untracked files on disk
+	ts.registerTask(TaskDefinition{
+		Name:        "reconcile_scan",
+		Description: "Find books with missing files and match to untracked files on disk",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			store := database.GlobalStore
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
+			id := ulid.Make().String()
+			op, err := store.CreateOperation(id, "reconcile_scan", nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create operation: %w", err)
+			}
+			if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
+				func(ctx context.Context, progress operations.ProgressReporter) error {
+					result, scanErr := buildReconcilePreviewWithProgress(store, progress)
+					if scanErr != nil {
+						return fmt.Errorf("reconcile scan failed: %w", scanErr)
+					}
+					resultJSON, marshalErr := json.Marshal(result)
+					if marshalErr != nil {
+						return fmt.Errorf("failed to marshal scan results: %w", marshalErr)
+					}
+					if err := store.UpdateOperationResultData(id, string(resultJSON)); err != nil {
+						return fmt.Errorf("failed to store scan results: %w", err)
+					}
+					summary := fmt.Sprintf("Found %d broken records, %d matches, %d unmatched",
+						len(result.BrokenRecords), len(result.Matches), len(result.UnmatchedBooks))
+					_ = progress.Log("info", summary, nil)
+					return nil
+				},
+			); err != nil {
+				return nil, fmt.Errorf("failed to enqueue reconcile scan: %w", err)
+			}
+			return op, nil
+		},
+		IsEnabled: func() bool { return config.AppConfig.ScheduledReconcileEnabled },
+		GetInterval: func() time.Duration {
+			mins := config.AppConfig.ScheduledReconcileInterval
+			if mins <= 0 {
+				return 0
+			}
+			return time.Duration(mins) * time.Minute
+		},
+		RunOnStart: func() bool { return config.AppConfig.ScheduledReconcileOnStartup },
 	})
 
 	// AI Dedup Batch — uses OpenAI Batch API at 50% cost

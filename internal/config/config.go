@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -214,6 +214,10 @@ type Config struct {
 	ScheduledAIDedupBatchEnabled   bool `json:"scheduled_ai_dedup_batch_enabled"`
 	ScheduledAIDedupBatchInterval  int  `json:"scheduled_ai_dedup_batch_interval"`   // minutes, default 1440 (24h)
 	ScheduledAIDedupBatchOnStartup bool `json:"scheduled_ai_dedup_batch_on_startup"`
+
+	ScheduledReconcileEnabled   bool `json:"scheduled_reconcile_enabled"`
+	ScheduledReconcileInterval  int  `json:"scheduled_reconcile_interval"`  // minutes, default 0 (manual)
+	ScheduledReconcileOnStartup bool `json:"scheduled_reconcile_on_startup"`
 
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
