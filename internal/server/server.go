@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.113.0
+// version: 1.115.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -29,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -702,7 +703,7 @@ func (s *Server) resumeInterruptedOperations() {
 				for from, to := range params.PathMappings {
 					mappings = append(mappings, itunes.PathMapping{From: from, To: to})
 				}
-				return executeITunesImport(ctx, progress, opID, ITunesImportRequest{
+				return executeITunesImport(ctx, operations.LoggerFromReporter(progress), opID, ITunesImportRequest{
 					LibraryPath:      params.LibraryXMLPath,
 					ImportMode:       params.ImportMode,
 					PathMappings:     mappings,
@@ -943,8 +944,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 				if config.AppConfig.AutoScanDebounceSeconds > 0 {
 					debounce = time.Duration(config.AppConfig.AutoScanDebounceSeconds) * time.Second
 				}
+				watchLog := logger.NewWithActivityLog("auto-scan", database.GlobalStore)
 				fileWatcher = watcher.New(func(path string) {
-					log.Printf("[INFO] Auto-scan triggered for: %s", path)
+					watchLog.Info("Auto-scan triggered for: %s", path)
 					if hub := realtime.GetGlobalHub(); hub != nil {
 						hub.Broadcast(&realtime.Event{
 							Type: "scan.auto_triggered",
@@ -957,7 +959,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 							id := ulid.Make().String()
 							op, opErr := database.GlobalStore.CreateOperation(id, "scan", &scanPath)
 							if opErr != nil {
-								log.Printf("[ERROR] Auto-scan: failed to create operation: %v", opErr)
+								watchLog.Error("Auto-scan: failed to create operation: %v", opErr)
 								return
 							}
 							scanReq := &ScanRequest{FolderPath: &scanPath}
@@ -965,17 +967,17 @@ func (s *Server) Start(cfg ServerConfig) error {
 								return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
 							}
 							if enqueueErr := operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
-								log.Printf("[ERROR] Auto-scan: failed to enqueue: %v", enqueueErr)
+								watchLog.Error("Auto-scan: failed to enqueue: %v", enqueueErr)
 							}
 						}()
 					}
 				}, debounce)
 				// Start watching the first import path (primary)
 				if startErr := fileWatcher.Start(watchPaths[0]); startErr != nil {
-					log.Printf("[WARN] Failed to start file watcher: %v", startErr)
+					watchLog.Warn("Failed to start file watcher: %v", startErr)
 					fileWatcher = nil
 				} else {
-					log.Printf("[INFO] Auto-scan file watcher started for %s", watchPaths[0])
+					watchLog.Info("Auto-scan file watcher started for %s", watchPaths[0])
 				}
 			}
 		}
@@ -983,6 +985,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Periodic cleanup of expired/revoked auth sessions.
 	if database.GlobalStore != nil {
+		sessionLog := logger.NewWithActivityLog("session-cleanup", database.GlobalStore)
 		sessionCleanupTicker := time.NewTicker(10 * time.Minute)
 		backgroundWG.Add(1)
 		go func() {
@@ -992,9 +995,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 				select {
 				case <-sessionCleanupTicker.C:
 					if deleted, err := database.GlobalStore.DeleteExpiredSessions(time.Now()); err != nil {
-						log.Printf("[WARN] failed to clean up expired sessions: %v", err)
+						sessionLog.Warn("failed to clean up expired sessions: %v", err)
 					} else if deleted > 0 {
-						log.Printf("[INFO] cleaned up %d expired/revoked sessions", deleted)
+						sessionLog.Info("cleaned up %d expired/revoked sessions", deleted)
 					}
 				case <-shutdown:
 					return
@@ -1290,6 +1293,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/system/announcements", s.getSystemAnnouncements)
 			protected.GET("/system/storage", s.getSystemStorage)
 			protected.GET("/system/logs", s.getSystemLogs)
+			protected.GET("/system/activity-log", s.getSystemActivityLog)
 			protected.POST("/system/reset", s.resetSystem)
 			protected.POST("/system/factory-reset", s.factoryReset)
 			protected.GET("/config", s.getConfig)
@@ -1963,7 +1967,8 @@ func (s *Server) startITunesSyncScheduler(shutdown chan struct{}, wg *sync.WaitG
 			}
 		}
 	}()
-	log.Printf("[INFO] iTunes sync scheduler started (interval=%v)", interval)
+	itunesLog := logger.NewWithActivityLog("itunes-scheduler", database.GlobalStore)
+	itunesLog.Info("iTunes sync scheduler started (interval=%v)", interval)
 }
 
 // triggerITunesSync finds the library path from DB and enqueues a sync if the file changed.
@@ -1986,23 +1991,24 @@ func (s *Server) triggerITunesSync() {
 		}
 	}
 
+	itunesTriggerLog := logger.NewWithActivityLog("itunes-scheduler", database.GlobalStore)
 	opID := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
 	if err != nil {
-		log.Printf("[WARN] iTunes sync scheduler: failed to create operation: %v", err)
+		itunesTriggerLog.Warn("iTunes sync scheduler: failed to create operation: %v", err)
 		return
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, progress, libraryPath, nil)
+		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, nil)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
-		log.Printf("[WARN] iTunes sync scheduler: failed to enqueue: %v", err)
+		itunesTriggerLog.Warn("iTunes sync scheduler: failed to enqueue: %v", err)
 		return
 	}
 
-	log.Printf("[INFO] iTunes sync scheduler: enqueued sync operation %s", op.ID)
+	itunesTriggerLog.Info("iTunes sync scheduler: enqueued sync operation %s", op.ID)
 }
 
 func isStaleOperationStatus(status string) bool {
@@ -2049,9 +2055,10 @@ func (s *Server) collectStaleOperations(timeout time.Duration) ([]database.Opera
 }
 
 func (s *Server) failStaleOperations(timeout time.Duration) {
+	staleLog := logger.NewWithActivityLog("reaper", database.GlobalStore)
 	stale, err := s.collectStaleOperations(timeout)
 	if err != nil {
-		log.Printf("[WARN] stale operation check failed: %v", err)
+		staleLog.Warn("stale operation check failed: %v", err)
 		return
 	}
 	if len(stale) == 0 {
@@ -2061,7 +2068,7 @@ func (s *Server) failStaleOperations(timeout time.Duration) {
 	for _, op := range stale {
 		msg := fmt.Sprintf("operation timed out after %s", timeout)
 		if err := database.GlobalStore.UpdateOperationError(op.ID, msg); err != nil {
-			log.Printf("[WARN] failed to mark stale operation %s as failed: %v", op.ID, err)
+			staleLog.Warn("failed to mark stale operation %s as failed: %v", op.ID, err)
 			continue
 		}
 		if hub := realtime.GetGlobalHub(); hub != nil {
@@ -2069,8 +2076,22 @@ func (s *Server) failStaleOperations(timeout time.Duration) {
 				"error": msg,
 			})
 		}
-		log.Printf("[WARN] marked stale operation as failed: id=%s type=%s", op.ID, op.Type)
+		staleLog.Warn("marked stale operation as failed: id=%s type=%s", op.ID, op.Type)
 	}
+}
+
+func (s *Server) getSystemActivityLog(c *gin.Context) {
+	source := c.Query("source")
+	limit := 50
+	if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 {
+		limit = l
+	}
+	logs, err := database.GlobalStore.GetSystemActivityLogs(source, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
 }
 
 func (s *Server) restoreAudiobook(c *gin.Context) {

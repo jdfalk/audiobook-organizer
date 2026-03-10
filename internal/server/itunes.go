@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"log"
+	stdlog "log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -149,7 +150,7 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 		return
 	}
 
-	log.Printf("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
+	stdlog.Printf("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
 
 	opts := itunes.ImportOptions{
 		LibraryPath:    req.LibraryPath,
@@ -179,7 +180,7 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 		missingPaths = missingPaths[:100]
 	}
 
-	log.Printf("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
+	stdlog.Printf("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
 		result.AudiobookTracks, result.FilesFound, result.FilesMissing, result.PathPrefixes)
 
 	response := ITunesValidateResponse{
@@ -230,7 +231,7 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 		return
 	}
 
-	log.Printf("iTunes test-mapping: from=%q to=%q", req.From, req.To)
+	stdlog.Printf("iTunes test-mapping: from=%q to=%q", req.From, req.To)
 	mapping := itunes.PathMapping{From: req.From, To: req.To}
 	opts := itunes.ImportOptions{PathMappings: []itunes.PathMapping{mapping}}
 
@@ -251,12 +252,12 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 		location := opts.RemapPath(track.Location)
 		path, err := itunes.DecodeLocation(location)
 		if err != nil {
-			log.Printf("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
+			stdlog.Printf("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
 			continue
 		}
 		if _, err := os.Stat(path); err == nil {
 			response.Found++
-			log.Printf("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
+			stdlog.Printf("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
 			if len(response.Examples) < 3 {
 				response.Examples = append(response.Examples, ITunesTestExample{
 					Title: track.Name,
@@ -264,11 +265,11 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 				})
 			}
 		} else {
-			log.Printf("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
+			stdlog.Printf("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
 		}
 	}
 
-	log.Printf("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
+	stdlog.Printf("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
 	c.JSON(http.StatusOK, response)
 }
 
@@ -305,7 +306,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	itunesImportStatuses.Store(op.ID, status)
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesImport(ctx, progress, op.ID, req)
+		return executeITunesImport(ctx, operations.LoggerFromReporter(progress), op.ID, req)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
@@ -435,15 +436,15 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		// Write to a temp file first, then replace
 		itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 		if itlErr != nil {
-			log.Printf("[WARN] ITL write-back failed: %v", itlErr)
+			stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
 			itlMessage = fmt.Sprintf(" (ITL write-back failed: %v)", itlErr)
 		} else {
 			// Atomic replace
 			if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
-				log.Printf("[WARN] ITL rename failed: %v", renameErr)
+				stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
 				itlMessage = fmt.Sprintf(" (ITL rename failed: %v)", renameErr)
 			} else {
-				log.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
+				stdlog.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
 				itlMessage = fmt.Sprintf(" + ITL: %d tracks updated", itlResult.UpdatedCount)
 			}
 		}
@@ -708,7 +709,7 @@ type albumGroup struct {
 	tracks []*itunes.Track
 }
 
-func executeITunesImport(ctx context.Context, progress operations.ProgressReporter, opID string, req ITunesImportRequest) error {
+func executeITunesImport(ctx context.Context, log logger.Logger, opID string, req ITunesImportRequest) error {
 	store := database.GlobalStore
 
 	// Persist operation parameters for resume
@@ -731,13 +732,13 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	resumeIndex := 0
 	if checkpoint != nil && checkpoint.Phase == "importing" {
 		resumeIndex = checkpoint.PhaseIndex
-		_ = progress.Log("info", fmt.Sprintf("Resuming import from album %d/%d", resumeIndex, checkpoint.PhaseTotal), nil)
+		log.Info("Resuming import from album %d/%d", resumeIndex, checkpoint.PhaseTotal)
 	}
 
 	status := loadITunesImportStatus(opID)
 	progressMessage := "Starting iTunes import"
-	_ = progress.UpdateProgress(0, 0, progressMessage)
-	_ = progress.Log("info", progressMessage, nil)
+	log.UpdateProgress(0, 0, progressMessage)
+	log.Info("%s", progressMessage)
 
 	library, err := itunes.ParseLibrary(req.LibraryPath)
 	if err != nil {
@@ -752,9 +753,9 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	totalGroups := len(groups)
 	setITunesImportTotal(status, totalGroups)
 
-	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook albums to import (from grouped tracks)", totalGroups), nil)
+	log.Info("Found %d audiobook albums to import (from grouped tracks)", totalGroups)
 	if totalGroups == 0 {
-		_ = progress.UpdateProgress(0, 0, "No audiobooks found")
+		log.UpdateProgress(0, 0, "No audiobooks found")
 		operations.ClearState(store, opID)
 		return nil
 	}
@@ -773,8 +774,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			processed++
 			continue
 		}
-		if progress.IsCanceled() {
-			_ = progress.Log("info", "iTunes import canceled", nil)
+		if log.IsCanceled() {
+			log.Info("iTunes import canceled")
 			return nil
 		}
 
@@ -784,8 +785,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		book, err := buildBookFromAlbumGroup(group, req.LibraryPath, importOpts)
 		if err != nil {
 			recordITunesFailure(status, err.Error())
-			_ = progress.Log("error", err.Error(), nil)
-			updateITunesProgress(progress, status, processed, totalGroups, group.key)
+			log.Error("%s", err.Error())
+			updateITunesProgress(log, status, processed, totalGroups, group.key)
 			continue
 		}
 
@@ -804,7 +805,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		// Hash the first track file for dedup (use actual file, not directory)
 		hash, err := scanner.ComputeFileHash(firstTrackPath)
 		if err != nil {
-			_ = progress.Log("warn", fmt.Sprintf("Failed to hash %s: %v", book.FilePath, err), nil)
+			log.Warn("Failed to hash %s: %v", book.FilePath, err)
 		} else if hash != "" {
 			book.FileHash = stringPtr(hash)
 			book.OriginalFileHash = stringPtr(hash)
@@ -813,8 +814,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			}
 			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
 				updateITunesSkipped(status)
-				_ = progress.Log("warn", fmt.Sprintf("Skipping blocked hash for %s", book.Title), nil)
-				updateITunesProgress(progress, status, processed, totalGroups, book.Title)
+				log.Warn("Skipping blocked hash for %s", book.Title)
+				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
 			}
 		}
@@ -822,15 +823,15 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		if req.SkipDuplicates {
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
 				updateITunesSkipped(status)
-				_ = progress.Log("info", fmt.Sprintf("Skipping duplicate file path: %s", book.FilePath), nil)
-				updateITunesProgress(progress, status, processed, totalGroups, book.Title)
+				log.Info("Skipping duplicate file path: %s", book.FilePath)
+				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
 			}
 			if book.FileHash != nil {
 				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
 					updateITunesSkipped(status)
-					_ = progress.Log("info", fmt.Sprintf("Skipping duplicate hash: %s", book.Title), nil)
-					updateITunesProgress(progress, status, processed, totalGroups)
+					log.Info("Skipping duplicate hash: %s", book.Title)
+					updateITunesProgress(log, status, processed, totalGroups)
 					continue
 				}
 			}
@@ -848,8 +849,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 		created, err := database.GlobalStore.CreateBook(book)
 		if err != nil {
 			recordITunesFailure(status, fmt.Sprintf("Failed to save '%s': %v", book.Title, err))
-			_ = progress.Log("error", fmt.Sprintf("Failed to save '%s': %v", book.Title, err), nil)
-			updateITunesProgress(progress, status, processed, totalGroups)
+			log.Error("Failed to save '%s': %v", book.Title, err)
+			updateITunesProgress(log, status, processed, totalGroups)
 			continue
 		}
 
@@ -880,7 +881,7 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 					segment.FileHash = &segHash
 				}
 				if _, segErr := database.GlobalStore.CreateBookSegment(bookNumericID, segment); segErr != nil {
-					_ = progress.Log("warn", fmt.Sprintf("Failed to create segment for track %d of '%s': %v", track.TrackNumber, book.Title, segErr), nil)
+					log.Warn("Failed to create segment for track %d of '%s': %v", track.TrackNumber, book.Title, segErr)
 				}
 			}
 		}
@@ -901,11 +902,11 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 			// Use first track for playlist tag extraction
 			tags := itunes.ExtractPlaylistTags(group.tracks[0].TrackID, library.Playlists)
 			if len(tags) > 0 {
-				_ = progress.Log("info", fmt.Sprintf("Playlist tags for '%s': %s", book.Title, strings.Join(tags, ", ")), nil)
+				log.Info("Playlist tags for '%s': %s", book.Title, strings.Join(tags, ", "))
 			}
 		}
 
-		updateITunesProgress(progress, status, processed, totalGroups, book.Title)
+		updateITunesProgress(log, status, processed, totalGroups, book.Title)
 
 		// Checkpoint every 10 groups
 		if processed%10 == 0 {
@@ -917,15 +918,15 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	// so that author/title are accurate for folder structure
 	if req.FetchMetadata {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "enriching", 0, 0)
-		_ = progress.Log("info", "Starting metadata enrichment phase...", nil)
-		enrichITunesImportedBooks(progress, status)
+		log.Info("Starting metadata enrichment phase...")
+		enrichITunesImportedBooks(log, status)
 	}
 
 	// Phase 4: Organize (if requested) — runs after enrichment
 	if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "organizing", 0, 0)
-		_ = progress.Log("info", "Starting organize phase...", nil)
-		organizeImportedBooks(progress, status)
+		log.Info("Starting organize phase...")
+		organizeImportedBooks(log, status)
 	}
 
 	// Clear checkpoint on successful completion
@@ -937,8 +938,8 @@ func executeITunesImport(ctx context.Context, progress operations.ProgressReport
 	}
 
 	summary := buildITunesSummary(status)
-	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
-	_ = progress.Log("info", summary, nil)
+	log.UpdateProgress(totalGroups, totalGroups, summary)
+	log.Info("%s", summary)
 	_ = ctx
 	return nil
 }
@@ -988,13 +989,13 @@ func groupTracksByAlbum(library *itunes.Library) []albumGroup {
 
 // enrichITunesImportedBooks fetches metadata for recently imported books
 // to normalize author names and get cover art before organizing.
-func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itunesImportStatus) {
+func enrichITunesImportedBooks(log logger.Logger, status *itunesImportStatus) {
 	mfs := NewMetadataFetchService(database.GlobalStore)
 
 	// Get all imported books (library_state = 'imported')
 	books, err := database.GlobalStore.GetAllBooks(10000, 0)
 	if err != nil {
-		_ = progress.Log("error", fmt.Sprintf("Failed to list books for enrichment: %v", err), nil)
+		log.Error("Failed to list books for enrichment: %v", err)
 		return
 	}
 
@@ -1010,11 +1011,11 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 
 		resp, err := mfs.FetchMetadataForBook(book.ID)
 		if err != nil {
-			_ = progress.Log("debug", fmt.Sprintf("No metadata found for '%s': %v", book.Title, err), nil)
+			log.Debug("No metadata found for '%s': %v", book.Title, err)
 			consecutiveErrors++
 			// Back off if we're hitting rate limits (many consecutive failures)
 			if consecutiveErrors >= 5 {
-				_ = progress.Log("info", "Rate limit detected, pausing 10s...", nil)
+				log.Info("Rate limit detected, pausing 10s...")
 				time.Sleep(10 * time.Second)
 				consecutiveErrors = 0
 			}
@@ -1037,20 +1038,20 @@ func enrichITunesImportedBooks(progress operations.ProgressReporter, status *itu
 
 		// Rate limit: pause every 10 enrichments to avoid hammering external APIs
 		if enriched%10 == 0 {
-			_ = progress.Log("info", fmt.Sprintf("Enriched %d books so far (processing %d/%d)...", enriched, i+1, len(books)), nil)
+			log.Info("Enriched %d books so far (processing %d/%d)...", enriched, i+1, len(books))
 			time.Sleep(2 * time.Second)
 		}
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("Metadata enrichment complete: %d books enriched", enriched), nil)
+	log.Info("Metadata enrichment complete: %d books enriched", enriched)
 }
 
 // organizeImportedBooks moves all imported books into the organized folder structure.
 // Runs as a separate phase after metadata enrichment so author/title are accurate.
-func organizeImportedBooks(progress operations.ProgressReporter, status *itunesImportStatus) {
+func organizeImportedBooks(log logger.Logger, status *itunesImportStatus) {
 	books, err := database.GlobalStore.GetAllBooks(100000, 0)
 	if err != nil {
-		_ = progress.Log("error", fmt.Sprintf("Failed to list books for organize: %v", err), nil)
+		log.Error("Failed to list books for organize: %v", err)
 		return
 	}
 
@@ -1065,16 +1066,16 @@ func organizeImportedBooks(progress operations.ProgressReporter, status *itunesI
 		}
 
 		oldPath := book.FilePath
-		if err := organizeImportedBook(book, progress); err != nil {
+		if err := organizeImportedBook(book, log); err != nil {
 			recordITunesFailure(status, fmt.Sprintf("Failed to organize '%s': %v", book.Title, err))
-			_ = progress.Log("warn", fmt.Sprintf("Failed to organize '%s': %v", book.Title, err), nil)
+			log.Warn("Failed to organize '%s': %v", book.Title, err)
 		} else {
 			book.LibraryState = stringPtr("organized")
 			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
-				_ = progress.Log("error", fmt.Sprintf("Failed to update organized path for '%s': %v — rolling back", book.Title, err), nil)
+				log.Error("Failed to update organized path for '%s': %v — rolling back", book.Title, err)
 				if book.FilePath != oldPath {
 					if rbErr := os.Rename(book.FilePath, oldPath); rbErr != nil {
-						_ = progress.Log("error", fmt.Sprintf("CRITICAL: rollback failed for %s: file at %s, DB expects %s", book.ID, book.FilePath, oldPath), nil)
+						log.Error("CRITICAL: rollback failed for %s: file at %s, DB expects %s", book.ID, book.FilePath, oldPath)
 					} else {
 						book.FilePath = oldPath
 					}
@@ -1085,7 +1086,7 @@ func organizeImportedBooks(progress operations.ProgressReporter, status *itunesI
 		}
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("Organize phase complete: %d books organized", organized), nil)
+	log.Info("Organize phase complete: %d books organized", organized)
 }
 
 // buildBookFromAlbumGroup creates a single Book from a group of tracks
@@ -1180,7 +1181,7 @@ func buildBookFromAlbumGroup(group albumGroup, libraryPath string, opts itunes.I
 	}
 
 	if len(group.tracks) > 1 {
-		log.Printf("iTunes import: grouped %d tracks into album %q", len(group.tracks), title)
+		stdlog.Printf("iTunes import: grouped %d tracks into album %q", len(group.tracks), title)
 	}
 
 	return book, nil
@@ -1341,7 +1342,7 @@ func importLibraryState(mode itunes.ImportMode) string {
 	return "imported"
 }
 
-func organizeImportedBook(book *database.Book, progress operations.ProgressReporter) error {
+func organizeImportedBook(book *database.Book, log logger.Logger) error {
 	if book == nil {
 		return fmt.Errorf("book is nil")
 	}
@@ -1357,7 +1358,7 @@ func organizeImportedBook(book *database.Book, progress operations.ProgressRepor
 	if newPath != "" && newPath != book.FilePath {
 		book.FilePath = newPath
 		applyOrganizedFileMetadata(book, newPath)
-		_ = progress.Log("info", fmt.Sprintf("Organized '%s' to %s", book.Title, newPath), nil)
+		log.Info("Organized '%s' to %s", book.Title, newPath)
 	}
 	return nil
 }
@@ -1441,7 +1442,7 @@ func recordITunesImportError(status *itunesImportStatus, message string) {
 	status.mu.Unlock()
 }
 
-func updateITunesProgress(progress operations.ProgressReporter, status *itunesImportStatus, processed, total int, currentTitle ...string) {
+func updateITunesProgress(log logger.Logger, status *itunesImportStatus, processed, total int, currentTitle ...string) {
 	status.mu.Lock()
 	current := status.Processed
 	imported := status.Imported
@@ -1469,7 +1470,7 @@ func updateITunesProgress(progress operations.ProgressReporter, status *itunesIm
 	if title != "" {
 		message += fmt.Sprintf(" — %s", title)
 	}
-	_ = progress.UpdateProgress(processed, total, message)
+	log.UpdateProgress(processed, total, message)
 }
 
 func buildITunesSummary(status *itunesImportStatus) string {
@@ -1620,7 +1621,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 
 	pathMappings := req.PathMappings
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, progress, libraryPath, pathMappings)
+		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, pathMappings)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
@@ -1653,29 +1654,26 @@ func discoverITunesLibraryPath() string {
 
 // executeITunesSync re-reads an iTunes Library.xml and updates changed fields
 // or imports new audiobooks.
-func executeITunesSync(ctx context.Context, progress operations.ProgressReporter, libraryPath string, pathMappings []itunes.PathMapping) error {
+func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath string, pathMappings []itunes.PathMapping) error {
 	store := database.GlobalStore
-	log.Printf("[INFO] executeITunesSync starting: path=%s", libraryPath)
 
-	_ = progress.UpdateProgress(0, 0, "Parsing iTunes library XML...")
-	_ = progress.Log("info", fmt.Sprintf("Starting iTunes sync from %s", libraryPath), nil)
+	log.UpdateProgress(0, 0, "Parsing iTunes library XML...")
+	log.Info("Starting iTunes sync from %s", libraryPath)
 
-	log.Printf("[INFO] Parsing iTunes library XML...")
 	library, err := itunes.ParseLibrary(libraryPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
 	trackCount := len(library.Tracks)
-	log.Printf("[INFO] Parsed library: %d tracks", trackCount)
-	_ = progress.Log("info", fmt.Sprintf("Parsed %d tracks from iTunes library", trackCount), nil)
-	_ = progress.UpdateProgress(0, 0, fmt.Sprintf("Grouping %d tracks by album...", trackCount))
+	log.Info("Parsed %d tracks from iTunes library", trackCount)
+	log.UpdateProgress(0, 0, fmt.Sprintf("Grouping %d tracks by album...", trackCount))
 
 	groups := groupTracksByAlbum(library)
 	totalGroups := len(groups)
-	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook groups from %d tracks", totalGroups, trackCount), nil)
+	log.Info("Found %d audiobook groups from %d tracks", totalGroups, trackCount)
 	if totalGroups == 0 {
-		_ = progress.UpdateProgress(0, 0, "No audiobooks found in library")
-		_ = progress.Log("warn", "No audiobooks found in library", nil)
+		log.UpdateProgress(0, 0, "No audiobooks found in library")
+		log.Warn("No audiobooks found in library")
 		return nil
 	}
 
@@ -1685,7 +1683,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 	}
 
 	// Pre-build persistent ID → Book index to avoid O(n) scan per group
-	_ = progress.UpdateProgress(0, 0, "Building persistent ID index...")
+	log.UpdateProgress(0, 0, "Building persistent ID index...")
 	allBooks, err := store.GetAllBooks(100000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to load books for index: %w", err)
@@ -1700,12 +1698,12 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		pathIndex[allBooks[i].FilePath] = &allBooks[i]
 		titleIndex[strings.ToLower(allBooks[i].Title)] = &allBooks[i]
 	}
-	_ = progress.Log("info", fmt.Sprintf("Indexed %d books (%d with iTunes persistent IDs)", len(allBooks), len(pidIndex)), nil)
+	log.Info("Indexed %d books (%d with iTunes persistent IDs)", len(allBooks), len(pidIndex))
 
 	var updated, newBooks, unchanged int
 	for i, group := range groups {
-		if progress.IsCanceled() {
-			_ = progress.Log("info", "iTunes sync canceled", nil)
+		if log.IsCanceled() {
+			log.Info("iTunes sync canceled")
 			return nil
 		}
 
@@ -1780,7 +1778,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 
 			if changed {
 				if _, err := store.UpdateBook(existing.ID, existing); err != nil {
-					_ = progress.Log("error", fmt.Sprintf("Failed to update '%s': %v", existing.Title, err), nil)
+					log.Error("Failed to update '%s': %v", existing.Title, err)
 				} else {
 					updated++
 				}
@@ -1791,7 +1789,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 			// Import as new book
 			book, err := buildBookFromAlbumGroup(group, libraryPath, importOpts)
 			if err != nil {
-				_ = progress.Log("warn", fmt.Sprintf("Failed to build book from group '%s': %v", group.key, err), nil)
+				log.Warn("Failed to build book from group '%s': %v", group.key, err)
 				continue
 			}
 			assignAuthorAndSeries(book, firstTrack)
@@ -1799,7 +1797,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 
 			created, err := store.CreateBook(book)
 			if err != nil {
-				_ = progress.Log("error", fmt.Sprintf("Failed to create '%s': %v", book.Title, err), nil)
+				log.Error("Failed to create '%s': %v", book.Title, err)
 			} else {
 				newBooks++
 				// Set up book_authors junction table
@@ -1820,7 +1818,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 		if processed%itunesImportProgressBatch == 0 || processed == totalGroups {
 			message := fmt.Sprintf("Syncing book %d of %d (updated %d, new %d, unchanged %d)",
 				processed, totalGroups, updated, newBooks, unchanged)
-			_ = progress.UpdateProgress(processed, totalGroups, message)
+			log.UpdateProgress(processed, totalGroups, message)
 		}
 	}
 
@@ -1831,8 +1829,7 @@ func executeITunesSync(ctx context.Context, progress operations.ProgressReporter
 
 	summary := fmt.Sprintf("Sync completed: %d updated, %d new, %d unchanged (from %d tracks, %d groups)",
 		updated, newBooks, unchanged, trackCount, totalGroups)
-	_ = progress.UpdateProgress(totalGroups, totalGroups, summary)
-	_ = progress.Log("info", summary, nil)
-	log.Printf("[INFO] %s", summary)
+	log.UpdateProgress(totalGroups, totalGroups, summary)
+	log.Info("%s", summary)
 	return nil
 }
