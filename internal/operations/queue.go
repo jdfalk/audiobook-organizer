@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
@@ -266,11 +267,17 @@ func (q *OperationQueue) worker(id int) {
 				}
 			}
 
-			// Create progress reporter
-			reporter := &operationProgressReporter{
-				operationID: op.ID,
-				store:       q.store,
-				queue:       q,
+			// Create progress reporter backed by OperationLogger.
+			storeAdapter := &queueStoreAdapter{store: q.store}
+			var realtimeHub logger.RealtimeHub
+			if hub := realtime.GetGlobalHub(); hub != nil {
+				realtimeHub = hub
+			}
+			opLogger := logger.ForOperation(op.ID, storeAdapter, realtimeHub)
+			reporter := &loggerProgressReporter{
+				logger: opLogger,
+				store:  q.store,
+				queue:  q,
 			}
 
 			// Execute the operation with timeout protection and panic recovery.
@@ -307,7 +314,7 @@ func (q *OperationQueue) worker(id int) {
 					})
 				}
 				log.Printf("Operation %s failed: %v", op.ID, err)
-			} else if reporter.canceled {
+			} else if reporter.canceled() {
 				// Already marked as canceled
 				metrics.IncOperationCanceled(op.Type)
 				// Send real-time canceled status
@@ -350,7 +357,7 @@ func (q *OperationQueue) worker(id int) {
 					summary.Status = "failed"
 					summary.Error = &errMsg
 					summary.CompletedAt = &now
-				} else if reporter.canceled {
+				} else if reporter.canceled() {
 					summary.Status = "canceled"
 					summary.CompletedAt = &now
 				} else {
@@ -487,6 +494,90 @@ func (r *operationProgressReporter) IsCanceled() bool {
 	}
 
 	return false
+}
+
+// queueStoreAdapter bridges database.Store to logger.OperationStore.
+type queueStoreAdapter struct {
+	store database.Store
+}
+
+func (a *queueStoreAdapter) AddOperationLog(operationID, level, message string, details *string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.AddOperationLog(operationID, level, message, details)
+}
+
+func (a *queueStoreAdapter) CreateOperationChange(change interface{}) error {
+	// Changes are tracked in-memory by OperationLogger; not persisted here.
+	return nil
+}
+
+func (a *queueStoreAdapter) UpdateOperationProgress(id string, current, total int, message string) error {
+	if a.store == nil {
+		return nil
+	}
+	return a.store.UpdateOperationStatus(id, "running", current, total, message)
+}
+
+// loggerProgressReporter adapts OperationLogger to the ProgressReporter interface.
+// It is the authoritative reporter used by the queue worker.
+type loggerProgressReporter struct {
+	logger  *logger.OperationLogger
+	store   database.Store
+	queue   *OperationQueue
+	current int
+	total   int
+}
+
+func (r *loggerProgressReporter) UpdateProgress(current, total int, message string) error {
+	r.current = current
+	r.total = total
+
+	// Update database directly (adapter routes through UpdateOperationStatus).
+	if r.store != nil {
+		if err := r.store.UpdateOperationStatus(r.logger.OperationID(), "running", current, total, message); err != nil {
+			return err
+		}
+	}
+
+	// Notify in-process listeners.
+	r.queue.notifyListeners(r.logger.OperationID(), OperationProgress{
+		Current: current,
+		Total:   total,
+		Message: message,
+	})
+
+	// Send real-time event.
+	if hub := realtime.GetGlobalHub(); hub != nil {
+		hub.SendOperationProgress(r.logger.OperationID(), current, total, message)
+	}
+
+	return nil
+}
+
+func (r *loggerProgressReporter) Log(level, message string, details *string) error {
+	return r.logger.Log(level, message, details)
+}
+
+func (r *loggerProgressReporter) IsCanceled() bool {
+	if r.logger.IsCanceled() {
+		return true
+	}
+	// Also poll the DB status, matching old reporter behaviour.
+	if r.store != nil {
+		op, err := r.store.GetOperationByID(r.logger.OperationID())
+		if err == nil && op != nil && op.Status == "canceled" {
+			r.logger.SetCanceled()
+			return true
+		}
+	}
+	return false
+}
+
+// canceled returns whether the operation was marked canceled (via the logger).
+func (r *loggerProgressReporter) canceled() bool {
+	return r.logger.IsCanceled()
 }
 
 // Global queue instance

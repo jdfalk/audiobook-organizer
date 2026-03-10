@@ -1,5 +1,5 @@
 // file: internal/logger/operation.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7b3f9c1a-4e2d-4a8b-9c5e-1d2f3a4b5c6d
 
 package logger
@@ -131,6 +131,11 @@ func (l *OperationLogger) Changes() []Change {
 // IsCanceled reports whether the operation has been marked canceled.
 func (l *OperationLogger) IsCanceled() bool {
 	return l.shared.canceled.Load()
+}
+
+// OperationID returns the operation ID this logger is bound to.
+func (l *OperationLogger) OperationID() string {
+	return l.operationID
 }
 
 // With returns a child Logger that shares state with the parent.
