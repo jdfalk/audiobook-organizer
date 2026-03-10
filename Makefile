@@ -26,6 +26,7 @@ help:
 	@echo "Build:"
 	@echo "  make build          - Full build: frontend + Go binary with embedded UI"
 	@echo "  make build-api      - Backend only (no embedded frontend, for quick iteration)"
+	@echo "  make build-bench    - Backend + bench tooling (dedup-bench experiments)"
 	@echo "  make run            - Full build then serve"
 	@echo "  make run-api        - Backend-only build then serve (API endpoints only)"
 	@echo ""
@@ -77,6 +78,12 @@ build-api:
 	@echo "🔨 Building $(BINARY) (API only)..."
 	@go build -ldflags="$(LDFLAGS)" -o $(BINARY) .
 	@echo "✅ Built ./$(BINARY)"
+
+## build-bench: Build with bench tooling (dedup-bench experiments)
+build-bench:
+	@echo "🔨 Building $(BINARY) with bench tooling..."
+	@go build -tags bench -ldflags="$(LDFLAGS)" -o $(BINARY) .
+	@echo "✅ Built ./$(BINARY) (bench mode)"
 
 ## build-linux: Cross-compile for Linux amd64 (requires: brew install filosottile/musl-cross/musl-cross)
 build-linux: web-build

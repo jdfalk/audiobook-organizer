@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.15.0
+// version: 1.18.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -55,6 +55,11 @@ type MockStore struct {
 	CreateAuthorAliasFunc   func(authorID int, aliasName string, aliasType string) (*AuthorAlias, error)
 	DeleteAuthorAliasFunc   func(id int) error
 	FindAuthorByAliasFunc   func(aliasName string) (*Author, error)
+
+	// Author Tombstones
+	CreateAuthorTombstoneFunc  func(oldID, canonicalID int) error
+	GetAuthorTombstoneFunc     func(oldID int) (int, error)
+	ResolveTombstoneChainsFunc func() (int, error)
 
 	// Series methods
 	GetAllSeriesFunc    func() ([]Series, error)
@@ -144,10 +149,12 @@ type MockStore struct {
 	GetAllPreferencesForUserFunc func(userID string) ([]UserPreferenceKV, error)
 
 	// Book segments
-	CreateBookSegmentFunc  func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
-	UpdateBookSegmentFunc  func(segment *BookSegment) error
-	ListBookSegmentsFunc   func(bookNumericID int) ([]BookSegment, error)
-	MergeBookSegmentsFunc  func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+	CreateBookSegmentFunc      func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
+	UpdateBookSegmentFunc      func(segment *BookSegment) error
+	ListBookSegmentsFunc       func(bookNumericID int) ([]BookSegment, error)
+	MergeBookSegmentsFunc      func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+	GetBookSegmentByIDFunc     func(segmentID string) (*BookSegment, error)
+	MoveSegmentsToBookFunc     func(segmentIDs []string, targetBookNumericID int) error
 
 	// Playback events
 	AddPlaybackEventFunc       func(event *PlaybackEvent) error
@@ -459,6 +466,10 @@ func (m *MockStore) GetFolderDuplicates() ([][]Book, error) {
 	return nil, nil
 }
 
+func (m *MockStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, error) {
+	return nil, nil
+}
+
 func (m *MockStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	if m.GetBooksBySeriesIDFunc != nil {
 		return m.GetBooksBySeriesIDFunc(seriesID)
@@ -486,6 +497,10 @@ func (m *MockStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 }
 
 func (m *MockStore) GetAllAuthorBookCounts() (map[int]int, error) {
+	return map[int]int{}, nil
+}
+
+func (m *MockStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	return map[int]int{}, nil
 }
 
@@ -1007,6 +1022,20 @@ func (m *MockStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment
 	return nil
 }
 
+func (m *MockStore) GetBookSegmentByID(segmentID string) (*BookSegment, error) {
+	if m.GetBookSegmentByIDFunc != nil {
+		return m.GetBookSegmentByIDFunc(segmentID)
+	}
+	return nil, fmt.Errorf("segment not found: %s", segmentID)
+}
+
+func (m *MockStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
+	if m.MoveSegmentsToBookFunc != nil {
+		return m.MoveSegmentsToBookFunc(segmentIDs, targetBookNumericID)
+	}
+	return nil
+}
+
 func (m *MockStore) AddPlaybackEvent(event *PlaybackEvent) error {
 	if m.AddPlaybackEventFunc != nil {
 		return m.AddPlaybackEventFunc(event)
@@ -1157,4 +1186,25 @@ func (m *MockStore) GetBookChanges(bookID string) ([]*OperationChange, error) {
 
 func (m *MockStore) RevertOperationChanges(operationID string) error {
 	return nil
+}
+
+func (m *MockStore) CreateAuthorTombstone(oldID, canonicalID int) error {
+	if m.CreateAuthorTombstoneFunc != nil {
+		return m.CreateAuthorTombstoneFunc(oldID, canonicalID)
+	}
+	return nil
+}
+
+func (m *MockStore) GetAuthorTombstone(oldID int) (int, error) {
+	if m.GetAuthorTombstoneFunc != nil {
+		return m.GetAuthorTombstoneFunc(oldID)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) ResolveTombstoneChains() (int, error) {
+	if m.ResolveTombstoneChainsFunc != nil {
+		return m.ResolveTombstoneChainsFunc()
+	}
+	return 0, nil
 }

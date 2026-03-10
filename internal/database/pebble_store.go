@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.26.0
+// version: 1.30.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -38,7 +38,11 @@ import (
 // - playlist:<id>              -> Playlist JSON
 // - playlist:series:<series_id> -> playlist_id
 // - playlistitem:<playlist_id>:<position> -> PlaylistItem JSON
-// - counter:author             -> next author ID
+// - author_alias:<id>           -> AuthorAlias JSON
+// - author_alias:author:<author_id>:<alias_id> -> alias_id (for author queries)
+// - author_alias:name:<name>    -> alias_id (for name lookups)
+// - counter:author              -> next author ID
+// - counter:author_alias        -> next author alias ID
 // - counter:series             -> next series ID
 // - counter:book               -> next book ID
 // - counter:import_path        -> next import path ID
@@ -46,6 +50,7 @@ import (
 // - counter:playlist           -> next playlist ID
 // - counter:playlistitem       -> next playlist item ID
 // - metadata_state:<book_id>:<field> -> MetadataFieldState JSON
+// - author_tombstone:<old_id>        -> canonical_id (merged author redirect)
 
 type PebbleStore struct {
 	db *pebble.DB
@@ -70,7 +75,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	}
 
 	// Initialize counters if they don't exist
-	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
+	counters := []string{"author", "author_alias", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
 		key := fmt.Sprintf("counter:%s", counter)
 		if _, closer, err := db.Get([]byte(key)); err == pebble.ErrNotFound {
@@ -213,7 +218,12 @@ func (p *PebbleStore) GetAuthorByID(id int) (*Author, error) {
 	key := []byte(fmt.Sprintf("author:%d", id))
 	value, closer, err := p.db.Get(key)
 	if err == pebble.ErrNotFound {
-		return nil, nil
+		// Check for tombstone redirect
+		canonicalID, tErr := p.GetAuthorTombstone(id)
+		if tErr != nil || canonicalID == 0 {
+			return nil, nil
+		}
+		return p.GetAuthorByID(canonicalID)
 	}
 	if err != nil {
 		return nil, err
@@ -303,6 +313,12 @@ func (p *PebbleStore) DeleteAuthor(id int) error {
 	batch.Delete([]byte(fmt.Sprintf("author:%d", id)), nil)
 	batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil)
 
+	// Delete aliases for this author (cascade)
+	if err := p.deleteAuthorAliases(batch, id); err != nil {
+		batch.Close()
+		return fmt.Errorf("delete author aliases: %w", err)
+	}
+
 	// Delete book_author entries for this author
 	iter, iterErr := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book_author:"),
@@ -358,26 +374,181 @@ func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
 	return batch.Commit(pebble.Sync)
 }
 
-// Author Alias operations (stub — PebbleStore does not support aliases)
+// Author Alias operations
+//
+// Key schema:
+//   author_alias:<id>                              → AuthorAlias JSON
+//   author_alias:author:<author_id>:<alias_id>     → alias_id (iterate by author)
+//   author_alias:name:<lowercase_alias_name>       → alias_id (lookup by name)
 
 func (p *PebbleStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
-	return []AuthorAlias{}, nil
+	prefix := []byte(fmt.Sprintf("author_alias:author:%d:", authorID))
+	upper := []byte(fmt.Sprintf("author_alias:author:%d;", authorID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var aliases []AuthorAlias
+	for iter.First(); iter.Valid(); iter.Next() {
+		aliasID, _ := strconv.Atoi(string(iter.Value()))
+		alias, err := p.getAuthorAliasByID(aliasID)
+		if err != nil {
+			return nil, err
+		}
+		if alias != nil {
+			aliases = append(aliases, *alias)
+		}
+	}
+	sort.Slice(aliases, func(i, j int) bool { return aliases[i].AliasName < aliases[j].AliasName })
+	return aliases, nil
 }
 
 func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
-	return []AuthorAlias{}, nil
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("author_alias:0"),
+		UpperBound: []byte("author_alias:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var aliases []AuthorAlias
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		// Only match primary records (author_alias:<digits>), skip index keys
+		if strings.Contains(key, ":author:") || strings.Contains(key, ":name:") {
+			continue
+		}
+		var a AuthorAlias
+		if err := json.Unmarshal(iter.Value(), &a); err != nil {
+			return nil, err
+		}
+		aliases = append(aliases, a)
+	}
+	return aliases, nil
 }
 
 func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
-	return nil, fmt.Errorf("author aliases not supported in PebbleStore")
+	if aliasType == "" {
+		aliasType = "alias"
+	}
+
+	// Check for duplicate
+	nameKey := fmt.Sprintf("author_alias:name:%s", strings.ToLower(aliasName))
+	if _, closer, err := p.db.Get([]byte(nameKey)); err == nil {
+		closer.Close()
+		return nil, fmt.Errorf("alias %q already exists", aliasName)
+	}
+
+	id, err := p.nextID("author_alias")
+	if err != nil {
+		return nil, err
+	}
+
+	alias := AuthorAlias{
+		ID:        id,
+		AuthorID:  authorID,
+		AliasName: aliasName,
+		AliasType: aliasType,
+		CreatedAt: time.Now(),
+	}
+
+	data, err := json.Marshal(alias)
+	if err != nil {
+		return nil, err
+	}
+
+	batch := p.db.NewBatch()
+	batch.Set([]byte(fmt.Sprintf("author_alias:%d", id)), data, nil)
+	batch.Set([]byte(fmt.Sprintf("author_alias:author:%d:%d", authorID, id)), []byte(strconv.Itoa(id)), nil)
+	batch.Set([]byte(nameKey), []byte(strconv.Itoa(id)), nil)
+
+	if err := batch.Commit(pebble.Sync); err != nil {
+		batch.Close()
+		return nil, err
+	}
+	return &alias, nil
 }
 
 func (p *PebbleStore) DeleteAuthorAlias(id int) error {
-	return fmt.Errorf("author aliases not supported in PebbleStore")
+	alias, err := p.getAuthorAliasByID(id)
+	if err != nil {
+		return err
+	}
+	if alias == nil {
+		return nil
+	}
+
+	batch := p.db.NewBatch()
+	batch.Delete([]byte(fmt.Sprintf("author_alias:%d", id)), nil)
+	batch.Delete([]byte(fmt.Sprintf("author_alias:author:%d:%d", alias.AuthorID, id)), nil)
+	batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil)
+	return batch.Commit(pebble.Sync)
 }
 
 func (p *PebbleStore) FindAuthorByAlias(aliasName string) (*Author, error) {
-	return nil, nil
+	nameKey := []byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(aliasName)))
+	value, closer, err := p.db.Get(nameKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	aliasID, _ := strconv.Atoi(string(value))
+	closer.Close()
+
+	alias, err := p.getAuthorAliasByID(aliasID)
+	if err != nil || alias == nil {
+		return nil, err
+	}
+	return p.GetAuthorByID(alias.AuthorID)
+}
+
+func (p *PebbleStore) getAuthorAliasByID(id int) (*AuthorAlias, error) {
+	key := []byte(fmt.Sprintf("author_alias:%d", id))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var alias AuthorAlias
+	if err := json.Unmarshal(value, &alias); err != nil {
+		return nil, err
+	}
+	return &alias, nil
+}
+
+// deleteAuthorAliases removes all aliases for an author (cascade on delete).
+func (p *PebbleStore) deleteAuthorAliases(batch *pebble.Batch, authorID int) error {
+	prefix := []byte(fmt.Sprintf("author_alias:author:%d:", authorID))
+	upper := []byte(fmt.Sprintf("author_alias:author:%d;", authorID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		aliasID, _ := strconv.Atoi(string(iter.Value()))
+		alias, err := p.getAuthorAliasByID(aliasID)
+		if err != nil {
+			return err
+		}
+		if alias != nil {
+			batch.Delete([]byte(fmt.Sprintf("author_alias:%d", aliasID)), nil)
+			batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil)
+		}
+		batch.Delete(iter.Key(), nil)
+	}
+	return nil
 }
 
 // Series operations
@@ -555,6 +726,19 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 	newIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(name), oldAuthorIDStr))
 	idBytes := []byte(fmt.Sprintf("%d", id))
 	return p.db.Set(newIndexKey, idBytes, pebble.Sync)
+}
+
+func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
+	series, err := p.GetAllSeries()
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int, len(series))
+	for _, s := range series {
+		books, _ := p.GetBooksBySeriesID(s.ID)
+		counts[s.ID] = len(books)
+	}
+	return counts, nil
 }
 
 // ---- Work operations (logical title-level grouping) ----
@@ -932,6 +1116,11 @@ func (p *PebbleStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]B
 
 func (p *PebbleStore) GetFolderDuplicates() ([][]Book, error) {
 	// PebbleStore doesn't support folder-based duplicate detection efficiently.
+	return nil, nil
+}
+
+// GetDuplicateBooksByMetadata is not efficiently supported in PebbleStore.
+func (p *PebbleStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, error) {
 	return nil, nil
 }
 
@@ -3120,6 +3309,64 @@ func (p *PebbleStore) MergeBookSegments(bookNumericID int, newSegment *BookSegme
 	return p.recomputeDurationMap(bookNumericID)
 }
 
+// GetBookSegmentByID retrieves a single segment by its ULID.
+func (p *PebbleStore) GetBookSegmentByID(segmentID string) (*BookSegment, error) {
+	v, closer, err := p.db.Get([]byte("bf:" + segmentID))
+	if err != nil {
+		return nil, fmt.Errorf("segment not found: %s", segmentID)
+	}
+	defer closer.Close()
+	var seg BookSegment
+	if err := json.Unmarshal(v, &seg); err != nil {
+		return nil, err
+	}
+	return &seg, nil
+}
+
+// MoveSegmentsToBook reassigns segments to a different book (by numeric ID).
+func (p *PebbleStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
+	b := p.db.NewBatch()
+	for _, segID := range segmentIDs {
+		v, closer, err := p.db.Get([]byte("bf:" + segID))
+		if err != nil {
+			b.Close()
+			return fmt.Errorf("segment not found: %s", segID)
+		}
+		var seg BookSegment
+		if err := json.Unmarshal(v, &seg); err != nil {
+			closer.Close()
+			b.Close()
+			return err
+		}
+		closer.Close()
+
+		// Delete old index key
+		oldKey := []byte(fmt.Sprintf("bfs:%d:%s", seg.BookID, seg.ID))
+		if err := b.Delete(oldKey, nil); err != nil {
+			b.Close()
+			return err
+		}
+
+		// Update segment
+		seg.BookID = targetBookNumericID
+		seg.UpdatedAt = time.Now()
+		seg.Version++
+
+		data, _ := json.Marshal(&seg)
+		if err := b.Set([]byte("bf:"+segID), data, nil); err != nil {
+			b.Close()
+			return err
+		}
+		// Create new index key
+		newKey := []byte(fmt.Sprintf("bfs:%d:%s", targetBookNumericID, seg.ID))
+		if err := b.Set(newKey, []byte("1"), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
 func (p *PebbleStore) recomputeDurationMap(bookNumericID int) error {
 	segs, err := p.ListBookSegments(bookNumericID)
 	if err != nil {
@@ -3496,7 +3743,7 @@ func (p *PebbleStore) Reset() error {
 	}
 
 	// Reinitialize counters to their initial state
-	counters := []string{"author", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
+	counters := []string{"author", "author_alias", "series", "book", "import_path", "operationlog", "playlist", "playlistitem", "preference"}
 	for _, counter := range counters {
 		key := fmt.Sprintf("counter:%s", counter)
 		if err := batch.Set([]byte(key), []byte("1"), pebble.NoSync); err != nil {
@@ -3607,4 +3854,95 @@ func (p *PebbleStore) RevertOperationChanges(operationID string) error {
 		}
 	}
 	return nil
+}
+
+// CreateAuthorTombstone writes a tombstone that redirects oldID to canonicalID.
+func (p *PebbleStore) CreateAuthorTombstone(oldID, canonicalID int) error {
+	key := []byte(fmt.Sprintf("author_tombstone:%d", oldID))
+	value := []byte(strconv.Itoa(canonicalID))
+	return p.db.Set(key, value, pebble.Sync)
+}
+
+// GetAuthorTombstone returns the canonical author ID for a tombstoned author.
+// Returns 0 if no tombstone exists.
+func (p *PebbleStore) GetAuthorTombstone(oldID int) (int, error) {
+	key := []byte(fmt.Sprintf("author_tombstone:%d", oldID))
+	value, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer closer.Close()
+
+	canonicalID, err := strconv.Atoi(string(value))
+	if err != nil {
+		return 0, fmt.Errorf("invalid tombstone value for author %d: %w", oldID, err)
+	}
+	return canonicalID, nil
+}
+
+// ResolveTombstoneChains finds chains like A→B→C and collapses them so A→C, B→C.
+// Returns the number of tombstones updated.
+func (p *PebbleStore) ResolveTombstoneChains() (int, error) {
+	// Collect all tombstones
+	tombstones := make(map[int]int) // oldID → canonicalID
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("author_tombstone:"),
+		UpperBound: []byte("author_tombstone;"),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create tombstone iterator: %w", err)
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		keyStr := string(iter.Key())
+		parts := strings.SplitN(keyStr, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		oldID, err := strconv.Atoi(parts[1])
+		if err != nil {
+			continue
+		}
+		val, valErr := iter.ValueAndErr()
+		if valErr != nil {
+			continue
+		}
+		canonicalID, err := strconv.Atoi(string(val))
+		if err != nil {
+			continue
+		}
+		tombstones[oldID] = canonicalID
+	}
+
+	// Resolve chains: follow each tombstone to its final destination
+	updated := 0
+	for oldID, canonicalID := range tombstones {
+		finalID := canonicalID
+		visited := map[int]bool{oldID: true}
+		for {
+			nextID, exists := tombstones[finalID]
+			if !exists {
+				break
+			}
+			if visited[finalID] {
+				break // cycle detection
+			}
+			visited[finalID] = true
+			finalID = nextID
+		}
+		if finalID != canonicalID {
+			// Update the tombstone to point directly to the final destination
+			key := []byte(fmt.Sprintf("author_tombstone:%d", oldID))
+			if err := p.db.Set(key, []byte(strconv.Itoa(finalID)), pebble.Sync); err != nil {
+				return updated, fmt.Errorf("failed to update tombstone %d: %w", oldID, err)
+			}
+			updated++
+		}
+	}
+
+	return updated, nil
 }

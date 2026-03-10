@@ -1126,6 +1126,100 @@ func (_c *MockStore_UpdateBookSegment_Call) RunAndReturn(run func(segment *datab
 	return _c
 }
 
+// GetBookSegmentByID provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookSegmentByID(segmentID string) (*database.BookSegment, error) {
+	ret := _mock.Called(segmentID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookSegmentByID")
+	}
+
+	var r0 *database.BookSegment
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.BookSegment, error)); ok {
+		return returnFunc(segmentID)
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.BookSegment)
+	}
+	r1 = ret.Error(1)
+	return r0, r1
+}
+
+// MockStore_GetBookSegmentByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookSegmentByID'
+type MockStore_GetBookSegmentByID_Call struct {
+	*mock.Call
+}
+
+// GetBookSegmentByID is a helper method to define mock.On call
+//   - segmentID string
+func (_e *MockStore_Expecter) GetBookSegmentByID(segmentID interface{}) *MockStore_GetBookSegmentByID_Call {
+	return &MockStore_GetBookSegmentByID_Call{Call: _e.mock.On("GetBookSegmentByID", segmentID)}
+}
+
+func (_c *MockStore_GetBookSegmentByID_Call) Run(run func(segmentID string)) *MockStore_GetBookSegmentByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookSegmentByID_Call) Return(segment *database.BookSegment, err error) *MockStore_GetBookSegmentByID_Call {
+	_c.Call.Return(segment, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookSegmentByID_Call) RunAndReturn(run func(string) (*database.BookSegment, error)) *MockStore_GetBookSegmentByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MoveSegmentsToBook provides a mock function for the type MockStore
+func (_mock *MockStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
+	ret := _mock.Called(segmentIDs, targetBookNumericID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MoveSegmentsToBook")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func([]string, int) error); ok {
+		r0 = returnFunc(segmentIDs, targetBookNumericID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_MoveSegmentsToBook_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MoveSegmentsToBook'
+type MockStore_MoveSegmentsToBook_Call struct {
+	*mock.Call
+}
+
+// MoveSegmentsToBook is a helper method to define mock.On call
+//   - segmentIDs []string
+//   - targetBookNumericID int
+func (_e *MockStore_Expecter) MoveSegmentsToBook(segmentIDs interface{}, targetBookNumericID interface{}) *MockStore_MoveSegmentsToBook_Call {
+	return &MockStore_MoveSegmentsToBook_Call{Call: _e.mock.On("MoveSegmentsToBook", segmentIDs, targetBookNumericID)}
+}
+
+func (_c *MockStore_MoveSegmentsToBook_Call) Run(run func(segmentIDs []string, targetBookNumericID int)) *MockStore_MoveSegmentsToBook_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]string), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_MoveSegmentsToBook_Call) Return(err error) *MockStore_MoveSegmentsToBook_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_MoveSegmentsToBook_Call) RunAndReturn(run func([]string, int) error) *MockStore_MoveSegmentsToBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateImportPath provides a mock function for the type MockStore
 func (_mock *MockStore) CreateImportPath(path string, name string) (*database.ImportPath, error) {
 	ret := _mock.Called(path, name)
@@ -4149,6 +4243,59 @@ func (_c *MockStore_GetFolderDuplicates_Call) Return(bookss [][]database.Book, e
 }
 
 func (_c *MockStore_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]database.Book, error)) *MockStore_GetFolderDuplicates_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDuplicateBooksByMetadata provides a mock function for the type MockStore
+func (_mock *MockStore) GetDuplicateBooksByMetadata(threshold float64) ([][]database.Book, error) {
+	ret := _mock.Called(threshold)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDuplicateBooksByMetadata")
+	}
+
+	var r0 [][]database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(float64) ([][]database.Book, error)); ok {
+		return returnFunc(threshold)
+	}
+	if returnFunc, ok := ret.Get(0).(func(float64) [][]database.Book); ok {
+		r0 = returnFunc(threshold)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([][]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(float64) error); ok {
+		r1 = returnFunc(threshold)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetDuplicateBooksByMetadata_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetDuplicateBooksByMetadata(threshold interface{}) *MockStore_GetDuplicateBooksByMetadata_Call {
+	return &MockStore_GetDuplicateBooksByMetadata_Call{Call: _e.mock.On("GetDuplicateBooksByMetadata", threshold)}
+}
+
+func (_c *MockStore_GetDuplicateBooksByMetadata_Call) Run(run func(float64)) *MockStore_GetDuplicateBooksByMetadata_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(float64))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDuplicateBooksByMetadata_Call) Return(bookss [][]database.Book, err error) *MockStore_GetDuplicateBooksByMetadata_Call {
+	_c.Call.Return(bookss, err)
+	return _c
+}
+
+func (_c *MockStore_GetDuplicateBooksByMetadata_Call) RunAndReturn(run func(float64) ([][]database.Book, error)) *MockStore_GetDuplicateBooksByMetadata_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -8445,6 +8592,159 @@ func (_c *MockStore_RevertOperationChanges_Call) Return(err error) *MockStore_Re
 }
 
 func (_c *MockStore_RevertOperationChanges_Call) RunAndReturn(run func(string) error) *MockStore_RevertOperationChanges_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateAuthorTombstone provides a mock function for the type MockStore
+func (_mock *MockStore) CreateAuthorTombstone(oldID int, canonicalID int) error {
+	ret := _mock.Called(oldID, canonicalID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateAuthorTombstone")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) error); ok {
+		r0 = returnFunc(oldID, canonicalID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_CreateAuthorTombstone_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateAuthorTombstone'
+type MockStore_CreateAuthorTombstone_Call struct {
+	*mock.Call
+}
+
+// CreateAuthorTombstone is a helper method to define mock.On call
+//   - oldID int
+//   - canonicalID int
+func (_e *MockStore_Expecter) CreateAuthorTombstone(oldID interface{}, canonicalID interface{}) *MockStore_CreateAuthorTombstone_Call {
+	return &MockStore_CreateAuthorTombstone_Call{Call: _e.mock.On("CreateAuthorTombstone", oldID, canonicalID)}
+}
+
+func (_c *MockStore_CreateAuthorTombstone_Call) Run(run func(oldID int, canonicalID int)) *MockStore_CreateAuthorTombstone_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int), args[1].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateAuthorTombstone_Call) Return(err error) *MockStore_CreateAuthorTombstone_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateAuthorTombstone_Call) RunAndReturn(run func(int, int) error) *MockStore_CreateAuthorTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetAuthorTombstone provides a mock function for the type MockStore
+func (_mock *MockStore) GetAuthorTombstone(oldID int) (int, error) {
+	ret := _mock.Called(oldID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuthorTombstone")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) (int, error)); ok {
+		return returnFunc(oldID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) int); ok {
+		r0 = returnFunc(oldID)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(oldID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetAuthorTombstone_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuthorTombstone'
+type MockStore_GetAuthorTombstone_Call struct {
+	*mock.Call
+}
+
+// GetAuthorTombstone is a helper method to define mock.On call
+//   - oldID int
+func (_e *MockStore_Expecter) GetAuthorTombstone(oldID interface{}) *MockStore_GetAuthorTombstone_Call {
+	return &MockStore_GetAuthorTombstone_Call{Call: _e.mock.On("GetAuthorTombstone", oldID)}
+}
+
+func (_c *MockStore_GetAuthorTombstone_Call) Run(run func(oldID int)) *MockStore_GetAuthorTombstone_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAuthorTombstone_Call) Return(canonicalID int, err error) *MockStore_GetAuthorTombstone_Call {
+	_c.Call.Return(canonicalID, err)
+	return _c
+}
+
+func (_c *MockStore_GetAuthorTombstone_Call) RunAndReturn(run func(int) (int, error)) *MockStore_GetAuthorTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ResolveTombstoneChains provides a mock function for the type MockStore
+func (_mock *MockStore) ResolveTombstoneChains() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ResolveTombstoneChains")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (int, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() int); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ResolveTombstoneChains_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ResolveTombstoneChains'
+type MockStore_ResolveTombstoneChains_Call struct {
+	*mock.Call
+}
+
+// ResolveTombstoneChains is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ResolveTombstoneChains() *MockStore_ResolveTombstoneChains_Call {
+	return &MockStore_ResolveTombstoneChains_Call{Call: _e.mock.On("ResolveTombstoneChains")}
+}
+
+func (_c *MockStore_ResolveTombstoneChains_Call) Run(run func()) *MockStore_ResolveTombstoneChains_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ResolveTombstoneChains_Call) Return(resolved int, err error) *MockStore_ResolveTombstoneChains_Call {
+	_c.Call.Return(resolved, err)
+	return _c
+}
+
+func (_c *MockStore_ResolveTombstoneChains_Call) RunAndReturn(run func() (int, error)) *MockStore_ResolveTombstoneChains_Call {
 	_c.Call.Return(run)
 	return _c
 }

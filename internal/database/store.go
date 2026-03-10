@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.34.0
+// version: 2.37.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -34,6 +34,11 @@ type Store interface {
 	DeleteAuthor(id int) error
 	UpdateAuthorName(id int, name string) error
 
+	// Author Tombstones (merged author redirects)
+	CreateAuthorTombstone(oldID, canonicalID int) error
+	GetAuthorTombstone(oldID int) (int, error)
+	ResolveTombstoneChains() (int, error)
+
 	// Author Aliases
 	GetAuthorAliases(authorID int) ([]AuthorAlias, error)
 	GetAllAuthorAliases() ([]AuthorAlias, error)
@@ -64,6 +69,7 @@ type Store interface {
 	CreateSeries(name string, authorID *int) (*Series, error)
 	DeleteSeries(id int) error
 	UpdateSeriesName(id int, name string) error
+	GetAllSeriesBookCounts() (map[int]int, error)
 
 	// Works (logical title-level grouping across editions/narrations)
 	GetAllWorks() ([]Work, error)
@@ -81,8 +87,9 @@ type Store interface {
 	GetBookByFileHash(hash string) (*Book, error)
 	GetBookByOriginalHash(hash string) (*Book, error)
 	GetBookByOrganizedHash(hash string) (*Book, error)
-	GetDuplicateBooks() ([][]Book, error)   // Returns groups of duplicate books (by hash)
+	GetDuplicateBooks() ([][]Book, error)                            // Returns groups of duplicate books (by hash)
 	GetFolderDuplicates() ([][]Book, error)                        // Returns groups of duplicate books (same folder + title)
+	GetDuplicateBooksByMetadata(threshold float64) ([][]Book, error) // Returns groups of fuzzy-matched duplicate books (title+author+duration)
 	GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) // Find books with same title in same directory
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
@@ -202,6 +209,8 @@ type Store interface {
 	UpdateBookSegment(segment *BookSegment) error
 	ListBookSegments(bookNumericID int) ([]BookSegment, error)
 	MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+	GetBookSegmentByID(segmentID string) (*BookSegment, error)
+	MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error
 
 	// Playback events & progress
 	AddPlaybackEvent(event *PlaybackEvent) error
@@ -292,6 +301,7 @@ type Book struct {
 	WorkID               *string `json:"work_id,omitempty"`
 	Narrator             *string `json:"narrator,omitempty"`
 	Edition              *string `json:"edition,omitempty"`
+	Description          *string `json:"description,omitempty"`
 	Language             *string `json:"language,omitempty"`
 	Publisher            *string `json:"publisher,omitempty"`
 	PrintYear            *int    `json:"print_year,omitempty"`
@@ -527,6 +537,7 @@ type BookSegment struct {
 	TrackNumber  *int      `json:"track_number,omitempty"`
 	TotalTracks  *int      `json:"total_tracks,omitempty"`
 	SegmentTitle *string   `json:"segment_title,omitempty"`
+	FileHash     *string   `json:"file_hash,omitempty"`
 	Active       bool      `json:"active"`
 	SupersededBy *string   `json:"superseded_by,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`

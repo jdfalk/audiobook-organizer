@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -205,6 +205,10 @@ type Config struct {
 
 	ScheduledResolveProductionAuthorsEnabled  bool `json:"scheduled_resolve_production_authors_enabled"`
 	ScheduledResolveProductionAuthorsInterval int  `json:"scheduled_resolve_production_authors_interval"` // minutes, 0 = manual only
+
+	ScheduledSeriesPruneEnabled   bool `json:"scheduled_series_prune_enabled"`
+	ScheduledSeriesPruneInterval  int  `json:"scheduled_series_prune_interval"`  // minutes, default 0 (manual)
+	ScheduledSeriesPruneOnStartup bool `json:"scheduled_series_prune_on_startup"`
 
 	// AI Batch API
 	ScheduledAIDedupBatchEnabled   bool `json:"scheduled_ai_dedup_batch_enabled"`
@@ -544,7 +548,7 @@ func InitConfig() {
 			{
 				ID:           "wikipedia",
 				Name:         "Wikipedia",
-				Enabled:      true,
+				Enabled:      false, // Disabled by default — Wikipedia API returns 403
 				Priority:     6,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
@@ -869,7 +873,7 @@ func ResetToDefaults() {
 			{
 				ID:           "wikipedia",
 				Name:         "Wikipedia",
-				Enabled:      true,
+				Enabled:      false, // Disabled by default — Wikipedia API returns 403
 				Priority:     6,
 				RequiresAuth: false,
 				Credentials:  make(map[string]string),
