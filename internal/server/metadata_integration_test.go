@@ -74,7 +74,9 @@ func TestMetadataFetch_FallbackToAuthorSearch(t *testing.T) {
 		query := r.URL.Query()
 		w.Header().Set("Content-Type", "application/json")
 
-		if query.Get("author") != "" {
+		// Title-only search: stripped title "The Hobbit" should match
+		title := query.Get("title")
+		if title == "The Hobbit" || title == "The+Hobbit" {
 			_, _ = w.Write([]byte(testutil.OpenLibraryHobbitResponse))
 		} else {
 			_, _ = w.Write([]byte(testutil.OpenLibraryEmptyResponse))
@@ -100,7 +102,7 @@ func TestMetadataFetch_FallbackToAuthorSearch(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
-	assert.GreaterOrEqual(t, callCount, 2, "should have tried title-only first, then title+author")
+	assert.GreaterOrEqual(t, callCount, 1, "should have searched by title (stripped chapter prefix)")
 }
 
 func TestMetadataFetch_NotFound(t *testing.T) {

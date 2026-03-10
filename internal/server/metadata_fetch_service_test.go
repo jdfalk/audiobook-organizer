@@ -199,12 +199,8 @@ func TestMetadataFetchService_TitleStrippingFallback(t *testing.T) {
 		name: "TestSource",
 		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
 			atomic.AddInt32(&searchCount, 1)
-			return nil, nil // no results for title-only searches
-		},
-		searchByTitleAndAuthor: func(title, author string) ([]metadata.BookMetadata, error) {
-			atomic.AddInt32(&searchCount, 1)
-			// Only the stripped title + author search succeeds
-			if title == "The Hobbit" && author == "Tolkien" {
+			// Only the stripped title search succeeds (title-only, no author in query)
+			if title == "The Hobbit" {
 				return []metadata.BookMetadata{{Title: "The Hobbit", Author: "Tolkien"}}, nil
 			}
 			return nil, nil
@@ -221,8 +217,8 @@ func TestMetadataFetchService_TitleStrippingFallback(t *testing.T) {
 	}
 
 	count := atomic.LoadInt32(&searchCount)
-	if count < 3 {
-		t.Errorf("expected at least 3 search calls, got %d", count)
+	if count < 1 {
+		t.Errorf("expected at least 1 search call (stripped title), got %d", count)
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package database
@@ -929,4 +929,179 @@ func TestPebblePruneBookVersions(t *testing.T) {
 
 	remaining, _ := store.GetBookVersions(created.ID, 100)
 	require.Len(t, remaining, 2)
+}
+
+func TestPebbleAuthorAliases(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	// Create an author
+	author, err := store.CreateAuthor("Stephen King")
+	require.NoError(t, err)
+
+	// Create aliases
+	alias1, err := store.CreateAuthorAlias(author.ID, "Richard Bachman", "pen_name")
+	require.NoError(t, err)
+	require.Equal(t, "Richard Bachman", alias1.AliasName)
+	require.Equal(t, "pen_name", alias1.AliasType)
+	require.Equal(t, author.ID, alias1.AuthorID)
+
+	_, err = store.CreateAuthorAlias(author.ID, "John Swithen", "pen_name")
+	require.NoError(t, err)
+
+	// Get aliases by author
+	aliases, err := store.GetAuthorAliases(author.ID)
+	require.NoError(t, err)
+	require.Len(t, aliases, 2)
+	// Sorted by name
+	require.Equal(t, "John Swithen", aliases[0].AliasName)
+	require.Equal(t, "Richard Bachman", aliases[1].AliasName)
+
+	// Get all aliases
+	all, err := store.GetAllAuthorAliases()
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+
+	// Find author by alias (case-insensitive)
+	found, err := store.FindAuthorByAlias("richard bachman")
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	require.Equal(t, author.ID, found.ID)
+
+	// Not found
+	notFound, err := store.FindAuthorByAlias("nonexistent")
+	require.NoError(t, err)
+	require.Nil(t, notFound)
+
+	// Duplicate alias
+	_, err = store.CreateAuthorAlias(author.ID, "Richard Bachman", "pen_name")
+	require.Error(t, err)
+
+	// Delete alias
+	err = store.DeleteAuthorAlias(alias1.ID)
+	require.NoError(t, err)
+
+	aliases, err = store.GetAuthorAliases(author.ID)
+	require.NoError(t, err)
+	require.Len(t, aliases, 1)
+	require.Equal(t, "John Swithen", aliases[0].AliasName)
+
+	// Lookup deleted alias should return nil
+	found, err = store.FindAuthorByAlias("Richard Bachman")
+	require.NoError(t, err)
+	require.Nil(t, found)
+
+	// Default alias type
+	alias3, err := store.CreateAuthorAlias(author.ID, "The Master", "")
+	require.NoError(t, err)
+	require.Equal(t, "alias", alias3.AliasType)
+}
+
+func TestPebbleAuthorDeleteCascadesAliases(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	author, err := store.CreateAuthor("Mark Twain")
+	require.NoError(t, err)
+
+	_, err = store.CreateAuthorAlias(author.ID, "Samuel Clemens", "real_name")
+	require.NoError(t, err)
+
+	// Delete author should cascade delete aliases
+	err = store.DeleteAuthor(author.ID)
+	require.NoError(t, err)
+
+	aliases, err := store.GetAuthorAliases(author.ID)
+	require.NoError(t, err)
+	require.Empty(t, aliases)
+
+	// Alias lookup should return nil
+	found, err := store.FindAuthorByAlias("Samuel Clemens")
+	require.NoError(t, err)
+	require.Nil(t, found)
+}
+
+func TestPebbleTombstones(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	// Create two authors
+	authorA, err := store.CreateAuthor("J.R.R. Tolkien")
+	require.NoError(t, err)
+	authorB, err := store.CreateAuthor("JRR Tolkien")
+	require.NoError(t, err)
+
+	// Delete authorB and create tombstone pointing to authorA
+	err = store.DeleteAuthor(authorB.ID)
+	require.NoError(t, err)
+	err = store.CreateAuthorTombstone(authorB.ID, authorA.ID)
+	require.NoError(t, err)
+
+	// GetAuthorByID for the tombstoned ID should follow redirect
+	result, err := store.GetAuthorByID(authorB.ID)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, authorA.ID, result.ID)
+	require.Equal(t, "J.R.R. Tolkien", result.Name)
+
+	// GetAuthorTombstone should return the canonical ID
+	canonicalID, err := store.GetAuthorTombstone(authorB.ID)
+	require.NoError(t, err)
+	require.Equal(t, authorA.ID, canonicalID)
+
+	// Non-existent tombstone should return 0
+	missingID, err := store.GetAuthorTombstone(9999)
+	require.NoError(t, err)
+	require.Equal(t, 0, missingID)
+}
+
+func TestPebbleTombstoneChainResolution(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
+
+	// Create three authors: A, B, C
+	authorA, err := store.CreateAuthor("Author A")
+	require.NoError(t, err)
+	authorB, err := store.CreateAuthor("Author B")
+	require.NoError(t, err)
+	authorC, err := store.CreateAuthor("Author C")
+	require.NoError(t, err)
+
+	// Create chain: A → B → C
+	err = store.DeleteAuthor(authorA.ID)
+	require.NoError(t, err)
+	err = store.CreateAuthorTombstone(authorA.ID, authorB.ID)
+	require.NoError(t, err)
+
+	err = store.DeleteAuthor(authorB.ID)
+	require.NoError(t, err)
+	err = store.CreateAuthorTombstone(authorB.ID, authorC.ID)
+	require.NoError(t, err)
+
+	// Before resolution, A → B (which chains to C via GetAuthorByID)
+	tombA, err := store.GetAuthorTombstone(authorA.ID)
+	require.NoError(t, err)
+	require.Equal(t, authorB.ID, tombA, "Before resolution, A should point to B")
+
+	// Resolve chains
+	updated, err := store.ResolveTombstoneChains()
+	require.NoError(t, err)
+	require.Equal(t, 1, updated, "Should have updated 1 tombstone (A→C)")
+
+	// After resolution, A → C directly
+	tombA, err = store.GetAuthorTombstone(authorA.ID)
+	require.NoError(t, err)
+	require.Equal(t, authorC.ID, tombA, "After resolution, A should point directly to C")
+
+	// B → C should remain unchanged
+	tombB, err := store.GetAuthorTombstone(authorB.ID)
+	require.NoError(t, err)
+	require.Equal(t, authorC.ID, tombB)
+
+	// GetAuthorByID for A should resolve to C
+	result, err := store.GetAuthorByID(authorA.ID)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, authorC.ID, result.ID)
+	require.Equal(t, "Author C", result.Name)
 }

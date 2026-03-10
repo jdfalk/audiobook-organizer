@@ -179,21 +179,23 @@ func TestPipeline_ChapterTitle_StillFindsBook(t *testing.T) {
 	}
 	config.AppConfig.WriteBackMetadata = false
 
-	// 3. Mock server: title-only returns empty, title+author returns results
+	// 3. Mock server: title-only search with stripped chapter prefix should match.
 	// The service strips " - Chapter 3" via stripChapterFromTitle, then
-	// searches by title first (which we make return empty), then by title+author.
+	// searches by title "The Hobbit" (no author in query).
 	callCount := 0
 	olServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 
-		// If the query includes an author param, return results
-		if strings.Contains(r.URL.String(), "author=") {
+		// Stripped title "The Hobbit" should match
+		query := r.URL.Query()
+		title := query.Get("title")
+		if title == "The Hobbit" || title == "The+Hobbit" {
 			_, _ = w.Write([]byte(testutil.OpenLibraryHobbitResponse))
 			return
 		}
 
-		// Title-only: return empty
+		// Other searches: return empty
 		_, _ = w.Write([]byte(testutil.OpenLibraryEmptyResponse))
 	}))
 	defer olServer.Close()
@@ -205,7 +207,7 @@ func TestPipeline_ChapterTitle_StillFindsBook(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// 5. Assert: metadata found via title+author fallback
+	// 5. Assert: metadata found via title-only search with stripped chapter prefix
 	assert.Equal(t, "Open Library", resp.Source)
 
 	// 6. Assert: book title in DB is now clean (from metadata response)

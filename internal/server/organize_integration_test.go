@@ -55,15 +55,37 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	require.True(t, ok, "response should contain id or operation_id, got: %v", resp)
 	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
-	// Verify book was organized
+	// Verify book was organized — now creates a new version record
 	books, err := env.Store.GetAllBooks(100, 0)
 	require.NoError(t, err)
-	require.Len(t, books, 1)
+	require.Len(t, books, 2, "should have original + organized version")
 
-	updated := books[0]
-	assert.Contains(t, updated.FilePath, env.RootDir, "book should be in library dir")
+	// Find the organized version (in library dir) and original
+	var organized, original *database.Book
+	for i := range books {
+		if strings.HasPrefix(books[i].FilePath, env.RootDir) {
+			organized = &books[i]
+		} else {
+			original = &books[i]
+		}
+	}
+	require.NotNil(t, organized, "should have an organized version in library dir")
+	require.NotNil(t, original, "should have the original book")
+
+	// Organized version is primary
+	assert.True(t, organized.IsPrimaryVersion != nil && *organized.IsPrimaryVersion, "organized version should be primary")
+	assert.True(t, original.IsPrimaryVersion != nil && !*original.IsPrimaryVersion, "original should not be primary")
+
+	// Both share a version group
+	assert.NotNil(t, organized.VersionGroupID)
+	assert.NotNil(t, original.VersionGroupID)
+	assert.Equal(t, *organized.VersionGroupID, *original.VersionGroupID, "should share version group")
 
 	// Verify file exists at organized location
-	_, err = os.Stat(updated.FilePath)
+	_, err = os.Stat(organized.FilePath)
 	assert.NoError(t, err, "organized file should exist")
+
+	// Verify original file still exists
+	_, err = os.Stat(original.FilePath)
+	assert.NoError(t, err, "original file should still exist")
 }

@@ -22,6 +22,7 @@ import (
 
 func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 	server, cleanup := setupTestServer(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	// Stub OpenLibrary.
@@ -115,6 +116,7 @@ func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 
 func TestBulkFetchMetadata_OnlyMissingFalse_AllowsOverwrite(t *testing.T) {
 	server, cleanup := setupTestServer(t)
+	useOnlyOpenLibrary(t)
 	defer cleanup()
 
 	// Stub OpenLibrary with a different publisher.

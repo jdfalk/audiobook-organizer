@@ -1,0 +1,26 @@
+2026/03/07 18:40:09 Operation queue initialized with 2 workers
+2026/03/07 18:40:09 Worker 0 started
+2026/03/07 18:40:09 Worker 1 started
+Error: OpenAI API key required (set openai_api_key in config or OPENAI_API_KEY env var)
+Usage:
+  audiobook-organizer dedup-bench [flags]
+
+Flags:
+      --chunk-size int   Max authors per AI request (for large datasets) (default 200)
+      --dry-run          Extract data only, don't call API
+  -h, --help             help for dedup-bench
+      --mode string      Mode: groups, full, or both (default "both")
+      --models strings   Models to test (default [gpt-4o,gpt-4o-mini,gpt-5,gpt-5-mini,o3-mini,o4-mini])
+      --output string    Output directory for results (default "testdata/dedup-bench")
+      --server string    Remote server URL to fetch authors from (e.g., http://172.16.2.30:8484)
+
+Global Flags:
+      --config string                     config file (default is $HOME/.audiobook-organizer.yaml)
+      --db string                         path to database (default: audiobooks.pebble for PebbleDB) (default "audiobooks.pebble")
+      --db-type string                    database type: pebble (default) or sqlite (default "pebble")
+      --dir string                        root directory containing audiobooks
+      --enable-sqlite3-i-know-the-risks   enable SQLite3 database (WARNING: cross-compilation issues, PebbleDB recommended)
+      --log-level string                  log level: debug, info, warn, error (default "info")
+      --playlists string                  directory to store generated playlists (default "playlists")
+
+OpenAI API key required (set openai_api_key in config or OPENAI_API_KEY env var)
