@@ -220,6 +220,12 @@ var migrations = []Migration{
 		Down:        nil,
 	},
 	{
+		Version:     31,
+		Description: "Add system_activity_log table and logs_pruned flag",
+		Up:          migration031Up,
+		Down:        nil,
+	},
+	{
 		Version:     32,
 		Description: "Add scan cache columns for incremental scanning",
 		Up:          migration032Up,
@@ -1627,6 +1633,37 @@ func migration030Up(store Store) error {
 	}
 
 	log.Println("  - file_hash column added to book_segments successfully")
+	return nil
+}
+
+func migration031Up(store Store) error {
+	log.Println("  - Adding system_activity_log table and logs_pruned flag")
+
+	sqlStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB handles this via prefix keys
+	}
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS system_activity_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source TEXT NOT NULL,
+			level TEXT NOT NULL,
+			message TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_system_activity_source ON system_activity_log(source)`,
+		`CREATE INDEX IF NOT EXISTS idx_system_activity_created ON system_activity_log(created_at)`,
+		`ALTER TABLE operations ADD COLUMN logs_pruned BOOLEAN DEFAULT 0`,
+	}
+	for _, stmt := range statements {
+		if _, err := sqlStore.db.Exec(stmt); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return fmt.Errorf("migration 31: %w", err)
+			}
+		}
+	}
+
+	log.Println("  - system_activity_log table created successfully")
 	return nil
 }
 

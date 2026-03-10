@@ -161,6 +161,15 @@ type Store interface {
 	GetOperationSummaryLog(id string) (*OperationSummaryLog, error)
 	ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error)
 
+	// System activity log
+	AddSystemActivityLog(source, level, message string) error
+	GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error)
+
+	// Retention pruning
+	PruneOperationLogs(olderThan time.Time) (int, error)
+	PruneOperationChanges(olderThan time.Time) (int, error)
+	PruneSystemActivityLogs(olderThan time.Time) (int, error)
+
 	DeleteOperationsByStatus(statuses []string) (int, error)
 
 	// User Preferences
@@ -460,6 +469,15 @@ type OperationChange struct {
 	NewValue    string     `json:"new_value"`
 	RevertedAt  *time.Time `json:"reverted_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// SystemActivityLog represents a log entry from a housekeeping goroutine.
+type SystemActivityLog struct {
+	ID        int       `json:"id"`
+	Source    string    `json:"source"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // OperationSummaryLog represents a completed operation persisted for history across restarts.

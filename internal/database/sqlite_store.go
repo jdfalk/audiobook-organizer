@@ -3612,6 +3612,73 @@ func (s *SQLiteStore) ResolveTombstoneChains() (int, error) {
 	return 0, nil
 }
 
+// AddSystemActivityLog inserts a log entry from a housekeeping goroutine.
+func (s *SQLiteStore) AddSystemActivityLog(source, level, message string) error {
+	_, err := s.db.Exec(
+		"INSERT INTO system_activity_log (source, level, message) VALUES (?, ?, ?)",
+		source, level, message,
+	)
+	return err
+}
+
+// GetSystemActivityLogs retrieves recent system activity log entries.
+func (s *SQLiteStore) GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error) {
+	query := "SELECT id, source, level, message, created_at FROM system_activity_log"
+	args := []interface{}{}
+	if source != "" {
+		query += " WHERE source = ?"
+		args = append(args, source)
+	}
+	query += " ORDER BY created_at DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []SystemActivityLog
+	for rows.Next() {
+		var l SystemActivityLog
+		if err := rows.Scan(&l.ID, &l.Source, &l.Level, &l.Message, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, l)
+	}
+	return logs, rows.Err()
+}
+
+// PruneOperationLogs deletes operation log entries older than the given time.
+func (s *SQLiteStore) PruneOperationLogs(olderThan time.Time) (int, error) {
+	result, err := s.db.Exec("DELETE FROM operation_logs WHERE created_at < ?", olderThan)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
+// PruneOperationChanges deletes operation change entries older than the given time.
+func (s *SQLiteStore) PruneOperationChanges(olderThan time.Time) (int, error) {
+	result, err := s.db.Exec("DELETE FROM operation_changes WHERE created_at < ?", olderThan)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
+// PruneSystemActivityLogs deletes system activity log entries older than the given time.
+func (s *SQLiteStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
+	result, err := s.db.Exec("DELETE FROM system_activity_log WHERE created_at < ?", olderThan)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
 // GetScanCacheMap returns a map of file_path -> ScanCacheEntry for all books
 // that have a non-empty file_path and a non-NULL last_scan_mtime.
 func (s *SQLiteStore) GetScanCacheMap() (map[string]ScanCacheEntry, error) {
