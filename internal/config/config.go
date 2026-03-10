@@ -128,6 +128,8 @@ type Config struct {
 	ConcurrentScans int `json:"concurrent_scans"`
 	// Background operation timeout in minutes (0 disables timeout)
 	OperationTimeoutMinutes int `json:"operation_timeout_minutes"`
+	// Log retention in days (0 = keep forever)
+	LogRetentionDays int `json:"log_retention_days"`
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -272,6 +274,7 @@ func InitConfig() {
 	}
 	viper.SetDefault("concurrent_scans", defaultWorkers)
 	viper.SetDefault("operation_timeout_minutes", 30)
+	viper.SetDefault("log_retention_days", 90)
 
 	// API security/runtime limits
 	viper.SetDefault("api_rate_limit_per_minute", 0)

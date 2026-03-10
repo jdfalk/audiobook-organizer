@@ -3956,6 +3956,106 @@ func (p *PebbleStore) ResolveTombstoneChains() (int, error) {
 	return updated, nil
 }
 
+// AddSystemActivityLog stores a log entry from a housekeeping goroutine.
+func (p *PebbleStore) AddSystemActivityLog(source, level, message string) error {
+	key := fmt.Sprintf("syslog:%s:%s", time.Now().Format(time.RFC3339Nano), source)
+	val := SystemActivityLog{
+		Source:    source,
+		Level:     level,
+		Message:   message,
+		CreatedAt: time.Now(),
+	}
+	data, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte(key), data, pebble.Sync)
+}
+
+// GetSystemActivityLogs retrieves recent system activity log entries.
+func (p *PebbleStore) GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error) {
+	prefix := []byte("syslog:")
+	upperBound := append(append([]byte{}, prefix...), 0xFF)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var logs []SystemActivityLog
+	for iter.Last(); iter.Valid(); iter.Prev() {
+		var l SystemActivityLog
+		if err := json.Unmarshal(iter.Value(), &l); err != nil {
+			continue
+		}
+		if source != "" && l.Source != source {
+			continue
+		}
+		logs = append(logs, l)
+		if len(logs) >= limit {
+			break
+		}
+	}
+	return logs, nil
+}
+
+// PruneOperationLogs deletes operation log entries older than the given time.
+func (p *PebbleStore) PruneOperationLogs(olderThan time.Time) (int, error) {
+	return p.pruneByTimestampPrefix("oplog:", olderThan)
+}
+
+// PruneOperationChanges deletes operation change entries older than the given time.
+func (p *PebbleStore) PruneOperationChanges(olderThan time.Time) (int, error) {
+	return p.pruneByTimestampPrefix("opchange:", olderThan)
+}
+
+// PruneSystemActivityLogs deletes system activity log entries older than the given time.
+func (p *PebbleStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
+	return p.pruneByTimestampPrefix("syslog:", olderThan)
+}
+
+// pruneByTimestampPrefix deletes all keys with the given prefix whose
+// embedded RFC3339 timestamp is before olderThan.
+func (p *PebbleStore) pruneByTimestampPrefix(prefix string, olderThan time.Time) (int, error) {
+	prefixBytes := []byte(prefix)
+	upperBound := append(append([]byte{}, prefixBytes...), 0xFF)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefixBytes,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	deleted := 0
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		parts := strings.SplitN(strings.TrimPrefix(key, prefix), ":", 2)
+		if len(parts) == 0 {
+			continue
+		}
+		ts, err := time.Parse(time.RFC3339Nano, parts[0])
+		if err != nil {
+			continue
+		}
+		if ts.Before(olderThan) {
+			_ = batch.Delete(iter.Key(), nil)
+			deleted++
+		}
+	}
+	if deleted > 0 {
+		return deleted, batch.Commit(pebble.Sync)
+	}
+	return 0, nil
+}
+
 // derefInt64 safely dereferences a *int64, returning 0 for nil.
 func derefInt64(p *int64) int64 {
 	if p == nil {
