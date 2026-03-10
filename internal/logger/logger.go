@@ -1,5 +1,5 @@
 // file: internal/logger/logger.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f47ac10b-58cc-4372-a567-0e02b2c3d479
 
 package logger
@@ -89,6 +89,10 @@ type Logger interface {
 	// Create child logger with subsystem prefix
 	With(subsystem string) Logger
 }
+
+// Compile-time assertions that both concrete types fully implement Logger.
+var _ Logger = (*StandardLogger)(nil)
+var _ Logger = (*OperationLogger)(nil)
 
 // logToStdout formats and prints a log line to stdout.
 func logToStdout(subsystem string, level Level, msg string, args ...any) {
