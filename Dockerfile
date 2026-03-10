@@ -1,5 +1,5 @@
 # file: Dockerfile
-# version: 2.2.0
+# version: 2.3.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
@@ -19,10 +19,11 @@ RUN npm run build
 
 # Stage 2: Build Go application with embedded frontend
 # Uses native platform (no cross-compile) so CGO works without cross-toolchain.
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 
 WORKDIR /build
 
+ENV GOEXPERIMENT=jsonv2
 RUN apk add --no-cache git gcc musl-dev sqlite-dev ca-certificates tzdata
 
 COPY go.mod go.sum ./
