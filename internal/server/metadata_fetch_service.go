@@ -905,14 +905,18 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 	for i, r := range results {
 		score := scoreOneResult(r, searchWords)
 
-		// Author-based scoring: boost matches, penalize mismatches
-		if bookAuthor != "" && r.Author != "" {
-			rAuthorLower := strings.ToLower(r.Author)
-			bAuthorLower := strings.ToLower(bookAuthor)
-			if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
-				score *= 1.5
+		// Author-based scoring: boost matches, penalize mismatches or missing
+		if bookAuthor != "" {
+			if r.Author != "" {
+				rAuthorLower := strings.ToLower(r.Author)
+				bAuthorLower := strings.ToLower(bookAuthor)
+				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+					score *= 1.5
+				} else {
+					score *= 0.7
+				}
 			} else {
-				score *= 0.7
+				score *= 0.75
 			}
 		}
 
@@ -925,9 +929,11 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 			}
 		}
 
-		// Small boost for audiobook sources (results with narrators are more likely correct)
+		// Audiobook-specific: boost results with narrator, penalize without
 		if r.Narrator != "" {
-			score *= 1.05
+			score *= 1.15
+		} else {
+			score *= 0.85
 		}
 
 		if score > bestScore {
@@ -1100,14 +1106,18 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 				continue
 			}
 
-			// Author-based scoring: boost matches, penalize mismatches
-			if bookAuthor != "" && r.Author != "" {
-				rAuthorLower := strings.ToLower(r.Author)
-				bAuthorLower := strings.ToLower(bookAuthor)
-				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
-					score *= 1.5 // Strong boost for author match
+			// Author-based scoring: boost matches, penalize mismatches or missing
+			if bookAuthor != "" {
+				if r.Author != "" {
+					rAuthorLower := strings.ToLower(r.Author)
+					bAuthorLower := strings.ToLower(bookAuthor)
+					if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+						score *= 1.5 // Strong boost for author match
+					} else {
+						score *= 0.7 // Penalize non-matching authors
+					}
 				} else {
-					score *= 0.7 // Penalize non-matching authors
+					score *= 0.75 // Penalize results missing author when we know the book's author
 				}
 			}
 
@@ -1129,9 +1139,12 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 				}
 			}
 
-			// Small boost for audiobook sources (results with narrators are more likely correct)
+			// Audiobook-specific scoring: boost results with narrator info,
+			// penalize sparse results from non-audiobook sources
 			if r.Narrator != "" {
-				score *= 1.05
+				score *= 1.15 // Results with narrator are more likely correct audiobook matches
+			} else {
+				score *= 0.85 // Penalize results without narrator info (likely non-audiobook sources)
 			}
 
 			candidates = append(candidates, MetadataCandidate{
