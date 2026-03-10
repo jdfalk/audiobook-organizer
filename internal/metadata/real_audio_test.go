@@ -47,7 +47,7 @@ func TestExtractMetadata_RealMP3_MobyDick(t *testing.T) {
 		t.Skip("moby dick MP3 fixture not available")
 	}
 
-	meta, err := ExtractMetadata(mp3Path)
+	meta, err := ExtractMetadata(mp3Path, nil)
 	require.NoError(t, err)
 
 	// Real ID3 tags: title="Chapter 000: Etymology and Extracts", artist="Herman Melville", album="Moby Dick, or The Whale"
@@ -64,7 +64,7 @@ func TestExtractMetadata_RealM4B_MobyDick(t *testing.T) {
 		t.Skip("moby dick M4B fixture not available")
 	}
 
-	meta, err := ExtractMetadata(m4bPath)
+	meta, err := ExtractMetadata(m4bPath, nil)
 	require.NoError(t, err)
 
 	// Real M4B tags: title="Moby Dick", composer="LibriVox Community", genre="Audiobook"
@@ -83,7 +83,7 @@ func TestExtractMetadata_RealM4B_SpecialCharsInFilename(t *testing.T) {
 		t.Skip("iliad M4B fixture not available")
 	}
 
-	meta, err := ExtractMetadata(m4bPath)
+	meta, err := ExtractMetadata(m4bPath, nil)
 	require.NoError(t, err)
 
 	// Verify key metadata was extracted from real tags
@@ -111,7 +111,7 @@ func TestExtractMetadata_RealMP3_MultipleChapters(t *testing.T) {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Skipf("chapter %s not available", ch)
 		}
-		meta, err := ExtractMetadata(path)
+		meta, err := ExtractMetadata(path, nil)
 		require.NoError(t, err)
 		artists = append(artists, meta.Artist)
 		albums = append(albums, meta.Album)
@@ -131,7 +131,7 @@ func TestExtractMetadata_RealM4A_Odyssey(t *testing.T) {
 		t.Skip("odyssey M4A fixture not available")
 	}
 
-	meta, err := ExtractMetadata(m4aPath)
+	meta, err := ExtractMetadata(m4aPath, nil)
 	require.NoError(t, err)
 
 	assert.Contains(t, meta.Title, "Odyssey")
@@ -158,7 +158,7 @@ func TestExtractMetadata_MinimalFixtures(t *testing.T) {
 				t.Skipf("fixture %s not available", tt.fixture)
 			}
 
-			meta, err := ExtractMetadata(path)
+			meta, err := ExtractMetadata(path, nil)
 			require.NoError(t, err)
 			// Minimal fixtures have no meaningful tags, so title should fall back to filename
 			assert.NotEmpty(t, meta.Title, "should have at least a title (from filename if needed)")
@@ -167,7 +167,7 @@ func TestExtractMetadata_MinimalFixtures(t *testing.T) {
 }
 
 func TestExtractMetadata_NonexistentFile(t *testing.T) {
-	_, err := ExtractMetadata("/nonexistent/path/to/file.m4b")
+	_, err := ExtractMetadata("/nonexistent/path/to/file.m4b", nil)
 	assert.Error(t, err)
 }
 
@@ -177,7 +177,7 @@ func TestExtractMetadata_EmptyFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(emptyFile, []byte{}, 0644))
 
 	// Should not crash, may return error or fallback metadata
-	meta, err := ExtractMetadata(emptyFile)
+	meta, err := ExtractMetadata(emptyFile, nil)
 	if err == nil {
 		// If no error, should have used filename fallback
 		assert.True(t, meta.UsedFilenameFallback || meta.Title == "empty")
@@ -190,7 +190,7 @@ func TestExtractMetadata_CorruptFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(corruptFile, []byte("this is not audio data at all"), 0644))
 
 	// Should not crash - may return error or fallback to filename
-	meta, err := ExtractMetadata(corruptFile)
+	meta, err := ExtractMetadata(corruptFile, nil)
 	if err == nil {
 		assert.True(t, meta.UsedFilenameFallback, "should fall back to filename for corrupt file")
 		assert.Equal(t, "corrupt", meta.Title)
@@ -211,7 +211,7 @@ func TestExtractMetadata_ReadOnlyFile(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(dst, data, 0444))
 
-	meta, err := ExtractMetadata(dst)
+	meta, err := ExtractMetadata(dst, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, meta.Title)
 }

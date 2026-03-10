@@ -753,7 +753,7 @@ func TestSourceOrUnknown_ValidValue(t *testing.T) {
 }
 
 func TestExtractMetadata_FileNotFound(t *testing.T) {
-	_, err := ExtractMetadata("/nonexistent/file.m4b")
+	_, err := ExtractMetadata("/nonexistent/file.m4b", nil)
 	if err == nil {
 		t.Error("Expected error for nonexistent file")
 	}

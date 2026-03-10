@@ -84,7 +84,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				if s.scanService == nil {
 					return fmt.Errorf("scan service not initialized")
 				}
-				return s.scanService.PerformScan(ctx, &ScanRequest{}, progress)
+				return s.scanService.PerformScan(ctx, &ScanRequest{}, operations.LoggerFromReporter(progress))
 			})
 		},
 		IsEnabled:   func() bool { return config.AppConfig.ScanOnStartup }, // reuse existing field

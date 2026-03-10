@@ -69,7 +69,7 @@ func TestIntegrationRealWorldMixedFormats(t *testing.T) {
 	}
 
 	// Test scanning
-	books, err := ScanDirectoryParallel(tmpDir, 4)
+	books, err := ScanDirectoryParallel(tmpDir, 4, nil)
 	if err != nil {
 		t.Fatalf("Integration scan failed: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestIntegrationProcessingMixedFormats(t *testing.T) {
 	}
 
 	// Scan and process
-	books, err := ScanDirectory(tmpDir)
+	books, err := ScanDirectory(tmpDir, nil)
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestIntegrationProcessingMixedFormats(t *testing.T) {
 	}
 
 	// Process books (metadata extraction)
-	err = ProcessBooksParallel(context.Background(), books, 2, nil)
+	err = ProcessBooksParallel(context.Background(), books, 2, nil, nil)
 	if err != nil {
 		t.Fatalf("Processing failed: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestIntegrationLargeScaleMixedFormats(t *testing.T) {
 	workerCounts := []int{1, 2, 4, 8}
 	for _, workers := range workerCounts {
 		t.Run(fmt.Sprintf("workers_%d", workers), func(t *testing.T) {
-			books, err := ScanDirectoryParallel(tmpDir, workers)
+			books, err := ScanDirectoryParallel(tmpDir, workers, nil)
 			if err != nil {
 				t.Fatalf("Scan with %d workers failed: %v", workers, err)
 			}

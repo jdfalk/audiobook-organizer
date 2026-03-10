@@ -567,7 +567,7 @@ func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, progr
 		}
 
 		_ = scanProgress.Log("info", fmt.Sprintf("Starting directory scan with %d workers", workers), nil)
-		books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers)
+		books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers, nil)
 		if err != nil {
 			return fmt.Errorf("failed to rescan root directory: %w", err)
 		}
@@ -593,7 +593,7 @@ func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, progr
 			}
 
 			_ = scanProgress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", totalBooks, workers), nil)
-			if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback); err != nil {
+			if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, nil); err != nil {
 				return fmt.Errorf("failed to process books: %w", err)
 			}
 			_ = scanProgress.Log("info", fmt.Sprintf("Metadata processing complete: %d books processed", processedFiles.Load()), nil)

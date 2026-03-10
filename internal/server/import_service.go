@@ -84,7 +84,7 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		}
 	} else {
 		var err error
-		meta, err = metadata.ExtractMetadata(req.FilePath)
+		meta, err = metadata.ExtractMetadata(req.FilePath, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to extract metadata: %w", err)
 		}

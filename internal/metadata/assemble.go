@@ -1,15 +1,16 @@
 // file: internal/metadata/assemble.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1b2c3d4e-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 
 package metadata
 
 import (
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 // AssembledMetadata is the combined, priority-resolved metadata for an audiobook.
@@ -36,6 +37,7 @@ type AssembledMetadata struct {
 
 // AssembleBookMetadata builds a BookMetadata from folder path hierarchy + first file tags.
 func AssembleBookMetadata(dirPath, firstFilePath string, fileCount int, totalDuration float64) (*AssembledMetadata, error) {
+	assembleLog := logger.New("assemble")
 	bm := &AssembledMetadata{
 		FileCount:     fileCount,
 		TotalDuration: totalDuration,
@@ -43,7 +45,7 @@ func AssembleBookMetadata(dirPath, firstFilePath string, fileCount int, totalDur
 
 	fm, err := ExtractMetadataFromFolder(dirPath)
 	if err != nil {
-		log.Printf("[WARN] assemble: folder parser error for %s: %v", dirPath, err)
+		assembleLog.Warn("folder parser error for %s: %v", dirPath, err)
 		fm = &FolderMetadata{}
 	}
 
@@ -51,11 +53,11 @@ func AssembleBookMetadata(dirPath, firstFilePath string, fileCount int, totalDur
 	if firstFilePath != "" && firstFilePath != dirPath {
 		info, statErr := os.Stat(firstFilePath)
 		if statErr == nil && !info.IsDir() {
-			m, tagErr := ExtractMetadata(firstFilePath)
+			m, tagErr := ExtractMetadata(firstFilePath, nil)
 			if tagErr == nil {
 				tagMeta = &m
 			} else {
-				log.Printf("[WARN] assemble: tag extraction failed for %s: %v", firstFilePath, tagErr)
+				assembleLog.Warn("tag extraction failed for %s: %v", firstFilePath, tagErr)
 			}
 		}
 	}
@@ -76,8 +78,8 @@ func AssembleBookMetadata(dirPath, firstFilePath string, fileCount int, totalDur
 		bm.ISBN10 = tagMeta.ISBN10
 	}
 
-	log.Printf(
-		"[INFO] assemble: %s → title=%q authors=%v series=%q pos=%d narrator=%q",
+	assembleLog.Info(
+		"%s → title=%q authors=%v series=%q pos=%d narrator=%q",
 		dirPath, bm.Title, bm.Authors, bm.SeriesName, bm.SeriesPosition, bm.Narrator,
 	)
 	return bm, nil
@@ -88,7 +90,7 @@ func resolveTitle(tag *Metadata, fm *FolderMetadata, firstFilePath string) (stri
 		if !isGenericTitle(tag.Title) {
 			return tag.Title, "tag.Title"
 		}
-		log.Printf("[DEBUG] assemble: tag title %q looks generic; trying folder parser", tag.Title)
+		logger.New("assemble").Debug("tag title %q looks generic; trying folder parser", tag.Title)
 	}
 	if fm.Title != "" {
 		return fm.Title, "folder.Title"

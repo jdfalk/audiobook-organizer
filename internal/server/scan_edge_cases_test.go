@@ -14,6 +14,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestScanService_EmptyDirectory(t *testing.T) {
 	folderPath := emptyDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -50,7 +51,7 @@ func TestScanService_DeepNestedDirectories(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -77,7 +78,7 @@ func TestScanService_SpecialCharsInFilenames(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -99,7 +100,7 @@ func TestScanService_UnsupportedFileExtensions(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -119,7 +120,7 @@ func TestScanService_RescanUpdatesExistingBooks(t *testing.T) {
 	// First scan
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books1, _ := env.Store.GetAllBooks(100, 0)
@@ -128,7 +129,7 @@ func TestScanService_RescanUpdatesExistingBooks(t *testing.T) {
 	// Second scan (should not create duplicate)
 	err = svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books2, _ := env.Store.GetAllBooks(100, 0)
@@ -167,7 +168,7 @@ func TestScanService_NonexistentScanFolder(t *testing.T) {
 	folderPath := "/nonexistent/scan/path"
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	// Should complete without error (logs warning about missing folder)
 	require.NoError(t, err)
 
@@ -189,7 +190,7 @@ func TestScanService_MultiChapterAudiobook(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -212,7 +213,7 @@ func TestScanService_RealLibrivoxFiles(t *testing.T) {
 	svc := NewScanService(env.Store)
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &librivoxDir,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -247,7 +248,7 @@ func TestScanService_LongFilePaths(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, _ := env.Store.GetAllBooks(100, 0)

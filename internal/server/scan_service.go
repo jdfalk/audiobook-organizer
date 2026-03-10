@@ -7,7 +7,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -41,32 +41,36 @@ type ScanStats struct {
 }
 
 // PerformScanWithID executes the multi-folder scan operation with checkpoint support.
-func (ss *ScanService) PerformScanWithID(ctx context.Context, opID string, req *ScanRequest, progress operations.ProgressReporter) error {
+func (ss *ScanService) PerformScanWithID(ctx context.Context, opID string, req *ScanRequest, log logger.Logger) error {
 	// Save params for resume
 	_ = operations.SaveParams(ss.db, opID, operations.ScanParams{
 		FolderPath:  req.FolderPath,
 		ForceUpdate: req.ForceUpdate != nil && *req.ForceUpdate,
 	})
-	err := ss.PerformScan(ctx, req, progress)
+	err := ss.PerformScan(ctx, req, log)
 	_ = operations.ClearState(ss.db, opID)
 	return err
 }
 
-// PerformScan executes the multi-folder scan operation
-func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progress operations.ProgressReporter) error {
+// PerformScan executes the multi-folder scan operation.
+// Accepts a logger.Logger for unified logging, progress, and change tracking.
+func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, log logger.Logger) error {
+	if log == nil {
+		log = logger.New("scan")
+	}
 	forceUpdate := req.ForceUpdate != nil && *req.ForceUpdate
 	if forceUpdate {
-		log.Printf("[DEBUG] ScanService: Force update enabled - will update all book file paths in database")
+		log.Debug("ScanService: Force update enabled - will update all book file paths in database")
 	}
 
 	// Determine which folders to scan
-	foldersToScan, err := ss.determineFoldersToScan(req.FolderPath, forceUpdate, progress)
+	foldersToScan, err := ss.determineFoldersToScan(req.FolderPath, forceUpdate, log)
 	if err != nil {
 		return err
 	}
 
 	if len(foldersToScan) == 0 {
-		_ = progress.Log("warn", "No folders to scan", nil)
+		log.Warn("No folders to scan")
 		return nil
 	}
 
@@ -75,10 +79,10 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progre
 	if !forceUpdate {
 		cache, err := ss.db.GetScanCacheMap()
 		if err != nil {
-			_ = progress.Log("warn", fmt.Sprintf("Failed to load scan cache, running full scan: %v", err), nil)
+			log.Warn("Failed to load scan cache, running full scan: %v", err)
 		} else {
 			scanCache = cache
-			_ = progress.Log("info", fmt.Sprintf("Loaded scan cache with %d entries", len(cache)), nil)
+			log.Info("Loaded scan cache with %d entries", len(cache))
 		}
 	}
 
@@ -86,7 +90,7 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progre
 	if !forceUpdate && scanCache != nil {
 		dirtyFolders, err := ss.db.GetDirtyBookFolders()
 		if err == nil && len(dirtyFolders) > 0 {
-			_ = progress.Log("info", fmt.Sprintf("Found %d folders with dirty books", len(dirtyFolders)), nil)
+			log.Info("Found %d folders with dirty books", len(dirtyFolders))
 			folderSet := make(map[string]bool)
 			for _, f := range foldersToScan {
 				folderSet[f] = true
@@ -104,14 +108,14 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progre
 	// the expensive directory walk.
 	var totalFilesAcrossFolders int
 	if forceUpdate || scanCache == nil {
-		totalFilesAcrossFolders = ss.countFilesAcrossFolders(foldersToScan, progress)
-		_ = progress.Log("info", fmt.Sprintf("Total audiobook files across all folders: %d", totalFilesAcrossFolders), nil)
+		totalFilesAcrossFolders = ss.countFilesAcrossFolders(foldersToScan, log)
+		log.Info("Total audiobook files across all folders: %d", totalFilesAcrossFolders)
 		if totalFilesAcrossFolders == 0 {
-			_ = progress.Log("warn", "No audiobook files detected during pre-scan; totals will update as files are processed", nil)
+			log.Warn("No audiobook files detected during pre-scan; totals will update as files are processed")
 		}
 	} else {
 		totalFilesAcrossFolders = len(scanCache)
-		_ = progress.Log("info", fmt.Sprintf("Incremental scan: ~%d known files, checking for changes", totalFilesAcrossFolders), nil)
+		log.Info("Incremental scan: ~%d known files, checking for changes", totalFilesAcrossFolders)
 	}
 
 	// Install scan cache into the scanner package so workers can skip unchanged files.
@@ -123,35 +127,40 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progre
 	var processedFiles atomic.Int32
 
 	for folderIdx, folderPath := range foldersToScan {
-		if progress.IsCanceled() {
-			_ = progress.Log("info", "Scan canceled", nil)
+		if log.IsCanceled() {
+			log.Info("Scan canceled")
 			return fmt.Errorf("scan canceled")
 		}
 
-		err := ss.scanFolder(ctx, folderIdx, folderPath, foldersToScan, totalFilesAcrossFolders, &processedFiles, stats, progress)
+		err := ss.scanFolder(ctx, folderIdx, folderPath, foldersToScan, totalFilesAcrossFolders, &processedFiles, stats, log)
 		if err != nil {
-			_ = progress.Log("error", fmt.Sprintf("Error scanning folder %s: %v", folderPath, err), nil)
+			log.Error("Error scanning folder %s: %v", folderPath, err)
 			continue
 		}
 	}
 
-	// Report completion
-	ss.reportCompletion(totalFilesAcrossFolders, int(processedFiles.Load()), stats, progress)
+	// Report completion with change counters
+	counters := log.ChangeCounters()
+	if counters != nil && (counters["book_create"] > 0 || counters["book_update"] > 0) {
+		log.Info("scan changes: %d created, %d updated, %d skipped",
+			counters["book_create"], counters["book_update"], counters["book_skip"])
+	}
+	ss.reportCompletion(totalFilesAcrossFolders, int(processedFiles.Load()), stats, log)
 	return nil
 }
 
-func (ss *ScanService) determineFoldersToScan(folderPath *string, forceUpdate bool, progress operations.ProgressReporter) ([]string, error) {
+func (ss *ScanService) determineFoldersToScan(folderPath *string, forceUpdate bool, log logger.Logger) ([]string, error) {
 	var foldersToScan []string
 
 	if folderPath != nil && *folderPath != "" {
 		// Scan specific folder
 		foldersToScan = []string{*folderPath}
-		_ = progress.Log("info", fmt.Sprintf("Starting scan of folder: %s", *folderPath), nil)
+		log.Info("Starting scan of folder: %s", *folderPath)
 	} else {
 		// Full scan: include RootDir if force_update enabled, then all import paths
 		if forceUpdate && config.AppConfig.RootDir != "" {
 			foldersToScan = append(foldersToScan, config.AppConfig.RootDir)
-			_ = progress.Log("info", fmt.Sprintf("Full rescan: including library path %s", config.AppConfig.RootDir), nil)
+			log.Info("Full rescan: including library path %s", config.AppConfig.RootDir)
 		}
 
 		// Add all import paths
@@ -164,17 +173,17 @@ func (ss *ScanService) determineFoldersToScan(folderPath *string, forceUpdate bo
 				foldersToScan = append(foldersToScan, folder.Path)
 			}
 		}
-		_ = progress.Log("info", fmt.Sprintf("Scanning %d total folders (%d import paths)", len(foldersToScan), len(folders)), nil)
+		log.Info("Scanning %d total folders (%d import paths)", len(foldersToScan), len(folders))
 	}
 
 	return foldersToScan, nil
 }
 
-func (ss *ScanService) countFilesAcrossFolders(foldersToScan []string, progress operations.ProgressReporter) int {
+func (ss *ScanService) countFilesAcrossFolders(foldersToScan []string, log logger.Logger) int {
 	totalFilesAcrossFolders := 0
 	for _, folderPath := range foldersToScan {
 		if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-			_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
+			log.Warn("Folder does not exist: %s", folderPath)
 			continue
 		}
 		fileCount := 0
@@ -191,24 +200,24 @@ func (ss *ScanService) countFilesAcrossFolders(foldersToScan []string, progress 
 			}
 			return nil
 		})
-		_ = progress.Log("info", fmt.Sprintf("Folder %s: Found %d audiobook files", folderPath, fileCount), nil)
+		log.Info("Folder %s: Found %d audiobook files", folderPath, fileCount)
 		totalFilesAcrossFolders += fileCount
 	}
 	return totalFilesAcrossFolders
 }
 
-func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath string, foldersToScan []string, totalFilesAcrossFolders int, processedFiles *atomic.Int32, stats *ScanStats, progress operations.ProgressReporter) error {
+func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath string, foldersToScan []string, totalFilesAcrossFolders int, processedFiles *atomic.Int32, stats *ScanStats, log logger.Logger) error {
 	currentProcessed := int(processedFiles.Load())
 	displayTotal := totalFilesAcrossFolders
 	if currentProcessed > displayTotal {
 		displayTotal = currentProcessed
 	}
-	_ = progress.UpdateProgress(currentProcessed, displayTotal, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
-	_ = progress.Log("info", fmt.Sprintf("Scanning folder: %s", folderPath), nil)
+	log.UpdateProgress(currentProcessed, displayTotal, fmt.Sprintf("Scanning folder %d/%d: %s", folderIdx+1, len(foldersToScan), folderPath))
+	log.Info("Scanning folder: %s", folderPath)
 
 	// Check if folder exists
 	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-		_ = progress.Log("warn", fmt.Sprintf("Folder does not exist: %s", folderPath), nil)
+		log.Warn("Folder does not exist: %s", folderPath)
 		return nil
 	}
 
@@ -217,12 +226,12 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 	if workers < 1 {
 		workers = 4
 	}
-	books, err := scanner.ScanDirectoryParallel(folderPath, workers)
+	books, err := scanner.ScanDirectoryParallel(folderPath, workers, log.With("scanner"))
 	if err != nil {
 		return fmt.Errorf("failed to scan folder: %w", err)
 	}
 
-	_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files in %s", len(books), folderPath), nil)
+	log.Info("Found %d audiobook files in %s", len(books), folderPath)
 	stats.TotalBooks += len(books)
 	if folderPath == config.AppConfig.RootDir {
 		stats.LibraryBooks += len(books)
@@ -245,29 +254,29 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 		if bookPath != "" {
 			message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
 		}
-		_ = progress.UpdateProgress(int(current), displayTotal, message)
+		log.UpdateProgress(int(current), displayTotal, message)
 	}
 
 	// Process the books to extract metadata (parallel)
 	if len(books) > 0 {
-		_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
-		if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback); err != nil {
-			_ = progress.Log("error", fmt.Sprintf("Failed to process books: %v", err), nil)
+		log.Info("Processing metadata for %d books using %d workers", len(books), workers)
+		if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, log.With("scanner")); err != nil {
+			log.Error("Failed to process books: %v", err)
 		} else {
-			_ = progress.Log("info", fmt.Sprintf("Successfully processed %d books", len(books)), nil)
+			log.Info("Successfully processed %d books", len(books))
 		}
 
-			// Auto-organize if enabled
-		ss.autoOrganizeScannedBooks(ctx, books, progress)
+		// Auto-organize if enabled
+		ss.autoOrganizeScannedBooks(ctx, books, log)
 	}
 
 	// Update book count for this import path
-	ss.updateImportPathBookCount(folderPath, len(books), progress)
+	ss.updateImportPathBookCount(folderPath, len(books), log)
 
 	return nil
 }
 
-func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scanner.Book, progress operations.ProgressReporter) {
+func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scanner.Book, log logger.Logger) {
 	if len(books) == 0 {
 		return
 	}
@@ -275,7 +284,7 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 		org := organizer.NewOrganizer(&config.AppConfig)
 		organized := 0
 		for i := range books {
-			if progress.IsCanceled() {
+			if log.IsCanceled() {
 				break
 			}
 			// Lookup DB book by file path
@@ -285,7 +294,7 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 			}
 			newPath, err := org.OrganizeBook(dbBook)
 			if err != nil {
-				_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
+				log.Warn("Organize failed for %s: %v", dbBook.Title, err)
 				continue
 			}
 			// Update DB path if changed
@@ -294,35 +303,35 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 				dbBook.FilePath = newPath
 				applyOrganizedFileMetadata(dbBook, newPath)
 				if _, err := ss.db.UpdateBook(dbBook.ID, dbBook); err != nil {
-					_ = progress.Log("error", fmt.Sprintf("Failed to update path for %s: %v — rolling back", dbBook.Title, err), nil)
+					log.Error("Failed to update path for %s: %v — rolling back", dbBook.Title, err)
 					if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
-						_ = progress.Log("error", fmt.Sprintf("CRITICAL: rollback failed for %s: file at %s, DB expects %s", dbBook.ID, newPath, oldPath), nil)
+						log.Error("CRITICAL: rollback failed for %s: file at %s, DB expects %s", dbBook.ID, newPath, oldPath)
 					}
 				} else {
 					organized++
 				}
 			}
 		}
-		_ = progress.Log("info", fmt.Sprintf("Auto-organize complete: %d organized", organized), nil)
+		log.Info("Auto-organize complete: %d organized", organized)
 	} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
-		_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
+		log.Warn("Auto-organize enabled but root_dir not set")
 	}
 }
 
-func (ss *ScanService) updateImportPathBookCount(folderPath string, bookCount int, progress operations.ProgressReporter) {
+func (ss *ScanService) updateImportPathBookCount(folderPath string, bookCount int, log logger.Logger) {
 	folders, _ := ss.db.GetAllImportPaths()
 	for _, folder := range folders {
 		if folder.Path == folderPath {
 			folder.BookCount = bookCount
 			if err := ss.db.UpdateImportPath(folder.ID, &folder); err != nil {
-				_ = progress.Log("warn", fmt.Sprintf("Failed to update book count for folder %s: %v", folderPath, err), nil)
+				log.Warn("Failed to update book count for folder %s: %v", folderPath, err)
 			}
 			break
 		}
 	}
 }
 
-func (ss *ScanService) reportCompletion(totalFilesAcrossFolders int, finalProcessed int, stats *ScanStats, progress operations.ProgressReporter) {
+func (ss *ScanService) reportCompletion(totalFilesAcrossFolders int, finalProcessed int, stats *ScanStats, log logger.Logger) {
 	var completionMsg string
 	if stats.LibraryBooks > 0 && stats.ImportBooks > 0 {
 		completionMsg = fmt.Sprintf("Scan completed. Library: %d books, Import: %d books (Total: %d)", stats.LibraryBooks, stats.ImportBooks, stats.TotalBooks)
@@ -338,6 +347,6 @@ func (ss *ScanService) reportCompletion(totalFilesAcrossFolders int, finalProces
 	if finalProcessed > finalTotal {
 		finalTotal = finalProcessed
 	}
-	_ = progress.UpdateProgress(finalProcessed, finalTotal, completionMsg)
-	_ = progress.Log("info", completionMsg, nil)
+	log.UpdateProgress(finalProcessed, finalTotal, completionMsg)
+	log.Info("%s", completionMsg)
 }
