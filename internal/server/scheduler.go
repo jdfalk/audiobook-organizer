@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.3.0
+// version: 1.7.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -209,6 +209,30 @@ func (ts *TaskScheduler) registerAllTasks() {
 	})
 
 	ts.registerTask(TaskDefinition{
+		Name:        "series_prune",
+		Description: "Merge duplicate series and delete orphans",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperationWithID("series-prune", func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
+				store := database.GlobalStore
+				if store == nil {
+					return fmt.Errorf("database not initialized")
+				}
+				return s.executeSeriesPrune(ctx, store, progress, opID)
+			})
+		},
+		IsEnabled: func() bool { return config.AppConfig.ScheduledSeriesPruneEnabled },
+		GetInterval: func() time.Duration {
+			mins := config.AppConfig.ScheduledSeriesPruneInterval
+			if mins <= 0 {
+				return 0
+			}
+			return time.Duration(mins) * time.Minute
+		},
+		RunOnStart: func() bool { return config.AppConfig.ScheduledSeriesPruneOnStartup },
+	})
+
+	ts.registerTask(TaskDefinition{
 		Name:        "author_split_scan",
 		Description: "Find & split composite author names",
 		Category:    "maintenance",
@@ -414,6 +438,33 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return 0
 		},
 		RunOnStart: func() bool { return config.AppConfig.PurgeSoftDeletedAfterDays > 0 },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "tombstone_cleanup",
+		Description: "Resolve author tombstone chains (A→B→C becomes A→C)",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("tombstone-cleanup", func(ctx context.Context, progress operations.ProgressReporter) error {
+				store := database.GlobalStore
+				if store == nil {
+					return fmt.Errorf("database not initialized")
+				}
+				_ = progress.Log("info", "Starting author tombstone chain resolution", nil)
+				_ = progress.UpdateProgress(0, 100, "Resolving tombstone chains...")
+				updated, err := store.ResolveTombstoneChains()
+				if err != nil {
+					return fmt.Errorf("tombstone chain resolution failed: %w", err)
+				}
+				resultMsg := fmt.Sprintf("Resolved %d tombstone chains", updated)
+				_ = progress.Log("info", resultMsg, nil)
+				_ = progress.UpdateProgress(100, 100, resultMsg)
+				return nil
+			})
+		},
+		IsEnabled:   func() bool { return true },
+		GetInterval: func() time.Duration { return 24 * time.Hour },
+		RunOnStart:  func() bool { return false },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -659,6 +710,28 @@ func (ts *TaskScheduler) registerAllTasks() {
 		},
 		RunOnStart: func() bool { return config.AppConfig.ScheduledAIDedupBatchOnStartup },
 	})
+
+	// AI Pipeline Batch Polling — checks for completed batch phases in the pipeline
+	ts.registerTask(TaskDefinition{
+		Name:        "ai_pipeline_batch_poll",
+		Description: "Poll OpenAI Batch API for completed pipeline phases",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			if s.pipelineManager == nil {
+				return nil, fmt.Errorf("pipeline manager not initialized")
+			}
+			ctx := context.Background()
+			s.pipelineManager.PollBatchPhases(ctx)
+			return nil, nil // No operation created — polling is lightweight
+		},
+		IsEnabled: func() bool {
+			return config.AppConfig.EnableAIParsing && s.pipelineManager != nil
+		},
+		GetInterval: func() time.Duration {
+			return 5 * time.Minute // Poll every 5 minutes
+		},
+		RunOnStart: func() bool { return false },
+	})
 }
 
 // triggerOperation is a helper that creates a DB operation and enqueues it.
@@ -678,6 +751,33 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, opType, operations.PriorityNormal, fn); err != nil {
+		return nil, fmt.Errorf("failed to enqueue operation: %w", err)
+	}
+
+	return op, nil
+}
+
+// triggerOperationWithID is like triggerOperation but passes the operation ID to the function.
+func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.Context, operations.ProgressReporter, string) error) (*database.Operation, error) {
+	store := database.GlobalStore
+	if store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if operations.GlobalQueue == nil {
+		return nil, fmt.Errorf("operation queue not initialized")
+	}
+
+	id := ulid.Make().String()
+	op, err := store.CreateOperation(id, opType, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create operation: %w", err)
+	}
+
+	wrappedFn := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return fn(ctx, progress, op.ID)
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, opType, operations.PriorityNormal, wrappedFn); err != nil {
 		return nil, fmt.Errorf("failed to enqueue operation: %w", err)
 	}
 

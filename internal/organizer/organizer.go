@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.7.0
+// version: 1.9.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -128,6 +128,13 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown organization strategy: %s", strategy)
 	}
+}
+
+// GenerateTargetPath creates the target file path based on naming patterns.
+// This is the public API for computing where a book would be organized to,
+// without actually performing the move. Used by preview rename and organize.
+func (o *Organizer) GenerateTargetPath(book *database.Book) (string, error) {
+	return o.generateTargetPath(book)
 }
 
 // generateTargetPath creates the target file path based on naming patterns
@@ -396,6 +403,82 @@ func (o *Organizer) symlinkFile(src, dst string) error {
 		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 	return os.Symlink(absSrc, dst)
+}
+
+// OrganizeBookDirectory organizes a multi-file book (directory) by copying each
+// segment file into the target directory generated from the book's metadata.
+// Returns the target directory path and a map of old→new segment file paths.
+func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []string) (string, map[string]string, error) {
+	if book == nil {
+		return "", nil, fmt.Errorf("invalid book")
+	}
+	if len(segmentPaths) == 0 {
+		return "", nil, fmt.Errorf("no segment files to organize")
+	}
+
+	// Generate target directory from folder naming pattern
+	folderPath, err := o.expandPattern(o.config.FolderNamingPattern, book)
+	if err != nil {
+		return "", nil, fmt.Errorf("folder pattern: %w", err)
+	}
+	folderPath = sanitizePath(folderPath)
+	targetDir := filepath.Join(o.config.RootDir, folderPath)
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return "", nil, fmt.Errorf("failed to create target directory: %w", err)
+	}
+
+	pathMap := make(map[string]string, len(segmentPaths))
+	for _, srcPath := range segmentPaths {
+		fileName := filepath.Base(srcPath)
+		dstPath := filepath.Join(targetDir, fileName)
+
+		if srcPath == dstPath {
+			pathMap[srcPath] = dstPath
+			continue
+		}
+
+		// Skip if target already exists
+		if _, err := os.Stat(dstPath); err == nil {
+			pathMap[srcPath] = dstPath
+			continue
+		}
+
+		if err := o.organizeFile(srcPath, dstPath); err != nil {
+			return "", nil, fmt.Errorf("failed to organize segment %s: %w", fileName, err)
+		}
+		pathMap[srcPath] = dstPath
+	}
+
+	return targetDir, pathMap, nil
+}
+
+// organizeFile copies/links a single file using the configured strategy.
+func (o *Organizer) organizeFile(src, dst string) error {
+	strategy := o.config.OrganizationStrategy
+
+	if strategy == "auto" {
+		if err := o.reflinkFile(src, dst); err == nil {
+			return nil
+		}
+		if err := o.hardlinkFile(src, dst); err == nil {
+			return nil
+		}
+		strategy = "copy"
+	}
+
+	switch strategy {
+	case "copy":
+		return o.copyFile(src, dst)
+	case "hardlink":
+		return o.hardlinkFile(src, dst)
+	case "reflink":
+		return o.reflinkFile(src, dst)
+	case "symlink":
+		return o.symlinkFile(src, dst)
+	default:
+		return fmt.Errorf("unknown organization strategy: %s", strategy)
+	}
 }
 
 // reflinkFile creates a copy-on-write reflink (platform-specific)
