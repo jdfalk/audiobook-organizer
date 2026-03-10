@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1891,6 +1891,10 @@ func (p *PebbleStore) GetBookCountsByLocation(rootDir string) (library, import_ 
 		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
 			continue
 		}
+		// Skip non-primary versions so organized originals don't inflate import count
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+			continue
+		}
 		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
 			library++
 		} else {
@@ -1920,6 +1924,10 @@ func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, impor
 			continue
 		}
 		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		// Skip non-primary versions (consistent with count logic)
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 			continue
 		}
 		size := int64(0)
