@@ -1,5 +1,5 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.1.0 -->
+<!-- version: 4.2.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
 <!-- last-edited: 2026-01-31 -->
 
@@ -34,6 +34,20 @@ make help            # All targets
 ```
 
 > **Note:** `go.mod` currently says `go 1.24.0`. The Go instructions reference 1.25 features — update go.mod when upgrading.
+
+## Quick Fix Workflow
+
+When making small fixes while another Claude process is working on main, use this
+workflow to avoid conflicts. Do not ask for confirmation at each step — run through
+the entire sequence:
+
+1. `git checkout -b fix/<description>` (from main)
+2. Make the fix, commit with conventional commit message
+3. `git push -u origin fix/<description>`
+4. `gh pr create --title "..." --body "..."`
+5. `gh pr merge <number> --rebase` (this repo uses rebase/FF only, no squash)
+6. `git checkout main && git pull`
+7. Update the worktree: `cd <worktree> && git fetch origin main && git rebase origin/main`
 
 ## Critical Rules
 
