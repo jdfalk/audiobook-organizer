@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.18.0
+// version: 4.19.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -277,13 +277,9 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 						updatedBook.CoverURL = &localCoverURL
 						mfs.db.UpdateBook(id, &database.Book{CoverURL: &localCoverURL})
 					}
-					// Embed cover art into audio file only if it doesn't already have one
-					if updatedBook != nil && updatedBook.FilePath != "" && !metadata.HasExistingCoverArt(updatedBook.FilePath) {
-						if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
-							log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
-						} else {
-							log.Printf("[INFO] cover art embedded into %s", updatedBook.FilePath)
-						}
+					// Embed cover art into all audio files for this book
+					if updatedBook != nil {
+						mfs.embedCoverInBookFiles(updatedBook, coverPath)
 					}
 				}
 			}
@@ -948,6 +944,64 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 	return nil
 }
 
+// embedCoverInBookFiles embeds cover art into all audio files for a book.
+// For single-file books where book.FilePath has an audio extension, it embeds there directly.
+// For multi-segment books (where book.FilePath may be a directory-like path without extension),
+// it lists segments and embeds cover art into each active segment file.
+func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, coverPath string) {
+	if book == nil || book.FilePath == "" || coverPath == "" {
+		return
+	}
+
+	audioExts := map[string]bool{
+		".mp3": true, ".m4b": true, ".m4a": true, ".aac": true,
+		".ogg": true, ".flac": true,
+	}
+
+	ext := strings.ToLower(filepath.Ext(book.FilePath))
+	if audioExts[ext] {
+		// Single audio file — embed directly
+		if !metadata.HasExistingCoverArt(book.FilePath) {
+			if err := tagger.EmbedCoverArt(book.FilePath, coverPath); err != nil {
+				log.Printf("[WARN] cover art embedding failed for %s: %v", book.FilePath, err)
+			} else {
+				log.Printf("[INFO] cover art embedded into %s", book.FilePath)
+			}
+		}
+		return
+	}
+
+	// Multi-segment book — embed cover in all active segment files
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	if err != nil {
+		log.Printf("[WARN] failed to list segments for cover embedding on book %s: %v", book.ID, err)
+		return
+	}
+
+	embedded := 0
+	for _, seg := range segments {
+		if !seg.Active {
+			continue
+		}
+		segExt := strings.ToLower(filepath.Ext(seg.FilePath))
+		if !audioExts[segExt] {
+			continue
+		}
+		if metadata.HasExistingCoverArt(seg.FilePath) {
+			continue
+		}
+		if err := tagger.EmbedCoverArt(seg.FilePath, coverPath); err != nil {
+			log.Printf("[WARN] cover art embedding failed for segment %s: %v", seg.FilePath, err)
+		} else {
+			embedded++
+		}
+	}
+	if embedded > 0 {
+		log.Printf("[INFO] cover art embedded into %d segment files for book %s", embedded, book.ID)
+	}
+}
+
 func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
 	fetchedValues := map[string]any{}
 	if meta.Title != "" {
@@ -1349,13 +1403,9 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 				updatedBook.CoverURL = &localCoverURL
 				mfs.db.UpdateBook(id, updatedBook)
 			}
-			// Embed cover art into audio file only if it doesn't already have one
-			if updatedBook != nil && updatedBook.FilePath != "" && !metadata.HasExistingCoverArt(updatedBook.FilePath) {
-				if embedErr := tagger.EmbedCoverArt(updatedBook.FilePath, coverPath); embedErr != nil {
-					log.Printf("[WARN] cover art embedding failed for %s: %v", updatedBook.FilePath, embedErr)
-				} else {
-					log.Printf("[INFO] cover art embedded into %s", updatedBook.FilePath)
-				}
+			// Embed cover art into all audio files for this book
+			if updatedBook != nil {
+				mfs.embedCoverInBookFiles(updatedBook, coverPath)
 			}
 		}
 	}
