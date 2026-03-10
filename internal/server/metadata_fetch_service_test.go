@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 4.2.0
+// version: 4.3.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
@@ -957,5 +957,414 @@ func TestWriteBackMetadataForBook_SingleFile(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("expected written count 0, got %d", count)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Scoring improvements tests
+// ---------------------------------------------------------------------------
+
+func TestBestTitleMatchWithContext_AuthorTiebreaking(t *testing.T) {
+	// When two results have equal base title scores, the one matching the
+	// book's author should score higher and be selected.
+	results := []metadata.BookMetadata{
+		{Title: "Dune", Author: "Frank Herbert", Narrator: "Scott Brick"},
+		{Title: "Dune", Author: "Someone Else", Narrator: "Jane Doe"},
+	}
+
+	got := bestTitleMatchWithContext(results, "Frank Herbert", "", "Dune")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(got))
+	}
+	if got[0].Author != "Frank Herbert" {
+		t.Errorf("expected author 'Frank Herbert' to win tiebreak, got %q", got[0].Author)
+	}
+}
+
+func TestBestTitleMatchWithContext_AuthorTiebreaking_Substring(t *testing.T) {
+	// Author matching uses substring containment, so partial matches work.
+	results := []metadata.BookMetadata{
+		{Title: "The Colour of Magic", Author: "Terry Pratchett", Narrator: "Nigel Planer"},
+		{Title: "The Colour of Magic", Author: "Unknown Publisher", Narrator: "Nigel Planer"},
+	}
+
+	got := bestTitleMatchWithContext(results, "Pratchett", "", "The Colour of Magic")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Author != "Terry Pratchett" {
+		t.Errorf("expected 'Terry Pratchett' (substring match), got %q", got[0].Author)
+	}
+}
+
+func TestBestTitleMatchWithContext_MissingAuthorPenalty(t *testing.T) {
+	// Results with no author should get 0.75x when book's author is known,
+	// making them lose to a result with a matching author.
+	results := []metadata.BookMetadata{
+		{Title: "Foundation", Author: "", Narrator: "Scott Brick"},       // no author → 0.75x
+		{Title: "Foundation", Author: "Isaac Asimov", Narrator: "Scott Brick"}, // matching → 1.5x
+	}
+
+	got := bestTitleMatchWithContext(results, "Isaac Asimov", "", "Foundation")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Author != "Isaac Asimov" {
+		t.Errorf("expected result with author to win over missing-author result, got %q", got[0].Author)
+	}
+}
+
+func TestBestTitleMatchWithContext_MissingAuthorPenalty_NoBookAuthor(t *testing.T) {
+	// When book's author is unknown (empty), no author penalty should apply,
+	// so results with or without author are scored the same on that axis.
+	withAuthor := metadata.BookMetadata{Title: "Foundation", Author: "Isaac Asimov", Narrator: "Scott Brick"}
+	withoutAuthor := metadata.BookMetadata{Title: "Foundation", Author: "", Narrator: "Scott Brick"}
+
+	// Both have same narrator so narrator boost is the same.
+	// With empty bookAuthor, neither gets author boost/penalty.
+	gotWith := bestTitleMatchWithContext([]metadata.BookMetadata{withAuthor}, "", "", "Foundation")
+	gotWithout := bestTitleMatchWithContext([]metadata.BookMetadata{withoutAuthor}, "", "", "Foundation")
+
+	// Both should return results (no penalty kills them)
+	if gotWith == nil {
+		t.Fatal("expected result with author, got nil")
+	}
+	if gotWithout == nil {
+		t.Fatal("expected result without author, got nil")
+	}
+}
+
+func TestBestTitleMatchWithContext_NarratorBoost(t *testing.T) {
+	// Results with narrator info get 1.15x, without get 0.85x.
+	// Two identical results except for narrator presence.
+	results := []metadata.BookMetadata{
+		{Title: "Neuromancer", Author: "William Gibson"},                              // no narrator → 0.85x
+		{Title: "Neuromancer", Author: "William Gibson", Narrator: "Robertson Dean"},  // narrator → 1.15x
+	}
+
+	got := bestTitleMatchWithContext(results, "", "", "Neuromancer")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Narrator != "Robertson Dean" {
+		t.Errorf("expected result with narrator to win, got narrator=%q", got[0].Narrator)
+	}
+}
+
+func TestBestTitleMatchWithContext_NarratorMatchBoost(t *testing.T) {
+	// When book's narrator is known, a result matching it gets 1.3x on top of 1.15x.
+	results := []metadata.BookMetadata{
+		{Title: "Dune", Author: "Frank Herbert", Narrator: "Wrong Narrator"},
+		{Title: "Dune", Author: "Frank Herbert", Narrator: "Scott Brick"},
+	}
+
+	got := bestTitleMatchWithContext(results, "Frank Herbert", "Scott Brick", "Dune")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Narrator != "Scott Brick" {
+		t.Errorf("expected matching narrator 'Scott Brick' to win, got %q", got[0].Narrator)
+	}
+}
+
+func TestBestTitleMatchWithContext_AudiobookSourcePreference(t *testing.T) {
+	// Audible-like result (with narrator) should outrank Open Library-like
+	// result (no narrator) when both match on title and author.
+	results := []metadata.BookMetadata{
+		// Open Library-like: no narrator
+		{Title: "The Name of the Wind", Author: "Patrick Rothfuss", Description: "A novel."},
+		// Audible-like: has narrator
+		{Title: "The Name of the Wind", Author: "Patrick Rothfuss", Narrator: "Nick Podehl", Description: "A novel."},
+	}
+
+	got := bestTitleMatchWithContext(results, "Patrick Rothfuss", "", "The Name of the Wind")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Narrator == "" {
+		t.Error("expected Audible-like result (with narrator) to outrank Open Library (no narrator)")
+	}
+	if got[0].Narrator != "Nick Podehl" {
+		t.Errorf("expected narrator 'Nick Podehl', got %q", got[0].Narrator)
+	}
+}
+
+func TestBestTitleMatchWithContext_AuthorMismatchPenalty(t *testing.T) {
+	// A result with a non-matching author gets 0.7x, which is worse than
+	// a result with a matching author at 1.5x.
+	results := []metadata.BookMetadata{
+		{Title: "Storm Front", Author: "Jim Butcher", Narrator: "James Marsters"},
+		{Title: "Storm Front", Author: "R.S. Belcher", Narrator: "Bronson Pinchot"},
+	}
+
+	got := bestTitleMatchWithContext(results, "Jim Butcher", "", "Storm Front")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Author != "Jim Butcher" {
+		t.Errorf("expected matching author to win over mismatched author, got %q", got[0].Author)
+	}
+}
+
+func TestSearchMetadataForBook_SeriesBoost(t *testing.T) {
+	// Results matching the search series should get 1.4x boost.
+	mockDB := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{ID: id, Title: "Storm Front"}, nil
+		},
+	}
+
+	src := &mockMetadataSource{
+		name: "TestSource",
+		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
+			return []metadata.BookMetadata{
+				{Title: "Storm Front", Author: "Jim Butcher", Series: "The Dresden Files", Narrator: "James Marsters"},
+				// Different author so dedup key (title|author) is unique
+				{Title: "Storm Front", Author: "Jim Butcher Jr", Series: "Unrelated Series", Narrator: "James Marsters"},
+			}, nil
+		},
+	}
+
+	mfs := NewMetadataFetchService(mockDB)
+	mfs.overrideSources = []metadata.MetadataSource{src}
+
+	// Pass series as the third authorHint parameter
+	resp, err := mfs.SearchMetadataForBook("book1", "Storm Front", "Jim Butcher", "", "The Dresden Files")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(resp.Results))
+	}
+	// The result with matching series should be ranked first (higher score)
+	if resp.Results[0].Series != "The Dresden Files" {
+		t.Errorf("expected series 'The Dresden Files' to rank first, got %q", resp.Results[0].Series)
+	}
+	if resp.Results[0].Score <= resp.Results[1].Score {
+		t.Errorf("expected series-matching result to have higher score: got %.3f <= %.3f",
+			resp.Results[0].Score, resp.Results[1].Score)
+	}
+}
+
+func TestIsGarbageValue_ExtendedValues(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		// Core garbage values
+		{"Various", true},
+		{"VARIOUS", true},
+		{"various", true},
+		{"None", true},
+		{"null", true},
+		{"undefined", true},
+		{"test", true},
+		{"Untitled", true},
+		{"No Title", true},
+		{"No Author", true},
+		{"Various Authors", true},
+		{"Various Artists", true},
+		// HTML/error fragments
+		{"<html>stuff</html>", true},
+		{"<!DOCTYPE html>", true},
+		{"403 Forbidden", true},
+		{"error occurred", true},
+		// Whitespace-only
+		{"   ", true},
+		// Real values should not be garbage
+		{"J.R.R. Tolkien", false},
+		{"Neil Gaiman", false},
+		{"The Hobbit", false},
+		{"Audible Studios", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := isGarbageValue(tc.input); got != tc.want {
+				t.Errorf("isGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSearchMetadataForBook_ResultLimitCap50(t *testing.T) {
+	// Verify that results are capped at 50, not 10.
+	mockDB := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{ID: id, Title: "Test"}, nil
+		},
+	}
+
+	// Generate 60 unique results
+	src := &mockMetadataSource{
+		name: "BigSource",
+		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
+			var results []metadata.BookMetadata
+			for i := 0; i < 60; i++ {
+				results = append(results, metadata.BookMetadata{
+					Title:    fmt.Sprintf("Test Book %d", i),
+					Author:   fmt.Sprintf("Author %d", i),
+					Narrator: "Some Narrator",
+				})
+			}
+			return results, nil
+		},
+	}
+
+	mfs := NewMetadataFetchService(mockDB)
+	mfs.overrideSources = []metadata.MetadataSource{src}
+
+	resp, err := mfs.SearchMetadataForBook("book1", "Test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Results) > 50 {
+		t.Errorf("expected at most 50 results, got %d", len(resp.Results))
+	}
+	// Ensure we get more than 10 (the old limit) — cap is 50
+	if len(resp.Results) < 11 {
+		t.Errorf("expected more than 10 results (cap is 50), got %d", len(resp.Results))
+	}
+}
+
+func TestSearchMetadataForBook_GarbageAuthorTreatedAsEmpty(t *testing.T) {
+	// When book's author resolves to a garbage value, it should be treated
+	// as empty and not used for scoring (no author penalty applied).
+	authorID := 1
+	mockDB := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{ID: id, Title: "Test Book", AuthorID: &authorID}, nil
+		},
+		GetAuthorByIDFunc: func(id int) (*database.Author, error) {
+			return &database.Author{ID: id, Name: "Unknown"}, nil // garbage
+		},
+	}
+
+	src := &mockMetadataSource{
+		name: "TestSource",
+		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
+			return []metadata.BookMetadata{
+				{Title: "Test Book", Author: ""}, // no author
+			}, nil
+		},
+	}
+
+	mfs := NewMetadataFetchService(mockDB)
+	mfs.overrideSources = []metadata.MetadataSource{src}
+
+	resp, err := mfs.SearchMetadataForBook("book1", "Test Book")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// The result should not have been penalized for missing author since
+	// the book's own author is garbage. At least 1 result should be returned.
+	if len(resp.Results) == 0 {
+		t.Error("expected at least 1 result when book's author is garbage (no penalty)")
+	}
+}
+
+func TestSearchMetadataForBook_GarbageNarratorTreatedAsEmpty(t *testing.T) {
+	// Garbage narrator on the book should not trigger narrator-match scoring.
+	narrator := "Narrator" // garbage value
+	mockDB := &database.MockStore{
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			return &database.Book{ID: id, Title: "Test Book", Narrator: &narrator}, nil
+		},
+	}
+
+	src := &mockMetadataSource{
+		name: "TestSource",
+		searchByTitleFunc: func(title string) ([]metadata.BookMetadata, error) {
+			return []metadata.BookMetadata{
+				// Different authors so dedup key (title|author) is unique
+				{Title: "Test Book", Author: "Author A", Narrator: "Narrator"}, // also garbage narrator
+				{Title: "Test Book", Author: "Author B", Narrator: "Real Person"},
+			}, nil
+		},
+	}
+
+	mfs := NewMetadataFetchService(mockDB)
+	mfs.overrideSources = []metadata.MetadataSource{src}
+
+	resp, err := mfs.SearchMetadataForBook("book1", "Test Book")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Both results should be present; the garbage narrator match should not
+	// have gotten an unfair boost.
+	if len(resp.Results) < 2 {
+		t.Errorf("expected 2 results, got %d", len(resp.Results))
+	}
+}
+
+func TestScoreOneResult_BasicScoring(t *testing.T) {
+	searchWords := map[string]bool{"dune": true}
+
+	tests := []struct {
+		name   string
+		result metadata.BookMetadata
+		minExp float64
+		maxExp float64
+	}{
+		{
+			name:   "exact single-word match",
+			result: metadata.BookMetadata{Title: "Dune"},
+			minExp: 0.8, // F1=1.0, no bonus
+			maxExp: 1.2,
+		},
+		{
+			name:   "no overlap",
+			result: metadata.BookMetadata{Title: "Foundation"},
+			minExp: 0,
+			maxExp: 0.01,
+		},
+		{
+			name:   "match with rich metadata",
+			result: metadata.BookMetadata{Title: "Dune", Description: "A novel.", CoverURL: "http://x", ISBN: "123"},
+			minExp: 1.0, // F1=1.0 + bonus
+			maxExp: 1.3,
+		},
+		{
+			name:   "compilation penalty",
+			result: metadata.BookMetadata{Title: "Dune Complete Collection Box Set"},
+			minExp: 0,
+			maxExp: 0.2, // heavily penalized
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			score := scoreOneResult(tc.result, searchWords)
+			if score < tc.minExp || score > tc.maxExp {
+				t.Errorf("scoreOneResult() = %.3f, want [%.3f, %.3f]", score, tc.minExp, tc.maxExp)
+			}
+		})
+	}
+}
+
+func TestBestTitleMatchWithContext_AllMultipliersCombine(t *testing.T) {
+	// Verify that author match (1.5x), narrator presence (1.15x), and narrator
+	// match (1.3x) all stack to create a significant scoring advantage.
+	ideal := metadata.BookMetadata{
+		Title:    "The Hobbit",
+		Author:   "J.R.R. Tolkien",
+		Narrator: "Martin Freeman",
+	}
+	poor := metadata.BookMetadata{
+		Title:  "The Hobbit",
+		Author: "Wrong Person",
+		// no narrator
+	}
+
+	results := []metadata.BookMetadata{poor, ideal}
+	got := bestTitleMatchWithContext(results, "J.R.R. Tolkien", "Martin Freeman", "The Hobbit")
+	if got == nil {
+		t.Fatal("expected a match, got nil")
+	}
+	if got[0].Author != "J.R.R. Tolkien" {
+		t.Errorf("expected ideal result with all boosts to win, got author=%q narrator=%q",
+			got[0].Author, got[0].Narrator)
 	}
 }

@@ -3873,6 +3873,39 @@ func (_c *MockStore_GetAllAuthorBookCounts_Call) RunAndReturn(run func() (map[in
 	return _c
 }
 
+// GetAllSeriesBookCounts provides a mock function for the type MockStore
+func (_mock *MockStore) GetAllSeriesBookCounts() (map[int]int, error) {
+	ret := _mock.Called()
+	var r0 map[int]int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(map[int]int)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetAllSeriesBookCounts_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetAllSeriesBookCounts() *MockStore_GetAllSeriesBookCounts_Call {
+	return &MockStore_GetAllSeriesBookCounts_Call{Call: _e.mock.On("GetAllSeriesBookCounts")}
+}
+
+func (_c *MockStore_GetAllSeriesBookCounts_Call) Run(run func()) *MockStore_GetAllSeriesBookCounts_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetAllSeriesBookCounts_Call) Return(counts map[int]int, err error) *MockStore_GetAllSeriesBookCounts_Call {
+	_c.Call = _c.Call.Return(counts, err)
+	return _c
+}
+
+func (_c *MockStore_GetAllSeriesBookCounts_Call) RunAndReturn(run func() (map[int]int, error)) *MockStore_GetAllSeriesBookCounts_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
 // GetBooksBySeriesID provides a mock function for the type MockStore
 func (_mock *MockStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error) {
 	ret := _mock.Called(seriesID)
