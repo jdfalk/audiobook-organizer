@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 3.1.0 -->
+<!-- version: 3.2.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-03-01 -->
+<!-- last-edited: 2026-03-10 -->
 
 # Project TODO
 
@@ -93,6 +93,33 @@
 - [x] Metadata undo/history (MetadataChangeRecord, UI component)
 - [x] Directory-as-filepath bug in tag extraction — fixed, falls back to filename parsing
 - [x] Basic auth for web UI (constant-time compare, health/static exemptions)
+
+---
+
+## 🔥 Active Work — March 10, 2026
+
+### Metadata Search Improvements (Session 12)
+
+| Item | Status |
+| --- | --- |
+| Author/narrator/audiobook scoring tiebreaks in search results | ✅ Done |
+| Series search field in metadata dialogs (single + bulk) | ✅ Done |
+| Increase result limit from 10 to 50 | ✅ Done |
+| Open Library deprioritization (penalize sparse results) | ✅ Done |
+| Write-to-files toggle in bulk metadata search | ✅ Done |
+| Undo button in bulk metadata search (reverts last apply) | ✅ Done |
+| History recording for all metadata changes | ✅ Done |
+| Filter already-applied books toggle in bulk search | 🔧 In Progress |
+| `.envrc` for `GOEXPERIMENT=jsonv2` (direnv) | ✅ Done |
+
+### Tests Added (Session 12)
+
+| Item | Status |
+| --- | --- |
+| `metadata_fetch_service_test.go` — 15 new scoring/search tests | ✅ Done |
+| `server_undo_test.go` — 7 undo + 3 write-back tests | ✅ Done |
+| `server_bulk_delete_test.go` — 15 bulk delete endpoint tests | ✅ Done |
+| Fix `MockStore` missing `GetAllSeriesBookCounts` | ✅ Done |
 
 ---
 
