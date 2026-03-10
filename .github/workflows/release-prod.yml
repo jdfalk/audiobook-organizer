@@ -1,5 +1,5 @@
 # file: .github/workflows/release-prod.yml
-# version: 4.7.0
+# version: 4.8.0
 # guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 name: Production Release
@@ -36,7 +36,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@1a96daebeba7b0f61037be5bc381e3b6794e26b5 # v2.9.0
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@39120a6141617e899ae60c82a8f5789beaf911bf # v2.10.0
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
@@ -46,4 +46,5 @@ jobs:
       docker-enabled: true
       system-packages: 'libtag1-dev'
       pre-build-script: 'cd web && npm ci && npm run build'
+      go-experiment: 'jsonv2'
     secrets: inherit

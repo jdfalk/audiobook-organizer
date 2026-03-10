@@ -1,5 +1,5 @@
 # file: .github/workflows/prerelease.yml
-# version: 2.7.0
+# version: 2.8.0
 # guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 name: Prerelease on Merge
@@ -27,7 +27,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@1a96daebeba7b0f61037be5bc381e3b6794e26b5 # v2.9.0
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@39120a6141617e899ae60c82a8f5789beaf911bf # v2.10.0
     with:
       release-type: 'auto'
       prerelease: true
@@ -37,4 +37,5 @@ jobs:
       docker-enabled: true
       system-packages: 'libtag1-dev'
       pre-build-script: 'cd web && npm ci && npm run build'
+      go-experiment: 'jsonv2'
     secrets: inherit
