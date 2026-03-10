@@ -213,7 +213,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 
 	var meta metadata.Metadata
 	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+		if m, err := metadata.ExtractMetadata(book.FilePath, nil); err == nil {
 			meta = m
 		} else {
 			log.Printf("[WARN] GetAudiobook: failed to extract metadata for %s: %v", book.FilePath, err)
@@ -276,7 +276,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (m
 
 	var meta metadata.Metadata
 	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath); err == nil {
+		if m, err := metadata.ExtractMetadata(book.FilePath, nil); err == nil {
 			meta = m
 		} else {
 			log.Printf("[WARN] GetAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)

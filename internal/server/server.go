@@ -722,7 +722,7 @@ func (s *Server) resumeInterruptedOperations() {
 				return s.scanService.PerformScanWithID(ctx, opID, &ScanRequest{
 					FolderPath:  params.FolderPath,
 					ForceUpdate: &forceUpdate,
-				}, progress)
+				}, operations.LoggerFromReporter(progress))
 			}
 		case "organize":
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -962,7 +962,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 							}
 							scanReq := &ScanRequest{FolderPath: &scanPath}
 							opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-								return s.scanService.PerformScan(ctx, scanReq, progress)
+								return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
 							}
 							if enqueueErr := operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
 								log.Printf("[ERROR] Auto-scan: failed to enqueue: %v", enqueueErr)
@@ -2401,7 +2401,7 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 	usedFallback := false
 	tagsReadError := ""
 
-	meta, err := metadata.ExtractMetadata(found.FilePath)
+	meta, err := metadata.ExtractMetadata(found.FilePath, nil)
 	if err != nil {
 		tagsReadError = err.Error()
 	} else {
@@ -5121,17 +5121,18 @@ func (s *Server) addImportPath(c *gin.Context) {
 				if workers < 1 {
 					workers = 4
 				}
-				books, err := scanner.ScanDirectoryParallel(folderPath, workers)
+				scanLog := operations.LoggerFromReporter(progress)
+				books, err := scanner.ScanDirectoryParallel(folderPath, workers, scanLog)
 				if err != nil {
 					return fmt.Errorf("failed to scan folder: %w", err)
 				}
 
-				_ = progress.Log("info", fmt.Sprintf("Found %d audiobook files", len(books)), nil)
+				scanLog.Info("Found %d audiobook files", len(books))
 
 				// Process the books to extract metadata (parallel)
 				if len(books) > 0 {
-					_ = progress.Log("info", fmt.Sprintf("Processing metadata for %d books using %d workers", len(books), workers), nil)
-					if err := scanner.ProcessBooksParallel(ctx, books, workers, nil); err != nil {
+					scanLog.Info("Processing metadata for %d books using %d workers", len(books), workers)
+					if err := scanner.ProcessBooksParallel(ctx, books, workers, nil, scanLog); err != nil {
 						return fmt.Errorf("failed to process books: %w", err)
 					}
 					// Auto-organize if enabled
@@ -5189,10 +5190,10 @@ func (s *Server) addImportPath(c *gin.Context) {
 	if folder.Enabled && operations.GlobalQueue == nil {
 		// Basic scan without progress reporter
 		if _, err := os.Stat(folder.Path); err == nil {
-			books, err := scanner.ScanDirectory(folder.Path)
+			books, err := scanner.ScanDirectory(folder.Path, nil)
 			if err == nil {
 				if len(books) > 0 {
-					_ = scanner.ProcessBooks(books) // ignore individual processing errors (already logged internally)
+					_ = scanner.ProcessBooks(books, nil) // ignore individual processing errors (already logged internally)
 					// Auto-organize if enabled
 					if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
 						org := organizer.NewOrganizer(&config.AppConfig)
@@ -5282,7 +5283,7 @@ func (s *Server) startScan(c *gin.Context) {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.scanService.PerformScan(ctx, scanReq, progress)
+		return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
 	}
 
 	// Enqueue the operation

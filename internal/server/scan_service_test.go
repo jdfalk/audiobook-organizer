@@ -1,5 +1,5 @@
 // file: internal/server/scan_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-b8c9-d0e1-f2a3b4c5d6e7
 
 package server
@@ -9,17 +9,18 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 func TestScanService_DetermineFoldersToScan_SpecificFolder(t *testing.T) {
 	mockDB := &database.MockStore{}
 	ss := NewScanService(mockDB)
 
-	mockProgress := &mockProgressReporter{}
+	testLog := logger.New("test")
 	folderPath := "/test/folder"
 	req := &ScanRequest{FolderPath: &folderPath}
 
-	folders, err := ss.determineFoldersToScan(req.FolderPath, false, mockProgress)
+	folders, err := ss.determineFoldersToScan(req.FolderPath, false, testLog)
 
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -41,8 +42,8 @@ func TestScanService_DetermineFoldersToScan_AllImportPaths(t *testing.T) {
 	}
 	ss := NewScanService(mockDB)
 
-	mockProgress := &mockProgressReporter{}
-	folders, err := ss.determineFoldersToScan(nil, false, mockProgress)
+	testLog := logger.New("test")
+	folders, err := ss.determineFoldersToScan(nil, false, testLog)
 
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -62,16 +63,17 @@ func TestScanService_PerformScan_NoFolders(t *testing.T) {
 	ss := NewScanService(mockDB)
 
 	ctx := context.Background()
-	mockProgress := &mockProgressReporter{}
+	testLog := logger.New("test")
 	req := &ScanRequest{}
 
-	err := ss.PerformScan(ctx, req, mockProgress)
+	err := ss.PerformScan(ctx, req, testLog)
 
 	if err != nil {
 		t.Errorf("expected no error for empty folders, got %v", err)
 	}
 }
 
+// mockProgressReporter is a no-op ProgressReporter for tests that still use operations.ProgressReporter.
 type mockProgressReporter struct{}
 
 func (m *mockProgressReporter) Log(level, message string, details *string) error {

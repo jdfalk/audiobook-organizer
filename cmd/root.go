@@ -39,8 +39,8 @@ var metadataInspectFile string
 var (
 	initializeStore        = database.InitializeStore
 	closeStore             = database.CloseStore
-	scanDirectory          = scanner.ScanDirectory
-	processBooks           = scanner.ProcessBooks
+	scanDirectory          = scanner.ScanDirectory  // func(string, logger.Logger) ([]Book, error)
+	processBooks           = scanner.ProcessBooks   // func([]Book, logger.Logger) error
 	generatePlaylists      = playlist.GeneratePlaylistsForSeries
 	updateSeriesTags       = tagger.UpdateSeriesTags
 	initEncryption         = database.InitEncryption
@@ -93,7 +93,7 @@ var scanCmd = &cobra.Command{
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
 
 		// Start scanning
-		books, err := scanDirectory(config.AppConfig.RootDir)
+		books, err := scanDirectory(config.AppConfig.RootDir, nil)
 		if err != nil {
 			return fmt.Errorf("scan error: %w", err)
 		}
@@ -101,7 +101,7 @@ var scanCmd = &cobra.Command{
 		fmt.Printf("Found %d audiobooks\n", len(books))
 
 		// Process books and identify series
-		if err := processBooks(books); err != nil {
+		if err := processBooks(books, nil); err != nil {
 			return fmt.Errorf("processing error: %w", err)
 		}
 
@@ -185,7 +185,7 @@ var organizeCmd = &cobra.Command{
 		// Step 1: Scan files
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 		fmt.Printf("Scanning directory: %s\n", config.AppConfig.RootDir)
-		books, err := scanDirectory(config.AppConfig.RootDir)
+		books, err := scanDirectory(config.AppConfig.RootDir, nil)
 		if err != nil {
 			return fmt.Errorf("scan error: %w", err)
 		}
@@ -193,7 +193,7 @@ var organizeCmd = &cobra.Command{
 
 		// Step 2: Process books and identify series
 		fmt.Println("Processing audiobooks and identifying series...")
-		if err := processBooks(books); err != nil {
+		if err := processBooks(books, nil); err != nil {
 			return fmt.Errorf("processing error: %w", err)
 		}
 
@@ -410,7 +410,7 @@ broken tags or filename fallbacks without running a full scan.`,
 		}
 
 		fmt.Printf("Inspecting metadata for %s\n", target)
-		meta, err := metadata.ExtractMetadata(target)
+		meta, err := metadata.ExtractMetadata(target, nil)
 		if err != nil {
 			return fmt.Errorf("metadata extraction failed: %w", err)
 		}

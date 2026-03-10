@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/schollz/progressbar/v3"
@@ -30,13 +30,16 @@ import (
 
 var saveBook = saveBookToDatabase
 
+// defaultLog is a package-level logger for functions that cannot accept a logger parameter.
+var defaultLog = logger.New("scanner")
+
 // Scanner defines the interface for scanning and processing audiobook files.
 // This enables tests to swap in a mock implementation by setting GlobalScanner.
 type Scanner interface {
-	ScanDirectory(rootDir string) ([]Book, error)
-	ScanDirectoryParallel(rootDir string, workers int) ([]Book, error)
-	ProcessBooks(books []Book) error
-	ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string)) error
+	ScanDirectory(rootDir string, scanLog logger.Logger) ([]Book, error)
+	ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) ([]Book, error)
+	ProcessBooks(books []Book, scanLog logger.Logger) error
+	ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string), scanLog logger.Logger) error
 	ComputeFileHash(filePath string) (string, error)
 }
 
@@ -115,24 +118,29 @@ type Book struct {
 	FileHash        string // Pre-computed hash from ProcessFile (avoids double-read)
 }
 
-// ScanDirectory scans the given directory for audiobook files
-func ScanDirectory(rootDir string) ([]Book, error) {
+// ScanDirectory scans the given directory for audiobook files.
+// If scanLog is nil, a default logger is used.
+func ScanDirectory(rootDir string, scanLog logger.Logger) ([]Book, error) {
 	if GlobalScanner != nil {
-		return GlobalScanner.ScanDirectory(rootDir)
+		return GlobalScanner.ScanDirectory(rootDir, scanLog)
 	}
-	return ScanDirectoryParallel(rootDir, 1)
+	return ScanDirectoryParallel(rootDir, 1, scanLog)
 }
 
-// ScanDirectoryParallel scans directory with parallel workers for improved performance
-func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
+// ScanDirectoryParallel scans directory with parallel workers for improved performance.
+// If scanLog is nil, a default logger is used.
+func ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) ([]Book, error) {
 	if GlobalScanner != nil {
-		return GlobalScanner.ScanDirectoryParallel(rootDir, workers)
+		return GlobalScanner.ScanDirectoryParallel(rootDir, workers, scanLog)
+	}
+	if scanLog == nil {
+		scanLog = logger.New("scanner")
 	}
 	if workers < 1 {
 		workers = 1
 	}
 
-	fmt.Printf("Scanning for audiobook files (using %d workers)...\n", workers)
+	scanLog.Info("Scanning for audiobook files (using %d workers)...", workers)
 
 	// Collect all directories first
 	var dirs []string
@@ -155,7 +163,7 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 		visitedMu.Lock()
 		defer visitedMu.Unlock()
 		if _, seen := visitedInodes[inode]; seen {
-			log.Printf("[WARN] scanner: potential symlink loop detected, skipping already visited directory: %s", path)
+			scanLog.Warn("potential symlink loop detected, skipping already visited directory: %s", path)
 			return false
 		}
 		visitedInodes[inode] = struct{}{}
@@ -239,24 +247,29 @@ func ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
 	return books, nil
 }
 
-// ProcessBooks processes the discovered books to extract metadata and identify series
-func ProcessBooks(books []Book) error {
+// ProcessBooks processes the discovered books to extract metadata and identify series.
+// If scanLog is nil, a default logger is used.
+func ProcessBooks(books []Book, scanLog logger.Logger) error {
 	if GlobalScanner != nil {
-		return GlobalScanner.ProcessBooks(books)
+		return GlobalScanner.ProcessBooks(books, scanLog)
 	}
-	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans, nil)
+	return ProcessBooksParallel(context.Background(), books, config.AppConfig.ConcurrentScans, nil, scanLog)
 }
 
-// ProcessBooksParallel processes books with parallel workers for improved performance
-func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string)) error {
+// ProcessBooksParallel processes books with parallel workers for improved performance.
+// If scanLog is nil, a default logger is used.
+func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string), scanLog logger.Logger) error {
 	if GlobalScanner != nil {
-		return GlobalScanner.ProcessBooksParallel(ctx, books, workers, progressFn)
+		return GlobalScanner.ProcessBooksParallel(ctx, books, workers, progressFn, scanLog)
+	}
+	if scanLog == nil {
+		scanLog = logger.New("scanner")
 	}
 	if workers < 1 {
 		workers = 1
 	}
 
-	fmt.Printf("Processing audiobook metadata (using %d workers)...\n", workers)
+	scanLog.Info("Processing audiobook metadata (using %d workers)...", workers)
 
 	bar := progressbar.Default(int64(len(books)))
 	total := len(books)
@@ -283,14 +296,14 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 	aiEnabled := false
 	if config.AppConfig.EnableAIParsing {
 		if config.AppConfig.OpenAIAPIKey == "" {
-			log.Printf("[WARN] scanner: AI parsing enabled but OpenAI API key is not configured")
+			scanLog.Warn("AI parsing enabled but OpenAI API key is not configured")
 		} else {
 			aiParser = ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, true)
 			if aiParser != nil && aiParser.IsEnabled() {
 				aiEnabled = true
-				log.Printf("[DEBUG] scanner: OpenAI parser initialized for filename metadata fallback")
+				scanLog.Debug("OpenAI parser initialized for filename metadata fallback")
 			} else {
-				log.Printf("[WARN] scanner: failed to initialize OpenAI parser, AI fallback disabled")
+				scanLog.Warn("failed to initialize OpenAI parser, AI fallback disabled")
 			}
 		}
 	}
@@ -355,7 +368,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				fileCount := countAudioFilesInDir(dirPath, config.AppConfig.SupportedExtensions)
 				bm, bmErr := metadata.AssembleBookMetadata(dirPath, firstFile, fileCount, 0)
 				if bmErr != nil {
-					log.Printf("[WARN] scanner: AssembleBookMetadata failed for %s: %v", dirPath, bmErr)
+					scanLog.Warn("AssembleBookMetadata failed for %s: %v", dirPath, bmErr)
 					fallbackUsed = true
 				} else {
 					if bm.Title != "" {
@@ -385,7 +398,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				// Single-pass extraction: open file once for tags + mediainfo + hash.
 				meta, mi, fileHash, pfErr := ProcessFile(filePath)
 				if pfErr != nil {
-					log.Printf("[WARN] scanner: ProcessFile failed for %s: %v", filePath, pfErr)
+					scanLog.Warn("ProcessFile failed for %s: %v", filePath, pfErr)
 					fallbackUsed = true
 				} else {
 					if meta != nil {
@@ -518,7 +531,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 	}
 
 	if len(errs) > 0 {
-		fmt.Printf("Warning: %d books failed to save\n", len(errs))
+		scanLog.Warn("%d books failed to save", len(errs))
 	}
 
 	if ctxErr != nil {
@@ -527,7 +540,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	// Batch AI parsing phase: process candidates in batches of 20 with rate limiting
 	if aiEnabled && len(aiCandidates) > 0 {
-		log.Printf("[INFO] scanner: AI batch parsing %d books in batches of 20", len(aiCandidates))
+		scanLog.Info("AI batch parsing %d books in batches of 20", len(aiCandidates))
 		const batchSize = 20
 		const delayBetweenBatches = 2 * time.Second
 
@@ -553,7 +566,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			cancel()
 
 			if aiErr != nil {
-				log.Printf("[WARN] scanner: AI batch parsing failed (batch %d-%d): %v", start, end, aiErr)
+				scanLog.Warn("AI batch parsing failed (batch %d-%d): %v", start, end, aiErr)
 				// Rate limit error — wait longer before retry/next batch
 				if start+batchSize < len(aiCandidates) {
 					time.Sleep(5 * time.Second)
@@ -588,11 +601,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 				// Re-save with updated metadata
 				if saveErr := saveBook(&books[idx]); saveErr != nil {
-					log.Printf("[WARN] scanner: failed to re-save AI-enriched book %s: %v", books[idx].FilePath, saveErr)
+					scanLog.Warn("failed to re-save AI-enriched book %s: %v", books[idx].FilePath, saveErr)
 				}
 			}
 
-			log.Printf("[INFO] scanner: AI batch %d-%d complete (%d results)", start, end, len(results))
+			scanLog.Info("AI batch %d-%d complete (%d results)", start, end, len(results))
 
 			// Rate limit: wait between batches to avoid OpenAI throttling
 			if end < len(aiCandidates) {
@@ -603,7 +616,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	// After processing all books, try to match series using external APIs for uncertain cases
 	if err := identifySeriesUsingExternalAPIs(books); err != nil {
-		fmt.Printf("Warning: Error identifying series using external APIs: %v\n", err)
+		scanLog.Warn("Error identifying series using external APIs: %v", err)
 	}
 
 	return nil
@@ -939,9 +952,9 @@ func saveBookToDatabase(book *Book) error {
 			// Check if this hash is blocked
 			blocked, err := database.GlobalStore.IsHashBlocked(hash)
 			if err != nil {
-				log.Printf("Warning: failed to check hash blocklist: %v", err)
+				defaultLog.Warn("failed to check hash blocklist: %v", err)
 			} else if blocked {
-				log.Printf("Skipping file %s: hash %s is blocked", book.FilePath, hash)
+				defaultLog.Info("Skipping file %s: hash %s is blocked", book.FilePath, hash)
 				return nil // Skip this file
 			}
 
@@ -993,7 +1006,7 @@ func saveBookToDatabase(book *Book) error {
 		if book.BookOrganizerID != "" {
 			existingByOrgID, orgErr := database.GlobalStore.GetBookByID(book.BookOrganizerID)
 			if orgErr == nil && existingByOrgID != nil && existingByOrgID.FilePath != book.FilePath {
-				log.Printf("[INFO] scanner: re-linking book %s (moved from %s to %s)",
+				defaultLog.Info("re-linking book %s (moved from %s to %s)",
 					book.BookOrganizerID, existingByOrgID.FilePath, book.FilePath)
 				existingByOrgID.FilePath = book.FilePath
 				preserveExistingFields(dbBook, existingByOrgID)
@@ -1028,7 +1041,7 @@ func saveBookToDatabase(book *Book) error {
 			}
 
 			if existing != nil {
-				log.Printf("[DEBUG] Found duplicate book by hash: %s (existing: %s, new: %s)",
+				defaultLog.Debug("Found duplicate book by hash: %s (existing: %s, new: %s)",
 					existing.Title, existing.FilePath, book.FilePath)
 
 				// Check if these are already version-linked
@@ -1037,9 +1050,9 @@ func saveBookToDatabase(book *Book) error {
 				if config.AppConfig.RootDir != "" &&
 					strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) &&
 					!strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir) {
-					log.Printf("[DEBUG] Promoting organized path for %s", existing.Title)
+					defaultLog.Debug("Promoting organized path for %s", existing.Title)
 				} else if alreadyLinked {
-					log.Printf("[DEBUG] Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
+					defaultLog.Debug("Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
 					return nil
 				} else {
 					// Not linked — create a version link between the two copies
@@ -1052,12 +1065,12 @@ func saveBookToDatabase(book *Book) error {
 					existing.VersionGroupID = &groupID
 					existing.IsPrimaryVersion = &existingInRoot
 					if _, uerr := database.GlobalStore.UpdateBook(existing.ID, existing); uerr != nil {
-						log.Printf("[WARN] Failed to set version group on existing book %s: %v", existing.ID, uerr)
+						defaultLog.Warn("Failed to set version group on existing book %s: %v", existing.ID, uerr)
 					}
 
 					dbBook.VersionGroupID = &groupID
 					dbBook.IsPrimaryVersion = &isNotPrimary
-					log.Printf("[INFO] Auto-linked duplicate as version group %s: %s <-> %s", groupID, existing.FilePath, book.FilePath)
+					defaultLog.Info("Auto-linked duplicate as version group %s: %s <-> %s", groupID, existing.FilePath, book.FilePath)
 					// Fall through to create the new book record below
 					existing = nil
 				}
@@ -1094,11 +1107,11 @@ func saveBookToDatabase(book *Book) error {
 							sib.VersionGroupID = &groupID
 							sib.IsPrimaryVersion = &sibIsM4B
 							if _, uerr := database.GlobalStore.UpdateBook(sib.ID, &sib); uerr != nil {
-								log.Printf("[WARN] Failed to update sibling version group for %s: %v", sib.FilePath, uerr)
+								defaultLog.Warn("Failed to update sibling version group for %s: %v", sib.FilePath, uerr)
 							}
 						}
 					}
-					log.Printf("[INFO] Auto-linked version group %s for %q in %s", groupID, dbBook.Title, parentDir)
+					defaultLog.Info("Auto-linked version group %s for %q in %s", groupID, dbBook.Title, parentDir)
 				}
 			}
 
