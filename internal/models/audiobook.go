@@ -33,6 +33,7 @@ type Audiobook struct {
 	Duration             *int    `json:"duration" db:"duration"`
 	Narrator             *string `json:"narrator" db:"narrator"`
 	Edition              *string `json:"edition" db:"edition"`
+	Description          *string `json:"description" db:"description"`
 	Language             *string `json:"language" db:"language"`
 	Publisher            *string `json:"publisher" db:"publisher"`
 	PrintYear            *int    `json:"print_year" db:"print_year"`

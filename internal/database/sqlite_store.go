@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.35.0
+// version: 1.38.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -23,7 +23,7 @@ type rowScanner interface {
 const bookSelectColumns = `
 	id, title, author_id, series_id, series_sequence,
 	file_path, original_filename, format, duration,
-	work_id, narrator, edition, language, publisher,
+	work_id, narrator, edition, description, language, publisher,
 	print_year, audiobook_release_year, isbn10, isbn13, asin,
 	open_library_id, hardcover_id, google_books_id,
 	itunes_persistent_id, itunes_date_added, itunes_play_count,
@@ -39,7 +39,7 @@ const bookSelectColumns = `
 const bookSelectColumnsQualified = `
 	books.id, books.title, books.author_id, books.series_id, books.series_sequence,
 	books.file_path, books.original_filename, books.format, books.duration,
-	books.work_id, books.narrator, books.edition, books.language, books.publisher,
+	books.work_id, books.narrator, books.edition, books.description, books.language, books.publisher,
 	books.print_year, books.audiobook_release_year, books.isbn10, books.isbn13, books.asin,
 	books.open_library_id, books.hardcover_id, books.google_books_id,
 	books.itunes_persistent_id, books.itunes_date_added, books.itunes_play_count,
@@ -58,7 +58,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		fileSize, bitrate, sampleRate, channels, bitDepth, quantity          sql.NullInt64
 		title, filePath, format                                              string
 		originalFilename                                                     sql.NullString
-		workID, narrator, edition, language, publisher                       sql.NullString
+		workID, narrator, edition, description, language, publisher           sql.NullString
 		itunesPersistentID, itunesImportSource                               sql.NullString
 		itunesDateAdded, itunesLastPlayed                                    sql.NullTime
 		isbn10, isbn13, asin                                                  sql.NullString
@@ -77,7 +77,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if err := scanner.Scan(
 		&book.ID, &title, &authorID, &seriesID, &seriesSequence,
 		&filePath, &originalFilename, &format, &duration,
-		&workID, &narrator, &edition, &language, &publisher,
+		&workID, &narrator, &edition, &description, &language, &publisher,
 		&printYear, &releaseYear, &isbn10, &isbn13, &asin,
 		&openLibraryID, &hardcoverID, &googleBooksID,
 		&itunesPersistentID, &itunesDateAdded, &itunesPlayCount,
@@ -102,6 +102,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.WorkID = nullableString(workID)
 	book.Narrator = nullableString(narrator)
 	book.Edition = nullableString(edition)
+	book.Description = nullableString(description)
 	book.Language = nullableString(language)
 	book.Publisher = nullableString(publisher)
 	book.PrintYear = nullableInt(printYear)
@@ -300,6 +301,7 @@ func (s *SQLiteStore) createTables() error {
 		work_id TEXT,
 		narrator TEXT,
 		edition TEXT,
+		description TEXT,
 		language TEXT,
 		publisher TEXT,
 		print_year INTEGER,
@@ -515,11 +517,13 @@ func (s *SQLiteStore) createTables() error {
 		total_tracks INTEGER,
 		active INTEGER NOT NULL DEFAULT 1,
 		superseded_by TEXT,
+		file_hash TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		version INTEGER NOT NULL DEFAULT 1
 	);
 	CREATE INDEX IF NOT EXISTS idx_book_segments_book ON book_segments(book_id);
+	CREATE INDEX IF NOT EXISTS idx_book_segments_hash ON book_segments(file_hash);
 
 	CREATE TABLE IF NOT EXISTS playback_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -637,6 +641,7 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"work_id":                "TEXT",
 		"narrator":               "TEXT",
 		"edition":                "TEXT",
+		"description":            "TEXT",
 		"language":               "TEXT",
 		"publisher":              "TEXT",
 		"isbn10":                 "TEXT",
@@ -932,10 +937,10 @@ func (s *SQLiteStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 	segment.UpdatedAt = now
 	segment.Version = 1
 	_, err := s.db.Exec(
-		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, superseded_by, created_at, updated_at, version)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, file_hash, active, superseded_by, created_at, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		segment.ID, bookNumericID, segment.FilePath, segment.Format, segment.SizeBytes, segment.DurationSec,
-		segment.TrackNumber, segment.TotalTracks, func() int {
+		segment.TrackNumber, segment.TotalTracks, segment.FileHash, func() int {
 			if segment.Active {
 				return 1
 			}
@@ -964,7 +969,7 @@ func (s *SQLiteStore) UpdateBookSegment(segment *BookSegment) error {
 
 func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, superseded_by, created_at, updated_at, version
+		`SELECT id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, file_hash, active, superseded_by, created_at, updated_at, version
 		 FROM book_segments WHERE book_id = ? ORDER BY track_number ASC, created_at ASC`, bookNumericID,
 	)
 	if err != nil {
@@ -976,13 +981,60 @@ func (s *SQLiteStore) ListBookSegments(bookNumericID int) ([]BookSegment, error)
 		var seg BookSegment
 		var active int
 		if err := rows.Scan(&seg.ID, &seg.BookID, &seg.FilePath, &seg.Format, &seg.SizeBytes, &seg.DurationSec,
-			&seg.TrackNumber, &seg.TotalTracks, &active, &seg.SupersededBy, &seg.CreatedAt, &seg.UpdatedAt, &seg.Version); err != nil {
+			&seg.TrackNumber, &seg.TotalTracks, &seg.FileHash, &active, &seg.SupersededBy, &seg.CreatedAt, &seg.UpdatedAt, &seg.Version); err != nil {
 			return nil, err
 		}
 		seg.Active = active != 0
 		segments = append(segments, seg)
 	}
 	return segments, rows.Err()
+}
+
+// GetBookSegmentByID retrieves a single segment by its ULID.
+func (s *SQLiteStore) GetBookSegmentByID(segmentID string) (*BookSegment, error) {
+	row := s.db.QueryRow(
+		`SELECT id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, file_hash, active, superseded_by, created_at, updated_at, version
+		 FROM book_segments WHERE id = ?`, segmentID,
+	)
+	var seg BookSegment
+	var active int
+	if err := row.Scan(&seg.ID, &seg.BookID, &seg.FilePath, &seg.Format, &seg.SizeBytes, &seg.DurationSec,
+		&seg.TrackNumber, &seg.TotalTracks, &seg.FileHash, &active, &seg.SupersededBy, &seg.CreatedAt, &seg.UpdatedAt, &seg.Version); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("segment not found: %s", segmentID)
+		}
+		return nil, err
+	}
+	seg.Active = active != 0
+	return &seg, nil
+}
+
+// MoveSegmentsToBook reassigns segments to a different book (by numeric ID).
+func (s *SQLiteStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
+	if len(segmentIDs) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	for _, segID := range segmentIDs {
+		result, err := tx.Exec(
+			`UPDATE book_segments SET book_id = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
+			targetBookNumericID, now, segID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to move segment %s: %w", segID, err)
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			return fmt.Errorf("segment not found: %s", segID)
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error {
@@ -1008,10 +1060,10 @@ func (s *SQLiteStore) MergeBookSegments(bookNumericID int, newSegment *BookSegme
 	}
 	now := time.Now()
 	if _, err := tx.Exec(
-		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, active, created_at, updated_at, version)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 1)`,
+		`INSERT INTO book_segments (id, book_id, file_path, format, size_bytes, duration_seconds, track_number, total_tracks, file_hash, active, created_at, updated_at, version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 1)`,
 		newSegment.ID, bookNumericID, newSegment.FilePath, newSegment.Format, newSegment.SizeBytes, newSegment.DurationSec,
-		newSegment.TrackNumber, newSegment.TotalTracks, now, now,
+		newSegment.TrackNumber, newSegment.TotalTracks, newSegment.FileHash, now, now,
 	); err != nil {
 		return fmt.Errorf("failed to insert merged segment: %w", err)
 	}
@@ -1297,6 +1349,26 @@ func (s *SQLiteStore) DeleteSeries(id int) error {
 func (s *SQLiteStore) UpdateSeriesName(id int, name string) error {
 	_, err := s.db.Exec("UPDATE series SET name = ? WHERE id = ?", name, id)
 	return err
+}
+
+func (s *SQLiteStore) GetAllSeriesBookCounts() (map[int]int, error) {
+	rows, err := s.db.Query(`SELECT series_id, COUNT(*)
+		FROM books
+		WHERE series_id IS NOT NULL AND COALESCE(marked_for_deletion, 0) = 0
+		GROUP BY series_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[int]int)
+	for rows.Next() {
+		var seriesID, count int
+		if err := rows.Scan(&seriesID, &count); err != nil {
+			return nil, err
+		}
+		counts[seriesID] = count
+	}
+	return counts, rows.Err()
 }
 
 func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
@@ -1729,6 +1801,194 @@ func (s *SQLiteStore) GetFolderDuplicates() ([][]Book, error) {
 	return groups, nil
 }
 
+// normalizeTitle normalizes a book title for comparison: lowercase, strip articles,
+// remove parenthesized suffixes like "(Unabridged)", collapse whitespace.
+func normalizeTitle(title string) string {
+	s := strings.ToLower(strings.TrimSpace(title))
+	// Remove common parenthesized suffixes
+	for _, suffix := range []string{"(unabridged)", "(abridged)", "(audiobook)", "(audio)"} {
+		s = strings.ReplaceAll(s, suffix, "")
+	}
+	// Remove leading articles
+	for _, article := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(s, article) {
+			s = s[len(article):]
+			break
+		}
+	}
+	// Collapse multiple spaces
+	parts := strings.Fields(s)
+	return strings.Join(parts, " ")
+}
+
+// jaroWinkler computes the Jaro-Winkler similarity between two strings (0.0–1.0).
+func jaroWinkler(s1, s2 string) float64 {
+	if s1 == s2 {
+		return 1.0
+	}
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0.0
+	}
+
+	// Jaro distance
+	matchDist := max(len(s1), len(s2))/2 - 1
+	if matchDist < 0 {
+		matchDist = 0
+	}
+
+	s1Matches := make([]bool, len(s1))
+	s2Matches := make([]bool, len(s2))
+	matches := 0
+	transpositions := 0
+
+	for i := 0; i < len(s1); i++ {
+		start := i - matchDist
+		if start < 0 {
+			start = 0
+		}
+		end := i + matchDist + 1
+		if end > len(s2) {
+			end = len(s2)
+		}
+		for j := start; j < end; j++ {
+			if s2Matches[j] || s1[i] != s2[j] {
+				continue
+			}
+			s1Matches[i] = true
+			s2Matches[j] = true
+			matches++
+			break
+		}
+	}
+	if matches == 0 {
+		return 0.0
+	}
+
+	k := 0
+	for i := 0; i < len(s1); i++ {
+		if !s1Matches[i] {
+			continue
+		}
+		for !s2Matches[k] {
+			k++
+		}
+		if s1[i] != s2[k] {
+			transpositions++
+		}
+		k++
+	}
+
+	jaro := (float64(matches)/float64(len(s1)) +
+		float64(matches)/float64(len(s2)) +
+		float64(matches-transpositions/2)/float64(matches)) / 3.0
+
+	// Winkler modification: boost for common prefix (up to 4 chars)
+	prefix := 0
+	for i := 0; i < min(4, min(len(s1), len(s2))); i++ {
+		if s1[i] == s2[i] {
+			prefix++
+		} else {
+			break
+		}
+	}
+
+	return jaro + float64(prefix)*0.1*(1.0-jaro)
+}
+
+// GetDuplicateBooksByMetadata finds books that appear to be duplicates based on
+// title + author matching. Books with the same author_id and similar titles
+// (after normalization) are grouped together. The threshold parameter controls
+// how similar titles must be (0.0–1.0, where 1.0 = exact match). Duration is
+// used as an additional signal: if both books have duration, they must be within
+// 5% to be grouped.
+func (s *SQLiteStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, error) {
+	// Fetch all non-deleted books that aren't already in a version group
+	query := fmt.Sprintf(`
+		SELECT %s FROM books
+		WHERE COALESCE(marked_for_deletion, 0) = 0
+		  AND title != ''
+		  AND author_id IS NOT NULL
+		ORDER BY author_id, LOWER(title)
+	`, bookSelectColumns)
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query books for metadata dedup: %w", err)
+	}
+	defer rows.Close()
+
+	var allBooks []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		allBooks = append(allBooks, book)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Group books by author_id first, then find title matches within each author group
+	authorGroups := map[int][]Book{}
+	for _, b := range allBooks {
+		if b.AuthorID == nil {
+			continue
+		}
+		authorGroups[*b.AuthorID] = append(authorGroups[*b.AuthorID], b)
+	}
+
+	var duplicateGroups [][]Book
+
+	for _, books := range authorGroups {
+		if len(books) < 2 {
+			continue
+		}
+		// Track which books have been assigned to a group
+		assigned := make([]bool, len(books))
+
+		for i := 0; i < len(books); i++ {
+			if assigned[i] {
+				continue
+			}
+			group := []Book{books[i]}
+			assigned[i] = true
+
+			normI := normalizeTitle(books[i].Title)
+
+			for j := i + 1; j < len(books); j++ {
+				if assigned[j] {
+					continue
+				}
+				normJ := normalizeTitle(books[j].Title)
+				sim := jaroWinkler(normI, normJ)
+				if sim < threshold {
+					continue
+				}
+				// If both have duration, check within 5%
+				if books[i].Duration != nil && books[j].Duration != nil {
+					di := float64(*books[i].Duration)
+					dj := float64(*books[j].Duration)
+					if di > 0 && dj > 0 {
+						ratio := di / dj
+						if ratio < 0.95 || ratio > 1.05 {
+							continue
+						}
+					}
+				}
+				group = append(group, books[j])
+				assigned[j] = true
+			}
+
+			if len(group) >= 2 {
+				duplicateGroups = append(duplicateGroups, group)
+			}
+		}
+	}
+
+	return duplicateGroups, nil
+}
+
 func (s *SQLiteStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE series_id = ? AND COALESCE(marked_for_deletion, 0) = 0 ORDER BY series_sequence, title`, bookSelectColumns)
 	rows, err := s.db.Query(query, seriesID)
@@ -1964,7 +2224,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
-		format, duration, work_id, narrator, edition, language, publisher,
+		format, duration, work_id, narrator, edition, description, language, publisher,
 		print_year, audiobook_release_year, isbn10, isbn13, asin,
 		open_library_id, hardcover_id, google_books_id,
 		itunes_persistent_id, itunes_date_added, itunes_play_count, itunes_last_played,
@@ -1973,10 +2233,10 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
-		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
+		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
@@ -2083,7 +2343,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	query := `UPDATE books SET
 		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 		file_path = ?, original_filename = ?, format = ?, duration = ?,
-		work_id = ?, narrator = ?, edition = ?, language = ?, publisher = ?,
+		work_id = ?, narrator = ?, edition = ?, description = ?, language = ?, publisher = ?,
 		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?, asin = ?,
 		open_library_id = ?, hardcover_id = ?, google_books_id = ?,
 		itunes_persistent_id = ?, itunes_date_added = ?, itunes_play_count = ?, itunes_last_played = ?,
@@ -2098,7 +2358,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
 		book.FilePath, book.OriginalFilename, book.Format, book.Duration,
-		book.WorkID, book.Narrator, book.Edition, book.Language, book.Publisher,
+		book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
@@ -2274,7 +2534,7 @@ func sanitizeFTS5Query(q string) string {
 
 func (s *SQLiteStore) CountBooks() (int, error) {
 	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&count)
+	err := s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND COALESCE(is_primary_version, 1) = 1").Scan(&count)
 	return count, err
 }
 
@@ -2291,16 +2551,17 @@ func (s *SQLiteStore) CountSeries() (int, error) {
 }
 
 func (s *SQLiteStore) GetBookCountsByLocation(rootDir string) (library, import_ int, err error) {
+	const primaryFilter = " AND COALESCE(is_primary_version, 1) = 1"
 	if rootDir == "" {
 		// No root dir configured, all books are imports
-		err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&import_)
+		err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0" + primaryFilter).Scan(&import_)
 		return 0, import_, err
 	}
-	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?", rootDir+"%").Scan(&library)
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?" + primaryFilter, rootDir+"%").Scan(&library)
 	if err != nil {
 		return
 	}
-	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?", rootDir+"%").Scan(&import_)
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?" + primaryFilter, rootDir+"%").Scan(&import_)
 	return
 }
 
@@ -3333,6 +3594,21 @@ func (s *SQLiteStore) RevertOperationChanges(operationID string) error {
 		operationID,
 	)
 	return err
+}
+
+// CreateAuthorTombstone is a no-op for SQLite (uses SQL foreign keys instead).
+func (s *SQLiteStore) CreateAuthorTombstone(oldID, canonicalID int) error {
+	return nil
+}
+
+// GetAuthorTombstone is a no-op for SQLite (uses SQL foreign keys instead).
+func (s *SQLiteStore) GetAuthorTombstone(oldID int) (int, error) {
+	return 0, nil
+}
+
+// ResolveTombstoneChains is a no-op for SQLite (uses SQL foreign keys instead).
+func (s *SQLiteStore) ResolveTombstoneChains() (int, error) {
+	return 0, nil
 }
 
 func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {

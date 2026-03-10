@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -211,6 +211,12 @@ var migrations = []Migration{
 		Version:     29,
 		Description: "Add operation_changes table for undo/rollback tracking",
 		Up:          migration029Up,
+		Down:        nil,
+	},
+	{
+		Version:     30,
+		Description: "Add file_hash column to book_segments for auto-relinking",
+		Up:          migration030Up,
 		Down:        nil,
 	},
 }
@@ -1587,5 +1593,33 @@ func migration029Up(store Store) error {
 	}
 
 	log.Println("  - operation_changes table created successfully")
+	return nil
+}
+
+func migration030Up(store Store) error {
+	log.Println("  - Adding file_hash column to book_segments for auto-relinking")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`ALTER TABLE book_segments ADD COLUMN file_hash TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_book_segments_file_hash ON book_segments(file_hash)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("  - Column already exists, skipping: %s", stmt)
+				continue
+			}
+			return fmt.Errorf("migration 30 failed: %w", err)
+		}
+	}
+
+	log.Println("  - file_hash column added to book_segments successfully")
 	return nil
 }

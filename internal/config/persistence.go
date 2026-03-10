@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.8.0
+// version: 1.10.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -302,6 +302,11 @@ func applySetting(key, value, typ string) error {
 		}
 	case "language":
 		AppConfig.Language = value
+	case "metadata_sources":
+		var sources []MetadataSource
+		if err := json.Unmarshal([]byte(value), &sources); err == nil && len(sources) > 0 {
+			AppConfig.MetadataSources = sources
+		}
 
 	// Open Library dumps
 	case "openlibrary_dump_enabled":
@@ -513,6 +518,19 @@ func applySetting(key, value, typ string) error {
 			AppConfig.ScheduledResolveProductionAuthorsInterval = i
 		}
 
+	case "scheduled_series_prune_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledSeriesPruneEnabled = b
+		}
+	case "scheduled_series_prune_interval":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.ScheduledSeriesPruneInterval = i
+		}
+	case "scheduled_series_prune_on_startup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ScheduledSeriesPruneOnStartup = b
+		}
+
 	// Basic auth
 	case "basic_auth_enabled":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -542,6 +560,11 @@ func SaveConfigToDatabase(store database.Store) error {
 	pathMappingsJSON, err := json.Marshal(AppConfig.ITunesPathMappings)
 	if err != nil {
 		return fmt.Errorf("failed to marshal itunes_path_mappings: %w", err)
+	}
+
+	metadataSourcesJSON, err := json.Marshal(AppConfig.MetadataSources)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata_sources: %w", err)
 	}
 
 	extensionsJSON, err := json.Marshal(AppConfig.SupportedExtensions)
@@ -583,6 +606,7 @@ func SaveConfigToDatabase(store database.Store) error {
 		// Metadata
 		"auto_fetch_metadata": {strconv.FormatBool(AppConfig.AutoFetchMetadata), "bool", false},
 		"language":            {AppConfig.Language, "string", false},
+		"metadata_sources":    {string(metadataSourcesJSON), "json", false},
 
 		// Open Library dumps
 		"openlibrary_dump_enabled": {strconv.FormatBool(AppConfig.OpenLibraryDumpEnabled), "bool", false},
@@ -660,6 +684,9 @@ func SaveConfigToDatabase(store database.Store) error {
 		"scheduled_metadata_refresh_on_startup": {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshOnStartup), "bool", false},
 		"scheduled_resolve_production_authors_enabled":  {strconv.FormatBool(AppConfig.ScheduledResolveProductionAuthorsEnabled), "bool", false},
 		"scheduled_resolve_production_authors_interval": {strconv.Itoa(AppConfig.ScheduledResolveProductionAuthorsInterval), "int", false},
+		"scheduled_series_prune_enabled":               {strconv.FormatBool(AppConfig.ScheduledSeriesPruneEnabled), "bool", false},
+		"scheduled_series_prune_interval":              {strconv.Itoa(AppConfig.ScheduledSeriesPruneInterval), "int", false},
+		"scheduled_series_prune_on_startup":            {strconv.FormatBool(AppConfig.ScheduledSeriesPruneOnStartup), "bool", false},
 	}
 
 	saved := 0
