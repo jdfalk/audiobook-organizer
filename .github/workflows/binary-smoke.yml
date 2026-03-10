@@ -1,5 +1,5 @@
 # file: .github/workflows/binary-smoke.yml
-# version: 1.1.0
+# version: 1.2.0
 # guid: 8dad4b58-c626-48e4-9adc-2696ddd2e864
 
 name: Binary Smoke
@@ -27,13 +27,15 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libtag1-dev
 
       - name: Build CLI Binary
         run: go build -o audiobook-organizer .
+        env:
+          GOEXPERIMENT: jsonv2
 
       - name: Verify CLI Help Output
         run: |
