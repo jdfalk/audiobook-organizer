@@ -8782,6 +8782,312 @@ func (_c *MockStore_ResolveTombstoneChains_Call) RunAndReturn(run func() (int, e
 	return _c
 }
 
+// AddSystemActivityLog provides a mock function for the type MockStore
+//   - source string
+//   - level string
+//   - message string
+func (_mock *MockStore) AddSystemActivityLog(source string, level string, message string) error {
+	ret := _mock.Called(source, level, message)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddSystemActivityLog")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
+		r0 = returnFunc(source, level, message)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_AddSystemActivityLog_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddSystemActivityLog'
+type MockStore_AddSystemActivityLog_Call struct {
+	*mock.Call
+}
+
+// AddSystemActivityLog is a helper method to define mock.On call
+//   - source string
+//   - level string
+//   - message string
+func (_e *MockStore_Expecter) AddSystemActivityLog(source interface{}, level interface{}, message interface{}) *MockStore_AddSystemActivityLog_Call {
+	return &MockStore_AddSystemActivityLog_Call{Call: _e.mock.On("AddSystemActivityLog", source, level, message)}
+}
+
+func (_c *MockStore_AddSystemActivityLog_Call) Run(run func(source string, level string, message string)) *MockStore_AddSystemActivityLog_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(arg0, arg1, arg2)
+	})
+	return _c
+}
+
+func (_c *MockStore_AddSystemActivityLog_Call) Return(err error) *MockStore_AddSystemActivityLog_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_AddSystemActivityLog_Call) RunAndReturn(run func(string, string, string) error) *MockStore_AddSystemActivityLog_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSystemActivityLogs provides a mock function for the type MockStore
+//   - source string
+//   - limit int
+func (_mock *MockStore) GetSystemActivityLogs(source string, limit int) ([]database.SystemActivityLog, error) {
+	ret := _mock.Called(source, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSystemActivityLogs")
+	}
+
+	var r0 []database.SystemActivityLog
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.SystemActivityLog, error)); ok {
+		return returnFunc(source, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int) []database.SystemActivityLog); ok {
+		r0 = returnFunc(source, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.SystemActivityLog)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int) error); ok {
+		r1 = returnFunc(source, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetSystemActivityLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSystemActivityLogs'
+type MockStore_GetSystemActivityLogs_Call struct {
+	*mock.Call
+}
+
+// GetSystemActivityLogs is a helper method to define mock.On call
+//   - source string
+//   - limit int
+func (_e *MockStore_Expecter) GetSystemActivityLogs(source interface{}, limit interface{}) *MockStore_GetSystemActivityLogs_Call {
+	return &MockStore_GetSystemActivityLogs_Call{Call: _e.mock.On("GetSystemActivityLogs", source, limit)}
+}
+
+func (_c *MockStore_GetSystemActivityLogs_Call) Run(run func(source string, limit int)) *MockStore_GetSystemActivityLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetSystemActivityLogs_Call) Return(logs []database.SystemActivityLog, err error) *MockStore_GetSystemActivityLogs_Call {
+	_c.Call.Return(logs, err)
+	return _c
+}
+
+func (_c *MockStore_GetSystemActivityLogs_Call) RunAndReturn(run func(string, int) ([]database.SystemActivityLog, error)) *MockStore_GetSystemActivityLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PruneOperationLogs provides a mock function for the type MockStore
+//   - olderThan time.Time
+func (_mock *MockStore) PruneOperationLogs(olderThan time.Time) (int, error) {
+	ret := _mock.Called(olderThan)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PruneOperationLogs")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(time.Time) (int, error)); ok {
+		return returnFunc(olderThan)
+	}
+	if returnFunc, ok := ret.Get(0).(func(time.Time) int); ok {
+		r0 = returnFunc(olderThan)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(time.Time) error); ok {
+		r1 = returnFunc(olderThan)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_PruneOperationLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneOperationLogs'
+type MockStore_PruneOperationLogs_Call struct {
+	*mock.Call
+}
+
+// PruneOperationLogs is a helper method to define mock.On call
+//   - olderThan time.Time
+func (_e *MockStore_Expecter) PruneOperationLogs(olderThan interface{}) *MockStore_PruneOperationLogs_Call {
+	return &MockStore_PruneOperationLogs_Call{Call: _e.mock.On("PruneOperationLogs", olderThan)}
+}
+
+func (_c *MockStore_PruneOperationLogs_Call) Run(run func(olderThan time.Time)) *MockStore_PruneOperationLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 time.Time
+		if args[0] != nil {
+			arg0 = args[0].(time.Time)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_PruneOperationLogs_Call) Return(n int, err error) *MockStore_PruneOperationLogs_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_PruneOperationLogs_Call) RunAndReturn(run func(time.Time) (int, error)) *MockStore_PruneOperationLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PruneOperationChanges provides a mock function for the type MockStore
+//   - olderThan time.Time
+func (_mock *MockStore) PruneOperationChanges(olderThan time.Time) (int, error) {
+	ret := _mock.Called(olderThan)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PruneOperationChanges")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(time.Time) (int, error)); ok {
+		return returnFunc(olderThan)
+	}
+	if returnFunc, ok := ret.Get(0).(func(time.Time) int); ok {
+		r0 = returnFunc(olderThan)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(time.Time) error); ok {
+		r1 = returnFunc(olderThan)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_PruneOperationChanges_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneOperationChanges'
+type MockStore_PruneOperationChanges_Call struct {
+	*mock.Call
+}
+
+// PruneOperationChanges is a helper method to define mock.On call
+//   - olderThan time.Time
+func (_e *MockStore_Expecter) PruneOperationChanges(olderThan interface{}) *MockStore_PruneOperationChanges_Call {
+	return &MockStore_PruneOperationChanges_Call{Call: _e.mock.On("PruneOperationChanges", olderThan)}
+}
+
+func (_c *MockStore_PruneOperationChanges_Call) Run(run func(olderThan time.Time)) *MockStore_PruneOperationChanges_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 time.Time
+		if args[0] != nil {
+			arg0 = args[0].(time.Time)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_PruneOperationChanges_Call) Return(n int, err error) *MockStore_PruneOperationChanges_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_PruneOperationChanges_Call) RunAndReturn(run func(time.Time) (int, error)) *MockStore_PruneOperationChanges_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PruneSystemActivityLogs provides a mock function for the type MockStore
+//   - olderThan time.Time
+func (_mock *MockStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
+	ret := _mock.Called(olderThan)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PruneSystemActivityLogs")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(time.Time) (int, error)); ok {
+		return returnFunc(olderThan)
+	}
+	if returnFunc, ok := ret.Get(0).(func(time.Time) int); ok {
+		r0 = returnFunc(olderThan)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(time.Time) error); ok {
+		r1 = returnFunc(olderThan)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_PruneSystemActivityLogs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneSystemActivityLogs'
+type MockStore_PruneSystemActivityLogs_Call struct {
+	*mock.Call
+}
+
+// PruneSystemActivityLogs is a helper method to define mock.On call
+//   - olderThan time.Time
+func (_e *MockStore_Expecter) PruneSystemActivityLogs(olderThan interface{}) *MockStore_PruneSystemActivityLogs_Call {
+	return &MockStore_PruneSystemActivityLogs_Call{Call: _e.mock.On("PruneSystemActivityLogs", olderThan)}
+}
+
+func (_c *MockStore_PruneSystemActivityLogs_Call) Run(run func(olderThan time.Time)) *MockStore_PruneSystemActivityLogs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 time.Time
+		if args[0] != nil {
+			arg0 = args[0].(time.Time)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_PruneSystemActivityLogs_Call) Return(n int, err error) *MockStore_PruneSystemActivityLogs_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_PruneSystemActivityLogs_Call) RunAndReturn(run func(time.Time) (int, error)) *MockStore_PruneSystemActivityLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetScanCacheMap provides a mock function for the type MockStore
 func (_mock *MockStore) GetScanCacheMap() (map[string]database.ScanCacheEntry, error) {
 	ret := _mock.Called()

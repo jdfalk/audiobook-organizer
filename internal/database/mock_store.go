@@ -110,6 +110,13 @@ type MockStore struct {
 	GetOperationSummaryLogFunc   func(id string) (*OperationSummaryLog, error)
 	ListOperationSummaryLogsFunc func(limit, offset int) ([]OperationSummaryLog, error)
 
+	// System activity log
+	AddSystemActivityLogFunc    func(source, level, message string) error
+	GetSystemActivityLogsFunc   func(source string, limit int) ([]SystemActivityLog, error)
+	PruneOperationLogsFunc      func(olderThan time.Time) (int, error)
+	PruneOperationChangesFunc   func(olderThan time.Time) (int, error)
+	PruneSystemActivityLogsFunc func(olderThan time.Time) (int, error)
+
 	// User Preferences
 	GetUserPreferenceFunc     func(key string) (*UserPreference, error)
 	SetUserPreferenceFunc     func(key, value string) error
@@ -1211,6 +1218,41 @@ func (m *MockStore) GetAuthorTombstone(oldID int) (int, error) {
 func (m *MockStore) ResolveTombstoneChains() (int, error) {
 	if m.ResolveTombstoneChainsFunc != nil {
 		return m.ResolveTombstoneChainsFunc()
+	}
+	return 0, nil
+}
+
+func (m *MockStore) AddSystemActivityLog(source, level, message string) error {
+	if m.AddSystemActivityLogFunc != nil {
+		return m.AddSystemActivityLogFunc(source, level, message)
+	}
+	return nil
+}
+
+func (m *MockStore) GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error) {
+	if m.GetSystemActivityLogsFunc != nil {
+		return m.GetSystemActivityLogsFunc(source, limit)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) PruneOperationLogs(olderThan time.Time) (int, error) {
+	if m.PruneOperationLogsFunc != nil {
+		return m.PruneOperationLogsFunc(olderThan)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) PruneOperationChanges(olderThan time.Time) (int, error) {
+	if m.PruneOperationChangesFunc != nil {
+		return m.PruneOperationChangesFunc(olderThan)
+	}
+	return 0, nil
+}
+
+func (m *MockStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
+	if m.PruneSystemActivityLogsFunc != nil {
+		return m.PruneSystemActivityLogsFunc(olderThan)
 	}
 	return 0, nil
 }
