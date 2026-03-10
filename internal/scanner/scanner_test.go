@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5c1a2b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
 
 package scanner
@@ -44,7 +44,7 @@ func TestScanDirectoryParallelFiltersExtensions(t *testing.T) {
 		t.Fatalf("write other: %v", err)
 	}
 
-	books, err := ScanDirectoryParallel(dir, 2)
+	books, err := ScanDirectoryParallel(dir, 2, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectoryParallel error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestProcessBooksParallelInvokesProgress(t *testing.T) {
 		}
 	}
 
-	if err := ProcessBooksParallel(context.Background(), books, 2, progressFn); err != nil {
+	if err := ProcessBooksParallel(context.Background(), books, 2, progressFn, nil); err != nil {
 		t.Fatalf("ProcessBooksParallel returned error: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestScanDirectory(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	books, err := ScanDirectory(dir)
+	books, err := ScanDirectory(dir, nil)
 	if err != nil {
 		t.Fatalf("ScanDirectory error: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestProcessBooksParallelCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	err := ProcessBooksParallel(ctx, books, 2, nil)
+	err := ProcessBooksParallel(ctx, books, 2, nil, nil)
 	if err != context.Canceled {
 		t.Errorf("expected context.Canceled error, got %v", err)
 	}
@@ -338,7 +338,7 @@ func TestScanDirectoryParallelNegativeWorkers(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	books, err := ScanDirectoryParallel(dir, -1)
+	books, err := ScanDirectoryParallel(dir, -1, nil)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestProcessBooksParallelNegativeWorkers(t *testing.T) {
 	saveBook = func(book *Book) error { return nil }
 
 	// Should handle negative workers gracefully (defaults to 1)
-	err := ProcessBooksParallel(context.Background(), books, -1, nil)
+	err := ProcessBooksParallel(context.Background(), books, -1, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestProcessBooks(t *testing.T) {
 	t.Cleanup(func() { saveBook = oldSaver })
 	saveBook = func(book *Book) error { return nil }
 
-	err := ProcessBooks(books)
+	err := ProcessBooks(books, nil)
 	if err != nil {
 		t.Errorf("ProcessBooks error: %v", err)
 	}

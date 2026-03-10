@@ -13,6 +13,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 )
@@ -331,10 +332,10 @@ func stubCommandDeps(t *testing.T) {
 		database.GlobalStore = nil
 		return nil
 	}
-	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+	scanDirectory = func(rootDir string, _ logger.Logger) ([]scanner.Book, error) {
 		return []scanner.Book{}, nil
 	}
-	processBooks = func(books []scanner.Book) error {
+	processBooks = func(books []scanner.Book, _ logger.Logger) error {
 		return nil
 	}
 	generatePlaylists = func() error {
@@ -434,17 +435,17 @@ func TestScanCommandErrorPaths(t *testing.T) {
 	config.AppConfig.RootDir = tempDir
 	config.AppConfig.EnableSQLite = true
 
-	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+	scanDirectory = func(rootDir string, _ logger.Logger) ([]scanner.Book, error) {
 		return nil, fmt.Errorf("scan failed")
 	}
 	if err := scanCmd.RunE(scanCmd, nil); err == nil {
 		t.Fatal("expected scan command error")
 	}
 
-	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+	scanDirectory = func(rootDir string, _ logger.Logger) ([]scanner.Book, error) {
 		return []scanner.Book{{FilePath: filepath.Join(tempDir, "book.m4b")}}, nil
 	}
-	processBooks = func(books []scanner.Book) error {
+	processBooks = func(books []scanner.Book, _ logger.Logger) error {
 		return fmt.Errorf("process failed")
 	}
 	if err := scanCmd.RunE(scanCmd, nil); err == nil {
@@ -535,7 +536,7 @@ func TestOrganizeCommandError(t *testing.T) {
 	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
 	config.AppConfig.EnableSQLite = true
 
-	scanDirectory = func(rootDir string) ([]scanner.Book, error) {
+	scanDirectory = func(rootDir string, _ logger.Logger) ([]scanner.Book, error) {
 		return nil, fmt.Errorf("scan failed in organize")
 	}
 	if err := organizeCmd.RunE(organizeCmd, nil); err == nil {

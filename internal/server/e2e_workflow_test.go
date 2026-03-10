@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -123,7 +124,7 @@ func TestE2E_ScanAndFetchMetadata(t *testing.T) {
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &ScanRequest{
 		FolderPath: &folderPath,
-	}, &mockProgressReporter{})
+	}, logger.New("test"))
 	require.NoError(t, err)
 
 	books, err := env.Store.GetAllBooks(100, 0)

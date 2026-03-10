@@ -36,6 +36,16 @@ type ProgressReporter interface {
 	IsCanceled() bool
 }
 
+// LoggerFromReporter extracts the logger.Logger from a ProgressReporter.
+// If the reporter was created by the queue (backed by OperationLogger), the
+// underlying logger is returned. Otherwise a default StandardLogger is returned.
+func LoggerFromReporter(progress ProgressReporter) logger.Logger {
+	if lpr, ok := progress.(*loggerProgressReporter); ok {
+		return lpr.logger
+	}
+	return logger.New("operation")
+}
+
 // QueuedOperation represents an operation in the queue
 type QueuedOperation struct {
 	ID       string

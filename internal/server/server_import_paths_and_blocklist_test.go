@@ -130,8 +130,8 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	store.EXPECT().CreateOperation(mock.Anything, "scan", mock.Anything).Return(&database.Operation{ID: "op-1", Type: "scan"}, nil)
 	store.EXPECT().UpdateImportPath(created.ID, mock.Anything).Return(nil)
 
-	scannerMock.EXPECT().ScanDirectoryParallel(importDir, mock.AnythingOfType("int")).Return([]scanner.Book{{FilePath: bookPath, Format: ".m4b"}}, nil)
-	scannerMock.EXPECT().ProcessBooksParallel(mock.Anything, mock.Anything, mock.AnythingOfType("int"), mock.Anything).Return(nil)
+	scannerMock.EXPECT().ScanDirectoryParallel(importDir, mock.AnythingOfType("int"), mock.Anything).Return([]scanner.Book{{FilePath: bookPath, Format: ".m4b"}}, nil)
+	scannerMock.EXPECT().ProcessBooksParallel(mock.Anything, mock.Anything, mock.AnythingOfType("int"), mock.Anything, mock.Anything).Return(nil)
 
 	queue.EXPECT().Enqueue("op-1", "scan", operations.PriorityNormal, mock.Anything).RunAndReturn(
 		func(id, opType string, priority int, fn operations.OperationFunc) error {

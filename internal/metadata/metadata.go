@@ -7,7 +7,6 @@ package metadata
 import (
 	"crypto/sha256"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/dhowden/tag"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 var yearPattern = regexp.MustCompile(`(\d{4})`)
@@ -89,13 +89,16 @@ func sourceOrUnknown(sources map[string]string, field string) string {
 }
 
 // ExtractMetadata reads metadata from audio files.
-// It opens the file, reads the tags, and calls BuildMetadataFromTag internally.
-func ExtractMetadata(filePath string) (Metadata, error) {
+// If metaLog is nil, a default logger is used.
+func ExtractMetadata(filePath string, metaLog logger.Logger) (Metadata, error) {
 	if GlobalMetadataExtractor != nil {
 		return GlobalMetadataExtractor.ExtractMetadata(filePath)
 	}
+	if metaLog == nil {
+		metaLog = logger.New("metadata")
+	}
 	var metadata Metadata
-	log.Printf("[DEBUG] metadata: extracting tags for %s", filePath)
+	metaLog.Debug("extracting tags for %s", filePath)
 
 	// Check if path is a directory — tag extraction only works on files
 	info, err := os.Stat(filePath)
@@ -103,7 +106,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		return metadata, fmt.Errorf("error stat'ing path: %w", err)
 	}
 	if info.IsDir() {
-		log.Printf("[DEBUG] metadata: %s is a directory, falling back to filename parsing", filePath)
+		metaLog.Debug("%s is a directory, falling back to filename parsing", filePath)
 		metadata = extractFromFilename(filePath)
 		metadata.UsedFilenameFallback = true
 		if metadata.SeriesIndex == 0 {
@@ -120,7 +123,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		log.Printf("[WARN] metadata: failed to read tags for %s: %v; falling back to filename parsing", filePath, err)
+		metaLog.Warn("failed to read tags for %s: %v; falling back to filename parsing", filePath, err)
 		metadata = extractFromFilename(filePath)
 		metadata.UsedFilenameFallback = true
 		if metadata.SeriesIndex == 0 {
@@ -151,7 +154,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
 			rawKeys = append(rawKeys, key)
 		}
 		sort.Strings(rawKeys)
-		log.Printf("[TRACE] metadata: raw tag keys for %s: %v", filePath, rawKeys)
+		metaLog.Trace("raw tag keys for %s: %v", filePath, rawKeys)
 	}
 
 	albumValue, albumSource := pickFirstNonEmpty(
@@ -396,11 +399,11 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
 		seriesIndexSource = "detected"
 	}
 	if fallbackUsed {
-		log.Printf("[TRACE] metadata: filename fallback filled gaps for %s", filePath)
+		metaLog.Trace("filename fallback filled gaps for %s", filePath)
 	}
 	metadata.UsedFilenameFallback = fallbackUsed
-	log.Printf(
-		"[TRACE] metadata: sources for %s | title=%s | author=%s | series=%s | series_index=%s | narrator=%s | album=%s | publisher=%s | language=%s",
+	metaLog.Trace(
+		"sources for %s | title=%s | author=%s | series=%s | series_index=%s | narrator=%s | album=%s | publisher=%s | language=%s",
 		filePath,
 		sourceOrUnknown(fieldSources, "title"),
 		sourceOrUnknown(fieldSources, "author"),
@@ -412,7 +415,8 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
 		sourceOrUnknown(fieldSources, "language"),
 	)
 
-	return metadata
+	metaLog.Debug("extracted for %s (title=%q author=%q series=%q position=%d)", filePath, metadata.Title, metadata.Artist, metadata.Series, metadata.SeriesIndex)
+	return metadata, nil
 }
 
 func cleanTagValue(value string) string {
@@ -831,7 +835,9 @@ func ExtractCoverArt(filePath string) (string, error) {
 		return "", fmt.Errorf("failed to write cover: %w", err)
 	}
 
-	log.Printf("[DEBUG] metadata: extracted cover art from %s → %s", filePath, coverPath)
+	// Cover art extraction log — use a default logger since this function
+	// doesn't accept a logger parameter (callers are few and non-critical).
+	logger.New("metadata").Debug("extracted cover art from %s → %s", filePath, coverPath)
 	return coverPath, nil
 }
 

@@ -1787,7 +1787,7 @@ func (mfs *MetadataFetchService) buildTagMap(
 // entries from tagMap whose values already match, so only changed fields are
 // written back to the file.
 func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[string]interface{} {
-	current, err := metadata.ExtractMetadata(filePath)
+	current, err := metadata.ExtractMetadata(filePath, nil)
 	if err != nil {
 		// Can't read current tags — write everything to be safe
 		return tagMap

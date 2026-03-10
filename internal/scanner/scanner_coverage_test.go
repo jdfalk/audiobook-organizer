@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -375,7 +376,7 @@ func TestScanDirectoryParallelReadDirError(t *testing.T) {
 
 	// This should not panic even if ReadDir fails on the file
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
-	books, err := ScanDirectoryParallel(tmp, 2)
+	books, err := ScanDirectoryParallel(tmp, 2, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -388,7 +389,7 @@ func TestScanDirectoryParallelReadDirError(t *testing.T) {
 // TestScanDirectoryParallelWalkError tests error handling when Walk fails
 func TestScanDirectoryParallelWalkError(t *testing.T) {
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
-	_, err := ScanDirectoryParallel("/completely/nonexistent/path/12345", 2)
+	_, err := ScanDirectoryParallel("/completely/nonexistent/path/12345", 2, nil)
 	if err == nil {
 		t.Error("expected error for nonexistent directory")
 	}
@@ -411,7 +412,7 @@ func TestProcessBooksParallelWithSaveError(t *testing.T) {
 	}
 
 	// Should complete but report warnings
-	err := ProcessBooksParallel(context.Background(), books, 1, nil)
+	err := ProcessBooksParallel(context.Background(), books, 1, nil, nil)
 	if err != nil {
 		t.Errorf("ProcessBooksParallel should not return error for save failures: %v", err)
 	}
@@ -430,7 +431,7 @@ func TestProcessBooksParallelNoProgressCallback(t *testing.T) {
 	saveBook = func(book *Book) error { return nil }
 
 	// Test with nil progress callback
-	err := ProcessBooksParallel(context.Background(), books, 2, nil)
+	err := ProcessBooksParallel(context.Background(), books, 2, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -590,7 +591,7 @@ func TestProcessBooksParallelWithAIParsing(t *testing.T) {
 	saveBook = func(book *Book) error { return nil }
 
 	// Should handle missing API key gracefully
-	err := ProcessBooksParallel(context.Background(), books, 1, nil)
+	err := ProcessBooksParallel(context.Background(), books, 1, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error with AI enabled but no key: %v", err)
 	}
@@ -616,7 +617,7 @@ func TestProcessBooksParallelContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 
-	err := ProcessBooksParallel(ctx, books, 1, nil)
+	err := ProcessBooksParallel(ctx, books, 1, nil, nil)
 	if err != context.DeadlineExceeded && err != context.Canceled {
 		t.Logf("expected context error, got: %v", err)
 	}
@@ -673,7 +674,7 @@ func TestScanDirectoryParallelMultipleWorkers(t *testing.T) {
 	workers := []int{0, 1, 2, 4, 8}
 	for _, w := range workers {
 		t.Run(fmt.Sprintf("workers_%d", w), func(t *testing.T) {
-			books, err := ScanDirectoryParallel(tmp, w)
+			books, err := ScanDirectoryParallel(tmp, w, nil)
 			if err != nil {
 				t.Fatalf("scan error: %v", err)
 			}
@@ -728,7 +729,7 @@ func TestScanDirectoryGlobalScanner(t *testing.T) {
 		books: []Book{{FilePath: "/mock/book.m4b", Title: "Mock Book"}},
 	}
 
-	books, err := ScanDirectory("/any/dir")
+	books, err := ScanDirectory("/any/dir", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -741,19 +742,19 @@ type fullMockScanner struct {
 	books []Book
 }
 
-func (m *fullMockScanner) ScanDirectory(rootDir string) ([]Book, error) {
+func (m *fullMockScanner) ScanDirectory(rootDir string, _ logger.Logger) ([]Book, error) {
 	return m.books, nil
 }
 
-func (m *fullMockScanner) ScanDirectoryParallel(rootDir string, workers int) ([]Book, error) {
+func (m *fullMockScanner) ScanDirectoryParallel(rootDir string, workers int, _ logger.Logger) ([]Book, error) {
 	return m.books, nil
 }
 
-func (m *fullMockScanner) ProcessBooks(books []Book) error {
+func (m *fullMockScanner) ProcessBooks(books []Book, _ logger.Logger) error {
 	return nil
 }
 
-func (m *fullMockScanner) ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(int, int, string)) error {
+func (m *fullMockScanner) ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(int, int, string), _ logger.Logger) error {
 	return nil
 }
 
@@ -777,7 +778,7 @@ func TestProcessBooksDefault(t *testing.T) {
 	t.Cleanup(func() { saveBook = oldSaver })
 	saveBook = func(book *Book) error { return nil }
 
-	err := ProcessBooks(books)
+	err := ProcessBooks(books, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

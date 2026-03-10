@@ -56,7 +56,7 @@ func TestExtractMetadata_UsesAlbumArtistForAuthor(t *testing.T) {
 	}
 
 	// Act
-	meta, err := ExtractMetadata(testFile)
+	meta, err := ExtractMetadata(testFile, nil)
 
 	// Assert
 	if err != nil {
@@ -95,7 +95,7 @@ func TestExtractMetadata_ComposerOverridesAlbumArtist(t *testing.T) {
 	}
 
 	// Act
-	meta, err := ExtractMetadata(testFile)
+	meta, err := ExtractMetadata(testFile, nil)
 
 	// Assert
 	if err != nil {
@@ -121,7 +121,7 @@ func TestExtractMetadata_FallbackFlagOnReadError(t *testing.T) {
 	}
 
 	// Act
-	meta, err := ExtractMetadata(filePath)
+	meta, err := ExtractMetadata(filePath, nil)
 
 	// Assert
 	if err != nil {
@@ -146,7 +146,7 @@ func TestExtractMetadata_DirectoryPath(t *testing.T) {
 	}
 
 	// Should not error — should fall back to filename parsing
-	meta, err := ExtractMetadata(dir)
+	meta, err := ExtractMetadata(dir, nil)
 	if err != nil {
 		t.Fatalf("expected no error for directory, got: %v", err)
 	}

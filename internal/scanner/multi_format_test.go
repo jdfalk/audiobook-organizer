@@ -85,7 +85,7 @@ func TestMultiFormatSupport(t *testing.T) {
 			}
 
 			// Scan directory
-			books, err := ScanDirectory(tmpDir)
+			books, err := ScanDirectory(tmpDir, nil)
 			if err != nil {
 				t.Fatalf("ScanDirectory failed: %v", err)
 			}
@@ -162,7 +162,7 @@ func TestParallelScanWithMixedFormats(t *testing.T) {
 	// Test with different worker counts
 	for workers := 1; workers <= 4; workers++ {
 		t.Run("workers_"+string(rune(workers+'0')), func(t *testing.T) {
-			books, err := ScanDirectoryParallel(tmpDir, workers)
+			books, err := ScanDirectoryParallel(tmpDir, workers, nil)
 			if err != nil {
 				t.Fatalf("Parallel scan failed: %v", err)
 			}
@@ -210,7 +210,7 @@ func TestFormatPreservation(t *testing.T) {
 		}
 	}
 
-	books, err := ScanDirectory(tmpDir)
+	books, err := ScanDirectory(tmpDir, nil)
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
 	}
