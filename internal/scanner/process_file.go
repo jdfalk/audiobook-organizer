@@ -49,7 +49,7 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 	// Directories: fall back to metadata-only extraction (no mediainfo, no hash)
 	if fi.IsDir() {
 		log.Printf("[DEBUG] scanner.ProcessFile: %s is a directory, extracting path metadata only", filePath)
-		meta, err := metadata.ExtractMetadata(filePath)
+		meta, err := metadata.ExtractMetadata(filePath, nil)
 		if err != nil {
 			return nil, nil, "", fmt.Errorf("ProcessFile: directory metadata for %q: %w", filePath, err)
 		}
@@ -74,13 +74,13 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 
 	if tagErr != nil {
 		log.Printf("[WARN] scanner.ProcessFile: tag read failed for %s: %v; using filename fallback", filePath, tagErr)
-		meta, err = metadata.ExtractMetadata(filePath) // opens file again — rare error path
+		meta, err = metadata.ExtractMetadata(filePath, nil) // opens file again — rare error path
 		if err != nil {
 			log.Printf("[WARN] scanner.ProcessFile: filename fallback also failed for %s: %v", filePath, err)
 		}
 		// mi stays nil — we have no tag to build from
 	} else {
-		meta = metadata.BuildMetadataFromTag(tagMeta, filePath)
+		meta = metadata.BuildMetadataFromTag(tagMeta, filePath, nil)
 		mi = mediainfo.BuildFromTag(tagMeta, filePath, fileSize)
 	}
 
