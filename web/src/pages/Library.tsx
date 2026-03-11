@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.39.0
+// version: 1.40.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -135,7 +135,7 @@ export const Library = () => {
       : SortOrder.Ascending;
   const initialPage = Math.max(
     1,
-    parseInt(searchParams.get('page') || '1', 10)
+    parseInt(searchParams.get('page') || localStorage.getItem('library_page') || '1', 10)
   );
   const initialItemsPerPage = Math.max(
     10,
@@ -464,6 +464,7 @@ export const Library = () => {
     prevPageRef.current = page;
     isInternalUpdate.current = true;
     setSearchParams(params, { replace: !pageChanged });
+    localStorage.setItem('library_page', page.toString());
   }, [
     filters,
     itemsPerPage,
