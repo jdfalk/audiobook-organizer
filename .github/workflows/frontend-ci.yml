@@ -1,5 +1,5 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.8.0
+# version: 2.9.0
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
 
 name: Frontend CI
@@ -50,5 +50,8 @@ jobs:
     if: needs.frontend-config.outputs.has-frontend == 'true'
     uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@36775c335a07fd1daf32393ceeb6fc04663765a2 # v2.9.0
     with:
+      go-version: '1.26'
+      go-experiment: 'jsonv2'
       node-version: ${{ needs.frontend-config.outputs.node-version }}
+      system-packages: 'libtag1-dev'
     secrets: inherit
