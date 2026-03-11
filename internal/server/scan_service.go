@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -70,12 +70,53 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, progre
 		return nil
 	}
 
-	// First pass: count total files across all folders
-	totalFilesAcrossFolders := ss.countFilesAcrossFolders(foldersToScan, progress)
-	_ = progress.Log("info", fmt.Sprintf("Total audiobook files across all folders: %d", totalFilesAcrossFolders), nil)
-	if totalFilesAcrossFolders == 0 {
-		_ = progress.Log("warn", "No audiobook files detected during pre-scan; totals will update as files are processed", nil)
+	// Pre-load scan cache for incremental skip checks.
+	var scanCache map[string]database.ScanCacheEntry
+	if !forceUpdate {
+		cache, err := ss.db.GetScanCacheMap()
+		if err != nil {
+			_ = progress.Log("warn", fmt.Sprintf("Failed to load scan cache, running full scan: %v", err), nil)
+		} else {
+			scanCache = cache
+			_ = progress.Log("info", fmt.Sprintf("Loaded scan cache with %d entries", len(cache)), nil)
+		}
 	}
+
+	// Add any folders that have books flagged needs_rescan.
+	if !forceUpdate && scanCache != nil {
+		dirtyFolders, err := ss.db.GetDirtyBookFolders()
+		if err == nil && len(dirtyFolders) > 0 {
+			_ = progress.Log("info", fmt.Sprintf("Found %d folders with dirty books", len(dirtyFolders)), nil)
+			folderSet := make(map[string]bool)
+			for _, f := range foldersToScan {
+				folderSet[f] = true
+			}
+			for _, df := range dirtyFolders {
+				if !folderSet[df] {
+					foldersToScan = append(foldersToScan, df)
+				}
+			}
+		}
+	}
+
+	// First pass: count total files across all folders.
+	// For incremental scans we use the cache size as an approximation to avoid
+	// the expensive directory walk.
+	var totalFilesAcrossFolders int
+	if forceUpdate || scanCache == nil {
+		totalFilesAcrossFolders = ss.countFilesAcrossFolders(foldersToScan, progress)
+		_ = progress.Log("info", fmt.Sprintf("Total audiobook files across all folders: %d", totalFilesAcrossFolders), nil)
+		if totalFilesAcrossFolders == 0 {
+			_ = progress.Log("warn", "No audiobook files detected during pre-scan; totals will update as files are processed", nil)
+		}
+	} else {
+		totalFilesAcrossFolders = len(scanCache)
+		_ = progress.Log("info", fmt.Sprintf("Incremental scan: ~%d known files, checking for changes", totalFilesAcrossFolders), nil)
+	}
+
+	// Install scan cache into the scanner package so workers can skip unchanged files.
+	scanner.SetScanCache(scanCache)
+	defer scanner.ClearScanCache()
 
 	// Scan each folder
 	stats := &ScanStats{}
