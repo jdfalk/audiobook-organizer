@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.21.0
+// version: 4.22.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1846,9 +1846,13 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 		}
 	}
 
-	// Tag writing stub
+	// Write metadata tags to audio files
 	if config.AppConfig.AutoWriteTagsOnApply {
-		log.Printf("[INFO] tag writing not yet implemented for book %s", id)
+		if written, err := mfs.WriteBackMetadataForBook(id); err != nil {
+			log.Printf("[WARN] tag writing failed for book %s: %v", id, err)
+		} else {
+			log.Printf("[INFO] wrote metadata tags to %d file(s) for book %s", written, id)
+		}
 	}
 
 	return nil
