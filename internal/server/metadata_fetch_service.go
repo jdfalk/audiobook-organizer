@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.26.0
+// version: 4.27.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1658,6 +1658,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 
 	totalTracks := len(activeSegments)
 	writtenCount := 0
+	skippedProtected := 0
 
 	if totalTracks > 1 {
 		// Multi-file: write to each segment with per-track title and numbering
@@ -1674,7 +1675,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				continue
 			}
 			if isProtectedPath(seg.FilePath) {
-				log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
+				log.Printf("[DEBUG] skipping write-back for protected segment: %s", seg.FilePath)
+				skippedProtected++
 				writtenCount++
 				continue
 			}
@@ -1687,7 +1689,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	} else {
 		// Single-file or no segments: write to book.FilePath
 		if isProtectedPath(book.FilePath) {
-			log.Printf("[INFO] skipping write-back for protected path: %s", book.FilePath)
+			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
+			skippedProtected++
 			writtenCount++
 		} else {
 			tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
@@ -1755,6 +1758,10 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		}
 		// Flag for rescan so the next incremental scan re-reads the updated tags.
 		_ = mfs.db.MarkNeedsRescan(book.ID)
+	}
+
+	if skippedProtected > 0 {
+		log.Printf("[INFO] write-back for book %s: wrote %d file(s), skipped %d protected path(s)", book.ID, writtenCount-skippedProtected, skippedProtected)
 	}
 
 	return writtenCount, nil
