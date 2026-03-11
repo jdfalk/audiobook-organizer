@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -217,6 +217,12 @@ var migrations = []Migration{
 		Version:     30,
 		Description: "Add file_hash column to book_segments for auto-relinking",
 		Up:          migration030Up,
+		Down:        nil,
+	},
+	{
+		Version:     32,
+		Description: "Add scan cache columns for incremental scanning",
+		Up:          migration032Up,
 		Down:        nil,
 	},
 }
@@ -1621,5 +1627,37 @@ func migration030Up(store Store) error {
 	}
 
 	log.Println("  - file_hash column added to book_segments successfully")
+	return nil
+}
+
+// migration032Up adds scan cache columns for incremental scanning
+func migration032Up(store Store) error {
+	log.Println("  - Adding scan cache columns for incremental scanning")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`ALTER TABLE books ADD COLUMN last_scan_mtime INTEGER DEFAULT NULL`,
+		`ALTER TABLE books ADD COLUMN last_scan_size INTEGER DEFAULT NULL`,
+		`ALTER TABLE books ADD COLUMN needs_rescan BOOLEAN DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS idx_books_scan_cache ON books(file_path, last_scan_mtime, last_scan_size)`,
+		`CREATE INDEX IF NOT EXISTS idx_books_needs_rescan ON books(needs_rescan) WHERE needs_rescan = 1`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				log.Printf("  - Column already exists, skipping: %s", stmt)
+				continue
+			}
+			return fmt.Errorf("migration 32 failed: %w", err)
+		}
+	}
+
+	log.Println("  - Scan cache columns added to books successfully")
 	return nil
 }
