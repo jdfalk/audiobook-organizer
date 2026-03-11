@@ -8781,3 +8781,193 @@ func (_c *MockStore_ResolveTombstoneChains_Call) RunAndReturn(run func() (int, e
 	_c.Call.Return(run)
 	return _c
 }
+
+// GetScanCacheMap provides a mock function for the type MockStore
+func (_mock *MockStore) GetScanCacheMap() (map[string]database.ScanCacheEntry, error) {
+	ret := _mock.Called()
+	var r0 map[string]database.ScanCacheEntry
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(map[string]database.ScanCacheEntry)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetScanCacheMap_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetScanCacheMap() *MockStore_GetScanCacheMap_Call {
+	return &MockStore_GetScanCacheMap_Call{Call: _e.mock.On("GetScanCacheMap")}
+}
+
+func (_c *MockStore_GetScanCacheMap_Call) Run(run func()) *MockStore_GetScanCacheMap_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetScanCacheMap_Call) Return(cache map[string]database.ScanCacheEntry, err error) *MockStore_GetScanCacheMap_Call {
+	_c.Call = _c.Call.Return(cache, err)
+	return _c
+}
+
+func (_c *MockStore_GetScanCacheMap_Call) RunAndReturn(run func() (map[string]database.ScanCacheEntry, error)) *MockStore_GetScanCacheMap_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// UpdateScanCache provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateScanCache(bookID string, mtime int64, size int64) error {
+	ret := _mock.Called(bookID, mtime, size)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateScanCache")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, int64, int64) error); ok {
+		r0 = returnFunc(bookID, mtime, size)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_UpdateScanCache_Call struct {
+	*mock.Call
+}
+
+// UpdateScanCache is a helper method to define mock.On call
+//   - bookID string
+//   - mtime int64
+//   - size int64
+func (_e *MockStore_Expecter) UpdateScanCache(bookID interface{}, mtime interface{}, size interface{}) *MockStore_UpdateScanCache_Call {
+	return &MockStore_UpdateScanCache_Call{Call: _e.mock.On("UpdateScanCache", bookID, mtime, size)}
+}
+
+func (_c *MockStore_UpdateScanCache_Call) Run(run func(bookID string, mtime int64, size int64)) *MockStore_UpdateScanCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int64
+		if args[1] != nil {
+			arg1 = args[1].(int64)
+		}
+		var arg2 int64
+		if args[2] != nil {
+			arg2 = args[2].(int64)
+		}
+		run(arg0, arg1, arg2)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateScanCache_Call) Return(err error) *MockStore_UpdateScanCache_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateScanCache_Call) RunAndReturn(run func(string, int64, int64) error) *MockStore_UpdateScanCache_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MarkNeedsRescan provides a mock function for the type MockStore
+func (_mock *MockStore) MarkNeedsRescan(bookID string) error {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MarkNeedsRescan")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_MarkNeedsRescan_Call struct {
+	*mock.Call
+}
+
+// MarkNeedsRescan is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) MarkNeedsRescan(bookID interface{}) *MockStore_MarkNeedsRescan_Call {
+	return &MockStore_MarkNeedsRescan_Call{Call: _e.mock.On("MarkNeedsRescan", bookID)}
+}
+
+func (_c *MockStore_MarkNeedsRescan_Call) Run(run func(bookID string)) *MockStore_MarkNeedsRescan_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_MarkNeedsRescan_Call) Return(err error) *MockStore_MarkNeedsRescan_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_MarkNeedsRescan_Call) RunAndReturn(run func(string) error) *MockStore_MarkNeedsRescan_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDirtyBookFolders provides a mock function for the type MockStore
+func (_mock *MockStore) GetDirtyBookFolders() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDirtyBookFolders")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetDirtyBookFolders_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetDirtyBookFolders() *MockStore_GetDirtyBookFolders_Call {
+	return &MockStore_GetDirtyBookFolders_Call{Call: _e.mock.On("GetDirtyBookFolders")}
+}
+
+func (_c *MockStore_GetDirtyBookFolders_Call) Run(run func()) *MockStore_GetDirtyBookFolders_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetDirtyBookFolders_Call) Return(folders []string, err error) *MockStore_GetDirtyBookFolders_Call {
+	_c.Call = _c.Call.Return(folders, err)
+	return _c
+}
+
+func (_c *MockStore_GetDirtyBookFolders_Call) RunAndReturn(run func() ([]string, error)) *MockStore_GetDirtyBookFolders_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
