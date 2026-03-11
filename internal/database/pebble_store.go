@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.31.0
+// version: 1.32.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -3953,4 +3954,123 @@ func (p *PebbleStore) ResolveTombstoneChains() (int, error) {
 	}
 
 	return updated, nil
+}
+
+// derefInt64 safely dereferences a *int64, returning 0 for nil.
+func derefInt64(p *int64) int64 {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// derefBool safely dereferences a *bool, returning false for nil.
+func derefBool(p *bool) bool {
+	if p == nil {
+		return false
+	}
+	return *p
+}
+
+// GetScanCacheMap returns a map of file_path -> ScanCacheEntry for all books
+// that have a non-empty FilePath and a non-nil LastScanMtime.
+func (p *PebbleStore) GetScanCacheMap() (map[string]ScanCacheEntry, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	result := make(map[string]ScanCacheEntry)
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.FilePath == "" || book.LastScanMtime == nil {
+			continue
+		}
+		result[book.FilePath] = ScanCacheEntry{
+			Mtime:       derefInt64(book.LastScanMtime),
+			Size:        derefInt64(book.LastScanSize),
+			NeedsRescan: derefBool(book.NeedsRescan),
+		}
+	}
+	return result, nil
+}
+
+// UpdateScanCache sets LastScanMtime, LastScanSize, and clears NeedsRescan for a book.
+func (p *PebbleStore) UpdateScanCache(bookID string, mtime int64, size int64) error {
+	book, err := p.GetBookByID(bookID)
+	if err != nil {
+		return err
+	}
+	if book == nil {
+		return nil // non-fatal: book not found
+	}
+	book.LastScanMtime = &mtime
+	book.LastScanSize = &size
+	f := false
+	book.NeedsRescan = &f
+	_, err = p.UpdateBook(bookID, book)
+	return err
+}
+
+// MarkNeedsRescan sets NeedsRescan = true for the given book.
+func (p *PebbleStore) MarkNeedsRescan(bookID string) error {
+	book, err := p.GetBookByID(bookID)
+	if err != nil {
+		return err
+	}
+	if book == nil {
+		return nil // non-fatal: book not found
+	}
+	t := true
+	book.NeedsRescan = &t
+	_, err = p.UpdateBook(bookID, book)
+	return err
+}
+
+// GetDirtyBookFolders returns a deduplicated list of parent directories for all
+// books that have NeedsRescan = true.
+func (p *PebbleStore) GetDirtyBookFolders() ([]string, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	seen := make(map[string]struct{})
+	var dirs []string
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.FilePath == "" || !derefBool(book.NeedsRescan) {
+			continue
+		}
+		dir := filepath.Dir(book.FilePath)
+		if _, ok := seen[dir]; !ok {
+			seen[dir] = struct{}{}
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs, nil
 }
