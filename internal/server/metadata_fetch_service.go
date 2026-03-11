@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.25.0
+// version: 4.26.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -710,6 +710,8 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 		if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
 			log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
 		}
+		// Flag for rescan so the next incremental scan re-reads the updated tags.
+		_ = mfs.db.MarkNeedsRescan(book.ID)
 	}
 
 	// Write to each segment file for multi-file books
@@ -1751,6 +1753,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		if err := mfs.db.SetLastWrittenAt(book.ID, now); err != nil {
 			log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
 		}
+		// Flag for rescan so the next incremental scan re-reads the updated tags.
+		_ = mfs.db.MarkNeedsRescan(book.ID)
 	}
 
 	return writtenCount, nil

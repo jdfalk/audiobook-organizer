@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -432,6 +432,10 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 		}
 		return nil, err
 	}
+	// Mark both the organized copy and the original for rescan so the next
+	// incremental scan picks up the moved/new file location.
+	_ = orgSvc.db.MarkNeedsRescan(createdBook.ID)
+	_ = orgSvc.db.MarkNeedsRescan(book.ID)
 
 	// Copy book_authors relationships to the new book
 	if authors, err := orgSvc.db.GetBookAuthors(book.ID); err == nil && len(authors) > 0 {
