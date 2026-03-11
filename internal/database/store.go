@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.37.0
+// version: 2.38.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -237,6 +237,12 @@ type Store interface {
 
 	// Database maintenance
 	Optimize() error
+
+	// Scan cache for incremental scanning
+	GetScanCacheMap() (map[string]ScanCacheEntry, error)
+	UpdateScanCache(bookID string, mtime int64, size int64) error
+	MarkNeedsRescan(bookID string) error
+	GetDirtyBookFolders() ([]string, error)
 }
 
 // Common data structures used by all store implementations
@@ -356,6 +362,10 @@ type Book struct {
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array
 	NarratorsJSON *string `json:"narrators_json,omitempty"`
+	// Scan cache for incremental scanning (set by scanner, not user-facing)
+	LastScanMtime *int64 `json:"last_scan_mtime,omitempty"`
+	LastScanSize  *int64 `json:"last_scan_size,omitempty"`
+	NeedsRescan   *bool  `json:"needs_rescan,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
 	Author               *Author                            `json:"author,omitempty" db:"-"`
 	Authors              []BookAuthor                       `json:"authors,omitempty" db:"-"`
@@ -611,6 +621,13 @@ type BookVersion struct {
 	BookID    string    `json:"book_id"`
 	Timestamp time.Time `json:"timestamp"`
 	Data      []byte    `json:"data"` // Full JSON-serialized Book
+}
+
+// ScanCacheEntry holds mtime/size for incremental scan skip checks.
+type ScanCacheEntry struct {
+	Mtime       int64
+	Size        int64
+	NeedsRescan bool
 }
 
 // DashboardStats holds aggregated statistics computed via SQL rather than loading all books.
