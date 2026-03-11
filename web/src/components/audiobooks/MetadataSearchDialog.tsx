@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -19,7 +19,9 @@ import {
   IconButton,
   InputAdornment,
   Stack,
+  Switch,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search.js';
@@ -98,6 +100,7 @@ export function MetadataSearchDialog({
   const [sourcesTried, setSourcesTried] = useState<string[]>([]);
   const [sourcesFailed, setSourcesFailed] = useState<Record<string, string>>({});
   const [previewCover, setPreviewCover] = useState<string | null>(null);
+  const [writeToFiles, setWriteToFiles] = useState(true);
 
   // Auto-populate query and search on open
   useEffect(() => {
@@ -151,7 +154,7 @@ export function MetadataSearchDialog({
   const handleApplyAll = async (candidate: MetadataCandidate) => {
     setApplying(true);
     try {
-      const resp = await api.applyMetadataCandidate(book.id, candidate);
+      const resp = await api.applyMetadataCandidate(book.id, candidate, undefined, writeToFiles);
       toast(`Metadata applied from ${resp.source}`, 'success');
       onApplied(resp.book);
       onClose();
@@ -175,7 +178,8 @@ export function MetadataSearchDialog({
       const resp = await api.applyMetadataCandidate(
         book.id,
         candidate,
-        Array.from(selectedFields)
+        Array.from(selectedFields),
+        writeToFiles
       );
       toast(`Selected fields applied from ${resp.source}`, 'success');
       onApplied(resp.book);
@@ -343,6 +347,14 @@ export function MetadataSearchDialog({
             />
           </Stack>
         </Collapse>
+
+        <Tooltip title="Write applied metadata to audio file tags (MP3/M4B/M4A)">
+          <FormControlLabel
+            control={<Switch checked={writeToFiles} onChange={(e) => setWriteToFiles(e.target.checked)} size="small" />}
+            label={<Typography variant="body2">Write to files</Typography>}
+            sx={{ mb: 1 }}
+          />
+        </Tooltip>
 
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
