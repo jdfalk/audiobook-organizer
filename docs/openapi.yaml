@@ -1,5 +1,5 @@
 # file: docs/openapi.yaml
-# version: 2.0.0
+# version: 2.1.0
 # guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 openapi: 3.0.3
@@ -10,7 +10,7 @@ info:
     Provides endpoints for managing audiobooks, authors, series, narrators,
     import paths, metadata, iTunes integration, AI parsing, AI scans,
     Open Library, works, version groups, tasks, updates, and more.
-  version: 2.0.0
+  version: 2.1.0
   contact:
     name: API Support
     url: https://github.com/jdfalk/audiobook-organizer
@@ -3179,6 +3179,39 @@ paths:
                     type: boolean
                   result:
                     $ref: '#/components/schemas/MergeDuplicatesResult'
+
+  /operations/assign-orphan-vgs:
+    post:
+      tags: [Operations]
+      summary: Assign version groups to orphan library books
+      description: |
+        Finds books in the library directory that have no version group,
+        creates a VG for each, and marks them as primary/organized. This
+        fixes books that were organized before a DB wipe and re-scanned
+        without linkage.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Assignment result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      total_checked:
+                        type: integer
+                      assigned:
+                        type: integer
+                      already_has_vg:
+                        type: integer
+                      not_in_library:
+                        type: integer
+                      errors:
+                        type: integer
 
   # ── Import ──────────────────────────────────
   /import/file:
