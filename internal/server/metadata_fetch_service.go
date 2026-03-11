@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.22.0
+// version: 4.23.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -962,6 +962,12 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 		".ogg": true, ".flac": true,
 	}
 
+	// Never modify files in protected paths (import folders, iTunes Media)
+	if isProtectedPath(book.FilePath) {
+		log.Printf("[INFO] skipping cover embed for protected path: %s", book.FilePath)
+		return
+	}
+
 	ext := strings.ToLower(filepath.Ext(book.FilePath))
 	if audioExts[ext] {
 		// Single audio file — embed directly
@@ -986,6 +992,10 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 	embedded := 0
 	for _, seg := range segments {
 		if !seg.Active {
+			continue
+		}
+		if isProtectedPath(seg.FilePath) {
+			log.Printf("[INFO] skipping cover embed for protected segment: %s", seg.FilePath)
 			continue
 		}
 		segExt := strings.ToLower(filepath.Ext(seg.FilePath))
