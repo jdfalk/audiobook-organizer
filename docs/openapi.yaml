@@ -1,5 +1,5 @@
 # file: docs/openapi.yaml
-# version: 1.1.0
+# version: 2.0.0
 # guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 openapi: 3.0.3
@@ -7,9 +7,10 @@ info:
   title: Audiobook Organizer API
   description: |
     REST API for the Audiobook Organizer application.
-    Provides endpoints for managing audiobooks, authors, series, import paths,
-    metadata, iTunes integration, AI parsing, Open Library, and more.
-  version: 1.1.0
+    Provides endpoints for managing audiobooks, authors, series, narrators,
+    import paths, metadata, iTunes integration, AI parsing, AI scans,
+    Open Library, works, version groups, tasks, updates, and more.
+  version: 2.0.0
   contact:
     name: API Support
     url: https://github.com/jdfalk/audiobook-organizer
@@ -32,6 +33,8 @@ tags:
     description: Audiobook management operations
   - name: Authors
     description: Author management
+  - name: Narrators
+    description: Narrator management
   - name: Series
     description: Series management
   - name: Library
@@ -39,7 +42,7 @@ tags:
   - name: Filesystem
     description: Filesystem browsing and exclusions
   - name: Operations
-    description: Background operations (scan, organize)
+    description: Background operations (scan, organize, reconcile, etc.)
   - name: Import
     description: File import
   - name: iTunes
@@ -55,7 +58,9 @@ tags:
   - name: Backup
     description: Database backup and restore
   - name: AI
-    description: AI-powered filename parsing
+    description: AI-powered filename parsing and scanning
+  - name: AIScans
+    description: AI scan pipeline management
   - name: OpenLibrary
     description: Open Library data dump management
   - name: Works
@@ -66,6 +71,12 @@ tags:
     description: Background work queue
   - name: BlockedHashes
     description: Blocked file hash management
+  - name: Tasks
+    description: Scheduled task management
+  - name: Update
+    description: Application update management
+  - name: Dedup
+    description: Cross-entity deduplication validation
 
 # ────────────────────────────────────────────
 # Reusable parameters
@@ -96,9 +107,9 @@ components:
       in: query
       schema:
         type: integer
-        default: 24
+        default: 50
         minimum: 1
-        maximum: 100
+        maximum: 10000
     offsetQuery:
       name: offset
       in: query
@@ -106,6 +117,13 @@ components:
         type: integer
         default: 0
         minimum: 0
+    dryRunQuery:
+      name: dry_run
+      in: query
+      schema:
+        type: string
+        enum: ["true", "false"]
+      description: When "true", shows what would happen without making changes.
 
   schemas:
     # ── Core domain ──────────────────────────
@@ -412,6 +430,7 @@ components:
       properties:
         count:
           type: integer
+          description: Total number of matching audiobooks (not page size)
         items:
           type: array
           items:
@@ -426,6 +445,97 @@ components:
       properties:
         count:
           type: integer
+
+    DuplicateGroupsResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Book'
+        group_count:
+          type: integer
+        duplicate_count:
+          type: integer
+
+    AuthorAlias:
+      type: object
+      properties:
+        id:
+          type: integer
+        author_id:
+          type: integer
+        alias:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    BrokenSegmentResult:
+      type: object
+      properties:
+        books_checked:
+          type: integer
+        broken_books:
+          type: integer
+        marked_for_review:
+          type: integer
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              book_id:
+                type: string
+              title:
+                type: string
+              file_path:
+                type: string
+              total_segments:
+                type: integer
+              missing_segments:
+                type: integer
+              missing_paths:
+                type: array
+                items:
+                  type: string
+
+    MergeDuplicatesResult:
+      type: object
+      properties:
+        total_no_vg:
+          type: integer
+        matched_to_vg:
+          type: integer
+        self_duplicates:
+          type: integer
+        metadata_merged:
+          type: integer
+        soft_deleted:
+          type: integer
+        remaining_orphans:
+          type: integer
+        errors:
+          type: integer
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              duplicate_id:
+                type: string
+              primary_id:
+                type: string
+              title:
+                type: string
+              fields_merged:
+                type: array
+                items:
+                  type: string
+              action:
+                type: string
 
 # ────────────────────────────────────────────
 # Paths
@@ -618,7 +728,10 @@ paths:
     get:
       tags: [Audiobooks]
       summary: List audiobooks
-      description: Retrieve a paginated list of audiobooks with optional filtering and sorting.
+      description: |
+        Retrieve a paginated list of audiobooks with optional filtering and sorting.
+        The `count` field in the response is the total number of matching audiobooks
+        (not the page size). The limit parameter caps at 10000.
       security:
         - bearerAuth: []
       parameters:
@@ -661,23 +774,24 @@ paths:
     get:
       tags: [Audiobooks]
       summary: Search audiobooks
+      description: Search audiobooks by query string. Returns paginated results.
       security:
         - bearerAuth: []
       parameters:
-        - name: query
+        - name: q
           in: query
           required: true
           schema:
             type: string
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
       responses:
         '200':
           description: Search results
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/PaginatedBooks'
 
   /audiobooks/count:
     get:
@@ -697,6 +811,7 @@ paths:
     get:
       tags: [Audiobooks]
       summary: List duplicate audiobooks
+      description: Returns groups of duplicate audiobooks with group and duplicate counts.
       security:
         - bearerAuth: []
       responses:
@@ -705,11 +820,113 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
+                $ref: '#/components/schemas/DuplicateGroupsResponse'
+
+  /audiobooks/duplicates/scan-results:
+    get:
+      tags: [Audiobooks]
+      summary: Get cached book duplicate scan results
+      description: Returns cached results from the last async book-dedup scan.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cached scan results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Book'
+                  group_count:
+                    type: integer
+                  duplicate_count:
+                    type: integer
+                  needs_refresh:
+                    type: boolean
+
+  /audiobooks/duplicates/scan:
+    post:
+      tags: [Audiobooks]
+      summary: Trigger async book duplicate scan
+      description: Starts a background operation to scan for book duplicates using metadata matching.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+
+  /audiobooks/duplicates/merge:
+    post:
+      tags: [Audiobooks]
+      summary: Merge book duplicates as versions
+      description: Merges duplicate book groups into version groups, keeping the primary and linking others.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                groups:
                   type: array
                   items:
-                    $ref: '#/components/schemas/Book'
+                    type: object
+                    properties:
+                      primary_id:
+                        type: string
+                      duplicate_ids:
+                        type: array
+                        items:
+                          type: string
+      responses:
+        '200':
+          description: Merge result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Invalid request
+
+  /audiobooks/duplicates/dismiss:
+    post:
+      tags: [Audiobooks]
+      summary: Dismiss a book duplicate group
+      description: Marks a duplicate group as dismissed so it no longer appears in scan results.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_key:
+                  type: string
+              required: [group_key]
+      responses:
+        '200':
+          description: Group dismissed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
 
   /audiobooks/soft-deleted:
     get:
@@ -767,6 +984,41 @@ paths:
         '400':
           description: Invalid request
 
+  /audiobooks/merge:
+    post:
+      tags: [Audiobooks]
+      summary: Merge multiple audiobooks
+      description: Merges source books into a target book, combining metadata and segments.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: string
+                  format: ulid
+                source_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: ulid
+              required: [target_id, source_ids]
+      responses:
+        '200':
+          description: Merge successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Invalid request
+        '404':
+          description: Book not found
+
   /audiobooks/{id}:
     get:
       tags: [Audiobooks]
@@ -788,6 +1040,7 @@ paths:
     put:
       tags: [Audiobooks]
       summary: Update audiobook
+      description: Full replacement update. Always pass the complete book object.
       security:
         - bearerAuth: []
       parameters:
@@ -844,38 +1097,59 @@ paths:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: Restored
+          description: Audiobook restored
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Book'
         '404':
-          description: Not found
+          description: Audiobook not found
 
   /audiobooks/{id}/tags:
     get:
       tags: [Audiobooks]
-      summary: Get audio file tags
-      description: Returns raw audio metadata tags extracted from the file.
+      summary: Get audiobook file tags
+      description: Returns raw metadata tags extracted from the audio file.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: Audio tags
+          description: File tags
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
         '404':
-          description: Not found
+          description: Audiobook not found
+
+  /audiobooks/{id}/cover:
+    get:
+      tags: [Covers]
+      summary: Serve audiobook cover image
+      description: Returns the cover image for an audiobook, extracted from the file or cached.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Cover image
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No cover found
 
   /audiobooks/{id}/segments:
     get:
       tags: [Audiobooks]
-      summary: List file segments (chapters)
+      summary: List audiobook segments
+      description: Returns the individual file segments (tracks/chapters) for a multi-file audiobook.
       security:
         - bearerAuth: []
       parameters:
@@ -890,46 +1164,73 @@ paths:
                 items:
                   type: object
                   properties:
-                    index:
+                    id:
+                      type: string
+                    book_id:
+                      type: string
+                    file_path:
+                      type: string
+                    track_number:
                       type: integer
+                      nullable: true
                     title:
                       type: string
-                    start_time:
-                      type: number
-                    end_time:
-                      type: number
+                      nullable: true
                     duration:
-                      type: number
+                      type: integer
+                      nullable: true
         '404':
-          description: Not found
+          description: Audiobook not found
 
-  # ── Versions ────────────────────────────────
-  /audiobooks/{id}/versions:
+  /audiobooks/{id}/segments/{segmentId}/tags:
     get:
-      tags: [Versions]
-      summary: List audiobook versions
+      tags: [Audiobooks]
+      summary: Get segment file tags
+      description: Returns raw metadata tags from a specific segment file.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+        - name: segmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Segment tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Segment not found
+
+  /audiobooks/{id}/extract-track-info:
+    post:
+      tags: [Audiobooks]
+      summary: Extract track info from audio file
+      description: Re-extracts track/chapter information from the audiobook's audio files.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: List of versions
+          description: Track info extracted
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  versions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Book'
+                $ref: '#/components/schemas/Message'
         '404':
           description: Audiobook not found
 
+  /audiobooks/{id}/relocate:
     post:
-      tags: [Versions]
-      summary: Link audiobook version
+      tags: [Audiobooks]
+      summary: Relocate book files
+      description: Moves book files to a new location on disk.
       security:
         - bearerAuth: []
       parameters:
@@ -941,71 +1242,48 @@ paths:
             schema:
               type: object
               properties:
-                other_id:
+                target_path:
                   type: string
-                  format: ulid
-              required: [other_id]
+              required: [target_path]
       responses:
         '200':
-          description: Version linked
+          description: Files relocated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
         '400':
           description: Invalid request
         '404':
-          description: Not found
+          description: Audiobook not found
 
-  /audiobooks/{id}/set-primary:
-    put:
-      tags: [Versions]
-      summary: Set primary version
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/idPath'
-      responses:
-        '200':
-          description: Primary version set
-        '404':
-          description: Not found
-
-  # ── Metadata History ────────────────────────
+  # ── Audiobook Metadata History ──────────────
   /audiobooks/{id}/metadata-history:
     get:
       tags: [Metadata]
-      summary: Get all metadata change history
+      summary: Get audiobook metadata history
+      description: Returns all metadata changes for an audiobook.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: Metadata history entries
+          description: Metadata history
           content:
             application/json:
               schema:
                 type: array
                 items:
                   type: object
-                  properties:
-                    id:
-                      type: integer
-                    field:
-                      type: string
-                    old_value:
-                      type: string
-                      nullable: true
-                    new_value:
-                      type: string
-                      nullable: true
-                    source:
-                      type: string
-                    created_at:
-                      type: string
-                      format: date-time
+                  additionalProperties: true
+        '404':
+          description: Audiobook not found
 
   /audiobooks/{id}/metadata-history/{field}:
     get:
       tags: [Metadata]
-      summary: Get metadata history for a specific field
+      summary: Get field-specific metadata history
       security:
         - bearerAuth: []
       parameters:
@@ -1024,23 +1302,14 @@ paths:
                 type: array
                 items:
                   type: object
-                  properties:
-                    old_value:
-                      type: string
-                      nullable: true
-                    new_value:
-                      type: string
-                      nullable: true
-                    source:
-                      type: string
-                    created_at:
-                      type: string
-                      format: date-time
+                  additionalProperties: true
+        '404':
+          description: Not found
 
   /audiobooks/{id}/metadata-history/{field}/undo:
     post:
       tags: [Metadata]
-      summary: Undo last metadata change for a field
+      summary: Undo a metadata field change
       security:
         - bearerAuth: []
       parameters:
@@ -1057,69 +1326,500 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
-        '404':
-          description: No history found
 
-  # ── Fetch metadata for single book ──────────
+  /audiobooks/{id}/undo-last-apply:
+    post:
+      tags: [Metadata]
+      summary: Undo the last metadata apply for a book
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Last apply undone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/field-states:
+    get:
+      tags: [Metadata]
+      summary: Get audiobook field states
+      description: Returns per-field metadata state (locked, source, etc.) for an audiobook.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Field states
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/changes:
+    get:
+      tags: [Audiobooks]
+      summary: Get book change history
+      description: Returns the change log for a specific book.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Change log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  # ── Audiobook Metadata Operations ───────────
   /audiobooks/{id}/fetch-metadata:
     post:
       tags: [Metadata]
-      summary: Fetch and apply metadata from external sources
+      summary: Fetch metadata for an audiobook
+      description: Triggers metadata lookup from configured sources (Google Books, Open Library, etc.)
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: Metadata fetched and applied
+          description: Metadata results
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  book:
-                    $ref: '#/components/schemas/Book'
-                  source:
-                    type: string
+                type: array
+                items:
+                  $ref: '#/components/schemas/MetadataResult'
         '404':
-          description: Not found
+          description: Audiobook not found
 
-  # ── AI parse for single book ────────────────
+  /audiobooks/{id}/search-metadata:
+    post:
+      tags: [Metadata]
+      summary: Search metadata for an audiobook
+      description: Searches external metadata sources with custom query parameters.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                author:
+                  type: string
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MetadataResult'
+
+  /audiobooks/{id}/apply-metadata:
+    post:
+      tags: [Metadata]
+      summary: Apply metadata to an audiobook
+      description: Applies a chosen metadata result to the audiobook.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetadataResult'
+      responses:
+        '200':
+          description: Metadata applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          description: Invalid request
+
+  /audiobooks/{id}/mark-no-match:
+    post:
+      tags: [Metadata]
+      summary: Mark audiobook as having no metadata match
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Marked as no match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/{id}/revert-metadata:
+    post:
+      tags: [Metadata]
+      summary: Revert applied metadata for an audiobook
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Metadata reverted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+
+  /audiobooks/{id}/cow-versions:
+    get:
+      tags: [Metadata]
+      summary: List copy-on-write metadata versions
+      description: Returns all COW (copy-on-write) metadata snapshots for a book.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: COW versions list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /audiobooks/{id}/cow-versions/prune:
+    post:
+      tags: [Metadata]
+      summary: Prune old COW versions
+      description: Removes old copy-on-write metadata snapshots for a book.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: COW versions pruned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/{id}/write-back:
+    post:
+      tags: [Metadata]
+      summary: Write metadata back to audio file
+      description: Writes current database metadata back into the audio file tags using ffmpeg.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Write-back successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '500':
+          description: Write-back failed
+
   /audiobooks/{id}/parse-with-ai:
     post:
       tags: [AI]
-      summary: Parse audiobook metadata using AI
+      summary: Parse audiobook metadata with AI
+      description: Uses AI to extract/improve metadata from the audiobook's filename and tags.
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: AI parse results applied
+          description: AI parsing result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Audiobook not found
+
+  # ── Audiobook Rename ────────────────────────
+  /audiobooks/{id}/rename/preview:
+    post:
+      tags: [Audiobooks]
+      summary: Preview file rename
+      description: Shows what the file rename would look like without applying it.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Rename preview
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  message:
+                  current_path:
                     type: string
-                  book:
-                    $ref: '#/components/schemas/Book'
-        '404':
-          description: Not found
+                  new_path:
+                    type: string
 
-  # ── Authors ─────────────────────────────────
+  /audiobooks/{id}/rename/apply:
+    post:
+      tags: [Audiobooks]
+      summary: Apply file rename
+      description: Renames/moves the audiobook files according to the naming pattern.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Rename applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Audiobook Versions ──────────────────────
+  /audiobooks/{id}/versions:
+    get:
+      tags: [Versions]
+      summary: List audiobook versions
+      description: Returns all versions of an audiobook (different editions, formats, narrators).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: List of versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+        '404':
+          description: Audiobook not found
+
+    post:
+      tags: [Versions]
+      summary: Link an audiobook as a version
+      description: Links an audiobook to a version group.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version_group_id:
+                  type: string
+                  format: ulid
+      responses:
+        '200':
+          description: Version linked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/{id}/set-primary:
+    put:
+      tags: [Versions]
+      summary: Set audiobook as primary version
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Set as primary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: Audiobook not found
+
+  /audiobooks/{id}/split-version:
+    post:
+      tags: [Versions]
+      summary: Split audiobook from its version group
+      description: Removes an audiobook from its version group into a standalone book.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Split from version group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/{id}/split-to-books:
+    post:
+      tags: [Audiobooks]
+      summary: Split segments into separate books
+      description: Splits selected segments from a multi-segment audiobook into new standalone books.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segment_ids:
+                  type: array
+                  items:
+                    type: string
+              required: [segment_ids]
+      responses:
+        '200':
+          description: Segments split into new books
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /audiobooks/{id}/move-segments:
+    post:
+      tags: [Audiobooks]
+      summary: Move segments to another book
+      description: Moves selected segments from this book to a target book.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segment_ids:
+                  type: array
+                  items:
+                    type: string
+                target_book_id:
+                  type: string
+                  format: ulid
+              required: [segment_ids, target_book_id]
+      responses:
+        '200':
+          description: Segments moved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Audiobook Narrators ─────────────────────
+  /audiobooks/{id}/narrators:
+    get:
+      tags: [Narrators]
+      summary: List narrators for an audiobook
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Narrator list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+
+    put:
+      tags: [Narrators]
+      summary: Set narrators for an audiobook
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                narrator_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Narrators updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Authors ──────────────────────────────────
   /authors:
     get:
       tags: [Authors]
       summary: List authors
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+        - name: search
+          in: query
+          schema:
+            type: string
       responses:
         '200':
-          description: List of authors
+          description: Author list
           content:
             application/json:
               schema:
@@ -1130,7 +1830,375 @@ paths:
   /authors/count:
     get:
       tags: [Authors]
-      summary: Get author count
+      summary: Get total author count
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountResponse'
+
+  /authors/duplicates:
+    get:
+      tags: [Authors]
+      summary: List duplicate authors
+      description: Returns groups of authors that appear to be duplicates based on name similarity.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Duplicate author groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /authors/duplicates/refresh:
+    post:
+      tags: [Authors]
+      summary: Refresh duplicate author detection
+      description: Re-scans for duplicate authors and updates the cache.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Refresh completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/duplicates/ai-review:
+    post:
+      tags: [AI]
+      summary: AI review of duplicate authors
+      description: Sends duplicate author groups to AI for review and suggestions.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                groups:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+      responses:
+        '200':
+          description: AI review results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /authors/duplicates/ai-review/apply:
+    post:
+      tags: [AI]
+      summary: Apply AI author review suggestions
+      description: Applies the suggestions from an AI duplicate author review.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                suggestions:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+      responses:
+        '200':
+          description: Suggestions applied
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /authors/merge:
+    post:
+      tags: [Authors]
+      summary: Merge authors
+      description: Merges source authors into a target author, reassigning all books.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: integer
+                source_ids:
+                  type: array
+                  items:
+                    type: integer
+              required: [target_id, source_ids]
+      responses:
+        '200':
+          description: Authors merged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Invalid request
+
+  /authors/bulk-delete:
+    post:
+      tags: [Authors]
+      summary: Bulk delete authors
+      description: Deletes multiple authors by ID.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+              required: [ids]
+      responses:
+        '200':
+          description: Authors deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/{id}:
+    delete:
+      tags: [Authors]
+      summary: Delete an author
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '204':
+          description: Author deleted
+        '404':
+          description: Author not found
+
+  /authors/{id}/name:
+    put:
+      tags: [Authors]
+      summary: Rename an author
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+              required: [name]
+      responses:
+        '200':
+          description: Author renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/{id}/split:
+    post:
+      tags: [Authors]
+      summary: Split composite author
+      description: Splits a composite author entry (e.g., "Author A & Author B") into separate authors.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                names:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Author split
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/{id}/reclassify-as-narrator:
+    post:
+      tags: [Authors]
+      summary: Reclassify author as narrator
+      description: Moves an author entry to narrators. Self-narrating authors should NOT be reclassified.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '200':
+          description: Reclassified as narrator
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/{id}/resolve-production:
+    post:
+      tags: [Authors]
+      summary: Resolve production company author
+      description: Resolves an author entry that is actually a production company.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '200':
+          description: Production author resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /authors/{id}/aliases:
+    get:
+      tags: [Authors]
+      summary: Get author aliases
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '200':
+          description: Author aliases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuthorAlias'
+
+    post:
+      tags: [Authors]
+      summary: Create author alias
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                alias:
+                  type: string
+              required: [alias]
+      responses:
+        '201':
+          description: Alias created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorAlias'
+
+  /authors/{id}/aliases/{aliasId}:
+    delete:
+      tags: [Authors]
+      summary: Delete author alias
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+        - name: aliasId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Alias deleted
+
+  /authors/{id}/books:
+    get:
+      tags: [Authors]
+      summary: Get books by author
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '200':
+          description: Books by this author
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  # ── Narrators ────────────────────────────────
+  /narrators:
+    get:
+      tags: [Narrators]
+      summary: List narrators
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Narrator list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+
+  /narrators/count:
+    get:
+      tags: [Narrators]
+      summary: Get total narrator count
       security:
         - bearerAuth: []
       responses:
@@ -1148,9 +2216,16 @@ paths:
       summary: List series
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+        - name: search
+          in: query
+          schema:
+            type: string
       responses:
         '200':
-          description: List of series
+          description: Series list
           content:
             application/json:
               schema:
@@ -1161,7 +2236,7 @@ paths:
   /series/count:
     get:
       tags: [Series]
-      summary: Get series count
+      summary: Get total series count
       security:
         - bearerAuth: []
       responses:
@@ -1172,16 +2247,291 @@ paths:
               schema:
                 $ref: '#/components/schemas/CountResponse'
 
-  # ── Filesystem ──────────────────────────────
-  /filesystem/home:
+  /series/duplicates:
     get:
-      tags: [Filesystem]
-      summary: Get home directory path
+      tags: [Series]
+      summary: List duplicate series
+      description: Returns groups of series that appear to be duplicates.
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Home directory
+          description: Duplicate series groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /series/duplicates/refresh:
+    post:
+      tags: [Series]
+      summary: Refresh duplicate series detection
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Refresh completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /series/deduplicate:
+    post:
+      tags: [Series]
+      summary: Deduplicate series
+      description: Automatically merges duplicate series based on similarity matching.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deduplication result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /series/merge:
+    post:
+      tags: [Series]
+      summary: Merge series
+      description: Merges source series into a target series.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_id:
+                  type: integer
+                source_ids:
+                  type: array
+                  items:
+                    type: integer
+              required: [target_id, source_ids]
+      responses:
+        '200':
+          description: Series merged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /series/prune/preview:
+    get:
+      tags: [Series]
+      summary: Preview series pruning
+      description: Shows which empty or duplicate series would be removed.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Prune preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /series/prune:
+    post:
+      tags: [Series]
+      summary: Prune empty/duplicate series
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Series pruned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /series/bulk-delete:
+    post:
+      tags: [Series]
+      summary: Bulk delete series
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+              required: [ids]
+      responses:
+        '200':
+          description: Series deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /series/{id}:
+    patch:
+      tags: [Series]
+      summary: Update series name (PATCH)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Series updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+    delete:
+      tags: [Series]
+      summary: Delete empty series
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '204':
+          description: Series deleted
+        '400':
+          description: Series has books and cannot be deleted
+        '404':
+          description: Series not found
+
+  /series/{id}/name:
+    put:
+      tags: [Series]
+      summary: Rename series
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+              required: [name]
+      responses:
+        '200':
+          description: Series renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /series/{id}/books:
+    get:
+      tags: [Series]
+      summary: Get books in a series
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      responses:
+        '200':
+          description: Books in series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  /series/{id}/split:
+    post:
+      tags: [Series]
+      summary: Split a series
+      description: Splits a series into multiple new series.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/intIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                groups:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      book_ids:
+                        type: array
+                        items:
+                          type: string
+      responses:
+        '200':
+          description: Series split
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ── Dedup ────────────────────────────────────
+  /dedup/validate:
+    post:
+      tags: [Dedup]
+      summary: Validate a dedup entry
+      description: Validates a deduplication suggestion entry.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  # ── Filesystem ──────────────────────────────
+  /filesystem/home:
+    get:
+      tags: [Filesystem]
+      summary: Get home directory
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Home directory path
           content:
             application/json:
               schema:
@@ -1193,15 +2543,15 @@ paths:
   /filesystem/browse:
     get:
       tags: [Filesystem]
-      summary: Browse a filesystem path
+      summary: Browse filesystem
       security:
         - bearerAuth: []
       parameters:
         - name: path
           in: query
-          required: true
           schema:
             type: string
+          description: Directory path to browse (defaults to home)
       responses:
         '200':
           description: Directory listing
@@ -1212,6 +2562,9 @@ paths:
                 properties:
                   path:
                     type: string
+                  parent:
+                    type: string
+                    nullable: true
                   entries:
                     type: array
                     items:
@@ -1219,15 +2572,19 @@ paths:
                       properties:
                         name:
                           type: string
+                        path:
+                          type: string
                         is_dir:
                           type: boolean
                         size:
                           type: integer
+                        excluded:
+                          type: boolean
 
   /filesystem/exclude:
     post:
       tags: [Filesystem]
-      summary: Create a path exclusion
+      summary: Create filesystem exclusion
       security:
         - bearerAuth: []
       requestBody:
@@ -1243,9 +2600,10 @@ paths:
       responses:
         '201':
           description: Exclusion created
+
     delete:
       tags: [Filesystem]
-      summary: Remove a path exclusion
+      summary: Remove filesystem exclusion
       security:
         - bearerAuth: []
       requestBody:
@@ -1271,7 +2629,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: List of import paths
+          description: Import paths
           content:
             application/json:
               schema:
@@ -1295,14 +2653,16 @@ paths:
                   type: string
                 name:
                   type: string
-              required: [path, name]
+              required: [path]
       responses:
         '201':
-          description: Import path added
+          description: Import path created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportPath'
+        '400':
+          description: Invalid path or already exists
 
   /import-paths/{id}:
     delete:
@@ -1319,6 +2679,31 @@ paths:
           description: Import path not found
 
   # ── Operations ──────────────────────────────
+  /operations:
+    get:
+      tags: [Operations]
+      summary: List all operations
+      description: Returns a paginated list of all operations (active and historical).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+      responses:
+        '200':
+          description: Operation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Operation'
+                  total:
+                    type: integer
+
   /operations/active:
     get:
       tags: [Operations]
@@ -1339,6 +2724,7 @@ paths:
     get:
       tags: [Operations]
       summary: List stale operations
+      description: Returns operations that appear stuck or stale.
       security:
         - bearerAuth: []
       responses:
@@ -1355,6 +2741,7 @@ paths:
     post:
       tags: [Operations]
       summary: Start library scan
+      description: Scans import paths for new audiobooks.
       security:
         - bearerAuth: []
       requestBody:
@@ -1363,10 +2750,11 @@ paths:
             schema:
               type: object
               properties:
-                folder_path:
-                  type: string
+                path_id:
+                  type: integer
+                  description: Scan a specific import path (omit for all paths)
       responses:
-        '202':
+        '200':
           description: Scan started
           content:
             application/json:
@@ -1375,18 +2763,19 @@ paths:
                 properties:
                   operation_id:
                     type: string
-                  message:
-                    type: string
+        '409':
+          description: Scan already in progress
 
   /operations/organize:
     post:
       tags: [Operations]
-      summary: Start library organization
+      summary: Start organize operation
+      description: Organizes audiobook files according to naming patterns.
       security:
         - bearerAuth: []
       responses:
-        '202':
-          description: Organization started
+        '200':
+          description: Organize started
           content:
             application/json:
               schema:
@@ -1394,7 +2783,38 @@ paths:
                 properties:
                   operation_id:
                     type: string
-                  message:
+
+  /operations/transcode:
+    post:
+      tags: [Operations]
+      summary: Start transcode operation
+      description: Transcodes audiobooks to a different format/codec.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                book_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: ulid
+                target_format:
+                  type: string
+                target_bitrate:
+                  type: integer
+      responses:
+        '200':
+          description: Transcode started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
                     type: string
 
   /operations/{id}/status:
@@ -1404,11 +2824,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/idPath'
       responses:
         '200':
           description: Operation status
@@ -1426,54 +2842,350 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
+        - $ref: '#/components/parameters/idPath'
+        - name: offset
+          in: query
           schema:
-            type: string
+            type: integer
+            default: 0
       responses:
         '200':
-          description: Operation log entries
+          description: Operation logs
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    timestamp:
-                      type: string
-                      format: date-time
-                    level:
-                      type: string
-                    message:
-                      type: string
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        level:
+                          type: string
+                        message:
+                          type: string
+                  total:
+                    type: integer
+        '404':
+          description: Operation not found
+
+  /operations/{id}/result:
+    get:
+      tags: [Operations]
+      summary: Get operation result
+      description: Returns the result data for a completed operation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
         '404':
           description: Operation not found
 
   /operations/{id}:
     delete:
       tags: [Operations]
-      summary: Cancel an operation
+      summary: Cancel operation
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/idPath'
       responses:
         '200':
           description: Operation cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
         '404':
           description: Operation not found
+
+  /operations/{id}/changes:
+    get:
+      tags: [Operations]
+      summary: Get operation change log
+      description: Returns the changes made by a specific operation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Operation changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /operations/{id}/revert:
+    post:
+      tags: [Operations]
+      summary: Revert an operation
+      description: Undoes the changes made by a specific operation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Operation reverted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /operations/clear-stale:
+    post:
+      tags: [Operations]
+      summary: Clear stale operations
+      description: Marks stale operations as failed/cancelled.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Stale operations cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /operations/history:
+    delete:
+      tags: [Operations]
+      summary: Delete operation history
+      description: Removes completed/failed operations from history.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: History deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /operations/optimize-database:
+    post:
+      tags: [Operations]
+      summary: Optimize database
+      description: Runs VACUUM and other database optimization operations.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Database optimized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /operations/sweep-tombstones:
+    post:
+      tags: [Operations]
+      summary: Sweep tombstones
+      description: Cleans up author/entity tombstones by resolving redirect chains.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Tombstones swept
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /operations/audit-files:
+    get:
+      tags: [Operations]
+      summary: Audit file consistency
+      description: Checks for missing files, orphaned records, and other inconsistencies.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Audit results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /operations/reconcile/preview:
+    get:
+      tags: [Operations]
+      summary: Preview reconciliation
+      description: Shows what a reconcile operation would do without making changes.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Reconcile preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /operations/reconcile:
+    post:
+      tags: [Operations]
+      summary: Start reconcile operation
+      description: Applies reconciliation matches to fix database/filesystem inconsistencies.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                matches:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      book_id:
+                        type: string
+                      new_path:
+                        type: string
+      responses:
+        '200':
+          description: Reconcile started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+
+  /operations/reconcile/scan:
+    post:
+      tags: [Operations]
+      summary: Start async reconcile scan
+      description: Launches a background reconcile scan operation.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Reconcile scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operation_id:
+                    type: string
+
+  /operations/reconcile/scan/latest:
+    get:
+      tags: [Operations]
+      summary: Get latest reconcile scan results
+      description: Returns results from the most recent completed reconcile scan.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Latest reconcile scan
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: No reconcile scan found
+
+  /operations/cleanup-version-groups:
+    post:
+      tags: [Operations]
+      summary: Cleanup duplicate version groups
+      description: Finds and merges version groups that contain the same books.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dryRunQuery'
+      responses:
+        '200':
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dry_run:
+                    type: boolean
+                  result:
+                    type: object
+                    additionalProperties: true
+
+  /operations/mark-broken-segments:
+    post:
+      tags: [Operations]
+      summary: Mark books with broken segments
+      description: Finds books whose segment files don't exist on disk and optionally marks them for review.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dryRunQuery'
+      responses:
+        '200':
+          description: Broken segment scan result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dry_run:
+                    type: boolean
+                  result:
+                    $ref: '#/components/schemas/BrokenSegmentResult'
+
+  /operations/merge-novg-duplicates:
+    post:
+      tags: [Operations]
+      summary: Merge no-version-group duplicates
+      description: |
+        Finds books without version groups that match existing VG books by title,
+        merges their metadata into the primary, and soft-deletes the duplicates.
+        Also deduplicates among remaining orphans.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/dryRunQuery'
+      responses:
+        '200':
+          description: Merge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dry_run:
+                    type: boolean
+                  result:
+                    $ref: '#/components/schemas/MergeDuplicatesResult'
 
   # ── Import ──────────────────────────────────
   /import/file:
     post:
       tags: [Import]
-      summary: Upload an audiobook file
+      summary: Import a file
+      description: Upload and import an audiobook file.
       security:
         - bearerAuth: []
       requestBody:
@@ -1486,6 +3198,9 @@ paths:
                 file:
                   type: string
                   format: binary
+                path:
+                  type: string
+                  description: Target path within the library
       responses:
         '200':
           description: File imported
@@ -1494,10 +3209,10 @@ paths:
               schema:
                 type: object
                 properties:
+                  book_id:
+                    type: string
                   message:
                     type: string
-                  book:
-                    $ref: '#/components/schemas/Book'
         '400':
           description: Invalid file
 
@@ -1530,13 +3245,14 @@ paths:
                     type: boolean
                   track_count:
                     type: integer
-                  message:
+                  error:
                     type: string
+                    nullable: true
 
   /itunes/test-mapping:
     post:
       tags: [iTunes]
-      summary: Test path mapping for iTunes import
+      summary: Test iTunes path mapping
       security:
         - bearerAuth: []
       requestBody:
@@ -1546,12 +3262,11 @@ paths:
             schema:
               type: object
               properties:
-                path:
+                itunes_path:
                   type: string
-                mapping:
-                  type: object
-                  additionalProperties:
-                    type: string
+                local_path:
+                  type: string
+              required: [itunes_path, local_path]
       responses:
         '200':
           description: Mapping test result
@@ -1560,19 +3275,24 @@ paths:
               schema:
                 type: object
                 properties:
-                  resolved_paths:
+                  valid:
+                    type: boolean
+                  sample_mappings:
                     type: array
                     items:
-                      type: string
-                  errors:
-                    type: array
-                    items:
-                      type: string
+                      type: object
+                      properties:
+                        itunes:
+                          type: string
+                        local:
+                          type: string
+                        exists:
+                          type: boolean
 
   /itunes/import:
     post:
       tags: [iTunes]
-      summary: Start iTunes library import
+      summary: Import from iTunes library
       security:
         - bearerAuth: []
       requestBody:
@@ -1586,25 +3306,28 @@ paths:
                   type: string
                 mapping:
                   type: object
-                  additionalProperties:
-                    type: string
+                  properties:
+                    itunes_path:
+                      type: string
+                    local_path:
+                      type: string
+              required: [path]
       responses:
-        '202':
+        '200':
           description: Import started
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  import_id:
-                    type: string
-                  message:
+                  operation_id:
                     type: string
 
   /itunes/write-back:
     post:
       tags: [iTunes]
-      summary: Write metadata back to iTunes library
+      summary: Write back to iTunes library
+      description: Writes updated metadata back to the iTunes .itl binary file.
       security:
         - bearerAuth: []
       responses:
@@ -1615,18 +3338,48 @@ paths:
               schema:
                 $ref: '#/components/schemas/Message'
 
+  /itunes/write-back/preview:
+    post:
+      tags: [iTunes]
+      summary: Preview iTunes write-back
+      description: Shows what changes would be written to the iTunes library without applying them.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Write-back preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /itunes/books:
+    get:
+      tags: [iTunes]
+      summary: List iTunes books
+      description: Returns books from the parsed iTunes library.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: iTunes book list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
   /itunes/import-status/{id}:
     get:
       tags: [iTunes]
-      summary: Get iTunes import status
+      summary: Get iTunes import status for a book
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/idPath'
       responses:
         '200':
           description: Import status
@@ -1635,22 +3388,41 @@ paths:
               schema:
                 type: object
                 properties:
-                  id:
-                    type: string
-                  status:
-                    type: string
-                  progress:
-                    type: number
-                  total:
-                    type: integer
                   imported:
-                    type: integer
-                  errors:
-                    type: array
-                    items:
-                      type: string
-        '404':
-          description: Import not found
+                    type: boolean
+                  itunes_id:
+                    type: string
+                    nullable: true
+
+  /itunes/import-status/bulk:
+    post:
+      tags: [iTunes]
+      summary: Get iTunes import status for multiple books
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Bulk import status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    imported:
+                      type: boolean
 
   /itunes/library-status:
     get:
@@ -1666,33 +3438,40 @@ paths:
               schema:
                 type: object
                 properties:
-                  connected:
+                  configured:
                     type: boolean
                   path:
                     type: string
                     nullable: true
                   track_count:
                     type: integer
+                  last_sync:
+                    type: string
+                    format: date-time
+                    nullable: true
 
   /itunes/sync:
     post:
       tags: [iTunes]
-      summary: Trigger iTunes sync
+      summary: Sync iTunes library
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Sync triggered
+          description: Sync started
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
+                type: object
+                properties:
+                  operation_id:
+                    type: string
 
   # ── Covers ──────────────────────────────────
   /covers/proxy:
     get:
       tags: [Covers]
-      summary: Proxy an external cover image
+      summary: Proxy cover image from URL
       security:
         - bearerAuth: []
       parameters:
@@ -1704,19 +3483,19 @@ paths:
             format: uri
       responses:
         '200':
-          description: Cover image
+          description: Proxied cover image
           content:
             image/*:
               schema:
                 type: string
                 format: binary
         '400':
-          description: Missing or invalid URL
+          description: Invalid URL
 
   /covers/local/{filename}:
     get:
       tags: [Covers]
-      summary: Serve a locally stored cover image
+      summary: Get local cover image
       security:
         - bearerAuth: []
       parameters:
@@ -1727,14 +3506,99 @@ paths:
             type: string
       responses:
         '200':
-          description: Cover image
+          description: Local cover image
           content:
             image/*:
               schema:
                 type: string
                 format: binary
         '404':
-          description: File not found
+          description: Cover not found
+
+  # ── Tasks ────────────────────────────────────
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List scheduled tasks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    schedule:
+                      type: string
+                    enabled:
+                      type: boolean
+                    last_run:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    next_run:
+                      type: string
+                      format: date-time
+                      nullable: true
+
+  /tasks/{name}/run:
+    post:
+      tags: [Tasks]
+      summary: Run a task immediately
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          description: Task not found
+
+  /tasks/{name}:
+    put:
+      tags: [Tasks]
+      summary: Update task configuration
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schedule:
+                  type: string
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
 
   # ── System ──────────────────────────────────
   /system/status:
@@ -1750,6 +3614,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SystemStatus'
+
+  /system/announcements:
+    get:
+      tags: [System]
+      summary: Get system announcements
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    message:
+                      type: string
+                    level:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
 
   /system/storage:
     get:
@@ -1786,7 +3676,11 @@ paths:
           schema:
             type: string
             enum: [debug, info, warn, error]
-        - $ref: '#/components/parameters/limitQuery'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
       responses:
         '200':
           description: Log entries
@@ -1805,10 +3699,32 @@ paths:
                     message:
                       type: string
 
+  /system/activity-log:
+    get:
+      tags: [System]
+      summary: Get system activity log
+      description: Returns recent user and system activity events.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
+      responses:
+        '200':
+          description: Activity log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
   /system/reset:
     post:
       tags: [System]
-      summary: Reset system (clear library data)
+      summary: Reset system
+      description: Clears all audiobooks, authors, and series but keeps configuration.
       security:
         - bearerAuth: []
       responses:
@@ -1822,7 +3738,8 @@ paths:
   /system/factory-reset:
     post:
       tags: [System]
-      summary: Factory reset (clear all data and config)
+      summary: Factory reset
+      description: Removes all data and configuration, returning to initial state.
       security:
         - bearerAuth: []
       responses:
@@ -1833,6 +3750,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Message'
 
+  # ── Config ──────────────────────────────────
   /config:
     get:
       tags: [System]
@@ -1865,7 +3783,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Config'
+        '400':
+          description: Invalid configuration
 
+  # ── Dashboard ───────────────────────────────
   /dashboard:
     get:
       tags: [System]
@@ -1874,7 +3795,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Dashboard summary
+          description: Dashboard data
           content:
             application/json:
               schema:
@@ -1886,8 +3807,11 @@ paths:
                     type: integer
                   series_count:
                     type: integer
+                  narrator_count:
+                    type: integer
                   total_duration:
                     type: integer
+                    description: Total duration in seconds
                   recent_books:
                     type: array
                     items:
@@ -1901,7 +3825,7 @@ paths:
   /backup/create:
     post:
       tags: [Backup]
-      summary: Create a database backup
+      summary: Create database backup
       security:
         - bearerAuth: []
       responses:
@@ -1916,13 +3840,14 @@ paths:
                     type: string
                   size:
                     type: integer
-                  message:
+                  created_at:
                     type: string
+                    format: date-time
 
   /backup/list:
     get:
       tags: [Backup]
-      summary: List available backups
+      summary: List backups
       security:
         - bearerAuth: []
       responses:
@@ -1946,7 +3871,7 @@ paths:
   /backup/restore:
     post:
       tags: [Backup]
-      summary: Restore from a backup
+      summary: Restore from backup
       security:
         - bearerAuth: []
       requestBody:
@@ -1961,11 +3886,13 @@ paths:
               required: [filename]
       responses:
         '200':
-          description: Backup restored
+          description: Restore successful
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+        '404':
+          description: Backup not found
 
   /backup/{filename}:
     delete:
@@ -1985,7 +3912,7 @@ paths:
         '404':
           description: Backup not found
 
-  # ── Metadata Operations ─────────────────────
+  # ── Metadata ────────────────────────────────
   /metadata/batch-update:
     post:
       tags: [Metadata]
@@ -1999,17 +3926,14 @@ paths:
             schema:
               type: object
               properties:
-                updates:
+                book_ids:
                   type: array
                   items:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: ulid
-                      fields:
-                        type: object
-                        additionalProperties: true
+                    type: string
+                    format: ulid
+                updates:
+                  type: object
+                  additionalProperties: true
       responses:
         '200':
           description: Batch update result
@@ -2021,7 +3945,7 @@ paths:
   /metadata/validate:
     post:
       tags: [Metadata]
-      summary: Validate metadata format
+      summary: Validate metadata
       security:
         - bearerAuth: []
       requestBody:
@@ -2089,16 +4013,16 @@ paths:
   /metadata/search:
     get:
       tags: [Metadata]
-      summary: Search external metadata sources
+      summary: Search metadata
       security:
         - bearerAuth: []
       parameters:
-        - name: title
+        - name: query
           in: query
           required: true
           schema:
             type: string
-        - name: author
+        - name: source
           in: query
           schema:
             type: string
@@ -2108,26 +4032,19 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  results:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/MetadataResult'
-                  source:
-                    type: string
-        '400':
-          description: Title parameter required
+                type: array
+                items:
+                  $ref: '#/components/schemas/MetadataResult'
 
   /metadata/fields:
     get:
       tags: [Metadata]
-      summary: List available metadata fields
+      summary: Get metadata field definitions
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Available fields
+          description: Field definitions
           content:
             application/json:
               schema:
@@ -2145,7 +4062,8 @@ paths:
   /metadata/bulk-fetch:
     post:
       tags: [Metadata]
-      summary: Bulk fetch metadata for multiple books
+      summary: Bulk fetch metadata
+      description: Fetches metadata for multiple audiobooks at once.
       security:
         - bearerAuth: []
       requestBody:
@@ -2155,31 +4073,58 @@ paths:
             schema:
               type: object
               properties:
-                ids:
+                book_ids:
                   type: array
                   items:
                     type: string
                     format: ulid
       responses:
         '200':
-          description: Bulk fetch result
+          description: Bulk fetch started
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  updated:
-                    type: integer
-                  errors:
-                    type: array
-                    items:
-                      type: string
+                  operation_id:
+                    type: string
+
+  /metadata-sources/test:
+    post:
+      tags: [Metadata]
+      summary: Test metadata source connection
+      description: Tests connectivity and authentication for a metadata source.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+                api_key:
+                  type: string
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
 
   # ── AI ──────────────────────────────────────
   /ai/parse-filename:
     post:
       tags: [AI]
-      summary: Parse a filename using AI
+      summary: Parse filename with AI
       security:
         - bearerAuth: []
       requestBody:
@@ -2204,7 +4149,6 @@ paths:
                     type: string
                   author:
                     type: string
-                    nullable: true
                   series:
                     type: string
                     nullable: true
@@ -2214,11 +4158,14 @@ paths:
                   narrator:
                     type: string
                     nullable: true
+                  year:
+                    type: integer
+                    nullable: true
 
   /ai/test-connection:
     post:
       tags: [AI]
-      summary: Test AI provider connection
+      summary: Test AI connection
       security:
         - bearerAuth: []
       responses:
@@ -2229,23 +4176,199 @@ paths:
               schema:
                 type: object
                 properties:
-                  connected:
+                  success:
                     type: boolean
-                  provider:
+                  model:
                     type: string
                   message:
                     type: string
+
+  # ── AI Scans ────────────────────────────────
+  /ai/scans:
+    post:
+      tags: [AIScans]
+      summary: Start an AI scan
+      description: Starts a new AI-powered metadata scan of the library.
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+                  description: Scan scope filter
+      responses:
+        '200':
+          description: AI scan started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+    get:
+      tags: [AIScans]
+      summary: List AI scans
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of AI scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    completed_at:
+                      type: string
+                      format: date-time
+                      nullable: true
+
+  /ai/scans/compare:
+    get:
+      tags: [AIScans]
+      summary: Compare AI scans
+      description: Compares results between two AI scans.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: scan_a
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: scan_b
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comparison results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /ai/scans/{id}:
+    get:
+      tags: [AIScans]
+      summary: Get AI scan details
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: AI scan details
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Scan not found
+
+    delete:
+      tags: [AIScans]
+      summary: Delete an AI scan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '204':
+          description: Scan deleted
+        '404':
+          description: Scan not found
+
+  /ai/scans/{id}/results:
+    get:
+      tags: [AIScans]
+      summary: Get AI scan results
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Scan results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+  /ai/scans/{id}/apply:
+    post:
+      tags: [AIScans]
+      summary: Apply AI scan results
+      description: Applies the suggestions from an AI scan to the library.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                result_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Results applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  /ai/scans/{id}/cancel:
+    post:
+      tags: [AIScans]
+      summary: Cancel an AI scan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Scan cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
 
   # ── Open Library ────────────────────────────
   /openlibrary/status:
     get:
       tags: [OpenLibrary]
-      summary: Get Open Library data dump status
+      summary: Get Open Library data status
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Dump status
+          description: OL data status
           content:
             application/json:
               schema:
@@ -2255,7 +4378,7 @@ paths:
                     type: boolean
                   record_count:
                     type: integer
-                  last_updated:
+                  last_import:
                     type: string
                     format: date-time
                     nullable: true
@@ -2263,35 +4386,41 @@ paths:
   /openlibrary/download:
     post:
       tags: [OpenLibrary]
-      summary: Download Open Library data dump
+      summary: Start OL dump download
       security:
         - bearerAuth: []
       responses:
-        '202':
+        '200':
           description: Download started
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
+                type: object
+                properties:
+                  operation_id:
+                    type: string
 
   /openlibrary/import:
     post:
       tags: [OpenLibrary]
-      summary: Import Open Library data dump
+      summary: Start OL data import
       security:
         - bearerAuth: []
       responses:
-        '202':
+        '200':
           description: Import started
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message'
+                type: object
+                properties:
+                  operation_id:
+                    type: string
 
   /openlibrary/upload:
     post:
       tags: [OpenLibrary]
-      summary: Upload an Open Library data dump file
+      summary: Upload OL dump file
       security:
         - bearerAuth: []
       requestBody:
@@ -2315,7 +4444,7 @@ paths:
   /openlibrary/data:
     delete:
       tags: [OpenLibrary]
-      summary: Delete Open Library data
+      summary: Delete OL data
       security:
         - bearerAuth: []
       responses:
@@ -2336,9 +4465,13 @@ paths:
       parameters:
         - $ref: '#/components/parameters/limitQuery'
         - $ref: '#/components/parameters/offsetQuery'
+        - name: search
+          in: query
+          schema:
+            type: string
       responses:
         '200':
-          description: List of works
+          description: Work list
           content:
             application/json:
               schema:
@@ -2374,7 +4507,7 @@ paths:
   /works/{id}:
     get:
       tags: [Works]
-      summary: Get a work
+      summary: Get work by ID
       security:
         - bearerAuth: []
       parameters:
@@ -2387,11 +4520,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Work'
         '404':
-          description: Not found
+          description: Work not found
 
     put:
       tags: [Works]
-      summary: Update a work
+      summary: Update work
       security:
         - bearerAuth: []
       parameters:
@@ -2409,12 +4542,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Work'
-        '404':
-          description: Not found
 
     delete:
       tags: [Works]
-      summary: Delete a work
+      summary: Delete work
       security:
         - bearerAuth: []
       parameters:
@@ -2422,20 +4553,18 @@ paths:
       responses:
         '204':
           description: Work deleted
-        '404':
-          description: Not found
 
   /works/{id}/books:
     get:
       tags: [Works]
-      summary: List books belonging to a work
+      summary: List books for a work
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/idPath'
       responses:
         '200':
-          description: Books in this work
+          description: Books in work
           content:
             application/json:
               schema:
@@ -2447,7 +4576,7 @@ paths:
   /version-groups/{id}:
     get:
       tags: [VersionGroups]
-      summary: Get a version group
+      summary: Get version group
       security:
         - bearerAuth: []
       parameters:
@@ -2460,7 +4589,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VersionGroup'
         '404':
-          description: Not found
+          description: Version group not found
 
   # ── Work Queue ──────────────────────────────
   /work:
@@ -2469,6 +4598,9 @@ paths:
       summary: List work queue items
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/limitQuery'
+        - $ref: '#/components/parameters/offsetQuery'
       responses:
         '200':
           description: Work queue items
@@ -2478,24 +4610,12 @@ paths:
                 type: array
                 items:
                   type: object
-                  properties:
-                    id:
-                      type: string
-                    type:
-                      type: string
-                    status:
-                      type: string
-                    payload:
-                      type: object
-                      additionalProperties: true
-                    created_at:
-                      type: string
-                      format: date-time
+                  additionalProperties: true
 
   /work/stats:
     get:
       tags: [WorkQueue]
-      summary: Get work queue statistics
+      summary: Get work queue stats
       security:
         - bearerAuth: []
       responses:
@@ -2514,6 +4634,77 @@ paths:
                     type: integer
                   failed:
                     type: integer
+
+  # ── Update ──────────────────────────────────
+  /update/status:
+    get:
+      tags: [Update]
+      summary: Get update status
+      description: Returns the last update check info including current version and whether an update is available.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Update status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_version:
+                    type: string
+                  latest_version:
+                    type: string
+                  channel:
+                    type: string
+                  update_available:
+                    type: boolean
+                  last_checked:
+                    type: string
+                    format: date-time
+                    nullable: true
+
+  /update/check:
+    post:
+      tags: [Update]
+      summary: Check for updates
+      description: Triggers an immediate update check and returns the result.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Update check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_version:
+                    type: string
+                  latest_version:
+                    type: string
+                  update_available:
+                    type: boolean
+                  release_notes:
+                    type: string
+                    nullable: true
+
+  /update/apply:
+    post:
+      tags: [Update]
+      summary: Apply available update
+      description: Downloads and applies an available update, then exits for restart.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Update applied, restarting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: No update available
 
   # ── Blocked Hashes ─────────────────────────
   /blocked-hashes:
