@@ -1,10 +1,11 @@
 // file: internal/metadata/real_audio_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-1234-567890abcdef
 
 package metadata
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,6 +37,11 @@ func skipIfNoLibrivox(t *testing.T) string {
 	librivoxDir := filepath.Join(root, "testdata", "audio", "librivox")
 	if _, err := os.Stat(librivoxDir); os.IsNotExist(err) {
 		t.Skip("librivox test fixtures not available")
+	}
+	// Detect Git LFS pointer files (CI may not fetch LFS objects)
+	probe := filepath.Join(librivoxDir, "moby_dick_librivox", "mobydick_000_melville_64kb.mp3")
+	if data, err := os.ReadFile(probe); err == nil && bytes.HasPrefix(data, []byte("version https://git-lfs.github.com/")) {
+		t.Skip("librivox fixtures are LFS pointers (LFS not fetched)")
 	}
 	return librivoxDir
 }

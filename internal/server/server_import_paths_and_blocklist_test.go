@@ -1,5 +1,5 @@
 // file: internal/server/server_import_paths_and_blocklist_test.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: 2f4a6b8c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-02-03
 
@@ -35,8 +35,13 @@ func (noopProgress) IsCanceled() bool                                        { r
 
 func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
-	store.EXPECT().GetAllAuthors().Return(([]database.Author)(nil), nil)
-	store.EXPECT().GetAllSeries().Return(([]database.Series)(nil), nil)
+	// Authors endpoint: GetAllAuthors + GetAllAuthorBookCounts + GetAllAuthorAliases
+	store.EXPECT().GetAllAuthors().Return(([]database.Author)(nil), nil).Maybe()
+	store.EXPECT().GetAllAuthorBookCounts().Return(map[int]int{}, nil).Maybe()
+	store.EXPECT().GetAllAuthorAliases().Return([]database.AuthorAlias{}, nil).Maybe()
+	// Series endpoint: GetAllSeries + GetAllSeriesBookCounts + GetAllAuthors (for author names)
+	store.EXPECT().GetAllSeries().Return(([]database.Series)(nil), nil).Maybe()
+	store.EXPECT().GetAllSeriesBookCounts().Return(map[int]int{}, nil).Maybe()
 
 	server, cleanup := setupTestServerWithStore(t, store)
 	defer cleanup()
