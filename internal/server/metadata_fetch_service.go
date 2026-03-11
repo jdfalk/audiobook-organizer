@@ -1593,6 +1593,36 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		}
 	}
 
+	// --- Write to version-linked copies in the library folder ---
+	if book.VersionGroupID != nil && *book.VersionGroupID != "" && config.AppConfig.RootDir != "" {
+		siblings, sibErr := mfs.db.GetBooksByVersionGroup(*book.VersionGroupID)
+		if sibErr == nil {
+			for _, sib := range siblings {
+				if sib.ID == book.ID {
+					continue // already written above
+				}
+				if !strings.HasPrefix(sib.FilePath, config.AppConfig.RootDir) {
+					continue // only write to library copies, leave import copies alone
+				}
+				if isProtectedPath(sib.FilePath) {
+					continue
+				}
+				tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
+				tagMap = filterUnchangedTags(sib.FilePath, tagMap)
+				if len(tagMap) == 0 {
+					writtenCount++
+					continue
+				}
+				if err := metadata.WriteMetadataToFile(sib.FilePath, tagMap, opConfig); err != nil {
+					log.Printf("[WARN] write-back failed for version-linked %s: %v", sib.FilePath, err)
+				} else {
+					writtenCount++
+					log.Printf("[INFO] wrote metadata to version-linked copy: %s", sib.FilePath)
+				}
+			}
+		}
+	}
+
 	// --- Record history entry ---
 	now := time.Now()
 	summaryVal := fmt.Sprintf("%q (wrote %d file(s))", book.Title, writtenCount)
