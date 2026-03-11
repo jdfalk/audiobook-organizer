@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.27.0
+// version: 4.28.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -956,7 +956,8 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 // ensureLibraryCopy returns a book record with files in the library folder.
 // If the book is already in the library, returns it as-is. If the book is in a
 // protected path (iTunes/import), looks for an existing library version or
-// organizes (hard-links) the file to the library and creates a new version record.
+// organizes (hard-links) the file(s) to the library and creates a new version record.
+// For multi-file books, all segments are also organized and recreated.
 func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *database.Book {
 	if config.AppConfig.RootDir == "" {
 		return book // no library configured
@@ -981,12 +982,44 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 		}
 	}
 
-	// No library copy exists — organize (hard link) to library
+	// Collect segment paths for multi-file books
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
+	var activeSegments []database.BookSegment
+	if segErr == nil {
+		for _, seg := range segments {
+			if seg.Active {
+				activeSegments = append(activeSegments, seg)
+			}
+		}
+	}
+
 	org := organizer.NewOrganizer(&config.AppConfig)
-	newPath, err := org.OrganizeBook(book)
-	if err != nil {
-		log.Printf("[WARN] failed to create library copy for %s: %v", book.ID, err)
-		return nil // caller should skip
+	var newBookPath string
+	var pathMap map[string]string
+
+	if len(activeSegments) > 1 {
+		// Multi-file: organize all segment files to library directory
+		segPaths := make([]string, len(activeSegments))
+		for i, seg := range activeSegments {
+			segPaths[i] = seg.FilePath
+		}
+		targetDir, pm, err := org.OrganizeBookDirectory(book, segPaths)
+		if err != nil {
+			log.Printf("[WARN] failed to create library copy for multi-file book %s: %v", book.ID, err)
+			return nil
+		}
+		pathMap = pm
+		// Use the directory as the book's primary path
+		newBookPath = targetDir
+	} else {
+		// Single-file: organize just the book file
+		p, err := org.OrganizeBook(book)
+		if err != nil {
+			log.Printf("[WARN] failed to create library copy for %s: %v", book.ID, err)
+			return nil
+		}
+		newBookPath = p
 	}
 
 	// Create version-linked record for the library copy
@@ -1002,7 +1035,7 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 
 	newBook := *book
 	newBook.ID = ulid.Make().String()
-	newBook.FilePath = newPath
+	newBook.FilePath = newBookPath
 	newBook.LibraryState = &organizedState
 	newBook.VersionGroupID = &versionGroupID
 	newBook.IsPrimaryVersion = &isPrimary
@@ -1024,12 +1057,27 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 		_ = mfs.db.SetBookAuthors(created.ID, newAuthors)
 	}
 
+	// Copy segments with updated file paths for multi-file books
+	if len(activeSegments) > 1 && pathMap != nil {
+		newBookNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
+		for _, seg := range activeSegments {
+			newSeg := seg
+			newSeg.ID = ulid.Make().String()
+			if newPath, ok := pathMap[seg.FilePath]; ok {
+				newSeg.FilePath = newPath
+			}
+			if _, err := mfs.db.CreateBookSegment(newBookNumericID, &newSeg); err != nil {
+				log.Printf("[WARN] failed to copy segment %s for library book %s: %v", seg.ID, created.ID, err)
+			}
+		}
+	}
+
 	// Demote original to non-primary
 	book.VersionGroupID = &versionGroupID
 	book.IsPrimaryVersion = &isNotPrimary
 	_, _ = mfs.db.UpdateBook(book.ID, book)
 
-	log.Printf("[INFO] created library copy %s -> %s for protected book %s", newPath, created.ID, book.ID)
+	log.Printf("[INFO] created library copy %s -> %s for protected book %s (%d segment(s))", newBookPath, created.ID, book.ID, len(activeSegments))
 	return created
 }
 
