@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/BulkMetadataSearchDialog.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -137,8 +137,8 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
       setNarratorQuery(n);
       setSeriesQuery(s);
       setShowAdvanced(false);
-      // Always search with author + narrator + series for better results
-      doSearch(q, a, n, s);
+      // Search with author + narrator (series can over-constrain results)
+      doSearch(q, a, n);
     }
   }, [open, currentIndex, currentBook, doSearch]);
 
