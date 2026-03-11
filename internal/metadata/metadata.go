@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -88,7 +88,8 @@ func sourceOrUnknown(sources map[string]string, field string) string {
 	return "unset"
 }
 
-// ExtractMetadata reads metadata from audio files
+// ExtractMetadata reads metadata from audio files.
+// It opens the file, reads the tags, and calls BuildMetadataFromTag internally.
 func ExtractMetadata(filePath string) (Metadata, error) {
 	if GlobalMetadataExtractor != nil {
 		return GlobalMetadataExtractor.ExtractMetadata(filePath)
@@ -111,11 +112,6 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		return metadata, nil
 	}
 
-	fieldSources := map[string]string{}
-	seriesIndexSource := ""
-	fallbackUsed := false
-	authorFromArtist := false
-
 	f, err := os.Open(filePath)
 	if err != nil {
 		return metadata, fmt.Errorf("error opening file: %w", err)
@@ -132,6 +128,21 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		}
 		return metadata, nil
 	}
+
+	result := BuildMetadataFromTag(m, filePath)
+	log.Printf("[DEBUG] metadata: extracted for %s (title=%q author=%q series=%q position=%d)", filePath, result.Title, result.Artist, result.Series, result.SeriesIndex)
+	return result, nil
+}
+
+// BuildMetadataFromTag extracts a Metadata struct from an already-parsed tag.Metadata.
+// filePath is used only for filename-fallback logic and logging; the file is not re-opened.
+// This is the shared builder used by both ExtractMetadata and ProcessFile (single-pass).
+func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
+	var metadata Metadata
+	fieldSources := map[string]string{}
+	seriesIndexSource := ""
+	fallbackUsed := false
+	authorFromArtist := false
 
 	raw := m.Raw()
 	if len(raw) > 0 {
@@ -401,8 +412,7 @@ func ExtractMetadata(filePath string) (Metadata, error) {
 		sourceOrUnknown(fieldSources, "language"),
 	)
 
-	log.Printf("[DEBUG] metadata: extracted for %s (title=%q author=%q series=%q position=%d)", filePath, metadata.Title, metadata.Artist, metadata.Series, metadata.SeriesIndex)
-	return metadata, nil
+	return metadata
 }
 
 func cleanTagValue(value string) string {
