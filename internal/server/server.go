@@ -1258,6 +1258,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/reconcile", s.startReconcile)
 			protected.POST("/operations/reconcile/scan", s.startReconcileScan)
 			protected.GET("/operations/reconcile/scan/latest", s.latestReconcileScan)
+			protected.POST("/operations/cleanup-version-groups", s.cleanupDuplicateVersionGroupsHandler)
 			protected.GET("/operations/:id/changes", s.getOperationChanges)
 			protected.POST("/operations/:id/revert", s.revertOperation)
 

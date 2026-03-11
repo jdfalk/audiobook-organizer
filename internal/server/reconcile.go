@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -641,4 +641,123 @@ func countMatchType(matches []ReconcileMatch, matchType string) int {
 		}
 	}
 	return n
+}
+
+// VersionGroupCleanupResult holds the result of pruning duplicate version groups.
+type VersionGroupCleanupResult struct {
+	GroupsChecked  int `json:"groups_checked"`
+	GroupsCleaned  int `json:"groups_cleaned"`
+	DuplicatesRemoved int `json:"duplicates_removed"`
+	FilesDeleted   int `json:"files_deleted"`
+}
+
+// cleanupDuplicateVersionGroups finds version groups with more than 2 members
+// (1 original + 1 organized) and removes the extra organized copies that were
+// created by the organize-reprocessing bug.
+func cleanupDuplicateVersionGroups(store database.Store, rootDir string, dryRun bool) (*VersionGroupCleanupResult, error) {
+	result := &VersionGroupCleanupResult{}
+
+	// Fetch all books and group by version_group_id
+	versionGroups := make(map[string][]database.Book)
+	const pageSize = 1000
+	for offset := 0; ; offset += pageSize {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch books: %w", err)
+		}
+		for _, b := range books {
+			if b.VersionGroupID != nil && *b.VersionGroupID != "" {
+				versionGroups[*b.VersionGroupID] = append(versionGroups[*b.VersionGroupID], b)
+			}
+		}
+		if len(books) < pageSize {
+			break
+		}
+	}
+
+	for groupID, members := range versionGroups {
+		result.GroupsChecked++
+		if len(members) <= 2 {
+			continue // normal: 1 original + 1 organized
+		}
+
+		// Separate into originals (non-primary, outside library) and organized copies (in library)
+		var originals, libraryCopies []database.Book
+		for _, m := range members {
+			if rootDir != "" && strings.HasPrefix(m.FilePath, rootDir) {
+				libraryCopies = append(libraryCopies, m)
+			} else {
+				originals = append(originals, m)
+			}
+		}
+
+		if len(libraryCopies) <= 1 {
+			continue // only one library copy, nothing to prune
+		}
+
+		// Keep the oldest library copy (first created = lowest ULID), remove the rest
+		// Sort by ID (ULIDs sort chronologically)
+		keepIdx := 0
+		for i := 1; i < len(libraryCopies); i++ {
+			if libraryCopies[i].ID < libraryCopies[keepIdx].ID {
+				keepIdx = i
+			}
+		}
+
+		result.GroupsCleaned++
+		for i, dup := range libraryCopies {
+			if i == keepIdx {
+				continue
+			}
+
+			stdlog.Printf("[INFO] version-group cleanup: removing duplicate %s (%s) from group %s", dup.ID, dup.FilePath, groupID)
+
+			if !dryRun {
+				// Delete the file if it exists and is in the library
+				if rootDir != "" && strings.HasPrefix(dup.FilePath, rootDir) {
+					if _, err := os.Stat(dup.FilePath); err == nil {
+						if err := os.Remove(dup.FilePath); err != nil {
+							stdlog.Printf("[WARN] failed to delete duplicate file %s: %v", dup.FilePath, err)
+						} else {
+							result.FilesDeleted++
+						}
+					}
+				}
+				// Delete the book record
+				if err := store.DeleteBook(dup.ID); err != nil {
+					stdlog.Printf("[WARN] failed to delete duplicate book record %s: %v", dup.ID, err)
+				}
+			}
+			result.DuplicatesRemoved++
+		}
+
+		// Ensure the kept library copy is primary and the original(s) are non-primary
+		if !dryRun {
+			isPrimary := true
+			isNotPrimary := false
+			kept := libraryCopies[keepIdx]
+			kept.IsPrimaryVersion = &isPrimary
+			store.UpdateBook(kept.ID, &kept)
+			for _, orig := range originals {
+				orig.IsPrimaryVersion = &isNotPrimary
+				store.UpdateBook(orig.ID, &orig)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// cleanupDuplicateVersionGroupsHandler is the HTTP handler for POST /api/v1/operations/cleanup-version-groups
+func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
+	dryRun := c.Query("dry_run") == "true"
+	result, err := cleanupDuplicateVersionGroups(database.GlobalStore, config.AppConfig.RootDir, dryRun)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run": dryRun,
+		"result":  result,
+	})
 }
