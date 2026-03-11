@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -117,8 +117,8 @@ export function MetadataSearchDialog({
       setResults([]);
       setExpandedCard(null);
       setSelectedFields(new Set());
-      // Always search with author + narrator + series for better results
-      doSearch(q, a, n, s);
+      // Search with author + narrator (series can over-constrain results)
+      doSearch(q, a, n);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, book?.id]);
