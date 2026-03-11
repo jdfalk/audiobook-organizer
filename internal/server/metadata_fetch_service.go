@@ -1124,6 +1124,17 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 			}
 		}
 
+		// Narrator-as-author fallback: author/narrator fields are frequently
+		// swapped in audiobook metadata. Try searching with the narrator as
+		// author to catch these cases.
+		if bookNarrator != "" && bookNarrator != searchAuthor {
+			if results, serr := src.SearchByTitleAndAuthor(searchTitle, bookNarrator); serr == nil {
+				allResults = append(allResults, results...)
+			} else {
+				log.Printf("[DEBUG] metadata-search: %s narrator-as-author fallback(%q, %q) error: %v", src.Name(), searchTitle, bookNarrator, serr)
+			}
+		}
+
 		// Always also search by title only to get broader results
 		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
 			allResults = append(allResults, results...)
