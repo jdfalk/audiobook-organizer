@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.40.0
+// version: 1.41.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -211,6 +211,7 @@ export const Library = () => {
   const [softDeletedCount, setSoftDeletedCount] = useState(0);
   const [softDeletedBooks, setSoftDeletedBooks] = useState<Audiobook[]>([]);
   const [softDeletedLoading, setSoftDeletedLoading] = useState(false);
+  const [softDeletedExpanded, setSoftDeletedExpanded] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookPendingDelete, setBookPendingDelete] = useState<Audiobook | null>(
     null
@@ -2287,15 +2288,18 @@ export const Library = () => {
             alignItems="center"
             justifyContent="space-between"
             spacing={2}
-            flexWrap="wrap"
-            rowGap={1}
+            sx={{ cursor: 'pointer' }}
+            onClick={() => setSoftDeletedExpanded(!softDeletedExpanded)}
           >
-            <Box>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <ExpandMoreIcon
+                sx={{
+                  transform: softDeletedExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              />
               <Typography variant="h6">Soft-Deleted Books</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Review recently deleted items before purging them permanently.
-              </Typography>
-            </Box>
+            </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
               <Chip
                 label={`${softDeletedCount} ${softDeletedCount === 1 ? 'item' : 'items'}`}
@@ -2305,86 +2309,91 @@ export const Library = () => {
                 size="small"
                 variant="outlined"
                 startIcon={<RefreshIcon />}
-                onClick={loadSoftDeleted}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  loadSoftDeleted();
+                }}
                 disabled={softDeletedLoading}
               >
                 {softDeletedLoading ? 'Refreshing...' : 'Refresh'}
               </Button>
             </Stack>
           </Stack>
-          {softDeletedLoading ? (
-            <Typography variant="body2" sx={{ mt: 2 }}>
-              Loading soft-deleted books...
-            </Typography>
-          ) : softDeletedBooks.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              No soft-deleted books at the moment.
-            </Alert>
-          ) : (
-            <List dense sx={{ mt: 1 }}>
-              {softDeletedBooks.map((book) => {
-                const deletedAt =
-                  book.marked_for_deletion_at &&
-                  new Date(book.marked_for_deletion_at);
-                return (
-                  <ListItem key={book.id} alignItems="flex-start">
-                    <ListItemText
-                      primary={book.title || 'Untitled'}
-                      secondary={
-                        <Stack spacing={0.5}>
-                          <Typography variant="body2" color="text.secondary">
-                            {book.author || 'Unknown Author'}
-                          </Typography>
-                          {deletedAt && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              Soft deleted at {deletedAt.toLocaleString()}
+          <Collapse in={softDeletedExpanded}>
+            {softDeletedLoading ? (
+              <Typography variant="body2" sx={{ mt: 2 }}>
+                Loading soft-deleted books...
+              </Typography>
+            ) : softDeletedBooks.length === 0 ? (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                No soft-deleted books at the moment.
+              </Alert>
+            ) : (
+              <List dense sx={{ mt: 1 }}>
+                {softDeletedBooks.map((book) => {
+                  const deletedAt =
+                    book.marked_for_deletion_at &&
+                    new Date(book.marked_for_deletion_at);
+                  return (
+                    <ListItem key={book.id} alignItems="flex-start">
+                      <ListItemText
+                        primary={book.title || 'Untitled'}
+                        secondary={
+                          <Stack spacing={0.5}>
+                            <Typography variant="body2" color="text.secondary">
+                              {book.author || 'Unknown Author'}
                             </Typography>
-                          )}
-                          {book.file_path && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {book.file_path}
-                            </Typography>
-                          )}
-                        </Stack>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        sx={{ mr: 1 }}
-                        onClick={() => handleRestoreOne(book)}
-                        disabled={
-                          restoringBookId === book.id ||
-                          purgeInProgress ||
-                          purgingBookId === book.id
+                            {deletedAt && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Soft deleted at {deletedAt.toLocaleString()}
+                              </Typography>
+                            )}
+                            {book.file_path && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {book.file_path}
+                              </Typography>
+                            )}
+                          </Stack>
                         }
-                      >
-                        {restoringBookId === book.id
-                          ? 'Restoring...'
-                          : 'Restore'}
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        onClick={() => handlePurgeOne(book)}
-                        disabled={purgingBookId === book.id || purgeInProgress}
-                      >
-                        {purgingBookId === book.id ? 'Purging...' : 'Purge now'}
-                      </Button>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                );
-              })}
-            </List>
-          )}
+                      />
+                      <ListItemSecondaryAction>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          sx={{ mr: 1 }}
+                          onClick={() => handleRestoreOne(book)}
+                          disabled={
+                            restoringBookId === book.id ||
+                            purgeInProgress ||
+                            purgingBookId === book.id
+                          }
+                        >
+                          {restoringBookId === book.id
+                            ? 'Restoring...'
+                            : 'Restore'}
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => handlePurgeOne(book)}
+                          disabled={purgingBookId === book.id || purgeInProgress}
+                        >
+                          {purgingBookId === book.id ? 'Purging...' : 'Purge now'}
+                        </Button>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </Collapse>
         </Paper>
 
         <FilterSidebar
