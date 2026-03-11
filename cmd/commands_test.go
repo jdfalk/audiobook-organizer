@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -303,6 +303,17 @@ func (s *stubStore) GetBookChanges(bookID string) ([]*database.OperationChange, 
 	return nil, nil
 }
 func (s *stubStore) RevertOperationChanges(operationID string) error { return nil }
+func (s *stubStore) AddSystemActivityLog(source, level, message string) error { return nil }
+func (s *stubStore) GetSystemActivityLogs(source string, limit int) ([]database.SystemActivityLog, error) {
+	return nil, nil
+}
+func (s *stubStore) PruneOperationLogs(olderThan time.Time) (int, error)       { return 0, nil }
+func (s *stubStore) PruneOperationChanges(olderThan time.Time) (int, error)    { return 0, nil }
+func (s *stubStore) PruneSystemActivityLogs(olderThan time.Time) (int, error)  { return 0, nil }
+func (s *stubStore) GetScanCacheMap() (map[string]database.ScanCacheEntry, error) { return nil, nil }
+func (s *stubStore) UpdateScanCache(bookID string, mtime int64, size int64) error { return nil }
+func (s *stubStore) MarkNeedsRescan(bookID string) error                         { return nil }
+func (s *stubStore) GetDirtyBookFolders() ([]string, error)                      { return nil, nil }
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
