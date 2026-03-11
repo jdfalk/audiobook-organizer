@@ -1,5 +1,5 @@
 // file: internal/server/error_handler.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5d6e7f8a-9b0c-1d2e-3f4a-5b6c7d8e9f0a
 // last-edited: 2026-02-04
 
@@ -196,8 +196,8 @@ func ParsePaginationParams(c *gin.Context) PaginationParams {
 	if limit < 1 {
 		limit = 50
 	}
-	if limit > 1000 {
-		limit = 1000
+	if limit > 10000 {
+		limit = 10000
 	}
 	if offset < 0 {
 		offset = 0
