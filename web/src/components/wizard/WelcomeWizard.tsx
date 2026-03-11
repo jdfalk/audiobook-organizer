@@ -213,7 +213,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       });
       setITunesValidation({
         valid: true,
-        audiobook_count: result.audiobook_tracks,
+        audiobook_count: result.audiobook_count || result.audiobook_tracks,
         files_found: result.files_found,
       });
       // Auto-populate path mappings from detected prefixes
@@ -633,7 +633,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
                           });
                           setITunesValidation({
                             valid: true,
-                            audiobook_count: result.audiobook_tracks,
+                            audiobook_count: result.audiobook_count || result.audiobook_tracks,
                             files_found: result.files_found,
                           });
                           setITunesEnabled(true);

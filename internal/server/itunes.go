@@ -45,6 +45,7 @@ type ITunesValidateRequest struct {
 type ITunesValidateResponse struct {
 	TotalTracks     int      `json:"total_tracks"`
 	AudiobookTracks int      `json:"audiobook_tracks"`
+	AudiobookCount  int      `json:"audiobook_count"`
 	FilesFound      int      `json:"files_found"`
 	FilesMissing    int      `json:"files_missing"`
 	MissingPaths    []string `json:"missing_paths,omitempty"`
@@ -186,6 +187,7 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 	response := ITunesValidateResponse{
 		TotalTracks:     result.TotalTracks,
 		AudiobookTracks: result.AudiobookTracks,
+		AudiobookCount:  result.AudiobookCount,
 		FilesFound:      result.FilesFound,
 		FilesMissing:    result.FilesMissing,
 		MissingPaths:    missingPaths,

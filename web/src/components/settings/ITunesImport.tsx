@@ -690,8 +690,9 @@ export function ITunesImport() {
           >
             <AlertTitle>Validation Results</AlertTitle>
             <Typography variant="body2">
-              Found <strong>{validationResult.audiobook_tracks}</strong>{' '}
-              audiobooks ({validationResult.files_found} files found,
+              Found <strong>{validationResult.audiobook_count || validationResult.audiobook_tracks}</strong>{' '}
+              audiobooks ({validationResult.audiobook_tracks} tracks across{' '}
+              {validationResult.files_found} files found,
               {` ${validationResult.files_missing} missing`})
             </Typography>
             {validationResult.duplicate_count > 0 && (
