@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.23.0
+// version: 4.25.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -16,11 +16,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oklog/ulid/v2"
+
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 )
 
@@ -948,6 +951,86 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 	return nil
 }
 
+// ensureLibraryCopy returns a book record with files in the library folder.
+// If the book is already in the library, returns it as-is. If the book is in a
+// protected path (iTunes/import), looks for an existing library version or
+// organizes (hard-links) the file to the library and creates a new version record.
+func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *database.Book {
+	if config.AppConfig.RootDir == "" {
+		return book // no library configured
+	}
+	if strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+		return book // already in library
+	}
+	if !isProtectedPath(book.FilePath) {
+		return book // not protected, safe to modify
+	}
+
+	// Check for existing library version in the same version group
+	if book.VersionGroupID != nil && *book.VersionGroupID != "" {
+		siblings, err := mfs.db.GetBooksByVersionGroup(*book.VersionGroupID)
+		if err == nil {
+			for i := range siblings {
+				if siblings[i].ID != book.ID && strings.HasPrefix(siblings[i].FilePath, config.AppConfig.RootDir) {
+					log.Printf("[INFO] using existing library copy %s for protected book %s", siblings[i].ID, book.ID)
+					return &siblings[i]
+				}
+			}
+		}
+	}
+
+	// No library copy exists — organize (hard link) to library
+	org := organizer.NewOrganizer(&config.AppConfig)
+	newPath, err := org.OrganizeBook(book)
+	if err != nil {
+		log.Printf("[WARN] failed to create library copy for %s: %v", book.ID, err)
+		return nil // caller should skip
+	}
+
+	// Create version-linked record for the library copy
+	isPrimary := true
+	isNotPrimary := false
+	organizedState := "organized"
+	versionGroupID := ""
+	if book.VersionGroupID != nil && *book.VersionGroupID != "" {
+		versionGroupID = *book.VersionGroupID
+	} else {
+		versionGroupID = ulid.Make().String()
+	}
+
+	newBook := *book
+	newBook.ID = ulid.Make().String()
+	newBook.FilePath = newPath
+	newBook.LibraryState = &organizedState
+	newBook.VersionGroupID = &versionGroupID
+	newBook.IsPrimaryVersion = &isPrimary
+
+	created, err := mfs.db.CreateBook(&newBook)
+	if err != nil {
+		log.Printf("[WARN] failed to create library book record for %s: %v", book.ID, err)
+		return nil
+	}
+
+	// Copy book_authors to the new record
+	if authors, err := mfs.db.GetBookAuthors(book.ID); err == nil && len(authors) > 0 {
+		var newAuthors []database.BookAuthor
+		for _, ba := range authors {
+			newAuthors = append(newAuthors, database.BookAuthor{
+				BookID: created.ID, AuthorID: ba.AuthorID, Role: ba.Role, Position: ba.Position,
+			})
+		}
+		_ = mfs.db.SetBookAuthors(created.ID, newAuthors)
+	}
+
+	// Demote original to non-primary
+	book.VersionGroupID = &versionGroupID
+	book.IsPrimaryVersion = &isNotPrimary
+	_, _ = mfs.db.UpdateBook(book.ID, book)
+
+	log.Printf("[INFO] created library copy %s -> %s for protected book %s", newPath, created.ID, book.ID)
+	return created
+}
+
 // embedCoverInBookFiles embeds cover art into all audio files for a book.
 // For single-file books where book.FilePath has an audio extension, it embeds there directly.
 // For multi-segment books (where book.FilePath may be a directory-like path without extension),
@@ -962,10 +1045,14 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 		".ogg": true, ".flac": true,
 	}
 
-	// Never modify files in protected paths (import folders, iTunes Media)
+	// If book is in a protected path, get or create a library copy
 	if isProtectedPath(book.FilePath) {
-		log.Printf("[INFO] skipping cover embed for protected path: %s", book.FilePath)
-		return
+		libCopy := mfs.ensureLibraryCopy(book)
+		if libCopy == nil {
+			log.Printf("[WARN] cannot embed cover: no library copy for protected book %s", book.ID)
+			return
+		}
+		book = libCopy
 	}
 
 	ext := strings.ToLower(filepath.Ext(book.FilePath))
@@ -1486,6 +1573,16 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return 0, fmt.Errorf("audiobook not found: %s", id)
+	}
+
+	// If book is in a protected path, write to the library copy instead
+	if isProtectedPath(book.FilePath) {
+		libCopy := mfs.ensureLibraryCopy(book)
+		if libCopy == nil {
+			return 0, fmt.Errorf("cannot write back: no library copy for protected book %s", id)
+		}
+		book = libCopy
+		id = libCopy.ID
 	}
 
 	// --- Resolve author names ---
