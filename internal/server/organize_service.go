@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -176,6 +176,7 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 
 func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
 	booksToOrganize := make([]database.Book, 0)
+	skippedMissingSegments := 0
 	for _, book := range allBooks {
 		// Skip non-primary versions — they are originals already linked to an organized copy
 		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
@@ -187,11 +188,36 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 			continue
 		}
 		// Skip if file doesn't exist
-		if _, err := os.Stat(book.FilePath); os.IsNotExist(err) {
+		info, err := os.Stat(book.FilePath)
+		if os.IsNotExist(err) {
 			log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
 			continue
 		}
+		// For directory-based (multi-file) books, verify segment files exist
+		if err == nil && info.IsDir() {
+			numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+			segments, segErr := orgSvc.db.ListBookSegments(numericID)
+			if segErr == nil && len(segments) > 0 {
+				missingCount := 0
+				for _, seg := range segments {
+					if seg.FilePath == "" || !seg.Active {
+						continue
+					}
+					if _, serr := os.Stat(seg.FilePath); os.IsNotExist(serr) {
+						missingCount++
+					}
+				}
+				if missingCount > 0 {
+					log.Debug("Organize: Skipping %s — %d segment file(s) missing on disk", book.Title, missingCount)
+					skippedMissingSegments++
+					continue
+				}
+			}
+		}
 		booksToOrganize = append(booksToOrganize, book)
+	}
+	if skippedMissingSegments > 0 {
+		log.Info("Organize: Skipped %d book(s) with missing segment files", skippedMissingSegments)
 	}
 	return booksToOrganize
 }

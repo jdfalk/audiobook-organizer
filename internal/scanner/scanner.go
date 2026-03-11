@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.23.0
+// version: 1.25.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -19,12 +19,16 @@ import (
 	"sync"
 	"time"
 
+	"hash/crc32"
+
+	"github.com/dhowden/tag"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/oklog/ulid/v2"
 	"github.com/schollz/progressbar/v3"
 )
 
@@ -114,6 +118,7 @@ type Book struct {
 	ASIN            string
 	OpenLibraryID   string
 	HardcoverID     string
+	SegmentFiles    []string // For multi-file books grouped by album in mixed directories
 	GoogleBooksID   string
 	FileHash        string // Pre-computed hash from ProcessFile (avoids double-read)
 }
@@ -212,12 +217,12 @@ func ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) (
 				return
 			}
 
-			var localBooks []Book
+			// Collect all supported audio files in this directory
+			var audioFiles []string
 			for _, entry := range entries {
 				if entry.IsDir() {
 					continue
 				}
-
 				path := filepath.Join(scanDir, entry.Name())
 				if isExcludedPath(path) {
 					continue
@@ -225,14 +230,14 @@ func ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) (
 				ext := strings.ToLower(filepath.Ext(path))
 				for _, supportedExt := range config.AppConfig.SupportedExtensions {
 					if ext == supportedExt {
-						localBooks = append(localBooks, Book{
-							FilePath: path,
-							Format:   ext,
-						})
+						audioFiles = append(audioFiles, path)
 						break
 					}
 				}
 			}
+
+			// Group files into logical books using album tags
+			localBooks := groupFilesIntoBooks(audioFiles)
 
 			// Merge results
 			if len(localBooks) > 0 {
@@ -358,6 +363,65 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			// hierarchy combined with first-file tags for richer metadata.
 			fallbackUsed := false
 			filePath := books[idx].FilePath
+
+			// Handle directory-based books (multi-file books grouped by album tag)
+			if info, statErr := os.Stat(filePath); statErr == nil && info.IsDir() {
+				dirPath := filePath
+				firstFile := metadata.FindFirstAudioFile(dirPath, config.AppConfig.SupportedExtensions)
+				if firstFile == "" {
+					return // No audio files found in directory
+				}
+				fileCount := countAudioFilesInDir(dirPath, config.AppConfig.SupportedExtensions)
+				bm, bmErr := metadata.AssembleBookMetadata(dirPath, firstFile, fileCount, 0)
+				if bmErr == nil {
+					if bm.Title != "" {
+						books[idx].Title = bm.Title
+					}
+					if bm.PrimaryAuthor() != "" {
+						books[idx].Author = bm.PrimaryAuthor()
+					}
+					if bm.Narrator != "" {
+						books[idx].Narrator = bm.Narrator
+					}
+					if bm.Language != "" {
+						books[idx].Language = bm.Language
+					}
+					if bm.Publisher != "" {
+						books[idx].Publisher = bm.Publisher
+					}
+					if bm.SeriesName != "" {
+						books[idx].Series = bm.SeriesName
+					}
+					if bm.SeriesPosition > 0 {
+						books[idx].Position = bm.SeriesPosition
+					}
+				}
+				// Compute hash from first file for dedup
+				if h, herr := ComputeFileHash(firstFile); herr == nil {
+					books[idx].FileHash = h
+				}
+				// Fallback to filepath extraction if title/author still unknown
+				if books[idx].Title == "" || books[idx].Author == "" {
+					extractInfoFromPath(&books[idx])
+				}
+				if books[idx].Position <= 0 {
+					books[idx].Position = metadata.DetectVolumeNumber(books[idx].Title)
+				}
+				series, position := matcher.IdentifySeries(books[idx].Title, books[idx].FilePath)
+				if books[idx].Series == "" && series != "" {
+					books[idx].Series = series
+				}
+				if books[idx].Position == 0 && position > 0 {
+					books[idx].Position = position
+				}
+				// Save the book and create segments
+				if err := saveBook(&books[idx]); err != nil {
+					errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
+				} else {
+					createSegmentsForBook(dirPath, nil, scanLog)
+				}
+				return // Done with this directory-based book
+			}
 
 			if metadata.IsGenericPartFilename(filePath) {
 				dirPath := filepath.Dir(filePath)
@@ -500,6 +564,10 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			if err := saveBook(&books[idx]); err != nil {
 				errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
 			} else {
+				// Create segments for multi-file books grouped by album
+				if len(books[idx].SegmentFiles) > 1 {
+					createSegmentsForBook(books[idx].FilePath, books[idx].SegmentFiles, scanLog)
+				}
 				// Update scan cache so next incremental scan skips this file.
 				// Use a deferred recover guard in case GlobalStore is a non-nil interface
 				// wrapping a nil concrete pointer (can happen in tests).
@@ -879,6 +947,341 @@ func looksLikeTitleCandidate(s string) bool {
 // isInitialToken reports whether a word is a single-letter initial with a period.
 func isInitialToken(word string) bool {
 	return len(word) == 2 && word[1] == '.' && word[0] >= 'A' && word[0] <= 'Z'
+}
+
+// createSegmentsForBook creates BookSegment records for a multi-file book.
+// If segmentFiles is nil, it scans dirPath for all audio files.
+// If segmentFiles is provided, only those specific files become segments.
+func createSegmentsForBook(bookFilePath string, segmentFiles []string, scanLog logger.Logger) {
+	if database.GlobalStore == nil {
+		return
+	}
+
+	dbBook, err := database.GlobalStore.GetBookByFilePath(bookFilePath)
+	if err != nil || dbBook == nil {
+		return
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(dbBook.ID)))
+
+	// Check if segments already exist
+	existing, _ := database.GlobalStore.ListBookSegments(bookNumericID)
+	if len(existing) > 0 {
+		return // Segments already created (rescan)
+	}
+
+	// If no specific files provided, scan the directory
+	if len(segmentFiles) == 0 {
+		dirPath := bookFilePath
+		entries, rerr := os.ReadDir(dirPath)
+		if rerr != nil {
+			return
+		}
+		audioExts := make(map[string]bool)
+		for _, ext := range config.AppConfig.SupportedExtensions {
+			audioExts[ext] = true
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if audioExts[ext] {
+				segmentFiles = append(segmentFiles, filepath.Join(dirPath, entry.Name()))
+			}
+		}
+	}
+
+	for i, filePath := range segmentFiles {
+		trackNum := i + 1
+		ext := strings.ToLower(filepath.Ext(filePath))
+		var sizeBytes int64
+		if fi, serr := os.Stat(filePath); serr == nil {
+			sizeBytes = fi.Size()
+		}
+
+		seg := &database.BookSegment{
+			ID:          ulid.Make().String(),
+			FilePath:    filePath,
+			Format:      strings.TrimPrefix(ext, "."),
+			SizeBytes:   sizeBytes,
+			TrackNumber: &trackNum,
+			Active:      true,
+		}
+
+		if _, serr := database.GlobalStore.CreateBookSegment(bookNumericID, seg); serr != nil {
+			scanLog.Warn("failed to create segment for %s: %v", filePath, serr)
+		}
+	}
+
+	if len(segmentFiles) > 0 {
+		scanLog.Debug("Created %d segments for book %s", len(segmentFiles), dbBook.Title)
+	}
+}
+
+// parseCueFile reads a CUE sheet and returns the audio files it references.
+// CUE files use FILE "name.mp3" BINARY/WAVE/MP3 to list tracks.
+func parseCueFile(cuePath string) (title string, files []string) {
+	data, err := os.ReadFile(cuePath)
+	if err != nil {
+		return "", nil
+	}
+	dir := filepath.Dir(cuePath)
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		// Extract TITLE from top-level TITLE "..."
+		if strings.HasPrefix(strings.ToUpper(line), "TITLE ") && title == "" {
+			title = extractQuotedValue(line)
+		}
+		// Extract FILE references
+		if strings.HasPrefix(strings.ToUpper(line), "FILE ") {
+			fname := extractQuotedValue(line)
+			if fname != "" {
+				full := filepath.Join(dir, fname)
+				if _, err := os.Stat(full); err == nil {
+					files = append(files, full)
+				}
+			}
+		}
+	}
+	return title, files
+}
+
+// parseM3UFile reads an M3U/M3U8 playlist and returns the audio files it references.
+func parseM3UFile(m3uPath string) []string {
+	data, err := os.ReadFile(m3uPath)
+	if err != nil {
+		return nil
+	}
+	dir := filepath.Dir(m3uPath)
+	var files []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		// Resolve relative paths
+		full := line
+		if !filepath.IsAbs(line) {
+			full = filepath.Join(dir, line)
+		}
+		if _, err := os.Stat(full); err == nil {
+			files = append(files, full)
+		}
+	}
+	return files
+}
+
+// extractQuotedValue extracts the value between the first pair of double quotes.
+func extractQuotedValue(line string) string {
+	start := strings.Index(line, "\"")
+	if start < 0 {
+		return ""
+	}
+	end := strings.Index(line[start+1:], "\"")
+	if end < 0 {
+		return ""
+	}
+	return line[start+1 : start+1+end]
+}
+
+// findPlaylistGroupings scans a directory for CUE/M3U files and returns
+// groups of audio files they reference. Each group maps to a single book.
+// Returns: map of group name -> list of audio file paths
+func findPlaylistGroupings(dirPath string, audioFiles []string) map[string][]string {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil
+	}
+
+	groups := make(map[string][]string)
+	// Track which audio files are claimed by a playlist
+	claimed := make(map[string]bool)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		full := filepath.Join(dirPath, entry.Name())
+
+		switch ext {
+		case ".cue":
+			title, files := parseCueFile(full)
+			if len(files) == 0 {
+				continue
+			}
+			if title == "" {
+				title = strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+			}
+			// Only include files that are in our audioFiles set
+			var matched []string
+			audioSet := make(map[string]bool)
+			for _, af := range audioFiles {
+				audioSet[af] = true
+			}
+			for _, f := range files {
+				if audioSet[f] && !claimed[f] {
+					matched = append(matched, f)
+					claimed[f] = true
+				}
+			}
+			if len(matched) > 0 {
+				groups[title] = matched
+			}
+
+		case ".m3u", ".m3u8":
+			files := parseM3UFile(full)
+			if len(files) == 0 {
+				continue
+			}
+			title := strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+			audioSet := make(map[string]bool)
+			for _, af := range audioFiles {
+				audioSet[af] = true
+			}
+			var matched []string
+			for _, f := range files {
+				if audioSet[f] && !claimed[f] {
+					matched = append(matched, f)
+					claimed[f] = true
+				}
+			}
+			if len(matched) > 0 {
+				groups[title] = matched
+			}
+		}
+	}
+
+	return groups
+}
+
+// quickReadAlbum reads just the album tag from an audio file without full processing.
+func quickReadAlbum(filePath string) string {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(m.Album())
+}
+
+// groupFilesIntoBooks groups audio files from a single directory into logical books.
+// When all files in a directory share the same non-empty album tag, they become a
+// single directory-based Book (with segments created later). Otherwise, each file
+// is treated as an individual Book (existing hash-based dedup handles linking).
+func groupFilesIntoBooks(files []string) []Book {
+	if len(files) <= 1 {
+		var books []Book
+		for _, f := range files {
+			books = append(books, Book{
+				FilePath: f,
+				Format:   strings.ToLower(filepath.Ext(f)),
+			})
+		}
+		return books
+	}
+
+	// Sample up to 3 files to quickly check if directory is a single-album book
+	sampleSize := 3
+	if sampleSize > len(files) {
+		sampleSize = len(files)
+	}
+
+	var firstAlbum string
+	allSame := true
+	for i := 0; i < sampleSize; i++ {
+		album := quickReadAlbum(files[i])
+		if album == "" {
+			allSame = false
+			break
+		}
+		if firstAlbum == "" {
+			firstAlbum = strings.ToLower(strings.TrimSpace(album))
+		} else if strings.ToLower(strings.TrimSpace(album)) != firstAlbum {
+			allSame = false
+			break
+		}
+	}
+
+	// If all sampled files share the same album and there are multiple files,
+	// treat the entire directory as a single multi-file book
+	if allSame && firstAlbum != "" && len(files) > 1 {
+		dirPath := filepath.Dir(files[0])
+		return []Book{{
+			FilePath: dirPath,
+			Format:   strings.ToLower(filepath.Ext(files[0])),
+		}}
+	}
+
+	// Mixed directory — group by album, create one book per album group
+	albumGroups := make(map[string][]string) // normalized album -> file paths
+	var noAlbum []string
+	for _, f := range files {
+		album := quickReadAlbum(f)
+		if album == "" {
+			noAlbum = append(noAlbum, f)
+		} else {
+			key := strings.ToLower(strings.TrimSpace(album))
+			albumGroups[key] = append(albumGroups[key], f)
+		}
+	}
+
+	// For files with no album tag, try CUE/M3U playlist grouping as fallback
+	if len(noAlbum) > 1 {
+		dirPath := filepath.Dir(noAlbum[0])
+		plGroups := findPlaylistGroupings(dirPath, noAlbum)
+		if len(plGroups) > 0 {
+			claimed := make(map[string]bool)
+			for _, groupFiles := range plGroups {
+				for _, f := range groupFiles {
+					claimed[f] = true
+				}
+			}
+			// Merge playlist groups into albumGroups
+			for title, groupFiles := range plGroups {
+				key := "pl:" + strings.ToLower(strings.TrimSpace(title))
+				albumGroups[key] = append(albumGroups[key], groupFiles...)
+			}
+			// Reduce noAlbum to only unclaimed files
+			var remaining []string
+			for _, f := range noAlbum {
+				if !claimed[f] {
+					remaining = append(remaining, f)
+				}
+			}
+			noAlbum = remaining
+		}
+	}
+
+	var books []Book
+	for _, albumFiles := range albumGroups {
+		if len(albumFiles) > 1 {
+			// Multi-file book: use first file as FilePath, store all files for segment creation
+			books = append(books, Book{
+				FilePath:     albumFiles[0],
+				Format:       strings.ToLower(filepath.Ext(albumFiles[0])),
+				SegmentFiles: albumFiles,
+			})
+		} else {
+			books = append(books, Book{
+				FilePath: albumFiles[0],
+				Format:   strings.ToLower(filepath.Ext(albumFiles[0])),
+			})
+		}
+	}
+	for _, f := range noAlbum {
+		books = append(books, Book{
+			FilePath: f,
+			Format:   strings.ToLower(filepath.Ext(f)),
+		})
+	}
+	return books
 }
 
 // saveBookToDatabase saves the book information to the database
