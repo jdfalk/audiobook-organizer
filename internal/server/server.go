@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.115.0
+// version: 1.116.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1496,7 +1496,16 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
-	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": params.Limit, "offset": params.Offset})
+
+	// Get total count for proper pagination (not just page size)
+	totalCount := len(enriched)
+	if params.Search == "" && authorID == nil && seriesID == nil {
+		if tc, err := s.audiobookService.CountAudiobooks(c.Request.Context()); err == nil {
+			totalCount = tc
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset})
 }
 
 func (s *Server) searchAudiobooks(c *gin.Context) {
