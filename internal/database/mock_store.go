@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -187,6 +187,12 @@ type MockStore struct {
 	// iTunes Library Fingerprints
 	SaveLibraryFingerprintFunc func(path string, size int64, modTime time.Time, crc32 uint32) error
 	GetLibraryFingerprintFunc  func(path string) (*LibraryFingerprintRecord, error)
+
+	// Scan cache
+	GetScanCacheMapFunc     func() (map[string]ScanCacheEntry, error)
+	UpdateScanCacheFunc     func(bookID string, mtime int64, size int64) error
+	MarkNeedsRescanFunc     func(bookID string) error
+	GetDirtyBookFoldersFunc func() ([]string, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1207,4 +1213,32 @@ func (m *MockStore) ResolveTombstoneChains() (int, error) {
 		return m.ResolveTombstoneChainsFunc()
 	}
 	return 0, nil
+}
+
+func (m *MockStore) GetScanCacheMap() (map[string]ScanCacheEntry, error) {
+	if m.GetScanCacheMapFunc != nil {
+		return m.GetScanCacheMapFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) UpdateScanCache(bookID string, mtime int64, size int64) error {
+	if m.UpdateScanCacheFunc != nil {
+		return m.UpdateScanCacheFunc(bookID, mtime, size)
+	}
+	return nil
+}
+
+func (m *MockStore) MarkNeedsRescan(bookID string) error {
+	if m.MarkNeedsRescanFunc != nil {
+		return m.MarkNeedsRescanFunc(bookID)
+	}
+	return nil
+}
+
+func (m *MockStore) GetDirtyBookFolders() ([]string, error) {
+	if m.GetDirtyBookFoldersFunc != nil {
+		return m.GetDirtyBookFoldersFunc()
+	}
+	return nil, nil
 }
