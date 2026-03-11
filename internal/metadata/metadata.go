@@ -132,15 +132,18 @@ func ExtractMetadata(filePath string, metaLog logger.Logger) (Metadata, error) {
 		return metadata, nil
 	}
 
-	result := BuildMetadataFromTag(m, filePath)
-	log.Printf("[DEBUG] metadata: extracted for %s (title=%q author=%q series=%q position=%d)", filePath, result.Title, result.Artist, result.Series, result.SeriesIndex)
+	result := BuildMetadataFromTag(m, filePath, metaLog)
 	return result, nil
 }
 
 // BuildMetadataFromTag extracts a Metadata struct from an already-parsed tag.Metadata.
 // filePath is used only for filename-fallback logic and logging; the file is not re-opened.
 // This is the shared builder used by both ExtractMetadata and ProcessFile (single-pass).
-func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
+// If metaLog is nil, a default logger is used.
+func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger) Metadata {
+	if metaLog == nil {
+		metaLog = logger.New("metadata")
+	}
 	var metadata Metadata
 	fieldSources := map[string]string{}
 	seriesIndexSource := ""
@@ -416,7 +419,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string) Metadata {
 	)
 
 	metaLog.Debug("extracted for %s (title=%q author=%q series=%q position=%d)", filePath, metadata.Title, metadata.Artist, metadata.Series, metadata.SeriesIndex)
-	return metadata, nil
+	return metadata
 }
 
 func cleanTagValue(value string) string {

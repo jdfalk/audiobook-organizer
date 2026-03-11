@@ -599,7 +599,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
-					result, scanErr := buildReconcilePreviewWithProgress(store, progress)
+					reconcileLog := logger.New("reconcile_scan")
+					result, scanErr := buildReconcilePreviewWithProgress(store, reconcileLog)
 					if scanErr != nil {
 						return fmt.Errorf("reconcile scan failed: %w", scanErr)
 					}
