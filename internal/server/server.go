@@ -1261,6 +1261,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/cleanup-version-groups", s.cleanupDuplicateVersionGroupsHandler)
 			protected.POST("/operations/mark-broken-segments", s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.mergeNoVGDuplicatesHandler)
+			protected.POST("/operations/assign-orphan-vgs", s.assignOrphanVGsHandler)
 			protected.GET("/operations/:id/changes", s.getOperationChanges)
 			protected.POST("/operations/:id/revert", s.revertOperation)
 
