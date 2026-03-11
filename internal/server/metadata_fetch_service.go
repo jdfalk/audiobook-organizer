@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.19.0
+// version: 4.20.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1263,6 +1263,18 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 		} else {
 			log.Printf("[DEBUG] metadata-search: ASIN lookup for %q failed: %v", asinToLookup, err)
 		}
+	}
+
+	// Filter out results without cover images — they're typically low-quality
+	// entries that clutter the results. Keep them only if ALL results lack covers.
+	var withCover []MetadataCandidate
+	for _, c := range candidates {
+		if c.CoverURL != "" {
+			withCover = append(withCover, c)
+		}
+	}
+	if len(withCover) > 0 {
+		candidates = withCover
 	}
 
 	// Sort by score descending
