@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -77,7 +77,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 
 	ts.registerTask(TaskDefinition{
 		Name:        "library_scan",
-		Description: "Scan library folders for audiobooks",
+		Description: "Scan library for new/changed audiobooks (incremental by default, use force_update for full rescan)",
 		Category:    "library",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("scan", func(ctx context.Context, progress operations.ProgressReporter) error {
