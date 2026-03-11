@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.20.0
+// version: 4.21.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -422,7 +422,8 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 		book.Narrator = stringPtr(meta.Narrator)
 	}
 
-	// Apply author if fetched data is better — resolve to AuthorID
+	// Apply author if fetched data is better — resolve to AuthorID and
+	// replace the book_authors join table so stale associations are removed.
 	if meta.Author != "" && !isGarbageValue(meta.Author) {
 		author, err := mfs.db.GetAuthorByName(meta.Author)
 		if err == nil && author == nil {
@@ -430,6 +431,9 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 		}
 		if err == nil && author != nil {
 			book.AuthorID = &author.ID
+			_ = mfs.db.SetBookAuthors(book.ID, []database.BookAuthor{
+				{BookID: book.ID, AuthorID: author.ID, Role: "author", Position: 0},
+			})
 		}
 	}
 
