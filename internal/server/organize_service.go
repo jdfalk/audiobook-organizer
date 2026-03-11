@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -177,6 +177,10 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
 	booksToOrganize := make([]database.Book, 0)
 	for _, book := range allBooks {
+		// Skip non-primary versions — they are originals already linked to an organized copy
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+			continue
+		}
 		// Skip if already in root directory
 		if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
 			log.Debug("Organize: Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
