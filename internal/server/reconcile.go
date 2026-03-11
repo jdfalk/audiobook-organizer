@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -1223,4 +1223,76 @@ func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
 		"dry_run": dryRun,
 		"result":  result,
 	})
+}
+
+// AssignVGResult holds the result of assigning version groups to orphan library books.
+type AssignVGResult struct {
+	TotalChecked int `json:"total_checked"`
+	Assigned     int `json:"assigned"`
+	AlreadyHasVG int `json:"already_has_vg"`
+	NotInLibrary int `json:"not_in_library"`
+	Errors       int `json:"errors"`
+}
+
+// assignOrphanVGs finds books in the library directory that have no version group,
+// creates a VG for each, and marks them as primary. This fixes books that were
+// organized before a DB wipe and re-scanned without linkage.
+func assignOrphanVGs(store database.Store, rootDir string) (*AssignVGResult, error) {
+	result := &AssignVGResult{}
+
+	var allBooks []database.Book
+	pageSize := 5000
+	for offset := 0; ; offset += pageSize {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get books: %w", err)
+		}
+		allBooks = append(allBooks, books...)
+		if len(books) < pageSize {
+			break
+		}
+	}
+
+	for i := range allBooks {
+		b := &allBooks[i]
+		result.TotalChecked++
+
+		// Skip books that already have a VG
+		if b.VersionGroupID != nil && *b.VersionGroupID != "" {
+			result.AlreadyHasVG++
+			continue
+		}
+
+		// Only process books in the library directory
+		if rootDir == "" || !strings.HasPrefix(b.FilePath, rootDir) {
+			result.NotInLibrary++
+			continue
+		}
+
+		// Create a version group and mark as primary
+		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(b.ID+b.FilePath)))
+		b.VersionGroupID = &vgID
+		isPrimary := true
+		b.IsPrimaryVersion = &isPrimary
+		organizedState := "organized"
+		b.LibraryState = &organizedState
+
+		if _, err := store.UpdateBook(b.ID, b); err != nil {
+			result.Errors++
+			continue
+		}
+		result.Assigned++
+	}
+
+	return result, nil
+}
+
+// assignOrphanVGsHandler handles POST /api/v1/operations/assign-orphan-vgs
+func (s *Server) assignOrphanVGsHandler(c *gin.Context) {
+	result, err := assignOrphanVGs(database.GlobalStore, config.AppConfig.RootDir)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": result})
 }
