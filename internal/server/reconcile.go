@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -8,10 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	stdlog "log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -752,6 +754,467 @@ func cleanupDuplicateVersionGroups(store database.Store, rootDir string, dryRun 
 func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := cleanupDuplicateVersionGroups(database.GlobalStore, config.AppConfig.RootDir, dryRun)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run": dryRun,
+		"result":  result,
+	})
+}
+
+// BrokenSegmentResult describes books with missing segment files.
+type BrokenSegmentResult struct {
+	BooksChecked    int                  `json:"books_checked"`
+	BrokenBooks     int                  `json:"broken_books"`
+	MarkedForReview int                  `json:"marked_for_review"`
+	Details         []BrokenSegmentEntry `json:"details"`
+}
+
+// BrokenSegmentEntry describes one book with missing segment files.
+type BrokenSegmentEntry struct {
+	BookID          string   `json:"book_id"`
+	Title           string   `json:"title"`
+	FilePath        string   `json:"file_path"`
+	TotalSegments   int      `json:"total_segments"`
+	MissingSegments int      `json:"missing_segments"`
+	MissingPaths    []string `json:"missing_paths"`
+}
+
+// findBrokenSegmentBooks finds books whose segment files don't exist on disk
+// and optionally marks them as needs_review.
+func findBrokenSegmentBooks(store database.Store, dryRun bool) (*BrokenSegmentResult, error) {
+	allBooks, err := store.GetAllBooks(100000, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get books: %w", err)
+	}
+
+	result := &BrokenSegmentResult{}
+	now := time.Now()
+	needsReview := "needs_review"
+
+	for _, book := range allBooks {
+		// Only check directory-based books in import paths (not in library)
+		if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+			continue
+		}
+		info, serr := os.Stat(book.FilePath)
+		if serr != nil || !info.IsDir() {
+			continue
+		}
+
+		numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+		segments, segErr := store.ListBookSegments(numericID)
+		if segErr != nil || len(segments) == 0 {
+			continue
+		}
+
+		result.BooksChecked++
+		var missingPaths []string
+		activeCount := 0
+		for _, seg := range segments {
+			if !seg.Active || seg.FilePath == "" {
+				continue
+			}
+			activeCount++
+			if _, ferr := os.Stat(seg.FilePath); os.IsNotExist(ferr) {
+				missingPaths = append(missingPaths, seg.FilePath)
+			}
+		}
+
+		if len(missingPaths) == 0 {
+			continue
+		}
+
+		entry := BrokenSegmentEntry{
+			BookID:          book.ID,
+			Title:           book.Title,
+			FilePath:        book.FilePath,
+			TotalSegments:   activeCount,
+			MissingSegments: len(missingPaths),
+			MissingPaths:    missingPaths,
+		}
+		result.Details = append(result.Details, entry)
+		result.BrokenBooks++
+
+		if !dryRun {
+			book.LibraryState = &needsReview
+			book.MarkedForDeletion = boolPtr(true)
+			book.MarkedForDeletionAt = &now
+			if _, uerr := store.UpdateBook(book.ID, &book); uerr != nil {
+				stdlog.Printf("[WARN] failed to mark broken book %s: %v", book.ID, uerr)
+			} else {
+				result.MarkedForReview++
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// markBrokenSegmentBooksHandler handles POST /api/v1/operations/mark-broken-segments
+func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
+	dryRun := c.Query("dry_run") == "true"
+	result, err := findBrokenSegmentBooks(database.GlobalStore, dryRun)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run": dryRun,
+		"result":  result,
+	})
+}
+
+// MergeDuplicatesResult describes the outcome of merging no-VG duplicates into existing version groups.
+type MergeDuplicatesResult struct {
+	TotalNoVG         int                   `json:"total_no_vg"`
+	MatchedToVG       int                   `json:"matched_to_vg"`
+	SelfDuplicates    int                   `json:"self_duplicates"`
+	MetadataMerged    int                   `json:"metadata_merged"`
+	SoftDeleted       int                   `json:"soft_deleted"`
+	RemainingOrphans  int                   `json:"remaining_orphans"`
+	Errors            int                   `json:"errors"`
+	Details           []MergeDuplicateEntry `json:"details,omitempty"`
+}
+
+// MergeDuplicateEntry describes one merge action.
+type MergeDuplicateEntry struct {
+	DuplicateID    string   `json:"duplicate_id"`
+	PrimaryID      string   `json:"primary_id"`
+	Title          string   `json:"title"`
+	FieldsMerged   []string `json:"fields_merged,omitempty"`
+	Action         string   `json:"action"`
+}
+
+// mergeNoVGDuplicates finds no-VG books that match VG books by title, merges metadata, and soft-deletes.
+// It also deduplicates among the remaining no-VG orphans (keeping one per title, soft-deleting extras).
+func mergeNoVGDuplicates(store database.Store, rootDir string, dryRun bool) (*MergeDuplicatesResult, error) {
+	result := &MergeDuplicatesResult{}
+
+	// Load all books in pages
+	var allBooks []database.Book
+	pageSize := 5000
+	for offset := 0; ; offset += pageSize {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get books: %w", err)
+		}
+		allBooks = append(allBooks, books...)
+		if len(books) < pageSize {
+			break
+		}
+	}
+
+	// Index VG primary books by normalized title
+	vgPrimaryByTitle := make(map[string]*database.Book)
+	var noVGBooks []database.Book
+
+	for i := range allBooks {
+		b := &allBooks[i]
+		if b.VersionGroupID != nil && *b.VersionGroupID != "" {
+			if b.IsPrimaryVersion != nil && *b.IsPrimaryVersion {
+				normTitle := strings.TrimSpace(strings.ToLower(b.Title))
+				vgPrimaryByTitle[normTitle] = b
+			}
+		} else {
+			if rootDir != "" && strings.HasPrefix(b.FilePath, rootDir) {
+				noVGBooks = append(noVGBooks, *b)
+			}
+		}
+	}
+
+	result.TotalNoVG = len(noVGBooks)
+	now := time.Now()
+	deletedState := "deleted"
+
+	// Helper to soft-delete a book
+	softDelete := func(book *database.Book) error {
+		book.MarkedForDeletion = boolPtr(true)
+		book.MarkedForDeletionAt = &now
+		book.LibraryState = &deletedState
+		_, err := store.UpdateBook(book.ID, book)
+		return err
+	}
+
+	// Phase 1: Match no-VG books against existing VG primaries
+	// Track which no-VG books have been handled
+	handled := make(map[string]bool)
+
+	for i := range noVGBooks {
+		dupe := &noVGBooks[i]
+		normTitle := strings.TrimSpace(strings.ToLower(dupe.Title))
+		primary, found := vgPrimaryByTitle[normTitle]
+		if !found {
+			continue
+		}
+
+		handled[dupe.ID] = true
+		result.MatchedToVG++
+		entry := MergeDuplicateEntry{
+			DuplicateID: dupe.ID,
+			PrimaryID:   primary.ID,
+			Title:       dupe.Title,
+		}
+
+		merged := mergeBookMetadata(primary, dupe)
+		entry.FieldsMerged = merged
+
+		if !dryRun {
+			if len(merged) > 0 {
+				if _, err := store.UpdateBook(primary.ID, primary); err != nil {
+					stdlog.Printf("[WARN] merge-dupes: failed to update primary %s: %v", primary.ID, err)
+					entry.Action = "error"
+					result.Errors++
+					result.Details = append(result.Details, entry)
+					continue
+				}
+				result.MetadataMerged++
+			}
+			if err := softDelete(dupe); err != nil {
+				stdlog.Printf("[WARN] merge-dupes: failed to soft-delete %s: %v", dupe.ID, err)
+				entry.Action = "error"
+				result.Errors++
+			} else {
+				result.SoftDeleted++
+				if len(merged) > 0 {
+					entry.Action = "merged_and_deleted"
+				} else {
+					entry.Action = "deleted_no_merge_needed"
+				}
+			}
+		} else {
+			result.SoftDeleted++
+			if len(merged) > 0 {
+				entry.Action = "would_merge_and_delete"
+				result.MetadataMerged++
+			} else {
+				entry.Action = "would_delete_no_merge_needed"
+			}
+		}
+		result.Details = append(result.Details, entry)
+	}
+
+	// Phase 2: Deduplicate among remaining no-VG orphans (same title → keep one, delete rest)
+	// Group remaining orphans by normalized title
+	orphansByTitle := make(map[string][]*database.Book)
+	for i := range noVGBooks {
+		b := &noVGBooks[i]
+		if handled[b.ID] {
+			continue
+		}
+		normTitle := strings.TrimSpace(strings.ToLower(b.Title))
+		orphansByTitle[normTitle] = append(orphansByTitle[normTitle], b)
+	}
+
+	for _, group := range orphansByTitle {
+		if len(group) <= 1 {
+			continue
+		}
+
+		// Pick the best keeper: prefer directory-based (multi-file) paths, then longest path
+		bestIdx := 0
+		for i := 1; i < len(group); i++ {
+			// Prefer books whose path is a directory (multi-file book) over individual segment files
+			bestIsDir := !strings.Contains(filepath.Base(group[bestIdx].FilePath), ".")
+			currIsDir := !strings.Contains(filepath.Base(group[i].FilePath), ".")
+			if currIsDir && !bestIsDir {
+				bestIdx = i
+			} else if currIsDir == bestIsDir {
+				// Prefer shorter path (usually the directory, not a segment file)
+				if len(group[i].FilePath) < len(group[bestIdx].FilePath) {
+					bestIdx = i
+				}
+			}
+		}
+
+		keeper := group[bestIdx]
+		for i, dupe := range group {
+			if i == bestIdx {
+				continue
+			}
+
+			result.SelfDuplicates++
+			entry := MergeDuplicateEntry{
+				DuplicateID: dupe.ID,
+				PrimaryID:   keeper.ID,
+				Title:       dupe.Title,
+			}
+
+			merged := mergeBookMetadata(keeper, dupe)
+			entry.FieldsMerged = merged
+
+			if !dryRun {
+				if len(merged) > 0 {
+					if _, err := store.UpdateBook(keeper.ID, keeper); err != nil {
+						stdlog.Printf("[WARN] merge-self-dupes: failed to update keeper %s: %v", keeper.ID, err)
+					} else {
+						result.MetadataMerged++
+					}
+				}
+				if err := softDelete(dupe); err != nil {
+					stdlog.Printf("[WARN] merge-self-dupes: failed to soft-delete %s: %v", dupe.ID, err)
+					entry.Action = "error"
+					result.Errors++
+				} else {
+					result.SoftDeleted++
+					entry.Action = "self_dupe_deleted"
+				}
+			} else {
+				result.SoftDeleted++
+				entry.Action = "would_delete_self_dupe"
+				if len(merged) > 0 {
+					result.MetadataMerged++
+				}
+			}
+			result.Details = append(result.Details, entry)
+		}
+	}
+
+	// Count remaining orphans (unique no-VG books with no match)
+	remaining := 0
+	for _, group := range orphansByTitle {
+		if len(group) >= 1 {
+			remaining++
+		}
+	}
+	result.RemainingOrphans = remaining
+
+	return result, nil
+}
+
+// mergeBookMetadata copies non-empty metadata fields from src to dst where dst field is empty.
+// Returns list of field names that were merged.
+func mergeBookMetadata(dst, src *database.Book) []string {
+	var merged []string
+
+	if dst.Narrator == nil && src.Narrator != nil {
+		dst.Narrator = src.Narrator
+		merged = append(merged, "narrator")
+	}
+	if dst.NarratorsJSON == nil && src.NarratorsJSON != nil {
+		dst.NarratorsJSON = src.NarratorsJSON
+		merged = append(merged, "narrators_json")
+	}
+	if dst.Description == nil && src.Description != nil {
+		dst.Description = src.Description
+		merged = append(merged, "description")
+	}
+	if dst.Language == nil && src.Language != nil {
+		dst.Language = src.Language
+		merged = append(merged, "language")
+	}
+	if dst.Publisher == nil && src.Publisher != nil {
+		dst.Publisher = src.Publisher
+		merged = append(merged, "publisher")
+	}
+	if dst.PrintYear == nil && src.PrintYear != nil {
+		dst.PrintYear = src.PrintYear
+		merged = append(merged, "print_year")
+	}
+	if dst.AudiobookReleaseYear == nil && src.AudiobookReleaseYear != nil {
+		dst.AudiobookReleaseYear = src.AudiobookReleaseYear
+		merged = append(merged, "audiobook_release_year")
+	}
+	if dst.ISBN10 == nil && src.ISBN10 != nil {
+		dst.ISBN10 = src.ISBN10
+		merged = append(merged, "isbn10")
+	}
+	if dst.ISBN13 == nil && src.ISBN13 != nil {
+		dst.ISBN13 = src.ISBN13
+		merged = append(merged, "isbn13")
+	}
+	if dst.ASIN == nil && src.ASIN != nil {
+		dst.ASIN = src.ASIN
+		merged = append(merged, "asin")
+	}
+	if dst.OpenLibraryID == nil && src.OpenLibraryID != nil {
+		dst.OpenLibraryID = src.OpenLibraryID
+		merged = append(merged, "open_library_id")
+	}
+	if dst.HardcoverID == nil && src.HardcoverID != nil {
+		dst.HardcoverID = src.HardcoverID
+		merged = append(merged, "hardcover_id")
+	}
+	if dst.GoogleBooksID == nil && src.GoogleBooksID != nil {
+		dst.GoogleBooksID = src.GoogleBooksID
+		merged = append(merged, "google_books_id")
+	}
+	if dst.Edition == nil && src.Edition != nil {
+		dst.Edition = src.Edition
+		merged = append(merged, "edition")
+	}
+	if dst.CoverURL == nil && src.CoverURL != nil {
+		dst.CoverURL = src.CoverURL
+		merged = append(merged, "cover_url")
+	}
+	if dst.Duration == nil && src.Duration != nil {
+		dst.Duration = src.Duration
+		merged = append(merged, "duration")
+	}
+	if dst.Bitrate == nil && src.Bitrate != nil {
+		dst.Bitrate = src.Bitrate
+		merged = append(merged, "bitrate")
+	}
+	if dst.Codec == nil && src.Codec != nil {
+		dst.Codec = src.Codec
+		merged = append(merged, "codec")
+	}
+	if dst.SampleRate == nil && src.SampleRate != nil {
+		dst.SampleRate = src.SampleRate
+		merged = append(merged, "sample_rate")
+	}
+	if dst.Channels == nil && src.Channels != nil {
+		dst.Channels = src.Channels
+		merged = append(merged, "channels")
+	}
+	if dst.FileHash == nil && src.FileHash != nil {
+		dst.FileHash = src.FileHash
+		merged = append(merged, "file_hash")
+	}
+	if dst.FileSize == nil && src.FileSize != nil {
+		dst.FileSize = src.FileSize
+		merged = append(merged, "file_size")
+	}
+	// iTunes fields
+	if dst.ITunesPersistentID == nil && src.ITunesPersistentID != nil {
+		dst.ITunesPersistentID = src.ITunesPersistentID
+		merged = append(merged, "itunes_persistent_id")
+	}
+	if dst.ITunesPlayCount == nil && src.ITunesPlayCount != nil {
+		dst.ITunesPlayCount = src.ITunesPlayCount
+		merged = append(merged, "itunes_play_count")
+	}
+	if dst.ITunesRating == nil && src.ITunesRating != nil {
+		dst.ITunesRating = src.ITunesRating
+		merged = append(merged, "itunes_rating")
+	}
+	if dst.ITunesBookmark == nil && src.ITunesBookmark != nil {
+		dst.ITunesBookmark = src.ITunesBookmark
+		merged = append(merged, "itunes_bookmark")
+	}
+	// Author/Series: only merge if dst has none
+	if dst.AuthorID == nil && src.AuthorID != nil {
+		dst.AuthorID = src.AuthorID
+		merged = append(merged, "author_id")
+	}
+	if dst.SeriesID == nil && src.SeriesID != nil {
+		dst.SeriesID = src.SeriesID
+		merged = append(merged, "series_id")
+	}
+	if dst.SeriesSequence == nil && src.SeriesSequence != nil {
+		dst.SeriesSequence = src.SeriesSequence
+		merged = append(merged, "series_sequence")
+	}
+
+	return merged
+}
+
+// mergeNoVGDuplicatesHandler handles POST /api/v1/operations/merge-novg-duplicates
+func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
+	dryRun := c.Query("dry_run") == "true"
+	result, err := mergeNoVGDuplicates(database.GlobalStore, config.AppConfig.RootDir, dryRun)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
