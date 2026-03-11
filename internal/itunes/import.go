@@ -114,7 +114,8 @@ func ReverseRemapPath(localPath string, mappings []PathMapping) string {
 // ValidationResult contains the results of validating an iTunes import
 type ValidationResult struct {
 	TotalTracks     int                 // Total tracks in iTunes library
-	AudiobookTracks int                 // Tracks identified as audiobooks
+	AudiobookTracks int                 // Tracks identified as audiobooks (individual files)
+	AudiobookCount  int                 // Unique audiobooks (grouped by Album)
 	FilesFound      int                 // Audiobook files that exist on disk
 	FilesMissing    int                 // Audiobook files that are missing
 	MissingPaths    []string            // List of missing file paths
@@ -159,12 +160,21 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 	// Pass 1: Filter audiobooks and decode paths (fast, single-threaded)
 	var checks []trackCheck
 	var rawLocations []string
+	uniqueAlbums := make(map[string]bool)
 	for _, track := range library.Tracks {
 		if !IsAudiobook(track) {
 			continue
 		}
 		result.AudiobookTracks++
 		rawLocations = append(rawLocations, track.Location)
+
+		// Count unique albums (books) using Album + Artist as key
+		albumKey := strings.ToLower(strings.TrimSpace(track.Album))
+		if albumKey == "" {
+			albumKey = strings.ToLower(strings.TrimSpace(track.Name))
+		}
+		artistKey := strings.ToLower(strings.TrimSpace(track.Artist))
+		uniqueAlbums[albumKey+"|"+artistKey] = true
 
 		location := opts.RemapPath(track.Location)
 		path, err := DecodeLocation(location)
@@ -175,8 +185,10 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 		}
 	}
 
+	result.AudiobookCount = len(uniqueAlbums)
+
 	debugLog := config.AppConfig.LogLevel == "debug"
-	log.Printf("iTunes validate: %d audiobooks found, checking file existence with 32 workers (debug=%v)...", len(checks), debugLog)
+	log.Printf("iTunes validate: %d audiobook tracks (%d unique books) found, checking file existence with 32 workers (debug=%v)...", len(checks), result.AudiobookCount, debugLog)
 
 	// Pass 2: Parallel os.Stat checks
 	type statResult struct {
@@ -256,8 +268,8 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 	// Extract distinct file:// path prefixes for mapping UI
 	result.PathPrefixes = extractPathPrefixes(rawLocations)
 
-	// Estimate import time (roughly 1 second per book for metadata extraction)
-	seconds := result.FilesFound
+	// Estimate import time (roughly 1 second per unique book for metadata extraction)
+	seconds := result.AudiobookCount
 	if seconds < 60 {
 		result.EstimatedTime = fmt.Sprintf("%d seconds", seconds)
 	} else if seconds < 3600 {

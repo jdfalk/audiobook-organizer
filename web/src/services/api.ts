@@ -212,6 +212,7 @@ export interface ITunesValidateRequest {
 export interface ITunesValidateResponse {
   total_tracks: number;
   audiobook_tracks: number;
+  audiobook_count: number;
   files_found: number;
   files_missing: number;
   missing_paths?: string[];
