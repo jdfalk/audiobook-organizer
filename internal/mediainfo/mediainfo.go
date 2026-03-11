@@ -1,5 +1,5 @@
 // file: internal/mediainfo/mediainfo.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f1e2d3c4-b5a6-7c8d-9e0f-1a2b3c4d5e6f
 
 package mediainfo
@@ -25,7 +25,8 @@ type MediaInfo struct {
 	Duration   int
 }
 
-// Extract reads media information from an audio file
+// Extract reads media information from an audio file.
+// It opens the file, reads the tags, and calls BuildFromTag internally.
 func Extract(filePath string) (*MediaInfo, error) {
 	info := &MediaInfo{}
 	ext := strings.ToLower(filepath.Ext(filePath))
@@ -42,6 +43,23 @@ func Extract(filePath string) (*MediaInfo, error) {
 		return inferFromFormat(filePath, info)
 	}
 
+	fi, err := f.Stat()
+	var fileSize int64
+	if err == nil {
+		fileSize = fi.Size()
+	}
+
+	return BuildFromTag(m, filePath, fileSize), nil
+}
+
+// BuildFromTag builds a MediaInfo struct from an already-parsed tag.Metadata.
+// filePath is used for format inference; fileSize is used for duration estimation.
+// The file is not re-opened. This is the shared builder used by ProcessFile (single-pass).
+func BuildFromTag(m tag.Metadata, filePath string, fileSize int64) *MediaInfo {
+	info := &MediaInfo{}
+	ext := strings.ToLower(filepath.Ext(filePath))
+	info.Format = strings.TrimPrefix(ext, ".")
+
 	fileType := m.FileType()
 
 	switch fileType {
@@ -54,23 +72,29 @@ func Extract(filePath string) (*MediaInfo, error) {
 	case tag.OGG:
 		extractOGGInfo(m, info)
 	default:
-		return inferFromFormat(filePath, info)
+		// Fall back to format inference — inferFromFormat needs a file path but we
+		// already know the size, so we call it and accept it may re-stat the file.
+		result, err := inferFromFormat(filePath, info)
+		if err != nil {
+			// Return a best-effort struct rather than nil
+			info.Quality = generateQualityString(info)
+			return info
+		}
+		return result
 	}
 
 	// Estimate duration from file size and bitrate when the tag library
 	// doesn't provide it directly (which is most cases).
-	if info.Duration == 0 && info.Bitrate > 0 {
-		if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
-			// bitrate is in kbps; convert to bytes/sec then divide file size
-			bytesPerSec := (info.Bitrate * 1000) / 8
-			if bytesPerSec > 0 {
-				info.Duration = int(fi.Size()) / bytesPerSec
-			}
+	if info.Duration == 0 && info.Bitrate > 0 && fileSize > 0 {
+		// bitrate is in kbps; convert to bytes/sec then divide file size
+		bytesPerSec := (info.Bitrate * 1000) / 8
+		if bytesPerSec > 0 {
+			info.Duration = int(fileSize) / bytesPerSec
 		}
 	}
 
 	info.Quality = generateQualityString(info)
-	return info, nil
+	return info
 }
 
 func extractMP3Info(m tag.Metadata, info *MediaInfo) {
