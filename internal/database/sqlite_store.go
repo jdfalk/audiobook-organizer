@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.38.0
+// version: 1.39.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -3609,6 +3610,86 @@ func (s *SQLiteStore) GetAuthorTombstone(oldID int) (int, error) {
 // ResolveTombstoneChains is a no-op for SQLite (uses SQL foreign keys instead).
 func (s *SQLiteStore) ResolveTombstoneChains() (int, error) {
 	return 0, nil
+}
+
+// GetScanCacheMap returns a map of file_path -> ScanCacheEntry for all books
+// that have a non-empty file_path and a non-NULL last_scan_mtime.
+func (s *SQLiteStore) GetScanCacheMap() (map[string]ScanCacheEntry, error) {
+	rows, err := s.db.Query(
+		`SELECT file_path, last_scan_mtime, last_scan_size, needs_rescan
+		 FROM books WHERE file_path != '' AND last_scan_mtime IS NOT NULL`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]ScanCacheEntry)
+	for rows.Next() {
+		var path string
+		var mtime, size sql.NullInt64
+		var needsRescan sql.NullBool
+		if err := rows.Scan(&path, &mtime, &size, &needsRescan); err != nil {
+			return nil, err
+		}
+		entry := ScanCacheEntry{}
+		if mtime.Valid {
+			entry.Mtime = mtime.Int64
+		}
+		if size.Valid {
+			entry.Size = size.Int64
+		}
+		if needsRescan.Valid {
+			entry.NeedsRescan = needsRescan.Bool
+		}
+		result[path] = entry
+	}
+	return result, rows.Err()
+}
+
+// UpdateScanCache sets last_scan_mtime, last_scan_size, and clears needs_rescan for a book.
+func (s *SQLiteStore) UpdateScanCache(bookID string, mtime int64, size int64) error {
+	_, err := s.db.Exec(
+		`UPDATE books SET last_scan_mtime = ?, last_scan_size = ?, needs_rescan = 0 WHERE id = ?`,
+		mtime, size, bookID,
+	)
+	return err
+}
+
+// MarkNeedsRescan sets needs_rescan = 1 for the given book.
+func (s *SQLiteStore) MarkNeedsRescan(bookID string) error {
+	_, err := s.db.Exec(
+		`UPDATE books SET needs_rescan = 1 WHERE id = ?`,
+		bookID,
+	)
+	return err
+}
+
+// GetDirtyBookFolders returns a deduplicated list of parent directories for all
+// books that have needs_rescan = 1.
+func (s *SQLiteStore) GetDirtyBookFolders() ([]string, error) {
+	rows, err := s.db.Query(
+		`SELECT DISTINCT file_path FROM books WHERE needs_rescan = 1 AND file_path != ''`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	seen := make(map[string]struct{})
+	var dirs []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		dir := filepath.Dir(path)
+		if _, ok := seen[dir]; !ok {
+			seen[dir] = struct{}{}
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs, rows.Err()
 }
 
 func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
