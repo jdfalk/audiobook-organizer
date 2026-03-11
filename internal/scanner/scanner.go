@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -24,7 +24,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
-	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/schollz/progressbar/v3"
 )
@@ -44,6 +43,41 @@ type Scanner interface {
 // GlobalScanner, when set, is used by the package-level functions below.
 // If nil, the concrete implementations in this file are used.
 var GlobalScanner Scanner
+
+// globalScanCache is set before a scan and used inside ProcessBooksParallel to
+// skip files whose mtime+size are unchanged since the last successful scan.
+// Protected by globalScanCacheMu because SetScanCache and ProcessBooksParallel
+// may be called from different goroutines in tests.
+var (
+	globalScanCache   map[string]database.ScanCacheEntry
+	globalScanCacheMu sync.RWMutex
+)
+
+// SetScanCache installs a pre-loaded scan-cache map before a scan run.
+// Pass nil to disable incremental skip behaviour (full scan).
+func SetScanCache(cache map[string]database.ScanCacheEntry) {
+	globalScanCacheMu.Lock()
+	defer globalScanCacheMu.Unlock()
+	globalScanCache = cache
+}
+
+// ClearScanCache removes the cached map after a scan completes.
+func ClearScanCache() {
+	SetScanCache(nil)
+}
+
+// shouldSkipFile returns true when a file is unchanged since the last scan and
+// does not have a pending rescan request.
+func shouldSkipFile(filePath string, mtime int64, size int64, cache map[string]database.ScanCacheEntry) bool {
+	if cache == nil {
+		return false
+	}
+	entry, found := cache[filePath]
+	if !found {
+		return false
+	}
+	return entry.Mtime == mtime && entry.Size == size && !entry.NeedsRescan
+}
 
 // isExcludedPath checks whether a path matches any configured exclude pattern.
 func isExcludedPath(path string) bool {
@@ -78,6 +112,7 @@ type Book struct {
 	OpenLibraryID   string
 	HardcoverID     string
 	GoogleBooksID   string
+	FileHash        string // Pre-computed hash from ProcessFile (avoids double-read)
 }
 
 // ScanDirectory scans the given directory for audiobook files
@@ -291,6 +326,20 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				return
 			}
 
+			// Incremental skip check: if mtime+size unchanged and no rescan flag, skip.
+			{
+				globalScanCacheMu.RLock()
+				cache := globalScanCache
+				globalScanCacheMu.RUnlock()
+				if cache != nil {
+					if fi, statErr := os.Stat(books[idx].FilePath); statErr == nil {
+						if shouldSkipFile(books[idx].FilePath, fi.ModTime().Unix(), fi.Size(), cache) {
+							return // progress deferred func will still fire
+						}
+					}
+				}
+			}
+
 			// Extract metadata from the file. For multi-file books where the filename
 			// is a generic part number (e.g. "01 Part 1 of 67.mp3"), use folder path
 			// hierarchy combined with first-file tags for richer metadata.
@@ -333,61 +382,62 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 					fallbackUsed = bm.Title == "" || bm.PrimaryAuthor() == ""
 				}
 			} else {
-				meta, err := metadata.ExtractMetadata(filePath)
-				if err != nil {
-					fmt.Printf("Warning: Could not extract metadata from %s: %v\n", filePath, err)
+				// Single-pass extraction: open file once for tags + mediainfo + hash.
+				meta, mi, fileHash, pfErr := ProcessFile(filePath)
+				if pfErr != nil {
+					log.Printf("[WARN] scanner: ProcessFile failed for %s: %v", filePath, pfErr)
 					fallbackUsed = true
 				} else {
-					fallbackUsed = meta.UsedFilenameFallback
-					if meta.Title != "" {
-						books[idx].Title = meta.Title
+					if meta != nil {
+						fallbackUsed = meta.UsedFilenameFallback
+						if meta.Title != "" {
+							books[idx].Title = meta.Title
+						}
+						if meta.Artist != "" {
+							books[idx].Author = meta.Artist
+						}
+						if meta.Narrator != "" {
+							books[idx].Narrator = meta.Narrator
+						}
+						if meta.Language != "" {
+							books[idx].Language = meta.Language
+						}
+						if meta.Publisher != "" {
+							books[idx].Publisher = meta.Publisher
+						}
+						if meta.Series != "" {
+							books[idx].Series = meta.Series
+						}
+						if meta.SeriesIndex > 0 {
+							books[idx].Position = meta.SeriesIndex
+						}
+						// Propagate custom organizer tags for re-linking
+						if meta.BookOrganizerID != "" {
+							books[idx].BookOrganizerID = meta.BookOrganizerID
+						}
+						if meta.ASIN != "" {
+							books[idx].ASIN = meta.ASIN
+						}
+						if meta.OpenLibraryID != "" {
+							books[idx].OpenLibraryID = meta.OpenLibraryID
+						}
+						if meta.HardcoverID != "" {
+							books[idx].HardcoverID = meta.HardcoverID
+						}
+						if meta.GoogleBooksID != "" {
+							books[idx].GoogleBooksID = meta.GoogleBooksID
+						}
 					}
-					if meta.Artist != "" {
-						books[idx].Author = meta.Artist
+					if mi != nil {
+						if mi.Format != "" {
+							books[idx].Format = "." + strings.TrimPrefix(strings.ToLower(mi.Format), ".")
+						}
+						if mi.Duration > 0 {
+							books[idx].Duration = mi.Duration
+						}
 					}
-					if meta.Narrator != "" {
-						books[idx].Narrator = meta.Narrator
-					}
-					if meta.Language != "" {
-						books[idx].Language = meta.Language
-					}
-					if meta.Publisher != "" {
-						books[idx].Publisher = meta.Publisher
-					}
-					if meta.Series != "" {
-						books[idx].Series = meta.Series
-					}
-					if meta.SeriesIndex > 0 {
-						books[idx].Position = meta.SeriesIndex
-					}
-					// Propagate custom organizer tags for re-linking
-					if meta.BookOrganizerID != "" {
-						books[idx].BookOrganizerID = meta.BookOrganizerID
-					}
-					if meta.ASIN != "" {
-						books[idx].ASIN = meta.ASIN
-					}
-					if meta.OpenLibraryID != "" {
-						books[idx].OpenLibraryID = meta.OpenLibraryID
-					}
-					if meta.HardcoverID != "" {
-						books[idx].HardcoverID = meta.HardcoverID
-					}
-					if meta.GoogleBooksID != "" {
-						books[idx].GoogleBooksID = meta.GoogleBooksID
-					}
+					books[idx].FileHash = fileHash
 				}
-			}
-
-			if info, miErr := mediainfo.Extract(books[idx].FilePath); miErr == nil {
-				if info.Format != "" {
-					books[idx].Format = "." + strings.TrimPrefix(strings.ToLower(info.Format), ".")
-				}
-				if info.Duration > 0 {
-					books[idx].Duration = info.Duration
-				}
-			} else {
-				log.Printf("[DEBUG] scanner: mediainfo extract failed for %s: %v", books[idx].FilePath, miErr)
 			}
 
 			// Mark books needing AI parsing for batch processing later.
@@ -436,6 +486,22 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			// Save to database (database operations are thread-safe)
 			if err := saveBook(&books[idx]); err != nil {
 				errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
+			} else {
+				// Update scan cache so next incremental scan skips this file.
+				// Use a deferred recover guard in case GlobalStore is a non-nil interface
+				// wrapping a nil concrete pointer (can happen in tests).
+				func() {
+					defer func() { recover() }() //nolint:errcheck
+					store := database.GlobalStore
+					if store == nil {
+						return
+					}
+					if fi, statErr := os.Stat(books[idx].FilePath); statErr == nil {
+						if dbBook, dbErr := store.GetBookByFilePath(books[idx].FilePath); dbErr == nil && dbBook != nil {
+							_ = store.UpdateScanCache(dbBook.ID, fi.ModTime().Unix(), fi.Size())
+						}
+					}
+				}()
 			}
 		}(i)
 	}
@@ -855,12 +921,21 @@ func saveBookToDatabase(book *Book) error {
 			}
 		}
 
-		// Compute file hash variants for deduplication/state mapping
+		// Compute file hash variants for deduplication/state mapping.
+		// If ProcessFile pre-computed the hash, reuse it to avoid a second read.
 		var fileHash *string
 		var fileSize *int64
 		var originalFileHash *string
 		var organizedFileHash *string
-		if hash, err := ComputeFileHash(book.FilePath); err == nil && hash != "" {
+		precomputedHash := book.FileHash
+		var hash string
+		var hashErr error
+		if precomputedHash != "" {
+			hash = precomputedHash
+		} else {
+			hash, hashErr = ComputeFileHash(book.FilePath)
+		}
+		if hashErr == nil && hash != "" {
 			// Check if this hash is blocked
 			blocked, err := database.GlobalStore.IsHashBlocked(hash)
 			if err != nil {
