@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.10.0
+// version: 2.11.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -772,7 +772,8 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		PathMappings: req.PathMappings,
 	}
 
-	// Phase 2: Create one book per album group
+	// Phase 2: Quick import — file path matching + new book creation (no hashing)
+	var newBookIDs []string // track IDs of newly created books for hash validation
 	processed := 0
 	for i, group := range groups {
 		// Skip already-processed groups on resume
@@ -813,47 +814,15 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
 				linkITunesMetadata(existing, book, group.tracks[0], log)
 				updateITunesLinked(status)
-				log.Info("Skipping duplicate file path (linked metadata): %s", book.FilePath)
 				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
-			}
-		}
-
-		// Slow check: hash the first track file for dedup (only for unmatched books)
-		hash, err := scanner.ComputeFileHash(firstTrackPath)
-		if err != nil {
-			log.Warn("Failed to hash %s: %v", book.FilePath, err)
-		} else if hash != "" {
-			book.FileHash = stringPtr(hash)
-			book.OriginalFileHash = stringPtr(hash)
-			if importMode == itunes.ImportModeOrganized {
-				book.OrganizedFileHash = stringPtr(hash)
-			}
-			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
-				updateITunesSkipped(status)
-				log.Warn("Skipping blocked hash for %s", book.Title)
-				updateITunesProgress(log, status, processed, totalGroups, book.Title)
-				continue
-			}
-		}
-
-		if req.SkipDuplicates {
-			// Hash-based match: link as version instead of skipping
-			if book.FileHash != nil {
-				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
-					linkAsVersion(existing, book, group.tracks[0], log)
-					updateITunesLinked(status)
-					log.Info("Linked as version via hash: %s → %s", book.Title, existing.ID)
-					updateITunesProgress(log, status, processed, totalGroups, book.Title)
-					continue
-				}
 			}
 		}
 
 		book.LibraryState = stringPtr(importLibraryState(importMode))
 
 		// New book — create a version group
-		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(book.FilePath+book.Title)))
+		vgID := fmt.Sprintf("vg-%s", ulid.Make().String())
 		book.VersionGroupID = stringPtr(vgID)
 		isPrimary := false // iTunes original is non-primary; organized copy will be primary
 		book.IsPrimaryVersion = &isPrimary
@@ -874,6 +843,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		}
 
 		updateITunesImported(status)
+		newBookIDs = append(newBookIDs, created.ID)
 
 		// Create BookSegments for multi-track albums
 		if len(group.tracks) > 1 {
@@ -933,7 +903,84 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		}
 	}
 
-	// Phase 3: Metadata enrichment (if requested) — runs before organize
+	quickSummary := buildITunesSummary(status)
+	log.UpdateProgress(totalGroups, totalGroups, "Quick import done: "+quickSummary)
+	log.Info("Quick import completed: %s", quickSummary)
+
+	// Phase 3: Hash validation — compute hashes for new books and link any hash matches
+	if len(newBookIDs) > 0 && req.SkipDuplicates {
+		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "hash_validation", 0, len(newBookIDs))
+		log.UpdateProgress(totalGroups, totalGroups, fmt.Sprintf("Hash validation: checking %d new books...", len(newBookIDs)))
+		log.Info("Starting hash validation for %d new books...", len(newBookIDs))
+
+		hashLinked := 0
+		hashBlocked := 0
+		for hi, bookID := range newBookIDs {
+			if log.IsCanceled() {
+				log.Info("Hash validation canceled")
+				break
+			}
+
+			book, err := database.GlobalStore.GetBookByID(bookID)
+			if err != nil || book == nil {
+				continue
+			}
+
+			// Hash the book's file
+			hash, err := scanner.ComputeFileHash(book.FilePath)
+			if err != nil {
+				log.Warn("Hash validation: failed to hash %s: %v", book.FilePath, err)
+				continue
+			}
+			if hash == "" {
+				continue
+			}
+
+			book.FileHash = stringPtr(hash)
+			book.OriginalFileHash = stringPtr(hash)
+			if importMode == itunes.ImportModeOrganized {
+				book.OrganizedFileHash = stringPtr(hash)
+			}
+
+			// Check for blocked hash
+			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
+				log.Warn("Hash validation: blocked hash for %s, soft-deleting", book.Title)
+				marked := true
+				now := time.Now()
+				book.MarkedForDeletion = &marked
+				book.MarkedForDeletionAt = &now
+				database.GlobalStore.UpdateBook(book.ID, book)
+				hashBlocked++
+				continue
+			}
+
+			// Check for existing book with same hash — merge into its VG
+			if existing, err := database.GlobalStore.GetBookByFileHash(hash); err == nil && existing != nil && existing.ID != book.ID {
+				// This new book is a duplicate — link it to the existing book's VG
+				if existing.VersionGroupID != nil && *existing.VersionGroupID != "" {
+					book.VersionGroupID = existing.VersionGroupID
+					isPrimary := false
+					book.IsPrimaryVersion = &isPrimary
+				}
+				hashLinked++
+				log.Info("Hash validation: linked %s → %s via hash", book.Title, existing.ID)
+			}
+
+			// Save the hash (and any VG changes) to the book
+			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+				log.Warn("Hash validation: failed to update %s: %v", book.ID, err)
+			}
+
+			if (hi+1)%100 == 0 || hi+1 == len(newBookIDs) {
+				msg := fmt.Sprintf("Hash validation: %d/%d checked (%d linked, %d blocked)",
+					hi+1, len(newBookIDs), hashLinked, hashBlocked)
+				log.UpdateProgress(totalGroups, totalGroups, msg)
+			}
+		}
+		log.Info("Hash validation completed: %d linked, %d blocked out of %d new books", hashLinked, hashBlocked, len(newBookIDs))
+	}
+
+	// Phase 4: Metadata enrichment (if requested) — runs before organize
 	// so that author/title are accurate for folder structure
 	if req.FetchMetadata {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "enriching", 0, 0)
@@ -941,7 +988,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		enrichITunesImportedBooks(log, status)
 	}
 
-	// Phase 4: Organize (if requested) — runs after enrichment
+	// Phase 5: Organize (if requested) — runs after enrichment
 	if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "organizing", 0, 0)
 		log.Info("Starting organize phase...")
@@ -1141,10 +1188,13 @@ func linkITunesMetadata(existing *database.Book, importBook *database.Book, trac
 		existing.ITunesImportSource = importBook.ITunesImportSource
 		changed = true
 	}
-	// Ensure it has a version group
+	// Ensure it has a version group and is marked as primary
 	if existing.VersionGroupID == nil || *existing.VersionGroupID == "" {
-		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(existing.ID+existing.FilePath)))
+		vgID := fmt.Sprintf("vg-%s", ulid.Make().String())
 		existing.VersionGroupID = &vgID
+		changed = true
+	}
+	if existing.IsPrimaryVersion == nil || !*existing.IsPrimaryVersion {
 		isPrimary := true
 		existing.IsPrimaryVersion = &isPrimary
 		changed = true
@@ -1161,7 +1211,7 @@ func linkITunesMetadata(existing *database.Book, importBook *database.Book, trac
 func linkAsVersion(existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
 	// Ensure the existing book has a version group
 	if existing.VersionGroupID == nil || *existing.VersionGroupID == "" {
-		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(existing.ID+existing.FilePath)))
+		vgID := fmt.Sprintf("vg-%s", ulid.Make().String())
 		existing.VersionGroupID = &vgID
 		isPrimary := true
 		existing.IsPrimaryVersion = &isPrimary
