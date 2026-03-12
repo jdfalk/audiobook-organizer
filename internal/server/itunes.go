@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -132,6 +132,7 @@ type itunesImportStatus struct {
 	Processed int
 	Imported  int
 	Skipped   int
+	Linked    int // existing books that had iTunes metadata or VG linked
 	Failed    int
 	Errors    []string
 }
@@ -738,9 +739,8 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 	}
 
 	status := loadITunesImportStatus(opID)
-	progressMessage := "Starting iTunes import"
-	log.UpdateProgress(0, 0, progressMessage)
-	log.Info("%s", progressMessage)
+	log.UpdateProgress(0, 0, "Parsing iTunes XML library...")
+	log.Info("Parsing iTunes XML library: %s", req.LibraryPath)
 
 	library, err := itunes.ParseLibrary(req.LibraryPath)
 	if err != nil {
@@ -749,15 +749,19 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		return fmt.Errorf("failed to parse library: %w", err)
 	}
 
+	log.UpdateProgress(0, 0, fmt.Sprintf("Parsed %d tracks, grouping into albums...", len(library.Tracks)))
+	log.Info("Parsed %d tracks, grouping into albums...", len(library.Tracks))
+
 	// Phase 1: Group audiobook tracks by Artist|Album
 	groups := groupTracksByAlbum(library)
 
 	totalGroups := len(groups)
 	setITunesImportTotal(status, totalGroups)
 
+	log.UpdateProgress(0, totalGroups, fmt.Sprintf("Found %d audiobook albums, starting import...", totalGroups))
 	log.Info("Found %d audiobook albums to import (from grouped tracks)", totalGroups)
 	if totalGroups == 0 {
-		log.UpdateProgress(0, 0, "No audiobooks found")
+		log.UpdateProgress(0, 0, "No audiobooks found in library")
 		operations.ClearState(store, opID)
 		return nil
 	}
@@ -827,7 +831,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
 				// Link iTunes metadata to existing book if it lacks iTunes info
 				linkITunesMetadata(existing, book, group.tracks[0], log)
-				updateITunesSkipped(status)
+				updateITunesLinked(status)
 				log.Info("Skipping duplicate file path (linked metadata): %s", book.FilePath)
 				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
@@ -836,7 +840,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			if book.FileHash != nil {
 				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
 					linkAsVersion(existing, book, group.tracks[0], log)
-					updateITunesSkipped(status)
+					updateITunesLinked(status)
 					log.Info("Linked as version via hash: %s → %s", book.Title, existing.ID)
 					updateITunesProgress(log, status, processed, totalGroups, book.Title)
 					continue
@@ -1485,6 +1489,7 @@ func snapshotITunesImportStatus(opID string) *itunesImportStatus {
 		Processed: status.Processed,
 		Imported:  status.Imported,
 		Skipped:   status.Skipped,
+		Linked:    status.Linked,
 		Failed:    status.Failed,
 		Errors:    append([]string(nil), status.Errors...),
 	}
@@ -1515,6 +1520,12 @@ func updateITunesSkipped(status *itunesImportStatus) {
 	status.mu.Unlock()
 }
 
+func updateITunesLinked(status *itunesImportStatus) {
+	status.mu.Lock()
+	status.Linked++
+	status.mu.Unlock()
+}
+
 func recordITunesFailure(status *itunesImportStatus, message string) {
 	status.mu.Lock()
 	status.Failed++
@@ -1536,6 +1547,7 @@ func updateITunesProgress(log logger.Logger, status *itunesImportStatus, process
 	status.mu.Lock()
 	current := status.Processed
 	imported := status.Imported
+	linked := status.Linked
 	skipped := status.Skipped
 	failed := status.Failed
 	status.mu.Unlock()
@@ -1550,10 +1562,11 @@ func updateITunesProgress(log logger.Logger, status *itunesImportStatus, process
 	}
 
 	message := fmt.Sprintf(
-		"Book %d of %d (imported %d, skipped %d, failed %d)",
+		"Book %d/%d — %d new, %d linked, %d skipped, %d failed",
 		current,
 		total,
 		imported,
+		linked,
 		skipped,
 		failed,
 	)
@@ -1567,8 +1580,9 @@ func buildITunesSummary(status *itunesImportStatus) string {
 	status.mu.Lock()
 	defer status.mu.Unlock()
 	return fmt.Sprintf(
-		"Import completed: %d imported, %d skipped, %d failed",
+		"Import completed: %d new, %d linked, %d skipped, %d failed",
 		status.Imported,
+		status.Linked,
 		status.Skipped,
 		status.Failed,
 	)
