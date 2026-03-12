@@ -823,23 +823,34 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		}
 
 		if req.SkipDuplicates {
+			// Check for existing book by file path
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
+				// Link iTunes metadata to existing book if it lacks iTunes info
+				linkITunesMetadata(existing, book, group.tracks[0], log)
 				updateITunesSkipped(status)
-				log.Info("Skipping duplicate file path: %s", book.FilePath)
+				log.Info("Skipping duplicate file path (linked metadata): %s", book.FilePath)
 				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
 			}
+			// Check for existing book by hash — link as version instead of skipping
 			if book.FileHash != nil {
 				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
+					linkAsVersion(existing, book, group.tracks[0], log)
 					updateITunesSkipped(status)
-					log.Info("Skipping duplicate hash: %s", book.Title)
-					updateITunesProgress(log, status, processed, totalGroups)
+					log.Info("Linked as version via hash: %s → %s", book.Title, existing.ID)
+					updateITunesProgress(log, status, processed, totalGroups, book.Title)
 					continue
 				}
 			}
 		}
 
 		book.LibraryState = stringPtr(importLibraryState(importMode))
+
+		// New book — create a version group
+		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(book.FilePath+book.Title)))
+		book.VersionGroupID = stringPtr(vgID)
+		isPrimary := false // iTunes original is non-primary; organized copy will be primary
+		book.IsPrimaryVersion = &isPrimary
 
 		// Try to extract embedded cover art from first track's actual file
 		coverPath, coverErr := metadata.ExtractCoverArt(firstTrackPath)
@@ -1095,6 +1106,83 @@ func organizeImportedBooks(log logger.Logger, status *itunesImportStatus) {
 // that belong to the same album. For single-track groups, it behaves
 // like the old buildBookFromTrack. For multi-track groups, it uses the
 // album name as the title and sums durations/sizes.
+// linkITunesMetadata copies iTunes-specific fields (play count, rating, bookmark,
+// persistent ID, date added) from an import book onto an existing book that was
+// matched by file path. Also ensures the existing book has a version group.
+func linkITunesMetadata(existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
+	changed := false
+	if existing.ITunesPersistentID == nil && importBook.ITunesPersistentID != nil {
+		existing.ITunesPersistentID = importBook.ITunesPersistentID
+		changed = true
+	}
+	if existing.ITunesPlayCount == nil && importBook.ITunesPlayCount != nil {
+		existing.ITunesPlayCount = importBook.ITunesPlayCount
+		changed = true
+	}
+	if existing.ITunesRating == nil && importBook.ITunesRating != nil {
+		existing.ITunesRating = importBook.ITunesRating
+		changed = true
+	}
+	if existing.ITunesBookmark == nil && importBook.ITunesBookmark != nil {
+		existing.ITunesBookmark = importBook.ITunesBookmark
+		changed = true
+	}
+	if existing.ITunesDateAdded == nil && importBook.ITunesDateAdded != nil {
+		existing.ITunesDateAdded = importBook.ITunesDateAdded
+		changed = true
+	}
+	if existing.ITunesImportSource == nil && importBook.ITunesImportSource != nil {
+		existing.ITunesImportSource = importBook.ITunesImportSource
+		changed = true
+	}
+	// Ensure it has a version group
+	if existing.VersionGroupID == nil || *existing.VersionGroupID == "" {
+		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(existing.ID+existing.FilePath)))
+		existing.VersionGroupID = &vgID
+		isPrimary := true
+		existing.IsPrimaryVersion = &isPrimary
+		changed = true
+	}
+	if changed {
+		if _, err := database.GlobalStore.UpdateBook(existing.ID, existing); err != nil {
+			log.Warn("Failed to link iTunes metadata to %s: %v", existing.ID, err)
+		}
+	}
+}
+
+// linkAsVersion creates the import book as a non-primary version linked to the
+// existing book's version group. The existing book (organized copy) stays primary.
+func linkAsVersion(existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
+	// Ensure the existing book has a version group
+	if existing.VersionGroupID == nil || *existing.VersionGroupID == "" {
+		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(existing.ID+existing.FilePath)))
+		existing.VersionGroupID = &vgID
+		isPrimary := true
+		existing.IsPrimaryVersion = &isPrimary
+		if _, err := database.GlobalStore.UpdateBook(existing.ID, existing); err != nil {
+			log.Warn("Failed to set VG on existing book %s: %v", existing.ID, err)
+			return
+		}
+	}
+
+	// Create the iTunes book as a non-primary version in the same VG
+	importBook.VersionGroupID = existing.VersionGroupID
+	isPrimary := false
+	importBook.IsPrimaryVersion = &isPrimary
+	importBook.LibraryState = stringPtr("imported")
+
+	created, err := database.GlobalStore.CreateBook(importBook)
+	if err != nil {
+		log.Warn("Failed to create version link for %s: %v", importBook.Title, err)
+		return
+	}
+
+	// Copy iTunes metadata to the existing primary if it's missing
+	linkITunesMetadata(existing, importBook, track, log)
+
+	log.Info("Created version link: %s (iTunes) → %s (primary) in %s", created.ID, existing.ID, *existing.VersionGroupID)
+}
+
 func buildBookFromAlbumGroup(group albumGroup, libraryPath string, opts itunes.ImportOptions) (*database.Book, error) {
 	if len(group.tracks) == 0 {
 		return nil, fmt.Errorf("album group has no tracks")
