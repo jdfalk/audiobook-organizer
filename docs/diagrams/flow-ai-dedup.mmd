@@ -1,0 +1,61 @@
+%% file: docs/diagrams/flow-ai-dedup.mmd
+%% version: 1.0.0
+%% guid: c9d0e1f2-a3b4-5678-cdef-890123456789
+%%
+%% AI Deduplication Pipeline Flow
+
+flowchart TD
+    Start([Start AI Scan]) --> Route["POST /api/v1/ai/scans<br/>startAIScan(mode)"]
+    Route --> CreateScan["AIScanStore.CreateScan()<br/>mode=batch|realtime"]
+    CreateScan --> QueueOp["operations.Enqueue('ai_dedup_scan')"]
+
+    QueueOp --> Phase1["Phase 1: Groups Scan<br/>Small model (gpt-5-mini)"]
+    Phase1 --> GroupAuthors["Group similar authors<br/>by Levenshtein/phonetic"]
+    GroupAuthors --> BatchSubmit1["Submit to OpenAI Batch API<br/>Each group as a prompt"]
+    BatchSubmit1 --> PollBatch1["Poll batch status<br/>until complete"]
+    PollBatch1 --> ParseResults1["Parse suggestions:<br/>merge/split/keep/alias"]
+
+    ParseResults1 --> Phase2["Phase 2: Full Scan<br/>Larger model (o4-mini)"]
+    Phase2 --> BatchSubmit2["Submit same groups<br/>to second model"]
+    BatchSubmit2 --> PollBatch2["Poll batch status"]
+    PollBatch2 --> ParseResults2["Parse second set<br/>of suggestions"]
+
+    ParseResults2 --> Phase3["Phase 3: Groups Enrichment<br/>(optional)"]
+    Phase3 --> Phase4["Phase 4: Full Enrichment<br/>(optional)"]
+
+    Phase4 --> CrossValidate["Phase 5: Cross-Validation"]
+    CrossValidate --> Compare{"Both models agree?"}
+    Compare -->|"Agreed"| HighConf["ScanResult: agreement=agreed<br/>confidence=high"]
+    Compare -->|"Groups only"| MedConf["ScanResult: agreement=groups_only"]
+    Compare -->|"Full only"| LowConf["ScanResult: agreement=full_only"]
+    Compare -->|"Disagree"| Disagree["ScanResult: agreement=disagreed"]
+
+    HighConf --> StoreResults["Store all ScanResults"]
+    MedConf --> StoreResults
+    LowConf --> StoreResults
+    Disagree --> StoreResults
+
+    StoreResults --> UserReview["User reviews results<br/>on /dedup page"]
+    UserReview --> ApplySelected["POST /api/v1/ai/scans/:id/apply<br/>applyAIScanResults()"]
+
+    ApplySelected --> ForEachResult["For each selected result"]
+    ForEachResult --> CheckAction{"Action type?"}
+    CheckAction -->|"merge"| MergeAuthors["Merge authors<br/>keep canonical, redirect others"]
+    CheckAction -->|"split"| SplitAuthor["Split composite author<br/>into individual authors"]
+    CheckAction -->|"alias"| CreateAlias["Create AuthorAlias"]
+    CheckAction -->|"rename"| RenameAuthor["Update author name"]
+    CheckAction -->|"reclassify"| Reclassify["Move to Narrator"]
+
+    MergeAuthors --> MarkApplied["Mark result as applied"]
+    SplitAuthor --> MarkApplied
+    CreateAlias --> MarkApplied
+    RenameAuthor --> MarkApplied
+    Reclassify --> MarkApplied
+
+    MarkApplied --> NextResult{More results?}
+    NextResult -->|"Yes"| ForEachResult
+    NextResult -->|"No"| Done["Scan complete"]
+
+    style Start fill:#e3f2fd
+    style Done fill:#e8f5e9
+    style CrossValidate fill:#fff3e0

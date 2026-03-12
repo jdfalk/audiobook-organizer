@@ -1,0 +1,67 @@
+// file: docs/diagrams/entity-relationship.dot
+// version: 1.0.0
+// guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
+//
+// Entity-Relationship Diagram (Graphviz DOT)
+// Render: dot -Tsvg entity-relationship.dot -o entity-relationship.svg
+
+digraph ER {
+    rankdir=LR;
+    node [shape=record, fontname="Helvetica", fontsize=10];
+    edge [fontname="Helvetica", fontsize=8];
+
+    Book [label="{Book|id: ULID (PK)\ltitle: string\lauthor_id: int (FK)\lseries_id: int (FK)\lwork_id: ULID (FK)\lfile_path: string (unique)\lformat: string\lduration: int (sec)\lversion_group_id: string\lis_primary_version: bool\lfile_hash: string (SHA256)\llibrary_state: string\litunes_persistent_id: string\l...40+ fields\l}"];
+
+    Author [label="{Author|id: int (PK)\lname: string\l}"];
+    AuthorAlias [label="{AuthorAlias|id: int (PK)\lauthor_id: int (FK)\lalias_name: string\lalias_type: string\l}"];
+    BookAuthor [label="{BookAuthor|book_id: ULID (FK)\lauthor_id: int (FK)\lrole: string\lposition: int\l}", style=filled, fillcolor="#e8e8e8"];
+    Narrator [label="{Narrator|id: int (PK)\lname: string\l}"];
+    BookNarrator [label="{BookNarrator|book_id: ULID (FK)\lnarrator_id: int (FK)\lrole: string\lposition: int\l}", style=filled, fillcolor="#e8e8e8"];
+    Series [label="{Series|id: int (PK)\lname: string\lauthor_id: int (FK, opt)\l}"];
+    Work [label="{Work|id: ULID (PK)\ltitle: string\lauthor_id: int (FK, opt)\lseries_id: int (FK, opt)\l}"];
+    BookSegment [label="{BookSegment|id: ULID (PK)\lbook_id: int (FK, numeric)\lfile_path: string\lformat: string\ltrack_number: int\lfile_hash: string\lactive: bool\l}"];
+    BookVersion [label="{BookVersion|book_id: ULID (FK)\ltimestamp: datetime\ldata: bytes (full JSON)\l}"];
+    MetadataFieldState [label="{MetadataFieldState|book_id: ULID (FK)\lfield: string\lfetched_value: JSON\loverride_value: JSON\loverride_locked: bool\l}"];
+    MetadataChangeRecord [label="{MetadataChangeRecord|id: int (PK)\lbook_id: ULID (FK)\lfield: string\lchange_type: string\lsource: string\l}"];
+    Operation [label="{Operation|id: ULID (PK)\ltype: string\lstatus: string\lprogress: int\ltotal: int\lmessage: string\l}"];
+    OperationLog [label="{OperationLog|id: int (PK)\loperation_id: ULID (FK)\llevel: string\lmessage: string\l}"];
+    OperationChange [label="{OperationChange|id: ULID (PK)\loperation_id: ULID (FK)\lbook_id: ULID (FK)\lchange_type: string\lfield_name: string\l}"];
+    ImportPath [label="{ImportPath|id: int (PK)\lpath: string\lname: string\lenabled: bool\l}"];
+    DoNotImport [label="{DoNotImport|hash: string (PK)\lreason: string\l}"];
+    User [label="{User|id: ULID (PK)\lusername: string\lemail: string\lroles: []string\l}"];
+    Session [label="{Session|id: ULID (PK)\luser_id: ULID (FK)\lexpires_at: datetime\l}"];
+    Setting [label="{Setting|key: string (PK)\lvalue: string\ltype: string\lis_secret: bool\l}"];
+
+    // Separate DB
+    subgraph cluster_aiscan {
+        label="AI Scan Store (separate PebbleDB)";
+        style=dashed;
+        color=gray;
+        AIScan [label="{Scan|id: int (PK)\lstatus: string\lmode: string\loperation_id: string\l}"];
+        AIScanPhase [label="{ScanPhase|scan_id: int (FK)\lphase_type: string\lbatch_id: string\l}"];
+        AIScanResult [label="{ScanResult|id: int (PK)\lscan_id: int (FK)\lagreement: string\lapplied: bool\l}"];
+    }
+
+    // Relationships
+    Author -> AuthorAlias [label="1:N"];
+    Author -> BookAuthor [label="1:N"];
+    Book -> BookAuthor [label="1:N"];
+    Book -> BookNarrator [label="1:N"];
+    Narrator -> BookNarrator [label="1:N"];
+    Book -> Series [label="N:1", style=dashed];
+    Book -> Work [label="N:1", style=dashed];
+    Series -> Author [label="N:1", style=dashed];
+    Work -> Author [label="N:1", style=dashed];
+    Work -> Series [label="N:1", style=dashed];
+    Book -> BookSegment [label="1:N"];
+    Book -> BookVersion [label="1:N"];
+    Book -> MetadataFieldState [label="1:N"];
+    Book -> MetadataChangeRecord [label="1:N"];
+    Book -> OperationChange [label="1:N"];
+    Operation -> OperationLog [label="1:N"];
+    Operation -> OperationChange [label="1:N"];
+    User -> Session [label="1:N"];
+    AIScan -> AIScanPhase [label="1:N"];
+    AIScan -> AIScanResult [label="1:N"];
+    AIScan -> Operation [label="cross-store", style=dotted];
+}

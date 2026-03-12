@@ -1,0 +1,51 @@
+%% file: docs/diagrams/flow-book-scan.mmd
+%% version: 1.0.0
+%% guid: f6a7b8c9-d0e1-2345-fabc-567890123456
+%%
+%% Book Scanning Flow
+
+flowchart TD
+    Start([Scan triggered]) --> Route["POST /api/v1/scan<br/>server.startScan()"]
+    Route --> QueueOp["operations.Enqueue('scan')"]
+    QueueOp --> ResolvePaths["Resolve scan paths<br/>(root_dir + import_paths)"]
+
+    ResolvePaths --> ScanCache["Load scan cache<br/>store.GetScanCacheMap()"]
+    ScanCache --> WalkDirs["Walk directories<br/>find supported extensions"]
+
+    WalkDirs --> ForEachFile["For each audio file"]
+    ForEachFile --> CheckCache{"File mtime/size<br/>changed?"}
+    CheckCache -->|"No change"| SkipFile["Skip (cached)"]
+    CheckCache -->|"Changed"| ExtractMeta["metadata.ExtractMetadata()<br/>ffprobe → tags, duration, bitrate"]
+
+    ExtractMeta --> CheckExisting{"GetBookByFilePath()?"}
+    CheckExisting -->|"Exists"| MergeFields["Merge metadata<br/>(preserve locked fields)"]
+    CheckExisting -->|"New"| BuildBook["Build new Book struct"]
+
+    BuildBook --> AIEnabled{"AI parsing enabled?"}
+    AIEnabled -->|"Yes"| AIParse["ai.ParseAudiobook()<br/>OpenAI for title/author/series"]
+    AIEnabled -->|"No"| ResolveAuthor
+    AIParse --> ResolveAuthor
+
+    ResolveAuthor --> ResolveAuth["Resolve/create Author<br/>(alias lookup, tombstone chains)"]
+    ResolveAuth --> ResolveSeries["Resolve/create Series"]
+    ResolveSeries --> ResolveNarrator["Resolve/create Narrator"]
+    ResolveNarrator --> ComputeHash["scanner.ComputeFileHash()<br/>SHA256"]
+    ComputeHash --> CheckDup{"Duplicate hash?"}
+    CheckDup -->|"Yes"| LinkVersion["Link as version group"]
+    CheckDup -->|"No"| SaveBook["store.CreateBook()"]
+
+    MergeFields --> UpdateBook["store.UpdateBook()"]
+    LinkVersion --> UpdateScanCache
+    SaveBook --> UpdateScanCache["store.UpdateScanCache()"]
+    UpdateBook --> UpdateScanCache
+    SkipFile --> NextFile{More files?}
+    UpdateScanCache --> NextFile
+    NextFile -->|"Yes"| ForEachFile
+    NextFile -->|"No"| AutoOrganize{"auto_organize<br/>enabled?"}
+
+    AutoOrganize -->|"Yes"| TriggerOrg["Trigger organizer.Organize()"]
+    AutoOrganize -->|"No"| Complete["Scan complete"]
+    TriggerOrg --> Complete
+
+    style Start fill:#e3f2fd
+    style Complete fill:#e8f5e9

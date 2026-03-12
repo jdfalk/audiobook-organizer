@@ -1,0 +1,50 @@
+%% file: docs/diagrams/flow-metadata-fetch.mmd
+%% version: 1.0.0
+%% guid: b8c9d0e1-f2a3-4567-bcde-789012345678
+%%
+%% Metadata Fetch Flow
+
+flowchart TD
+    Start([Fetch Metadata]) --> Route["POST /api/v1/audiobooks/:id/metadata<br/>or searchMetadataForBook()"]
+
+    Route --> GetBook["GetBookByID()"]
+    GetBook --> ForEachSource["For each enabled metadata source<br/>(by priority)"]
+
+    ForEachSource --> Source1["1. Audible<br/>Search by title+author"]
+    ForEachSource --> Source2["2. Open Library<br/>Search by ISBN or title"]
+    ForEachSource --> Source3["3. Audnexus<br/>Search by ASIN"]
+    ForEachSource --> Source4["4. Google Books<br/>Search by title+author"]
+
+    Source1 --> Collect["Collect all candidates"]
+    Source2 --> Collect
+    Source3 --> Collect
+    Source4 --> Collect
+
+    Collect --> Score["Score candidates<br/>(title similarity, author match, etc.)"]
+    Score --> ReturnResults["Return SearchMetadataResponse<br/>scored candidates by source"]
+
+    ReturnResults --> UserPicks{User selects candidate}
+    UserPicks --> ApplyCandidate["POST .../metadata/apply"]
+
+    ApplyCandidate --> LoadFieldStates["GetMetadataFieldStates()"]
+    LoadFieldStates --> ForEachField["For each selected field"]
+    ForEachField --> CheckLocked{"Field locked?"}
+    CheckLocked -->|"Yes"| SkipField["Skip locked field"]
+    CheckLocked -->|"No"| SaveCOW["Save BookVersion snapshot<br/>(copy-on-write)"]
+
+    SaveCOW --> RecordChange["RecordMetadataChange()<br/>field, old→new, source"]
+    RecordChange --> UpdateProvenance["UpsertMetadataFieldState()<br/>fetched_value=new"]
+    UpdateProvenance --> ApplyValue["Update book field"]
+
+    ApplyValue --> NextField{More fields?}
+    SkipField --> NextField
+    NextField -->|"Yes"| ForEachField
+    NextField -->|"No"| SaveBook["UpdateBook()"]
+
+    SaveBook --> WriteBack{"write_back_metadata?"}
+    WriteBack -->|"Yes"| WriteTags["ffmpeg write tags to file"]
+    WriteBack -->|"No"| Done["Return updated book"]
+    WriteTags --> Done
+
+    style Start fill:#e3f2fd
+    style Done fill:#e8f5e9

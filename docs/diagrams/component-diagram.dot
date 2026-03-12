@@ -1,0 +1,141 @@
+// file: docs/diagrams/component-diagram.dot
+// version: 1.0.0
+// guid: d4e5f6a7-b8c9-0123-defa-345678901234
+//
+// System Component Diagram (Graphviz DOT)
+// Render: dot -Tsvg component-diagram.dot -o component-diagram.svg
+
+digraph Components {
+    rankdir=TB;
+    compound=true;
+    node [shape=box, fontname="Helvetica", fontsize=9, style=filled];
+    edge [fontname="Helvetica", fontsize=8];
+
+    // Frontend
+    subgraph cluster_frontend {
+        label="Frontend (React/TypeScript + MUI)";
+        style=filled; fillcolor="#e3f2fd";
+        node [fillcolor="#bbdefb"];
+
+        subgraph cluster_pages {
+            label="Pages"; style=filled; fillcolor="#90caf9";
+            Dashboard; Library; BookDetail; Authors; Series;
+            Works; BookDedup; Settings; Operations; Maintenance;
+            System; FileBrowser; Login;
+        }
+
+        subgraph cluster_components {
+            label="Components"; style=filled; fillcolor="#90caf9";
+            AudiobookGrid [label="AudiobookGrid\nAudiobookList\nAudiobookCard"];
+            MetadataDialogs [label="MetadataEdit\nMetadataSearch\nBulkSearch"];
+            VersionMgmt [label="VersionManagement"];
+            ServerFileBrowser [label="ServerFileBrowser"];
+            ITunesImport [label="ITunesImport"];
+            WelcomeWizard [label="WelcomeWizard"];
+            OpsIndicator [label="OperationsIndicator"];
+            ConfigTable [label="ConfigurableTable"];
+        }
+
+        subgraph cluster_state {
+            label="State"; style=filled; fillcolor="#90caf9";
+            AppStore [label="useAppStore\n(Zustand)"];
+            OpsStore [label="useOperationsStore\n(Zustand)"];
+            AuthCtx [label="AuthContext"];
+            SSE [label="eventSourceManager\n(SSE)"];
+        }
+
+        ApiService [label="services/api.ts\n~200 functions", fillcolor="#64b5f6"];
+    }
+
+    // Backend
+    subgraph cluster_backend {
+        label="Backend (Go + Gin)";
+        style=filled; fillcolor="#e8f5e9";
+        node [fillcolor="#a5d6a7"];
+
+        Server [label="internal/server\nserver.go\n189 routes", fillcolor="#66bb6a"];
+
+        subgraph cluster_services {
+            label="Service Handlers"; style=filled; fillcolor="#81c784";
+            AudiobookSvc [label="AudiobookService"];
+            ConfigSvc [label="ConfigUpdateService"];
+            ReconcileSvc [label="reconcile.go"];
+            ITunesSvc [label="itunes.go\nimport/validate/sync"];
+            DedupSvc [label="dedup handlers"];
+            AuthSvc [label="auth.go"];
+        }
+
+        subgraph cluster_core {
+            label="Core Packages"; style=filled; fillcolor="#81c784";
+            Scanner [label="internal/scanner\nfile scan + extraction"];
+            Organizer [label="internal/organizer\nfile moves + renames"];
+            Metadata [label="internal/metadata\nmulti-source fetch"];
+            ITunesLib [label="internal/itunes\nXML parse + remap"];
+            AI [label="internal/ai\nOpenAI integration"];
+            OpsQueue [label="internal/operations\nbackground queue"];
+            Config [label="internal/config\nViper config"];
+            Logger [label="internal/logger"];
+            Cache [label="internal/cache\ngeneric TTL"];
+            Backup [label="internal/backup"];
+        }
+
+        subgraph cluster_data {
+            label="Data Layer"; style=filled; fillcolor="#81c784";
+            StoreIface [label="Store interface\n255 methods"];
+            PebbleStore [label="PebbleStore\n(primary)"];
+            SQLiteStore [label="SQLiteStore\n(opt-in)"];
+            AIScanStore [label="AIScanStore\n(separate DB)"];
+        }
+    }
+
+    // External
+    subgraph cluster_external {
+        label="External Services";
+        style=filled; fillcolor="#fff3e0";
+        node [fillcolor="#ffcc80"];
+        Audible; OpenLibrary; Audnexus; GoogleBooks;
+        OpenAI [label="OpenAI API"];
+        FFprobe; FFmpeg;
+    }
+
+    // Storage
+    subgraph cluster_storage {
+        label="Storage";
+        style=filled; fillcolor="#fce4ec";
+        node [fillcolor="#ef9a9a", shape=cylinder];
+        PebbleDB [label="PebbleDB\naudiobooks.pebble"];
+        AIScanDB [label="PebbleDB\nai_scans.db"];
+        AudioFiles [label="Audio Files\n/mnt/bigdata/books/"];
+        ITunesXML [label="iTunes Library.xml"];
+    }
+
+    // Edges
+    ApiService -> Server [label="HTTP/S", lhead=cluster_backend];
+    SSE -> Server [label="SSE"];
+    Server -> AudiobookSvc;
+    Server -> ConfigSvc;
+    Server -> ReconcileSvc;
+    Server -> ITunesSvc;
+    Server -> DedupSvc;
+    Server -> AuthSvc;
+    AudiobookSvc -> StoreIface;
+    ITunesSvc -> StoreIface;
+    ITunesSvc -> ITunesLib;
+    DedupSvc -> AI;
+    Scanner -> StoreIface;
+    Organizer -> StoreIface;
+    Scanner -> FFprobe;
+    Organizer -> FFmpeg;
+    Metadata -> Audible;
+    Metadata -> OpenLibrary;
+    Metadata -> Audnexus;
+    Metadata -> GoogleBooks;
+    AI -> OpenAI;
+    PebbleStore -> PebbleDB;
+    AIScanStore -> AIScanDB;
+    Scanner -> AudioFiles;
+    ITunesLib -> ITunesXML;
+    StoreIface -> PebbleStore;
+    StoreIface -> SQLiteStore;
+    OpsQueue -> StoreIface;
+}

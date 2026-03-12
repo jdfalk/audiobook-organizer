@@ -1,0 +1,66 @@
+%% file: docs/diagrams/flow-itunes-import.mmd
+%% version: 1.0.0
+%% guid: e5f6a7b8-c9d0-1234-efab-456789012345
+
+flowchart TD
+    Start([User clicks Import]) --> Validate["POST /api/v1/itunes/validate<br/>handleITunesValidate()"]
+    Validate --> ParseXML["itunes.ParseLibrary()<br/>Parse 88K+ tracks from XML"]
+    ParseXML --> FilterAudiobooks["itunes.IsAudiobook()<br/>Filter to audiobook tracks only"]
+    FilterAudiobooks --> GroupAlbums["groupTracksByAlbum()<br/>Group by Artist|Album → ~12K books"]
+    GroupAlbums --> CountUnique["Count unique albums<br/>Extract path prefixes"]
+    CountUnique --> StatCheck["Parallel os.Stat (32 workers)<br/>Check file existence"]
+    StatCheck --> ReturnStats["Return ValidationResult<br/>audiobook_count, files_found, files_missing, path_prefixes"]
+
+    ReturnStats --> UserReviews{User reviews stats}
+    UserReviews -->|"Clicks Import"| StartImport["POST /api/v1/itunes/import<br/>handleITunesImport()"]
+
+    StartImport --> QueueOp["operations.Enqueue()<br/>Create operation"]
+    QueueOp --> ParseLib["Parsing iTunes XML library..."]
+    ParseLib --> GroupTracks["Parsed N tracks, grouping into albums..."]
+    GroupTracks --> QuickPhase["PHASE 2: Quick Import"]
+
+    subgraph QuickImport["Quick Import (no hashing)"]
+        QuickPhase --> ForEachGroup["For each album group"]
+        ForEachGroup --> BuildBook["buildBookFromAlbumGroup()"]
+        BuildBook --> AssignAuthor["assignAuthorAndSeries()"]
+        AssignAuthor --> CheckPath{"GetBookByFilePath()"}
+        CheckPath -->|"Found"| LinkMeta["linkITunesMetadata()<br/>Copy iTunes fields to existing"]
+        LinkMeta --> IncLinked["linked++"]
+        CheckPath -->|"Not found"| CreateNew["CreateBook()<br/>with VG (ULID), isPrimary=false"]
+        CreateNew --> CreateSegments["Create BookSegments<br/>(multi-track albums)"]
+        CreateSegments --> SetAuthors["SetBookAuthors()"]
+        SetAuthors --> IncImported["imported++"]
+    end
+
+    IncLinked --> NextGroup{More groups?}
+    IncImported --> NextGroup
+    NextGroup -->|Yes| ForEachGroup
+    NextGroup -->|No| QuickDone["Quick import done: N new, M linked"]
+
+    QuickDone --> HashPhase["PHASE 3: Hash Validation"]
+
+    subgraph HashValidation["Hash Validation (new books only)"]
+        HashPhase --> ForEachNew["For each new book ID"]
+        ForEachNew --> ComputeHash["scanner.ComputeFileHash()"]
+        ComputeHash --> CheckBlocked{"IsHashBlocked()?"}
+        CheckBlocked -->|"Yes"| SoftDelete["Soft delete book"]
+        CheckBlocked -->|"No"| CheckHashMatch{"GetBookByFileHash()?"}
+        CheckHashMatch -->|"Found"| LinkVG["Link to existing VG<br/>Set non-primary"]
+        CheckHashMatch -->|"Not found"| SaveHash["Save hash to book"]
+    end
+
+    SoftDelete --> NextNew{More new books?}
+    LinkVG --> NextNew
+    SaveHash --> NextNew
+    NextNew -->|Yes| ForEachNew
+    NextNew -->|No| EnrichPhase{FetchMetadata?}
+
+    EnrichPhase -->|Yes| Enrich["PHASE 4: enrichITunesImportedBooks()"]
+    EnrichPhase -->|No| OrgPhase{ImportMode=organize?}
+    Enrich --> OrgPhase
+    OrgPhase -->|Yes| Organize["PHASE 5: organizeImportedBooks()"]
+    OrgPhase -->|No| Done
+    Organize --> Done["Import completed: N new, M linked, P skipped, Q failed"]
+
+    style QuickImport fill:#e8f5e9,stroke:#4caf50
+    style HashValidation fill:#fff3e0,stroke:#ff9800

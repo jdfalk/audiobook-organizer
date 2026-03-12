@@ -1,0 +1,305 @@
+%% file: docs/diagrams/entity-relationship.mmd
+%% version: 1.0.0
+%% guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+%%
+%% Entity-Relationship Diagram for Audiobook Organizer
+%% Render with: mmdc -i entity-relationship.mmd -o entity-relationship.svg
+
+erDiagram
+    Book {
+        string id PK "ULID"
+        string title
+        int author_id FK "legacy single-author"
+        int series_id FK
+        int series_sequence
+        string file_path "unique index"
+        string format
+        int duration "seconds"
+        string work_id FK "ULID"
+        string narrator "legacy string"
+        string edition
+        string description
+        string language
+        string publisher
+        int print_year
+        int audiobook_release_year
+        string isbn10
+        string isbn13
+        string asin
+        string open_library_id
+        string hardcover_id
+        string google_books_id
+        string itunes_persistent_id
+        datetime itunes_date_added
+        int itunes_play_count
+        datetime itunes_last_played
+        int itunes_rating
+        int64 itunes_bookmark "ms position"
+        string itunes_import_source
+        string original_filename
+        int bitrate_kbps
+        string codec
+        int sample_rate_hz
+        int channels
+        string quality
+        bool is_primary_version
+        string version_group_id "groups editions"
+        string version_notes
+        string file_hash "SHA256"
+        int64 file_size
+        string original_file_hash
+        string organized_file_hash
+        string library_state "imported|organized|wanted|needs_review|deleted"
+        bool marked_for_deletion
+        datetime marked_for_deletion_at
+        datetime created_at
+        datetime updated_at
+        datetime metadata_updated_at
+        datetime last_written_at
+        string metadata_review_status
+        string cover_url
+        string narrators_json "denormalized"
+        int64 last_scan_mtime
+        int64 last_scan_size
+        bool needs_rescan
+    }
+
+    Author {
+        int id PK "auto-increment"
+        string name
+    }
+
+    AuthorAlias {
+        int id PK
+        int author_id FK
+        string alias_name
+        string alias_type "pen_name|real_name|handle|abbreviation|alias"
+        datetime created_at
+    }
+
+    BookAuthor {
+        string book_id FK "ULID"
+        int author_id FK
+        string role "author|co-author|editor"
+        int position "0=primary"
+    }
+
+    Narrator {
+        int id PK "auto-increment"
+        string name
+        datetime created_at
+    }
+
+    BookNarrator {
+        string book_id FK "ULID"
+        int narrator_id FK
+        string role "narrator|co-narrator"
+        int position "0=primary"
+    }
+
+    Series {
+        int id PK "auto-increment"
+        string name
+        int author_id FK "optional"
+    }
+
+    Work {
+        string id PK "ULID"
+        string title
+        int author_id FK "optional"
+        int series_id FK "optional"
+        string alt_titles "JSON array"
+    }
+
+    BookSegment {
+        string id PK "ULID"
+        int book_id FK "numeric legacy"
+        string file_path
+        string format
+        int64 size_bytes
+        int duration_seconds
+        int track_number
+        int total_tracks
+        string segment_title
+        string file_hash
+        bool active
+        string superseded_by FK "ULID"
+        datetime created_at
+        datetime updated_at
+        int version
+    }
+
+    BookVersion {
+        string book_id FK "ULID"
+        datetime timestamp
+        bytes data "full JSON snapshot"
+    }
+
+    MetadataFieldState {
+        string book_id FK "ULID"
+        string field "composite PK"
+        string fetched_value "JSON"
+        string override_value "JSON"
+        bool override_locked
+        datetime updated_at
+    }
+
+    MetadataChangeRecord {
+        int id PK
+        string book_id FK "ULID"
+        string field
+        string previous_value "JSON"
+        string new_value "JSON"
+        string change_type "fetched|override|clear|undo|bulk_update"
+        string source "Open Library|manual|AI parsing"
+        datetime changed_at
+    }
+
+    ImportPath {
+        int id PK
+        string path
+        string name
+        bool enabled
+        datetime created_at
+        datetime last_scan
+        int book_count
+    }
+
+    Operation {
+        string id PK "ULID"
+        string type
+        string status "pending|running|completed|failed|canceled"
+        int progress
+        int total
+        string message
+        string folder_path
+        datetime created_at
+        datetime started_at
+        datetime completed_at
+        string error_message
+        string result_data "JSON"
+    }
+
+    OperationLog {
+        int id PK
+        string operation_id FK
+        string level
+        string message
+        string details
+        datetime created_at
+    }
+
+    OperationChange {
+        string id PK "ULID"
+        string operation_id FK
+        string book_id FK "ULID"
+        string change_type "file_move|metadata_update|tag_write"
+        string field_name
+        string old_value
+        string new_value
+        datetime reverted_at
+        datetime created_at
+    }
+
+    DoNotImport {
+        string hash PK "SHA256"
+        string reason
+        datetime created_at
+    }
+
+    User {
+        string id PK "ULID"
+        string username
+        string email
+        string password_hash_algo
+        string password_hash
+        string roles "JSON array"
+        string status
+        datetime created_at
+    }
+
+    Session {
+        string id PK "ULID"
+        string user_id FK
+        datetime created_at
+        datetime expires_at
+        string ip
+        string user_agent
+        bool revoked
+    }
+
+    Playlist {
+        int id PK
+        string name
+        int series_id FK "optional"
+        string file_path
+    }
+
+    PlaylistItem {
+        int id PK
+        int playlist_id FK
+        int book_id FK "numeric"
+        int position
+    }
+
+    Setting {
+        string key PK
+        string value
+        string type "string|int|bool|json"
+        bool is_secret "AES-256-GCM encrypted"
+    }
+
+    AIScan {
+        int id PK
+        string status "pending|scanning|enriching|cross_validating|complete|failed|canceled"
+        string mode "batch|realtime"
+        string models "JSON map"
+        int author_count
+        string operation_id "cross-store FK"
+        datetime created_at
+    }
+
+    AIScanPhase {
+        int scan_id FK
+        string phase_type "groups_scan|full_scan|groups_enrich|full_enrich|cross_validate"
+        string status
+        string batch_id "OpenAI batch ID"
+        string model
+        bytes input_data
+        bytes output_data
+        bytes suggestions
+    }
+
+    AIScanResult {
+        int id PK
+        int scan_id FK
+        string agreement "agreed|groups_only|full_only|disagreed"
+        string suggestion "JSON"
+        bool applied
+        datetime applied_at
+    }
+
+    %% Relationships
+    Author ||--o{ AuthorAlias : "has aliases"
+    Author ||--o{ BookAuthor : "writes"
+    Author ||--o{ Series : "owns (optional)"
+    Author ||--o{ Work : "creates (optional)"
+    Book ||--o{ BookAuthor : "written by"
+    Book ||--o{ BookNarrator : "narrated by"
+    Book }o--|| Series : "belongs to (optional)"
+    Book }o--|| Work : "edition of (optional)"
+    Book ||--o{ BookSegment : "has files"
+    Book ||--o{ BookVersion : "has snapshots"
+    Book ||--o{ MetadataFieldState : "has provenance"
+    Book ||--o{ MetadataChangeRecord : "has history"
+    Book ||--o{ OperationChange : "changed by"
+    Narrator ||--o{ BookNarrator : "narrates"
+    Series }o--|| Author : "by (optional)"
+    Work }o--|| Series : "in (optional)"
+    Operation ||--o{ OperationLog : "has logs"
+    Operation ||--o{ OperationChange : "has changes"
+    User ||--o{ Session : "has sessions"
+    Playlist }o--|| Series : "for (optional)"
+    Playlist ||--o{ PlaylistItem : "contains"
+    AIScan ||--o{ AIScanPhase : "has phases"
+    AIScan ||--o{ AIScanResult : "produces results"
