@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.9.0
+// version: 2.10.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -808,7 +808,18 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			}
 		}
 
-		// Hash the first track file for dedup (use actual file, not directory)
+		if req.SkipDuplicates {
+			// Fast check: file path match (no disk I/O, just DB lookup)
+			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
+				linkITunesMetadata(existing, book, group.tracks[0], log)
+				updateITunesLinked(status)
+				log.Info("Skipping duplicate file path (linked metadata): %s", book.FilePath)
+				updateITunesProgress(log, status, processed, totalGroups, book.Title)
+				continue
+			}
+		}
+
+		// Slow check: hash the first track file for dedup (only for unmatched books)
 		hash, err := scanner.ComputeFileHash(firstTrackPath)
 		if err != nil {
 			log.Warn("Failed to hash %s: %v", book.FilePath, err)
@@ -827,16 +838,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		}
 
 		if req.SkipDuplicates {
-			// Check for existing book by file path
-			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
-				// Link iTunes metadata to existing book if it lacks iTunes info
-				linkITunesMetadata(existing, book, group.tracks[0], log)
-				updateITunesLinked(status)
-				log.Info("Skipping duplicate file path (linked metadata): %s", book.FilePath)
-				updateITunesProgress(log, status, processed, totalGroups, book.Title)
-				continue
-			}
-			// Check for existing book by hash — link as version instead of skipping
+			// Hash-based match: link as version instead of skipping
 			if book.FileHash != nil {
 				if existing, err := database.GlobalStore.GetBookByFileHash(*book.FileHash); err == nil && existing != nil {
 					linkAsVersion(existing, book, group.tracks[0], log)
