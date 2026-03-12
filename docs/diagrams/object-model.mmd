@@ -1,0 +1,217 @@
+%% file: docs/diagrams/object-model.mmd
+%% version: 1.0.0
+%% guid: d0e1f2a3-b4c5-6789-defa-012345678901
+%%
+%% Object Model — Go package structure and key types
+%% Render: mmdc -i object-model.mmd -o object-model.svg
+
+classDiagram
+    direction TB
+
+    class Server {
+        +*gin.Engine router
+        +AudiobookService audiobookService
+        +*OperationQueue operationQueue
+        +*cache.Cache dedupCache
+        +listAudiobooks(c *gin.Context)
+        +getAudiobook(c *gin.Context)
+        +updateAudiobook(c *gin.Context)
+        +deleteAudiobook(c *gin.Context)
+        +startScan(c *gin.Context)
+        +startOrganize(c *gin.Context)
+        +handleITunesImport(c *gin.Context)
+        +handleITunesValidate(c *gin.Context)
+        +updateConfig(c *gin.Context)
+        ...189 route handlers
+    }
+
+    class AudiobookService {
+        +store Store
+        +GetAudiobook(ctx, id) (*Book, error)
+        +ListAudiobooks(ctx, params) ([]Book, error)
+        +CountAudiobooks(ctx) (int, error)
+        +SearchAudiobooks(ctx, query) ([]Book, error)
+        +EnrichBook(book *Book) *Book
+    }
+
+    class Store {
+        <<interface>>
+        +GetAllBooks(limit, offset) ([]Book, error)
+        +GetBookByID(id) (*Book, error)
+        +GetBookByFilePath(path) (*Book, error)
+        +GetBookByFileHash(hash) (*Book, error)
+        +CreateBook(book) (*Book, error)
+        +UpdateBook(id, book) (*Book, error)
+        +DeleteBook(id) error
+        +GetAllAuthors() ([]Author, error)
+        +CreateAuthor(name) (*Author, error)
+        +GetAllSeries() ([]Series, error)
+        +CreateSeries(name, authorID) (*Series, error)
+        ...255 methods total
+    }
+
+    class PebbleStore {
+        +*pebble.DB db
+        +Close() error
+        +GetBookByID(id) (*Book, error)
+        +CreateBook(book) (*Book, error)
+        +UpdateBook(id, book) (*Book, error)
+        ...implements Store
+    }
+
+    class AIScanStore {
+        +*pebble.DB db (separate: ai_scans.db)
+        +CreateScan(scan) (*Scan, error)
+        +GetScan(id) (*Scan, error)
+        +SavePhase(phase) error
+        +SaveResult(result) error
+        +GetResults(scanID) ([]ScanResult, error)
+    }
+
+    class Book {
+        +string ID (ULID)
+        +string Title
+        +*int AuthorID
+        +*int SeriesID
+        +string FilePath
+        +string Format
+        +*int Duration
+        +*string VersionGroupID
+        +*bool IsPrimaryVersion
+        +*string FileHash
+        +*string LibraryState
+        +*string ITunesPersistentID
+        +*bool MarkedForDeletion
+        ...50+ fields
+    }
+
+    class Author {
+        +int ID
+        +string Name
+    }
+
+    class Series {
+        +int ID
+        +string Name
+        +*int AuthorID
+    }
+
+    class Narrator {
+        +int ID
+        +string Name
+    }
+
+    class Work {
+        +string ID (ULID)
+        +string Title
+        +*int AuthorID
+        +*int SeriesID
+    }
+
+    class BookSegment {
+        +string ID (ULID)
+        +int BookID (numeric)
+        +string FilePath
+        +string Format
+        +int64 SizeBytes
+        +int DurationSec
+        +*int TrackNumber
+        +*string FileHash
+        +bool Active
+    }
+
+    class BookAuthor {
+        +string BookID (ULID)
+        +int AuthorID
+        +string Role
+        +int Position
+    }
+
+    class BookNarrator {
+        +string BookID (ULID)
+        +int NarratorID
+        +string Role
+        +int Position
+    }
+
+    class Operation {
+        +string ID (ULID)
+        +string Type
+        +string Status
+        +int Progress
+        +int Total
+        +string Message
+    }
+
+    class OperationQueue {
+        +timeout time.Duration
+        +Enqueue(id, type, path, fn)
+        +SetOperationTimeout(d)
+        +SaveCheckpoint(store, opID, ...)
+        +LoadCheckpoint(store, opID)
+    }
+
+    class Scanner {
+        +ScanDirectory(path, store, opts) error
+        +ComputeFileHash(path) (string, error)
+        +ExtractMetadata(path) (*Book, error)
+    }
+
+    class Organizer {
+        +Organize(book, pattern, store) error
+        +BuildTargetPath(book, pattern) string
+        +WriteMetadataTags(book, path) error
+    }
+
+    class MetadataFetcher {
+        +SearchMetadata(title, author) ([]Candidate, error)
+        +ApplyCandidate(book, candidate, fields) error
+        +ExtractCoverArt(path) (string, error)
+    }
+
+    class OpenAIParser {
+        +IsEnabled() bool
+        +ParseFilename(ctx, filename) (*ParsedMetadata, error)
+        +ParseAudiobook(ctx, abCtx) (*ParsedMetadata, error)
+        +ReviewAuthorDuplicates(ctx, groups) ([]Suggestion, error)
+        +CreateBatchAuthorDedup(ctx, inputs) (string, error)
+        +CheckBatchStatus(ctx, batchID) (string, error)
+    }
+
+    class Config {
+        +string RootDir
+        +string DatabasePath
+        +string DatabaseType
+        +string FolderNamingPattern
+        +string FileNamingPattern
+        +int ConcurrentScans
+        +int OperationTimeoutMinutes
+        +[]MetadataSource MetadataSources
+        +bool EnableAIParsing
+        +string OpenAIAPIKey
+        ...100+ fields
+    }
+
+    %% Relationships
+    Server --> AudiobookService
+    Server --> OperationQueue
+    AudiobookService --> Store
+    Store <|.. PebbleStore : implements
+    PebbleStore --> Book : stores
+    PebbleStore --> Author : stores
+    PebbleStore --> Series : stores
+    Book --> Author : AuthorID
+    Book --> Series : SeriesID
+    Book --> Work : WorkID
+    Book "1" --> "*" BookSegment : has
+    Book "1" --> "*" BookAuthor : has
+    Book "1" --> "*" BookNarrator : has
+    BookAuthor --> Author : AuthorID
+    BookNarrator --> Narrator : NarratorID
+    Series --> Author : AuthorID (optional)
+    Scanner --> Store : reads/writes
+    Scanner --> MetadataFetcher : extracts
+    Organizer --> Store : reads/writes
+    OpenAIParser --> AIScanStore : stores results
+    OperationQueue --> Operation : manages
+    Server --> Config : reads

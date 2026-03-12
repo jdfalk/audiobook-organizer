@@ -1,0 +1,49 @@
+%% file: docs/diagrams/flow-organize.mmd
+%% version: 1.0.0
+%% guid: a7b8c9d0-e1f2-3456-abcd-678901234567
+%%
+%% File Organization Flow
+
+flowchart TD
+    Start([Organize triggered]) --> Route["POST /api/v1/organize<br/>server.startOrganize()"]
+    Route --> QueueOp["operations.Enqueue('organize')"]
+    QueueOp --> GetBooks["Get books to organize<br/>(by folder or all unorganized)"]
+
+    GetBooks --> ForEachBook["For each book"]
+    ForEachBook --> BuildPath["Build target path from pattern<br/>{author}/{series}/{title} ({print_year})"]
+    BuildPath --> BuildFilename["Build filename from pattern<br/>{title} - {author} - read by {narrator}"]
+    BuildFilename --> CheckSame{"Source == Target?"}
+    CheckSame -->|"Yes"| Skip["Skip (already organized)"]
+    CheckSame -->|"No"| CreateDirs["Create target directories"]
+
+    CreateDirs --> BackupEnabled{"create_backups?"}
+    BackupEnabled -->|"Yes"| Backup["Create backup copy"]
+    BackupEnabled -->|"No"| MoveFile
+
+    Backup --> MoveFile["Move file to target path"]
+    MoveFile --> UpdateFilePath["UpdateBook(file_path=new)"]
+    UpdateFilePath --> WriteTags{"auto_write_tags_on_apply?"}
+    WriteTags -->|"Yes"| WriteMetadata["Write tags to file<br/>ffmpeg -metadata"]
+    WriteTags -->|"No"| RecordChange
+
+    WriteMetadata --> VerifyWrite{"verify_after_write?"}
+    VerifyWrite -->|"Yes"| Verify["Re-read tags, compare"]
+    VerifyWrite -->|"No"| RecordChange
+    Verify --> RecordChange
+
+    RecordChange --> LogChange["CreateOperationChange()<br/>type=file_move, old/new path"]
+    LogChange --> UpdateState["Set library_state=organized"]
+    UpdateState --> UpdateHash["Compute organized_file_hash"]
+    UpdateHash --> CleanEmpty["Clean up empty source dirs"]
+
+    Skip --> NextBook{More books?}
+    CleanEmpty --> NextBook
+    NextBook -->|"Yes"| ForEachBook
+    NextBook -->|"No"| ITunesSync{"itunes_sync_enabled?"}
+
+    ITunesSync -->|"Yes"| SyncITunes["Sync changes to iTunes"]
+    ITunesSync -->|"No"| Complete
+    SyncITunes --> Complete["Organize complete"]
+
+    style Start fill:#e3f2fd
+    style Complete fill:#e8f5e9

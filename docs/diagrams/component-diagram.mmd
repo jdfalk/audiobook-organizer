@@ -1,0 +1,126 @@
+%% file: docs/diagrams/component-diagram.mmd
+%% version: 1.0.0
+%% guid: c3d4e5f6-a7b8-9012-cdef-234567890123
+%%
+%% System Component Diagram
+%% Render with: mmdc -i component-diagram.mmd -o component-diagram.svg
+
+graph TB
+    subgraph Frontend["Frontend (React/TypeScript + MUI)"]
+        direction TB
+        App["App.tsx<br/>Router + Auth + Theme"]
+        subgraph Pages["Pages"]
+            Dashboard["Dashboard"]
+            Library["Library"]
+            BookDetail["BookDetail"]
+            Authors["Authors"]
+            SeriesPage["Series"]
+            Works["Works"]
+            BookDedup["BookDedup"]
+            Settings["Settings"]
+            Operations["Operations"]
+            Maintenance["Maintenance"]
+            System["System"]
+            FileBrowser["FileBrowser"]
+            Login["Login"]
+        end
+        subgraph Components["Shared Components"]
+            AudiobookGrid["AudiobookGrid/List/Card"]
+            SearchBar["SearchBar + FilterSidebar"]
+            MetadataEditDialog["MetadataEditDialog"]
+            MetadataSearchDialog["MetadataSearchDialog"]
+            VersionManagement["VersionManagement"]
+            ServerFileBrowser["ServerFileBrowser"]
+            ConfigurableTable["ConfigurableTable"]
+            ITunesImport["ITunesImport"]
+            WelcomeWizard["WelcomeWizard"]
+            OperationsIndicator["OperationsIndicator"]
+        end
+        subgraph State["State Management"]
+            AppStore["useAppStore (Zustand)<br/>theme, notifications"]
+            OpsStore["useOperationsStore (Zustand)<br/>active ops, polling"]
+            AuthContext["AuthContext (React Context)<br/>user, sessions"]
+            EventSource["eventSourceManager (SSE)<br/>/api/events"]
+        end
+        ApiService["services/api.ts<br/>~200 API functions"]
+    end
+
+    subgraph Backend["Backend (Go + Gin)"]
+        direction TB
+        Server["internal/server<br/>server.go — HTTP routes + handlers"]
+        subgraph Services["Service Layer"]
+            AudiobookSvc["AudiobookService<br/>CRUD, search, count"]
+            ConfigUpdateSvc["ConfigUpdateService<br/>config hot-reload"]
+            ReconcileSvc["reconcile.go<br/>orphan VGs, file reconcile"]
+            ITunesSvc["itunes.go<br/>import, validate, write-back, sync"]
+            DedupSvc["dedup handlers<br/>author/book/series dedup"]
+            AuthSvc["auth.go<br/>login, sessions, RBAC"]
+        end
+        subgraph Core["Core Packages"]
+            Scanner["internal/scanner<br/>file scanning, metadata extraction"]
+            Organizer["internal/organizer<br/>file moves, renames, tag writing"]
+            Metadata["internal/metadata<br/>multi-source fetching, ffprobe"]
+            ITunesLib["internal/itunes<br/>XML parsing, path mapping"]
+            AI["internal/ai<br/>OpenAI integration, dedup"]
+            OpsQueue["internal/operations<br/>background queue, checkpoints"]
+            Config["internal/config<br/>Viper-based config"]
+            Logger["internal/logger<br/>operation logging"]
+            Cache["internal/cache<br/>generic TTL cache"]
+            Backup["internal/backup<br/>backup/restore"]
+        end
+        subgraph Data["Data Layer"]
+            Store["internal/database<br/>Store interface (255 methods)"]
+            PebbleStore["PebbleStore<br/>primary KV store"]
+            SQLiteStore["SQLiteStore<br/>opt-in alternative"]
+            AIScanStore["AIScanStore<br/>separate PebbleDB"]
+            MockStore["MockStore<br/>testing"]
+        end
+    end
+
+    subgraph External["External Services"]
+        Audible["Audible API"]
+        OpenLibrary["Open Library API"]
+        Audnexus["Audnexus API"]
+        GoogleBooks["Google Books API"]
+        OpenAI["OpenAI API<br/>GPT-4/5 for AI parsing"]
+        FFprobe["ffprobe<br/>media info extraction"]
+        FFmpeg["ffmpeg<br/>transcoding, tag writing"]
+    end
+
+    subgraph Storage["Storage"]
+        PebbleDB["PebbleDB<br/>/var/lib/audiobook-organizer/audiobooks.pebble"]
+        AIScanDB["PebbleDB<br/>ai_scans.db"]
+        AudioFiles["Audio Files<br/>/mnt/bigdata/books/"]
+        ITunesXML["iTunes Library.xml"]
+        CoverArt["Cover Art Cache"]
+    end
+
+    %% Frontend connections
+    App --> Pages
+    App --> State
+    Pages --> Components
+    Pages --> ApiService
+    Components --> ApiService
+    ApiService -->|"HTTP/HTTPS"| Server
+    EventSource -->|"SSE /api/events"| Server
+
+    %% Backend connections
+    Server --> Services
+    Server --> Core
+    Services --> Store
+    Core --> Store
+    Scanner --> FFprobe
+    Scanner --> FFmpeg
+    Organizer --> FFmpeg
+    Metadata --> Audible
+    Metadata --> OpenLibrary
+    Metadata --> Audnexus
+    Metadata --> GoogleBooks
+    AI --> OpenAI
+    ITunesLib --> ITunesXML
+
+    %% Data connections
+    PebbleStore --> PebbleDB
+    AIScanStore --> AIScanDB
+    Scanner --> AudioFiles
+    Organizer --> AudioFiles
