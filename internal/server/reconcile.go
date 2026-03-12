@@ -1270,7 +1270,7 @@ func assignOrphanVGs(store database.Store, rootDir string) (*AssignVGResult, err
 		}
 
 		// Create a version group and mark as primary
-		vgID := fmt.Sprintf("vg-%x", crc32.ChecksumIEEE([]byte(b.ID+b.FilePath)))
+		vgID := fmt.Sprintf("vg-%s", ulid.Make().String())
 		b.VersionGroupID = &vgID
 		isPrimary := true
 		b.IsPrimaryVersion = &isPrimary
