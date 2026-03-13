@@ -99,9 +99,10 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 
 	// Set author if available
 	if meta.Artist != "" {
-		author, err := is.db.GetAuthorByName(meta.Artist)
+		normalizedArtist := NormalizeAuthorName(meta.Artist)
+		author, err := is.db.GetAuthorByName(normalizedArtist)
 		if err != nil {
-			author, err = is.db.CreateAuthor(meta.Artist)
+			author, err = is.db.CreateAuthor(normalizedArtist)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create author: %w", err)
 			}
