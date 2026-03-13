@@ -822,6 +822,7 @@ Script should:
 51. Section 10.1 — GoReleaser token permissions
 52. Section 10.2 — Changelog generation
 53. Section 10.4 — Docker image publishing
+54. Systemd watchdog integration — detect `WATCHDOG_USEC` env, send `sd_notify("WATCHDOG=1")` keepalive pings, update service file to `Type=notify` with `WatchdogSec=30s` (Linux only, no-op on other platforms)
 
 ---
 
