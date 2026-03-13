@@ -1291,6 +1291,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/tasks", s.listTasks)
 			protected.POST("/tasks/:name/run", s.runTask)
 			protected.PUT("/tasks/:name", s.updateTaskConfig)
+			protected.POST("/maintenance-window/run", s.runMaintenanceWindowNow)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)
@@ -7969,9 +7970,10 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	name := c.Param("name")
 
 	var req struct {
-		Enabled         *bool `json:"enabled"`
-		IntervalMinutes *int  `json:"interval_minutes"`
-		RunOnStartup    *bool `json:"run_on_startup"`
+		Enabled                *bool `json:"enabled"`
+		IntervalMinutes        *int  `json:"interval_minutes"`
+		RunOnStartup           *bool `json:"run_on_startup"`
+		RunInMaintenanceWindow *bool `json:"run_in_maintenance_window"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -7990,6 +7992,9 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		if req.RunOnStartup != nil {
 			config.AppConfig.ScheduledDedupRefreshOnStartup = *req.RunOnStartup
 		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowDedupRefresh = *req.RunInMaintenanceWindow
+		}
 	case "author_split_scan":
 		if req.Enabled != nil {
 			config.AppConfig.ScheduledAuthorSplitEnabled = *req.Enabled
@@ -7999,6 +8004,9 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		}
 		if req.RunOnStartup != nil {
 			config.AppConfig.ScheduledAuthorSplitOnStartup = *req.RunOnStartup
+		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowAuthorSplit = *req.RunInMaintenanceWindow
 		}
 	case "db_optimize":
 		if req.Enabled != nil {
@@ -8010,6 +8018,9 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		if req.RunOnStartup != nil {
 			config.AppConfig.ScheduledDbOptimizeOnStartup = *req.RunOnStartup
 		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowDbOptimize = *req.RunInMaintenanceWindow
+		}
 	case "metadata_refresh":
 		if req.Enabled != nil {
 			config.AppConfig.ScheduledMetadataRefreshEnabled = *req.Enabled
@@ -8019,6 +8030,9 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		}
 		if req.RunOnStartup != nil {
 			config.AppConfig.ScheduledMetadataRefreshOnStartup = *req.RunOnStartup
+		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowMetadataRefresh = *req.RunInMaintenanceWindow
 		}
 	case "itunes_sync":
 		if req.Enabled != nil {
@@ -8037,9 +8051,38 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		if req.RunOnStartup != nil {
 			config.AppConfig.ScheduledSeriesPruneOnStartup = *req.RunOnStartup
 		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowSeriesPrune = *req.RunInMaintenanceWindow
+		}
 	case "purge_deleted":
 		if req.IntervalMinutes != nil {
 			// purge interval is fixed at 6h, but we can update retention days
+		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowPurgeDeleted = *req.RunInMaintenanceWindow
+		}
+	case "tombstone_cleanup":
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowTombstoneCleanup = *req.RunInMaintenanceWindow
+		}
+	case "reconcile_scan":
+		if req.Enabled != nil {
+			config.AppConfig.ScheduledReconcileEnabled = *req.Enabled
+		}
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowReconcile = *req.RunInMaintenanceWindow
+		}
+	case "purge_old_logs":
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowPurgeOldLogs = *req.RunInMaintenanceWindow
+		}
+	case "library_scan":
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowLibraryScan = *req.RunInMaintenanceWindow
+		}
+	case "library_organize":
+		if req.RunInMaintenanceWindow != nil {
+			config.AppConfig.MaintenanceWindowLibraryOrganize = *req.RunInMaintenanceWindow
 		}
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task %q config is not configurable", name)})
@@ -8054,6 +8097,20 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "task config updated"})
+}
+
+// runMaintenanceWindowNow triggers the full maintenance window sequence immediately.
+func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
+	if s.scheduler == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		return
+	}
+	ctx := context.WithValue(c.Request.Context(), ignoreWindowKey, true)
+	if err := s.scheduler.RunMaintenanceWindow(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusAccepted, gin.H{"message": "maintenance window triggered"})
 }
 
 func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
