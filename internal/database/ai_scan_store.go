@@ -1,10 +1,11 @@
 // file: internal/database/ai_scan_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a7b3c9d1-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -111,6 +112,11 @@ func NewAIScanStore(path string) (*AIScanStore, error) {
 // Close closes the AI scan database.
 func (s *AIScanStore) Close() error {
 	return s.db.Close()
+}
+
+// Optimize compacts the PebbleDB database to reclaim space.
+func (s *AIScanStore) Optimize() error {
+	return s.db.Compact(context.Background(), nil, []byte{0xff}, false)
 }
 
 // nextID atomically reads and increments the counter for the given entity type.
