@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -174,6 +174,11 @@ type Config struct {
 	AutoUpdateWindowStart  int    `json:"auto_update_window_start"`  // hour 0-23, e.g. 1
 	AutoUpdateWindowEnd    int    `json:"auto_update_window_end"`    // hour 0-23, e.g. 4
 
+	// Maintenance window (unified — replaces separate auto-update window)
+	MaintenanceWindowEnabled bool `json:"maintenance_window_enabled"`
+	MaintenanceWindowStart   int  `json:"maintenance_window_start"` // hour 0-23, default 1
+	MaintenanceWindowEnd     int  `json:"maintenance_window_end"`   // hour 0-23, default 4
+
 	// Download client integration
 	DownloadClient DownloadClientConfig `json:"download_client"`
 
@@ -220,6 +225,19 @@ type Config struct {
 	ScheduledReconcileEnabled   bool `json:"scheduled_reconcile_enabled"`
 	ScheduledReconcileInterval  int  `json:"scheduled_reconcile_interval"`  // minutes, default 0 (manual)
 	ScheduledReconcileOnStartup bool `json:"scheduled_reconcile_on_startup"`
+
+	// Per-task maintenance window toggles
+	MaintenanceWindowDedupRefresh     bool `json:"maintenance_window_dedup_refresh"`
+	MaintenanceWindowSeriesPrune      bool `json:"maintenance_window_series_prune"`
+	MaintenanceWindowAuthorSplit      bool `json:"maintenance_window_author_split"`
+	MaintenanceWindowTombstoneCleanup bool `json:"maintenance_window_tombstone_cleanup"`
+	MaintenanceWindowReconcile        bool `json:"maintenance_window_reconcile"`
+	MaintenanceWindowPurgeDeleted     bool `json:"maintenance_window_purge_deleted"`
+	MaintenanceWindowPurgeOldLogs     bool `json:"maintenance_window_purge_old_logs"`
+	MaintenanceWindowDbOptimize       bool `json:"maintenance_window_db_optimize"`
+	MaintenanceWindowLibraryScan      bool `json:"maintenance_window_library_scan"`
+	MaintenanceWindowLibraryOrganize  bool `json:"maintenance_window_library_organize"`
+	MaintenanceWindowMetadataRefresh  bool `json:"maintenance_window_metadata_refresh"`
 
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
@@ -333,6 +351,24 @@ func InitConfig() {
 	viper.SetDefault("auto_update_check_minutes", 60)
 	viper.SetDefault("auto_update_window_start", 1)
 	viper.SetDefault("auto_update_window_end", 4)
+
+	// Maintenance window defaults
+	viper.SetDefault("maintenance_window_enabled", true)
+	viper.SetDefault("maintenance_window_start", 1)
+	viper.SetDefault("maintenance_window_end", 4)
+	// Per-task defaults — maintenance tasks default true
+	viper.SetDefault("maintenance_window_dedup_refresh", true)
+	viper.SetDefault("maintenance_window_series_prune", true)
+	viper.SetDefault("maintenance_window_author_split", true)
+	viper.SetDefault("maintenance_window_tombstone_cleanup", true)
+	viper.SetDefault("maintenance_window_reconcile", true)
+	viper.SetDefault("maintenance_window_purge_deleted", true)
+	viper.SetDefault("maintenance_window_purge_old_logs", true)
+	viper.SetDefault("maintenance_window_db_optimize", true)
+	// Non-maintenance tasks default false
+	viper.SetDefault("maintenance_window_library_scan", false)
+	viper.SetDefault("maintenance_window_library_organize", false)
+	viper.SetDefault("maintenance_window_metadata_refresh", false)
 
 	// Download client defaults
 	viper.SetDefault("download_client.torrent.type", "")
@@ -448,6 +484,22 @@ func InitConfig() {
 		AutoUpdateCheckMinutes: viper.GetInt("auto_update_check_minutes"),
 		AutoUpdateWindowStart:  viper.GetInt("auto_update_window_start"),
 		AutoUpdateWindowEnd:    viper.GetInt("auto_update_window_end"),
+
+		// Maintenance window
+		MaintenanceWindowEnabled:          viper.GetBool("maintenance_window_enabled"),
+		MaintenanceWindowStart:            viper.GetInt("maintenance_window_start"),
+		MaintenanceWindowEnd:              viper.GetInt("maintenance_window_end"),
+		MaintenanceWindowDedupRefresh:     viper.GetBool("maintenance_window_dedup_refresh"),
+		MaintenanceWindowSeriesPrune:      viper.GetBool("maintenance_window_series_prune"),
+		MaintenanceWindowAuthorSplit:      viper.GetBool("maintenance_window_author_split"),
+		MaintenanceWindowTombstoneCleanup: viper.GetBool("maintenance_window_tombstone_cleanup"),
+		MaintenanceWindowReconcile:        viper.GetBool("maintenance_window_reconcile"),
+		MaintenanceWindowPurgeDeleted:     viper.GetBool("maintenance_window_purge_deleted"),
+		MaintenanceWindowPurgeOldLogs:     viper.GetBool("maintenance_window_purge_old_logs"),
+		MaintenanceWindowDbOptimize:       viper.GetBool("maintenance_window_db_optimize"),
+		MaintenanceWindowLibraryScan:      viper.GetBool("maintenance_window_library_scan"),
+		MaintenanceWindowLibraryOrganize:  viper.GetBool("maintenance_window_library_organize"),
+		MaintenanceWindowMetadataRefresh:  viper.GetBool("maintenance_window_metadata_refresh"),
 
 		// iTunes sync
 		ITunesSyncEnabled:    viper.GetBool("itunes_sync_enabled"),
@@ -785,6 +837,22 @@ func ResetToDefaults() {
 		AutoUpdateCheckMinutes: 60,
 		AutoUpdateWindowStart:  1,
 		AutoUpdateWindowEnd:    4,
+
+		// Maintenance window
+		MaintenanceWindowEnabled:          true,
+		MaintenanceWindowStart:            1,
+		MaintenanceWindowEnd:              4,
+		MaintenanceWindowDedupRefresh:     true,
+		MaintenanceWindowSeriesPrune:      true,
+		MaintenanceWindowAuthorSplit:      true,
+		MaintenanceWindowTombstoneCleanup: true,
+		MaintenanceWindowReconcile:        true,
+		MaintenanceWindowPurgeDeleted:     true,
+		MaintenanceWindowPurgeOldLogs:     true,
+		MaintenanceWindowDbOptimize:       true,
+		MaintenanceWindowLibraryScan:      false,
+		MaintenanceWindowLibraryOrganize:  false,
+		MaintenanceWindowMetadataRefresh:  false,
 
 		// iTunes sync
 		ITunesSyncEnabled:    true,
