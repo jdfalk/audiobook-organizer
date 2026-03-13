@@ -1,5 +1,5 @@
 // file: internal/database/ai_scan_store_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b8c4d0e2-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -131,4 +132,13 @@ func TestAIScanStoreCRUD(t *testing.T) {
 	require.NoError(t, err)
 	scans, _ = store.ListScans()
 	require.Empty(t, scans)
+}
+
+func TestAIScanStore_Optimize(t *testing.T) {
+	tmpdir := t.TempDir()
+	store, err := NewAIScanStore(tmpdir + "/ai_scans.db")
+	require.NoError(t, err)
+	defer store.Close()
+	err = store.Optimize()
+	assert.NoError(t, err)
 }
