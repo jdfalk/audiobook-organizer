@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.32.0
+// version: 1.33.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"path/filepath"
 	"sort"
@@ -748,6 +749,43 @@ func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	return counts, nil
 }
 
+// GetAllSeriesFileCounts returns the number of audio files per series.
+func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
+	series, err := p.GetAllSeries()
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int, len(series))
+	for _, s := range series {
+		books, _ := p.GetBooksBySeriesID(s.ID)
+		total := 0
+		for _, b := range books {
+			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+				continue
+			}
+			numericID := int(crc32.ChecksumIEEE([]byte(b.ID)))
+			segs, err := p.ListBookSegments(numericID)
+			if err != nil || len(segs) == 0 {
+				total++
+				continue
+			}
+			activeCount := 0
+			for _, seg := range segs {
+				if seg.Active {
+					activeCount++
+				}
+			}
+			if activeCount > 0 {
+				total += activeCount
+			} else {
+				total++
+			}
+		}
+		counts[s.ID] = total
+	}
+	return counts, nil
+}
+
 // ---- Work operations (logical title-level grouping) ----
 
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
@@ -1234,6 +1272,43 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 			}
 		}
 		counts[a.ID] = count
+	}
+	return counts, nil
+}
+
+// GetAllAuthorFileCounts returns the number of audio files per author.
+func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
+	authors, err := p.GetAllAuthors()
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int, len(authors))
+	for _, a := range authors {
+		books, _ := p.GetBooksByAuthorID(a.ID)
+		total := 0
+		for _, b := range books {
+			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+				continue
+			}
+			numericID := int(crc32.ChecksumIEEE([]byte(b.ID)))
+			segs, err := p.ListBookSegments(numericID)
+			if err != nil || len(segs) == 0 {
+				total++
+				continue
+			}
+			activeCount := 0
+			for _, seg := range segs {
+				if seg.Active {
+					activeCount++
+				}
+			}
+			if activeCount > 0 {
+				total += activeCount
+			} else {
+				total++
+			}
+		}
+		counts[a.ID] = total
 	}
 	return counts, nil
 }
@@ -1848,6 +1923,64 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	return count, nil
 }
 
+// CountFiles returns the total number of audio files across all books.
+// Books with active segments count their segments; books without segments count as 1 file each.
+func (p *PebbleStore) CountFiles() (int, error) {
+	// Collect IDs of all primary, non-deleted books
+	var bookIDs []string
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			return 0, err
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+			continue
+		}
+		bookIDs = append(bookIDs, book.ID)
+	}
+
+	totalFiles := 0
+	for _, id := range bookIDs {
+		numericID := int(crc32.ChecksumIEEE([]byte(id)))
+		segs, err := p.ListBookSegments(numericID)
+		if err != nil || len(segs) == 0 {
+			totalFiles++ // No segments means single file
+			continue
+		}
+		activeCount := 0
+		for _, s := range segs {
+			if s.Active {
+				activeCount++
+			}
+		}
+		if activeCount > 0 {
+			totalFiles += activeCount
+		} else {
+			totalFiles++ // No active segments, treat as single file
+		}
+	}
+
+	return totalFiles, nil
+}
+
 func (p *PebbleStore) CountAuthors() (int, error) {
 	count := 0
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -1966,6 +2099,9 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 	stats := &DashboardStats{
 		StateDistribution:  make(map[string]int),
 		FormatDistribution: make(map[string]int),
+	}
+	if fc, err := p.CountFiles(); err == nil {
+		stats.TotalFiles = fc
 	}
 	if ac, err := p.CountAuthors(); err == nil {
 		stats.TotalAuthors = ac

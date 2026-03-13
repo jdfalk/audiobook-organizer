@@ -253,7 +253,7 @@ export interface MockApiOptions {
   seriesDedup?: { groups: MockSeriesDupGroup[]; total_series?: number };
 }
 
-interface TestBook {
+export interface TestBook {
   id: string;
   title: string;
   author_name?: string;

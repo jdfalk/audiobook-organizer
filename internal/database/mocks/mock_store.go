@@ -472,6 +472,59 @@ func (_c *MockStore_CountBooks_Call) RunAndReturn(run func() (int, error)) *Mock
 	return _c
 }
 
+// CountFiles provides a mock function for the type MockStore
+func (_mock *MockStore) CountFiles() (int, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountFiles")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (int, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() int); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountFiles_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountFiles'
+type MockStore_CountFiles_Call struct {
+	*mock.Call
+}
+
+// CountFiles is a helper method to define mock.On call
+func (_e *MockStore_Expecter) CountFiles() *MockStore_CountFiles_Call {
+	return &MockStore_CountFiles_Call{Call: _e.mock.On("CountFiles")}
+}
+
+func (_c *MockStore_CountFiles_Call) Run(run func()) *MockStore_CountFiles_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_CountFiles_Call) Return(n int, err error) *MockStore_CountFiles_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountFiles_Call) RunAndReturn(run func() (int, error)) *MockStore_CountFiles_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountSeries provides a mock function for the type MockStore
 func (_mock *MockStore) CountSeries() (int, error) {
 	ret := _mock.Called()
@@ -3873,6 +3926,39 @@ func (_c *MockStore_GetAllAuthorBookCounts_Call) RunAndReturn(run func() (map[in
 	return _c
 }
 
+// GetAllAuthorFileCounts provides a mock function for the type MockStore
+func (_mock *MockStore) GetAllAuthorFileCounts() (map[int]int, error) {
+	ret := _mock.Called()
+	var r0 map[int]int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(map[int]int)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetAllAuthorFileCounts_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetAllAuthorFileCounts() *MockStore_GetAllAuthorFileCounts_Call {
+	return &MockStore_GetAllAuthorFileCounts_Call{Call: _e.mock.On("GetAllAuthorFileCounts")}
+}
+
+func (_c *MockStore_GetAllAuthorFileCounts_Call) Run(run func()) *MockStore_GetAllAuthorFileCounts_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetAllAuthorFileCounts_Call) Return(counts map[int]int, err error) *MockStore_GetAllAuthorFileCounts_Call {
+	_c.Call = _c.Call.Return(counts, err)
+	return _c
+}
+
+func (_c *MockStore_GetAllAuthorFileCounts_Call) RunAndReturn(run func() (map[int]int, error)) *MockStore_GetAllAuthorFileCounts_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
 // GetAllSeriesBookCounts provides a mock function for the type MockStore
 func (_mock *MockStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	ret := _mock.Called()
@@ -3902,6 +3988,39 @@ func (_c *MockStore_GetAllSeriesBookCounts_Call) Return(counts map[int]int, err 
 }
 
 func (_c *MockStore_GetAllSeriesBookCounts_Call) RunAndReturn(run func() (map[int]int, error)) *MockStore_GetAllSeriesBookCounts_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// GetAllSeriesFileCounts provides a mock function for the type MockStore
+func (_mock *MockStore) GetAllSeriesFileCounts() (map[int]int, error) {
+	ret := _mock.Called()
+	var r0 map[int]int
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(map[int]int)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetAllSeriesFileCounts_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetAllSeriesFileCounts() *MockStore_GetAllSeriesFileCounts_Call {
+	return &MockStore_GetAllSeriesFileCounts_Call{Call: _e.mock.On("GetAllSeriesFileCounts")}
+}
+
+func (_c *MockStore_GetAllSeriesFileCounts_Call) Run(run func()) *MockStore_GetAllSeriesFileCounts_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetAllSeriesFileCounts_Call) Return(counts map[int]int, err error) *MockStore_GetAllSeriesFileCounts_Call {
+	_c.Call = _c.Call.Return(counts, err)
+	return _c
+}
+
+func (_c *MockStore_GetAllSeriesFileCounts_Call) RunAndReturn(run func() (map[int]int, error)) *MockStore_GetAllSeriesFileCounts_Call {
 	_c.Call = _c.Call.Return(run)
 	return _c
 }

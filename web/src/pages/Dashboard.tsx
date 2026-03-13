@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect, useCallback } from 'react';
@@ -46,6 +46,7 @@ interface SystemStats {
   library_books: number;
   import_books: number;
   total_books: number;
+  total_files: number;
   total_authors: number;
   total_series: number;
   import_paths: number;
@@ -90,6 +91,7 @@ export function Dashboard() {
         0;
       const totalBooks =
         systemStatus.total_book_count ?? libraryBooks + importBooks;
+      const totalFiles = systemStatus.total_file_count ?? totalBooks;
       const librarySizeBytes =
         systemStatus.library_size_bytes ?? systemStatus.library.total_size ?? 0;
       const importSizeBytes =
@@ -109,6 +111,7 @@ export function Dashboard() {
         library_books: libraryBooks,
         import_books: importBooks,
         total_books: totalBooks,
+        total_files: totalFiles,
         total_authors: systemStatus.author_count ?? 0,
         total_series: systemStatus.series_count ?? 0,
         import_paths: systemStatus.import_paths?.folder_count || 0,
@@ -140,7 +143,7 @@ export function Dashboard() {
       console.error('Failed to load system status:', error);
       // Set empty defaults so spinners stop
       setStats({
-        library_books: 0, import_books: 0, total_books: 0,
+        library_books: 0, import_books: 0, total_books: 0, total_files: 0,
         total_authors: 0, total_series: 0, import_paths: 0,
         library_size_gb: 0, import_size_gb: 0, total_size_gb: 0,
         disk_used_gb: 0, disk_total_gb: 0, disk_usage_percent: 0,
@@ -232,6 +235,7 @@ export function Dashboard() {
     loading,
     icon,
     suffix = '',
+    subtitle,
     onClick,
   }: {
     title: string;
@@ -239,6 +243,7 @@ export function Dashboard() {
     loading: boolean;
     icon: React.ReactNode;
     suffix?: string;
+    subtitle?: string;
     onClick?: () => void;
   }) => (
     <Card>
@@ -256,10 +261,17 @@ export function Dashboard() {
               {loading ? (
                 <Skeleton variant="text" width={80} height={42} />
               ) : (
-                <Typography variant="h4">
-                  {value.toLocaleString()}
-                  {suffix}
-                </Typography>
+                <>
+                  <Typography variant="h4">
+                    {value.toLocaleString()}
+                    {suffix}
+                  </Typography>
+                  {subtitle && (
+                    <Typography variant="caption" color="text.secondary">
+                      {subtitle}
+                    </Typography>
+                  )}
+                </>
               )}
             </Box>
             <Box sx={{ color: 'primary.main' }}>{icon}</Box>
@@ -317,6 +329,7 @@ export function Dashboard() {
             value={stats?.library_books ?? 0}
             loading={bookStatsLoading}
             icon={<LibraryBooksIcon sx={{ fontSize: 40 }} />}
+            subtitle={stats && stats.total_files > stats.total_books ? `${stats.total_files.toLocaleString()} files total` : undefined}
             onClick={() => navigate('/library')}
           />
         </Grid>

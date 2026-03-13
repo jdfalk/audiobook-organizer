@@ -1,5 +1,5 @@
 // file: internal/server/system_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
@@ -29,6 +29,7 @@ type SystemStatus struct {
 	LibraryBookCount int                  `json:"library_book_count"`
 	ImportBookCount  int                  `json:"import_book_count"`
 	TotalBookCount   int                  `json:"total_book_count"`
+	TotalFileCount   int                  `json:"total_file_count"`
 	AuthorCount      int                  `json:"author_count"`
 	SeriesCount      int                  `json:"series_count"`
 	LibrarySizeBytes int64                `json:"library_size_bytes"`
@@ -103,6 +104,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		importBookCount = 0
 	}
 
+	fileCount, _ := ss.db.CountFiles()
 	authorCount, _ := ss.db.CountAuthors()
 	seriesCount, _ := ss.db.CountSeries()
 
@@ -130,6 +132,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		LibraryBookCount: libraryBookCount,
 		ImportBookCount:  importBookCount,
 		TotalBookCount:   libraryBookCount + importBookCount,
+		TotalFileCount:   fileCount,
 		AuthorCount:      authorCount,
 		SeriesCount:      seriesCount,
 		LibrarySizeBytes: librarySize,

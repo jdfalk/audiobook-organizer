@@ -1,5 +1,5 @@
 // file: web/src/pages/Series.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -109,14 +109,16 @@ const seriesColumns: ColumnDef<SeriesType>[] = [
     key: 'book_count',
     label: 'Books',
     defaultVisible: true,
-    defaultWidth: 80,
-    minWidth: 60,
+    defaultWidth: 120,
+    minWidth: 80,
     align: 'right',
     sortable: true,
     sortValue: (s) => s.book_count ?? 0,
     render: (s) => {
       const count = s.book_count ?? 0;
-      return <Chip label={count} size="small" variant={count === 0 ? 'outlined' : 'filled'} />;
+      const fileCount = s.file_count ?? 0;
+      const label = fileCount > count ? `${count} (${fileCount} files)` : `${count}`;
+      return <Chip label={label} size="small" variant={count === 0 ? 'outlined' : 'filled'} />;
     },
   },
   {

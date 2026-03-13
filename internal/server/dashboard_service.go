@@ -1,5 +1,5 @@
 // file: internal/server/dashboard_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 
 package server
@@ -25,6 +25,7 @@ func NewDashboardService(db database.Store) *DashboardService {
 // DashboardMetrics represents aggregated dashboard metrics
 type DashboardMetrics struct {
 	Books     int   `json:"books"`
+	Files     int   `json:"files"`
 	Authors   int   `json:"authors"`
 	Series    int   `json:"series"`
 	Playlists int   `json:"playlists"`
@@ -54,6 +55,11 @@ func (ds *DashboardService) CollectDashboardMetrics() (*DashboardMetrics, error)
 	// Collect book count
 	if bc, err := ds.db.CountBooks(); err == nil {
 		metrics.Books = bc
+	}
+
+	// Collect file count
+	if fc, err := ds.db.CountFiles(); err == nil {
+		metrics.Files = fc
 	}
 
 	// Collect author count
@@ -101,10 +107,11 @@ func (ds *DashboardService) GetHealthCheckResponse(version string) *HealthCheckR
 
 // GetLibraryStats returns library statistics for the dashboard
 type LibraryStats struct {
-	TotalBooks      int `json:"total_books"`
-	TotalAuthors    int `json:"total_authors"`
-	TotalSeries     int `json:"total_series"`
-	OrganizedBooks  int `json:"organized_books"`
+	TotalBooks       int `json:"total_books"`
+	TotalFiles       int `json:"total_files"`
+	TotalAuthors     int `json:"total_authors"`
+	TotalSeries      int `json:"total_series"`
+	OrganizedBooks   int `json:"organized_books"`
 	UnorganizedBooks int `json:"unorganized_books"`
 }
 
@@ -119,6 +126,11 @@ func (ds *DashboardService) CollectLibraryStats() (*LibraryStats, error) {
 	// Count total books
 	if bc, err := ds.db.CountBooks(); err == nil {
 		stats.TotalBooks = bc
+	}
+
+	// Count total files
+	if fc, err := ds.db.CountFiles(); err == nil {
+		stats.TotalFiles = fc
 	}
 
 	// Count authors
@@ -151,6 +163,7 @@ func (ds *DashboardService) CollectLibraryStats() (*LibraryStats, error) {
 // GetQuickMetrics returns a quick set of metrics for display
 type QuickMetrics struct {
 	BookCount   int `json:"book_count"`
+	FileCount   int `json:"file_count"`
 	AuthorCount int `json:"author_count"`
 	SeriesCount int `json:"series_count"`
 }
@@ -165,6 +178,10 @@ func (ds *DashboardService) CollectQuickMetrics() *QuickMetrics {
 
 	if bc, err := ds.db.CountBooks(); err == nil {
 		metrics.BookCount = bc
+	}
+
+	if fc, err := ds.db.CountFiles(); err == nil {
+		metrics.FileCount = fc
 	}
 
 	if authors, err := ds.db.GetAllAuthors(); err == nil {

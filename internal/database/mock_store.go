@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -28,6 +28,7 @@ type MockStore struct {
 	DeleteBookFunc             func(id string) error
 	SearchBooksFunc            func(query string, limit, offset int) ([]Book, error)
 	CountBooksFunc               func() (int, error)
+	CountFilesFunc               func() (int, error)
 	CountAuthorsFunc             func() (int, error)
 	CountSeriesFunc              func() (int, error)
 	GetBookCountsByLocationFunc  func(rootDir string) (int, int, error)
@@ -513,7 +514,15 @@ func (m *MockStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return map[int]int{}, nil
 }
 
+func (m *MockStore) GetAllAuthorFileCounts() (map[int]int, error) {
+	return map[int]int{}, nil
+}
+
 func (m *MockStore) GetAllSeriesBookCounts() (map[int]int, error) {
+	return map[int]int{}, nil
+}
+
+func (m *MockStore) GetAllSeriesFileCounts() (map[int]int, error) {
 	return map[int]int{}, nil
 }
 
@@ -572,6 +581,13 @@ func (m *MockStore) SearchBooks(query string, limit, offset int) ([]Book, error)
 func (m *MockStore) CountBooks() (int, error) {
 	if m.CountBooksFunc != nil {
 		return m.CountBooksFunc()
+	}
+	return 0, nil
+}
+
+func (m *MockStore) CountFiles() (int, error) {
+	if m.CountFilesFunc != nil {
+		return m.CountFilesFunc()
 	}
 	return 0, nil
 }

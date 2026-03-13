@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.53.0
+// version: 1.54.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -125,6 +125,7 @@ export interface AuthorWithCount {
   id: number;
   name: string;
   book_count: number;
+  file_count: number;
   aliases: AuthorAlias[];
 }
 
@@ -134,6 +135,7 @@ export interface SeriesWithCount {
   author_id?: number;
   created_at: string;
   book_count: number;
+  file_count: number;
   author_name?: string;
 }
 
@@ -354,6 +356,7 @@ export interface SystemStatus {
   library_book_count?: number;
   import_book_count?: number;
   total_book_count?: number;
+  total_file_count?: number;
   author_count?: number;
   series_count?: number;
   library_size_bytes?: number;
