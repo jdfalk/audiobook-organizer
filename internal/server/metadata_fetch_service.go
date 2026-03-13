@@ -76,6 +76,8 @@ type SearchMetadataResponse struct {
 }
 
 // BuildSourceChain returns metadata sources ordered by config priority.
+// Each source is wrapped with a circuit breaker that opens after 5 consecutive
+// failures and retries after 30 seconds.
 func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 	// Copy and sort by priority
 	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
@@ -89,13 +91,14 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 		if !src.Enabled {
 			continue
 		}
+		var rawSource metadata.MetadataSource
 		switch src.ID {
 		case "openlibrary":
 			client := metadata.NewOpenLibraryClient()
 			if mfs.olStore != nil {
 				client.SetOLStore(mfs.olStore)
 			}
-			chain = append(chain, client)
+			rawSource = client
 		case "google-books":
 			apiKey := config.AppConfig.GoogleBooksAPIKey
 			if apiKey == "" {
@@ -103,11 +106,11 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 					apiKey = k
 				}
 			}
-			chain = append(chain, metadata.NewGoogleBooksClient(apiKey))
+			rawSource = metadata.NewGoogleBooksClient(apiKey)
 		case "audible":
-			chain = append(chain, metadata.NewAudibleClient())
+			rawSource = metadata.NewAudibleClient()
 		case "audnexus":
-			chain = append(chain, metadata.NewAudnexusClient())
+			rawSource = metadata.NewAudnexusClient()
 		case "hardcover":
 			token := config.AppConfig.HardcoverAPIToken
 			if token == "" {
@@ -119,14 +122,17 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 				}
 			}
 			if token != "" {
-				chain = append(chain, metadata.NewHardcoverClient(token))
+				rawSource = metadata.NewHardcoverClient(token)
 			} else {
 				log.Printf("[WARN] Hardcover source enabled but no API token configured")
 			}
 		case "wikipedia":
-			chain = append(chain, metadata.NewWikipediaClient())
+			rawSource = metadata.NewWikipediaClient()
 		default:
 			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
+		}
+		if rawSource != nil {
+			chain = append(chain, metadata.NewProtectedSource(rawSource, 5, 30*time.Second))
 		}
 	}
 	return chain
