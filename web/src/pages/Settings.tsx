@@ -328,6 +328,90 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
   );
 }
 
+interface MaintenanceWindowSectionProps {
+  settings: {
+    maintenanceWindowEnabled: boolean;
+    maintenanceWindowStart: number;
+    maintenanceWindowEnd: number;
+  };
+  setSettings: React.Dispatch<React.SetStateAction<any>>;
+}
+
+function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSectionProps) {
+  const hourOptions = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <Paper sx={{ mt: 4, p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Maintenance Window
+      </Typography>
+
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={settings.maintenanceWindowEnabled}
+                onChange={(e) =>
+                  setSettings((prev: any) => ({
+                    ...prev,
+                    maintenanceWindowEnabled: e.target.checked,
+                  }))
+                }
+              />
+            }
+            label="Enable maintenance window"
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={3}>
+          <TextField
+            select
+            fullWidth
+            label="Window start (hour)"
+            value={settings.maintenanceWindowStart}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                maintenanceWindowStart: parseInt(e.target.value),
+              }))
+            }
+            size="small"
+          >
+            {hourOptions.map((h) => (
+              <MenuItem key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+
+        <Grid item xs={12} sm={3}>
+          <TextField
+            select
+            fullWidth
+            label="Window end (hour)"
+            value={settings.maintenanceWindowEnd}
+            onChange={(e) =>
+              setSettings((prev: any) => ({
+                ...prev,
+                maintenanceWindowEnd: parseInt(e.target.value),
+              }))
+            }
+            size="small"
+          >
+            {hourOptions.map((h) => (
+              <MenuItem key={h} value={h}>
+                {String(h).padStart(2, '0')}:00
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      </Grid>
+    </Paper>
+  );
+}
+
 export function Settings() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -435,6 +519,9 @@ export function Settings() {
     autoUpdateCheckMinutes: number;
     autoUpdateWindowStart: number;
     autoUpdateWindowEnd: number;
+    maintenanceWindowEnabled: boolean;
+    maintenanceWindowStart: number;
+    maintenanceWindowEnd: number;
     pathFormat: string;
     segmentTitleFormat: string;
     autoRenameOnApply: boolean;
@@ -534,6 +621,11 @@ export function Settings() {
     autoUpdateCheckMinutes: 60,
     autoUpdateWindowStart: 1,
     autoUpdateWindowEnd: 4,
+
+    // Maintenance window
+    maintenanceWindowEnabled: false,
+    maintenanceWindowStart: 2,
+    maintenanceWindowEnd: 4,
 
     // Smart apply pipeline
     pathFormat: '{author}/{series_prefix}{title}/{track_title}.{ext}',
@@ -722,6 +814,11 @@ export function Settings() {
         autoUpdateCheckMinutes: config.auto_update_check_minutes || 60,
         autoUpdateWindowStart: config.auto_update_window_start ?? 1,
         autoUpdateWindowEnd: config.auto_update_window_end ?? 4,
+
+        // Maintenance window
+        maintenanceWindowEnabled: config.maintenance_window_enabled ?? false,
+        maintenanceWindowStart: config.maintenance_window_start ?? 2,
+        maintenanceWindowEnd: config.maintenance_window_end ?? 4,
 
         // Smart apply pipeline
         pathFormat: config.path_format || '{author}/{series_prefix}{title}/{track_title}.{ext}',
@@ -1316,6 +1413,11 @@ export function Settings() {
         auto_update_check_minutes: settings.autoUpdateCheckMinutes,
         auto_update_window_start: settings.autoUpdateWindowStart,
         auto_update_window_end: settings.autoUpdateWindowEnd,
+
+        // Maintenance window
+        maintenance_window_enabled: settings.maintenanceWindowEnabled,
+        maintenance_window_start: settings.maintenanceWindowStart,
+        maintenance_window_end: settings.maintenanceWindowEnd,
 
         // Smart apply pipeline
         path_format: settings.pathFormat,
@@ -3037,6 +3139,8 @@ export function Settings() {
           <SystemInfoTab />
 
           <UpdatesSection settings={settings} setSettings={setSettings} />
+
+          <MaintenanceWindowSection settings={settings} setSettings={setSettings} />
 
           <Paper
             sx={{
