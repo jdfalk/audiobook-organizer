@@ -5,6 +5,7 @@
 package itunes
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -493,7 +494,8 @@ func TestValidateImport_InvalidLibrary(t *testing.T) {
 }
 
 func TestValidateImport_EstimatedTime(t *testing.T) {
-	// Verify estimated time formatting with test library (0 files found = "0 seconds")
+	// Verify estimated time formatting with test library
+	// EstimatedTime is based on AudiobookCount (unique books), not FilesFound
 	opts := ImportOptions{
 		LibraryPath: testLibraryPath(t),
 		ImportMode:  ImportModeImport,
@@ -504,8 +506,9 @@ func TestValidateImport_EstimatedTime(t *testing.T) {
 		t.Fatalf("ValidateImport() error = %v", err)
 	}
 
-	if result.EstimatedTime != "0 seconds" {
-		t.Errorf("EstimatedTime = %q, want %q", result.EstimatedTime, "0 seconds")
+	expected := fmt.Sprintf("%d seconds", result.AudiobookCount)
+	if result.EstimatedTime != expected {
+		t.Errorf("EstimatedTime = %q, want %q", result.EstimatedTime, expected)
 	}
 }
 

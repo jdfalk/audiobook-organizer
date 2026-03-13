@@ -480,7 +480,7 @@ func TestBuildITunesSummary(t *testing.T) {
 		Failed:   2,
 	}
 	summary := buildITunesSummary(status)
-	if !strings.Contains(summary, "10 imported") || !strings.Contains(summary, "3 skipped") || !strings.Contains(summary, "2 failed") {
+	if !strings.Contains(summary, "10 new") || !strings.Contains(summary, "0 linked") || !strings.Contains(summary, "3 skipped") || !strings.Contains(summary, "2 failed") {
 		t.Errorf("unexpected summary: %q", summary)
 	}
 }
