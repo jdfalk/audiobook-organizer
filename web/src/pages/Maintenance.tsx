@@ -1,5 +1,5 @@
 // file: web/src/pages/Maintenance.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 import { useEffect, useState } from 'react';
@@ -93,6 +93,26 @@ export function Maintenance() {
     }
   };
 
+  const handleMaintenanceWindowToggle = async (name: string, runInMaintenanceWindow: boolean) => {
+    try {
+      await api.updateTaskConfig(name, { run_in_maintenance_window: runInMaintenanceWindow });
+      fetchTasks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update maintenance window setting');
+    }
+  };
+
+  const handleRunMaintenanceWindow = async () => {
+    setSuccessMsg(null);
+    try {
+      await api.runMaintenanceWindow();
+      setSuccessMsg('Maintenance window triggered');
+      setTimeout(fetchTasks, 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to run maintenance window');
+    }
+  };
+
   const grouped = categoryOrder.map((cat) => ({
     category: cat,
     label: categoryLabels[cat] || cat,
@@ -104,9 +124,19 @@ export function Maintenance() {
       <Typography variant="h4" gutterBottom>
         Maintenance & Scheduled Tasks
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Configure and manually trigger background tasks. Scheduled tasks run automatically at the configured interval.
       </Typography>
+
+      <Box sx={{ mb: 3 }}>
+        <Button
+          variant="outlined"
+          startIcon={<PlayArrowIcon />}
+          onClick={handleRunMaintenanceWindow}
+        >
+          Run Maintenance Now
+        </Button>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -176,6 +206,18 @@ export function Maintenance() {
                           />
                         }
                         label="On Start"
+                        sx={{ mx: 0 }}
+                      />
+
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            size="small"
+                            checked={task.run_in_maintenance_window}
+                            onChange={(e) => handleMaintenanceWindowToggle(task.name, e.target.checked)}
+                          />
+                        }
+                        label="Maint. Window"
                         sx={{ mx: 0 }}
                       />
 
