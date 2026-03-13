@@ -1,0 +1,45 @@
+%% file: docs/diagrams/flow-maintenance-window.mmd
+%% version: 1.0.0
+%% guid: d4e5f6a7-b8c9-0123-def4-567890abcdef
+%%
+%% Unified Maintenance Window Flow
+%% Render with: mmdc -i flow-maintenance-window.mmd -o flow-maintenance-window.svg
+
+flowchart TD
+    Start([Scheduler starts]) --> CalcNext["Calculate next window open time"]
+    CalcNext --> CheckLoop["Check every 60s:<br/>Is current time in window?<br/>Has today's run completed?"]
+
+    CheckLoop -->|"Not in window<br/>or already ran today"| CheckLoop
+    CheckLoop -->|"In window,<br/>not yet run today"| CreateOp["Create operation:<br/>maintenance-window"]
+
+    CreateOp --> AutoUpdate{"AutoUpdateEnabled?"}
+    AutoUpdate -->|"Yes"| RunUpdate["1. Run auto-update"]
+    AutoUpdate -->|"No"| NextTask
+
+    RunUpdate --> UpdateDone["Auto-update complete"]
+    UpdateDone --> NextTask
+
+    NextTask["Get next task from order:<br/>reconcile → dedup → split →<br/>prune → tombstone → purge →<br/>logs → db_optimize"] --> CheckTask{"Task enabled AND<br/>RunInMaintenanceWindow?"}
+    CheckTask -->|"No"| SkipTask["Skip, log reason"]
+    CheckTask -->|"Yes"| CheckRunning{"Already running<br/>via interval ticker?"}
+    CheckRunning -->|"Yes"| SkipTask
+    CheckRunning -->|"No"| RunTask["Run task<br/>Log: 'Running 3/7 series_prune'"]
+
+    RunTask --> TaskResult{"Task succeeded?"}
+    TaskResult -->|"Yes"| TaskDone["Log success"]
+    TaskResult -->|"No"| TaskFailed["Log error,<br/>continue to next"]
+    SkipTask --> MoreTasks
+    TaskFailed --> MoreTasks
+
+    TaskDone --> CheckWindow{"Still within<br/>window hours?"}
+    CheckWindow -->|"No"| WindowClose["Log: window closed<br/>skip remaining tasks"]
+    CheckWindow -->|"Yes"| MoreTasks{"More tasks?"}
+
+    MoreTasks -->|"Yes"| NextTask
+    MoreTasks -->|"No"| Complete
+
+    WindowClose --> Complete["Mark lastMaintenanceRun = today<br/>Complete operation"]
+
+    style Start fill:#e3f2fd
+    style Complete fill:#e8f5e9
+    style WindowClose fill:#fff3e0
