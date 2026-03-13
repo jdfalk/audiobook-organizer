@@ -1,5 +1,5 @@
 // file: internal/openlibrary/store_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 
 package openlibrary
@@ -150,4 +150,13 @@ func TestImportInvalidDumpType(t *testing.T) {
 	})
 	err = store.ImportDump("invalid", dumpPath, nil)
 	assert.Error(t, err)
+}
+
+func TestOLStore_Optimize(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewOLStore(filepath.Join(dir, "testdb"))
+	require.NoError(t, err)
+	defer store.Close()
+	err = store.Optimize()
+	assert.NoError(t, err)
 }

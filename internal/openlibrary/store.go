@@ -1,5 +1,5 @@
 // file: internal/openlibrary/store.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package openlibrary
@@ -7,6 +7,7 @@ package openlibrary
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -39,6 +40,11 @@ func NewOLStore(path string) (*OLStore, error) {
 // Close closes the underlying PebbleDB.
 func (s *OLStore) Close() error {
 	return s.db.Close()
+}
+
+// Optimize compacts the PebbleDB database to reclaim space.
+func (s *OLStore) Optimize() error {
+	return s.db.Compact(context.Background(), nil, []byte{0xff}, false)
 }
 
 // Key prefixes
