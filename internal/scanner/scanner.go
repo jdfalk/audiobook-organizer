@@ -1701,6 +1701,13 @@ func resolveAuthorID(authorName string) (*int, error) {
 		return nil, nil
 	}
 
+	// Normalize collapsed initials: "J.B." → "J. B."
+	initialsRe := regexp.MustCompile(`([A-Z]\.)([A-Z])`)
+	for initialsRe.MatchString(trimmed) {
+		trimmed = initialsRe.ReplaceAllString(trimmed, "$1 $2")
+	}
+	trimmed = strings.TrimSpace(trimmed)
+
 	author, err := database.GlobalStore.GetAuthorByName(trimmed)
 	if err != nil {
 		return nil, fmt.Errorf("author lookup failed: %w", err)

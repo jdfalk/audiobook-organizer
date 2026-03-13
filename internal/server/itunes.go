@@ -1419,6 +1419,7 @@ func ensureAuthorIDs(name string) ([]int, error) {
 		if part == "" {
 			continue
 		}
+		part = NormalizeAuthorName(part)
 		author, err := database.GlobalStore.GetAuthorByName(part)
 		if err != nil {
 			return nil, err
