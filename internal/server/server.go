@@ -3711,8 +3711,9 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 // mergeSeriesGroup merges multiple series into one, reassigning all books.
 func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	var req struct {
-		KeepID   int   `json:"keep_id" binding:"required"`
-		MergeIDs []int `json:"merge_ids" binding:"required"`
+		KeepID     int    `json:"keep_id" binding:"required"`
+		MergeIDs   []int  `json:"merge_ids" binding:"required"`
+		CustomName string `json:"custom_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -3746,9 +3747,30 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 
 	keepID := req.KeepID
 	mergeIDs := req.MergeIDs
+	customName := strings.TrimSpace(req.CustomName)
 	keepName := keepSeries.Name
+	if customName != "" {
+		keepName = customName
+	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		// Rename the kept series if a custom name was provided
+		if customName != "" {
+			oldName := keepSeries.Name
+			if err := store.UpdateSeriesName(keepID, customName); err != nil {
+				return fmt.Errorf("failed to rename series to %q: %w", customName, err)
+			}
+			_ = store.CreateOperationChange(&database.OperationChange{
+				ID:          ulid.Make().String(),
+				OperationID: opID,
+				ChangeType:  "metadata_update",
+				FieldName:   "series_name",
+				OldValue:    oldName,
+				NewValue:    customName,
+			})
+			_ = progress.Log("info", fmt.Sprintf("Renamed series from %q to %q", oldName, customName), nil)
+		}
+
 		_ = progress.Log("info", fmt.Sprintf("Merging %d series into \"%s\"", len(mergeIDs), keepName), nil)
 		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting series merge...")
 

@@ -1,8 +1,7 @@
-%% file: docs/diagrams/flow-itunes-import.mmd
-%% version: 1.0.0
-%% guid: e5f6a7b8-c9d0-1234-efab-456789012345
-
 flowchart TD
+    %% file: docs/diagrams/flow-itunes-import.mmd
+    %% version: 1.0.1
+    %% guid: e5f6a7b8-c9d0-1234-efab-456789012345
     Start([User clicks Import]) --> Validate["POST /api/v1/itunes/validate<br/>handleITunesValidate()"]
     Validate --> ParseXML["itunes.ParseLibrary()<br/>Parse 88K+ tracks from XML"]
     ParseXML --> FilterAudiobooks["itunes.IsAudiobook()<br/>Filter to audiobook tracks only"]

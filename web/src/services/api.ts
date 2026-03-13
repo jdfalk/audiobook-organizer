@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.52.0
+// version: 1.53.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -1845,11 +1845,13 @@ export async function deduplicateSeries(): Promise<Operation> {
   return response.json();
 }
 
-export async function mergeSeriesGroup(keepId: number, mergeIds: number[]): Promise<Operation> {
+export async function mergeSeriesGroup(keepId: number, mergeIds: number[], customName?: string): Promise<Operation> {
+  const body: Record<string, unknown> = { keep_id: keepId, merge_ids: mergeIds };
+  if (customName) body.custom_name = customName;
   const response = await fetch(`${API_BASE}/series/merge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keep_id: keepId, merge_ids: mergeIds }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge series');

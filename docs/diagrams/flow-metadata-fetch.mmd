@@ -1,10 +1,8 @@
-%% file: docs/diagrams/flow-metadata-fetch.mmd
-%% version: 1.0.0
-%% guid: b8c9d0e1-f2a3-4567-bcde-789012345678
-%%
-%% Metadata Fetch Flow
-
 flowchart TD
+    %% file: docs/diagrams/flow-metadata-fetch.mmd
+    %% version: 1.0.1
+    %% guid: b8c9d0e1-f2a3-4567-bcde-789012345678
+    %% Metadata Fetch Flow
     Start([Fetch Metadata]) --> Route["POST /api/v1/audiobooks/:id/metadata<br/>or searchMetadataForBook()"]
 
     Route --> GetBook["GetBookByID()"]

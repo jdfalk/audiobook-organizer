@@ -1,5 +1,5 @@
 // file: web/src/pages/Series.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -273,6 +273,8 @@ export function Series() {
   const [renameValue, setRenameValue] = useState('');
   const [mergeDialog, setMergeDialog] = useState(false);
   const [mergeKeepId, setMergeKeepId] = useState<number | null>(null);
+  const [mergeCustomName, setMergeCustomName] = useState('');
+  const [mergeUseCustomName, setMergeUseCustomName] = useState(false);
   const [splitDialog, setSplitDialog] = useState<{ open: boolean; series: SeriesType | null }>({ open: false, series: null });
   const [splitBooks, setSplitBooks] = useState<Book[]>([]);
   const [splitSelected, setSplitSelected] = useState<Set<string>>(new Set());
@@ -418,16 +420,19 @@ export function Series() {
       return;
     }
     setMergeKeepId(null);
+    setMergeCustomName('');
+    setMergeUseCustomName(false);
     setMergeDialog(true);
   };
 
   const doMerge = async () => {
     if (mergeKeepId === null) return;
     const mergeIds = [...selected].filter((id) => id !== mergeKeepId);
-    const keepName = selectedSeries.find((s) => s.id === mergeKeepId)?.name ?? '?';
+    const finalName = mergeUseCustomName && mergeCustomName.trim() ? mergeCustomName.trim() : undefined;
+    const keepName = finalName ?? selectedSeries.find((s) => s.id === mergeKeepId)?.name ?? '?';
     const mergedNames = selectedSeries.filter((s) => s.id !== mergeKeepId).map((s) => s.name).join(', ');
     try {
-      await api.mergeSeriesGroup(mergeKeepId, mergeIds);
+      await api.mergeSeriesGroup(mergeKeepId, mergeIds, finalName);
       addHistory({ action: 'merge', description: `Merged "${mergedNames}" into "${keepName}"`, undoable: false });
       setSnackbar({ open: true, message: 'Series merged', severity: 'success' });
       setMergeDialog(false);
@@ -671,8 +676,9 @@ export function Series() {
         <DialogTitle>Merge Series</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Select the canonical series to keep. All books from the other series will be moved to it.
+            Select which series to keep, then choose to use its existing name or enter a custom name.
           </Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Keep series:</Typography>
           <RadioGroup value={mergeKeepId ?? ''} onChange={(e) => setMergeKeepId(Number(e.target.value))}>
             {selectedSeries.map((s) => (
               <FormControlLabel
@@ -689,10 +695,27 @@ export function Series() {
               />
             ))}
           </RadioGroup>
+          {mergeKeepId !== null && (
+            <Box sx={{ mt: 2, pl: 1 }}>
+              <FormControlLabel
+                control={<Checkbox checked={mergeUseCustomName} onChange={(e) => setMergeUseCustomName(e.target.checked)} />}
+                label="Use custom name for merged series"
+              />
+              {mergeUseCustomName && (
+                <TextField
+                  autoFocus fullWidth size="small"
+                  label="Custom series name"
+                  value={mergeCustomName}
+                  onChange={(e) => setMergeCustomName(e.target.value)}
+                  sx={{ mt: 1 }}
+                />
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setMergeDialog(false)}>Cancel</Button>
-          <Button variant="contained" onClick={doMerge} disabled={mergeKeepId === null}>Merge</Button>
+          <Button variant="contained" onClick={doMerge} disabled={mergeKeepId === null || (mergeUseCustomName && !mergeCustomName.trim())}>Merge</Button>
         </DialogActions>
       </Dialog>
 
