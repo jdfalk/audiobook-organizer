@@ -98,9 +98,15 @@ type OverridePayload struct {
 	Clear        bool            `json:"clear,omitempty"`
 }
 
-// GetAudiobooks retrieves audiobooks with optional filtering
-// Supports search, author_id, and series_id filters
-func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offset int, search string, authorID *int, seriesID *int) ([]database.Book, error) {
+// ListFilters holds optional filters for listing audiobooks.
+type ListFilters struct {
+	IsPrimaryVersion *bool
+	LibraryState     string
+}
+
+// GetAudiobooks retrieves audiobooks with optional filtering.
+// Supports search, author_id, series_id, is_primary_version, and library_state filters.
+func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offset int, search string, authorID *int, seriesID *int, filters ...ListFilters) ([]database.Book, error) {
 	if svc.store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -111,6 +117,21 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	}
 	if offset < 0 {
 		offset = 0
+	}
+
+	var f ListFilters
+	if len(filters) > 0 {
+		f = filters[0]
+	}
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != ""
+
+	// When post-filters are active, fetch all and filter in memory
+	// (PebbleStore doesn't support query-level boolean/string filtering)
+	storeLimit := limit
+	storeOffset := offset
+	if hasPostFilters {
+		storeLimit = 0
+		storeOffset = 0
 	}
 
 	// Initialize as empty slice to ensure we return [] instead of null
@@ -128,18 +149,55 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Fall back to generic list only when no filter was applied
 	if search == "" && authorID == nil && seriesID == nil {
-		cacheKey := fmt.Sprintf("all:%d:%d", limit, offset)
-		if cached, ok := svc.listCache.Get(cacheKey); ok {
-			return cached, nil
-		}
-		books, err = svc.store.GetAllBooks(limit, offset)
-		if err == nil && books != nil {
-			svc.listCache.Set(cacheKey, books)
+		if !hasPostFilters {
+			cacheKey := fmt.Sprintf("all:%d:%d", limit, offset)
+			if cached, ok := svc.listCache.Get(cacheKey); ok {
+				return cached, nil
+			}
+			books, err = svc.store.GetAllBooks(storeLimit, storeOffset)
+			if err == nil && books != nil {
+				svc.listCache.Set(cacheKey, books)
+			}
+		} else {
+			books, err = svc.store.GetAllBooks(storeLimit, storeOffset)
 		}
 	}
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Apply post-filters
+	if hasPostFilters {
+		filtered := make([]database.Book, 0, len(books))
+		for _, b := range books {
+			if f.IsPrimaryVersion != nil {
+				bPrimary := b.IsPrimaryVersion != nil && *b.IsPrimaryVersion
+				if *f.IsPrimaryVersion != bPrimary {
+					continue
+				}
+			}
+			if f.LibraryState != "" {
+				bState := ""
+				if b.LibraryState != nil {
+					bState = *b.LibraryState
+				}
+				if bState != f.LibraryState {
+					continue
+				}
+			}
+			filtered = append(filtered, b)
+		}
+		// Apply pagination after filtering
+		if offset > 0 && offset < len(filtered) {
+			filtered = filtered[offset:]
+		} else if offset >= len(filtered) {
+			filtered = nil
+		}
+		if limit > 0 && limit < len(filtered) {
+			filtered = filtered[:limit]
+		}
+		books = filtered
 	}
 
 	// Ensure we never return null - always return empty array
@@ -148,6 +206,37 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	}
 
 	return books, nil
+}
+
+// CountAudiobooksFiltered returns the count of audiobooks matching the given filters.
+func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filters ListFilters) (int, error) {
+	if svc.store == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	books, err := svc.store.GetAllBooks(0, 0)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, b := range books {
+		if filters.IsPrimaryVersion != nil {
+			bPrimary := b.IsPrimaryVersion != nil && *b.IsPrimaryVersion
+			if *filters.IsPrimaryVersion != bPrimary {
+				continue
+			}
+		}
+		if filters.LibraryState != "" {
+			bState := ""
+			if b.LibraryState != nil {
+				bState = *b.LibraryState
+			}
+			if bState != filters.LibraryState {
+				continue
+			}
+		}
+		count++
+	}
+	return count, nil
 }
 
 // splitMultipleNames splits a name string on " & " to support multiple authors/narrators.
@@ -650,12 +739,13 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				if aName == "" {
 					continue
 				}
-				author, err := svc.store.GetAuthorByName(aName)
+				normalizedName := NormalizeAuthorName(aName)
+				author, err := svc.store.GetAuthorByName(normalizedName)
 				if err != nil {
 					return nil, fmt.Errorf("failed to resolve author")
 				}
 				if author == nil {
-					author, err = svc.store.CreateAuthor(aName)
+					author, err = svc.store.CreateAuthor(normalizedName)
 					if err != nil {
 						return nil, fmt.Errorf("failed to create author")
 					}
