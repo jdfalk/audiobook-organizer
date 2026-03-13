@@ -1,10 +1,8 @@
-%% file: docs/diagrams/flow-organize.mmd
-%% version: 1.1.0
-%% guid: a7b8c9d0-e1f2-3456-abcd-678901234567
-%%
-%% File Organization Flow
-
 flowchart TD
+    %% file: docs/diagrams/flow-organize.mmd
+    %% version: 1.1.1
+    %% guid: a7b8c9d0-e1f2-3456-abcd-678901234567
+    %% File Organization Flow
     Start([Organize triggered]) --> Route["POST /api/v1/organize<br/>server.startOrganize()"]
     Route --> QueueOp["operations.Enqueue('organize')"]
     QueueOp --> GetBooks["Get books to organize<br/>(by folder or all unorganized)"]

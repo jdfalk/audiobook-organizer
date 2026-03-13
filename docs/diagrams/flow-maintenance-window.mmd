@@ -1,11 +1,9 @@
-%% file: docs/diagrams/flow-maintenance-window.mmd
-%% version: 1.0.0
-%% guid: d4e5f6a7-b8c9-0123-def4-567890abcdef
-%%
-%% Unified Maintenance Window Flow
-%% Render with: mmdc -i flow-maintenance-window.mmd -o flow-maintenance-window.svg
-
 flowchart TD
+    %% file: docs/diagrams/flow-maintenance-window.mmd
+    %% version: 1.0.1
+    %% guid: d4e5f6a7-b8c9-0123-def4-567890abcdef
+    %% Unified Maintenance Window Flow
+    %% Render with: mmdc -i flow-maintenance-window.mmd -o flow-maintenance-window.svg
     Start([Scheduler starts]) --> CalcNext["Calculate next window open time"]
     CalcNext --> CheckLoop["Check every 60s:<br/>Is current time in window?<br/>Has today's run completed?"]
 

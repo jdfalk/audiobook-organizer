@@ -1355,7 +1355,7 @@ func (s *SQLiteStore) UpdateSeriesName(id int, name string) error {
 func (s *SQLiteStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	rows, err := s.db.Query(`SELECT series_id, COUNT(*)
 		FROM books
-		WHERE series_id IS NOT NULL AND COALESCE(marked_for_deletion, 0) = 0
+		WHERE series_id IS NOT NULL AND COALESCE(marked_for_deletion, 0) = 0 AND COALESCE(is_primary_version, 1) = 1
 		GROUP BY series_id`)
 	if err != nil {
 		return nil, err
@@ -2094,7 +2094,7 @@ func (s *SQLiteStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	rows, err := s.db.Query(`SELECT ba.author_id, COUNT(DISTINCT ba.book_id)
 		FROM book_authors ba
 		JOIN books b ON b.id = ba.book_id
-		WHERE COALESCE(b.marked_for_deletion, 0) = 0
+		WHERE COALESCE(b.marked_for_deletion, 0) = 0 AND COALESCE(b.is_primary_version, 1) = 1
 		GROUP BY ba.author_id`)
 	if err != nil {
 		return nil, err

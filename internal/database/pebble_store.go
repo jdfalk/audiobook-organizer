@@ -737,7 +737,13 @@ func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	counts := make(map[int]int, len(series))
 	for _, s := range series {
 		books, _ := p.GetBooksBySeriesID(s.ID)
-		counts[s.ID] = len(books)
+		count := 0
+		for _, b := range books {
+			if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
+				count++
+			}
+		}
+		counts[s.ID] = count
 	}
 	return counts, nil
 }
@@ -1221,7 +1227,13 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	counts := make(map[int]int, len(authors))
 	for _, a := range authors {
 		books, _ := p.GetBooksByAuthorID(a.ID)
-		counts[a.ID] = len(books)
+		count := 0
+		for _, b := range books {
+			if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
+				count++
+			}
+		}
+		counts[a.ID] = count
 	}
 	return counts, nil
 }
@@ -1824,6 +1836,10 @@ func (p *PebbleStore) CountBooks() (int, error) {
 			return 0, err
 		}
 		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		// Skip non-primary versions so duplicate editions don't inflate counts
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 			continue
 		}
 		count++
