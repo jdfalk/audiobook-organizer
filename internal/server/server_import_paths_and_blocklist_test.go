@@ -38,10 +38,12 @@ func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 	// Authors endpoint: GetAllAuthors + GetAllAuthorBookCounts + GetAllAuthorAliases
 	store.EXPECT().GetAllAuthors().Return(([]database.Author)(nil), nil).Maybe()
 	store.EXPECT().GetAllAuthorBookCounts().Return(map[int]int{}, nil).Maybe()
+	store.EXPECT().GetAllAuthorFileCounts().Return(map[int]int{}, nil).Maybe()
 	store.EXPECT().GetAllAuthorAliases().Return([]database.AuthorAlias{}, nil).Maybe()
-	// Series endpoint: GetAllSeries + GetAllSeriesBookCounts + GetAllAuthors (for author names)
+	// Series endpoint: GetAllSeries + GetAllSeriesBookCounts + GetAllSeriesFileCounts + GetAllAuthors (for author names)
 	store.EXPECT().GetAllSeries().Return(([]database.Series)(nil), nil).Maybe()
 	store.EXPECT().GetAllSeriesBookCounts().Return(map[int]int{}, nil).Maybe()
+	store.EXPECT().GetAllSeriesFileCounts().Return(map[int]int{}, nil).Maybe()
 
 	server, cleanup := setupTestServerWithStore(t, store)
 	defer cleanup()

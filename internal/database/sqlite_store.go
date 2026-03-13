@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1372,6 +1373,63 @@ func (s *SQLiteStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	return counts, rows.Err()
 }
 
+// GetAllSeriesFileCounts returns the number of audio files per series.
+// Books with active segments count their segments; books without count as 1.
+func (s *SQLiteStore) GetAllSeriesFileCounts() (map[int]int, error) {
+	rows, err := s.db.Query(`
+		SELECT series_id, id
+		FROM books
+		WHERE series_id IS NOT NULL AND COALESCE(marked_for_deletion, 0) = 0 AND COALESCE(is_primary_version, 1) = 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Collect book IDs per series
+	seriesBooks := make(map[int][]string)
+	for rows.Next() {
+		var seriesID int
+		var bookID string
+		if err := rows.Scan(&seriesID, &bookID); err != nil {
+			return nil, err
+		}
+		seriesBooks[seriesID] = append(seriesBooks[seriesID], bookID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get segment counts per book_id (numeric)
+	bookSegCounts := make(map[string]int)
+	segRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_segments WHERE active = 1 GROUP BY book_id")
+	if err == nil {
+		defer segRows.Close()
+		for segRows.Next() {
+			var numericID, count int
+			if err := segRows.Scan(&numericID, &count); err != nil {
+				break
+			}
+			bookSegCounts[fmt.Sprintf("%d", numericID)] = count
+		}
+	}
+
+	counts := make(map[int]int)
+	for seriesID, ids := range seriesBooks {
+		total := 0
+		for _, id := range ids {
+			crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
+			if segCount, ok := bookSegCounts[crc]; ok && segCount > 0 {
+				total += segCount
+			} else {
+				total++ // No segments, counts as 1 file
+			}
+		}
+		counts[seriesID] = total
+	}
+
+	return counts, nil
+}
+
 func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
 	var series Series
 	err := s.db.QueryRow("SELECT id, name, author_id FROM series WHERE id = ?", id).
@@ -2111,6 +2169,84 @@ func (s *SQLiteStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return counts, rows.Err()
 }
 
+// GetAllAuthorFileCounts returns the number of audio files per author.
+// Books with active segments count their segments; books without count as 1.
+func (s *SQLiteStore) GetAllAuthorFileCounts() (map[int]int, error) {
+	// For each author's books, calculate file count:
+	// - Books with active segments: count segments
+	// - Books without segments: count as 1 file
+	rows, err := s.db.Query(`
+		SELECT ba.author_id, b.id
+		FROM book_authors ba
+		JOIN books b ON b.id = ba.book_id
+		WHERE COALESCE(b.marked_for_deletion, 0) = 0 AND COALESCE(b.is_primary_version, 1) = 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Collect book IDs per author
+	authorBooks := make(map[int][]string)
+	for rows.Next() {
+		var authorID int
+		var bookID string
+		if err := rows.Scan(&authorID, &bookID); err != nil {
+			return nil, err
+		}
+		authorBooks[authorID] = append(authorBooks[authorID], bookID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Build a set of all unique book IDs to look up segments
+	allBookIDs := make(map[string]bool)
+	for _, ids := range authorBooks {
+		for _, id := range ids {
+			allBookIDs[id] = true
+		}
+	}
+
+	// Get segment counts per book (using book_segments table)
+	bookSegCounts := make(map[string]int)
+	segRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_segments WHERE active = 1 GROUP BY book_id")
+	if err == nil {
+		defer segRows.Close()
+		for segRows.Next() {
+			var numericID, count int
+			if err := segRows.Scan(&numericID, &count); err != nil {
+				break
+			}
+			// We need to map numeric IDs back; store by numeric ID for now
+			bookSegCounts[fmt.Sprintf("%d", numericID)] = count
+		}
+	}
+
+	// Build CRC32 lookup for our book IDs
+	bookCRC := make(map[string]string) // CRC32 string -> book ID
+	for id := range allBookIDs {
+		crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
+		bookCRC[crc] = id
+	}
+
+	// Calculate file counts per author
+	counts := make(map[int]int)
+	for authorID, ids := range authorBooks {
+		total := 0
+		for _, id := range ids {
+			crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
+			if segCount, ok := bookSegCounts[crc]; ok && segCount > 0 {
+				total += segCount
+			} else {
+				total++ // No segments, counts as 1 file
+			}
+		}
+		counts[authorID] = total
+	}
+
+	return counts, nil
+}
+
 // --- Narrator methods ---
 
 func (s *SQLiteStore) CreateNarrator(name string) (*Narrator, error) {
@@ -2539,6 +2675,36 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 	return count, err
 }
 
+// CountFiles returns the total number of audio files across all books.
+// Books with active segments count their segments; books without segments count as 1 file each.
+func (s *SQLiteStore) CountFiles() (int, error) {
+	// Count active segments
+	var segCount int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM book_segments WHERE active = 1").Scan(&segCount)
+	if err != nil {
+		// Table may not exist yet; treat as 0
+		segCount = 0
+	}
+
+	// Count all primary, non-deleted books
+	var bookCount int
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND COALESCE(is_primary_version, 1) = 1`).Scan(&bookCount)
+	if err != nil {
+		return 0, err
+	}
+
+	// Count distinct books that have active segments
+	var booksWithSegs int
+	err = s.db.QueryRow("SELECT COUNT(DISTINCT book_id) FROM book_segments WHERE active = 1").Scan(&booksWithSegs)
+	if err != nil {
+		// Table may not exist yet; treat as 0
+		booksWithSegs = 0
+	}
+
+	// Total files = active segments + books without any segments (each counts as 1 file)
+	return segCount + (bookCount - booksWithSegs), nil
+}
+
 func (s *SQLiteStore) CountAuthors() (int, error) {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM authors").Scan(&count)
@@ -2626,6 +2792,11 @@ func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
 		&stats.TotalBooks, &stats.TotalDuration, &stats.TotalSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get book aggregates: %w", err)
+	}
+
+	// File count
+	if fc, err := s.CountFiles(); err == nil {
+		stats.TotalFiles = fc
 	}
 
 	// Author and series counts

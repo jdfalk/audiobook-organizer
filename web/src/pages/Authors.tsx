@@ -1,5 +1,5 @@
 // file: web/src/pages/Authors.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -100,12 +100,14 @@ const authorColumns: ColumnDef<api.AuthorWithCount>[] = [
     key: 'book_count',
     label: 'Books',
     defaultVisible: true,
-    defaultWidth: 80,
-    minWidth: 60,
+    defaultWidth: 120,
+    minWidth: 80,
     align: 'right',
     sortable: true,
     sortValue: (a) => a.book_count,
-    render: (a) => a.book_count,
+    render: (a) => a.file_count > a.book_count
+      ? `${a.book_count} (${a.file_count} files)`
+      : `${a.book_count}`,
   },
   {
     key: 'alias_count',

@@ -273,6 +273,9 @@ func (s *stubStore) PruneBookVersions(id string, keepCount int) (int, error) { r
 func (s *stubStore) DeleteAuthor(id int) error                                   { return nil }
 func (s *stubStore) GetAllAuthorBookCounts() (map[int]int, error)                { return map[int]int{}, nil }
 func (s *stubStore) GetAllSeriesBookCounts() (map[int]int, error)                { return map[int]int{}, nil }
+func (s *stubStore) CountFiles() (int, error)                                    { return 0, nil }
+func (s *stubStore) GetAllAuthorFileCounts() (map[int]int, error)                { return map[int]int{}, nil }
+func (s *stubStore) GetAllSeriesFileCounts() (map[int]int, error)                { return map[int]int{}, nil }
 func (s *stubStore) DeleteSeries(id int) error                               { return nil }
 func (s *stubStore) UpdateAuthorName(id int, name string) error              { return nil }
 func (s *stubStore) UpdateSeriesName(id int, name string) error              { return nil }

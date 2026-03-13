@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.38.0
+// version: 2.39.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -51,6 +51,7 @@ type Store interface {
 	SetBookAuthors(bookID string, authors []BookAuthor) error
 	GetBooksByAuthorIDWithRole(authorID int) ([]Book, error)
 	GetAllAuthorBookCounts() (map[int]int, error)
+	GetAllAuthorFileCounts() (map[int]int, error)
 
 	// Narrators
 	CreateNarrator(name string) (*Narrator, error)
@@ -70,6 +71,7 @@ type Store interface {
 	DeleteSeries(id int) error
 	UpdateSeriesName(id int, name string) error
 	GetAllSeriesBookCounts() (map[int]int, error)
+	GetAllSeriesFileCounts() (map[int]int, error)
 
 	// Works (logical title-level grouping across editions/narrations)
 	GetAllWorks() ([]Work, error)
@@ -105,6 +107,7 @@ type Store interface {
 	DeleteBook(id string) error                      // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
+	CountFiles() (int, error)
 	CountAuthors() (int, error)
 	CountSeries() (int, error)
 	GetBookCountsByLocation(rootDir string) (library, import_ int, err error)
@@ -651,6 +654,7 @@ type ScanCacheEntry struct {
 // DashboardStats holds aggregated statistics computed via SQL rather than loading all books.
 type DashboardStats struct {
 	TotalBooks         int            `json:"total_books"`
+	TotalFiles         int            `json:"total_files"`
 	TotalAuthors       int            `json:"total_authors"`
 	TotalSeries        int            `json:"total_series"`
 	TotalDuration      int64          `json:"total_duration"`

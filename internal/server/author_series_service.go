@@ -1,5 +1,5 @@
 // file: internal/server/author_series_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 
 package server
@@ -16,11 +16,12 @@ func NewAuthorSeriesService(db database.Store) *AuthorSeriesService {
 	return &AuthorSeriesService{db: db}
 }
 
-// AuthorWithCount enriches an Author with book count and aliases.
+// AuthorWithCount enriches an Author with book count, file count, and aliases.
 type AuthorWithCount struct {
 	ID        int                    `json:"id"`
 	Name      string                 `json:"name"`
 	BookCount int                    `json:"book_count"`
+	FileCount int                    `json:"file_count"`
 	Aliases   []database.AuthorAlias `json:"aliases"`
 }
 
@@ -34,10 +35,11 @@ type AuthorWithCountListResponse struct {
 	Count int               `json:"count"`
 }
 
-// SeriesWithCount extends Series with book count and author name.
+// SeriesWithCount extends Series with book count, file count, and author name.
 type SeriesWithCount struct {
 	database.Series
 	BookCount  int    `json:"book_count"`
+	FileCount  int    `json:"file_count"`
 	AuthorName string `json:"author_name,omitempty"`
 }
 
@@ -80,6 +82,11 @@ func (as *AuthorSeriesService) ListAuthorsWithCounts() (*AuthorWithCountListResp
 		return nil, err
 	}
 
+	fileCounts, _ := as.db.GetAllAuthorFileCounts()
+	if fileCounts == nil {
+		fileCounts = map[int]int{}
+	}
+
 	allAliases, err := as.db.GetAllAuthorAliases()
 	if err != nil {
 		return nil, err
@@ -100,6 +107,7 @@ func (as *AuthorSeriesService) ListAuthorsWithCounts() (*AuthorWithCountListResp
 			ID:        a.ID,
 			Name:      a.Name,
 			BookCount: bookCounts[a.ID],
+			FileCount: fileCounts[a.ID],
 			Aliases:   aliases,
 		}
 	}
@@ -139,6 +147,11 @@ func (as *AuthorSeriesService) ListSeriesWithCounts() (*SeriesWithCountsResponse
 		return nil, err
 	}
 
+	fileCounts, _ := as.db.GetAllSeriesFileCounts()
+	if fileCounts == nil {
+		fileCounts = map[int]int{}
+	}
+
 	authors, _ := as.db.GetAllAuthors()
 	authorMap := make(map[int]string, len(authors))
 	for _, a := range authors {
@@ -150,6 +163,7 @@ func (as *AuthorSeriesService) ListSeriesWithCounts() (*SeriesWithCountsResponse
 		swc := SeriesWithCount{
 			Series:    s,
 			BookCount: counts[s.ID],
+			FileCount: fileCounts[s.ID],
 		}
 		if s.AuthorID != nil {
 			swc.AuthorName = authorMap[*s.AuthorID]
