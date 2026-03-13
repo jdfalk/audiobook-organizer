@@ -29,9 +29,10 @@ type TaskDefinition struct {
 	// TriggerFn creates and enqueues an operation, returning it.
 	TriggerFn func() (*database.Operation, error)
 	// Config accessors (read from AppConfig at runtime)
-	IsEnabled   func() bool
-	GetInterval func() time.Duration // 0 = manual only
-	RunOnStart  func() bool
+	IsEnabled              func() bool
+	GetInterval            func() time.Duration // 0 = manual only
+	RunOnStart             func() bool
+	RunInMaintenanceWindow func() bool // whether this task runs during the maintenance window
 }
 
 // TaskInfo is the API-facing view of a registered task.
@@ -41,18 +42,21 @@ type TaskInfo struct {
 	Category        string  `json:"category"`
 	Enabled         bool    `json:"enabled"`
 	IntervalMinutes int     `json:"interval_minutes"`
-	RunOnStartup    bool    `json:"run_on_startup"`
-	LastRun         *string `json:"last_run,omitempty"`
+	RunOnStartup           bool    `json:"run_on_startup"`
+	RunInMaintenanceWindow bool    `json:"run_in_maintenance_window"`
+	LastRun                *string `json:"last_run,omitempty"`
 }
 
 // TaskScheduler manages all registered tasks, their schedules, and manual triggers.
 type TaskScheduler struct {
-	server   *Server
-	tasks    map[string]*TaskDefinition
-	order    []string // insertion order for listing
-	lastRun  map[string]time.Time
-	mu       sync.RWMutex
-	shutdown chan struct{}
+	server             *Server
+	tasks              map[string]*TaskDefinition
+	order              []string // insertion order for listing
+	lastRun            map[string]time.Time
+	mu                 sync.RWMutex
+	shutdown           chan struct{}
+	maintenanceOrder   []string
+	lastMaintenanceRun time.Time
 }
 
 // NewTaskScheduler creates a scheduler and registers all known tasks.
@@ -63,6 +67,16 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 		lastRun: make(map[string]time.Time),
 	}
 	ts.registerAllTasks()
+	ts.maintenanceOrder = []string{
+		"reconcile_scan",
+		"dedup_refresh",
+		"author_split_scan",
+		"series_prune",
+		"tombstone_cleanup",
+		"purge_deleted",
+		"purge_old_logs",
+		"db_optimize",
+	}
 	return ts
 }
 
@@ -88,9 +102,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return s.scanService.PerformScan(ctx, &ScanRequest{}, operations.LoggerFromReporter(progress))
 			})
 		},
-		IsEnabled:   func() bool { return config.AppConfig.ScanOnStartup }, // reuse existing field
-		GetInterval: func() time.Duration { return 0 },                     // manual only by default
-		RunOnStart:  func() bool { return config.AppConfig.ScanOnStartup },
+		IsEnabled:              func() bool { return config.AppConfig.ScanOnStartup }, // reuse existing field
+		GetInterval:            func() time.Duration { return 0 },                     // manual only by default
+		RunOnStart:             func() bool { return config.AppConfig.ScanOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowLibraryScan },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -105,9 +120,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return s.organizeService.PerformOrganize(ctx, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			})
 		},
-		IsEnabled:   func() bool { return true },
-		GetInterval: func() time.Duration { return 0 },
-		RunOnStart:  func() bool { return false },
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowLibraryOrganize },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -119,9 +135,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return fmt.Errorf("transcode requires parameters — use the operations API directly")
 			})
 		},
-		IsEnabled:   func() bool { return true },
-		GetInterval: func() time.Duration { return 0 },
-		RunOnStart:  func() bool { return false },
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	// --- Sync tasks ---
@@ -142,7 +159,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return false },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -152,9 +170,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 		TriggerFn: func() (*database.Operation, error) {
 			return nil, fmt.Errorf("iTunes import requires parameters — use the iTunes API directly")
 		},
-		IsEnabled:   func() bool { return true },
-		GetInterval: func() time.Duration { return 0 },
-		RunOnStart:  func() bool { return false },
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	// --- Maintenance tasks ---
@@ -206,7 +225,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledDedupRefreshOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledDedupRefreshOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDedupRefresh },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -230,7 +250,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledSeriesPruneOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledSeriesPruneOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowSeriesPrune },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -382,7 +403,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledAuthorSplitOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledAuthorSplitOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowAuthorSplit },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -395,14 +417,47 @@ func (ts *TaskScheduler) registerAllTasks() {
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
-				_ = progress.Log("info", "Starting database optimization", nil)
-				_ = progress.UpdateProgress(0, 100, "Optimizing database...")
+
+				storesOptimized := 0
+				storesTotal := 3
+
+				// 1. Main store
+				_ = progress.Log("info", "Optimizing main database", nil)
+				_ = progress.UpdateProgress(0, storesTotal, "Optimizing main database...")
 				if err := store.Optimize(); err != nil {
-					_ = progress.Log("error", fmt.Sprintf("Optimization failed: %v", err), nil)
-					return fmt.Errorf("database optimization failed: %w", err)
+					_ = progress.Log("error", fmt.Sprintf("Main DB optimization failed: %v", err), nil)
+				} else {
+					storesOptimized++
+					_ = progress.Log("info", "Main database optimized", nil)
 				}
-				_ = progress.Log("info", "Database optimization completed successfully", nil)
-				_ = progress.UpdateProgress(100, 100, "Database optimized")
+
+				// 2. AI scan store
+				_ = progress.UpdateProgress(1, storesTotal, "Optimizing AI scan database...")
+				if s.aiScanStore != nil {
+					if err := s.aiScanStore.Optimize(); err != nil {
+						_ = progress.Log("error", fmt.Sprintf("AI scan DB optimization failed: %v", err), nil)
+					} else {
+						storesOptimized++
+						_ = progress.Log("info", "AI scan database optimized", nil)
+					}
+				} else {
+					_ = progress.Log("info", "AI scan store not initialized, skipping", nil)
+				}
+
+				// 3. OpenLibrary store (accessed via olService)
+				_ = progress.UpdateProgress(2, storesTotal, "Optimizing OpenLibrary cache...")
+				if s.olService != nil && s.olService.Store() != nil {
+					if err := s.olService.Store().Optimize(); err != nil {
+						_ = progress.Log("error", fmt.Sprintf("OL cache optimization failed: %v", err), nil)
+					} else {
+						storesOptimized++
+						_ = progress.Log("info", "OpenLibrary cache optimized", nil)
+					}
+				} else {
+					_ = progress.Log("info", "OpenLibrary store not initialized, skipping", nil)
+				}
+
+				_ = progress.UpdateProgress(storesTotal, storesTotal, fmt.Sprintf("Database optimization complete: %d/%d stores", storesOptimized, storesTotal))
 				return nil
 			})
 		},
@@ -414,7 +469,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledDbOptimizeOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledDbOptimizeOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDbOptimize },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -438,7 +494,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return 0
 		},
-		RunOnStart: func() bool { return config.AppConfig.PurgeSoftDeletedAfterDays > 0 },
+		RunOnStart:             func() bool { return config.AppConfig.PurgeSoftDeletedAfterDays > 0 },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowPurgeDeleted },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -463,9 +520,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return nil
 			})
 		},
-		IsEnabled:   func() bool { return true },
-		GetInterval: func() time.Duration { return 24 * time.Hour },
-		RunOnStart:  func() bool { return false },
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 24 * time.Hour },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowTombstoneCleanup },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -535,7 +593,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return false },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -579,7 +638,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledMetadataRefreshOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledMetadataRefreshOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
 	})
 
 	// Reconcile — find broken file paths and match to untracked files on disk
@@ -629,7 +689,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledReconcileOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledReconcileOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowReconcile },
 	})
 
 	// AI Dedup Batch — uses OpenAI Batch API at 50% cost
@@ -759,7 +820,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			return time.Duration(mins) * time.Minute
 		},
-		RunOnStart: func() bool { return config.AppConfig.ScheduledAIDedupBatchOnStartup },
+		RunOnStart:             func() bool { return config.AppConfig.ScheduledAIDedupBatchOnStartup },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	// AI Pipeline Batch Polling — checks for completed batch phases in the pipeline
@@ -781,7 +843,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		GetInterval: func() time.Duration {
 			return 5 * time.Minute // Poll every 5 minutes
 		},
-		RunOnStart: func() bool { return false },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	// Log Retention Pruning — prune old operation logs and system activity logs
@@ -804,9 +867,10 @@ func (ts *TaskScheduler) registerAllTasks() {
 			)
 			return op, nil
 		},
-		IsEnabled:   func() bool { return config.AppConfig.LogRetentionDays > 0 },
-		GetInterval: func() time.Duration { return 7 * 24 * time.Hour },
-		RunOnStart:  func() bool { return false },
+		IsEnabled:              func() bool { return config.AppConfig.LogRetentionDays > 0 },
+		GetInterval:            func() time.Duration { return 7 * 24 * time.Hour },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowPurgeOldLogs },
 	})
 }
 
@@ -863,6 +927,7 @@ func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.C
 // Start launches background goroutines for all scheduled and startup tasks.
 func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 	ts.shutdown = shutdown
+	ts.loadLastMaintenanceRun()
 
 	for _, name := range ts.order {
 		task := ts.tasks[name]
@@ -905,6 +970,31 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 			log.Printf("[INFO] Scheduled task %s: interval=%v", taskName, interval)
 		}
 	}
+
+	// Maintenance window checker — runs every 60 seconds
+	if config.AppConfig.MaintenanceWindowEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ticker := time.NewTicker(60 * time.Second)
+			defer ticker.Stop()
+			log.Printf("[INFO] Maintenance window enabled: %d:00 - %d:00",
+				config.AppConfig.MaintenanceWindowStart, config.AppConfig.MaintenanceWindowEnd)
+			for {
+				select {
+				case <-ticker.C:
+					if isInMaintenanceWindow() && !ts.hasRunToday() {
+						log.Printf("[INFO] Maintenance window open — starting maintenance run")
+						if err := ts.RunMaintenanceWindow(context.Background()); err != nil {
+							log.Printf("[WARN] Maintenance window failed: %v", err)
+						}
+					}
+				case <-shutdown:
+					return
+				}
+			}
+		}()
+	}
 }
 
 // RunTask triggers a task by name, returning the created operation.
@@ -944,6 +1034,9 @@ func (ts *TaskScheduler) ListTasks() []TaskInfo {
 			IntervalMinutes: int(task.GetInterval() / time.Minute),
 			RunOnStartup:    task.RunOnStart(),
 		}
+		if task.RunInMaintenanceWindow != nil {
+			info.RunInMaintenanceWindow = task.RunInMaintenanceWindow()
+		}
 		if t, ok := ts.lastRun[name]; ok {
 			s := t.Format(time.RFC3339)
 			info.LastRun = &s
@@ -959,4 +1052,236 @@ func (ts *TaskScheduler) GetTask(name string) (*TaskDefinition, bool) {
 	defer ts.mu.RUnlock()
 	task, ok := ts.tasks[name]
 	return task, ok
+}
+
+// --- Maintenance Window ---
+
+// maintenanceCtxKey is a typed context key to avoid string-key collisions.
+type maintenanceCtxKey string
+
+const ignoreWindowKey maintenanceCtxKey = "ignore_window"
+
+// isInMaintenanceWindowAt checks if a given hour falls within the configured window.
+// Supports midnight-spanning windows (e.g., start=23, end=2).
+func isInMaintenanceWindowAt(hour int) bool {
+	if !config.AppConfig.MaintenanceWindowEnabled {
+		return false
+	}
+	start := config.AppConfig.MaintenanceWindowStart
+	end := config.AppConfig.MaintenanceWindowEnd
+
+	if start < end {
+		return hour >= start && hour < end
+	}
+	// Midnight spanning: e.g., start=23, end=2 → 23,0,1 are in window
+	return hour >= start || hour < end
+}
+
+// isInMaintenanceWindow checks if the current time falls within the configured window.
+func isInMaintenanceWindow() bool {
+	return isInMaintenanceWindowAt(time.Now().Hour())
+}
+
+// loadLastMaintenanceRun reads the persisted last-run date from the database.
+func (ts *TaskScheduler) loadLastMaintenanceRun() {
+	store := database.GlobalStore
+	if store == nil {
+		return
+	}
+	setting, err := store.GetSetting("maintenance_window_last_run")
+	if err != nil || setting == nil {
+		return
+	}
+	t, err := time.Parse("2006-01-02", setting.Value)
+	if err != nil {
+		return
+	}
+	ts.lastMaintenanceRun = t
+}
+
+// saveLastMaintenanceRun persists today's date as the last-run date.
+func (ts *TaskScheduler) saveLastMaintenanceRun() {
+	store := database.GlobalStore
+	if store == nil {
+		return
+	}
+	today := time.Now().Format("2006-01-02")
+	_ = store.SetSetting("maintenance_window_last_run", today, "string", false)
+	ts.lastMaintenanceRun = time.Now()
+}
+
+// hasRunToday checks if the maintenance window has already run today.
+func (ts *TaskScheduler) hasRunToday() bool {
+	today := time.Now().Format("2006-01-02")
+	return ts.lastMaintenanceRun.Format("2006-01-02") == today
+}
+
+// isTaskRunning checks if a task's operation is currently in progress.
+func (ts *TaskScheduler) isTaskRunning(name string) bool {
+	store := database.GlobalStore
+	if store == nil {
+		return false
+	}
+	ops, _, err := store.ListOperations(100, 0)
+	if err != nil {
+		return false
+	}
+	opTypeMap := map[string]string{
+		"library_scan": "scan", "library_organize": "organize",
+		"dedup_refresh": "author-dedup-scan", "series_prune": "series-prune",
+		"author_split_scan": "author-split-scan", "db_optimize": "db-optimize",
+		"purge_deleted": "purge-deleted", "tombstone_cleanup": "tombstone-cleanup",
+		"reconcile_scan": "reconcile_scan", "purge_old_logs": "purge_old_logs",
+		"metadata_refresh": "metadata-refresh",
+	}
+	opType, ok := opTypeMap[name]
+	if !ok {
+		return false
+	}
+	for _, op := range ops {
+		if op.Type == opType && (op.Status == "running" || op.Status == "pending") {
+			return true
+		}
+	}
+	return false
+}
+
+// waitForOperation polls until an operation completes or the context is canceled.
+func (ts *TaskScheduler) waitForOperation(ctx context.Context, opID string) {
+	store := database.GlobalStore
+	if store == nil {
+		return
+	}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			op, err := store.GetOperationByID(opID)
+			if err != nil {
+				return
+			}
+			if op.Status == "completed" || op.Status == "failed" || op.Status == "canceled" {
+				return
+			}
+		}
+	}
+}
+
+// RunMaintenanceWindow runs all maintenance-window-eligible tasks in order.
+// Step 1: auto-update (if enabled). Step 2+: maintenance tasks in fixed order.
+func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
+	store := database.GlobalStore
+	if store == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if operations.GlobalQueue == nil {
+		return fmt.Errorf("operation queue not initialized")
+	}
+
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "maintenance-window", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create maintenance-window operation: %w", err)
+	}
+
+	_ = operations.GlobalQueue.Enqueue(op.ID, "maintenance-window", operations.PriorityNormal,
+		func(innerCtx context.Context, progress operations.ProgressReporter) error {
+			ignoreWindow := ctx.Value(ignoreWindowKey) != nil
+
+			// Step 1: Auto-update (if enabled and not already completed post-restart)
+			if config.AppConfig.AutoUpdateEnabled {
+				updateDone, _ := store.GetSetting("maintenance_window_update_completed")
+				today := time.Now().Format("2006-01-02")
+				if updateDone == nil || updateDone.Value != today {
+					_ = progress.Log("info", "Running auto-update (step 1)", nil)
+					_ = progress.UpdateProgress(0, 100, "Running auto-update...")
+					_ = store.SetSetting("maintenance_window_update_completed", today, "string", false)
+					if ts.server.updater != nil {
+						channel := config.AppConfig.AutoUpdateChannel
+						info, checkErr := ts.server.updater.CheckForUpdate(channel)
+						if checkErr != nil {
+							_ = progress.Log("warning", fmt.Sprintf("Auto-update check failed: %v", checkErr), nil)
+						} else if info != nil && info.UpdateAvailable {
+							_ = progress.Log("info", fmt.Sprintf("Update available: %s, applying...", info.LatestVersion), nil)
+							if applyErr := ts.server.updater.DownloadAndReplace(info); applyErr != nil {
+								_ = progress.Log("error", fmt.Sprintf("Auto-update apply failed: %v", applyErr), nil)
+							} else {
+								_ = progress.Log("info", "Update applied, server will restart", nil)
+								go ts.server.updater.RestartSelf()
+								return nil // Exit — server restarting
+							}
+						} else {
+							_ = progress.Log("info", "No update available", nil)
+						}
+					}
+					_ = progress.Log("info", "Auto-update step complete", nil)
+				} else {
+					_ = progress.Log("info", "Auto-update already completed today, skipping", nil)
+				}
+			}
+
+			// Step 2+: Maintenance tasks in order
+			var eligible []string
+			for _, name := range ts.maintenanceOrder {
+				task, ok := ts.tasks[name]
+				if !ok {
+					continue
+				}
+				if task.IsEnabled() && task.RunInMaintenanceWindow != nil && task.RunInMaintenanceWindow() {
+					eligible = append(eligible, name)
+				}
+			}
+
+			_ = progress.Log("info", fmt.Sprintf("Maintenance window starting: %d tasks eligible", len(eligible)), nil)
+
+			hadErrors := false
+			for i, name := range eligible {
+				// Check if window is still open (skip for manual "Run Now" triggers)
+				if !ignoreWindow && !isInMaintenanceWindow() {
+					_ = progress.Log("warning", fmt.Sprintf("Maintenance window closed after task %d/%d, skipping remaining", i, len(eligible)), nil)
+					break
+				}
+
+				// Duplicate prevention: skip if already running from interval ticker
+				if ts.isTaskRunning(name) {
+					_ = progress.Log("info", fmt.Sprintf("Task %s already running (interval), skipping", name), nil)
+					continue
+				}
+
+				_ = progress.UpdateProgress(i, len(eligible), fmt.Sprintf("Running task %d/%d: %s", i+1, len(eligible), name))
+				_ = progress.Log("info", fmt.Sprintf("Starting maintenance task: %s", name), nil)
+
+				taskOp, taskErr := ts.RunTask(name)
+				if taskErr != nil {
+					hadErrors = true
+					_ = progress.Log("error", fmt.Sprintf("Task %s failed: %v", name, taskErr), nil)
+				} else if taskOp != nil {
+					// Wait for the task operation to complete before starting next
+					ts.waitForOperation(innerCtx, taskOp.ID)
+					completedOp, _ := store.GetOperationByID(taskOp.ID)
+					if completedOp != nil && completedOp.Status == "failed" {
+						hadErrors = true
+						_ = progress.Log("warning", fmt.Sprintf("Task %s operation failed", name), nil)
+					} else {
+						_ = progress.Log("info", fmt.Sprintf("Task %s completed (op: %s)", name, taskOp.ID), nil)
+					}
+				} else {
+					_ = progress.Log("info", fmt.Sprintf("Task %s triggered (no operation)", name), nil)
+				}
+			}
+
+			ts.saveLastMaintenanceRun()
+
+			if hadErrors {
+				_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed with errors")
+				return fmt.Errorf("maintenance window completed with errors")
+			}
+			_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed successfully")
+			return nil
+		},
+	)
+	return nil
 }
