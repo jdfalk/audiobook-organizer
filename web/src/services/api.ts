@@ -488,6 +488,11 @@ export interface Config {
   auto_update_window_start?: number;
   auto_update_window_end?: number;
 
+  // Maintenance window
+  maintenance_window_enabled?: boolean;
+  maintenance_window_start?: number;
+  maintenance_window_end?: number;
+
   // Smart apply pipeline
   path_format?: string;
   segment_title_format?: string;
@@ -2688,6 +2693,7 @@ export interface TaskInfo {
   enabled: boolean;
   interval_minutes: number;
   run_on_startup: boolean;
+  run_in_maintenance_window: boolean;
   last_run?: string;
 }
 
@@ -2707,9 +2713,16 @@ export async function runTask(name: string): Promise<Operation | { message: stri
   return response.json();
 }
 
+export async function runMaintenanceWindow(): Promise<void> {
+  const response = await fetch(`${API_BASE}/maintenance-window/run`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to run maintenance window');
+  }
+}
+
 export async function updateTaskConfig(
   name: string,
-  updates: { enabled?: boolean; interval_minutes?: number; run_on_startup?: boolean }
+  updates: { enabled?: boolean; interval_minutes?: number; run_on_startup?: boolean; run_in_maintenance_window?: boolean }
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/tasks/${name}`, {
     method: 'PUT',
