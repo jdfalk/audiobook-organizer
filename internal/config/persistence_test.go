@@ -19,6 +19,13 @@ func resetConfigTestState() {
 	AppConfig = Config{}
 }
 
+// setupMigrationExpectations adds Maybe() expectations for the maintenance window
+// migration calls (GetSetting + SetSetting) that happen in LoadConfigFromDatabase.
+func setupMigrationExpectations(store *mocks.MockStore) {
+	store.On("GetSetting", "maintenance_window_migrated").Return(nil, fmt.Errorf("not found")).Maybe()
+	store.On("SetSetting", "maintenance_window_migrated", "true", "bool", false).Return(nil).Maybe()
+}
+
 func TestLoadConfigFromDatabase(t *testing.T) {
 	resetConfigTestState()
 	t.Cleanup(resetConfigTestState)
@@ -42,6 +49,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("handles empty settings gracefully", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{}, nil).Once()
 		err := LoadConfigFromDatabase(store)
 		if err != nil {
@@ -51,6 +59,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("loads string settings", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "root_dir",
@@ -82,6 +91,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("loads boolean settings", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "scan_on_startup",
@@ -112,6 +122,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("loads integer settings", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "concurrent_scans",
@@ -150,6 +161,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("skips secret setting when decrypt fails", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:      "openai_api_key",
@@ -173,6 +185,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("handles invalid boolean gracefully", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "scan_on_startup",
@@ -196,6 +209,7 @@ func TestLoadConfigFromDatabase(t *testing.T) {
 
 	t.Run("handles invalid integer gracefully", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "concurrent_scans",
@@ -751,6 +765,7 @@ func TestLifecycleRetentionSettings(t *testing.T) {
 		InitConfig()
 
 		store := mocks.NewMockStore(t)
+		setupMigrationExpectations(store)
 		store.EXPECT().GetAllSettings().Return([]database.Setting{
 			{
 				Key:   "purge_soft_deleted_after_days",
