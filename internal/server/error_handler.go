@@ -181,6 +181,16 @@ func ParseQueryBool(c *gin.Context, key string, defaultValue bool) bool {
 	return strings.ToLower(valueStr) == "true" || valueStr == "1"
 }
 
+// ParseQueryBoolPtr parses an optional boolean query parameter, returning nil if not present.
+func ParseQueryBoolPtr(c *gin.Context, key string) *bool {
+	valueStr := c.Query(key)
+	if valueStr == "" {
+		return nil
+	}
+	val := strings.ToLower(valueStr) == "true" || valueStr == "1"
+	return &val
+}
+
 // ParseQueryString returns a query parameter as a string, or empty string if not present
 func ParseQueryString(c *gin.Context, key string) string {
 	return c.Query(key)

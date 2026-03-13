@@ -1488,8 +1488,14 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	authorID := ParseQueryIntPtr(c, "author_id")
 	seriesID := ParseQueryIntPtr(c, "series_id")
 
+	// Parse optional filters
+	filters := ListFilters{
+		IsPrimaryVersion: ParseQueryBoolPtr(c, "is_primary_version"),
+		LibraryState:     ParseQueryString(c, "library_state"),
+	}
+
 	// Call service
-	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID)
+	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1498,11 +1504,18 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
 
-	// Get total count for proper pagination (not just page size)
+	// Get total count for proper pagination
 	totalCount := len(enriched)
+	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != ""
 	if params.Search == "" && authorID == nil && seriesID == nil {
-		if tc, err := s.audiobookService.CountAudiobooks(c.Request.Context()); err == nil {
-			totalCount = tc
+		if hasFilters {
+			if tc, err := s.audiobookService.CountAudiobooksFiltered(c.Request.Context(), filters); err == nil {
+				totalCount = tc
+			}
+		} else {
+			if tc, err := s.audiobookService.CountAudiobooks(c.Request.Context()); err == nil {
+				totalCount = tc
+			}
 		}
 	}
 
@@ -8168,7 +8181,7 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 		}
 		inputs = append(inputs, ai.AuthorDedupInput{
 			Index:         i,
-			CanonicalName: group.Canonical.Name,
+			CanonicalName: NormalizeAuthorName(group.Canonical.Name),
 			VariantNames:  variantNames,
 			BookCount:     group.BookCount,
 			SampleTitles:  sampleTitles,
@@ -8461,7 +8474,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 
 			case "rename":
 				if sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+					if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
 						applyErrors = append(applyErrors, fmt.Sprintf("rename author %d: %v", sug.KeepID, err))
 					} else {
 						applied++
@@ -8472,7 +8485,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 			case "merge":
 				// Rename canonical if needed
 				if sug.Rename && sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+					if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
 						applyErrors = append(applyErrors, fmt.Sprintf("rename before merge %d: %v", sug.KeepID, err))
 					}
 				}
@@ -8533,7 +8546,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 				// Keep canonical author, add variants as aliases instead of merging
 				if sug.KeepID > 0 && sug.CanonicalName != "" {
 					if sug.Rename {
-						if err := store.UpdateAuthorName(sug.KeepID, sug.CanonicalName); err != nil {
+						if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
 							applyErrors = append(applyErrors, fmt.Sprintf("rename for alias %d: %v", sug.KeepID, err))
 						}
 					}

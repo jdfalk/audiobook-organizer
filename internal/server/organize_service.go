@@ -178,9 +178,27 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 	booksToOrganize := make([]database.Book, 0)
 	skippedMissingSegments := 0
 	for _, book := range allBooks {
-		// Skip non-primary versions — they are originals already linked to an organized copy
+		// Skip non-primary versions — unless they're the only version in their VG
+		// (i.e., no organized primary copy exists yet)
 		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
-			continue
+			if book.VersionGroupID != nil && *book.VersionGroupID != "" {
+				vgBooks, vgErr := orgSvc.db.GetBooksByVersionGroup(*book.VersionGroupID)
+				if vgErr == nil {
+					hasPrimary := false
+					for _, vb := range vgBooks {
+						if vb.IsPrimaryVersion != nil && *vb.IsPrimaryVersion {
+							hasPrimary = true
+							break
+						}
+					}
+					if hasPrimary {
+						continue // Has a primary version — skip this non-primary
+					}
+					// No primary exists yet — allow organize to create one
+				}
+			} else {
+				continue
+			}
 		}
 		// Skip if already in root directory
 		if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
