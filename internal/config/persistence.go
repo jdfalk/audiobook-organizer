@@ -222,12 +222,41 @@ func LoadConfigFromDatabase(store database.Store) error {
 	log.Printf("[DEBUG] After config load: EnableAIParsing=%v, OpenAIAPIKey length=%d",
 		AppConfig.EnableAIParsing, len(AppConfig.OpenAIAPIKey))
 
+	// Migrate auto-update window → maintenance window (idempotent)
+	MigrateMaintenanceWindow(store)
+
 	// Re-derive defaults that depend on RootDir
 	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
 		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
 	}
 
 	return nil
+}
+
+// MigrateMaintenanceWindow migrates auto-update window fields to maintenance window.
+// Idempotent — safe to call multiple times.
+func MigrateMaintenanceWindow(store database.Store) {
+	migrated, _ := store.GetSetting("maintenance_window_migrated")
+	if migrated != nil && migrated.Value == "true" {
+		return
+	}
+
+	// Migrate auto-update window start/end if maintenance window not yet configured
+	if AppConfig.MaintenanceWindowStart == 0 && AppConfig.AutoUpdateWindowStart > 0 {
+		AppConfig.MaintenanceWindowStart = AppConfig.AutoUpdateWindowStart
+	}
+	if AppConfig.MaintenanceWindowEnd == 0 && AppConfig.AutoUpdateWindowEnd > 0 {
+		AppConfig.MaintenanceWindowEnd = AppConfig.AutoUpdateWindowEnd
+	}
+	// Ensure sensible defaults
+	if AppConfig.MaintenanceWindowStart == 0 && AppConfig.MaintenanceWindowEnd == 0 {
+		AppConfig.MaintenanceWindowStart = 1
+		AppConfig.MaintenanceWindowEnd = 4
+	}
+
+	_ = store.SetSetting("maintenance_window_migrated", "true", "bool", false)
+	log.Printf("[INFO] Maintenance window migration complete (start=%d, end=%d)",
+		AppConfig.MaintenanceWindowStart, AppConfig.MaintenanceWindowEnd)
 }
 
 // applySetting applies a single setting to AppConfig
@@ -459,6 +488,64 @@ func applySetting(key, value, typ string) error {
 			AppConfig.ITunesPathMappings = mappings
 		}
 
+	// Maintenance window
+	case "maintenance_window_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowEnabled = b
+		}
+	case "maintenance_window_start":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.MaintenanceWindowStart = i
+		}
+	case "maintenance_window_end":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.MaintenanceWindowEnd = i
+		}
+	case "maintenance_window_dedup_refresh":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowDedupRefresh = b
+		}
+	case "maintenance_window_series_prune":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowSeriesPrune = b
+		}
+	case "maintenance_window_author_split":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowAuthorSplit = b
+		}
+	case "maintenance_window_tombstone_cleanup":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowTombstoneCleanup = b
+		}
+	case "maintenance_window_reconcile":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowReconcile = b
+		}
+	case "maintenance_window_purge_deleted":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowPurgeDeleted = b
+		}
+	case "maintenance_window_purge_old_logs":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowPurgeOldLogs = b
+		}
+	case "maintenance_window_db_optimize":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowDbOptimize = b
+		}
+	case "maintenance_window_library_scan":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowLibraryScan = b
+		}
+	case "maintenance_window_library_organize":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowLibraryOrganize = b
+		}
+	case "maintenance_window_metadata_refresh":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.MaintenanceWindowMetadataRefresh = b
+		}
+
 	// Scheduled maintenance tasks
 	case "scheduled_dedup_refresh_enabled":
 		if b, err := strconv.ParseBool(value); err == nil {
@@ -540,6 +627,10 @@ func applySetting(key, value, typ string) error {
 		AppConfig.BasicAuthUsername = value
 	case "basic_auth_password":
 		AppConfig.BasicAuthPassword = value
+
+	case "maintenance_window_migrated", "maintenance_window_last_run", "maintenance_window_update_completed":
+		// Internal state keys — not mapped to AppConfig fields
+		return nil
 
 	default:
 		return fmt.Errorf("unknown setting key: %s", key)
@@ -668,6 +759,22 @@ func SaveConfigToDatabase(store database.Store) error {
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
 		"basic_auth_username": {AppConfig.BasicAuthUsername, "string", false},
 		"basic_auth_password": {AppConfig.BasicAuthPassword, "string", true},
+
+		// Maintenance window
+		"maintenance_window_enabled":            {strconv.FormatBool(AppConfig.MaintenanceWindowEnabled), "bool", false},
+		"maintenance_window_start":              {strconv.Itoa(AppConfig.MaintenanceWindowStart), "int", false},
+		"maintenance_window_end":                {strconv.Itoa(AppConfig.MaintenanceWindowEnd), "int", false},
+		"maintenance_window_dedup_refresh":      {strconv.FormatBool(AppConfig.MaintenanceWindowDedupRefresh), "bool", false},
+		"maintenance_window_series_prune":       {strconv.FormatBool(AppConfig.MaintenanceWindowSeriesPrune), "bool", false},
+		"maintenance_window_author_split":       {strconv.FormatBool(AppConfig.MaintenanceWindowAuthorSplit), "bool", false},
+		"maintenance_window_tombstone_cleanup":  {strconv.FormatBool(AppConfig.MaintenanceWindowTombstoneCleanup), "bool", false},
+		"maintenance_window_reconcile":          {strconv.FormatBool(AppConfig.MaintenanceWindowReconcile), "bool", false},
+		"maintenance_window_purge_deleted":      {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeDeleted), "bool", false},
+		"maintenance_window_purge_old_logs":     {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeOldLogs), "bool", false},
+		"maintenance_window_db_optimize":        {strconv.FormatBool(AppConfig.MaintenanceWindowDbOptimize), "bool", false},
+		"maintenance_window_library_scan":       {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryScan), "bool", false},
+		"maintenance_window_library_organize":   {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryOrganize), "bool", false},
+		"maintenance_window_metadata_refresh":   {strconv.FormatBool(AppConfig.MaintenanceWindowMetadataRefresh), "bool", false},
 
 		// Scheduled maintenance tasks
 		"scheduled_dedup_refresh_enabled":      {strconv.FormatBool(AppConfig.ScheduledDedupRefreshEnabled), "bool", false},
