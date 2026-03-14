@@ -959,6 +959,58 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 	return nil
 }
 
+// syncMetadataToLibraryCopy copies metadata fields from the original book to
+// the library copy so that both DB records stay in sync. This is needed because
+// ApplyMetadataCandidate only updates the original book's DB record, leaving
+// the library copy with stale metadata.
+func (mfs *MetadataFetchService) syncMetadataToLibraryCopy(original, libCopy *database.Book) {
+	// Sync display/metadata fields — preserve library copy's file/path/version fields
+	libCopy.Title = original.Title
+	libCopy.AuthorID = original.AuthorID
+	libCopy.Narrator = original.Narrator
+	libCopy.SeriesID = original.SeriesID
+	libCopy.SeriesSequence = original.SeriesSequence
+	libCopy.Publisher = original.Publisher
+	libCopy.Language = original.Language
+	libCopy.Description = original.Description
+	libCopy.AudiobookReleaseYear = original.AudiobookReleaseYear
+	libCopy.PrintYear = original.PrintYear
+	libCopy.ISBN10 = original.ISBN10
+	libCopy.ISBN13 = original.ISBN13
+	libCopy.ASIN = original.ASIN
+	libCopy.Edition = original.Edition
+	libCopy.CoverURL = original.CoverURL
+	libCopy.MetadataReviewStatus = original.MetadataReviewStatus
+
+	if _, err := mfs.db.UpdateBook(libCopy.ID, libCopy); err != nil {
+		log.Printf("[WARN] failed to sync metadata to library copy %s: %v", libCopy.ID, err)
+	} else {
+		log.Printf("[INFO] synced metadata from %s to library copy %s", original.ID, libCopy.ID)
+	}
+
+	// Also sync author associations
+	if authors, err := mfs.db.GetBookAuthors(original.ID); err == nil && len(authors) > 0 {
+		var newAuthors []database.BookAuthor
+		for _, ba := range authors {
+			newAuthors = append(newAuthors, database.BookAuthor{
+				BookID: libCopy.ID, AuthorID: ba.AuthorID, Role: ba.Role, Position: ba.Position,
+			})
+		}
+		_ = mfs.db.SetBookAuthors(libCopy.ID, newAuthors)
+	}
+
+	// Sync narrator associations
+	if narrators, err := mfs.db.GetBookNarrators(original.ID); err == nil && len(narrators) > 0 {
+		var newNarrators []database.BookNarrator
+		for _, bn := range narrators {
+			newNarrators = append(newNarrators, database.BookNarrator{
+				BookID: libCopy.ID, NarratorID: bn.NarratorID, Role: bn.Role, Position: bn.Position,
+			})
+		}
+		_ = mfs.db.SetBookNarrators(libCopy.ID, newNarrators)
+	}
+}
+
 // ensureLibraryCopy returns a book record with files in the library folder.
 // If the book is already in the library, returns it as-is. If the book is in a
 // protected path (iTunes/import), looks for an existing library version or
@@ -1631,27 +1683,36 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		return 0, fmt.Errorf("audiobook not found: %s", id)
 	}
 
-	// If book is in a protected path, write to the library copy instead
+	// If book is in a protected path, write to the library copy instead.
+	// Keep a reference to the original book so we can use its (freshly-updated)
+	// metadata for building the tag map, rather than the library copy's stale data.
+	originalBook := book
+	originalID := id
 	if isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
 			return 0, fmt.Errorf("cannot write back: no library copy for protected book %s", id)
 		}
+		// Sync metadata from the original book to the library copy so both
+		// DB records stay in sync and the tag map uses current data.
+		mfs.syncMetadataToLibraryCopy(originalBook, libCopy)
 		book = libCopy
 		id = libCopy.ID
 	}
 
 	// --- Resolve author names ---
+	// Use the original book's ID for author/narrator lookup since that's where
+	// ApplyMetadataCandidate stores the updated associations.
 	var authorNames []string
-	bookAuthors, err := mfs.db.GetBookAuthors(id)
+	bookAuthors, err := mfs.db.GetBookAuthors(originalID)
 	if err == nil && len(bookAuthors) > 0 {
 		for _, ba := range bookAuthors {
 			if author, aerr := mfs.db.GetAuthorByID(ba.AuthorID); aerr == nil && author != nil {
 				authorNames = append(authorNames, author.Name)
 			}
 		}
-	} else if book.AuthorID != nil {
-		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+	} else if originalBook.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*originalBook.AuthorID); aerr == nil && author != nil {
 			authorNames = append(authorNames, author.Name)
 		}
 	}
@@ -1659,24 +1720,25 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 
 	// --- Resolve narrator names ---
 	var narratorNames []string
-	bookNarrators, err := mfs.db.GetBookNarrators(id)
+	bookNarrators, err := mfs.db.GetBookNarrators(originalID)
 	if err == nil && len(bookNarrators) > 0 {
 		for _, bn := range bookNarrators {
 			if narrator, nerr := mfs.db.GetNarratorByID(bn.NarratorID); nerr == nil && narrator != nil {
 				narratorNames = append(narratorNames, narrator.Name)
 			}
 		}
-	} else if book.Narrator != nil && *book.Narrator != "" {
-		narratorNames = append(narratorNames, *book.Narrator)
+	} else if originalBook.Narrator != nil && *originalBook.Narrator != "" {
+		narratorNames = append(narratorNames, *originalBook.Narrator)
 	}
 	narratorStr := strings.Join(narratorNames, " & ")
 
 	// --- Determine year ---
+	// Use original book's year since it has the freshly-applied metadata
 	year := 0
-	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
-		year = *book.AudiobookReleaseYear
-	} else if book.PrintYear != nil && *book.PrintYear > 0 {
-		year = *book.PrintYear
+	if originalBook.AudiobookReleaseYear != nil && *originalBook.AudiobookReleaseYear > 0 {
+		year = *originalBook.AudiobookReleaseYear
+	} else if originalBook.PrintYear != nil && *originalBook.PrintYear > 0 {
+		year = *originalBook.PrintYear
 	}
 
 	opConfig := fileops.OperationConfig{VerifyChecksums: true}
@@ -1714,15 +1776,17 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	writtenCount := 0
 	skippedProtected := 0
 
+	// Use the original book's title for tag content (it has freshly-applied metadata)
+	bookTitle := originalBook.Title
 	if totalTracks > 1 {
 		// Multi-file: write to each segment with per-track title and numbering
 		digits := len(fmt.Sprintf("%d", totalTracks))
 		trackFmt := fmt.Sprintf("%%0%dd", digits)
 		for i, seg := range activeSegments {
 			trackNum := i + 1
-			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, book.Title)
+			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
-			tagMap := mfs.buildTagMap(book.Title, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap := mfs.buildTagMap(bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
 			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				writtenCount++ // nothing to change, count as success
@@ -1747,7 +1811,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			skippedProtected++
 			writtenCount++
 		} else {
-			tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
+			tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
 			tagMap = filterUnchangedTags(book.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				writtenCount++ // nothing to change, count as success
@@ -1773,7 +1837,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				if isProtectedPath(sib.FilePath) {
 					continue
 				}
-				tagMap := mfs.buildTagMap(book.Title, book.Title, artistStr, narratorStr, year, "")
+				tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
 				tagMap = filterUnchangedTags(sib.FilePath, tagMap)
 				if len(tagMap) == 0 {
 					writtenCount++
