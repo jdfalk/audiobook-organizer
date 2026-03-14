@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.116.0
+// version: 1.117.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -564,6 +564,8 @@ type Server struct {
 	scheduler              *TaskScheduler
 	aiScanStore            *database.AIScanStore
 	pipelineManager        *PipelineManager
+	mergeService           *MergeService
+	diagnosticsService     *DiagnosticsService
 }
 
 // ServerConfig holds server configuration
@@ -614,6 +616,8 @@ func NewServer() *Server {
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
+		mergeService:           NewMergeService(database.GlobalStore),
+		diagnosticsService:     NewDiagnosticsService(database.GlobalStore, nil, config.AppConfig.ITunesLibraryXMLPath),
 	}
 
 	// Initialize update scheduler
@@ -1387,6 +1391,13 @@ func (s *Server) setupRoutes() {
 			protected.POST("/blocked-hashes", s.addBlockedHash)
 			protected.DELETE("/blocked-hashes/:hash", s.removeBlockedHash)
 
+			// Diagnostics routes
+			protected.POST("/diagnostics/export", s.startDiagnosticsExport)
+			protected.GET("/diagnostics/export/:operationId/download", s.downloadDiagnosticsExport)
+			protected.POST("/diagnostics/submit-ai", s.submitDiagnosticsAI)
+			protected.GET("/diagnostics/ai-results/:operationId", s.getDiagnosticsAIResults)
+			protected.POST("/diagnostics/apply-suggestions", s.applyDiagnosticsSuggestions)
+
 			// Bench routes (only available with -tags bench)
 			s.setupBenchRoutes(protected)
 		}
@@ -1696,61 +1707,28 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
-	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+	ms := s.mergeService
+	if ms == nil {
+		ms = NewMergeService(database.GlobalStore)
+	}
+
+	result, err := ms.MergeBooks(req.BookIDs, "")
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
-	}
-
-	// Fetch all books
-	var books []*database.Book
-	for _, id := range req.BookIDs {
-		book, err := store.GetBookByID(id)
-		if err != nil || book == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("book %s not found", id)})
-			return
-		}
-		books = append(books, book)
-	}
-
-	// Pick the best as primary: M4B preferred, then highest bitrate, then largest file
-	bestIdx := 0
-	for i := 1; i < len(books); i++ {
-		if bookIsBetter(books[i], books[bestIdx]) {
-			bestIdx = i
-		}
-	}
-
-	// Determine version group ID (reuse if any book already has one)
-	versionGroupID := ""
-	for _, b := range books {
-		if b.VersionGroupID != nil && *b.VersionGroupID != "" {
-			versionGroupID = *b.VersionGroupID
-			break
-		}
-	}
-	if versionGroupID == "" {
-		versionGroupID = ulid.Make().String()
-	}
-
-	// Update all books
-	for i, book := range books {
-		book.VersionGroupID = &versionGroupID
-		isPrimary := i == bestIdx
-		book.IsPrimaryVersion = &isPrimary
-		if _, err := store.UpdateBook(book.ID, book); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update book %s: %v", book.ID, err)})
-			return
-		}
 	}
 
 	s.dedupCache.Invalidate("book-dedup-scan")
 	s.dedupCache.Invalidate("book-duplicates")
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":          fmt.Sprintf("Merged %d books into version group", len(books)),
-		"version_group_id": versionGroupID,
-		"primary_id":       books[bestIdx].ID,
+		"message":          fmt.Sprintf("Merged %d books into version group", result.MergedCount),
+		"version_group_id": result.VersionGroupID,
+		"primary_id":       result.PrimaryID,
 	})
 }
 
