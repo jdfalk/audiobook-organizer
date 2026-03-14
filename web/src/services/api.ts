@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.54.0
+// version: 1.55.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3014,5 +3014,74 @@ export async function getLatestReconcileScan(): Promise<LatestReconcileScan> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get latest reconcile scan');
   }
+  return response.json();
+}
+
+// Diagnostics
+export interface DiagnosticsSuggestion {
+  id: string;
+  action: 'merge_versions' | 'delete_orphan' | 'fix_metadata' | 'reassign_series';
+  book_ids: string[];
+  primary_id?: string;
+  reason: string;
+  fix?: Record<string, unknown>;
+  applied: boolean;
+}
+
+export interface DiagnosticsAIResults {
+  status: string;
+  schema_version?: number;
+  suggestions: DiagnosticsSuggestion[];
+  raw_responses: unknown[];
+}
+
+export async function startDiagnosticsExport(
+  category: string,
+  description: string
+): Promise<{ operation_id: string; status: string }> {
+  const response = await fetch(`${API_BASE}/diagnostics/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, description }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to start export');
+  return response.json();
+}
+
+export async function downloadDiagnosticsExport(operationId: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/diagnostics/export/${operationId}/download`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to download export');
+  return response.blob();
+}
+
+export async function submitDiagnosticsAI(
+  category: string,
+  description: string
+): Promise<{ operation_id: string; batch_id: string; status: string; request_count: number }> {
+  const response = await fetch(`${API_BASE}/diagnostics/submit-ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, description }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to submit AI analysis');
+  return response.json();
+}
+
+export async function getDiagnosticsAIResults(operationId: string): Promise<DiagnosticsAIResults> {
+  const response = await fetch(`${API_BASE}/diagnostics/ai-results/${operationId}`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to get AI results');
+  return response.json();
+}
+
+export async function applyDiagnosticsSuggestions(
+  operationId: string,
+  approvedIds: string[]
+): Promise<{ applied: number; failed: number; errors: string[] }> {
+  const response = await fetch(`${API_BASE}/diagnostics/apply-suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation_id: operationId, approved_suggestion_ids: approvedIds }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to apply suggestions');
   return response.json();
 }

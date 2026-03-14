@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.13.0
+// version: 1.14.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -26,6 +26,7 @@ import { Maintenance } from './pages/Maintenance';
 import { BookDedup } from './pages/BookDedup';
 import { Series } from './pages/Series';
 import { Authors } from './pages/Authors';
+import { Diagnostics } from './pages/Diagnostics';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
@@ -181,6 +182,7 @@ function App() {
             <Route path="/dedup" element={<BookDedup />} />
             <Route path="/series" element={<Series />} />
             <Route path="/authors" element={<Authors />} />
+            <Route path="/diagnostics" element={<Diagnostics />} />
           </Routes>
         </MainLayout>
       )}
