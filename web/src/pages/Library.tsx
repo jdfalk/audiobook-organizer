@@ -480,7 +480,7 @@ export const Library = () => {
   const loadSoftDeleted = useCallback(async () => {
     setSoftDeletedLoading(true);
     try {
-      const { items, count } = await api.getSoftDeletedBooks(500, 0);
+      const { items, count } = await api.getSoftDeletedBooks(10000, 0);
       setSoftDeletedBooks(items);
       setSoftDeletedCount(count);
     } catch (e) {

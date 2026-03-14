@@ -484,7 +484,7 @@ func (svc *AudiobookService) GetSoftDeletedBooks(ctx context.Context, limit int,
 	}
 
 	// Normalize limit and offset
-	if limit <= 0 || limit > 500 {
+	if limit <= 0 || limit > 10000 {
 		limit = 50
 	}
 	if offset < 0 {
