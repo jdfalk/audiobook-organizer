@@ -1,7 +1,7 @@
 # Diagnostics Export & AI Analysis
 
 **Date:** 2026-03-14
-**Status:** Approved
+**Status:** Approved (revised after spec review)
 
 ## Problem
 
@@ -21,25 +21,27 @@ User picks a diagnostic category:
 |----------|--------------|-------------------|
 | **Error Analysis** | Last 24h logs, system info, config (redacted), recent operations, failed operations | Identify root causes, suggest fixes, flag patterns |
 | **Deduplication** | All books (slim), authors, series, version groups, file hashes, iTunes albums | Find duplicate books, orphan tracks, missing merges, bad groupings |
-| **Metadata Quality** | Books with missing fields, file vs DB tag mismatches, broken paths, narrator-as-author | Flag incorrect metadata, suggest corrections, identify patterns |
+| **Metadata Quality** | Books with missing fields, broken paths, narrator-as-author | Flag incorrect metadata, suggest corrections, identify patterns |
 | **General / Custom** | Everything above combined | User describes the issue in free text |
 
 Optional text box: "Describe what you're seeing" — included as context in the JSONL system prompt.
 
-### Step 2: Export Generation
+### Step 2: Export Generation (Async)
 
-Backend endpoint `POST /api/v1/diagnostics/export` generates a ZIP containing:
+Backend endpoint `POST /api/v1/diagnostics/export` creates a background Operation (type="diagnostics_export") and returns an operation ID immediately. The ZIP is generated asynchronously and stored on disk. When ready, `GET /api/v1/diagnostics/export/:operationId/download` streams the ZIP.
+
+ZIP contains:
 
 **Always included:**
-- `system_info.json` — OS, app version, uptime, DB type, book/author/series counts, config (secrets redacted)
+- `system_info.json` — OS, app version, DB type, book/author/series counts, config (secrets redacted with `***REDACTED***`). Note: uptime requires adding `StartTime` to the Server struct.
 - `books.json` — all books with: id, title, author, narrator, series, format, duration, file_path, file_size, version_group_id, is_primary_version, work_id, itunes_persistent_id, year, publisher, library_state, marked_for_deletion
 - `authors.json` — id, name, book_count, file_count, aliases
 - `series.json` — id, name, book_count, file_count
 
 **Category-specific:**
-- **Error Analysis:** `logs.json` (last 24h system_activity_log), `operations.json` (last 100 operations with status/errors)
-- **Deduplication:** `itunes_albums.json` (parsed from iTunes XML — album, artist, track count, total duration, PIDs), `version_groups.json` (all version group IDs with their member book IDs)
-- **Metadata Quality:** `tag_mismatches.json` (books where file tags differ from DB values — requires sampling, not full library ffprobe), `missing_fields.json` (books missing title/author/series)
+- **Error Analysis:** `logs.json` (last 24h system_activity_log — fetched via `GetSystemActivityLogs("", 10000)` then filtered by `CreatedAt >= now-24h` in application code), `operations.json` (last 100 operations with status/errors)
+- **Deduplication:** `itunes_albums.json` (parsed from iTunes XML via `itunes.ParseLibrary` if `config.ITunesLibraryXMLPath` is configured; **omitted with empty array if not configured**), `version_groups.json` (built by fetching all books via `GetAllBooks` and grouping by `VersionGroupID` in application memory)
+- **Metadata Quality:** `missing_fields.json` (books missing title/author/series — computed from books.json data, no ffprobe needed)
 - **General:** all of the above
 
 **Always included:**
@@ -47,13 +49,21 @@ Backend endpoint `POST /api/v1/diagnostics/export` generates a ZIP containing:
 
 ### Step 3: Two Actions
 
-**Download ZIP** — standard browser download. User can attach to a GitHub issue for developer troubleshooting.
+**Download ZIP** — fetches the completed ZIP from `GET /api/v1/diagnostics/export/:operationId/download`. User can attach to a GitHub issue for developer troubleshooting.
 
-**Submit to AI** — uploads `batch.jsonl` to OpenAI batch API using the configured `openai_api_key`. Creates an Operation record (type="diagnostics_ai") to track progress. Polls for completion via the existing operation queue's checkpoint system.
+**Submit to AI** — uploads `batch.jsonl` to OpenAI batch API using the configured `openai_api_key`. Creates an Operation record (type="diagnostics_ai") to track progress. Polls for completion.
 
 ### Step 4: AI Results View
 
-When the batch completes, results are parsed and stored in the operation's `result_data`.
+When the batch completes, results are parsed and stored in the operation's `result_data` as JSON with schema version:
+
+```json
+{
+  "schema_version": 1,
+  "suggestions": [...],
+  "raw_responses": [...]
+}
+```
 
 **Formatted review list** (default view):
 - Suggestions grouped by action type: Merge Versions, Delete Orphans, Fix Metadata, Reassign Series
@@ -78,7 +88,17 @@ Request body:
 }
 ```
 
-Response: ZIP file download (Content-Type: application/zip)
+Response (immediate):
+```json
+{
+  "operation_id": "01KKN...",
+  "status": "generating"
+}
+```
+
+### `GET /api/v1/diagnostics/export/:operationId/download`
+
+Response: ZIP file download (Content-Type: application/zip) if ready, 202 if still generating, 404 if not found.
 
 ### `POST /api/v1/diagnostics/submit-ai`
 
@@ -106,6 +126,7 @@ Response:
 ```json
 {
   "status": "completed",
+  "schema_version": 1,
   "suggestions": [
     {
       "id": "sug-001",
@@ -139,6 +160,15 @@ Response:
 }
 ```
 
+## Suggestion Actions
+
+| Action | Behavior |
+|--------|----------|
+| `merge_versions` | Calls service-layer merge function (extracted from `mergeBookDuplicatesAsVersions` handler) |
+| `delete_orphan` | Soft-deletes the book (`marked_for_deletion = true`) — user can purge later |
+| `fix_metadata` | Calls `UpdateBook` with the corrected fields from `fix` object |
+| `reassign_series` | Updates `series_id` on the book |
+
 ## JSONL Prompt Design
 
 Each batch request includes:
@@ -160,12 +190,17 @@ Cross-chunk duplicates (book in chunk 1 is duplicate of book in chunk 37) are ha
 
 ## Implementation Notes
 
-- The ZIP generation runs as a background operation (could take 30+ seconds for large libraries)
-- iTunes XML parsing reuses `internal/itunes/parser.go` (already has `ParseLibrary`)
-- Batch polling reuses `internal/ai/openai_batch.go` (already has batch upload/poll/download)
-- Suggestion application reuses existing merge (`mergeBookDuplicatesAsVersions`), delete, and update endpoints
-- Config secrets (API keys, passwords) are redacted in the export with `***REDACTED***`
-- The `tag_mismatches.json` for metadata quality samples up to 100 books via ffprobe (not the full library — too slow)
+- Export is async: `POST /export` returns operation ID, ZIP generated in background, downloaded via separate GET
+- Need to add `StartTime time.Time` field to Server struct for uptime reporting
+- Need to extract merge logic from `mergeBookDuplicatesAsVersions` HTTP handler into a `DiagnosticsService.MergeBooks(bookIDs []string, primaryID string)` service function
+- Need a generic `DownloadBatchRaw(ctx, outputFileID)` function in `openai_batch.go` that returns raw JSON responses (existing download functions are typed to author-dedup domain)
+- Need a multi-request JSONL builder (existing batch helpers create single-request JSONLs)
+- iTunes XML parsing via `itunes.ParseLibrary(config.ITunesLibraryXMLPath)` — **skip with empty array** if path not configured
+- `version_groups.json` built by loading all books and grouping by `VersionGroupID` in memory
+- `logs.json` time filtering: fetch via `GetSystemActivityLogs("", 10000)`, filter `CreatedAt >= now-24h` in Go
+- Config secrets redacted with `***REDACTED***`
+- ZIP uses Go stdlib `archive/zip` (no existing ZIP code in the codebase to reuse)
+- Result data stored in `operation.result_data` with `schema_version: 1` for forward compatibility
 
 ## Frontend Components
 
@@ -173,6 +208,7 @@ Cross-chunk duplicates (book in chunk 1 is duplicate of book in chunk 37) are ha
   - Category selector (radio buttons or card grid)
   - Description text area
   - Download ZIP / Submit to AI buttons
+  - Progress indicator while generating/polling
   - Results panel (shows after AI completion)
     - Suggestion list with approve/reject
     - View Raw toggle
@@ -182,5 +218,6 @@ Cross-chunk duplicates (book in chunk 1 is duplicate of book in chunk 37) are ha
 
 - **Unit:** ZIP generation includes expected files per category
 - **Unit:** JSONL prompt structure is valid for OpenAI batch API
-- **Integration:** Export endpoint returns valid ZIP with parseable JSON files
+- **Unit:** Service-layer merge function works independently of HTTP handler
+- **Integration:** Export endpoint returns operation ID, download returns valid ZIP
 - **E2E:** Category selection → Download ZIP flow, Submit to AI → mock results → approve/apply flow
