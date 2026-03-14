@@ -14,7 +14,7 @@ const (
 	batchChunkBooks   = 500
 	batchChunkLogs    = 200
 	batchChunkItunes  = 500
-	batchModel        = "gpt-4o"
+	batchModel        = "o4-mini"
 	batchMaxTokens    = 16000
 	batchTemperature  = 0.1
 )
