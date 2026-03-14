@@ -2003,7 +2003,21 @@ func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle 
 }
 
 // runApplyPipeline runs the file rename pipeline after metadata is applied.
+// For protected books (iTunes/import paths), it operates on the library copy
+// instead of the original to avoid moving source files.
 func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book) error {
+	// If the book is in a protected path, run the pipeline on the library copy instead
+	if isProtectedPath(book.FilePath) {
+		libCopy := mfs.ensureLibraryCopy(book)
+		if libCopy == nil {
+			log.Printf("[WARN] runApplyPipeline: no library copy for protected book %s, skipping", id)
+			return nil
+		}
+		log.Printf("[INFO] runApplyPipeline: using library copy %s for protected book %s", libCopy.ID, id)
+		id = libCopy.ID
+		book = libCopy
+	}
+
 	bookNumericID := int(crc32.ChecksumIEEE([]byte(id)))
 	segments, err := mfs.db.ListBookSegments(bookNumericID)
 	if err != nil {
@@ -2077,6 +2091,20 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 				seg.FilePath = entry.TargetPath
 				if err := mfs.db.UpdateBookSegment(seg); err != nil {
 					log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
+				}
+			}
+		}
+
+		// Update the book's file_path to match the new segment directory.
+		// For multi-file books, file_path is the parent directory of the segments.
+		if len(renameResult.Succeeded) > 0 {
+			newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
+			if newBookPath != book.FilePath {
+				book.FilePath = newBookPath
+				if _, err := mfs.db.UpdateBook(id, book); err != nil {
+					log.Printf("[WARN] failed to update book path for %s: %v", id, err)
+				} else {
+					log.Printf("[INFO] updated book path for %s: %s", id, newBookPath)
 				}
 			}
 		}
