@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d1a9n0st-1cs0-s3rv-1c3z-1pexp0rt001
 
 package server
@@ -173,8 +173,8 @@ func (ds *DiagnosticsService) GenerateExport(category, description string) (stri
 		return "", err
 	}
 
-	// Always: batch.jsonl (stub for now)
-	if err := ds.writeBatchJSONL(zw); err != nil {
+	// Always: batch.jsonl
+	if err := ds.writeBatchJSONL(zw, category, description, allBooks); err != nil {
 		zw.Close()
 		tmpFile.Close()
 		os.Remove(zipPath)
@@ -354,14 +354,18 @@ func (ds *DiagnosticsService) writeSeries(zw *zip.Writer) error {
 	return writeJSON(zw, "series.json", result)
 }
 
-// writeBatchJSONL writes a stub batch.jsonl file. Task 5 will implement the real builder.
-func (ds *DiagnosticsService) writeBatchJSONL(zw *zip.Writer) error {
-	return writeRaw(zw, "batch.jsonl", []byte{})
-}
+// writeBatchJSONL writes a batch.jsonl file based on current category and books.
+func (ds *DiagnosticsService) writeBatchJSONL(zw *zip.Writer, category, description string, allBooks []database.Book) error {
+	slimBooks := make([]slimBook, len(allBooks))
+	for i, b := range allBooks {
+		slimBooks[i] = toSlimBook(b)
+	}
 
-// buildBatchJSONL is a stub for Task 5. Returns empty bytes.
-func (ds *DiagnosticsService) buildBatchJSONL() []byte {
-	return []byte{}
+	data, err := buildBatchJSONL(category, description, slimBooks, nil, nil, nil)
+	if err != nil {
+		return err
+	}
+	return writeRaw(zw, "batch.jsonl", data)
 }
 
 func (ds *DiagnosticsService) writeLogs(zw *zip.Writer) error {
