@@ -1,5 +1,5 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 import { useState } from 'react';
@@ -27,6 +27,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import ListAltIcon from '@mui/icons-material/ListAlt.js';
 import MergeTypeIcon from '@mui/icons-material/MergeType.js';
 import BuildIcon from '@mui/icons-material/Build.js';
+import BugReportIcon from '@mui/icons-material/BugReport.js';
 import CollectionsBookmarkIcon from '@mui/icons-material/CollectionsBookmark.js';
 import PeopleIcon from '@mui/icons-material/People.js';
 
@@ -49,6 +50,7 @@ const menuItems = [
   { text: 'Operations', icon: <ListAltIcon />, path: '/operations' },
   { text: 'Maintenance', icon: <BuildIcon />, path: '/maintenance' },
   { text: 'Dedup', icon: <MergeTypeIcon />, path: '/dedup' },
+  { text: 'Diagnostics', icon: <BugReportIcon />, path: '/diagnostics' },
   { text: 'System', icon: <MonitorIcon />, path: '/system' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
