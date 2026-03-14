@@ -1914,10 +1914,14 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 		return
 	}
 
+	// Get total count (unpaginated) for proper pagination support
+	allBooks, _ := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), 10000, 0, olderThanDays)
+	total := len(allBooks)
+
 	c.JSON(http.StatusOK, gin.H{
 		"items":  books,
 		"count":  len(books),
-		"total":  len(books),
+		"total":  total,
 		"limit":  params.Limit,
 		"offset": params.Offset,
 	})
