@@ -1,5 +1,5 @@
 // file: internal/ai/openai_batch.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package ai
@@ -336,6 +336,72 @@ func (p *OpenAIParser) DownloadBatchGroupsResults(ctx context.Context, outputFil
 	}
 
 	return allSuggestions, nil
+}
+
+// BatchRawResult holds one response from a batch API result file.
+type BatchRawResult struct {
+	CustomID string `json:"custom_id"`
+	Content  string `json:"content"`
+	Error    string `json:"error,omitempty"`
+}
+
+// DownloadBatchRaw downloads batch results and returns raw response content.
+func (p *OpenAIParser) DownloadBatchRaw(ctx context.Context, outputFileID string) ([]BatchRawResult, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	resp, err := p.client.Files.Content(ctx, outputFileID)
+	if err != nil {
+		return nil, fmt.Errorf("download batch output: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read batch output: %w", err)
+	}
+
+	return ParseBatchRawResults(data)
+}
+
+// ParseBatchRawResults parses JSONL batch output into raw results.
+func ParseBatchRawResults(data []byte) ([]BatchRawResult, error) {
+	var results []BatchRawResult
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var entry struct {
+			CustomID string `json:"custom_id"`
+			Response struct {
+				Body struct {
+					Choices []struct {
+						Message struct {
+							Content string `json:"content"`
+						} `json:"message"`
+					} `json:"choices"`
+				} `json:"body"`
+			} `json:"response"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(line, &entry); err != nil {
+			continue
+		}
+		result := BatchRawResult{CustomID: entry.CustomID}
+		if entry.Error != nil {
+			result.Error = entry.Error.Message
+		} else if len(entry.Response.Body.Choices) > 0 {
+			result.Content = entry.Response.Body.Choices[0].Message.Content
+		}
+		results = append(results, result)
+	}
+	return results, scanner.Err()
 }
 
 // BuildBatchAuthorDedupRequest creates the messages for a batch-compatible request.
