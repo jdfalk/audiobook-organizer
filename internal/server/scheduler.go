@@ -421,24 +421,28 @@ func (ts *TaskScheduler) registerAllTasks() {
 				storesOptimized := 0
 				storesTotal := 3
 
+				startTotal := time.Now()
+
 				// 1. Main store
-				_ = progress.Log("info", "Optimizing main database", nil)
+				_ = progress.Log("info", "Optimizing main database (VACUUM, ANALYZE, WAL checkpoint)...", nil)
 				_ = progress.UpdateProgress(0, storesTotal, "Optimizing main database...")
+				t1 := time.Now()
 				if err := store.Optimize(); err != nil {
 					_ = progress.Log("error", fmt.Sprintf("Main DB optimization failed: %v", err), nil)
 				} else {
 					storesOptimized++
-					_ = progress.Log("info", "Main database optimized", nil)
+					_ = progress.Log("info", fmt.Sprintf("Main database optimized in %s", time.Since(t1).Round(time.Millisecond)), nil)
 				}
 
 				// 2. AI scan store
 				_ = progress.UpdateProgress(1, storesTotal, "Optimizing AI scan database...")
 				if s.aiScanStore != nil {
+					t2 := time.Now()
 					if err := s.aiScanStore.Optimize(); err != nil {
 						_ = progress.Log("error", fmt.Sprintf("AI scan DB optimization failed: %v", err), nil)
 					} else {
 						storesOptimized++
-						_ = progress.Log("info", "AI scan database optimized", nil)
+						_ = progress.Log("info", fmt.Sprintf("AI scan database optimized in %s", time.Since(t2).Round(time.Millisecond)), nil)
 					}
 				} else {
 					_ = progress.Log("info", "AI scan store not initialized, skipping", nil)
@@ -447,17 +451,18 @@ func (ts *TaskScheduler) registerAllTasks() {
 				// 3. OpenLibrary store (accessed via olService)
 				_ = progress.UpdateProgress(2, storesTotal, "Optimizing OpenLibrary cache...")
 				if s.olService != nil && s.olService.Store() != nil {
+					t3 := time.Now()
 					if err := s.olService.Store().Optimize(); err != nil {
 						_ = progress.Log("error", fmt.Sprintf("OL cache optimization failed: %v", err), nil)
 					} else {
 						storesOptimized++
-						_ = progress.Log("info", "OpenLibrary cache optimized", nil)
+						_ = progress.Log("info", fmt.Sprintf("OpenLibrary cache optimized in %s", time.Since(t3).Round(time.Millisecond)), nil)
 					}
 				} else {
 					_ = progress.Log("info", "OpenLibrary store not initialized, skipping", nil)
 				}
 
-				_ = progress.UpdateProgress(storesTotal, storesTotal, fmt.Sprintf("Database optimization complete: %d/%d stores", storesOptimized, storesTotal))
+				_ = progress.UpdateProgress(storesTotal, storesTotal, fmt.Sprintf("Database optimization complete: %d/%d stores in %s", storesOptimized, storesTotal, time.Since(startTotal).Round(time.Millisecond)))
 				return nil
 			})
 		},
