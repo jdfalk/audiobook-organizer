@@ -277,7 +277,7 @@ func TestBuildBatchJSONL(t *testing.T) {
 
 		body, ok := req["body"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, "gpt-4o", body["model"])
+		assert.Equal(t, batchModel, body["model"])
 
 		messages, ok := body["messages"].([]interface{})
 		require.True(t, ok)
