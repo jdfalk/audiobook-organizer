@@ -1183,6 +1183,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
 			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
+			protected.POST("/audiobooks/batch-operations", s.batchOperations)
 
 			// Metadata change history
 			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
@@ -2929,6 +2930,34 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 		for _, item := range resp.Results {
 			if item.Success {
 				GlobalWriteBackBatcher.Enqueue(item.ID)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) batchOperations(c *gin.Context) {
+	var req BatchOperationsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.Operations) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no operations provided"})
+		return
+	}
+	if len(req.Operations) > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "max 10000 operations per request"})
+		return
+	}
+
+	resp := s.batchService.ExecuteOperations(&req)
+
+	if GlobalWriteBackBatcher != nil {
+		for _, r := range resp.Results {
+			if r.Success {
+				GlobalWriteBackBatcher.Enqueue(r.ID)
 			}
 		}
 	}
