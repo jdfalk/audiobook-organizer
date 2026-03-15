@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -532,6 +532,14 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 	}
 
 	for _, book := range books {
+		// Tombstone external IDs so reimport is blocked
+		if eidStore := asExternalIDStore(svc.store); eidStore != nil {
+			extIDs, _ := eidStore.GetExternalIDsForBook(book.ID)
+			for _, ext := range extIDs {
+				_ = eidStore.TombstoneExternalID(ext.Source, ext.ExternalID)
+			}
+		}
+
 		// Protect books with iTunes PIDs from import paths — these are the
 		// canonical link to the iTunes library. Purging them would cause
 		// reimport on the next iTunes sync.
