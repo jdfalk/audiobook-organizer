@@ -736,6 +736,12 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			}
+		case "reconcile_scan", "transcode", "diagnostics_export", "diagnostics_ai":
+			// These are safe to re-run from scratch
+			log.Printf("[INFO] Operation %s (type=%s) was interrupted; marking as failed (not resumable)", opID, opType)
+			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
+			_ = operations.ClearState(store, opID)
+			continue
 		default:
 			log.Printf("[WARN] Unknown operation type %s for %s, marking as failed", opType, opID)
 			_ = store.UpdateOperationError(opID, "unknown operation type, cannot resume")
