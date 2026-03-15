@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.12.0
+// version: 2.13.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -809,6 +809,27 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			}
 		}
 
+		// Check external ID map first (authoritative for PID lookups)
+		if eidStore := asExternalIDStore(store); eidStore != nil && len(group.tracks) > 0 {
+			firstPID := group.tracks[0].PersistentID
+			if firstPID != "" {
+				// Check if tombstoned — skip reimport of intentionally deleted book
+				if tombstoned, _ := eidStore.IsExternalIDTombstoned("itunes", firstPID); tombstoned {
+					updateITunesProgress(log, status, processed, totalGroups, book.Title)
+					continue
+				}
+				// Check if we already have a mapping for this PID
+				if bookID, err := eidStore.GetBookByExternalID("itunes", firstPID); err == nil && bookID != "" {
+					if existing, err := database.GlobalStore.GetBookByID(bookID); err == nil && existing != nil {
+						linkITunesMetadata(existing, book, group.tracks[0], log)
+						updateITunesLinked(status)
+						updateITunesProgress(log, status, processed, totalGroups, book.Title)
+						continue
+					}
+				}
+			}
+		}
+
 		if req.SkipDuplicates {
 			// Fast check: file path match (no disk I/O, just DB lookup)
 			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
@@ -844,6 +865,24 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 
 		updateITunesImported(status)
 		newBookIDs = append(newBookIDs, created.ID)
+
+		// Register all track PIDs in the external ID map
+		if eidStore := asExternalIDStore(store); eidStore != nil {
+			for _, albumTrack := range group.tracks {
+				if albumTrack.PersistentID != "" {
+					trackNum := albumTrack.TrackNumber
+					trackLoc := importOpts.RemapPath(albumTrack.Location)
+					trackPath, _ := itunes.DecodeLocation(trackLoc)
+					_ = eidStore.CreateExternalIDMapping(&database.ExternalIDMapping{
+						Source:      "itunes",
+						ExternalID:  albumTrack.PersistentID,
+						BookID:      created.ID,
+						TrackNumber: &trackNum,
+						FilePath:    trackPath,
+					})
+				}
+			}
+		}
 
 		// Create BookSegments for multi-track albums
 		if len(group.tracks) > 1 {

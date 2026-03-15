@@ -1,5 +1,5 @@
 // file: internal/server/merge_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7d736d2d-e0df-40bd-9f4b-0a07bc2eb6ae
 
 package server
@@ -82,6 +82,7 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 	}
 
 	// Update all books
+	resolvedPrimaryID := books[bestIdx].ID
 	for i, book := range books {
 		book.VersionGroupID = &versionGroupID
 		isPrimary := i == bestIdx
@@ -91,8 +92,17 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 		}
 	}
 
+	// Reassign external IDs from merged books to the primary book
+	if eidStore := asExternalIDStore(ms.db); eidStore != nil {
+		for _, book := range books {
+			if book.ID != resolvedPrimaryID {
+				_ = eidStore.ReassignExternalIDs(book.ID, resolvedPrimaryID)
+			}
+		}
+	}
+
 	return &MergeResult{
-		PrimaryID:      books[bestIdx].ID,
+		PrimaryID:      resolvedPrimaryID,
 		VersionGroupID: versionGroupID,
 		MergedCount:    len(books),
 	}, nil

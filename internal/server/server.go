@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.119.0
+// version: 1.120.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -877,6 +877,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()
+
+	// Backfill external ID mappings from existing iTunes PIDs (one-time, idempotent)
+	go s.backfillExternalIDs()
 
 	// Start periodic cleanup of stale transcode temp files
 	if database.DB != nil {
