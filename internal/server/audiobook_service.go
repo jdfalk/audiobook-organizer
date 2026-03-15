@@ -532,6 +532,15 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 	}
 
 	for _, book := range books {
+		// Protect books with iTunes PIDs from import paths — these are the
+		// canonical link to the iTunes library. Purging them would cause
+		// reimport on the next iTunes sync.
+		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" &&
+			book.ITunesImportSource != nil && *book.ITunesImportSource != "" {
+			log.Printf("[DEBUG] purge: skipping %s (has iTunes PID %s)", book.ID, *book.ITunesPersistentID)
+			continue
+		}
+
 		// Step 1: Create tombstone (snapshot of book for rollback)
 		if err := svc.store.CreateBookTombstone(&book); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to create tombstone: %v", book.ID, err))
