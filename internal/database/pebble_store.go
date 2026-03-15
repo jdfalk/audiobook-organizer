@@ -3851,7 +3851,7 @@ func (p *PebbleStore) GetInterruptedOperations() ([]Operation, error) {
 		if err := json.Unmarshal(iter.Value(), &op); err != nil {
 			continue
 		}
-		if op.Status == "running" || op.Status == "queued" {
+		if op.Status == "running" || op.Status == "queued" || op.Status == "interrupted" {
 			ops = append(ops, op)
 		}
 	}

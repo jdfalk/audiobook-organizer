@@ -3275,7 +3275,7 @@ func (s *SQLiteStore) UpdateOperationResultData(id string, resultData string) er
 func (s *SQLiteStore) GetInterruptedOperations() ([]Operation, error) {
 	query := `SELECT id, type, status, progress, total, message, folder_path,
 		created_at, started_at, completed_at, error_message, result_data
-		FROM operations WHERE status IN ('running', 'queued')`
+		FROM operations WHERE status IN ('running', 'queued', 'interrupted')`
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
