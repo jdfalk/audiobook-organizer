@@ -9396,3 +9396,191 @@ func (_c *MockStore_GetDirtyBookFolders_Call) RunAndReturn(run func() ([]string,
 	_c.Call = _c.Call.Return(run)
 	return _c
 }
+
+// CreateDeferredITunesUpdate provides a mock function for the type MockStore
+func (_mock *MockStore) CreateDeferredITunesUpdate(bookID string, persistentID string, oldPath string, newPath string, updateType string) error {
+	ret := _mock.Called(bookID, persistentID, oldPath, newPath, updateType)
+	if len(ret) == 0 {
+		panic("no return value specified for CreateDeferredITunesUpdate")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, string, string) error); ok {
+		r0 = returnFunc(bookID, persistentID, oldPath, newPath, updateType)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// GetPendingDeferredITunesUpdates provides a mock function for the type MockStore
+func (_mock *MockStore) GetPendingDeferredITunesUpdates() ([]database.DeferredITunesUpdate, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetPendingDeferredITunesUpdates")
+	}
+	var r0 []database.DeferredITunesUpdate
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.DeferredITunesUpdate, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.DeferredITunesUpdate); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.DeferredITunesUpdate)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MarkDeferredITunesUpdateApplied provides a mock function for the type MockStore
+func (_mock *MockStore) MarkDeferredITunesUpdateApplied(id int) error {
+	ret := _mock.Called(id)
+	if len(ret) == 0 {
+		panic("no return value specified for MarkDeferredITunesUpdateApplied")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// GetDeferredITunesUpdatesByBookID provides a mock function for the type MockStore
+func (_mock *MockStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]database.DeferredITunesUpdate, error) {
+	ret := _mock.Called(bookID)
+	if len(ret) == 0 {
+		panic("no return value specified for GetDeferredITunesUpdatesByBookID")
+	}
+	var r0 []database.DeferredITunesUpdate
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.DeferredITunesUpdate, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.DeferredITunesUpdate); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.DeferredITunesUpdate)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// --- Expecter helpers for CreateDeferredITunesUpdate ---
+
+type MockStore_CreateDeferredITunesUpdate_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CreateDeferredITunesUpdate(bookID interface{}, persistentID interface{}, oldPath interface{}, newPath interface{}, updateType interface{}) *MockStore_CreateDeferredITunesUpdate_Call {
+	return &MockStore_CreateDeferredITunesUpdate_Call{Call: _e.mock.On("CreateDeferredITunesUpdate", bookID, persistentID, oldPath, newPath, updateType)}
+}
+
+func (_c *MockStore_CreateDeferredITunesUpdate_Call) Run(run func(bookID string, persistentID string, oldPath string, newPath string, updateType string)) *MockStore_CreateDeferredITunesUpdate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(string), args[3].(string), args[4].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateDeferredITunesUpdate_Call) Return(err error) *MockStore_CreateDeferredITunesUpdate_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateDeferredITunesUpdate_Call) RunAndReturn(run func(string, string, string, string, string) error) *MockStore_CreateDeferredITunesUpdate_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// --- Expecter helpers for GetPendingDeferredITunesUpdates ---
+
+type MockStore_GetPendingDeferredITunesUpdates_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetPendingDeferredITunesUpdates() *MockStore_GetPendingDeferredITunesUpdates_Call {
+	return &MockStore_GetPendingDeferredITunesUpdates_Call{Call: _e.mock.On("GetPendingDeferredITunesUpdates")}
+}
+
+func (_c *MockStore_GetPendingDeferredITunesUpdates_Call) Run(run func()) *MockStore_GetPendingDeferredITunesUpdates_Call {
+	_c.Call = _c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetPendingDeferredITunesUpdates_Call) Return(updates []database.DeferredITunesUpdate, err error) *MockStore_GetPendingDeferredITunesUpdates_Call {
+	_c.Call = _c.Call.Return(updates, err)
+	return _c
+}
+
+func (_c *MockStore_GetPendingDeferredITunesUpdates_Call) RunAndReturn(run func() ([]database.DeferredITunesUpdate, error)) *MockStore_GetPendingDeferredITunesUpdates_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// --- Expecter helpers for MarkDeferredITunesUpdateApplied ---
+
+type MockStore_MarkDeferredITunesUpdateApplied_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) MarkDeferredITunesUpdateApplied(id interface{}) *MockStore_MarkDeferredITunesUpdateApplied_Call {
+	return &MockStore_MarkDeferredITunesUpdateApplied_Call{Call: _e.mock.On("MarkDeferredITunesUpdateApplied", id)}
+}
+
+func (_c *MockStore_MarkDeferredITunesUpdateApplied_Call) Run(run func(id int)) *MockStore_MarkDeferredITunesUpdateApplied_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(int))
+	})
+	return _c
+}
+
+func (_c *MockStore_MarkDeferredITunesUpdateApplied_Call) Return(err error) *MockStore_MarkDeferredITunesUpdateApplied_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_MarkDeferredITunesUpdateApplied_Call) RunAndReturn(run func(int) error) *MockStore_MarkDeferredITunesUpdateApplied_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// --- Expecter helpers for GetDeferredITunesUpdatesByBookID ---
+
+type MockStore_GetDeferredITunesUpdatesByBookID_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetDeferredITunesUpdatesByBookID(bookID interface{}) *MockStore_GetDeferredITunesUpdatesByBookID_Call {
+	return &MockStore_GetDeferredITunesUpdatesByBookID_Call{Call: _e.mock.On("GetDeferredITunesUpdatesByBookID", bookID)}
+}
+
+func (_c *MockStore_GetDeferredITunesUpdatesByBookID_Call) Run(run func(bookID string)) *MockStore_GetDeferredITunesUpdatesByBookID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDeferredITunesUpdatesByBookID_Call) Return(updates []database.DeferredITunesUpdate, err error) *MockStore_GetDeferredITunesUpdatesByBookID_Call {
+	_c.Call = _c.Call.Return(updates, err)
+	return _c
+}
+
+func (_c *MockStore_GetDeferredITunesUpdatesByBookID_Call) RunAndReturn(run func(string) ([]database.DeferredITunesUpdate, error)) *MockStore_GetDeferredITunesUpdatesByBookID_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}

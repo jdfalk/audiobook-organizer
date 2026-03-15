@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.39.0
+// version: 2.40.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -255,6 +255,12 @@ type Store interface {
 	UpdateScanCache(bookID string, mtime int64, size int64) error
 	MarkNeedsRescan(bookID string) error
 	GetDirtyBookFolders() ([]string, error)
+
+	// Deferred iTunes Updates (transcode path changes applied on next sync)
+	CreateDeferredITunesUpdate(bookID, persistentID, oldPath, newPath, updateType string) error
+	GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error)
+	MarkDeferredITunesUpdateApplied(id int) error
+	GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error)
 }
 
 // Common data structures used by all store implementations
@@ -642,6 +648,19 @@ type BookVersion struct {
 	BookID    string    `json:"book_id"`
 	Timestamp time.Time `json:"timestamp"`
 	Data      []byte    `json:"data"` // Full JSON-serialized Book
+}
+
+// DeferredITunesUpdate records a path change that should be applied to the
+// iTunes library (.itl) the next time write-back is enabled and a sync runs.
+type DeferredITunesUpdate struct {
+	ID           int        `json:"id"`
+	BookID       string     `json:"book_id"`
+	PersistentID string     `json:"persistent_id"`
+	OldPath      string     `json:"old_path"`
+	NewPath      string     `json:"new_path"`
+	UpdateType   string     `json:"update_type"`
+	CreatedAt    time.Time  `json:"created_at"`
+	AppliedAt    *time.Time `json:"applied_at,omitempty"`
 }
 
 // ScanCacheEntry holds mtime/size for incremental scan skip checks.

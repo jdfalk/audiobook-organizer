@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.0.3
+// version: 1.0.4
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -219,7 +219,17 @@ func (s *stubStore) SaveLibraryFingerprint(path string, size int64, modTime time
 func (s *stubStore) GetLibraryFingerprint(path string) (*database.LibraryFingerprintRecord, error) {
 	return nil, nil
 }
-func (s *stubStore) Reset() error                                                      { return nil }
+func (s *stubStore) Reset() error { return nil }
+func (s *stubStore) CreateDeferredITunesUpdate(bookID, persistentID, oldPath, newPath, updateType string) error {
+	return nil
+}
+func (s *stubStore) GetPendingDeferredITunesUpdates() ([]database.DeferredITunesUpdate, error) {
+	return nil, nil
+}
+func (s *stubStore) MarkDeferredITunesUpdateApplied(id int) error { return nil }
+func (s *stubStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]database.DeferredITunesUpdate, error) {
+	return nil, nil
+}
 func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)       { return nil, nil }
 func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error { return nil }
 func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
