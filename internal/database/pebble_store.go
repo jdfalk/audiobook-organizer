@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3996,6 +3996,196 @@ func (p *PebbleStore) getPendingAndAppliedDeferredUpdates() ([]DeferredITunesUpd
 		results = append(results, rec)
 	}
 	return results, nil
+}
+
+// CreateExternalIDMapping creates or replaces an external ID mapping.
+func (p *PebbleStore) CreateExternalIDMapping(mapping *ExternalIDMapping) error {
+	now := time.Now()
+	mapping.CreatedAt = now
+	mapping.UpdatedAt = now
+
+	data, err := json.Marshal(mapping)
+	if err != nil {
+		return err
+	}
+
+	primaryKey := []byte(fmt.Sprintf("ext_id:%s:%s", mapping.Source, mapping.ExternalID))
+	reverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", mapping.BookID, mapping.Source, mapping.ExternalID))
+
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	batch.Set(primaryKey, data, pebble.Sync)
+	batch.Set(reverseKey, []byte(mapping.ExternalID), pebble.Sync)
+
+	return batch.Commit(pebble.Sync)
+}
+
+// GetBookByExternalID returns the book_id for a non-tombstoned external ID.
+func (p *PebbleStore) GetBookByExternalID(source, externalID string) (string, error) {
+	key := []byte(fmt.Sprintf("ext_id:%s:%s", source, externalID))
+	data, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	defer closer.Close()
+
+	var mapping ExternalIDMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		return "", err
+	}
+	if mapping.Tombstoned {
+		return "", nil
+	}
+	return mapping.BookID, nil
+}
+
+// GetExternalIDsForBook returns all external ID mappings for a book.
+func (p *PebbleStore) GetExternalIDsForBook(bookID string) ([]ExternalIDMapping, error) {
+	prefix := []byte(fmt.Sprintf("ext_id:book:%s:", bookID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix, 0xff),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var results []ExternalIDMapping
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Parse source and externalID from key: ext_id:book:<bookID>:<source>:<externalID>
+		parts := strings.SplitN(string(iter.Key()), ":", 5)
+		if len(parts) < 5 {
+			continue
+		}
+		source := parts[3]
+		extID := parts[4]
+
+		primaryKey := []byte(fmt.Sprintf("ext_id:%s:%s", source, extID))
+		data, closer, err := p.db.Get(primaryKey)
+		if err != nil {
+			continue
+		}
+		var mapping ExternalIDMapping
+		if err := json.Unmarshal(data, &mapping); err != nil {
+			closer.Close()
+			continue
+		}
+		closer.Close()
+		results = append(results, mapping)
+	}
+	return results, nil
+}
+
+// IsExternalIDTombstoned checks whether an external ID is tombstoned.
+func (p *PebbleStore) IsExternalIDTombstoned(source, externalID string) (bool, error) {
+	key := []byte(fmt.Sprintf("ext_id:%s:%s", source, externalID))
+	data, closer, err := p.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer closer.Close()
+
+	var mapping ExternalIDMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		return false, err
+	}
+	return mapping.Tombstoned, nil
+}
+
+// TombstoneExternalID marks an external ID as tombstoned to prevent reimport.
+func (p *PebbleStore) TombstoneExternalID(source, externalID string) error {
+	key := []byte(fmt.Sprintf("ext_id:%s:%s", source, externalID))
+	data, closer, err := p.db.Get(key)
+	if err != nil {
+		return err
+	}
+	var mapping ExternalIDMapping
+	if err := json.Unmarshal(data, &mapping); err != nil {
+		closer.Close()
+		return err
+	}
+	closer.Close()
+
+	mapping.Tombstoned = true
+	mapping.UpdatedAt = time.Now()
+
+	updated, err := json.Marshal(mapping)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(key, updated, pebble.Sync)
+}
+
+// ReassignExternalIDs moves all external ID mappings from one book to another (for merges).
+func (p *PebbleStore) ReassignExternalIDs(oldBookID, newBookID string) error {
+	mappings, err := p.GetExternalIDsForBook(oldBookID)
+	if err != nil {
+		return err
+	}
+
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	now := time.Now()
+	for _, m := range mappings {
+		// Delete old reverse key
+		oldReverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", oldBookID, m.Source, m.ExternalID))
+		batch.Delete(oldReverseKey, pebble.Sync)
+
+		// Update mapping
+		m.BookID = newBookID
+		m.UpdatedAt = now
+		data, err := json.Marshal(m)
+		if err != nil {
+			return err
+		}
+		primaryKey := []byte(fmt.Sprintf("ext_id:%s:%s", m.Source, m.ExternalID))
+		batch.Set(primaryKey, data, pebble.Sync)
+
+		// Add new reverse key
+		newReverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", newBookID, m.Source, m.ExternalID))
+		batch.Set(newReverseKey, []byte(m.ExternalID), pebble.Sync)
+	}
+
+	return batch.Commit(pebble.Sync)
+}
+
+// BulkCreateExternalIDMappings inserts multiple external ID mappings.
+// Existing mappings are not overwritten (ignore semantics).
+func (p *PebbleStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error {
+	batch := p.db.NewBatch()
+	defer batch.Close()
+
+	now := time.Now()
+	for _, m := range mappings {
+		primaryKey := []byte(fmt.Sprintf("ext_id:%s:%s", m.Source, m.ExternalID))
+		// Check if already exists
+		if _, closer, err := p.db.Get(primaryKey); err == nil {
+			closer.Close()
+			continue // skip existing
+		}
+
+		m.CreatedAt = now
+		m.UpdatedAt = now
+		data, err := json.Marshal(m)
+		if err != nil {
+			return err
+		}
+		batch.Set(primaryKey, data, pebble.Sync)
+
+		reverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", m.BookID, m.Source, m.ExternalID))
+		batch.Set(reverseKey, []byte(m.ExternalID), pebble.Sync)
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
 // Reset clears all data from the store and resets all counters to initial state

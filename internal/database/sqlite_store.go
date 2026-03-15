@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.41.0
+// version: 1.42.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -3707,6 +3707,138 @@ func (s *SQLiteStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]Deferre
 		results = append(results, d)
 	}
 	return results, rows.Err()
+}
+
+// CreateExternalIDMapping creates or replaces an external ID mapping.
+func (s *SQLiteStore) CreateExternalIDMapping(mapping *ExternalIDMapping) error {
+	now := time.Now().Format(time.RFC3339)
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO external_id_map (source, external_id, book_id, track_number, file_path, tombstoned, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM external_id_map WHERE source = ? AND external_id = ?), ?), ?)`,
+		mapping.Source, mapping.ExternalID, mapping.BookID, mapping.TrackNumber, mapping.FilePath,
+		boolToInt(mapping.Tombstoned),
+		mapping.Source, mapping.ExternalID, now, now,
+	)
+	return err
+}
+
+// GetBookByExternalID returns the book_id for a non-tombstoned external ID.
+func (s *SQLiteStore) GetBookByExternalID(source, externalID string) (string, error) {
+	var bookID string
+	err := s.db.QueryRow(
+		`SELECT book_id FROM external_id_map WHERE source = ? AND external_id = ? AND tombstoned = 0`,
+		source, externalID,
+	).Scan(&bookID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return bookID, err
+}
+
+// GetExternalIDsForBook returns all external ID mappings for a book.
+func (s *SQLiteStore) GetExternalIDsForBook(bookID string) ([]ExternalIDMapping, error) {
+	rows, err := s.db.Query(
+		`SELECT id, source, external_id, book_id, track_number, file_path, tombstoned, created_at, updated_at
+		 FROM external_id_map WHERE book_id = ? ORDER BY source, external_id`,
+		bookID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ExternalIDMapping
+	for rows.Next() {
+		var m ExternalIDMapping
+		var trackNumber sql.NullInt64
+		var filePath sql.NullString
+		var tombstoned int
+		var createdAtStr, updatedAtStr string
+		if err := rows.Scan(&m.ID, &m.Source, &m.ExternalID, &m.BookID, &trackNumber, &filePath, &tombstoned, &createdAtStr, &updatedAtStr); err != nil {
+			return nil, err
+		}
+		if trackNumber.Valid {
+			tn := int(trackNumber.Int64)
+			m.TrackNumber = &tn
+		}
+		if filePath.Valid {
+			m.FilePath = filePath.String
+		}
+		m.Tombstoned = tombstoned != 0
+		m.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		m.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
+// IsExternalIDTombstoned checks whether an external ID is tombstoned.
+func (s *SQLiteStore) IsExternalIDTombstoned(source, externalID string) (bool, error) {
+	var tombstoned int
+	err := s.db.QueryRow(
+		`SELECT tombstoned FROM external_id_map WHERE source = ? AND external_id = ?`,
+		source, externalID,
+	).Scan(&tombstoned)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return tombstoned != 0, nil
+}
+
+// TombstoneExternalID marks an external ID as tombstoned to prevent reimport.
+func (s *SQLiteStore) TombstoneExternalID(source, externalID string) error {
+	_, err := s.db.Exec(
+		`UPDATE external_id_map SET tombstoned = 1, updated_at = ? WHERE source = ? AND external_id = ?`,
+		time.Now().Format(time.RFC3339), source, externalID,
+	)
+	return err
+}
+
+// ReassignExternalIDs moves all external ID mappings from one book to another (for merges).
+func (s *SQLiteStore) ReassignExternalIDs(oldBookID, newBookID string) error {
+	_, err := s.db.Exec(
+		`UPDATE external_id_map SET book_id = ?, updated_at = ? WHERE book_id = ?`,
+		newBookID, time.Now().Format(time.RFC3339), oldBookID,
+	)
+	return err
+}
+
+// BulkCreateExternalIDMappings inserts multiple external ID mappings in a transaction.
+// Uses INSERT OR IGNORE so existing mappings are not overwritten.
+func (s *SQLiteStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(
+		`INSERT OR IGNORE INTO external_id_map (source, external_id, book_id, track_number, file_path, tombstoned, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now().Format(time.RFC3339)
+	for _, m := range mappings {
+		if _, err := stmt.Exec(m.Source, m.ExternalID, m.BookID, m.TrackNumber, m.FilePath, now, now); err != nil {
+			return fmt.Errorf("failed to insert external ID mapping (%s/%s): %w", m.Source, m.ExternalID, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // Reset clears all data from all tables

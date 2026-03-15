@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -201,6 +201,15 @@ type MockStore struct {
 	UpdateScanCacheFunc     func(bookID string, mtime int64, size int64) error
 	MarkNeedsRescanFunc     func(bookID string) error
 	GetDirtyBookFoldersFunc func() ([]string, error)
+
+	// External ID mapping
+	CreateExternalIDMappingFunc      func(mapping *ExternalIDMapping) error
+	GetBookByExternalIDFunc          func(source, externalID string) (string, error)
+	GetExternalIDsForBookFunc        func(bookID string) ([]ExternalIDMapping, error)
+	IsExternalIDTombstonedFunc       func(source, externalID string) (bool, error)
+	TombstoneExternalIDFunc          func(source, externalID string) error
+	ReassignExternalIDsFunc          func(oldBookID, newBookID string) error
+	BulkCreateExternalIDMappingsFunc func(mappings []ExternalIDMapping) error
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1315,4 +1324,53 @@ func (m *MockStore) MarkDeferredITunesUpdateApplied(id int) error {
 
 func (m *MockStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error) {
 	return nil, nil
+}
+
+func (m *MockStore) CreateExternalIDMapping(mapping *ExternalIDMapping) error {
+	if m.CreateExternalIDMappingFunc != nil {
+		return m.CreateExternalIDMappingFunc(mapping)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookByExternalID(source, externalID string) (string, error) {
+	if m.GetBookByExternalIDFunc != nil {
+		return m.GetBookByExternalIDFunc(source, externalID)
+	}
+	return "", nil
+}
+
+func (m *MockStore) GetExternalIDsForBook(bookID string) ([]ExternalIDMapping, error) {
+	if m.GetExternalIDsForBookFunc != nil {
+		return m.GetExternalIDsForBookFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) IsExternalIDTombstoned(source, externalID string) (bool, error) {
+	if m.IsExternalIDTombstonedFunc != nil {
+		return m.IsExternalIDTombstonedFunc(source, externalID)
+	}
+	return false, nil
+}
+
+func (m *MockStore) TombstoneExternalID(source, externalID string) error {
+	if m.TombstoneExternalIDFunc != nil {
+		return m.TombstoneExternalIDFunc(source, externalID)
+	}
+	return nil
+}
+
+func (m *MockStore) ReassignExternalIDs(oldBookID, newBookID string) error {
+	if m.ReassignExternalIDsFunc != nil {
+		return m.ReassignExternalIDsFunc(oldBookID, newBookID)
+	}
+	return nil
+}
+
+func (m *MockStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error {
+	if m.BulkCreateExternalIDMappingsFunc != nil {
+		return m.BulkCreateExternalIDMappingsFunc(mappings)
+	}
+	return nil
 }
