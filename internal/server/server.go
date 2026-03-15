@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.117.0
+// version: 1.118.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -564,6 +564,7 @@ type Server struct {
 	scheduler              *TaskScheduler
 	aiScanStore            *database.AIScanStore
 	pipelineManager        *PipelineManager
+	batchPoller            *BatchPoller
 	mergeService           *MergeService
 	diagnosticsService     *DiagnosticsService
 }
@@ -648,6 +649,8 @@ func NewServer() *Server {
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
 				server.pipelineManager = NewPipelineManager(aiScanStore, database.GlobalStore, p, server)
+				server.batchPoller = NewBatchPoller(database.GlobalStore, p)
+				server.registerBatchPollerHandlers()
 			}
 		}
 	}

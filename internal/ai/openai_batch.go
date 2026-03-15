@@ -1,5 +1,5 @@
 // file: internal/ai/openai_batch.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package ai
@@ -13,8 +13,107 @@ import (
 	"io"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/pagination"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
 )
+
+// batchMetadata returns standard metadata tags for OpenAI batch creation.
+func batchMetadata(batchType string) shared.Metadata {
+	return shared.Metadata{
+		"project": "audiobook-organizer",
+		"type":    batchType,
+	}
+}
+
+// BatchInfo holds information about a project-tagged OpenAI batch.
+type BatchInfo struct {
+	ID            string
+	Status        string
+	Type          string
+	OutputFileID  string
+	ErrorFileID   string
+	RequestCounts RequestCounts
+}
+
+// RequestCounts holds batch request count information.
+type RequestCounts struct {
+	Total     int
+	Completed int
+	Failed    int
+}
+
+// UploadBatchFile uploads a JSONL buffer as a batch input file and returns the file ID.
+func (p *OpenAIParser) UploadBatchFile(ctx context.Context, data io.Reader) (string, error) {
+	if !p.enabled {
+		return "", fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	file, err := p.client.Files.New(ctx, openai.FileNewParams{
+		File:    data,
+		Purpose: openai.FilePurposeBatch,
+	})
+	if err != nil {
+		return "", fmt.Errorf("upload batch file: %w", err)
+	}
+	return file.ID, nil
+}
+
+// CreateBatchWithMetadata creates a batch with custom metadata tags.
+func (p *OpenAIParser) CreateBatchWithMetadata(ctx context.Context, fileID string, batchType string) (string, error) {
+	if !p.enabled {
+		return "", fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	batch, err := p.client.Batches.New(ctx, openai.BatchNewParams{
+		InputFileID:      fileID,
+		Endpoint:         openai.BatchNewParamsEndpointV1ChatCompletions,
+		CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
+		Metadata:         batchMetadata(batchType),
+	})
+	if err != nil {
+		return "", fmt.Errorf("create batch: %w", err)
+	}
+	return batch.ID, nil
+}
+
+// ListProjectBatches lists all recent batches tagged with our project metadata.
+func (p *OpenAIParser) ListProjectBatches(ctx context.Context) ([]BatchInfo, error) {
+	if !p.enabled {
+		return nil, fmt.Errorf("OpenAI parser is not enabled")
+	}
+
+	page, err := p.client.Batches.List(ctx, openai.BatchListParams{
+		Limit: param.NewOpt[int64](100),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list batches: %w", err)
+	}
+
+	var results []BatchInfo
+	// Iterate through the first page of results
+	for _, b := range page.Data {
+		if b.Metadata == nil || b.Metadata["project"] != "audiobook-organizer" {
+			continue
+		}
+		results = append(results, BatchInfo{
+			ID:           b.ID,
+			Status:       string(b.Status),
+			Type:         b.Metadata["type"],
+			OutputFileID: b.OutputFileID,
+			ErrorFileID:  b.ErrorFileID,
+			RequestCounts: RequestCounts{
+				Total:     int(b.RequestCounts.Total),
+				Completed: int(b.RequestCounts.Completed),
+				Failed:    int(b.RequestCounts.Failed),
+			},
+		})
+	}
+	return results, nil
+}
+
+// Ensure pagination import is used.
+var _ = (*pagination.CursorPage[openai.Batch])(nil)
 
 // BatchRequest represents a single request in a JSONL batch file.
 type BatchRequest struct {
@@ -110,6 +209,7 @@ Only include groups where you find actual duplicates or issues.`
 		InputFileID:      file.ID,
 		Endpoint:         openai.BatchNewParamsEndpointV1ChatCompletions,
 		CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
+		Metadata:         batchMetadata("author_dedup"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create batch: %w", err)
@@ -271,6 +371,7 @@ Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|spl
 		InputFileID:      file.ID,
 		Endpoint:         openai.BatchNewParamsEndpointV1ChatCompletions,
 		CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
+		Metadata:         batchMetadata("author_review"),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create batch: %w", err)

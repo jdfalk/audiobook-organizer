@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -824,26 +824,33 @@ func (ts *TaskScheduler) registerAllTasks() {
 		RunInMaintenanceWindow: func() bool { return false },
 	})
 
-	// AI Pipeline Batch Polling — checks for completed batch phases in the pipeline
+	// Unified Batch Poller — discovers all project-tagged OpenAI batches and routes
+	// completed ones to the appropriate handler (author_dedup, author_review,
+	// diagnostics, pipeline, etc.)
 	ts.registerTask(TaskDefinition{
-		Name:        "ai_pipeline_batch_poll",
-		Description: "Poll OpenAI Batch API for completed pipeline phases",
+		Name:        "batch_poller",
+		Description: "Poll OpenAI for completed batch jobs",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			if s.pipelineManager == nil {
-				return nil, fmt.Errorf("pipeline manager not initialized")
+			if s.batchPoller == nil {
+				return nil, nil
 			}
-			ctx := context.Background()
-			s.pipelineManager.PollBatchPhases(ctx)
-			return nil, nil // No operation created — polling is lightweight
+			processed, err := s.batchPoller.Poll(context.Background())
+			if err != nil {
+				log.Printf("[WARN] batch_poller: %v", err)
+			}
+			if processed > 0 {
+				log.Printf("[INFO] batch_poller: processed %d completed batches", processed)
+			}
+			return nil, nil
 		},
 		IsEnabled: func() bool {
-			return config.AppConfig.EnableAIParsing && s.pipelineManager != nil
+			return config.AppConfig.OpenAIAPIKey != "" && s.batchPoller != nil
 		},
 		GetInterval: func() time.Duration {
-			return 5 * time.Minute // Poll every 5 minutes
+			return 5 * time.Minute
 		},
-		RunOnStart:             func() bool { return false },
+		RunOnStart:             func() bool { return true },
 		RunInMaintenanceWindow: func() bool { return false },
 	})
 

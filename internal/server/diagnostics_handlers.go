@@ -1,10 +1,11 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -200,6 +202,12 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 	category := req.Category
 	description := req.Description
 
+	// Get the AI parser for file upload and batch creation
+	var parser *ai.OpenAIParser
+	if s.batchPoller != nil {
+		parser = s.batchPoller.parser
+	}
+
 	// Run async: generate export, build JSONL, submit to OpenAI
 	go func() {
 		_ = store.UpdateOperationStatus(opID, "running", 10, 100, "Generating export data")
@@ -237,14 +245,40 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 
 		_ = store.UpdateOperationStatus(opID, "running", 70, 100, "Submitting to OpenAI batch API")
 
-		// For now, store the JSONL data as result (actual OpenAI submission requires the ai package)
-		resultJSON, _ := json.Marshal(map[string]interface{}{
-			"status":        "submitted",
-			"request_count": requestCount,
-			"batch_id":      "pending-" + opID,
-		})
-		_ = store.UpdateOperationResultData(opID, string(resultJSON))
-		_ = store.UpdateOperationStatus(opID, "completed", 100, 100, "Batch submitted")
+		// Upload JSONL and create batch with metadata tagging
+		if parser != nil {
+			ctx := context.Background()
+			buf := bytes.NewBuffer(jsonlData)
+			file, uploadErr := parser.UploadBatchFile(ctx, buf)
+			if uploadErr != nil {
+				_ = store.UpdateOperationError(opID, fmt.Sprintf("upload batch file: %v", uploadErr))
+				return
+			}
+
+			batchID, createErr := parser.CreateBatchWithMetadata(ctx, file, "diagnostics")
+			if createErr != nil {
+				_ = store.UpdateOperationError(opID, fmt.Sprintf("create batch: %v", createErr))
+				return
+			}
+
+			resultJSON, _ := json.Marshal(map[string]interface{}{
+				"status":        "submitted",
+				"request_count": requestCount,
+				"batch_id":      batchID,
+			})
+			_ = store.UpdateOperationResultData(opID, string(resultJSON))
+			_ = store.UpdateOperationStatus(opID, "running", 80, 100, fmt.Sprintf("Batch %s submitted, awaiting completion", batchID))
+			log.Printf("[INFO] diagnostics_ai: batch %s submitted with %d requests", batchID, requestCount)
+		} else {
+			// Fallback: store JSONL metadata without actual submission
+			resultJSON, _ := json.Marshal(map[string]interface{}{
+				"status":        "submitted",
+				"request_count": requestCount,
+				"batch_id":      "pending-" + opID,
+			})
+			_ = store.UpdateOperationResultData(opID, string(resultJSON))
+			_ = store.UpdateOperationStatus(opID, "completed", 100, 100, "Batch data prepared (no AI parser available)")
+		}
 	}()
 
 	c.JSON(http.StatusAccepted, gin.H{
