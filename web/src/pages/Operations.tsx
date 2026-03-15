@@ -101,7 +101,12 @@ export function Operations() {
   const loadHistory = async (page = historyPage) => {
     try {
       const data = await api.listOperations(HISTORY_PAGE_SIZE, (page - 1) * HISTORY_PAGE_SIZE);
-      setHistory(data.items || []);
+      const items = data.items || [];
+      // Sort by created_at descending for stable position — prevents jockeying on status updates
+      items.sort((a: api.Operation, b: api.Operation) =>
+        b.created_at.localeCompare(a.created_at)
+      );
+      setHistory(items);
       setHistoryTotal(data.total || 0);
     } catch (error) {
       console.error('Failed to load operations history', error);
