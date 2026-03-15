@@ -9584,3 +9584,312 @@ func (_c *MockStore_GetDeferredITunesUpdatesByBookID_Call) RunAndReturn(run func
 	_c.Call = _c.Call.Return(run)
 	return _c
 }
+
+// CreateExternalIDMapping provides a mock function for the type MockStore
+func (_mock *MockStore) CreateExternalIDMapping(mapping *database.ExternalIDMapping) error {
+	ret := _mock.Called(mapping)
+	if len(ret) == 0 {
+		panic("no return value specified for CreateExternalIDMapping")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.ExternalIDMapping) error); ok {
+		r0 = returnFunc(mapping)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_CreateExternalIDMapping_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) CreateExternalIDMapping(mapping interface{}) *MockStore_CreateExternalIDMapping_Call {
+	return &MockStore_CreateExternalIDMapping_Call{Call: _e.mock.On("CreateExternalIDMapping", mapping)}
+}
+
+func (_c *MockStore_CreateExternalIDMapping_Call) Run(run func(mapping *database.ExternalIDMapping)) *MockStore_CreateExternalIDMapping_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*database.ExternalIDMapping))
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateExternalIDMapping_Call) Return(err error) *MockStore_CreateExternalIDMapping_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateExternalIDMapping_Call) RunAndReturn(run func(*database.ExternalIDMapping) error) *MockStore_CreateExternalIDMapping_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// GetBookByExternalID provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookByExternalID(source string, externalID string) (string, error) {
+	ret := _mock.Called(source, externalID)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookByExternalID")
+	}
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
+		return returnFunc(source, externalID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(source, externalID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(source, externalID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetBookByExternalID_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookByExternalID(source interface{}, externalID interface{}) *MockStore_GetBookByExternalID_Call {
+	return &MockStore_GetBookByExternalID_Call{Call: _e.mock.On("GetBookByExternalID", source, externalID)}
+}
+
+func (_c *MockStore_GetBookByExternalID_Call) Run(run func(source string, externalID string)) *MockStore_GetBookByExternalID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookByExternalID_Call) Return(bookID string, err error) *MockStore_GetBookByExternalID_Call {
+	_c.Call = _c.Call.Return(bookID, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookByExternalID_Call) RunAndReturn(run func(string, string) (string, error)) *MockStore_GetBookByExternalID_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// GetExternalIDsForBook provides a mock function for the type MockStore
+func (_mock *MockStore) GetExternalIDsForBook(bookID string) ([]database.ExternalIDMapping, error) {
+	ret := _mock.Called(bookID)
+	if len(ret) == 0 {
+		panic("no return value specified for GetExternalIDsForBook")
+	}
+	var r0 []database.ExternalIDMapping
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.ExternalIDMapping, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.ExternalIDMapping); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.ExternalIDMapping)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetExternalIDsForBook_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetExternalIDsForBook(bookID interface{}) *MockStore_GetExternalIDsForBook_Call {
+	return &MockStore_GetExternalIDsForBook_Call{Call: _e.mock.On("GetExternalIDsForBook", bookID)}
+}
+
+func (_c *MockStore_GetExternalIDsForBook_Call) Run(run func(bookID string)) *MockStore_GetExternalIDsForBook_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetExternalIDsForBook_Call) Return(mappings []database.ExternalIDMapping, err error) *MockStore_GetExternalIDsForBook_Call {
+	_c.Call = _c.Call.Return(mappings, err)
+	return _c
+}
+
+func (_c *MockStore_GetExternalIDsForBook_Call) RunAndReturn(run func(string) ([]database.ExternalIDMapping, error)) *MockStore_GetExternalIDsForBook_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// IsExternalIDTombstoned provides a mock function for the type MockStore
+func (_mock *MockStore) IsExternalIDTombstoned(source string, externalID string) (bool, error) {
+	ret := _mock.Called(source, externalID)
+	if len(ret) == 0 {
+		panic("no return value specified for IsExternalIDTombstoned")
+	}
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (bool, error)); ok {
+		return returnFunc(source, externalID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) bool); ok {
+		r0 = returnFunc(source, externalID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(source, externalID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_IsExternalIDTombstoned_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) IsExternalIDTombstoned(source interface{}, externalID interface{}) *MockStore_IsExternalIDTombstoned_Call {
+	return &MockStore_IsExternalIDTombstoned_Call{Call: _e.mock.On("IsExternalIDTombstoned", source, externalID)}
+}
+
+func (_c *MockStore_IsExternalIDTombstoned_Call) Run(run func(source string, externalID string)) *MockStore_IsExternalIDTombstoned_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_IsExternalIDTombstoned_Call) Return(tombstoned bool, err error) *MockStore_IsExternalIDTombstoned_Call {
+	_c.Call = _c.Call.Return(tombstoned, err)
+	return _c
+}
+
+func (_c *MockStore_IsExternalIDTombstoned_Call) RunAndReturn(run func(string, string) (bool, error)) *MockStore_IsExternalIDTombstoned_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// TombstoneExternalID provides a mock function for the type MockStore
+func (_mock *MockStore) TombstoneExternalID(source string, externalID string) error {
+	ret := _mock.Called(source, externalID)
+	if len(ret) == 0 {
+		panic("no return value specified for TombstoneExternalID")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(source, externalID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_TombstoneExternalID_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) TombstoneExternalID(source interface{}, externalID interface{}) *MockStore_TombstoneExternalID_Call {
+	return &MockStore_TombstoneExternalID_Call{Call: _e.mock.On("TombstoneExternalID", source, externalID)}
+}
+
+func (_c *MockStore_TombstoneExternalID_Call) Run(run func(source string, externalID string)) *MockStore_TombstoneExternalID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_TombstoneExternalID_Call) Return(err error) *MockStore_TombstoneExternalID_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_TombstoneExternalID_Call) RunAndReturn(run func(string, string) error) *MockStore_TombstoneExternalID_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// ReassignExternalIDs provides a mock function for the type MockStore
+func (_mock *MockStore) ReassignExternalIDs(oldBookID string, newBookID string) error {
+	ret := _mock.Called(oldBookID, newBookID)
+	if len(ret) == 0 {
+		panic("no return value specified for ReassignExternalIDs")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(oldBookID, newBookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_ReassignExternalIDs_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) ReassignExternalIDs(oldBookID interface{}, newBookID interface{}) *MockStore_ReassignExternalIDs_Call {
+	return &MockStore_ReassignExternalIDs_Call{Call: _e.mock.On("ReassignExternalIDs", oldBookID, newBookID)}
+}
+
+func (_c *MockStore_ReassignExternalIDs_Call) Run(run func(oldBookID string, newBookID string)) *MockStore_ReassignExternalIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_ReassignExternalIDs_Call) Return(err error) *MockStore_ReassignExternalIDs_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_ReassignExternalIDs_Call) RunAndReturn(run func(string, string) error) *MockStore_ReassignExternalIDs_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// BulkCreateExternalIDMappings provides a mock function for the type MockStore
+func (_mock *MockStore) BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error {
+	ret := _mock.Called(mappings)
+	if len(ret) == 0 {
+		panic("no return value specified for BulkCreateExternalIDMappings")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func([]database.ExternalIDMapping) error); ok {
+		r0 = returnFunc(mappings)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_BulkCreateExternalIDMappings_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) BulkCreateExternalIDMappings(mappings interface{}) *MockStore_BulkCreateExternalIDMappings_Call {
+	return &MockStore_BulkCreateExternalIDMappings_Call{Call: _e.mock.On("BulkCreateExternalIDMappings", mappings)}
+}
+
+func (_c *MockStore_BulkCreateExternalIDMappings_Call) Run(run func(mappings []database.ExternalIDMapping)) *MockStore_BulkCreateExternalIDMappings_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]database.ExternalIDMapping))
+	})
+	return _c
+}
+
+func (_c *MockStore_BulkCreateExternalIDMappings_Call) Return(err error) *MockStore_BulkCreateExternalIDMappings_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_BulkCreateExternalIDMappings_Call) RunAndReturn(run func([]database.ExternalIDMapping) error) *MockStore_BulkCreateExternalIDMappings_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}

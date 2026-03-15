@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.40.0
+// version: 2.41.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -261,6 +261,15 @@ type Store interface {
 	GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error)
 	MarkDeferredITunesUpdateApplied(id int) error
 	GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error)
+
+	// External ID mapping (PID map for iTunes, Audible, etc.)
+	CreateExternalIDMapping(mapping *ExternalIDMapping) error
+	GetBookByExternalID(source, externalID string) (string, error)
+	GetExternalIDsForBook(bookID string) ([]ExternalIDMapping, error)
+	IsExternalIDTombstoned(source, externalID string) (bool, error)
+	TombstoneExternalID(source, externalID string) error
+	ReassignExternalIDs(oldBookID, newBookID string) error
+	BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error
 }
 
 // Common data structures used by all store implementations
@@ -661,6 +670,19 @@ type DeferredITunesUpdate struct {
 	UpdateType   string     `json:"update_type"`
 	CreatedAt    time.Time  `json:"created_at"`
 	AppliedAt    *time.Time `json:"applied_at,omitempty"`
+}
+
+// ExternalIDMapping maps an external identifier (iTunes PID, Audible ASIN, etc.) to a book.
+type ExternalIDMapping struct {
+	ID          int       `json:"id"`
+	Source      string    `json:"source"`
+	ExternalID  string    `json:"external_id"`
+	BookID      string    `json:"book_id"`
+	TrackNumber *int      `json:"track_number,omitempty"`
+	FilePath    string    `json:"file_path,omitempty"`
+	Tombstoned  bool      `json:"tombstoned"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ScanCacheEntry holds mtime/size for incremental scan skip checks.

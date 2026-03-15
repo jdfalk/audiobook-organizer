@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -235,6 +235,12 @@ var migrations = []Migration{
 		Version:     33,
 		Description: "Add deferred_itunes_updates table for transcode path changes",
 		Up:          migration033Up,
+		Down:        nil,
+	},
+	{
+		Version:     34,
+		Description: "Add external_id_map table for PID/ASIN mapping",
+		Up:          migration034Up,
 		Down:        nil,
 	},
 }
@@ -1737,5 +1743,43 @@ func migration033Up(store Store) error {
 	}
 
 	log.Println("  - deferred_itunes_updates table created successfully")
+	return nil
+}
+
+// migration034Up creates the external_id_map table for mapping external
+// identifiers (iTunes PIDs, Audible ASINs, etc.) to book IDs.
+func migration034Up(store Store) error {
+	log.Println("  - Creating external_id_map table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS external_id_map (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			source TEXT NOT NULL,
+			external_id TEXT NOT NULL,
+			book_id TEXT NOT NULL,
+			track_number INTEGER,
+			file_path TEXT,
+			tombstoned INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ext_id_source_eid ON external_id_map(source, external_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_id_book ON external_id_map(book_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_id_tombstone ON external_id_map(source, tombstoned) WHERE tombstoned = 0`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 34 failed: %w", err)
+		}
+	}
+
+	log.Println("  - external_id_map table created successfully")
 	return nil
 }

@@ -230,6 +230,17 @@ func (s *stubStore) MarkDeferredITunesUpdateApplied(id int) error { return nil }
 func (s *stubStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]database.DeferredITunesUpdate, error) {
 	return nil, nil
 }
+func (s *stubStore) CreateExternalIDMapping(mapping *database.ExternalIDMapping) error { return nil }
+func (s *stubStore) GetBookByExternalID(source, externalID string) (string, error)     { return "", nil }
+func (s *stubStore) GetExternalIDsForBook(bookID string) ([]database.ExternalIDMapping, error) {
+	return nil, nil
+}
+func (s *stubStore) IsExternalIDTombstoned(source, externalID string) (bool, error) { return false, nil }
+func (s *stubStore) TombstoneExternalID(source, externalID string) error            { return nil }
+func (s *stubStore) ReassignExternalIDs(oldBookID, newBookID string) error          { return nil }
+func (s *stubStore) BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error {
+	return nil
+}
 func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)       { return nil, nil }
 func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error { return nil }
 func (s *stubStore) GetBooksByAuthorIDWithRole(authorID int) ([]database.Book, error) {
