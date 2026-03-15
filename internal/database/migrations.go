@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -229,6 +229,12 @@ var migrations = []Migration{
 		Version:     32,
 		Description: "Add scan cache columns for incremental scanning",
 		Up:          migration032Up,
+		Down:        nil,
+	},
+	{
+		Version:     33,
+		Description: "Add deferred_itunes_updates table for transcode path changes",
+		Up:          migration033Up,
 		Down:        nil,
 	},
 }
@@ -1696,5 +1702,40 @@ func migration032Up(store Store) error {
 	}
 
 	log.Println("  - Scan cache columns added to books successfully")
+	return nil
+}
+
+// migration033Up creates the deferred_itunes_updates table for storing
+// transcode path changes that should be applied on the next iTunes sync.
+func migration033Up(store Store) error {
+	log.Println("  - Creating deferred_itunes_updates table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS deferred_itunes_updates (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			book_id TEXT NOT NULL,
+			persistent_id TEXT NOT NULL,
+			old_path TEXT NOT NULL,
+			new_path TEXT NOT NULL,
+			update_type TEXT NOT NULL DEFAULT 'transcode',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			applied_at DATETIME
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_deferred_itunes_pending ON deferred_itunes_updates(applied_at) WHERE applied_at IS NULL`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 33 failed: %w", err)
+		}
+	}
+
+	log.Println("  - deferred_itunes_updates table created successfully")
 	return nil
 }

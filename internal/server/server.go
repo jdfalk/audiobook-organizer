@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.118.0
+// version: 1.119.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -5567,6 +5567,25 @@ func (s *Server) startTranscode(c *gin.Context) {
 		}
 
 		progress.Log("info", fmt.Sprintf("Created M4B version %s (group %s), original %s demoted to non-primary", newBook.ID, groupID, req.BookID), nil)
+
+		// If iTunes write-back is disabled and the original book came from iTunes,
+		// store a deferred update so the path change is applied on the next sync.
+		if !config.AppConfig.ITLWriteBackEnabled &&
+			originalBook.ITunesPersistentID != nil &&
+			*originalBook.ITunesPersistentID != "" {
+			if err := database.GlobalStore.CreateDeferredITunesUpdate(
+				originalBook.ID,
+				*originalBook.ITunesPersistentID,
+				originalBook.FilePath,
+				newBook.FilePath,
+				"transcode",
+			); err != nil {
+				progress.Log("warn", fmt.Sprintf("Failed to create deferred iTunes update: %v", err), nil)
+			} else {
+				progress.Log("info", "M4B created. iTunes library update deferred until write-back is enabled.", nil)
+			}
+		}
+
 		return nil
 	}
 

@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -1298,5 +1298,21 @@ func (m *MockStore) GetDirtyBookFolders() ([]string, error) {
 	if m.GetDirtyBookFoldersFunc != nil {
 		return m.GetDirtyBookFoldersFunc()
 	}
+	return nil, nil
+}
+
+func (m *MockStore) CreateDeferredITunesUpdate(bookID, persistentID, oldPath, newPath, updateType string) error {
+	return nil
+}
+
+func (m *MockStore) GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error) {
+	return nil, nil
+}
+
+func (m *MockStore) MarkDeferredITunesUpdateApplied(id int) error {
+	return nil
+}
+
+func (m *MockStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error) {
 	return nil, nil
 }

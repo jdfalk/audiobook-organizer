@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.40.0
+// version: 1.41.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -3634,6 +3634,79 @@ func (s *SQLiteStore) GetLibraryFingerprint(path string) (*LibraryFingerprintRec
 	rec.ModTime, _ = time.Parse(time.RFC3339, modTimeStr)
 	rec.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
 	return &rec, nil
+}
+
+// CreateDeferredITunesUpdate stores a deferred iTunes path update.
+func (s *SQLiteStore) CreateDeferredITunesUpdate(bookID, persistentID, oldPath, newPath, updateType string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO deferred_itunes_updates (book_id, persistent_id, old_path, new_path, update_type)
+		 VALUES (?, ?, ?, ?, ?)`,
+		bookID, persistentID, oldPath, newPath, updateType,
+	)
+	return err
+}
+
+// GetPendingDeferredITunesUpdates returns all deferred updates that haven't been applied yet.
+func (s *SQLiteStore) GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error) {
+	rows, err := s.db.Query(
+		`SELECT id, book_id, persistent_id, old_path, new_path, update_type, created_at
+		 FROM deferred_itunes_updates WHERE applied_at IS NULL ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []DeferredITunesUpdate
+	for rows.Next() {
+		var d DeferredITunesUpdate
+		var createdAtStr string
+		if err := rows.Scan(&d.ID, &d.BookID, &d.PersistentID, &d.OldPath, &d.NewPath, &d.UpdateType, &createdAtStr); err != nil {
+			return nil, err
+		}
+		d.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		results = append(results, d)
+	}
+	return results, rows.Err()
+}
+
+// MarkDeferredITunesUpdateApplied sets the applied_at timestamp on a deferred update.
+func (s *SQLiteStore) MarkDeferredITunesUpdateApplied(id int) error {
+	_, err := s.db.Exec(
+		`UPDATE deferred_itunes_updates SET applied_at = ? WHERE id = ?`,
+		time.Now().Format(time.RFC3339), id,
+	)
+	return err
+}
+
+// GetDeferredITunesUpdatesByBookID returns all deferred updates for a specific book.
+func (s *SQLiteStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error) {
+	rows, err := s.db.Query(
+		`SELECT id, book_id, persistent_id, old_path, new_path, update_type, created_at, applied_at
+		 FROM deferred_itunes_updates WHERE book_id = ? ORDER BY created_at ASC`,
+		bookID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []DeferredITunesUpdate
+	for rows.Next() {
+		var d DeferredITunesUpdate
+		var createdAtStr string
+		var appliedAtStr *string
+		if err := rows.Scan(&d.ID, &d.BookID, &d.PersistentID, &d.OldPath, &d.NewPath, &d.UpdateType, &createdAtStr, &appliedAtStr); err != nil {
+			return nil, err
+		}
+		d.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		if appliedAtStr != nil {
+			t, _ := time.Parse(time.RFC3339, *appliedAtStr)
+			d.AppliedAt = &t
+		}
+		results = append(results, d)
+	}
+	return results, rows.Err()
 }
 
 // Reset clears all data from all tables

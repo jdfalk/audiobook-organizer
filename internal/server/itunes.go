@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.11.0
+// version: 2.12.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -1832,6 +1832,33 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 		log.UpdateProgress(0, 0, "No audiobooks found in library")
 		log.Warn("No audiobooks found in library")
 		return nil
+	}
+
+	// Apply any deferred iTunes updates (e.g., from transcodes while write-back was disabled)
+	if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+		pending, _ := store.GetPendingDeferredITunesUpdates()
+		if len(pending) > 0 {
+			updates := make([]itunes.ITLLocationUpdate, len(pending))
+			for i, p := range pending {
+				updates[i] = itunes.ITLLocationUpdate{
+					PersistentID: p.PersistentID,
+					NewLocation:  p.NewPath,
+				}
+			}
+			itlPath := config.AppConfig.ITunesLibraryITLPath
+			tmpPath := itlPath + ".deferred-update.tmp"
+			result, itlErr := itunes.UpdateITLLocations(itlPath, tmpPath, updates)
+			if itlErr == nil && result.UpdatedCount > 0 {
+				_ = os.Rename(tmpPath, itlPath)
+				for _, p := range pending {
+					_ = store.MarkDeferredITunesUpdateApplied(p.ID)
+				}
+				log.Info("Applied %d deferred iTunes updates", result.UpdatedCount)
+			} else if itlErr != nil {
+				log.Warn("Failed to apply deferred iTunes updates: %v", itlErr)
+				_ = os.Remove(tmpPath)
+			}
+		}
 	}
 
 	importOpts := itunes.ImportOptions{
