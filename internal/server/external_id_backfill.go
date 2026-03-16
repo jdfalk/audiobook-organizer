@@ -54,8 +54,8 @@ func (s *Server) backfillExternalIDs() {
 		return
 	}
 
-	// Check if backfill has already been performed
-	if setting, err := store.GetSetting("external_id_backfill_done"); err == nil && setting != nil && setting.Value == "true" {
+	// Check if backfill has already been performed (v2 = includes iTunes XML track PIDs)
+	if setting, err := store.GetSetting("external_id_backfill_v2_done"); err == nil && setting != nil && setting.Value == "true" {
 		return
 	}
 
@@ -81,17 +81,14 @@ func (s *Server) backfillExternalIDs() {
 
 	log.Printf("[INFO] Backfilled %d external ID mappings from book records", backfilled)
 
-	// Mark book-level backfill as done
-	_ = store.SetSetting("external_id_backfill_done", "true", "bool", false)
-
-	// Now backfill ALL track-level PIDs from the iTunes XML (separate flag)
-	if setting, err := store.GetSetting("external_id_itunes_xml_backfill_done"); err != nil || setting == nil || setting.Value != "true" {
-		itunesBackfilled := s.backfillITunesTrackPIDs(store, eidStore)
-		if itunesBackfilled > 0 {
-			log.Printf("[INFO] Backfilled %d track-level PIDs from iTunes XML", itunesBackfilled)
-		}
-		_ = store.SetSetting("external_id_itunes_xml_backfill_done", "true", "bool", false)
+	// Backfill ALL track-level PIDs from the iTunes XML
+	itunesBackfilled := s.backfillITunesTrackPIDs(store, eidStore)
+	if itunesBackfilled > 0 {
+		log.Printf("[INFO] Backfilled %d track-level PIDs from iTunes XML", itunesBackfilled)
 	}
+
+	// Mark v2 backfill as done (book-level + iTunes XML track-level)
+	_ = store.SetSetting("external_id_backfill_v2_done", "true", "bool", false)
 }
 
 // backfillITunesTrackPIDs reads the iTunes XML and registers ALL track PIDs
