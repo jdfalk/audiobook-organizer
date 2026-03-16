@@ -56,8 +56,10 @@ func (s *Server) backfillExternalIDs() {
 
 	// Check if backfill has already been performed (v2 = includes iTunes XML track PIDs)
 	if setting, err := store.GetSetting("external_id_backfill_v2_done"); err == nil && setting != nil && setting.Value == "true" {
+		log.Printf("[INFO] External ID backfill v2 already completed, skipping")
 		return
 	}
+	log.Printf("[INFO] Starting external ID backfill v2...")
 
 	offset := 0
 	backfilled := 0
@@ -97,14 +99,17 @@ func (s *Server) backfillExternalIDs() {
 func (s *Server) backfillITunesTrackPIDs(store database.Store, eidStore ExternalIDStore) int {
 	xmlPath := config.AppConfig.ITunesLibraryXMLPath
 	if xmlPath == "" {
+		log.Printf("[INFO] backfillITunesTrackPIDs: no iTunes XML path configured, skipping")
 		return 0
 	}
 
+	log.Printf("[INFO] backfillITunesTrackPIDs: parsing iTunes XML at %s", xmlPath)
 	lib, err := itunes.ParseLibrary(xmlPath)
 	if err != nil {
 		log.Printf("[WARN] backfillITunesTrackPIDs: failed to parse iTunes XML: %v", err)
 		return 0
 	}
+	log.Printf("[INFO] backfillITunesTrackPIDs: parsed %d tracks", len(lib.Tracks))
 
 	// Group tracks by album
 	type albumGroup struct {
@@ -132,8 +137,10 @@ func (s *Server) backfillITunesTrackPIDs(store database.Store, eidStore External
 	}
 
 	// Build PID→book_id index from existing books
+	log.Printf("[INFO] backfillITunesTrackPIDs: loading book index...")
 	pidToBook := make(map[string]string)
 	titleToBook := make(map[string]string) // lowercase title → book_id
+	totalBooks := 0
 	offset := 0
 	for {
 		books, err := store.GetAllBooks(10000, offset)
@@ -146,8 +153,10 @@ func (s *Server) backfillITunesTrackPIDs(store database.Store, eidStore External
 			}
 			titleToBook[strings.ToLower(strings.TrimSpace(book.Title))] = book.ID
 		}
+		totalBooks += len(books)
 		offset += 10000
 	}
+	log.Printf("[INFO] backfillITunesTrackPIDs: loaded %d books (%d PIDs, %d titles)", totalBooks, len(pidToBook), len(titleToBook))
 
 	// For each album, find our book and register all track PIDs
 	registered := 0
