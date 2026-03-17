@@ -6478,7 +6478,7 @@ func stripChapterFromTitle(title string) string {
 	cleaned = discWordPrefix.ReplaceAllString(cleaned, "")
 
 	// Strip leading bracketed series info like "[The Expanse 9.0]" or "[Series Name]"
-	bracketPrefix := regexp.MustCompile(`^\[.*?\]\s*`)
+	bracketPrefix := regexp.MustCompile(`^\[.*?\]\s*[-–]?\s*`)
 	cleaned = bracketPrefix.ReplaceAllString(cleaned, "")
 
 	// Strip trailing bracketed info like "Title [Unabridged]"
@@ -6501,8 +6501,9 @@ func stripChapterFromTitle(title string) string {
 	qualifiers := regexp.MustCompile(`(?i)\s*\((un)?abridged\)`)
 	cleaned = qualifiers.ReplaceAllString(cleaned, "")
 
-	// Strip trailing " - " artifacts from removals
-	cleaned = strings.TrimRight(cleaned, " -")
+	// Strip leading/trailing " - " artifacts from removals
+	cleaned = strings.TrimLeft(cleaned, " -–")
+	cleaned = strings.TrimRight(cleaned, " -–")
 	cleaned = strings.TrimSpace(cleaned)
 
 	// If stripping removed everything, return the original title
