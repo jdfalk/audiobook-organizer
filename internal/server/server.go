@@ -6759,6 +6759,9 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	}
 
 	msg := fmt.Sprintf("metadata written to %d file(s)", writtenCount)
+	if writtenCount == 0 {
+		msg = "no files needed tag updates (tags already match DB values)"
+	}
 	if renamed > 0 {
 		msg += ", files renamed"
 	}

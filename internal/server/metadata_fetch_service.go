@@ -1790,13 +1790,12 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			tagMap := mfs.buildTagMap(bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
 			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
 			if len(tagMap) == 0 {
-				writtenCount++ // nothing to change, count as success
+				log.Printf("[DEBUG] write-back: segment %s tags already match, skipping", seg.FilePath)
 				continue
 			}
 			if isProtectedPath(seg.FilePath) {
 				log.Printf("[DEBUG] skipping write-back for protected segment: %s", seg.FilePath)
 				skippedProtected++
-				writtenCount++
 				continue
 			}
 			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
@@ -1810,12 +1809,11 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		if isProtectedPath(book.FilePath) {
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
-			writtenCount++
 		} else {
 			tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
 			tagMap = filterUnchangedTags(book.FilePath, tagMap)
 			if len(tagMap) == 0 {
-				writtenCount++ // nothing to change, count as success
+				log.Printf("[DEBUG] write-back: %s tags already match, skipping", book.FilePath)
 			} else if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 			} else {
