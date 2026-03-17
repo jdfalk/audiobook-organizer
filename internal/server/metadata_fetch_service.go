@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -2120,4 +2121,125 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 	}
 
 	return nil
+}
+
+// RunApplyPipelineRenameOnly runs only the rename portion of the apply pipeline.
+// Used by the "Save to Files" button to rename files without re-writing tags (tags are written separately).
+func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *database.Book) error {
+	// If the book is in a protected path, run on library copy
+	if isProtectedPath(book.FilePath) {
+		libCopy := mfs.ensureLibraryCopy(book)
+		if libCopy == nil {
+			return fmt.Errorf("no library copy for protected book %s", id)
+		}
+		id = libCopy.ID
+		book = libCopy
+	}
+
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(id)))
+	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	if err != nil {
+		return fmt.Errorf("list segments: %w", err)
+	}
+	if len(segments) == 0 {
+		return nil
+	}
+
+	var authorName string
+	if book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+	var seriesName, seriesPos string
+	if book.SeriesID != nil {
+		if series, serr := mfs.db.GetSeriesByID(*book.SeriesID); serr == nil && series != nil {
+			seriesName = series.Name
+		}
+		if book.SeriesSequence != nil {
+			seriesPos = strconv.Itoa(*book.SeriesSequence)
+		}
+	}
+	year := 0
+	if book.AudiobookReleaseYear != nil {
+		year = *book.AudiobookReleaseYear
+	}
+
+	vars := FormatVars{
+		Author:    authorName,
+		Title:     book.Title,
+		Series:    seriesName,
+		SeriesPos: seriesPos,
+		Year:      year,
+		Narrator:  derefString(book.Narrator),
+		Lang:      derefString(book.Language),
+	}
+
+	pathFormat := config.AppConfig.PathFormat
+	if pathFormat == "" {
+		pathFormat = DefaultPathFormat
+	}
+	segTitleFormat := config.AppConfig.SegmentTitleFormat
+	if segTitleFormat == "" {
+		segTitleFormat = DefaultSegmentTitleFormat
+	}
+
+	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, segments, vars)
+
+	renameResult, err := RenameFiles(entries)
+	if err != nil {
+		return fmt.Errorf("rename files: %w", err)
+	}
+
+	// Update segment records with new paths
+	segMap := make(map[string]*database.BookSegment, len(segments))
+	for i := range segments {
+		segMap[segments[i].ID] = &segments[i]
+	}
+	for _, entry := range renameResult.Succeeded {
+		if seg, ok := segMap[entry.SegmentID]; ok {
+			seg.FilePath = entry.TargetPath
+			if err := mfs.db.UpdateBookSegment(seg); err != nil {
+				log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
+			}
+		}
+	}
+
+	// Update book file_path
+	if len(renameResult.Succeeded) > 0 {
+		newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
+		if newBookPath != book.FilePath {
+			book.FilePath = newBookPath
+			if _, err := mfs.db.UpdateBook(id, book); err != nil {
+				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
+			} else {
+				log.Printf("[INFO] renamed book files for %s: %s", id, newBookPath)
+			}
+		}
+	}
+
+	// Clean up empty directories left after rename
+	for _, entry := range renameResult.Succeeded {
+		oldDir := filepath.Dir(entry.SourcePath)
+		if oldDir != filepath.Dir(entry.TargetPath) {
+			removeEmptyDirs(oldDir, config.AppConfig.RootDir)
+		}
+	}
+
+	return nil
+}
+
+// removeEmptyDirs removes empty directories walking up from dir until reaching stopAt.
+func removeEmptyDirs(dir, stopAt string) {
+	for dir != stopAt && dir != "/" && dir != "." {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			break
+		}
+		if err := os.Remove(dir); err != nil {
+			break
+		}
+		log.Printf("[INFO] removed empty directory: %s", dir)
+		dir = filepath.Dir(dir)
+	}
 }

@@ -6711,7 +6711,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 }
 
 // writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.
-// It writes current DB metadata for the book to all active audio files on disk.
+// It writes current DB metadata to audio files AND renames files if AutoRenameOnApply is enabled.
 func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -6719,33 +6719,54 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
-	// Parse optional segment filter from request body
+	// Parse optional segment filter and rename flag from request body
 	var body struct {
 		SegmentIDs []string `json:"segment_ids"`
+		Rename     *bool    `json:"rename"`
 	}
-	// Ignore bind errors — body is optional
 	_ = c.ShouldBindJSON(&body)
 
+	book, err := database.GlobalStore.GetBookByID(id)
+	if err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		return
+	}
+
+	// Step 1: Rename files if requested or AutoRenameOnApply is on
+	renamed := 0
+	doRename := (body.Rename != nil && *body.Rename) || config.AppConfig.AutoRenameOnApply
+	if doRename && len(body.SegmentIDs) == 0 {
+		if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
+			log.Printf("[WARN] rename failed for book %s: %v", id, err)
+		} else {
+			renamed = 1
+			// Re-fetch book after rename since file_path may have changed
+			book, _ = database.GlobalStore.GetBookByID(id)
+		}
+	}
+
+	// Step 2: Write tags to files
 	var writtenCount int
-	var err error
 	if len(body.SegmentIDs) > 0 {
 		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id, body.SegmentIDs)
 	} else {
 		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id)
 	}
 	if err != nil {
-		if err.Error() == fmt.Sprintf("audiobook not found: %s", id) {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-			return
-		}
 		log.Printf("[ERROR] write-back failed for book %s: %v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	msg := fmt.Sprintf("metadata written to %d file(s)", writtenCount)
+	if renamed > 0 {
+		msg += ", files renamed"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message":       fmt.Sprintf("metadata written to %d file(s)", writtenCount),
+		"message":       msg,
 		"written_count": writtenCount,
+		"renamed":       renamed > 0,
 	})
 }
 
