@@ -33,7 +33,11 @@ const (
 )
 
 // FormatSegmentTitle formats a per-segment title using the template.
+// For single-file books (totalTracks == 1), returns just the title without numbering.
 func FormatSegmentTitle(format string, title string, track, totalTracks int) string {
+	if totalTracks <= 1 {
+		return title
+	}
 	result := format
 	result = strings.ReplaceAll(result, "{title}", title)
 	result = strings.ReplaceAll(result, "{total_tracks}", fmt.Sprintf("%d", totalTracks))
