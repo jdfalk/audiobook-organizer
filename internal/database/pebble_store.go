@@ -1865,12 +1865,43 @@ func (p *PebbleStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 		return nil, err
 	}
 
+	// Build author name index for search matching
+	authorNames := make(map[int]string)
+	authIter, authErr := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("author:0"),
+		UpperBound: []byte("author:;"),
+	})
+	if authErr == nil {
+		defer authIter.Close()
+		for authIter.First(); authIter.Valid(); authIter.Next() {
+			key := string(authIter.Key())
+			if strings.Contains(key, ":name:") || strings.Contains(key, ":book:") {
+				continue
+			}
+			var a Author
+			if err := json.Unmarshal(authIter.Value(), &a); err == nil {
+				authorNames[a.ID] = strings.ToLower(a.Name)
+			}
+		}
+	}
+
 	var filtered []Book
 	lowerQuery := strings.ToLower(query)
 	for _, book := range allBooks {
 		titleMatch := strings.Contains(strings.ToLower(book.Title), lowerQuery)
-		authorMatch := book.Narrator != nil && strings.Contains(strings.ToLower(*book.Narrator), lowerQuery)
-		if titleMatch || authorMatch {
+
+		// Check author name
+		authorMatch := false
+		if book.AuthorID != nil {
+			if name, ok := authorNames[*book.AuthorID]; ok {
+				authorMatch = strings.Contains(name, lowerQuery)
+			}
+		}
+
+		// Check narrator
+		narratorMatch := book.Narrator != nil && strings.Contains(strings.ToLower(*book.Narrator), lowerQuery)
+
+		if titleMatch || authorMatch || narratorMatch {
 			filtered = append(filtered, book)
 		}
 	}

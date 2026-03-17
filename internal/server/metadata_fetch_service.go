@@ -1263,6 +1263,18 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 	}
 	searchTitle = stripChapterFromTitle(searchTitle)
 
+	// If title is effectively empty but we have author/narrator hints,
+	// use the author name as search query to get results
+	if strings.TrimSpace(searchTitle) == "" || searchTitle == "-" {
+		if len(authorHint) > 0 && authorHint[0] != "" {
+			searchTitle = authorHint[0]
+		} else if book.AuthorID != nil {
+			if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+				searchTitle = author.Name
+			}
+		}
+	}
+
 	var sources []metadata.MetadataSource
 	if len(mfs.overrideSources) > 0 {
 		sources = mfs.overrideSources
