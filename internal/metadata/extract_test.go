@@ -80,7 +80,8 @@ func TestExtractMetadata_UsesAlbumArtistForAuthor(t *testing.T) {
 }
 
 func TestExtractMetadata_ComposerOverridesAlbumArtist(t *testing.T) {
-	// Arrange
+	// Arrange — album_artist should take priority over composer for audiobooks
+	// because composer typically contains the narrator, not the author.
 	testFile := copyFixture(t, "test_sample.mp3")
 	tags := map[string][]string{
 		"TITLE":            {"Composer Title"},
@@ -97,12 +98,12 @@ func TestExtractMetadata_ComposerOverridesAlbumArtist(t *testing.T) {
 	// Act
 	meta, err := ExtractMetadata(testFile, nil)
 
-	// Assert
+	// Assert — album_artist wins over composer
 	if err != nil {
 		t.Fatalf("extract metadata: %v", err)
 	}
-	if meta.Artist != "Composer Author" {
-		t.Fatalf("expected author %q, got %q", "Composer Author", meta.Artist)
+	if meta.Artist != "Album Artist Author" {
+		t.Fatalf("expected author %q, got %q", "Album Artist Author", meta.Artist)
 	}
 	if meta.Narrator != "Performer Narrator" {
 		t.Fatalf("expected narrator %q, got %q", "Performer Narrator", meta.Narrator)

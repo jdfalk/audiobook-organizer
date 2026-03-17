@@ -194,20 +194,24 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 		fieldCandidate{value: m.Artist(), source: "tag.Artist"},
 		fieldCandidate{value: getRawString(raw, "TPE1", "artist", "\xa9ART", "©ART"), source: "raw.artist"},
 	)
-	if composerValue != "" {
-		metadata.Artist = composerValue
-		setFieldSource(fieldSources, "author", composerSource+" (composer)")
-	} else if albumArtistValue != "" {
+	// Priority: album_artist > artist > composer.
+	// Composer is used as fallback only — in audiobooks, composer typically
+	// contains the narrator, not the author.
+	if albumArtistValue != "" {
 		metadata.Artist = cleanTagValue(albumArtistValue)
 		if metadata.Artist != "" {
 			setFieldSource(fieldSources, "author", albumArtistSource+" (album_artist)")
 		}
-	} else {
+	} else if artistValue != "" {
 		metadata.Artist = cleanTagValue(artistValue)
 		if metadata.Artist != "" {
 			setFieldSource(fieldSources, "author", artistSource)
 			authorFromArtist = true
 		}
+	} else if composerValue != "" {
+		// Composer as last resort — in audiobooks this is often the narrator
+		metadata.Artist = composerValue
+		setFieldSource(fieldSources, "author", composerSource+" (composer fallback)")
 	}
 
 	genreValue, genreSource := pickFirstNonEmpty(
