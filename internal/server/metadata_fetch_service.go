@@ -2139,6 +2139,20 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 	if err != nil {
 		return fmt.Errorf("list segments: %w", err)
 	}
+
+	// For single-file books with no segments, create a virtual segment from book.FilePath
+	if len(segments) == 0 && book.FilePath != "" {
+		ext := strings.TrimPrefix(filepath.Ext(book.FilePath), ".")
+		if ext != "" {
+			// This is a file, not a directory — create a virtual segment
+			segments = []database.BookSegment{{
+				ID:       "virtual-" + id,
+				FilePath: book.FilePath,
+				Format:   ext,
+				Active:   true,
+			}}
+		}
+	}
 	if len(segments) == 0 {
 		return nil
 	}
@@ -2195,7 +2209,15 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		segMap[segments[i].ID] = &segments[i]
 	}
 	for _, entry := range renameResult.Succeeded {
-		if seg, ok := segMap[entry.SegmentID]; ok {
+		if strings.HasPrefix(entry.SegmentID, "virtual-") {
+			// Virtual segment = single-file book. Update book.FilePath directly to the new file path.
+			book.FilePath = entry.TargetPath
+			if _, err := mfs.db.UpdateBook(id, book); err != nil {
+				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
+			} else {
+				log.Printf("[INFO] renamed single-file book %s: %s", id, entry.TargetPath)
+			}
+		} else if seg, ok := segMap[entry.SegmentID]; ok {
 			seg.FilePath = entry.TargetPath
 			if err := mfs.db.UpdateBookSegment(seg); err != nil {
 				log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
@@ -2203,8 +2225,8 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		}
 	}
 
-	// Update book file_path
-	if len(renameResult.Succeeded) > 0 {
+	// Update book file_path for multi-segment books (directory path)
+	if len(renameResult.Succeeded) > 0 && !strings.HasPrefix(renameResult.Succeeded[0].SegmentID, "virtual-") {
 		newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
