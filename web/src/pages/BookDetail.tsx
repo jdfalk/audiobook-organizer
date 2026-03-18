@@ -1601,7 +1601,7 @@ export const BookDetail = () => {
             <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
               Change Log
             </Typography>
-            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} />
+            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} onRevert={() => { refreshFilesTab(); loadBook(); }} />
           </Paper>
 
         </Stack>
