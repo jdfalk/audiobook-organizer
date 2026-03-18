@@ -5,16 +5,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Box,
+  Button,
   CircularProgress,
   Stack,
   Typography,
 } from '@mui/material';
+import RestoreIcon from '@mui/icons-material/Restore.js';
 import type { ChangeLogEntry } from '../services/api';
 import * as api from '../services/api';
 
 interface ChangeLogProps {
   bookId: string;
   refreshKey?: number;
+  onRevert?: () => void; // called after successful revert so parent can refresh
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -39,7 +42,31 @@ const formatTimestamp = (ts: string): string => {
   return date.toLocaleString();
 };
 
-export const ChangeLog = ({ bookId, refreshKey }: ChangeLogProps) => {
+export const ChangeLog = ({ bookId, refreshKey, onRevert }: ChangeLogProps) => {
+  const [reverting, setReverting] = useState<string | null>(null);
+
+  const handleRevert = async (timestamp: string) => {
+    setReverting(timestamp);
+    try {
+      await fetch(`/api/v1/audiobooks/${bookId}/revert-metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timestamp }),
+      });
+      // Also trigger write-back to sync tags to file
+      await fetch(`/api/v1/audiobooks/${bookId}/write-back`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rename: true }),
+      });
+      loadChangelog();
+      onRevert?.();
+    } catch {
+      // silently fail
+    } finally {
+      setReverting(null);
+    }
+  };
   const [entries, setEntries] = useState<ChangeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -115,21 +142,34 @@ export const ChangeLog = ({ bookId, refreshKey }: ChangeLogProps) => {
             </Box>
           </Stack>
 
-          {/* Compare snapshot link for tag_write entries */}
-          {entry.type === 'tag_write' && (
-            <Typography
-              variant="caption"
-              color="primary"
-              sx={{
-                cursor: 'pointer',
-                flexShrink: 0,
-                pt: 0.25,
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              Compare snapshot &rarr;
-            </Typography>
-          )}
+          {/* Actions */}
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
+            {entry.type === 'tag_write' && (
+              <Typography
+                variant="caption"
+                color="primary"
+                sx={{
+                  cursor: 'pointer',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                Compare &rarr;
+              </Typography>
+            )}
+            {idx > 0 && (entry.type === 'metadata_apply' || entry.type === 'tag_write' || entry.type === 'rename') && (
+              <Button
+                size="small"
+                variant="outlined"
+                color="warning"
+                startIcon={<RestoreIcon />}
+                disabled={reverting === entry.timestamp}
+                onClick={(e) => { e.stopPropagation(); handleRevert(entry.timestamp); }}
+                sx={{ fontSize: '0.7rem', py: 0.25, px: 1 }}
+              >
+                {reverting === entry.timestamp ? 'Reverting...' : 'Revert'}
+              </Button>
+            )}
+          </Stack>
         </Box>
       ))}
     </Stack>
