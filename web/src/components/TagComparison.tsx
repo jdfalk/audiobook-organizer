@@ -26,6 +26,7 @@ import * as api from '../services/api';
 interface TagComparisonProps {
   bookId: string;
   versions: Book[];
+  refreshKey?: number; // increment to force reload after mutations
 }
 
 /** Key tags we always show badges for */
@@ -43,7 +44,7 @@ const TAG_LABELS: Record<string, string> = {
   description: 'description',
 };
 
-export const TagComparison = ({ bookId, versions }: TagComparisonProps) => {
+export const TagComparison = ({ bookId, versions, refreshKey }: TagComparisonProps) => {
   const [tags, setTags] = useState<BookTags | null>(null);
   const [loading, setLoading] = useState(false);
   const [compareId, setCompareId] = useState<string>('');
@@ -63,7 +64,7 @@ export const TagComparison = ({ bookId, versions }: TagComparisonProps) => {
 
   useEffect(() => {
     loadTags();
-  }, [loadTags]);
+  }, [loadTags, refreshKey]);
 
   const tagEntries = useMemo(() => {
     if (!tags?.tags) return [];

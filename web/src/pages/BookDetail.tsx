@@ -102,6 +102,8 @@ export const BookDetail = () => {
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [itunesLinked, setItunesLinked] = useState(false);
+  const [filesRefreshKey, setFilesRefreshKey] = useState(0);
+  const refreshFilesTab = () => setFilesRefreshKey((k) => k + 1);
   const [itunesPidCount, setItunesPidCount] = useState(0);
   const [linkSearchOpen, setLinkSearchOpen] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
@@ -363,6 +365,7 @@ export const BookDetail = () => {
       setBook(result.book);
       // Re-fetch enriched book (with populated authors array) and tags
       await refreshBook();
+      refreshFilesTab(); // reload tags and changelog
       toast(
         result.message ||
           `Metadata refreshed from ${result.source || 'provider'}.`,
@@ -401,6 +404,7 @@ export const BookDetail = () => {
     try {
       const result = await api.writeBackMetadata(book.id);
       toast(result.message || 'Metadata written to files.', 'success');
+      refreshFilesTab(); // reload tags and changelog after write
     } catch (error: unknown) {
       console.error('Failed to write metadata to files', error);
       const msg =
@@ -1446,7 +1450,7 @@ export const BookDetail = () => {
                         </Table>
 
                         {/* Tag comparison component (replaces inline tags table) */}
-                        <TagComparison bookId={version.id} versions={allVersions} />
+                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} />
 
                         {/* Segments/files table for multi-file books */}
                         {vSegs.length > 0 && (() => {
@@ -1597,7 +1601,7 @@ export const BookDetail = () => {
             <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
               Change Log
             </Typography>
-            <ChangeLog bookId={book.id} />
+            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} />
           </Paper>
 
         </Stack>
