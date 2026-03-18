@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.41.0
+// version: 2.42.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -261,6 +261,10 @@ type Store interface {
 	GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error)
 	MarkDeferredITunesUpdateApplied(id int) error
 	GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error)
+
+	// Book Path History (file rename/move tracking)
+	RecordPathChange(change *BookPathChange) error
+	GetBookPathHistory(bookID string) ([]BookPathChange, error)
 
 	// External ID mapping (PID map for iTunes, Audible, etc.)
 	CreateExternalIDMapping(mapping *ExternalIDMapping) error
@@ -683,6 +687,16 @@ type ExternalIDMapping struct {
 	Tombstoned  bool      `json:"tombstoned"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// BookPathChange records a file path change (rename/move) for a book.
+type BookPathChange struct {
+	ID         int       `json:"id"`
+	BookID     string    `json:"book_id"`
+	OldPath    string    `json:"old_path"`
+	NewPath    string    `json:"new_path"`
+	ChangeType string    `json:"change_type"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // ScanCacheEntry holds mtime/size for incremental scan skip checks.

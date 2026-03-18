@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.0.4
+// version: 1.0.5
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -240,6 +240,12 @@ func (s *stubStore) TombstoneExternalID(source, externalID string) error        
 func (s *stubStore) ReassignExternalIDs(oldBookID, newBookID string) error          { return nil }
 func (s *stubStore) BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error {
 	return nil
+}
+func (s *stubStore) RecordPathChange(change *database.BookPathChange) error {
+	return nil
+}
+func (s *stubStore) GetBookPathHistory(bookID string) ([]database.BookPathChange, error) {
+	return nil, nil
 }
 func (s *stubStore) GetBookAuthors(bookID string) ([]database.BookAuthor, error)       { return nil, nil }
 func (s *stubStore) SetBookAuthors(bookID string, authors []database.BookAuthor) error { return nil }

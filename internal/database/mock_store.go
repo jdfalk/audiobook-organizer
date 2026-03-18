@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -210,6 +210,10 @@ type MockStore struct {
 	TombstoneExternalIDFunc          func(source, externalID string) error
 	ReassignExternalIDsFunc          func(oldBookID, newBookID string) error
 	BulkCreateExternalIDMappingsFunc func(mappings []ExternalIDMapping) error
+
+	// Path history
+	RecordPathChangeFunc  func(change *BookPathChange) error
+	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1373,4 +1377,18 @@ func (m *MockStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) e
 		return m.BulkCreateExternalIDMappingsFunc(mappings)
 	}
 	return nil
+}
+
+func (m *MockStore) RecordPathChange(change *BookPathChange) error {
+	if m.RecordPathChangeFunc != nil {
+		return m.RecordPathChangeFunc(change)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookPathHistory(bookID string) ([]BookPathChange, error) {
+	if m.GetBookPathHistoryFunc != nil {
+		return m.GetBookPathHistoryFunc(bookID)
+	}
+	return nil, nil
 }

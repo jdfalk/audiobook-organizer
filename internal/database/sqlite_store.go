@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.42.0
+// version: 1.43.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -4133,6 +4133,40 @@ func (s *SQLiteStore) GetDirtyBookFolders() ([]string, error) {
 		}
 	}
 	return dirs, rows.Err()
+}
+
+// RecordPathChange inserts a path change record into book_path_history.
+func (s *SQLiteStore) RecordPathChange(change *BookPathChange) error {
+	_, err := s.db.Exec(
+		`INSERT INTO book_path_history (book_id, old_path, new_path, change_type) VALUES (?, ?, ?, ?)`,
+		change.BookID, change.OldPath, change.NewPath, change.ChangeType,
+	)
+	return err
+}
+
+// GetBookPathHistory returns all path changes for a book, newest first.
+func (s *SQLiteStore) GetBookPathHistory(bookID string) ([]BookPathChange, error) {
+	rows, err := s.db.Query(
+		`SELECT id, book_id, old_path, new_path, change_type, created_at
+		 FROM book_path_history WHERE book_id = ? ORDER BY created_at DESC`,
+		bookID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []BookPathChange
+	for rows.Next() {
+		var c BookPathChange
+		var createdAtStr string
+		if err := rows.Scan(&c.ID, &c.BookID, &c.OldPath, &c.NewPath, &c.ChangeType, &createdAtStr); err != nil {
+			return nil, err
+		}
+		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		results = append(results, c)
+	}
+	return results, rows.Err()
 }
 
 func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {

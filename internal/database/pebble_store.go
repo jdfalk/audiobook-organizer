@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.35.0
+// version: 1.36.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4651,4 +4651,45 @@ func (p *PebbleStore) GetDirtyBookFolders() ([]string, error) {
 		}
 	}
 	return dirs, nil
+}
+
+// RecordPathChange stores a path change record in PebbleDB.
+// Key format: path_history:<book_id>:<timestamp>
+func (p *PebbleStore) RecordPathChange(change *BookPathChange) error {
+	ts := time.Now().UnixNano()
+	change.CreatedAt = time.Now()
+	change.ID = int(ts)
+	data, err := json.Marshal(change)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("path_history:%s:%019d", change.BookID, ts))
+	return p.db.Set(key, data, pebble.Sync)
+}
+
+// GetBookPathHistory returns all path changes for a book, newest first.
+func (p *PebbleStore) GetBookPathHistory(bookID string) ([]BookPathChange, error) {
+	prefix := []byte(fmt.Sprintf("path_history:%s:", bookID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var results []BookPathChange
+	for iter.First(); iter.Valid(); iter.Next() {
+		var c BookPathChange
+		if err := json.Unmarshal(iter.Value(), &c); err != nil {
+			continue
+		}
+		results = append(results, c)
+	}
+	// Reverse for newest-first
+	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+		results[i], results[j] = results[j], results[i]
+	}
+	return results, nil
 }

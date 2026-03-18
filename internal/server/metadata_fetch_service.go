@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.28.0
+// version: 4.29.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -2104,6 +2104,15 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 					log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
 				}
 			}
+			// Record path change for each successful rename
+			if entry.SourcePath != entry.TargetPath {
+				_ = mfs.db.RecordPathChange(&database.BookPathChange{
+					BookID:     id,
+					OldPath:    entry.SourcePath,
+					NewPath:    entry.TargetPath,
+					ChangeType: "rename",
+				})
+			}
 		}
 
 		// Update the book's file_path to match the new segment directory.
@@ -2234,6 +2243,15 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 			if err := mfs.db.UpdateBookSegment(seg); err != nil {
 				log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
 			}
+		}
+		// Record path change for each successful rename
+		if entry.SourcePath != entry.TargetPath {
+			_ = mfs.db.RecordPathChange(&database.BookPathChange{
+				BookID:     id,
+				OldPath:    entry.SourcePath,
+				NewPath:    entry.TargetPath,
+				ChangeType: "rename",
+			})
 		}
 	}
 
