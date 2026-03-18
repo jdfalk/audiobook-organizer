@@ -71,6 +71,18 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	if isbn13, ok := metadata["isbn13"].(string); ok && isbn13 != "" {
 		tags["ISBN13"] = []string{isbn13}
 	}
+	if desc, ok := metadata["description"].(string); ok && desc != "" {
+		tags["DESCRIPTION"] = []string{desc}
+		tags["COMMENT"] = []string{desc} // Standard comment field
+	}
+	if series, ok := metadata["series"].(string); ok && series != "" {
+		tags["SERIES"] = []string{series}
+		tags["MVNM"] = []string{series} // MP4 movement name (used by some players for series)
+	}
+	if si, ok := metadata["series_index"].(int); ok && si > 0 {
+		tags["SERIES_INDEX"] = []string{fmt.Sprintf("%d", si)}
+		tags["MVIN"] = []string{fmt.Sprintf("%d", si)} // MP4 movement number
+	}
 
 	// Write custom AUDIOBOOK_ORGANIZER_* tags for book tracking
 	customPairs := [][2]string{
