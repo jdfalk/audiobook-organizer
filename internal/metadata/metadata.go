@@ -247,7 +247,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 	}
 
 	publisherValue, publisherSource := pickFirstNonEmpty(
-		fieldCandidate{value: getRawString(raw, "TPUB", "publisher", "©pub", "\xa9pub"), source: "raw.publisher"},
+		fieldCandidate{value: getRawString(raw, "TPUB", "publisher", "PUBLISHER", "©pub", "\xa9pub"), source: "raw.publisher"},
 	)
 	metadata.Publisher = cleanTagValue(publisherValue)
 	if metadata.Publisher != "" {
@@ -279,8 +279,17 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 	}
 
 	seriesValue, seriesSource := pickFirstNonEmpty(
-		fieldCandidate{value: getRawString(raw, "TXXX:SERIES", "SERIES", "SERIES_NAME", "SERIESNAME", "GRP1", "TGID", "©grp", "\xa9grp"), source: "raw.series"},
+		fieldCandidate{value: getRawString(raw, "TXXX:SERIES", "SERIES", "SERIES_NAME", "SERIESNAME", "MVNM", "GRP1", "TGID", "©grp", "\xa9grp"), source: "raw.series"},
 	)
+
+	// Read series index from custom tags (SERIES_INDEX, MVIN)
+	if seriesIdxStr := getRawString(raw, "SERIES_INDEX", "MVIN", "TXXX:SERIES_INDEX"); seriesIdxStr != "" {
+		if idx, err := strconv.Atoi(strings.TrimSpace(seriesIdxStr)); err == nil && idx > 0 {
+			metadata.SeriesIndex = idx
+			seriesIndexSource = "raw.series_index"
+			setFieldSource(fieldSources, "series_index", seriesIndexSource)
+		}
+	}
 	metadata.Series = cleanTagValue(seriesValue)
 	if metadata.Series != "" {
 		setFieldSource(fieldSources, "series", seriesSource)

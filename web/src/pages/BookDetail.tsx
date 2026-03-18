@@ -1273,6 +1273,33 @@ export const BookDetail = () => {
 
         return (
         <Stack spacing={0}>
+          {/* Link another version — above format trays */}
+          <Box sx={{ mb: 1 }}>
+            {!linkSearchOpen ? (
+              <Button size="small" variant="text" startIcon={<LinkIcon />}
+                onClick={() => setLinkSearchOpen(true)}>
+                Link Another Version
+              </Button>
+            ) : (
+              <Stack spacing={1} sx={{ maxWidth: 400 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Typography variant="caption">Search for a book to link as a version</Typography>
+                  <Button size="small" onClick={() => setLinkSearchOpen(false)}>Cancel</Button>
+                </Stack>
+                <TextField size="small" autoFocus placeholder="Search by title or author..."
+                  value={linkSearchQuery} onChange={(e) => setLinkSearchQuery(e.target.value)} fullWidth />
+                {linkSearchLoading && <CircularProgress size={16} />}
+                {linkSearchResults.map((result) => (
+                  <Button key={result.id} variant="outlined" size="small"
+                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
+                    onClick={() => handleInlineLinkVersion(result.id)}>
+                    {result.title} — {result.author_name}
+                  </Button>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
           {/* Format group sections */}
           {Array.from(formatGroups.entries()).map(([formatKey, groupVersions]) => {
             // Use first version in group as the representative
@@ -1573,32 +1600,6 @@ export const BookDetail = () => {
             <ChangeLog bookId={book.id} />
           </Paper>
 
-          {/* Link another version */}
-          <Box sx={{ mt: 1 }}>
-            {!linkSearchOpen ? (
-              <Button size="small" variant="text" startIcon={<LinkIcon />}
-                onClick={() => setLinkSearchOpen(true)}>
-                Link Another Version
-              </Button>
-            ) : (
-              <Stack spacing={1} sx={{ maxWidth: 400 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption">Search for a book to link as a version</Typography>
-                  <Button size="small" onClick={() => setLinkSearchOpen(false)}>Cancel</Button>
-                </Stack>
-                <TextField size="small" autoFocus placeholder="Search by title or author..."
-                  value={linkSearchQuery} onChange={(e) => setLinkSearchQuery(e.target.value)} fullWidth />
-                {linkSearchLoading && <CircularProgress size={16} />}
-                {linkSearchResults.map((result) => (
-                  <Button key={result.id} variant="outlined" size="small"
-                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                    onClick={() => handleInlineLinkVersion(result.id)}>
-                    {result.title} — {result.author_name}
-                  </Button>
-                ))}
-              </Stack>
-            )}
-          </Box>
         </Stack>
         );
       })()}
