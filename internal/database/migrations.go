@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -247,6 +247,12 @@ var migrations = []Migration{
 		Version:     35,
 		Description: "Add book_path_history table for file rename/move tracking",
 		Up:          migration035Up,
+		Down:        nil,
+	},
+	{
+		Version:     36,
+		Description: "Add genre column to books table",
+		Up:          migration036Up,
 		Down:        nil,
 	},
 }
@@ -1820,5 +1826,45 @@ func migration035Up(store Store) error {
 	}
 
 	log.Println("  - book_path_history table created successfully")
+	return nil
+}
+
+// migration036Up adds the genre column to the books table.
+func migration036Up(store Store) error {
+	log.Println("  - Adding genre column to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	// Check if column already exists (idempotent)
+	rows, err := sqliteStore.db.Query("PRAGMA table_info(books)")
+	if err != nil {
+		return fmt.Errorf("migration 36: failed to read table info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("migration 36: failed to scan column info: %w", err)
+		}
+		if name == "genre" {
+			log.Println("  - genre column already exists, skipping")
+			return nil
+		}
+	}
+
+	if _, err := sqliteStore.db.Exec(`ALTER TABLE books ADD COLUMN genre TEXT`); err != nil {
+		return fmt.Errorf("migration 36 failed: %w", err)
+	}
+
+	log.Println("  - genre column added successfully")
 	return nil
 }

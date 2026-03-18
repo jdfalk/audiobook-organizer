@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -113,6 +113,7 @@ type BookMetadata struct {
 	ASIN           string
 	CoverURL       string
 	Language       string
+	Genre          string
 	Series         string
 	SeriesPosition string
 }

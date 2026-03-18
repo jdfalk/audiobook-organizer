@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.42.0
+// version: 2.43.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -341,6 +341,7 @@ type Book struct {
 	Description          *string `json:"description,omitempty"`
 	Language             *string `json:"language,omitempty"`
 	Publisher            *string `json:"publisher,omitempty"`
+	Genre                *string `json:"genre,omitempty"`
 	PrintYear            *int    `json:"print_year,omitempty"`
 	AudiobookReleaseYear *int    `json:"audiobook_release_year,omitempty"`
 	ISBN10               *string `json:"isbn10,omitempty"`
