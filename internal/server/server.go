@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.120.0
+// version: 1.121.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1192,6 +1192,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
+			protected.GET("/audiobooks/:id/path-history", s.getBookPathHistory)
 			protected.GET("/audiobooks/:id/external-ids", s.getAudiobookExternalIDs)
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
 			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
@@ -2724,6 +2725,16 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		"message":       fmt.Sprintf("Undid %d field(s)", len(undoneFields)),
 		"undone_fields": undoneFields,
 	})
+}
+
+func (s *Server) getBookPathHistory(c *gin.Context) {
+	id := c.Param("id")
+	history, err := database.GlobalStore.GetBookPathHistory(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"history": []any{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"history": history})
 }
 
 func (s *Server) getAudiobookExternalIDs(c *gin.Context) {

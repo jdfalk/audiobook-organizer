@@ -9893,3 +9893,91 @@ func (_c *MockStore_BulkCreateExternalIDMappings_Call) RunAndReturn(run func([]d
 	_c.Call = _c.Call.Return(run)
 	return _c
 }
+
+// RecordPathChange provides a mock function for the type MockStore
+func (_mock *MockStore) RecordPathChange(change *database.BookPathChange) error {
+	ret := _mock.Called(change)
+	if len(ret) == 0 {
+		panic("no return value specified for RecordPathChange")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.BookPathChange) error); ok {
+		r0 = returnFunc(change)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_RecordPathChange_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) RecordPathChange(change interface{}) *MockStore_RecordPathChange_Call {
+	return &MockStore_RecordPathChange_Call{Call: _e.mock.On("RecordPathChange", change)}
+}
+
+func (_c *MockStore_RecordPathChange_Call) Run(run func(change *database.BookPathChange)) *MockStore_RecordPathChange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*database.BookPathChange))
+	})
+	return _c
+}
+
+func (_c *MockStore_RecordPathChange_Call) Return(err error) *MockStore_RecordPathChange_Call {
+	_c.Call = _c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RecordPathChange_Call) RunAndReturn(run func(*database.BookPathChange) error) *MockStore_RecordPathChange_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}
+
+// GetBookPathHistory provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookPathHistory(bookID string) ([]database.BookPathChange, error) {
+	ret := _mock.Called(bookID)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookPathHistory")
+	}
+	var r0 []database.BookPathChange
+	if returnFunc, ok := ret.Get(0).(func(string) []database.BookPathChange); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookPathChange)
+		}
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetBookPathHistory_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetBookPathHistory(bookID interface{}) *MockStore_GetBookPathHistory_Call {
+	return &MockStore_GetBookPathHistory_Call{Call: _e.mock.On("GetBookPathHistory", bookID)}
+}
+
+func (_c *MockStore_GetBookPathHistory_Call) Run(run func(bookID string)) *MockStore_GetBookPathHistory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookPathHistory_Call) Return(history []database.BookPathChange, err error) *MockStore_GetBookPathHistory_Call {
+	_c.Call = _c.Call.Return(history, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookPathHistory_Call) RunAndReturn(run func(string) ([]database.BookPathChange, error)) *MockStore_GetBookPathHistory_Call {
+	_c.Call = _c.Call.Return(run)
+	return _c
+}

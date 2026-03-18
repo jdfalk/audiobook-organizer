@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -241,6 +241,12 @@ var migrations = []Migration{
 		Version:     34,
 		Description: "Add external_id_map table for PID/ASIN mapping",
 		Up:          migration034Up,
+		Down:        nil,
+	},
+	{
+		Version:     35,
+		Description: "Add book_path_history table for file rename/move tracking",
+		Up:          migration035Up,
 		Down:        nil,
 	},
 }
@@ -1781,5 +1787,38 @@ func migration034Up(store Store) error {
 	}
 
 	log.Println("  - external_id_map table created successfully")
+	return nil
+}
+
+// migration035Up creates the book_path_history table for tracking file
+// rename/move operations over time.
+func migration035Up(store Store) error {
+	log.Println("  - Creating book_path_history table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS book_path_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			book_id TEXT NOT NULL,
+			old_path TEXT NOT NULL,
+			new_path TEXT NOT NULL,
+			change_type TEXT NOT NULL DEFAULT 'rename',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_path_history_book ON book_path_history(book_id)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 35 failed: %w", err)
+		}
+	}
+
+	log.Println("  - book_path_history table created successfully")
 	return nil
 }
