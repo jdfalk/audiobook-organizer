@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.43.0
+// version: 2.44.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -415,6 +415,7 @@ type MetadataProvenanceEntry struct {
 	OverrideLocked  bool        `json:"override_locked"`
 	EffectiveValue  interface{} `json:"effective_value,omitempty"`
 	EffectiveSource string      `json:"effective_source,omitempty"`
+	ComparisonValue interface{} `json:"comparison_value,omitempty"`
 	UpdatedAt       *time.Time  `json:"updated_at,omitempty"`
 }
 

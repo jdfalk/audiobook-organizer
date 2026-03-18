@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.122.0
+// version: 1.123.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -381,12 +381,35 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 	return resp
 }
 
-func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string) map[string]database.MetadataProvenanceEntry {
+func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonMeta *metadata.Metadata) map[string]database.MetadataProvenanceEntry {
 	if state == nil {
 		state = map[string]metadataFieldState{}
 	}
 
 	provenance := map[string]database.MetadataProvenanceEntry{}
+
+	// Build comparison lookup map if comparison metadata is provided
+	var compMap map[string]any
+	if comparisonMeta != nil {
+		compMap = map[string]any{
+			"title":                  nonEmpty(comparisonMeta.Title),
+			"author_name":           nonEmpty(comparisonMeta.Artist),
+			"narrator":              nonEmpty(comparisonMeta.Narrator),
+			"series_name":           nonEmpty(comparisonMeta.Series),
+			"publisher":             nonEmpty(comparisonMeta.Publisher),
+			"language":              nonEmpty(comparisonMeta.Language),
+			"isbn10":                nonEmpty(comparisonMeta.ISBN10),
+			"isbn13":                nonEmpty(comparisonMeta.ISBN13),
+			"genre":                 nonEmpty(comparisonMeta.Genre),
+			"album":                 nonEmpty(comparisonMeta.Album),
+		}
+		if comparisonMeta.Year > 0 {
+			compMap["audiobook_release_year"] = comparisonMeta.Year
+		}
+		if comparisonMeta.SeriesIndex > 0 {
+			compMap["series_index"] = comparisonMeta.SeriesIndex
+		}
+	}
 
 	addEntry := func(field string, fileValue any, storedValue any) {
 		entryState := state[field]
@@ -413,7 +436,7 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 			updatedAt = &ts
 		}
 
-		provenance[field] = database.MetadataProvenanceEntry{
+		entry := database.MetadataProvenanceEntry{
 			FileValue:       fileValue,
 			FetchedValue:    entryState.FetchedValue,
 			StoredValue:     storedValue,
@@ -423,6 +446,14 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 			EffectiveSource: effectiveSource,
 			UpdatedAt:       updatedAt,
 		}
+
+		if compMap != nil {
+			if cv, ok := compMap[field]; ok {
+				entry.ComparisonValue = cv
+			}
+		}
+
+		provenance[field] = entry
 	}
 
 	addEntry("title", meta.Title, book.Title)
@@ -446,6 +477,14 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("edition", nil, stringVal(book.Edition))
 
 	return provenance
+}
+
+// nonEmpty returns the string if non-empty, nil otherwise (for comparison map building).
+func nonEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func stringFromSeries(series *database.Series) any {
@@ -568,6 +607,7 @@ type Server struct {
 	batchPoller            *BatchPoller
 	mergeService           *MergeService
 	diagnosticsService     *DiagnosticsService
+	changelogService       *ChangelogService
 }
 
 // ServerConfig holds server configuration
@@ -620,6 +660,7 @@ func NewServer() *Server {
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           NewMergeService(database.GlobalStore),
 		diagnosticsService:     NewDiagnosticsService(database.GlobalStore, nil, config.AppConfig.ITunesLibraryXMLPath),
+		changelogService:       NewChangelogService(database.GlobalStore),
 	}
 
 	// Initialize update scheduler
@@ -1193,6 +1234,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
+			protected.GET("/audiobooks/:id/changelog", s.getBookChangelog)
 			protected.GET("/audiobooks/:id/path-history", s.getBookPathHistory)
 			protected.GET("/audiobooks/:id/external-ids", s.getAudiobookExternalIDs)
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
@@ -2766,7 +2808,8 @@ func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 
 func (s *Server) getAudiobookTags(c *gin.Context) {
 	id := c.Param("id")
-	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id)
+	compareID := c.Query("compare_id")
+	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id, compareID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -2777,6 +2820,19 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) getBookChangelog(c *gin.Context) {
+	id := c.Param("id")
+	entries, err := s.changelogService.GetBookChangelog(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if entries == nil {
+		entries = []ChangeLogEntry{}
+	}
+	c.JSON(http.StatusOK, gin.H{"entries": entries})
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
