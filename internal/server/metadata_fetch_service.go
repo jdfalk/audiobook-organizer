@@ -261,6 +261,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 				}
 			}
 
+			// Safety: never apply empty/untitled metadata
+			if meta.Title == "" || strings.ToLower(meta.Title) == "untitled" {
+				meta.Title = book.Title // keep original
+			}
+
 			// Record history before applying changes
 			mfs.recordChangeHistory(book, meta, src.Name())
 
@@ -413,8 +418,13 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 }
 
 func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
-	if meta.Title != "" && isBetterValue(book.Title, meta.Title) {
-		book.Title = meta.Title
+	if meta.Title != "" && meta.Title != "Untitled" && isBetterValue(book.Title, meta.Title) {
+		// Don't replace a real title with something shorter/worse
+		if book.Title != "" && !isGarbageValue(book.Title) && len(meta.Title) < 3 {
+			// Skip very short replacement titles
+		} else {
+			book.Title = meta.Title
+		}
 	}
 	if meta.Publisher != "" && isBetterStringPtr(book.Publisher, meta.Publisher) {
 		book.Publisher = stringPtr(meta.Publisher)
