@@ -3085,3 +3085,26 @@ export async function applyDiagnosticsSuggestions(
   if (!response.ok) throw await buildApiError(response, 'Failed to apply suggestions');
   return response.json();
 }
+
+// External ID mappings
+export interface ExternalIDMapping {
+  id: number;
+  source: string;
+  external_id: string;
+  book_id: string;
+  track_number?: number;
+  file_path?: string;
+  tombstoned: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getBookExternalIDs(bookId: string): Promise<{
+  external_ids: ExternalIDMapping[];
+  itunes_linked: boolean;
+  total: number;
+}> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/external-ids`);
+  if (!response.ok) return { external_ids: [], itunes_linked: false, total: 0 };
+  return response.json();
+}

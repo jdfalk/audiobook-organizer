@@ -99,6 +99,8 @@ export const BookDetail = () => {
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
+  const [itunesLinked, setItunesLinked] = useState(false);
+  const [itunesPidCount, setItunesPidCount] = useState(0);
   const [linkSearchOpen, setLinkSearchOpen] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [linkSearchResults, setLinkSearchResults] = useState<Book[]>([]);
@@ -186,6 +188,11 @@ export const BookDetail = () => {
   useEffect(() => {
     loadBook();
     loadVersions();
+    // Load external ID info (iTunes linkage)
+    api.getBookExternalIDs(id!).then((data) => {
+      setItunesLinked(data.itunes_linked);
+      setItunesPidCount(data.total);
+    }).catch(() => {});
   }, [id, loadBook, loadVersions]);
 
   // Inline version link search
@@ -897,6 +904,14 @@ export const BookDetail = () => {
                   icon={<CompareIcon />}
                   label="Version Group Linked"
                   color="secondary"
+                  variant="outlined"
+                  size="small"
+                />
+              )}
+              {itunesLinked && (
+                <Chip
+                  label={`iTunes Linked (${itunesPidCount} PID${itunesPidCount !== 1 ? 's' : ''})`}
+                  color="info"
                   variant="outlined"
                   size="small"
                 />
