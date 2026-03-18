@@ -1799,7 +1799,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			trackNum := i + 1
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
-			tagMap := mfs.buildTagMap(bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
 			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				log.Printf("[DEBUG] write-back: segment %s tags already match, skipping", seg.FilePath)
@@ -1822,7 +1822,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
 		} else {
-			tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
+			tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
 			tagMap = filterUnchangedTags(book.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				log.Printf("[DEBUG] write-back: %s tags already match, skipping", book.FilePath)
@@ -1897,6 +1897,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 }
 
 // buildTagMap constructs the tag map shared by all write-back paths.
+// Includes all available metadata fields — standard and custom tags.
 func (mfs *MetadataFetchService) buildTagMap(
 	albumTitle, trackTitle, artist, narrator string, year int, track string,
 ) map[string]interface{} {
@@ -1919,6 +1920,43 @@ func (mfs *MetadataFetchService) buildTagMap(
 	return tagMap
 }
 
+// buildFullTagMap constructs a tag map with ALL available metadata from the book record,
+// including custom tags for fields that don't have standard audio tag equivalents.
+func (mfs *MetadataFetchService) buildFullTagMap(
+	book *database.Book, albumTitle, trackTitle, artist, narrator string, year int, track string,
+) map[string]interface{} {
+	tagMap := mfs.buildTagMap(albumTitle, trackTitle, artist, narrator, year, track)
+
+	// Add fields that have standard or custom tag equivalents
+	if book.Language != nil && *book.Language != "" {
+		tagMap["language"] = *book.Language
+	}
+	if book.Publisher != nil && *book.Publisher != "" {
+		tagMap["publisher"] = *book.Publisher
+	}
+	if book.Description != nil && *book.Description != "" {
+		tagMap["description"] = *book.Description
+	}
+	if book.ISBN10 != nil && *book.ISBN10 != "" {
+		tagMap["isbn10"] = *book.ISBN10
+	}
+	if book.ISBN13 != nil && *book.ISBN13 != "" {
+		tagMap["isbn13"] = *book.ISBN13
+	}
+
+	// Series info as custom tags
+	if book.SeriesID != nil {
+		if series, err := mfs.db.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			tagMap["series"] = series.Name
+		}
+	}
+	if book.SeriesSequence != nil {
+		tagMap["series_index"] = *book.SeriesSequence
+	}
+
+	return tagMap
+}
+
 // filterUnchangedTags reads the current tags from filePath and removes any
 // entries from tagMap whose values already match, so only changed fields are
 // written back to the file.
@@ -1936,6 +1974,20 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 		"narrator": current.Narrator,
 		"genre":    current.Genre,
 		"year":     fmt.Sprintf("%d", current.Year),
+		"language": current.Language,
+		"series":   current.Series,
+	}
+	if current.Publisher != "" {
+		currentVals["publisher"] = current.Publisher
+	}
+	if current.SeriesIndex > 0 {
+		currentVals["series_index"] = fmt.Sprintf("%d", int(current.SeriesIndex))
+	}
+	if current.ISBN10 != "" {
+		currentVals["isbn10"] = current.ISBN10
+	}
+	if current.ISBN13 != "" {
+		currentVals["isbn13"] = current.ISBN13
 	}
 
 	filtered := make(map[string]interface{}, len(tagMap))
