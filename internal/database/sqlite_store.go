@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.43.0
+// version: 1.44.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -25,7 +25,7 @@ type rowScanner interface {
 const bookSelectColumns = `
 	id, title, author_id, series_id, series_sequence,
 	file_path, original_filename, format, duration,
-	work_id, narrator, edition, description, language, publisher,
+	work_id, narrator, edition, description, language, publisher, genre,
 	print_year, audiobook_release_year, isbn10, isbn13, asin,
 	open_library_id, hardcover_id, google_books_id,
 	itunes_persistent_id, itunes_date_added, itunes_play_count,
@@ -41,7 +41,7 @@ const bookSelectColumns = `
 const bookSelectColumnsQualified = `
 	books.id, books.title, books.author_id, books.series_id, books.series_sequence,
 	books.file_path, books.original_filename, books.format, books.duration,
-	books.work_id, books.narrator, books.edition, books.description, books.language, books.publisher,
+	books.work_id, books.narrator, books.edition, books.description, books.language, books.publisher, books.genre,
 	books.print_year, books.audiobook_release_year, books.isbn10, books.isbn13, books.asin,
 	books.open_library_id, books.hardcover_id, books.google_books_id,
 	books.itunes_persistent_id, books.itunes_date_added, books.itunes_play_count,
@@ -60,7 +60,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		fileSize, bitrate, sampleRate, channels, bitDepth, quantity          sql.NullInt64
 		title, filePath, format                                              string
 		originalFilename                                                     sql.NullString
-		workID, narrator, edition, description, language, publisher           sql.NullString
+		workID, narrator, edition, description, language, publisher, genre    sql.NullString
 		itunesPersistentID, itunesImportSource                               sql.NullString
 		itunesDateAdded, itunesLastPlayed                                    sql.NullTime
 		isbn10, isbn13, asin                                                  sql.NullString
@@ -79,7 +79,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if err := scanner.Scan(
 		&book.ID, &title, &authorID, &seriesID, &seriesSequence,
 		&filePath, &originalFilename, &format, &duration,
-		&workID, &narrator, &edition, &description, &language, &publisher,
+		&workID, &narrator, &edition, &description, &language, &publisher, &genre,
 		&printYear, &releaseYear, &isbn10, &isbn13, &asin,
 		&openLibraryID, &hardcoverID, &googleBooksID,
 		&itunesPersistentID, &itunesDateAdded, &itunesPlayCount,
@@ -107,6 +107,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.Description = nullableString(description)
 	book.Language = nullableString(language)
 	book.Publisher = nullableString(publisher)
+	book.Genre = nullableString(genre)
 	book.PrintYear = nullableInt(printYear)
 	book.AudiobookReleaseYear = nullableInt(releaseYear)
 	book.ISBN10 = nullableString(isbn10)
@@ -306,6 +307,7 @@ func (s *SQLiteStore) createTables() error {
 		description TEXT,
 		language TEXT,
 		publisher TEXT,
+		genre TEXT,
 		print_year INTEGER,
 		audiobook_release_year INTEGER,
 		isbn10 TEXT,
@@ -2361,7 +2363,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
-		format, duration, work_id, narrator, edition, description, language, publisher,
+		format, duration, work_id, narrator, edition, description, language, publisher, genre,
 		print_year, audiobook_release_year, isbn10, isbn13, asin,
 		open_library_id, hardcover_id, google_books_id,
 		itunes_persistent_id, itunes_date_added, itunes_play_count, itunes_last_played,
@@ -2370,10 +2372,10 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
-		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher,
+		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
@@ -2480,7 +2482,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	query := `UPDATE books SET
 		title = ?, author_id = ?, series_id = ?, series_sequence = ?,
 		file_path = ?, original_filename = ?, format = ?, duration = ?,
-		work_id = ?, narrator = ?, edition = ?, description = ?, language = ?, publisher = ?,
+		work_id = ?, narrator = ?, edition = ?, description = ?, language = ?, publisher = ?, genre = ?,
 		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?, asin = ?,
 		open_library_id = ?, hardcover_id = ?, google_books_id = ?,
 		itunes_persistent_id = ?, itunes_date_added = ?, itunes_play_count = ?, itunes_last_played = ?,
@@ -2495,7 +2497,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
 		book.FilePath, book.OriginalFilename, book.Format, book.Duration,
-		book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher,
+		book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,

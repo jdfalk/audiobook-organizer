@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.121.0
+// version: 1.122.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -434,8 +434,9 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("audiobook_release_year", meta.Year, intVal(book.AudiobookReleaseYear))
 	addEntry("isbn10", meta.ISBN10, stringVal(book.ISBN10))
 	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
-	addEntry("genre", meta.Genre, nil)
-	addEntry("album", meta.Album, nil)
+	addEntry("genre", meta.Genre, stringVal(book.Genre))
+	addEntry("album", meta.Album, book.Title)
+	addEntry("asin", nil, stringVal(book.ASIN))
 	var seriesIdx any
 	if meta.SeriesIndex > 0 {
 		seriesIdx = meta.SeriesIndex
