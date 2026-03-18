@@ -14,6 +14,7 @@ import * as api from '../services/api';
 
 interface ChangeLogProps {
   bookId: string;
+  refreshKey?: number;
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -38,7 +39,7 @@ const formatTimestamp = (ts: string): string => {
   return date.toLocaleString();
 };
 
-export const ChangeLog = ({ bookId }: ChangeLogProps) => {
+export const ChangeLog = ({ bookId, refreshKey }: ChangeLogProps) => {
   const [entries, setEntries] = useState<ChangeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +57,7 @@ export const ChangeLog = ({ bookId }: ChangeLogProps) => {
 
   useEffect(() => {
     loadChangelog();
-  }, [loadChangelog]);
+  }, [loadChangelog, refreshKey]);
 
   if (loading) {
     return (
