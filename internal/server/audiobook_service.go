@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -320,7 +320,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 	}
 
 	// Build metadata provenance
-	book.MetadataProvenance = buildMetadataProvenance(book, state, meta, authorName, seriesName)
+	book.MetadataProvenance = buildMetadataProvenance(book, state, meta, authorName, seriesName, nil)
 	nowUTC := time.Now().UTC()
 	book.MetadataProvenanceAt = &nowUTC
 
@@ -329,7 +329,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 }
 
 // GetAudiobookTags retrieves metadata tags and media info for an audiobook
-func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (map[string]any, error) {
+func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, compareID ...string) (map[string]any, error) {
 	if svc.store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -413,7 +413,26 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string) (m
 		}
 	}
 
-	tags := buildMetadataProvenance(book, state, meta, authorName, seriesName)
+	// Load comparison metadata if compare_id is provided
+	var comparisonMeta *metadata.Metadata
+	cmpID := ""
+	if len(compareID) > 0 {
+		cmpID = compareID[0]
+	}
+	if cmpID != "" {
+		compBook, err := svc.store.GetBookByID(cmpID)
+		if err != nil {
+			log.Printf("[WARN] GetAudiobookTags: failed to load comparison book %s: %v", cmpID, err)
+		} else if compBook != nil && compBook.FilePath != "" {
+			if cm, err := metadata.ExtractMetadata(compBook.FilePath, nil); err == nil {
+				comparisonMeta = &cm
+			} else {
+				log.Printf("[WARN] GetAudiobookTags: failed to extract comparison metadata for %s: %v", compBook.FilePath, err)
+			}
+		}
+	}
+
+	tags := buildMetadataProvenance(book, state, meta, authorName, seriesName, comparisonMeta)
 	response["tags"] = tags
 
 	return response, nil
