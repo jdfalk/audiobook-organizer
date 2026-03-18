@@ -1192,6 +1192,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
+			protected.GET("/audiobooks/:id/external-ids", s.getAudiobookExternalIDs)
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
 			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
@@ -2722,6 +2723,32 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":       fmt.Sprintf("Undid %d field(s)", len(undoneFields)),
 		"undone_fields": undoneFields,
+	})
+}
+
+func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
+	id := c.Param("id")
+	eidStore := asExternalIDStore(database.GlobalStore)
+	if eidStore == nil {
+		c.JSON(http.StatusOK, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		return
+	}
+	extIDs, err := eidStore.GetExternalIDsForBook(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		return
+	}
+	itunesLinked := false
+	for _, eid := range extIDs {
+		if eid.Source == "itunes" && !eid.Tombstoned {
+			itunesLinked = true
+			break
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"external_ids":  extIDs,
+		"itunes_linked": itunesLinked,
+		"total":         len(extIDs),
 	})
 }
 
