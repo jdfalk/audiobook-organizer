@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.55.0
+// version: 1.56.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -690,11 +690,25 @@ export async function updateBook(
   return response.json();
 }
 
-export async function getBookTags(bookId: string): Promise<BookTags> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags`);
+export async function getBookTags(bookId: string, compareId?: string): Promise<BookTags> {
+  const params = compareId ? `?compare_id=${compareId}` : '';
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags${params}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book tags');
   }
+  return response.json();
+}
+
+export interface ChangeLogEntry {
+  timestamp: string;
+  type: 'tag_write' | 'rename' | 'metadata_apply' | 'import' | 'transcode';
+  summary: string;
+  details?: Record<string, unknown>;
+}
+
+export async function getBookChangelog(bookId: string): Promise<{ entries: ChangeLogEntry[] }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/changelog`);
+  if (!response.ok) return { entries: [] };
   return response.json();
 }
 
