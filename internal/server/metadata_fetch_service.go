@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.31.0
+// version: 4.32.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -754,6 +754,7 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	}
 
 	// Write to primary file
+	backupFileBeforeWrite(book.FilePath)
 	if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 		log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 	} else {
@@ -780,6 +781,7 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 			log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
 			continue
 		}
+		backupFileBeforeWrite(seg.FilePath)
 		if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
 			log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
 		}
@@ -1860,6 +1862,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				skippedProtected++
 				continue
 			}
+			backupFileBeforeWrite(seg.FilePath)
 			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
 				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
 			} else {
@@ -1876,10 +1879,13 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			tagMap = filterUnchangedTags(book.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				log.Printf("[DEBUG] write-back: %s tags already match, skipping", book.FilePath)
-			} else if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
-				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 			} else {
-				writtenCount++
+				backupFileBeforeWrite(book.FilePath)
+				if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+					log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+				} else {
+					writtenCount++
+				}
 			}
 		}
 	}
@@ -1904,6 +1910,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 					writtenCount++
 					continue
 				}
+				backupFileBeforeWrite(sib.FilePath)
 				if err := metadata.WriteMetadataToFile(sib.FilePath, tagMap, opConfig); err != nil {
 					log.Printf("[WARN] write-back failed for version-linked %s: %v", sib.FilePath, err)
 				} else {
@@ -1944,6 +1951,28 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	}
 
 	return writtenCount, nil
+}
+
+// backupFileBeforeWrite creates a timestamped .bak copy of a file before writing tags.
+// Failures are logged but non-fatal — the write-back proceeds regardless.
+func backupFileBeforeWrite(filePath string) {
+	if filePath == "" {
+		return
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		return
+	}
+	backupPath := filePath + ".bak-" + time.Now().Format("20060102-150405")
+	// Use hardlink — same data, no disk space cost. Falls back to copy if
+	// hardlink fails (cross-device, unsupported filesystem).
+	if err := os.Link(filePath, backupPath); err != nil {
+		// Hardlink failed — fall back to copy
+		if err := fileops.SafeCopy(filePath, backupPath, fileops.OperationConfig{}); err != nil {
+			log.Printf("[WARN] backup before tag write failed: %s: %v", filePath, err)
+			return
+		}
+	}
+	log.Printf("[DEBUG] backup before tag write: %s", backupPath)
 }
 
 // buildTagMap constructs the tag map shared by all write-back paths.
