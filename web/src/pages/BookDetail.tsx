@@ -102,6 +102,7 @@ export const BookDetail = () => {
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [itunesLinked, setItunesLinked] = useState(false);
+  const [itunesPidDetails, setItunesPidDetails] = useState<api.ExternalIDMapping[] | null>(null);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const refreshFilesTab = () => setFilesRefreshKey((k) => k + 1);
   const [itunesPidCount, setItunesPidCount] = useState(0);
@@ -916,6 +917,8 @@ export const BookDetail = () => {
                   color="info"
                   variant="outlined"
                   size="small"
+                  clickable
+                  onClick={() => setActiveTab('files')}
                 />
               )}
             </Stack>
@@ -1589,10 +1592,54 @@ export const BookDetail = () => {
             );
           })}
 
-          {/* iTunes link banner */}
+          {/* iTunes link banner — clickable to show PID details */}
           {itunesLinked && (
-            <Alert severity="info" variant="outlined" sx={{ mt: 1 }}>
-              iTunes Linked &mdash; {itunesPidCount} PID{itunesPidCount !== 1 ? 's' : ''} mapped
+            <Alert
+              severity="info"
+              variant="outlined"
+              sx={{ mt: 1, cursor: 'pointer' }}
+              onClick={async () => {
+                if (itunesPidDetails) {
+                  setItunesPidDetails(null); // toggle off
+                } else {
+                  const data = await api.getBookExternalIDs(book.id);
+                  setItunesPidDetails(data.external_ids || []);
+                }
+              }}
+            >
+              <Typography variant="body2">
+                iTunes Linked &mdash; {itunesPidCount} PID{itunesPidCount !== 1 ? 's' : ''} mapped
+                {itunesPidDetails ? ' ▲' : ' ▼ Click to view'}
+              </Typography>
+              {itunesPidDetails && (
+                <Box sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>PID</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Track</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Source</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {itunesPidDetails.slice(0, 20).map((eid: api.ExternalIDMapping) => (
+                        <TableRow key={eid.id}>
+                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25, fontFamily: 'monospace' }}>{eid.external_id}</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.track_number ?? '—'}</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.source}</TableCell>
+                        </TableRow>
+                      ))}
+                      {itunesPidDetails.length > 20 && (
+                        <TableRow>
+                          <TableCell colSpan={3} sx={{ fontSize: '0.7rem', py: 0.25, textAlign: 'center', color: 'text.secondary' }}>
+                            ... and {itunesPidDetails.length - 20} more
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
             </Alert>
           )}
 
