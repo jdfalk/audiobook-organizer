@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.123.0
+// version: 1.124.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -678,6 +678,14 @@ func NewServer() *Server {
 	// Wire OL dump store into metadata fetch service for local-first lookups
 	if server.olService != nil && server.olService.Store() != nil {
 		server.metadataFetchService.SetOLStore(server.olService.Store())
+	}
+
+	// Wire ISBN enrichment service into metadata fetch service
+	isbnSources := server.metadataFetchService.BuildSourceChain()
+	if len(isbnSources) > 0 {
+		server.metadataFetchService.SetISBNEnrichment(
+			NewISBNEnrichmentService(database.GlobalStore, isbnSources),
+		)
 	}
 
 	// Open AI scan store alongside main DB

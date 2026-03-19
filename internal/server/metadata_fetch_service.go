@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.30.0
+// version: 4.31.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -32,6 +32,7 @@ type MetadataFetchService struct {
 	db              database.Store
 	olStore         *openlibrary.OLStore
 	overrideSources []metadata.MetadataSource // for testing
+	isbnEnrichment  *ISBNEnrichmentService
 }
 
 func NewMetadataFetchService(db database.Store) *MetadataFetchService {
@@ -41,6 +42,32 @@ func NewMetadataFetchService(db database.Store) *MetadataFetchService {
 // SetOLStore sets the Open Library dump store for local-first lookups.
 func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
 	mfs.olStore = store
+}
+
+// SetISBNEnrichment sets the ISBN enrichment service for background ISBN/ASIN lookups.
+func (mfs *MetadataFetchService) SetISBNEnrichment(svc *ISBNEnrichmentService) {
+	mfs.isbnEnrichment = svc
+}
+
+// queueISBNEnrichment starts a background goroutine to enrich ISBN/ASIN for a book
+// if the book is missing those identifiers.
+func (mfs *MetadataFetchService) queueISBNEnrichment(id string, book *database.Book) {
+	if mfs.isbnEnrichment == nil {
+		return
+	}
+	needsISBN := (book.ISBN10 == nil || *book.ISBN10 == "") && (book.ISBN13 == nil || *book.ISBN13 == "")
+	needsASIN := book.ASIN == nil || *book.ASIN == ""
+	if !needsISBN && !needsASIN {
+		return
+	}
+	go func(bid string) {
+		found, err := mfs.isbnEnrichment.EnrichBookISBN(bid)
+		if err != nil {
+			log.Printf("[WARN] ISBN enrichment failed for %s: %v", bid, err)
+		} else if found {
+			log.Printf("[INFO] ISBN enrichment succeeded for %s", bid)
+		}
+	}(id)
 }
 
 type FetchMetadataResponse struct {
@@ -302,6 +329,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			// Write metadata back to audio file(s) if enabled
 			if config.AppConfig.WriteBackMetadata {
 				mfs.writeBackMetadata(updatedBook, meta)
+			}
+
+			// Queue background ISBN/ASIN enrichment if identifiers are missing
+			if updatedBook != nil {
+				mfs.queueISBNEnrichment(id, updatedBook)
 			}
 
 			return &FetchMetadataResponse{
@@ -1678,6 +1710,11 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 		if err := mfs.runApplyPipeline(id, updatedBook); err != nil {
 			log.Printf("[WARN] apply pipeline failed for %s: %v", id, err)
 		}
+	}
+
+	// Queue background ISBN/ASIN enrichment if identifiers are missing
+	if updatedBook != nil {
+		mfs.queueISBNEnrichment(id, updatedBook)
 	}
 
 	return &FetchMetadataResponse{
