@@ -1193,6 +1193,20 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 	return created
 }
 
+// findLocalCover returns the path to a locally-cached cover image for the
+// given book ID, or "" if none exists on disk.
+func (mfs *MetadataFetchService) findLocalCover(bookID string) string {
+	coversDir := filepath.Join(config.AppConfig.RootDir, "covers")
+	matches, _ := filepath.Glob(filepath.Join(coversDir, bookID+".*"))
+	for _, m := range matches {
+		ext := strings.ToLower(filepath.Ext(m))
+		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
+			return m
+		}
+	}
+	return ""
+}
+
 // embedCoverInBookFiles embeds cover art into all audio files for a book.
 // For single-file books where book.FilePath has an audio extension, it embeds there directly.
 // For multi-segment books (where book.FilePath may be a directory-like path without extension),
@@ -1943,6 +1957,11 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		log.Printf("[WARN] failed to record write-back history for %s: %v", book.ID, err)
 	}
 
+	// Embed cover art if we have one on disk
+	if config.AppConfig.RootDir != "" {
+		mfs.embedCoverInBookFiles(book, mfs.findLocalCover(book.ID))
+	}
+
 	// Stamp last_written_at
 	if writtenCount > 0 {
 		if err := mfs.db.SetLastWrittenAt(book.ID, now); err != nil {
@@ -2060,11 +2079,6 @@ func (mfs *MetadataFetchService) buildFullTagMap(
 	}
 	if book.PrintYear != nil && *book.PrintYear > 0 {
 		tagMap["print_year"] = fmt.Sprintf("%d", *book.PrintYear)
-	}
-
-	// Cover URL (stored as custom tag for recovery)
-	if book.CoverURL != nil && *book.CoverURL != "" {
-		tagMap["cover_url"] = *book.CoverURL
 	}
 
 	return tagMap

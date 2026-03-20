@@ -98,7 +98,6 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		{TagASIN, "asin"}, {TagOpenLibrary, "open_library_id"},
 		{TagHardcover, "hardcover_id"}, {TagGoogleBooks, "google_books_id"},
 		{TagEdition, "edition"}, {TagPrintYear, "print_year"},
-		{TagCoverURL, "cover_url"},
 	}
 	for _, pair := range customPairs {
 		if val, ok := metadata[pair[1]].(string); ok && val != "" {
