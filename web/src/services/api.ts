@@ -74,6 +74,7 @@ export interface Book {
   isbn?: string;
   isbn10?: string;
   isbn13?: string;
+  asin?: string;
   work_id?: string;
   edition?: string;
   print_year?: number;

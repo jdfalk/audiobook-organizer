@@ -2006,35 +2006,30 @@ export const BookDetail = () => {
             This will write the following metadata from the database directly
             into the audio file tags on disk:
           </Typography>
-          <Box component="ul" sx={{ mt: 1 }}>
-            <li>
-              <strong>Title</strong> — {book?.title}
-            </li>
-            <li>
-              <strong>Album</strong> — {book?.title} (groups tracks in players)
-            </li>
-            <li>
-              <strong>Artist</strong> —{' '}
-              {book?.authors?.map((a) => a.name).join(' & ') ||
-                book?.author_name ||
-                '(none)'}
-            </li>
-            <li>
-              <strong>Narrator</strong> —{' '}
-              {book?.narrators?.map((n) => n.name).join(' & ') ||
-                book?.narrator ||
-                '(none)'}
-            </li>
-            <li>
-              <strong>Year</strong> —{' '}
-              {book?.audiobook_release_year || book?.print_year || '(none)'}
-            </li>
-            <li>
-              <strong>Genre</strong> — Audiobook
-            </li>
-            <li>
-              <strong>Track numbers</strong> — written for multi-file books
-            </li>
+          <Box component="ul" sx={{ mt: 1, '& li': { mb: 0.5 } }}>
+            {[
+              { label: 'Title', value: book?.title },
+              { label: 'Album', value: book?.title ? `${book.title} (groups tracks in players)` : undefined },
+              { label: 'Artist', value: book?.authors?.map((a) => a.name).join(' & ') || book?.author_name },
+              { label: 'Narrator', value: book?.narrators?.map((n) => n.name).join(' & ') || book?.narrator },
+              { label: 'Year', value: book?.audiobook_release_year || book?.print_year },
+              { label: 'Genre', value: 'Audiobook' },
+              { label: 'Language', value: book?.language },
+              { label: 'Publisher', value: book?.publisher },
+              { label: 'Series', value: book?.series_name },
+              { label: 'Series Index', value: book?.series_position },
+              { label: 'Description', value: book?.description ? `${book.description.slice(0, 60)}…` : undefined },
+              { label: 'ISBN-13', value: book?.isbn13 },
+              { label: 'ISBN-10', value: book?.isbn10 },
+              { label: 'ASIN', value: book?.asin },
+              { label: 'Track numbers', value: segments.length > 1 ? 'written for multi-file books' : undefined },
+            ]
+              .filter((item) => item.value != null && item.value !== '' && item.value !== 0)
+              .map((item) => (
+                <li key={item.label}>
+                  <strong>{item.label}</strong> — {String(item.value)}
+                </li>
+              ))}
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             A backup of each file is created before writing and removed on

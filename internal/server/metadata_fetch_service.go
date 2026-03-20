@@ -2028,6 +2028,9 @@ func (mfs *MetadataFetchService) buildFullTagMap(
 	if book.ISBN13 != nil && *book.ISBN13 != "" {
 		tagMap["isbn13"] = *book.ISBN13
 	}
+	if book.ASIN != nil && *book.ASIN != "" {
+		tagMap["asin"] = *book.ASIN
+	}
 
 	// Series info as custom tags
 	if book.SeriesID != nil {
