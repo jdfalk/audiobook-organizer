@@ -2042,6 +2042,31 @@ func (mfs *MetadataFetchService) buildFullTagMap(
 		tagMap["series_index"] = *book.SeriesSequence
 	}
 
+	// External provider IDs (written as AUDIOBOOK_ORGANIZER_* custom tags)
+	tagMap["book_id"] = book.ID
+	if book.OpenLibraryID != nil && *book.OpenLibraryID != "" {
+		tagMap["open_library_id"] = *book.OpenLibraryID
+	}
+	if book.HardcoverID != nil && *book.HardcoverID != "" {
+		tagMap["hardcover_id"] = *book.HardcoverID
+	}
+	if book.GoogleBooksID != nil && *book.GoogleBooksID != "" {
+		tagMap["google_books_id"] = *book.GoogleBooksID
+	}
+
+	// Edition and print year
+	if book.Edition != nil && *book.Edition != "" {
+		tagMap["edition"] = *book.Edition
+	}
+	if book.PrintYear != nil && *book.PrintYear > 0 {
+		tagMap["print_year"] = fmt.Sprintf("%d", *book.PrintYear)
+	}
+
+	// Cover URL (stored as custom tag for recovery)
+	if book.CoverURL != nil && *book.CoverURL != "" {
+		tagMap["cover_url"] = *book.CoverURL
+	}
+
 	return tagMap
 }
 
