@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.36.0
+// version: 1.37.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -68,6 +68,17 @@ import { ChangeLog } from '../components/ChangeLog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
 
+const SEGMENT_PREVIEW_COUNT = 5;
+const OVERALL_METADATA_FIELDS = [
+  { key: 'title', label: 'Title' },
+  { key: 'author_name', label: 'Author' },
+  { key: 'narrator', label: 'Narrator' },
+  { key: 'series_name', label: 'Series' },
+  { key: 'publisher', label: 'Publisher' },
+  { key: 'language', label: 'Language' },
+  { key: 'isbn13', label: 'ISBN' },
+] as const;
+
 export const BookDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -131,6 +142,7 @@ export const BookDetail = () => {
   const [applyingRename, setApplyingRename] = useState(false);
   // Sonarr-style version expansion
   const [expandedVersionIds, setExpandedVersionIds] = useState<Set<string>>(new Set());
+  const [expandedSegmentVersionIds, setExpandedSegmentVersionIds] = useState<Set<string>>(new Set());
   const [versionSegments, setVersionSegments] = useState<Record<string, BookSegment[]>>({});
   const [versionFileTags, setVersionFileTags] = useState<Record<string, BookTags | null>>({});
   // versionFileTagsLoading removed — TagComparison handles its own loading
@@ -285,11 +297,29 @@ export const BookDetail = () => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    const parts = [];
+    const parts: string[] = [];
     if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0) parts.push(`${minutes}m`);
+    if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
     if (remainingSeconds > 0 && hours === 0) parts.push(`${remainingSeconds}s`);
     return parts.join(' ');
+  };
+
+  const formatBytes = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return '—';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    const decimals = value >= 10 || unitIndex === 0 ? 0 : 1;
+    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+  };
+
+  const formatTagValue = (value?: string | number | boolean | null) => {
+    if (value == null || value === '') return '—';
+    return String(value);
   };
 
   const handleDelete = async () => {
@@ -557,6 +587,36 @@ export const BookDetail = () => {
       setVersionSegments(prev => ({ ...prev, [id]: segments }));
     }
   }, [id, segments]);
+
+  // Preload current-book tag data so multi-file summaries can render immediately.
+  useEffect(() => {
+    if (!id || versionFileTags[id] !== undefined) return;
+    let cancelled = false;
+    setVersionFileTagsLoading(prev => new Set(prev).add(id));
+    api.getBookTags(id)
+      .then((tags) => {
+        if (!cancelled) {
+          setVersionFileTags(prev => ({ ...prev, [id]: tags }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setVersionFileTags(prev => ({ ...prev, [id]: null }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setVersionFileTagsLoading(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, versionFileTags]);
 
   const handleSetPrimary = async (versionId: string) => {
     try {
@@ -1150,9 +1210,7 @@ export const BookDetail = () => {
                   { label: 'Duration', value: formatDuration(segmentTags.duration_sec) },
                   {
                     label: 'Size',
-                    value: segmentTags.size_bytes > 0
-                      ? `${(segmentTags.size_bytes / 1048576).toFixed(1)} MB`
-                      : undefined,
+                    value: formatBytes(segmentTags.size_bytes),
                   },
                   {
                     label: 'Track Number',
@@ -1364,7 +1422,7 @@ export const BookDetail = () => {
                     />
                     {totalSize > 0 && (
                       <Typography variant="body2" color="text.secondary">
-                        {(totalSize / 1048576).toFixed(1)} MB
+                        {formatBytes(totalSize)}
                       </Typography>
                     )}
                     {totalDuration > 0 && (
@@ -1387,6 +1445,30 @@ export const BookDetail = () => {
                     const isCurrent = version.id === book.id;
                     const isPrimary = version.is_primary_version;
                     const vSegs = isCurrent ? segments : (versionSegments[version.id] || []);
+                    const showAllSegments = expandedSegmentVersionIds.has(version.id);
+                    const visibleSegments = showAllSegments
+                      ? vSegs
+                      : vSegs.slice(0, SEGMENT_PREVIEW_COUNT);
+                    const hiddenSegmentCount = Math.max(vSegs.length - visibleSegments.length, 0);
+                    const metadataEntries = OVERALL_METADATA_FIELDS
+                      .map(({ key, label }) => {
+                        const tag = versionFileTags[version.id]?.tags?.[key];
+                        if (!tag) return null;
+                        const fileValue = formatTagValue(tag.file_value);
+                        const storedValue = formatTagValue(tag.stored_value);
+                        if (fileValue === '—' && storedValue === '—') return null;
+                        return {
+                          key,
+                          label,
+                          fileValue,
+                          storedValue,
+                          differsFromDb:
+                            fileValue !== '—' &&
+                            storedValue !== '—' &&
+                            fileValue !== storedValue,
+                        };
+                      })
+                      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
                     return (
                       <Box key={version.id} sx={{ p: 2, borderBottom: groupVersions.length > 1 ? '1px solid' : 'none', borderColor: 'divider' }}>
@@ -1452,6 +1534,76 @@ export const BookDetail = () => {
                             )}
                           </TableBody>
                         </Table>
+
+                        {vSegs.length > 1 && metadataEntries.length > 0 && (
+                          <Box
+                            sx={{
+                              mb: 2,
+                              p: 1.5,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              borderRadius: 1,
+                              bgcolor: 'background.default',
+                            }}
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                              useFlexGap
+                              sx={{ mb: 1 }}
+                            >
+                              <Typography variant="subtitle2">
+                                Overall Metadata
+                              </Typography>
+                              <Chip
+                                label={`${metadataEntries.length} field${metadataEntries.length !== 1 ? 's' : ''}`}
+                                size="small"
+                                variant="outlined"
+                              />
+                            </Stack>
+                            <Grid container spacing={1.5}>
+                              {metadataEntries.map((entry) => (
+                                <Grid item xs={12} md={6} key={`${version.id}-${entry.key}`}>
+                                  <Box
+                                    sx={{
+                                      p: 1.25,
+                                      borderRadius: 1,
+                                      border: '1px solid',
+                                      borderColor: entry.differsFromDb ? 'warning.main' : 'divider',
+                                      bgcolor: entry.differsFromDb ? 'warning.50' : 'background.paper',
+                                      height: '100%',
+                                    }}
+                                  >
+                                    <Stack
+                                      direction="row"
+                                      alignItems="center"
+                                      justifyContent="space-between"
+                                      spacing={1}
+                                      sx={{ mb: 0.5 }}
+                                    >
+                                      <Typography variant="caption" color="text.secondary">
+                                        {entry.label}
+                                      </Typography>
+                                      {entry.differsFromDb && (
+                                        <Chip label="≠ DB" size="small" color="warning" />
+                                      )}
+                                    </Stack>
+                                    <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                                      {entry.fileValue}
+                                    </Typography>
+                                    {entry.differsFromDb && (
+                                      <Typography variant="caption" color="text.secondary">
+                                        DB: {entry.storedValue}
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Box>
+                        )}
 
                         {/* Tag comparison component (replaces inline tags table) */}
                         <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} />
@@ -1538,7 +1690,7 @@ export const BookDetail = () => {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {vSegs.map((seg) => {
+                                  {visibleSegments.map((seg) => {
                                     const isMissing = seg.file_exists === false;
                                     const isSelected = isCurrentBook && selectedSegmentIds.has(seg.id);
                                     return (
@@ -1575,13 +1727,35 @@ export const BookDetail = () => {
                                         </TableCell>
                                         <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
                                         <TableCell align="right">
-                                          {seg.size_bytes > 0 ? `${(seg.size_bytes / 1048576).toFixed(1)} MB` : '\u2014'}
+                                          {formatBytes(seg.size_bytes)}
                                         </TableCell>
                                       </TableRow>
                                     );
                                   })}
                                 </TableBody>
                               </Table>
+                              {vSegs.length > SEGMENT_PREVIEW_COUNT && (
+                                <Box sx={{ mt: 1 }}>
+                                  <Button
+                                    size="small"
+                                    onClick={() => {
+                                      setExpandedSegmentVersionIds((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(version.id)) {
+                                          next.delete(version.id);
+                                        } else {
+                                          next.add(version.id);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    {showAllSegments
+                                      ? 'Show fewer files'
+                                      : `Show all ${vSegs.length} files${hiddenSegmentCount > 0 ? ` (${hiddenSegmentCount} more)` : ''}`}
+                                  </Button>
+                                </Box>
+                              )}
                             </Box>
                           );
                         })()}
@@ -1620,6 +1794,8 @@ export const BookDetail = () => {
                         <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>PID</TableCell>
                         <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Track</TableCell>
                         <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Source</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>File Path</TableCell>
+                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Linked</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1628,11 +1804,13 @@ export const BookDetail = () => {
                           <TableCell sx={{ fontSize: '0.7rem', py: 0.25, fontFamily: 'monospace' }}>{eid.external_id}</TableCell>
                           <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.track_number ?? '—'}</TableCell>
                           <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.source}</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25, fontFamily: 'monospace', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={eid.file_path || ''}>{eid.file_path || '—'}</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.created_at ? new Date(eid.created_at).toLocaleDateString() : '—'}</TableCell>
                         </TableRow>
                       ))}
                       {itunesPidDetails.length > 20 && (
                         <TableRow>
-                          <TableCell colSpan={3} sx={{ fontSize: '0.7rem', py: 0.25, textAlign: 'center', color: 'text.secondary' }}>
+                          <TableCell colSpan={5} sx={{ fontSize: '0.7rem', py: 0.25, textAlign: 'center', color: 'text.secondary' }}>
                             ... and {itunesPidDetails.length - 20} more
                           </TableCell>
                         </TableRow>

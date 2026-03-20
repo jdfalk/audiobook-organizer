@@ -116,7 +116,13 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
             px: 1,
             borderBottom: idx < entries.length - 1 ? '1px solid' : 'none',
             borderColor: 'divider',
+            cursor: (entry.type === 'metadata_apply' || entry.type === 'tag_write') ? 'pointer' : undefined,
             '&:hover': { bgcolor: 'action.hover' },
+          }}
+          onClick={() => {
+            if (entry.type === 'metadata_apply' || entry.type === 'tag_write') {
+              onCompareSnapshot?.(entry.timestamp);
+            }
           }}
         >
           {/* Timestamp */}

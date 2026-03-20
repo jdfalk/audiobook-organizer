@@ -1,0 +1,20 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty') && base=$(basename \"$file\") && [[ \"$base\" == \".env\" ]] && echo 'BLOCKED: Cannot edit .env files directly — use .env.example instead' && exit 1 || true"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty') && [[ \"$file\" == */web/src/*.ts* || \"$file\" == */web/src/*.css ]] && dir=$(git -C \"$(dirname \"$file\")\" rev-parse --show-toplevel 2>/dev/null) && npx --prefix \"$dir/web\" prettier --write \"$file\" 2>/dev/null || true"
+      },
+      {
+        "matcher": "Edit|Write",
+        "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty') && [[ \"$file\" == *.go ]] && dir=$(git -C \"$(dirname \"$file\")\" rev-parse --show-toplevel 2>/dev/null) && cd \"$dir\" && go vet ./$(dirname \"${file#$dir/}\")/... 2>&1 | head -5 || true"
+      }
+    ]
+  }
+}
