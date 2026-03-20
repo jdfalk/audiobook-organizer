@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -33,14 +33,15 @@ var GlobalMetadataExtractor MetadataExtractor
 
 // Metadata holds audio file metadata
 type Metadata struct {
-	Title       string
-	Artist      string
-	Album       string
-	Genre       string
-	Series      string
-	SeriesIndex int
-	Comments    string
-	Year        int
+	Title        string
+	Artist       string
+	AuthorSource string
+	Album        string
+	Genre        string
+	Series       string
+	SeriesIndex  int
+	Comments     string
+	Year         int
 	// Extended fields (best-effort; may be empty)
 	Narrator  string
 	Language  string
@@ -48,11 +49,12 @@ type Metadata struct {
 	ISBN10    string
 	ISBN13    string
 	// Custom organizer tags (read from embedded AUDIOBOOK_ORGANIZER_* tags)
-	BookOrganizerID string
-	ASIN            string
-	OpenLibraryID   string
-	HardcoverID     string
-	GoogleBooksID   string
+	BookOrganizerID     string
+	OrganizerTagVersion string
+	ASIN                string
+	OpenLibraryID       string
+	HardcoverID         string
+	GoogleBooksID       string
 	// UsedFilenameFallback indicates filename parsing filled metadata gaps.
 	UsedFilenameFallback bool
 }
@@ -210,7 +212,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 		}
 	} else if composerValue != "" {
 		// Composer as last resort — in audiobooks this is often the narrator
-		metadata.Artist = composerValue
+		metadata.Artist = cleanTagValue(composerValue)
 		setFieldSource(fieldSources, "author", composerSource+" (composer fallback)")
 	}
 
@@ -406,10 +408,12 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 
 	// Read custom AUDIOBOOK_ORGANIZER_* tags (TXXX frames for MP3, plain keys for FLAC/M4B)
 	metadata.BookOrganizerID = cleanTagValue(getRawString(raw, "TXXX:"+TagBookID, TagBookID))
+	metadata.OrganizerTagVersion = cleanTagValue(getRawString(raw, "TXXX:"+TagVersion, TagVersion))
 	metadata.ASIN = cleanTagValue(getRawString(raw, "TXXX:"+TagASIN, TagASIN))
 	metadata.OpenLibraryID = cleanTagValue(getRawString(raw, "TXXX:"+TagOpenLibrary, TagOpenLibrary))
 	metadata.HardcoverID = cleanTagValue(getRawString(raw, "TXXX:"+TagHardcover, TagHardcover))
 	metadata.GoogleBooksID = cleanTagValue(getRawString(raw, "TXXX:"+TagGoogleBooks, TagGoogleBooks))
+	metadata.AuthorSource = sourceOrUnknown(fieldSources, "author")
 
 	if seriesIndexSource == "" && metadata.SeriesIndex > 0 {
 		seriesIndexSource = "detected"

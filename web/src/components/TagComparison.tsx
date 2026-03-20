@@ -1,5 +1,5 @@
 // file: web/src/components/TagComparison.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: cfed2692-76f6-47b0-bc84-cc2a4075e554
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -52,17 +52,23 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
   const [compareId, setCompareId] = useState<string>('');
   const [expanded, setExpanded] = useState(false);
 
+  const snapshotComparisonActive = Boolean(snapshotTimestamp) && compareId === '';
+
   const loadTags = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.getBookTags(bookId, compareId || undefined);
+      const result = await api.getBookTags(
+        bookId,
+        compareId || undefined,
+        snapshotComparisonActive ? snapshotTimestamp ?? undefined : undefined
+      );
       setTags(result);
     } catch {
       setTags(null);
     } finally {
       setLoading(false);
     }
-  }, [bookId, compareId]);
+  }, [bookId, compareId, snapshotComparisonActive, snapshotTimestamp]);
 
   useEffect(() => {
     loadTags();
@@ -72,9 +78,10 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
   useEffect(() => {
     if (snapshotTimestamp) {
       setExpanded(true);
+      setCompareId('');
       loadTags();
     }
-  }, [snapshotTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapshotTimestamp, loadTags]);
 
   const tagEntries = useMemo(() => {
     if (!tags?.tags) return [];
@@ -97,7 +104,7 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
     [versions, bookId]
   );
 
-  const hasComparison = compareId !== '';
+  const hasComparison = compareId !== '' || snapshotComparisonActive;
 
   const getRowStyle = (entry: TagSourceValues, _tagName: string) => {
     const fileVal = entry.file_value != null ? String(entry.file_value) : '';
@@ -173,9 +180,9 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
 
       <Collapse in={expanded}>
         {/* Snapshot comparison banner */}
-        {snapshotTimestamp && (
+        {snapshotComparisonActive && (
           <Alert severity="info" sx={{ mb: 2 }} data-testid="snapshot-comparison-banner">
-            Comparing against snapshot from {new Date(snapshotTimestamp).toLocaleString()}
+            Comparing against snapshot from {new Date(snapshotTimestamp ?? '').toLocaleString()}
           </Alert>
         )}
 

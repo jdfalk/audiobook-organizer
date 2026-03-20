@@ -1,5 +1,5 @@
 // file: tests/e2e/files-history.spec.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: bd99e21f-38d1-4976-8ac2-43060c5fc17a
 
 import { expect, test } from '@playwright/test';
@@ -165,9 +165,9 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
           return Promise.resolve(jsonResponse(changelogData));
         }
 
-        // Tags (with optional compare_id)
+        // Tags (with optional compare_id or snapshot_ts)
         if (url.includes('/tags')) {
-          const hasCompare = url.includes('compare_id=');
+          const hasCompare = url.includes('compare_id=') || url.includes('snapshot_ts=');
           if (hasCompare) {
             // Add comparison_value to each tag
             const compTags = JSON.parse(JSON.stringify(tagsData));

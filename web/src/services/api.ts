@@ -690,9 +690,16 @@ export async function updateBook(
   return response.json();
 }
 
-export async function getBookTags(bookId: string, compareId?: string): Promise<BookTags> {
-  const params = compareId ? `?compare_id=${compareId}` : '';
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags${params}`);
+export async function getBookTags(
+  bookId: string,
+  compareId?: string,
+  snapshotTimestamp?: string
+): Promise<BookTags> {
+  const params = new URLSearchParams();
+  if (compareId) params.set('compare_id', compareId);
+  if (snapshotTimestamp) params.set('snapshot_ts', snapshotTimestamp);
+  const query = params.toString();
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/tags${query ? `?${query}` : ''}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book tags');
   }

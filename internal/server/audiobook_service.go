@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -300,14 +300,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
 
-	var meta metadata.Metadata
-	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath, nil); err == nil {
-			meta = m
-		} else {
-			log.Printf("[WARN] GetAudiobook: failed to extract metadata for %s: %v", book.FilePath, err)
-		}
-	}
+	meta := svc.extractBookFileMetadata(book, authorName)
 
 	// Backfill duration (and other media info) from file if DB fields are missing
 	if book.FilePath != "" && book.Duration == nil {
@@ -329,7 +322,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 }
 
 // GetAudiobookTags retrieves metadata tags and media info for an audiobook
-func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, compareID ...string) (map[string]any, error) {
+func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, compareID string, snapshotTS string) (map[string]any, error) {
 	if svc.store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -363,14 +356,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 		"tags": map[string]database.MetadataProvenanceEntry{},
 	}
 
-	var meta metadata.Metadata
-	if book.FilePath != "" {
-		if m, err := metadata.ExtractMetadata(book.FilePath, nil); err == nil {
-			meta = m
-		} else {
-			log.Printf("[WARN] GetAudiobookTags: failed to extract metadata for %s: %v", book.FilePath, err)
-		}
-	}
+	meta := svc.extractBookFileMetadata(book, authorName)
 
 	// Backfill empty media_info from file if DB fields are missing
 	if book.FilePath != "" && (book.Codec == nil || book.Bitrate == nil || book.SampleRate == nil) {
@@ -414,28 +400,58 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 	}
 
 	// Load comparison metadata if compare_id is provided
-	var comparisonMeta *metadata.Metadata
-	cmpID := ""
-	if len(compareID) > 0 {
-		cmpID = compareID[0]
-	}
-	if cmpID != "" {
-		compBook, err := svc.store.GetBookByID(cmpID)
+	var comparisonValues map[string]any
+	if snapshotTS != "" {
+		ts, err := time.Parse(time.RFC3339Nano, snapshotTS)
 		if err != nil {
-			log.Printf("[WARN] GetAudiobookTags: failed to load comparison book %s: %v", cmpID, err)
+			return nil, fmt.Errorf("invalid snapshot timestamp: %w", err)
+		}
+		snapshotBook, err := svc.store.GetBookAtVersion(id, ts)
+		if err != nil {
+			return nil, err
+		}
+		snapshotAuthorName, snapshotSeriesName := resolveAuthorAndSeriesNames(snapshotBook)
+		comparisonValues = buildComparisonValuesFromBook(snapshotBook, snapshotAuthorName, snapshotSeriesName)
+	} else if compareID != "" {
+		compBook, err := svc.store.GetBookByID(compareID)
+		if err != nil {
+			log.Printf("[WARN] GetAudiobookTags: failed to load comparison book %s: %v", compareID, err)
 		} else if compBook != nil && compBook.FilePath != "" {
 			if cm, err := metadata.ExtractMetadata(compBook.FilePath, nil); err == nil {
-				comparisonMeta = &cm
+				comparisonValues = buildComparisonValuesFromMetadata(&cm)
 			} else {
 				log.Printf("[WARN] GetAudiobookTags: failed to extract comparison metadata for %s: %v", compBook.FilePath, err)
 			}
 		}
 	}
 
-	tags := buildMetadataProvenance(book, state, meta, authorName, seriesName, comparisonMeta)
+	tags := buildMetadataProvenance(book, state, meta, authorName, seriesName, comparisonValues)
 	response["tags"] = tags
 
 	return response, nil
+}
+
+func (svc *AudiobookService) extractBookFileMetadata(book *database.Book, authorName string) metadata.Metadata {
+	var meta metadata.Metadata
+	if book == nil || book.FilePath == "" {
+		return meta
+	}
+
+	m, err := metadata.ExtractMetadata(book.FilePath, nil)
+	if err != nil {
+		log.Printf("[WARN] audiobook_service: failed to extract metadata for %s: %v", book.FilePath, err)
+		return meta
+	}
+
+	if m.OrganizerTagVersion == "" &&
+		strings.TrimSpace(authorName) != "" &&
+		strings.TrimSpace(m.Narrator) != "" &&
+		strings.EqualFold(strings.TrimSpace(m.Artist), strings.TrimSpace(m.Narrator)) {
+		m.Artist = authorName
+		m.AuthorSource = "database author fallback"
+	}
+
+	return m
 }
 
 // GetDuplicateBooks retrieves all duplicate book groups

@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.11.1
+// version: 1.12.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -253,12 +253,12 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 
 	var response struct {
 		Tags map[string]struct {
-			EffectiveValue  any `json:"effective_value"`
-			EffectiveSource string      `json:"effective_source"`
-			StoredValue     any `json:"stored_value"`
-			OverrideValue   any `json:"override_value"`
-			FetchedValue    any `json:"fetched_value"`
-			OverrideLocked  bool        `json:"override_locked"`
+			EffectiveValue  any    `json:"effective_value"`
+			EffectiveSource string `json:"effective_source"`
+			StoredValue     any    `json:"stored_value"`
+			OverrideValue   any    `json:"override_value"`
+			FetchedValue    any    `json:"fetched_value"`
+			OverrideLocked  bool   `json:"override_locked"`
 		} `json:"tags"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
@@ -271,6 +271,30 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 	assert.Equal(t, "Fetched Title", entry.FetchedValue)
 	assert.Equal(t, "Stored Title", entry.StoredValue)
 	assert.True(t, entry.OverrideLocked)
+}
+
+func TestGetAudiobookTagsRejectsInvalidSnapshotTimestamp(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+
+	tempDir := t.TempDir()
+	tempFile := filepath.Join(tempDir, "book.m4b")
+	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
+
+	created, err := database.GlobalStore.CreateBook(&database.Book{
+		Title:    "Snapshot Test",
+		FilePath: tempFile,
+		Format:   "m4b",
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s/tags?snapshot_ts=not-a-time", created.ID), nil)
+	w := httptest.NewRecorder()
+
+	server.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "snapshot_ts")
 }
 
 func TestUpdateAudiobookOverridesPersist(t *testing.T) {
@@ -1276,11 +1300,11 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 
 	var resp struct {
 		Tags map[string]struct {
-			FileValue      any `json:"file_value"`
-			FetchedValue   any `json:"fetched_value"`
-			StoredValue    any `json:"stored_value"`
-			OverrideValue  any `json:"override_value"`
-			OverrideLocked bool        `json:"override_locked"`
+			FileValue      any  `json:"file_value"`
+			FetchedValue   any  `json:"fetched_value"`
+			StoredValue    any  `json:"stored_value"`
+			OverrideValue  any  `json:"override_value"`
+			OverrideLocked bool `json:"override_locked"`
 		} `json:"tags"`
 	}
 
@@ -1787,7 +1811,7 @@ func TestRemoveExclusion(t *testing.T) {
 		validateFunc   func(t *testing.T, body []byte)
 	}{
 		{
-			name: "missing path returns error",
+			name:        "missing path returns error",
 			requestBody: map[string]any{
 				// path is missing
 			},
@@ -2249,9 +2273,9 @@ func TestHandleITunesImportStatus(t *testing.T) {
 		validateFunc   func(t *testing.T, body []byte)
 	}{
 		{
-			name:        "operation not found",
-			operationID: "01HXZ999999999999999999",
-			setup:       func() string { return "01HXZ999999999999999999" },
+			name:           "operation not found",
+			operationID:    "01HXZ999999999999999999",
+			setup:          func() string { return "01HXZ999999999999999999" },
 			expectedStatus: http.StatusNotFound,
 			validateFunc: func(t *testing.T, body []byte) {
 				var response map[string]any
