@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataEditDialog.tsx
-// version: 2.0.0
+// version: 2.1.0
 // guid: 4a5b6c7d-8e9f-0a1b-2c3d-4e5f6a7b8c9d
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -221,6 +221,7 @@ export const MetadataEditDialog: React.FC<MetadataEditDialogProps> = ({
             <IconButton
               size="small"
               onClick={() => toggleLock(field)}
+              aria-label={`${locked ? 'Unlock' : 'Lock'} ${label}`}
               sx={{
                 mt: '10px',
                 mr: 0.5,
