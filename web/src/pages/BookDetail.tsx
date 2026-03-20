@@ -113,7 +113,6 @@ export const BookDetail = () => {
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const [versions, setVersions] = useState<Book[]>([]);
   const [itunesLinked, setItunesLinked] = useState(false);
-  const [itunesPidDetails, setItunesPidDetails] = useState<api.ExternalIDMapping[] | null>(null);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const refreshFilesTab = () => setFilesRefreshKey((k) => k + 1);
   const [compareSnapshotTs, setCompareSnapshotTs] = useState<string | null>(null);
@@ -1767,58 +1766,71 @@ export const BookDetail = () => {
             );
           })}
 
-          {/* iTunes link banner — clickable to show PID details */}
+          {/* iTunes link info panel */}
           {itunesLinked && (
             <Alert
               severity="info"
               variant="outlined"
-              sx={{ mt: 1, cursor: 'pointer' }}
-              onClick={async () => {
-                if (itunesPidDetails) {
-                  setItunesPidDetails(null); // toggle off
-                } else {
-                  const data = await api.getBookExternalIDs(book.id);
-                  setItunesPidDetails(data.external_ids || []);
-                }
-              }}
+              icon={false}
+              sx={{ mt: 1 }}
             >
-              <Typography variant="body2">
-                iTunes Linked &mdash; {itunesPidCount} PID{itunesPidCount !== 1 ? 's' : ''} mapped
-                {itunesPidDetails ? ' ▲' : ' ▼ Click to view'}
-              </Typography>
-              {itunesPidDetails && (
-                <Box sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>PID</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Track</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Source</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>File Path</TableCell>
-                        <TableCell sx={{ fontSize: '0.75rem', py: 0.5 }}>Linked</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {itunesPidDetails.slice(0, 20).map((eid: api.ExternalIDMapping) => (
-                        <TableRow key={eid.id}>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25, fontFamily: 'monospace' }}>{eid.external_id}</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.track_number ?? '—'}</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.source}</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25, fontFamily: 'monospace', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={eid.file_path || ''}>{eid.file_path || '—'}</TableCell>
-                          <TableCell sx={{ fontSize: '0.7rem', py: 0.25 }}>{eid.created_at ? new Date(eid.created_at).toLocaleDateString() : '—'}</TableCell>
-                        </TableRow>
-                      ))}
-                      {itunesPidDetails.length > 20 && (
-                        <TableRow>
-                          <TableCell colSpan={5} sx={{ fontSize: '0.7rem', py: 0.25, textAlign: 'center', color: 'text.secondary' }}>
-                            ... and {itunesPidDetails.length - 20} more
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="center">
+                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                  iTunes Linked
+                </Typography>
+                {book.itunes_persistent_id && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">PID</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{book.itunes_persistent_id}</Typography>
+                  </Box>
+                )}
+                <Box>
+                  <Typography variant="caption" color="text.secondary">Tracks Mapped</Typography>
+                  <Typography variant="body2">{itunesPidCount}</Typography>
                 </Box>
-              )}
+                {book.itunes_date_added && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Date Added</Typography>
+                    <Typography variant="body2">{new Date(book.itunes_date_added).toLocaleDateString()}</Typography>
+                  </Box>
+                )}
+                {book.itunes_play_count != null && book.itunes_play_count > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Play Count</Typography>
+                    <Typography variant="body2">{book.itunes_play_count}</Typography>
+                  </Box>
+                )}
+                {book.itunes_last_played && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Last Played</Typography>
+                    <Typography variant="body2">{new Date(book.itunes_last_played).toLocaleDateString()}</Typography>
+                  </Box>
+                )}
+                {book.itunes_rating != null && book.itunes_rating > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Rating</Typography>
+                    <Typography variant="body2">{'★'.repeat(Math.round(book.itunes_rating / 20))}{'☆'.repeat(5 - Math.round(book.itunes_rating / 20))}</Typography>
+                  </Box>
+                )}
+                {book.itunes_bookmark != null && book.itunes_bookmark > 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Bookmark</Typography>
+                    <Typography variant="body2">{formatDuration(book.itunes_bookmark / 1000)}</Typography>
+                  </Box>
+                )}
+                {book.itunes_import_source && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Import Source</Typography>
+                    <Typography variant="body2">{book.itunes_import_source}</Typography>
+                  </Box>
+                )}
+                {book.file_path && (
+                  <Box sx={{ flex: '1 1 100%' }}>
+                    <Typography variant="caption" color="text.secondary">File Path</Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>{book.file_path}</Typography>
+                  </Box>
+                )}
+              </Stack>
             </Alert>
           )}
 

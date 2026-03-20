@@ -93,6 +93,12 @@ export interface Book {
   original_file_hash?: string;
   organized_file_hash?: string;
   itunes_persistent_id?: string;
+  itunes_date_added?: string;
+  itunes_play_count?: number;
+  itunes_last_played?: string;
+  itunes_rating?: number;
+  itunes_bookmark?: number;
+  itunes_import_source?: string;
   library_state?: string;
   quantity?: number;
   marked_for_deletion?: boolean;
