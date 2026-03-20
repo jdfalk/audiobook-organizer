@@ -1,5 +1,5 @@
 // file: src/services/api.test.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -9,6 +9,7 @@ import {
   addImportPathDetailed,
   removeImportPath,
   bulkFetchMetadata,
+  batchWriteBackMetadata,
 } from './api';
 
 const mockFetch = vi.fn();
@@ -152,6 +153,33 @@ describe('api import paths', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ book_ids: ['id-1', 'id-2'], only_missing: false }),
+    });
+  });
+
+  it('batchWriteBackMetadata posts book ids and rename flag', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          written: 2,
+          written_files: 3,
+          renamed: 1,
+          failed: 0,
+          errors: [],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    );
+
+    const response = await batchWriteBackMetadata(['id-1', 'id-2'], true);
+    expect(response.written).toBe(2);
+    expect(response.renamed).toBe(1);
+    expect(mockFetch).toHaveBeenCalledWith('/api/v1/audiobooks/batch-write-back', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_ids: ['id-1', 'id-2'], rename: true }),
     });
   });
 });

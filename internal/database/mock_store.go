@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -12,28 +12,32 @@ import (
 // MockStore is a simple mock implementation for testing services
 type MockStore struct {
 	// Book methods
-	GetBookByIDFunc            func(id string) (*Book, error)
-	GetBookByFilePathFunc      func(path string) (*Book, error)
-	GetAllBooksFunc            func(limit, offset int) ([]Book, error)
-	GetBooksByWorkIDFunc       func(workID string) ([]Book, error)
-	GetBooksBySeriesIDFunc     func(seriesID int) ([]Book, error)
-	GetBooksByAuthorIDFunc     func(authorID int) ([]Book, error)
+	GetBookByIDFunc                 func(id string) (*Book, error)
+	GetBookByFilePathFunc           func(path string) (*Book, error)
+	GetAllBooksFunc                 func(limit, offset int) ([]Book, error)
+	GetBooksByWorkIDFunc            func(workID string) ([]Book, error)
+	GetBooksBySeriesIDFunc          func(seriesID int) ([]Book, error)
+	GetBooksByAuthorIDFunc          func(authorID int) ([]Book, error)
 	GetBookByITunesPersistentIDFunc func(persistentID string) (*Book, error)
 	GetBookByFileHashFunc           func(hash string) (*Book, error)
-	GetBookByOriginalHashFunc  func(hash string) (*Book, error)
-	GetBookByOrganizedHashFunc func(hash string) (*Book, error)
-	GetDuplicateBooksFunc      func() ([][]Book, error)
-	CreateBookFunc             func(book *Book) (*Book, error)
-	UpdateBookFunc             func(id string, book *Book) (*Book, error)
-	DeleteBookFunc             func(id string) error
-	SearchBooksFunc            func(query string, limit, offset int) ([]Book, error)
-	CountBooksFunc               func() (int, error)
-	CountFilesFunc               func() (int, error)
-	CountAuthorsFunc             func() (int, error)
-	CountSeriesFunc              func() (int, error)
-	GetBookCountsByLocationFunc  func(rootDir string) (int, int, error)
-	GetDashboardStatsFunc        func() (*DashboardStats, error)
-	ListSoftDeletedBooksFunc   func(limit, offset int, olderThan *time.Time) ([]Book, error)
+	GetBookByOriginalHashFunc       func(hash string) (*Book, error)
+	GetBookByOrganizedHashFunc      func(hash string) (*Book, error)
+	GetBookVersionsFunc             func(id string, limit int) ([]BookVersion, error)
+	GetBookAtVersionFunc            func(id string, ts time.Time) (*Book, error)
+	RevertBookToVersionFunc         func(id string, ts time.Time) (*Book, error)
+	PruneBookVersionsFunc           func(id string, keepCount int) (int, error)
+	GetDuplicateBooksFunc           func() ([][]Book, error)
+	CreateBookFunc                  func(book *Book) (*Book, error)
+	UpdateBookFunc                  func(id string, book *Book) (*Book, error)
+	DeleteBookFunc                  func(id string) error
+	SearchBooksFunc                 func(query string, limit, offset int) ([]Book, error)
+	CountBooksFunc                  func() (int, error)
+	CountFilesFunc                  func() (int, error)
+	CountAuthorsFunc                func() (int, error)
+	CountSeriesFunc                 func() (int, error)
+	GetBookCountsByLocationFunc     func(rootDir string) (int, int, error)
+	GetDashboardStatsFunc           func() (*DashboardStats, error)
+	ListSoftDeletedBooksFunc        func(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Work methods
 	GetAllWorksFunc func() ([]Work, error)
@@ -43,12 +47,12 @@ type MockStore struct {
 	DeleteWorkFunc  func(id string) error
 
 	// Author methods
-	GetAllAuthorsFunc   func() ([]Author, error)
-	GetAuthorByIDFunc   func(id int) (*Author, error)
-	GetAuthorByNameFunc func(name string) (*Author, error)
-	CreateAuthorFunc      func(name string) (*Author, error)
-	DeleteAuthorFunc      func(id int) error
-	UpdateAuthorNameFunc  func(id int, name string) error
+	GetAllAuthorsFunc    func() ([]Author, error)
+	GetAuthorByIDFunc    func(id int) (*Author, error)
+	GetAuthorByNameFunc  func(name string) (*Author, error)
+	CreateAuthorFunc     func(name string) (*Author, error)
+	DeleteAuthorFunc     func(id int) error
+	UpdateAuthorNameFunc func(id int, name string) error
 
 	// Author Alias methods
 	GetAuthorAliasesFunc    func(authorID int) ([]AuthorAlias, error)
@@ -88,21 +92,21 @@ type MockStore struct {
 	DeleteImportPathFunc    func(id int) error
 
 	// Operations
-	CreateOperationFunc       func(id, opType string, folderPath *string) (*Operation, error)
-	GetOperationByIDFunc      func(id string) (*Operation, error)
-	GetRecentOperationsFunc   func(limit int) ([]Operation, error)
-	UpdateOperationStatusFunc func(id, status string, progress, total int, message string) error
-	UpdateOperationErrorFunc       func(id, errorMessage string) error
-	UpdateOperationResultDataFunc  func(id string, resultData string) error
+	CreateOperationFunc           func(id, opType string, folderPath *string) (*Operation, error)
+	GetOperationByIDFunc          func(id string) (*Operation, error)
+	GetRecentOperationsFunc       func(limit int) ([]Operation, error)
+	UpdateOperationStatusFunc     func(id, status string, progress, total int, message string) error
+	UpdateOperationErrorFunc      func(id, errorMessage string) error
+	UpdateOperationResultDataFunc func(id string, resultData string) error
 
 	// Operation State Persistence
-	SaveOperationStateFunc    func(opID string, state []byte) error
-	GetOperationStateFunc     func(opID string) ([]byte, error)
-	SaveOperationParamsFunc   func(opID string, params []byte) error
-	GetOperationParamsFunc    func(opID string) ([]byte, error)
-	DeleteOperationStateFunc       func(opID string) error
-	DeleteOperationsByStatusFunc   func(statuses []string) (int, error)
-	GetInterruptedOperationsFunc   func() ([]Operation, error)
+	SaveOperationStateFunc       func(opID string, state []byte) error
+	GetOperationStateFunc        func(opID string) ([]byte, error)
+	SaveOperationParamsFunc      func(opID string, params []byte) error
+	GetOperationParamsFunc       func(opID string) ([]byte, error)
+	DeleteOperationStateFunc     func(opID string) error
+	DeleteOperationsByStatusFunc func(statuses []string) (int, error)
+	GetInterruptedOperationsFunc func() ([]Operation, error)
 
 	// Operation Logs
 	AddOperationLogFunc          func(operationID, level, message string, details *string) error
@@ -157,12 +161,12 @@ type MockStore struct {
 	GetAllPreferencesForUserFunc func(userID string) ([]UserPreferenceKV, error)
 
 	// Book segments
-	CreateBookSegmentFunc      func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
-	UpdateBookSegmentFunc      func(segment *BookSegment) error
-	ListBookSegmentsFunc       func(bookNumericID int) ([]BookSegment, error)
-	MergeBookSegmentsFunc      func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
-	GetBookSegmentByIDFunc     func(segmentID string) (*BookSegment, error)
-	MoveSegmentsToBookFunc     func(segmentIDs []string, targetBookNumericID int) error
+	CreateBookSegmentFunc  func(bookNumericID int, segment *BookSegment) (*BookSegment, error)
+	UpdateBookSegmentFunc  func(segment *BookSegment) error
+	ListBookSegmentsFunc   func(bookNumericID int) ([]BookSegment, error)
+	MergeBookSegmentsFunc  func(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
+	GetBookSegmentByIDFunc func(segmentID string) (*BookSegment, error)
+	MoveSegmentsToBookFunc func(segmentIDs []string, targetBookNumericID int) error
 
 	// Playback events
 	AddPlaybackEventFunc       func(event *PlaybackEvent) error
@@ -212,7 +216,7 @@ type MockStore struct {
 	BulkCreateExternalIDMappingsFunc func(mappings []ExternalIDMapping) error
 
 	// Path history
-	RecordPathChangeFunc  func(change *BookPathChange) error
+	RecordPathChangeFunc   func(change *BookPathChange) error
 	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
 
 	// Lifecycle
@@ -1195,18 +1199,30 @@ func (m *MockStore) SetLastWrittenAt(id string, t time.Time) error {
 }
 
 func (m *MockStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+	if m.GetBookVersionsFunc != nil {
+		return m.GetBookVersionsFunc(id, limit)
+	}
 	return nil, nil
 }
 
 func (m *MockStore) GetBookAtVersion(id string, ts time.Time) (*Book, error) {
+	if m.GetBookAtVersionFunc != nil {
+		return m.GetBookAtVersionFunc(id, ts)
+	}
 	return nil, fmt.Errorf("not implemented in mock")
 }
 
 func (m *MockStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) {
+	if m.RevertBookToVersionFunc != nil {
+		return m.RevertBookToVersionFunc(id, ts)
+	}
 	return nil, fmt.Errorf("not implemented in mock")
 }
 
 func (m *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
+	if m.PruneBookVersionsFunc != nil {
+		return m.PruneBookVersionsFunc(id, keepCount)
+	}
 	return 0, nil
 }
 

@@ -1,8 +1,8 @@
 // file: web/src/pages/Library.bulkFetch.test.tsx
-// version: 1.0.3
+// version: 1.1.0
 // guid: 5b7b0d6f-5c2b-4d57-9b6c-8dbb7a9e9e2c
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
@@ -47,6 +47,13 @@ vi.mock('../services/api', () => ({
       author_name: 'Author',
     },
   }),
+  batchWriteBackMetadata: vi.fn().mockResolvedValue({
+    written: 1,
+    written_files: 1,
+    renamed: 1,
+    failed: 0,
+    errors: [],
+  }),
 }));
 
 describe('Library bulk metadata fetch', () => {
@@ -82,6 +89,50 @@ describe('Library bulk metadata fetch', () => {
     const fetchMock = vi.mocked(api.fetchBookMetadata);
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith('id-1');
+    });
+  });
+
+  it('triggers bulk save to files when confirmed', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Library />
+      </MemoryRouter>
+    );
+
+    const selectBox = await screen.findByRole('checkbox', {
+      name: /select test book/i,
+    });
+    await user.click(selectBox);
+    await waitFor(() => {
+      expect(selectBox).toBeChecked();
+    });
+
+    const openButton = await screen.findByRole('button', {
+      name: /save to files/i,
+    });
+    await waitFor(() => {
+      expect(openButton).toBeEnabled();
+    });
+    await user.click(openButton);
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /save selected to files/i,
+    });
+
+    const renameBox = within(dialog).getByRole('checkbox', {
+      name: /rename files after write-back/i,
+    });
+    await user.click(renameBox);
+
+    const confirmButton = within(dialog).getByRole('button', {
+      name: /^save to files$/i,
+    });
+    await user.click(confirmButton);
+
+    const writeBackMock = vi.mocked(api.batchWriteBackMetadata);
+    await waitFor(() => {
+      expect(writeBackMock).toHaveBeenCalledWith(['id-1'], true);
     });
   });
 });
