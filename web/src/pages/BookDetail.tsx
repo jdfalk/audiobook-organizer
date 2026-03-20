@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.35.0
+// version: 1.36.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -105,6 +105,7 @@ export const BookDetail = () => {
   const [itunesPidDetails, setItunesPidDetails] = useState<api.ExternalIDMapping[] | null>(null);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const refreshFilesTab = () => setFilesRefreshKey((k) => k + 1);
+  const [compareSnapshotTs, setCompareSnapshotTs] = useState<string | null>(null);
   const [itunesPidCount, setItunesPidCount] = useState(0);
   const [linkSearchOpen, setLinkSearchOpen] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
@@ -1453,7 +1454,7 @@ export const BookDetail = () => {
                         </Table>
 
                         {/* Tag comparison component (replaces inline tags table) */}
-                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} />
+                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} />
 
                         {/* Segments/files table for multi-file books */}
                         {vSegs.length > 0 && (() => {
@@ -1648,7 +1649,7 @@ export const BookDetail = () => {
             <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
               Change Log
             </Typography>
-            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} onRevert={() => { refreshFilesTab(); loadBook(); }} />
+            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} onRevert={() => { refreshFilesTab(); loadBook(); }} onCompareSnapshot={setCompareSnapshotTs} />
           </Paper>
 
         </Stack>

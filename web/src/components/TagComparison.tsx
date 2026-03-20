@@ -1,9 +1,10 @@
 // file: web/src/components/TagComparison.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: cfed2692-76f6-47b0-bc84-cc2a4075e554
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Chip,
   Collapse,
@@ -27,6 +28,7 @@ interface TagComparisonProps {
   bookId: string;
   versions: Book[];
   refreshKey?: number; // increment to force reload after mutations
+  snapshotTimestamp?: string | null; // when set, auto-expand and show snapshot comparison banner
 }
 
 /** Key tags we always show badges for */
@@ -44,7 +46,7 @@ const TAG_LABELS: Record<string, string> = {
   description: 'description',
 };
 
-export const TagComparison = ({ bookId, versions, refreshKey }: TagComparisonProps) => {
+export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp }: TagComparisonProps) => {
   const [tags, setTags] = useState<BookTags | null>(null);
   const [loading, setLoading] = useState(false);
   const [compareId, setCompareId] = useState<string>('');
@@ -65,6 +67,14 @@ export const TagComparison = ({ bookId, versions, refreshKey }: TagComparisonPro
   useEffect(() => {
     loadTags();
   }, [loadTags, refreshKey]);
+
+  // Auto-expand and reload when a snapshot timestamp is selected from ChangeLog
+  useEffect(() => {
+    if (snapshotTimestamp) {
+      setExpanded(true);
+      loadTags();
+    }
+  }, [snapshotTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tagEntries = useMemo(() => {
     if (!tags?.tags) return [];
@@ -162,6 +172,13 @@ export const TagComparison = ({ bookId, versions, refreshKey }: TagComparisonPro
       </Typography>
 
       <Collapse in={expanded}>
+        {/* Snapshot comparison banner */}
+        {snapshotTimestamp && (
+          <Alert severity="info" sx={{ mb: 2 }} data-testid="snapshot-comparison-banner">
+            Comparing against snapshot from {new Date(snapshotTimestamp).toLocaleString()}
+          </Alert>
+        )}
+
         {/* Comparison dropdown */}
         {otherVersions.length > 0 && (
           <FormControl size="small" sx={{ mb: 2, minWidth: 280 }}>
