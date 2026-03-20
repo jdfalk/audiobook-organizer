@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.bulkFetch.test.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5b7b0d6f-5c2b-4d57-9b6c-8dbb7a9e9e2c
 
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -60,7 +60,9 @@ describe('Library bulk metadata fetch', () => {
   it('triggers bulk fetch when confirmed', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
+      <MemoryRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <Library />
       </MemoryRouter>
     );
@@ -95,7 +97,9 @@ describe('Library bulk metadata fetch', () => {
   it('triggers bulk save to files when confirmed', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter>
+      <MemoryRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <Library />
       </MemoryRouter>
     );
