@@ -75,23 +75,32 @@ func embedWithFFmpeg(audioPath, coverPath, format string) error {
 	tmpFile := audioPath + ".tmp" + filepath.Ext(audioPath)
 	defer os.Remove(tmpFile) // clean up on failure
 
-	// Build ffmpeg command:
-	//   ffmpeg -i audio -i cover -map 0 -map 1 -c copy -disposition:v:0 attached_pic output
-	// For mp4 containers we need -c:v mjpeg if the cover is JPEG (ffmpeg handles this).
+	// Build ffmpeg command.
+	// For MP4/M4B: only map audio + new cover, dropping subtitle/data streams
+	// that the ipod muxer can't handle and any old cover art.
+	// For MP3/OGG: map all streams from audio + new cover.
 	args := []string{
-		"-y",                       // overwrite output
-		"-i", audioPath,            // input audio
-		"-i", coverPath,            // input cover image
-		"-map", "0",                // map all streams from audio
-		"-map", "1",                // map cover image
-		"-c", "copy",               // copy all codecs (no re-encoding)
-		"-disposition:v:0", "attached_pic", // mark as attached picture
+		"-y",            // overwrite output
+		"-i", audioPath, // input audio
+		"-i", coverPath, // input cover image
 	}
 
-	// For MP4 containers, set the video codec to copy (cover is just attached)
 	if format == "mp4" {
-		// MP4 containers need the metadata copy flag
-		args = append(args, "-movflags", "+faststart")
+		// Map only audio streams from input, plus the new cover image
+		args = append(args,
+			"-map", "0:a",              // audio streams only (skip data/subtitle/old cover)
+			"-map", "1:0",              // new cover image
+			"-c", "copy",               // copy all codecs
+			"-disposition:v:0", "attached_pic",
+			"-movflags", "+faststart",
+		)
+	} else {
+		args = append(args,
+			"-map", "0",                // all streams from audio
+			"-map", "1",                // cover image
+			"-c", "copy",               // copy all codecs
+			"-disposition:v:0", "attached_pic",
+		)
 	}
 
 	args = append(args, tmpFile)
