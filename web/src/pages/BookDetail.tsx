@@ -962,15 +962,18 @@ export const BookDetail = () => {
                 variant="outlined"
                 size="small"
               />
-              {book.version_group_id && (
-                <Chip
-                  icon={<CompareIcon />}
-                  label="Version Group Linked"
-                  color="secondary"
-                  variant="outlined"
-                  size="small"
-                />
-              )}
+              {book.version_group_id && (() => {
+                const anyMissing = book.file_exists === false || segments.some((s) => s.file_exists === false);
+                return (
+                  <Chip
+                    icon={<CompareIcon />}
+                    label="Version Group Linked"
+                    color={anyMissing ? 'error' : 'success'}
+                    variant="outlined"
+                    size="small"
+                  />
+                );
+              })()}
               {itunesLinked && (
                 <Chip
                   label={`iTunes Linked (${itunesPidCount} PID${itunesPidCount !== 1 ? 's' : ''})`}
