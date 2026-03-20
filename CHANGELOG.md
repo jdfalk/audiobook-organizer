@@ -1,13 +1,66 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 1.8.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-03-10 -->
+<!-- last-edited: 2026-03-19 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### March 14-19, 2026 — Major Data Cleanup, External IDs, Files & History Redesign (v2.0.0)
+
+##### Data Architecture
+- **External ID mapping** (migration 34): `external_id_map` table maps iTunes PIDs, Audible ASINs, Google Books IDs to book records. 97K+ PID mappings. Supports tombstoning to block reimport of deleted books.
+- **Deferred iTunes updates** (migration 33): `deferred_itunes_updates` table queues iTunes library changes when write-back is disabled. Auto-applies on next sync.
+- **File path history** (migration 35): `book_path_history` table records every rename/move with timestamps.
+- **Genre field** (migration 36): `genre TEXT` column on books table, stored from metadata fetch results.
+- **Batch operations API**: `POST /api/v1/audiobooks/batch-operations` — per-item update/delete/restore with different updates per book. Supports up to 10K operations per request.
+
+##### Files & History Tab Redesign
+- **Renamed** "Files & Versions" → "Files & History"
+- **Format-grouped trays**: One expanding tray per format (M4B, MP3), not per file. Multi-file formats show segment table inside.
+- **TagComparison component**: Key tag badges (✓/✗), expandable full comparison table, dropdown to compare against other versions with diff highlighting (amber/green/red).
+- **ChangeLog component**: Timeline of renames, tag writes, metadata applies with type icons. Revert buttons on each entry (reverts DB + writes tags + renames file).
+- **iTunes PID badge**: Clickable, expands to show PID detail table.
+
+##### Tag Writing & Reading
+- **Write ALL metadata fields**: series, series_index, language, publisher, narrator, description, ISBN-10, ISBN-13 as custom tags (SERIES, SERIES_INDEX, MVNM/MVIN, LANGUAGE, PUBLISHER, NARRATOR, DESCRIPTION).
+- **Read custom tags back**: ExtractMetadata now reads SERIES_INDEX, MVIN, PUBLISHER (uppercase), MVNM.
+- **Tag extraction priority fixed**: album_artist > artist > composer (was composer first, causing narrator-as-author in Audible M4Bs).
+- **Copy-on-write backups**: Hardlink backups (`.bak-*`) created before tag writes. TTL cleanup in maintenance.
+- **Honest write-back counting**: No longer counts skipped/unchanged as "written".
+
+##### Diagnostics Page
+- **Category selection**: Error Analysis, Deduplication, Metadata Quality, General.
+- **ZIP export**: System info, books, authors, series, iTunes albums, batch.jsonl for AI analysis.
+- **AI batch submission**: Submit to OpenAI batch API, poll for results, actionable review list.
+- **Apply suggestions**: Approve/reject per suggestion, batch-apply merges/deletes/fixes.
+
+##### Search & Metadata
+- **Search by author+narrator**: PebbleDB search now matches by author name AND narrator, not just title.
+- **Background ISBN/ASIN enrichment**: After metadata apply, searches Open Library/Google Books for ISBN, Audible for ASIN. Strict title matching (prefix with 60% length ratio).
+- **Fetch metadata safety**: Cannot wipe title to "Untitled" or empty. Final guard in `applyMetadataToBook`.
+- **stripChapterFromTitle**: Strips leading dashes after bracket removal (e.g., "[Novel 05] - Cobalt Blue" → "Cobalt Blue").
+
+##### Operations & Infrastructure
+- **Universal batch poller**: One scheduler task polls all OpenAI batches by metadata tag, routes completed results to handlers by type.
+- **Operation resume after restart**: `GetInterruptedOperations` now matches 'interrupted' status (was missing, only matched 'running'/'queued').
+- **Reconcile scan visible**: Connected to progress reporter so it shows in Operations UI.
+- **Operations list stable sort**: Sorted by `created_at` descending, no more jockeying.
+- **Soft-deleted list uncapped**: Was hardcoded to 500, now supports 10K with proper total count.
+- **Save to Files renames**: Now renames files + cleans up empty directories, not just writes tags.
+- **Single-file rename**: Books without segment records get virtual segment for rename pipeline.
+- **Protected path enforcement**: `runApplyPipeline` and `WriteBackMetadataForBook` redirect to library copy for iTunes/import paths.
+
+##### Data Cleanup (Production)
+- Library reduced from 68,166 → 10,891 books (84% reduction)
+- Authors reduced from 5,982 → 2,970
+- Series reduced from 19,261 → 8,507
+- Root cause found: iTunes path was in scanner import paths → double import of every file
+- Removed iTunes path from scanner import paths
+- Purge now skips books with iTunes PIDs to prevent reimport
 
 #### March 10, 2026 — Metadata Search Scoring & Bulk UX (v1.8.0)
 

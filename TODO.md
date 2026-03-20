@@ -1,293 +1,114 @@
 <!-- file: TODO.md -->
-<!-- version: 3.2.0 -->
+<!-- version: 4.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-03-10 -->
+<!-- last-edited: 2026-03-19 -->
 
 # Project TODO
 
-> All detailed plans live in [`docs/plans/`](docs/plans/). This file is a
-> priority-ordered index: one-line summary per item, link to the full plan.
+> All detailed plans live in [`docs/superpowers/plans/`](docs/superpowers/plans/) and specs in [`docs/superpowers/specs/`](docs/superpowers/specs/). Implementation guides for open items are in [`docs/implementation-guide.md`](docs/implementation-guide.md).
 
 ---
 
-## 🎯 MVP Status — February 16, 2026
+## 🎯 Current Status — March 19, 2026
 
-**~99% complete** · All P0/P1/P2 items done · Release pipeline finalized · All critical bugs fixed
-
-**Remaining for MVP**: manual QA sign-off
+**Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned from 68K/6K/19K)
+**Production:** PebbleDB, Linux, HTTPS at 172.16.2.30:8484
 
 ---
 
-## 🚨 P0 — Critical Path to MVP
+## 🚨 P0 — Must Fix (Blocks Daily Use)
 
-| Item | Plan |
-| --- | --- |
-| ~~Rotate exposed key + scrub `.env` from git history~~ ✅ Never committed, .gitignore correct | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
-| ~~Complete OpenAPI coverage for all implemented endpoints~~ ✅ v1.1.0, 80+ paths | [Roadmap to 100%](docs/roadmap-to-100-percent.md) |
-| ~~iTunes Library Import — Phases 2–4~~ ✅ Complete | [iTunes Integration](docs/plans/itunes-integration.md) |
-| Manual QA & validation across all core workflows | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
-| ~~Release pipeline fixes (token permissions, GoReleaser, changelog)~~ ✅ ghcommon v1.10.3, GoReleaser prerelease, Makefile targets | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| ~~Raise Go test coverage from 73.8% to 80%~~ ✅ 81.3% (38 integration tests) | [Session 10 Plan](docs/archive/SESSION_10_INTEGRATION_TEST_PLAN.md) |
-| ~~Expand Playwright E2E to critical workflows~~ ✅ 134/134 passing | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
+| # | Item | Details | Spec/Plan |
+|---|------|---------|-----------|
+| 1 | **Tag extraction reads conflicting metadata** | After writing correct tags, `ExtractMetadata` re-reads and gets wrong values from legacy `composer`, `album`, or other conflicting tags. Composer should be cleared when we write `artist`/`album_artist`. | [Implementation Guide §1](docs/implementation-guide.md#1-clear-conflicting-tags-during-write) |
+| 2 | **Author/narrator swap in many files** | `composer` field contains narrator in Audible M4Bs. Our fix (album_artist > artist > composer) helps but doesn't solve files where `artist` IS the narrator. Need to cross-reference with DB author. | [Implementation Guide §2](docs/implementation-guide.md#2-smart-author-narrator-resolution) |
+| 3 | **ISBN enrichment matched wrong book** | `isStrictTitleMatch` was too loose. Fixed to prefix match with 60% length ratio. Needs live testing to confirm fix works. | [Implementation Guide §3](docs/implementation-guide.md#3-isbn-enrichment-validation) |
 
 ---
 
 ## 🔴 P1 — High Priority
 
-| Item | Plan |
-| --- | --- |
-| ~~Fix metadata fetch fallback (fails for translated/subtitled titles)~~ ✅ 5-step cascade with subtitle stripping + author-only search | [Metadata System](docs/plans/metadata-system.md) |
-| ~~Design & implement multiple authors/narrators support~~ ✅ Narrator entity, BookNarrator junction, API endpoints, tests | [Metadata System](docs/plans/metadata-system.md) |
-| ~~Metadata quality — raw tags, provenance display, expanded edit dialog~~ ✅ Field-states API, provenance indicators, lock icons | [Metadata System](docs/plans/metadata-system.md) |
-| ~~Delete/purge flow refinement in Book Detail~~ ✅ Confirmation checkbox, block-hash explanation, deletion timestamp | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| ~~CI/CD health monitoring (detect action output drift)~~ ✅ Version checks, output logging, auto-issue creation | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| Capture manual verification notes from P0 QA | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
+| # | Item | Details | Spec/Plan |
+|---|------|---------|-----------|
+| 4 | **M4B conversion live test** | Integration test passes but never tested on production server with real files. Need to verify chapters, version linking, primary/non-primary, deferred iTunes update. | [Transcode Integration Test](internal/transcode/transcode_integration_test.go) |
+| 5 | **Bulk "Save to Files" for all books** | Currently per-book only. Need a batch operation to write tags + rename for all books (or filtered set). | [Implementation Guide §5](docs/implementation-guide.md#5-bulk-save-to-files) |
+| 6 | **Series dedup cleanup** | 8,507 series for 10,891 books. Many 1-book series, some should be merged or removed. | [Implementation Guide §6](docs/implementation-guide.md#6-series-dedup) |
+| 7 | **"read by narrator" books metadata fix** | ~100+ books still have title/author as "read by narrator". Need bulk AI-assisted metadata correction. | [Diagnostics Page](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
 
 ---
 
 ## 🟡 P2 — Medium Priority
 
-| Item | Plan |
-| --- | --- |
-| ~~Persist operation logs + log view UX improvements~~ ✅ Migration 21, SQLite persistence, queue wiring | [Observability](docs/plans/observability-and-monitoring.md) |
-| ~~SSE system status heartbeats (live metrics without polling)~~ ✅ Complete | [Observability](docs/plans/observability-and-monitoring.md) |
-| ~~Parallel scanning with goroutine pool~~ ✅ Complete | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| ~~Caching layer for frequent book queries~~ ✅ 30s/10s TTL cache with invalidation | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| ~~Debounced library size recomputation via fsnotify~~ ✅ Recursive watcher with 5s debounce, audio file filtering | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| ~~Global notification/toast system~~ ✅ Toast provider, auto-dismiss for success/info, persist for error/warning | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| ~~Dark mode with persisted preference~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| ~~Keyboard shortcuts~~ ✅ / or Ctrl+K for search, g+l library, g+s settings, ? help | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| ~~Welcome wizard (first-run setup)~~ ✅ Complete | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| ~~Developer guide (architecture, data flow, deployment)~~ ✅ docs/developer-guide.md | [MVP Critical Path](docs/plans/mvp-critical-path.md) |
-| ~~NPM cache fix (CRITICAL-002)~~ ✅ Added npm cache to vulnerability-scan.yml | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| ~~ghcommon pre-release & tagging strategy (CRITICAL-004)~~ ✅ Complete | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
+| # | Item | Details | Spec/Plan |
+|---|------|---------|-----------|
+| 8 | **Version vs Snapshot UI polish** | Tab renamed to "Files & History" with format trays, changelog, comparison. Needs UX polish and edge case handling. | [Files & History Spec](docs/superpowers/specs/2026-03-18-files-history-redesign.md) |
+| 9 | **Compare snapshot wiring** | ChangeLog "Compare →" link communicates timestamp to TagComparison but doesn't load snapshot data yet. | [Implementation Guide §9](docs/implementation-guide.md#9-snapshot-comparison) |
+| 10 | **Background ISBN enrichment expansion** | Currently searches after metadata apply. Should also run as a scheduled maintenance task for all books missing ISBN. | [Implementation Guide §10](docs/implementation-guide.md#10-scheduled-isbn-enrichment) |
+| 11 | **Copy-on-write TTL tuning** | Hardlink backups created before tag writes. Cleanup task registered. Need to verify TTL works and test disk usage. | [Implementation Guide §11](docs/implementation-guide.md#11-copy-on-write-verification) |
+| 12 | **iTunes PID detail view** | Badge clickable, banner expandable with PID table. Could show more info (file paths, track names from XML). | [Implementation Guide §12](docs/implementation-guide.md#12-itunes-pid-detail-expansion) |
 
 ---
 
-## Metadata Sources
+## 🟢 P3 — Nice to Have
 
-- [x] Hardcover.app integration
-- [x] Google Books API key support (config, persistence, credentials map, env var)
-- [x] Cover art: automatic download to local disk
-- [x] Cover art: embed in audio file metadata tags (ffmpeg/metaflac, graceful fallback)
-
-## Search Quality
-
-- [x] Title cleaning: bracket stripping for "[Series] Title" format
-- [x] Title cleaning: part/volume/chapter pattern removal
-- [x] Title cleaning: subtitle stripping (colon, dash, em-dash separators)
-- [x] Author-only fallback search with best-title-match scoring
-- [x] Fuzzy search / Levenshtein distance matching
-- [x] Search result ranking/scoring (0-100 fuzzy score, best match first)
-
-## Infrastructure
-
-- [x] PebbleDB format version logging on startup
-- [x] PebbleDB v2 upgrade (v2.1.4, all imports migrated to v2 path)
-- [x] Docker deployment (multi-stage build, docker-compose, Makefile targets)
-- [x] launchd/systemd service files (macOS plist + Linux systemd unit with install scripts)
-- [x] File watching / auto-scan for new audiobooks (fsnotify watcher with debounce)
-
-## Data Quality
-
-- [x] Metadata undo/history (MetadataChangeRecord, UI component)
-- [x] Directory-as-filepath bug in tag extraction — fixed, falls back to filename parsing
-- [x] Basic auth for web UI (constant-time compare, health/static exemptions)
+| # | Item | Details | Spec/Plan |
+|---|------|---------|-----------|
+| 13 | **OpenAI batch polling via app** | Universal batch poller deployed but gpt-5.4 hit token limits. Need to handle rate limiting gracefully. | [Diagnostics Spec](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
+| 14 | **Deferred iTunes updates** | Table/code deployed. Untested on production (requires M4B transcode + iTunes write-back disabled scenario). | [Deferred iTunes Spec](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md) |
+| 15 | **File count display** | Dashboard/Authors/Series pages show "N books (M files)" when counts differ. Verified working. | Completed |
+| 16 | **Path format customization UI** | Settings page should expose path_format and segment_title_format for user editing. | — |
 
 ---
 
-## 🔥 Active Work — March 10, 2026
+## ✅ Recently Completed (Session 12-13, Mar 14-19)
 
-### Metadata Search Improvements (Session 12)
+<details>
+<summary>49 commits — click to expand</summary>
 
-| Item | Status |
-| --- | --- |
-| Author/narrator/audiobook scoring tiebreaks in search results | ✅ Done |
-| Series search field in metadata dialogs (single + bulk) | ✅ Done |
-| Increase result limit from 10 to 50 | ✅ Done |
-| Open Library deprioritization (penalize sparse results) | ✅ Done |
-| Write-to-files toggle in bulk metadata search | ✅ Done |
-| Undo button in bulk metadata search (reverts last apply) | ✅ Done |
-| History recording for all metadata changes | ✅ Done |
-| Filter already-applied books toggle in bulk search | 🔧 In Progress |
-| `.envrc` for `GOEXPERIMENT=jsonv2` (direnv) | ✅ Done |
+### Data Cleanup
+- Cleaned library from 68K → 10.9K books (84% reduction)
+- Cleaned authors from 6K → 2.9K, series from 19K → 8.5K
+- Deleted 15K same-path duplicates, 5K same-format duplicates, 2.9K unmatched organizer copies
+- Merged 1.3K duplicate series, removed 7.3K empty series
+- Removed 2.3K empty authors
+- Stripped numeric title prefixes from 278 books
+- Removed fake numeric series assignments from 332 books
+- All ULID version groups converted to vg- style
+- All version groups have a primary version set
 
-### Tests Added (Session 12)
+### Features Built
+- **Diagnostics page** — ZIP export, AI batch analysis, 4 categories, results review panel
+- **External ID mapping** — migration 34, 97K PID mappings, merge/delete/tombstone support
+- **Files & History tab** — format-grouped trays, TagComparison with dropdown, ChangeLog timeline
+- **Background ISBN/ASIN enrichment** — after metadata apply
+- **Bulk batch-operations API** — per-item update/delete/restore
+- **Universal batch poller** — metadata tags on all batches, routes by type
+- **Deferred iTunes updates** — migration 33, post-transcode hook, auto-apply on sync
+- **File path history** — migration 35, records renames
+- **Genre field** — migration 36, stored from metadata fetch
+- **Copy-on-write backups** — hardlinks before tag writes, TTL cleanup task
+- **Revert buttons** in ChangeLog entries (DB + file revert)
 
-| Item | Status |
-| --- | --- |
-| `metadata_fetch_service_test.go` — 15 new scoring/search tests | ✅ Done |
-| `server_undo_test.go` — 7 undo + 3 write-back tests | ✅ Done |
-| `server_bulk_delete_test.go` — 15 bulk delete endpoint tests | ✅ Done |
-| Fix `MockStore` missing `GetAllSeriesBookCounts` | ✅ Done |
+### Bug Fixes
+- Metadata sync to library copies (stale data on tag write)
+- `books.file_path` updated after segment rename
+- iTunes files protected from `os.Rename` in apply pipeline
+- Soft-deleted list uncapped (was 500, now 10K)
+- Operation resume after server restart
+- Reconcile scan visible in operations UI
+- Operations list stable sort by created_at
+- Save to Files now renames + cleans empty dirs
+- Single-file books get virtual segment for rename
+- Single-file naming: `{title}.{ext}` not `{title} - 1/1.{ext}`
+- Tag extraction: album_artist > artist > composer priority
+- Honest write-back counting (no false "written" messages)
+- stripChapterFromTitle strips leading dashes
+- Search by author/narrator without title
+- Fetch metadata can't wipe title to Untitled
+- ISBN enrichment strict title matching
+- Read custom tags back (SERIES_INDEX, PUBLISHER, MVNM/MVIN)
+- Write ALL metadata to file tags (series, publisher, language, ISBN, description)
+- iTunes path removed from scanner import paths (prevented double import)
+- Purge protects books with iTunes PIDs
 
----
-
-## 🔥 P0 — UI & Metadata Overhaul (February 2026)
-
-See [UI & Metadata Overhaul Design](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) for full details.
-
-### Phase 1A: Fix Multiple Authors & AI Parse
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| Migration 22: backfill `book_authors`/`book_narrators` from `&`-delimited names | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
-| Route AI parse through AudiobookService (multi-author split, history, narrator join) | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
-| AI parse sends full folder path + existing metadata + file count (not just filename) | 🟢 | [Phase 1A](docs/plans/2026-02-28-phase1a-fix-multiple-authors.md) |
-
-### Phase 1B: Fix Fetch Metadata Matching
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| Penalize box sets/collections/omnibus in result scoring | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Precision+recall F1 scoring instead of word-overlap only | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Series position filter (reject mismatched positions) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Minimum quality threshold (reject scores below 0.35) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-| Rich metadata bonus (prefer results with description, cover, narrator) | 🟢 | [Phase 1B](docs/plans/2026-02-28-phase1b-fix-fetch-metadata-matching.md) |
-
-### Phase 1C: Fix History & Timestamps
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| `metadata_updated_at` column — only changes on metadata edits | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| `last_written_at` column — set when files are written | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| Change detection in `UpdateBook` (compare old vs new before updating timestamps) | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-| Field extractor loop records history entries for all manual edits | 🟢 | [Phase 1C](docs/plans/2026-02-28-phase1c-fix-history-and-timestamps.md) |
-
-### Phase 2: Save to Files
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| `POST /api/v1/audiobooks/:id/write-back` endpoint | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| Track number support in WriteMetadataToFile (M4B, MP3, FLAC) | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| Per-segment numbering: `001 - Title.mp3`, track X/Y tags | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-| "Save to Files" button with confirmation dialog | 🟢 | [Phase 2](docs/plans/2026-02-28-phase2-save-to-files-button.md) |
-
-### Phase 3: Multi-file Tab Layout
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| `GET /api/v1/audiobooks/:id/segments/:segmentId/tags` endpoint | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| FileSelector component (chips for ≤20 files, dropdown for >20) | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| Scoped Info/Tags/Compare tabs for selected file | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-| Fix Tags tab: show actual embedded media info (codec, bitrate, etc.) for single-file books | 🟢 | [Phase 3](docs/plans/2026-02-28-phase3-multifile-tab-layout.md) |
-
-### Phase 4B: Manual Metadata Matching UI
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| Show top 10 scored results to user, let them pick or search | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
-| Search from UI (title/author/ISBN) | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
-| "No match" option that marks book as manually reviewed | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
-| Field-level apply (Advanced mode with checkboxes) | 🟢 | [Phase 4B](docs/plans/2026-02-28-phase4b-manual-metadata-matching.md) |
-
-### Phase 4: Multi-file Metadata Read
-
-| Item | Status | Plan |
-| --- | --- | --- |
-| Folder path parser (author/series/title/narrator from directory hierarchy) | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
-| Combined metadata assembly (folder + first file tags + filename pattern) | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
-| Scanner integration for generic part-numbered files | 🟢 | [Phase 4](docs/plans/2026-02-28-phase4-multifile-metadata-read.md) |
-
----
-
-## 🐛 Active Bugs
-
-| Bug | Status | Plan |
-| --- | --- | --- |
-| ~~Directory-as-filepath in tag extraction (metadata.go:105)~~ | ✅ Fixed 2026-02-26 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| ~~Search bar broken: after no results, typing new text and hitting Enter doesn't re-search~~ | ✅ Fixed 2026-03-01 | SearchBar was hidden by empty state |
-| ~~BookDetail UX overhaul: button bar, merged tabs, mismatch readability, resolve buttons~~ | ✅ Fixed 2026-03-01 | [Design](docs/plans/2026-03-01-bookdetail-ux-overhaul-design.md) |
-| ~~Author display showing author_id instead of name~~ | ✅ Fixed 2026-03-01 | Removed author_id from fallback chain |
-| ~~Cover art not reloading after metadata fetch~~ | ✅ Fixed 2026-03-01 | Reset coverError on cover_url change |
-| ~~Metadata change history not recording for manual edits~~ | ✅ Fixed 2026-03-01 | Added recordChangeHistory in updateAudiobook |
-| ~~App.test.tsx missing getAppVersion mock~~ | ✅ Fixed 2026-03-01 | Pre-existing test gap |
-| ~~Library save/batch-save not calling API (local-only)~~ | ✅ Fixed 2026-03-01 | Wired to api.updateBook |
-| ~~FileManager all stubs (add/remove/scan/browse not calling API)~~ | ✅ Fixed 2026-03-01 | Wired to real API calls |
-| ~~Silent error swallowing in Settings, OpenLibraryDumps~~ | ✅ Fixed 2026-03-01 | Added console.error logging |
-| ~~Library fetch/AI-parse catch blocks missing toast~~ | ✅ Fixed 2026-03-01 | Added error toast notifications |
-| ~~Stale "Compare tab" references after rename to "Tags"~~ | ✅ Fixed 2026-03-01 | Updated comments and test vars |
-
-Previously fixed:
-
-| Bug | Status | Plan |
-| --- | --- | --- |
-| ~~Import path `total_size` returning negative values~~ | ✅ Fixed 2026-02-01 | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| ~~Corrupted organize paths with unresolved placeholders~~ | ✅ Fixed 2026-02-01 | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-
----
-
-## 🔮 Post-MVP — Feature Backlog
-
-### iTunes Feature Parity — Metadata
-
-| Item | Plan |
-| --- | --- |
-| Genre/category taxonomy | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Rating (1-5 stars) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Copyright field | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Explicit/clean flag | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Chapter marks display (M4B/MP4) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Per-chapter artwork | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Grouping field (link related books beyond series) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Sort fields (sort-title, sort-author, sort-narrator) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Comments/notes field | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-
-### iTunes Feature Parity — Library Management
-
-| Item | Plan |
-| --- | --- |
-| Smart collections / saved filters | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Bulk metadata editing (multi-select) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Duplicate detection | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Missing file detection | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Storage usage dashboard | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Column-customizable list view (iTunes-style sortable table) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Keyboard navigation (arrow keys, spacebar) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Import/export library metadata (backup/restore without files) | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Mark as read/unread status | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Reading progress tracking | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Improved cover art display/editing | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Search with filters/facets | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-| Sorting with more fields and saved orders | [Overhaul](docs/plans/2026-02-28-ui-metadata-overhaul-design.md) |
-
-### Other
-
-| Item | Plan |
-| --- | --- |
-| Anthology detection & review queue | [Anthology Handling](docs/plans/2026-01-31-anthology-handling-design.md) |
-| ~~iTunes ITL binary read/write (Go port of titl)~~ ✅ Parser, location updater, playlists, track insertion | [iTunes Integration](docs/plans/itunes-integration.md) |
-| ~~iTunes ITL write-back in organize workflow~~ ✅ Auto-updates .itl after file moves, with backup/validate/restore | [iTunes Integration](docs/plans/itunes-integration.md) |
-| iTunes bidirectional sync (playcount management + sync) | [iTunes Integration](docs/plans/itunes-integration.md) |
-| Release group & provenance tracking | [Metadata System](docs/plans/metadata-system.md) |
-| Download client integration (Deluge, SABnzbd, qBittorrent) | [Download Clients](docs/plans/download-client-integration.md) |
-| Advanced naming templates (Sonarr-style) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-| **MP3→chapterized M4B conversion (CRITICAL post-launch)** | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-| Audio transcoding (general, chapters, cover art) | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-| Web download & export | [Library Org & Transcoding](docs/plans/library-organization-and-transcoding.md) |
-| Security hardening (CSP, path traversal, audit log) | [Security & Multi-User](docs/plans/security-and-multiuser.md) |
-| Multi-user architecture (auth, RBAC, SSL/TLS) | [Security & Multi-User](docs/plans/security-and-multiuser.md) |
-| API enhancements (PATCH, webhooks, rate limiting, ETag) | [API & Integrations](docs/plans/api-and-ecosystem-integrations.md) |
-| Ecosystem integrations (Calibre, OPDS, Plex/Jellyfin) | [API & Integrations](docs/plans/api-and-ecosystem-integrations.md) |
-| Database quality (dedup, orphan detection, full-text search) | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| Backup enhancements (incremental, scheduled, integrity) | [Database & Data Quality](docs/plans/database-and-data-quality.md) |
-| Observability (metrics endpoint, health checks, error aggregation) | [Observability](docs/plans/observability-and-monitoring.md) |
-| Performance & reliability (resume scans, circuit breakers, retry) | [Performance & Reliability](docs/plans/performance-and-reliability.md) |
-| Frontend components (timeline, quality chart, folder tree, log tail) | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Accessibility (screen readers, high contrast, focus management) | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Internationalization (i18n) | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Mobile / PWA | [Frontend & UX](docs/plans/frontend-ux-and-accessibility.md) |
-| Docker multi-arch, Helm chart, binary distribution | [Release & DevOps](docs/plans/release-packaging-and-devops.md) |
-| Anthology configurable queue behavior (very low priority) | [Anthology Handling](docs/plans/2026-01-31-anthology-handling-design.md) |
-
----
-
-## 🤖 CI/CD Workflow Actionization
-
-Managed via background agent queue. See [Release & DevOps](docs/plans/release-packaging-and-devops.md) for details.
-
-1. Plan security workflow actionization
-2. Audit remaining workflows for action conversion
-3. Validate new composite actions CI/CD pipelines
-4. Verify action tags and releases
-5. Update reusable workflows to use new actions
+</details>
