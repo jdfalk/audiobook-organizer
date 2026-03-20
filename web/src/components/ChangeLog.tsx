@@ -1,5 +1,5 @@
 // file: web/src/components/ChangeLog.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 00f575de-ecea-45b7-9aa5-d6dbbc3f21f6
 
 import { useCallback, useEffect, useState } from 'react';
@@ -155,7 +155,7 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
                 }}
                 onClick={() => onCompareSnapshot?.(entry.timestamp)}
               >
-                Compare &rarr;
+                Compare snapshot &rarr;
               </Typography>
             )}
             {idx > 0 && (entry.type === 'metadata_apply' || entry.type === 'tag_write' || entry.type === 'rename') && (

@@ -1,10 +1,11 @@
 // file: internal/server/isbn_enrichment_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5b7766bc-1f00-4f32-b8ca-8cb0e815c9a1
 
 package server
 
 import (
+	"context"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -170,10 +171,8 @@ func TestEnrichBookISBN_StrictTitleMismatchSkips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// "Dune" is contained in "Dune Messiah", so isStrictTitleMatch returns true.
-	// This is by design — the match function allows substring containment.
-	if !found {
-		t.Log("substring containment matched as expected")
+	if found {
+		t.Fatal("expected enrichment to skip weak prefix match")
 	}
 }
 
@@ -185,8 +184,9 @@ func TestIsStrictTitleMatch(t *testing.T) {
 		{"Dune", "Dune", true},
 		{"dune", "DUNE", true},
 		{"  Dune  ", "Dune", true},
-		{"The Great Gatsby", "Great Gatsby", true},  // substring
-		{"Gatsby", "The Great Gatsby", true},         // reverse substring
+		{"Shadows of Self", "Shadows of Self: A Mistborn Novel", true},
+		{"Dune", "Dune Messiah", false},
+		{"Gatsby", "The Great Gatsby", false},
 		{"Completely Different", "Unrelated Book", false},
 	}
 	for _, tt := range tests {
@@ -194,5 +194,58 @@ func TestIsStrictTitleMatch(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("isStrictTitleMatch(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
 		}
+	}
+}
+
+func TestEnrichMissingISBNs_RespectsLimit(t *testing.T) {
+	checkedIDs := make([]string, 0)
+	books := []database.Book{
+		{ID: "book-1", Title: "One"},
+		{ID: "book-2", Title: "Two"},
+		{ID: "book-3", Title: "Three"},
+	}
+	mock := &database.MockStore{
+		GetAllBooksFunc: func(limit, offset int) ([]database.Book, error) {
+			if offset > 0 {
+				return nil, nil
+			}
+			return books, nil
+		},
+		GetBookByIDFunc: func(id string) (*database.Book, error) {
+			for i := range books {
+				if books[i].ID == id {
+					book := books[i]
+					return &book, nil
+				}
+			}
+			return nil, nil
+		},
+		UpdateBookFunc: func(id string, book *database.Book) (*database.Book, error) {
+			checkedIDs = append(checkedIDs, id)
+			return book, nil
+		},
+	}
+	src := &stubSource{
+		name: "Open Library",
+		results: []metadata.BookMetadata{
+			{Title: "One", ISBN: "9780000000001"},
+			{Title: "Two", ISBN: "9780000000002"},
+			{Title: "Three", ISBN: "9780000000003"},
+		},
+	}
+	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+
+	checked, updated, err := svc.EnrichMissingISBNs(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if checked != 2 {
+		t.Fatalf("expected 2 checked books, got %d", checked)
+	}
+	if updated != 2 {
+		t.Fatalf("expected 2 updated books, got %d", updated)
+	}
+	if len(checkedIDs) != 2 {
+		t.Fatalf("expected 2 updated IDs, got %d", len(checkedIDs))
 	}
 }

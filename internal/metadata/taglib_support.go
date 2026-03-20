@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 // TagLib native writer support (default). Falls back to CLI tools on failure.
@@ -45,6 +45,9 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		// Prefer ALBUMARTIST if we have a single artist (semantic for audiobooks narrator/author)
 		tags[taglib.AlbumArtist] = []string{artist}
 		tags["ARTIST"] = []string{artist}
+		// Overwrite legacy composer values so stale narrator data does not win
+		// when metadata is extracted later.
+		tags[taglib.Composer] = []string{artist}
 	}
 	if album, ok := metadata["album"].(string); ok && album != "" {
 		tags[taglib.Album] = []string{album}
@@ -78,6 +81,11 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	if series, ok := metadata["series"].(string); ok && series != "" {
 		tags["SERIES"] = []string{series}
 		tags["MVNM"] = []string{series} // MP4 movement name (used by some players for series)
+		if _, hasAlbum := metadata["album"]; !hasAlbum {
+			// Legacy files sometimes misuse ALBUM for series; clear it when we are
+			// only updating the dedicated series field.
+			tags[taglib.Album] = []string{""}
+		}
 	}
 	if si, ok := metadata["series_index"].(int); ok && si > 0 {
 		tags["SERIES_INDEX"] = []string{fmt.Sprintf("%d", si)}

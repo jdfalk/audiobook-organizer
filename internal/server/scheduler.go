@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -39,11 +39,11 @@ type TaskDefinition struct {
 
 // TaskInfo is the API-facing view of a registered task.
 type TaskInfo struct {
-	Name            string  `json:"name"`
-	Description     string  `json:"description"`
-	Category        string  `json:"category"`
-	Enabled         bool    `json:"enabled"`
-	IntervalMinutes int     `json:"interval_minutes"`
+	Name                   string  `json:"name"`
+	Description            string  `json:"description"`
+	Category               string  `json:"category"`
+	Enabled                bool    `json:"enabled"`
+	IntervalMinutes        int     `json:"interval_minutes"`
 	RunOnStartup           bool    `json:"run_on_startup"`
 	RunInMaintenanceWindow bool    `json:"run_in_maintenance_window"`
 	LastRun                *string `json:"last_run,omitempty"`
@@ -74,6 +74,7 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 		"dedup_refresh",
 		"author_split_scan",
 		"series_prune",
+		"isbn_enrichment",
 		"tombstone_cleanup",
 		"purge_deleted",
 		"purge_old_logs",
@@ -255,6 +256,33 @@ func (ts *TaskScheduler) registerAllTasks() {
 		},
 		RunOnStart:             func() bool { return config.AppConfig.ScheduledSeriesPruneOnStartup },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowSeriesPrune },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "isbn_enrichment",
+		Description: "Enrich missing ISBN identifiers from external metadata sources",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("isbn-enrichment", func(ctx context.Context, progress operations.ProgressReporter) error {
+				if s.metadataFetchService == nil || s.metadataFetchService.isbnEnrichment == nil {
+					_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
+					return nil
+				}
+				_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
+				checked, updated, err := s.metadataFetchService.isbnEnrichment.EnrichMissingISBNs(ctx, 100)
+				if err != nil {
+					return err
+				}
+				msg := fmt.Sprintf("ISBN enrichment complete: checked %d candidate book(s), updated %d", checked, updated)
+				_ = progress.Log("info", msg, nil)
+				_ = progress.UpdateProgress(100, 100, msg)
+				return nil
+			})
+		},
+		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.isbnEnrichment != nil },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -1193,11 +1221,12 @@ func (ts *TaskScheduler) isTaskRunning(name string) bool {
 	opTypeMap := map[string]string{
 		"library_scan": "scan", "library_organize": "organize",
 		"dedup_refresh": "author-dedup-scan", "series_prune": "series-prune",
+		"isbn_enrichment":   "isbn-enrichment",
 		"author_split_scan": "author-split-scan", "db_optimize": "db-optimize",
 		"purge_deleted": "purge-deleted", "tombstone_cleanup": "tombstone-cleanup",
 		"reconcile_scan": "reconcile_scan", "purge_old_logs": "purge_old_logs",
 		"cleanup_old_backups": "cleanup-old-backups",
-		"metadata_refresh": "metadata-refresh",
+		"metadata_refresh":    "metadata-refresh",
 	}
 	opType, ok := opTypeMap[name]
 	if !ok {

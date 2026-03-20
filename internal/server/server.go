@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.124.0
+// version: 1.125.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -8,16 +8,16 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"hash/crc32"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,13 +26,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
-	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
+	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -381,35 +381,69 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 	return resp
 }
 
-func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonMeta *metadata.Metadata) map[string]database.MetadataProvenanceEntry {
+func buildComparisonValuesFromMetadata(comparisonMeta *metadata.Metadata) map[string]any {
+	if comparisonMeta == nil {
+		return nil
+	}
+
+	compMap := map[string]any{
+		"title":       nonEmpty(comparisonMeta.Title),
+		"author_name": nonEmpty(comparisonMeta.Artist),
+		"narrator":    nonEmpty(comparisonMeta.Narrator),
+		"series_name": nonEmpty(comparisonMeta.Series),
+		"publisher":   nonEmpty(comparisonMeta.Publisher),
+		"language":    nonEmpty(comparisonMeta.Language),
+		"isbn10":      nonEmpty(comparisonMeta.ISBN10),
+		"isbn13":      nonEmpty(comparisonMeta.ISBN13),
+		"genre":       nonEmpty(comparisonMeta.Genre),
+		"album":       nonEmpty(comparisonMeta.Album),
+	}
+	if comparisonMeta.Year > 0 {
+		compMap["audiobook_release_year"] = comparisonMeta.Year
+	}
+	if comparisonMeta.SeriesIndex > 0 {
+		compMap["series_index"] = comparisonMeta.SeriesIndex
+	}
+	return compMap
+}
+
+func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName string) map[string]any {
+	if book == nil {
+		return nil
+	}
+
+	compMap := map[string]any{
+		"title":       nonEmpty(book.Title),
+		"author_name": nonEmpty(authorName),
+		"narrator":    nonEmpty(ptrStr(book.Narrator)),
+		"series_name": nonEmpty(seriesName),
+		"publisher":   nonEmpty(ptrStr(book.Publisher)),
+		"language":    nonEmpty(ptrStr(book.Language)),
+		"isbn10":      nonEmpty(ptrStr(book.ISBN10)),
+		"isbn13":      nonEmpty(ptrStr(book.ISBN13)),
+		"genre":       nonEmpty(ptrStr(book.Genre)),
+		"album":       nonEmpty(book.Title),
+		"asin":        nonEmpty(ptrStr(book.ASIN)),
+		"edition":     nonEmpty(ptrStr(book.Edition)),
+	}
+	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
+		compMap["audiobook_release_year"] = *book.AudiobookReleaseYear
+	}
+	if book.SeriesSequence != nil && *book.SeriesSequence > 0 {
+		compMap["series_index"] = *book.SeriesSequence
+	}
+	if book.PrintYear != nil && *book.PrintYear > 0 {
+		compMap["print_year"] = *book.PrintYear
+	}
+	return compMap
+}
+
+func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonValues map[string]any) map[string]database.MetadataProvenanceEntry {
 	if state == nil {
 		state = map[string]metadataFieldState{}
 	}
 
 	provenance := map[string]database.MetadataProvenanceEntry{}
-
-	// Build comparison lookup map if comparison metadata is provided
-	var compMap map[string]any
-	if comparisonMeta != nil {
-		compMap = map[string]any{
-			"title":                  nonEmpty(comparisonMeta.Title),
-			"author_name":           nonEmpty(comparisonMeta.Artist),
-			"narrator":              nonEmpty(comparisonMeta.Narrator),
-			"series_name":           nonEmpty(comparisonMeta.Series),
-			"publisher":             nonEmpty(comparisonMeta.Publisher),
-			"language":              nonEmpty(comparisonMeta.Language),
-			"isbn10":                nonEmpty(comparisonMeta.ISBN10),
-			"isbn13":                nonEmpty(comparisonMeta.ISBN13),
-			"genre":                 nonEmpty(comparisonMeta.Genre),
-			"album":                 nonEmpty(comparisonMeta.Album),
-		}
-		if comparisonMeta.Year > 0 {
-			compMap["audiobook_release_year"] = comparisonMeta.Year
-		}
-		if comparisonMeta.SeriesIndex > 0 {
-			compMap["series_index"] = comparisonMeta.SeriesIndex
-		}
-	}
 
 	addEntry := func(field string, fileValue any, storedValue any) {
 		entryState := state[field]
@@ -447,8 +481,8 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 			UpdatedAt:       updatedAt,
 		}
 
-		if compMap != nil {
-			if cv, ok := compMap[field]; ok {
+		if comparisonValues != nil {
+			if cv, ok := comparisonValues[field]; ok {
 				entry.ComparisonValue = cv
 			}
 		}
@@ -1248,6 +1282,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/extract-track-info", s.extractTrackInfo)
 			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
+			protected.POST("/audiobooks/batch-write-back", s.batchWriteBackAudiobooks)
 			protected.POST("/audiobooks/batch-operations", s.batchOperations)
 
 			// Metadata change history
@@ -2817,7 +2852,14 @@ func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 func (s *Server) getAudiobookTags(c *gin.Context) {
 	id := c.Param("id")
 	compareID := c.Query("compare_id")
-	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id, compareID)
+	snapshotTS := c.Query("snapshot_ts")
+	if snapshotTS != "" {
+		if _, err := time.Parse(time.RFC3339Nano, snapshotTS); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid snapshot_ts format, use RFC3339Nano"})
+			return
+		}
+	}
+	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id, compareID, snapshotTS)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -3050,6 +3092,67 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
+	var req struct {
+		BookIDs []string `json:"book_ids"`
+		Rename  bool     `json:"rename"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.BookIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids is required"})
+		return
+	}
+
+	type batchWriteBackError struct {
+		BookID string `json:"book_id"`
+		Error  string `json:"error"`
+	}
+
+	written := 0
+	writtenFiles := 0
+	renamed := 0
+	failed := 0
+	errors := make([]batchWriteBackError, 0)
+
+	for _, id := range req.BookIDs {
+		book, err := database.GlobalStore.GetBookByID(id)
+		if err != nil || book == nil {
+			failed++
+			errors = append(errors, batchWriteBackError{BookID: id, Error: "audiobook not found"})
+			continue
+		}
+
+		if req.Rename {
+			if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
+				errors = append(errors, batchWriteBackError{BookID: id, Error: fmt.Sprintf("rename failed: %v", err)})
+			} else {
+				renamed++
+			}
+		}
+
+		count, err := s.metadataFetchService.WriteBackMetadataForBook(id)
+		if err != nil {
+			failed++
+			errors = append(errors, batchWriteBackError{BookID: id, Error: err.Error()})
+			continue
+		}
+
+		written++
+		writtenFiles += count
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"written":       written,
+		"written_files": writtenFiles,
+		"renamed":       renamed,
+		"failed":        failed,
+		"errors":        errors,
+	})
 }
 
 func (s *Server) batchOperations(c *gin.Context) {
@@ -4422,7 +4525,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 				Series:         m.Series,
 				SeriesPosition: m.SeriesPosition,
 				CoverURL:       m.CoverURL,
-				ISBN:            m.ISBN,
+				ISBN:           m.ISBN,
 			}
 			// For series validation, prioritize results that have series info
 			if req.Type == "series" && m.Series == "" {
@@ -4562,11 +4665,11 @@ type seriesPruneResult struct {
 
 // seriesPrunePreviewGroup describes a duplicate group or orphan for the preview endpoint.
 type seriesPrunePreviewGroup struct {
-	Name       string   `json:"name"`
+	Name        string `json:"name"`
 	CanonicalID int    `json:"canonical_id"`
-	MergeIDs   []int   `json:"merge_ids"`
-	BookCount  int     `json:"book_count"`
-	Type       string  `json:"type"` // "duplicate" or "orphan"
+	MergeIDs    []int  `json:"merge_ids"`
+	BookCount   int    `json:"book_count"`
+	Type        string `json:"type"` // "duplicate" or "orphan"
 }
 
 // seriesPrunePreviewResult holds the dry-run result.
@@ -7492,16 +7595,16 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		}
 
 		newBook := &database.Book{
-			Title:    title,
-			AuthorID: sourceBook.AuthorID,
-			SeriesID: sourceBook.SeriesID,
-			FilePath: seg.FilePath,
-			Format:   seg.Format,
-			Narrator: sourceBook.Narrator,
-			Language: sourceBook.Language,
+			Title:     title,
+			AuthorID:  sourceBook.AuthorID,
+			SeriesID:  sourceBook.SeriesID,
+			FilePath:  seg.FilePath,
+			Format:    seg.Format,
+			Narrator:  sourceBook.Narrator,
+			Language:  sourceBook.Language,
 			Publisher: sourceBook.Publisher,
-			Duration: &seg.DurationSec,
-			FileSize: &seg.SizeBytes,
+			Duration:  &seg.DurationSec,
+			FileSize:  &seg.SizeBytes,
 		}
 
 		created, createErr := database.GlobalStore.CreateBook(newBook)
@@ -8577,7 +8680,6 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 	_ = progress.UpdateProgress(100, 100, fmt.Sprintf("AI discovery complete: %d groups found", len(groups)))
 	return nil
 }
-
 
 // Author alias handlers
 

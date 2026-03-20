@@ -1,10 +1,11 @@
 // file: internal/server/isbn_enrichment.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
 package server
 
 import (
+	"context"
 	"log"
 	"strings"
 
@@ -92,6 +93,58 @@ func (s *ISBNEnrichmentService) EnrichBookISBN(bookID string) (bool, error) {
 	return updated, nil
 }
 
+// EnrichMissingISBNs scans books missing ISBN data and enriches up to limit of them.
+// It returns the number of candidate books checked and the number updated.
+func (s *ISBNEnrichmentService) EnrichMissingISBNs(ctx context.Context, limit int) (int, int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	const pageSize = 250
+	checked := 0
+	updated := 0
+
+	for offset := 0; checked < limit; offset += pageSize {
+		if ctx != nil && ctx.Err() != nil {
+			return checked, updated, ctx.Err()
+		}
+
+		books, err := s.db.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return checked, updated, err
+		}
+		if len(books) == 0 {
+			break
+		}
+
+		for i := range books {
+			if ctx != nil && ctx.Err() != nil {
+				return checked, updated, ctx.Err()
+			}
+			if !needsIdentifierEnrichment(&books[i]) {
+				continue
+			}
+
+			checked++
+			found, err := s.EnrichBookISBN(books[i].ID)
+			if err != nil {
+				log.Printf("[WARN] ISBN enrichment failed for %s during batch scan: %v", books[i].ID, err)
+			} else if found {
+				updated++
+			}
+			if checked >= limit {
+				break
+			}
+		}
+
+		if len(books) < pageSize {
+			break
+		}
+	}
+
+	return checked, updated, nil
+}
+
 // resolveAuthor returns the author name for the book, or "" if unknown.
 func (s *ISBNEnrichmentService) resolveAuthor(book *database.Book) string {
 	if book.AuthorID == nil {
@@ -102,6 +155,14 @@ func (s *ISBNEnrichmentService) resolveAuthor(book *database.Book) string {
 		return ""
 	}
 	return a.Name
+}
+
+func needsIdentifierEnrichment(book *database.Book) bool {
+	if book == nil {
+		return false
+	}
+	return (book.ISBN10 == nil || strings.TrimSpace(*book.ISBN10) == "") &&
+		(book.ISBN13 == nil || strings.TrimSpace(*book.ISBN13) == "")
 }
 
 // searchSourceForISBN queries a single metadata source and returns the first
@@ -160,6 +221,21 @@ func isStrictTitleMatch(dbTitle, searchTitle string) bool {
 	}
 	// One is a prefix of the other (e.g., "Shadows of Self" matches "Shadows of Self: A Mistborn Novel")
 	if strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+		shorterText := a
+		longerText := b
+		if len(shorterText) > len(longerText) {
+			shorterText, longerText = longerText, shorterText
+		}
+		remainder := strings.TrimSpace(strings.TrimPrefix(longerText, shorterText))
+		if remainder == "" {
+			return true
+		}
+		if strings.HasPrefix(remainder, ":") ||
+			strings.HasPrefix(remainder, "-") ||
+			strings.HasPrefix(remainder, "—") {
+			return true
+		}
+
 		// But only if the shorter one is at least 60% of the longer one's length
 		shorter := len(a)
 		longer := len(b)
