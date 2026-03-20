@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.41.0
+// version: 1.42.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -251,6 +251,11 @@ export const Library = () => {
   const [bulkOrganizeInProgress, setBulkOrganizeInProgress] = useState(false);
   const [bulkOrganizeProgress, setBulkOrganizeProgress] =
     useState<BulkActionProgress | null>(null);
+  const [bulkWriteBackDialogOpen, setBulkWriteBackDialogOpen] = useState(false);
+  const [bulkWriteBackInProgress, setBulkWriteBackInProgress] = useState(false);
+  const [bulkWriteBackRename, setBulkWriteBackRename] = useState(false);
+  const [bulkWriteBackResult, setBulkWriteBackResult] =
+    useState<api.BatchWriteBackResponse | null>(null);
   const [duplicateDialog, setDuplicateDialog] =
     useState<DuplicateDialogState | null>(null);
   const duplicateResolverRef =
@@ -1165,6 +1170,54 @@ export const Library = () => {
       return;
     }
     bulkFetchCancelRef.current = true;
+  };
+
+  const handleBulkWriteBack = async () => {
+    const activeBooks = selectedAudiobooks.filter(
+      (book) => !book.marked_for_deletion
+    );
+    if (activeBooks.length === 0) {
+      toast('Select active audiobooks to save to files.', 'info');
+      return;
+    }
+
+    setBulkWriteBackInProgress(true);
+    try {
+      const result = await api.batchWriteBackMetadata(
+        activeBooks.map((book) => book.id),
+        bulkWriteBackRename
+      );
+      setBulkWriteBackResult(result);
+      if (result.failed > 0) {
+        toast(
+          `Saved ${result.written} books to files, ${result.failed} failed.`,
+          'warning'
+        );
+      } else {
+        const renameNote =
+          result.renamed > 0 ? ` and renamed ${result.renamed}` : '';
+        toast(
+          `Saved ${result.written} books to files${renameNote}.`,
+          'success'
+        );
+        setSelectedAudiobooks([]);
+      }
+      await loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to batch write metadata:', error);
+      toast('Failed to save selected books to files.', 'error');
+    } finally {
+      setBulkWriteBackInProgress(false);
+    }
+  };
+
+  const handleCloseBulkWriteBackDialog = () => {
+    if (bulkWriteBackInProgress) {
+      return;
+    }
+    setBulkWriteBackDialogOpen(false);
+    setBulkWriteBackResult(null);
+    setBulkWriteBackRename(false);
   };
 
   const requestDuplicateAction = (
@@ -2131,6 +2184,32 @@ export const Library = () => {
                   </Tooltip>
                   <Tooltip
                     title={
+                      !selectedHasActive
+                        ? hasSelection
+                          ? 'Select active books first'
+                          : 'Select books first'
+                        : ''
+                    }
+                    disableHoverListener={selectedHasActive}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => {
+                          setBulkWriteBackResult(null);
+                          setBulkWriteBackRename(false);
+                          setBulkWriteBackDialogOpen(true);
+                        }}
+                        disabled={!selectedHasActive}
+                      >
+                        Save to Files
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
                       !selectedHasImport
                         ? hasSelection
                           ? 'Select scanned books (not yet imported) first'
@@ -2504,6 +2583,74 @@ export const Library = () => {
               disabled={bulkOrganizeInProgress || !selectedHasImport}
             >
               {bulkOrganizeInProgress ? 'Organizing…' : 'Organize Selected'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={bulkWriteBackDialogOpen}
+          onClose={handleCloseBulkWriteBackDialog}
+        >
+          <DialogTitle>Save Selected to Files</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              Write current database metadata to {selectedAudiobooks.length}{' '}
+              selected books.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={bulkWriteBackRename}
+                  onChange={(event) => setBulkWriteBackRename(event.target.checked)}
+                  disabled={bulkWriteBackInProgress}
+                />
+              }
+              label="Rename files after write-back"
+            />
+            {bulkWriteBackResult && (
+              <Box sx={{ mt: 2 }}>
+                <Alert
+                  severity={bulkWriteBackResult.failed > 0 ? 'warning' : 'success'}
+                  sx={{ mb: 2 }}
+                >
+                  Wrote {bulkWriteBackResult.written} books to files, updated{' '}
+                  {bulkWriteBackResult.written_files} file
+                  {bulkWriteBackResult.written_files === 1 ? '' : 's'}
+                  {bulkWriteBackResult.renamed > 0
+                    ? `, renamed ${bulkWriteBackResult.renamed}`
+                    : ''}
+                  {bulkWriteBackResult.failed > 0
+                    ? `, ${bulkWriteBackResult.failed} failed`
+                    : ''}.
+                </Alert>
+                {bulkWriteBackResult.errors.length > 0 && (
+                  <List dense>
+                    {bulkWriteBackResult.errors.map((error) => (
+                      <ListItem key={`${error.book_id}-${error.error}`}>
+                        <ListItemText
+                          primary={error.book_id}
+                          secondary={error.error}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={handleCloseBulkWriteBackDialog}
+              disabled={bulkWriteBackInProgress}
+            >
+              Close
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleBulkWriteBack}
+              disabled={bulkWriteBackInProgress || !selectedHasActive}
+            >
+              {bulkWriteBackInProgress ? 'Saving…' : 'Save to Files'}
             </Button>
           </DialogActions>
         </Dialog>

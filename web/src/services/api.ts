@@ -2064,6 +2064,19 @@ export interface WriteBackMetadataResponse {
   written_count: number;
 }
 
+export interface BatchWriteBackError {
+  book_id: string;
+  error: string;
+}
+
+export interface BatchWriteBackResponse {
+  written: number;
+  written_files: number;
+  renamed: number;
+  failed: number;
+  errors: BatchWriteBackError[];
+}
+
 export async function writeBackMetadata(
   bookId: string,
   segmentIds?: string[]
@@ -2077,6 +2090,21 @@ export async function writeBackMetadata(
     `${API_BASE}/audiobooks/${bookId}/write-back`,
     options
   );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to write metadata to files');
+  }
+  return response.json();
+}
+
+export async function batchWriteBackMetadata(
+  bookIds: string[],
+  rename = false
+): Promise<BatchWriteBackResponse> {
+  const response = await fetch(`${API_BASE}/audiobooks/batch-write-back`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds, rename }),
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
   }
