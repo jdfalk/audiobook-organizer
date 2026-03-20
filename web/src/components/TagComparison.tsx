@@ -1,14 +1,15 @@
 // file: web/src/components/TagComparison.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: cfed2692-76f6-47b0-bc84-cc2a4075e554
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
   Chip,
   Collapse,
   FormControl,
+  IconButton,
   InputLabel,
   LinearProgress,
   MenuItem,
@@ -19,8 +20,11 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff.js';
+import RestoreIcon from '@mui/icons-material/Restore.js';
 import type { Book, BookTags, TagSourceValues } from '../services/api';
 import * as api from '../services/api';
 
@@ -51,6 +55,12 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
   const [loading, setLoading] = useState(false);
   const [compareId, setCompareId] = useState<string>('');
   const [expanded, setExpanded] = useState(false);
+  const [hiddenTags, setHiddenTags] = useState<Set<string>>(new Set());
+  const [colWidths, setColWidths] = useState<number[]>([180, 0, 0, 0]); // tag, file, db, comparison; 0 = flex
+  const resizingCol = useRef<number | null>(null);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+  const tableRef = useRef<HTMLTableElement | null>(null);
 
   const snapshotComparisonActive = Boolean(snapshotTimestamp) && compareId === '';
 
@@ -88,6 +98,11 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
     return Object.entries(tags.tags);
   }, [tags]);
 
+  const visibleTagEntries = useMemo(
+    () => tagEntries.filter(([name]) => !hiddenTags.has(name)),
+    [tagEntries, hiddenTags]
+  );
+
   /** Check which key tags are present (have a non-empty file_value) */
   const keyTagStatus = useMemo(() => {
     const status: Record<string, boolean> = {};
@@ -111,21 +126,17 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
     const storedVal = entry.stored_value != null ? String(entry.stored_value) : '';
 
     if (hasComparison) {
-      // comparison_value comes from the API when compare_id is set
       const compVal = (entry as TagSourceValues & { comparison_value?: string | number | boolean | null }).comparison_value;
       const compStr = compVal != null ? String(compVal) : '';
 
       if (compStr && fileVal && compStr !== fileVal) {
-        // Differs from file value - amber background
         return { bgcolor: '#1a1500' };
       }
       if (fileVal && !compStr) {
-        // Present here but missing in comparison - green background
         return { bgcolor: '#001a00' };
       }
     }
 
-    // No comparison mode: highlight file vs stored diffs
     if (fileVal && storedVal && fileVal !== storedVal) {
       return { bgcolor: 'warning.900' };
     }
@@ -137,7 +148,7 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
     const compVal = (entry as TagSourceValues & { comparison_value?: string | number | boolean | null }).comparison_value;
     const compStr = compVal != null ? String(compVal) : '';
     if (compStr && fileVal && compStr !== fileVal) {
-      return '#ef5350'; // Red for differing comparison values
+      return '#ef5350';
     }
     return undefined;
   };
@@ -146,9 +157,70 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
     const fileVal = entry.file_value != null ? String(entry.file_value) : '';
     const storedVal = entry.stored_value != null ? String(entry.stored_value) : '';
     if (storedVal && !fileVal) {
-      return '#4caf50'; // Green for DB values not in file
+      return '#4caf50';
     }
     return undefined;
+  };
+
+  // Column resize handlers
+  const handleResizeStart = (colIndex: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingCol.current = colIndex;
+    resizeStartX.current = e.clientX;
+
+    // Measure actual column width from DOM
+    if (tableRef.current) {
+      const headerCells = tableRef.current.querySelectorAll('thead th');
+      if (headerCells[colIndex]) {
+        resizeStartWidth.current = headerCells[colIndex].getBoundingClientRect().width;
+      }
+    }
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (resizingCol.current === null) return;
+      const delta = ev.clientX - resizeStartX.current;
+      const newWidth = Math.max(60, resizeStartWidth.current + delta);
+      setColWidths((prev) => {
+        const next = [...prev];
+        next[resizingCol.current!] = newWidth;
+        return next;
+      });
+    };
+
+    const handleMouseUp = () => {
+      resizingCol.current = null;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const resizeHandle = (colIndex: number) => (
+    <Box
+      sx={{
+        position: 'absolute',
+        right: -3,
+        top: 0,
+        bottom: 0,
+        width: 6,
+        cursor: 'col-resize',
+        zIndex: 1,
+        '&:hover': { bgcolor: 'primary.main', opacity: 0.4 },
+      }}
+      onMouseDown={(e) => handleResizeStart(colIndex, e)}
+    />
+  );
+
+  const colStyle = (idx: number): Record<string, unknown> => {
+    if (colWidths[idx]) return { width: colWidths[idx], minWidth: 60, position: 'relative' };
+    return { position: 'relative' };
   };
 
   return (
@@ -208,20 +280,65 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
 
         {loading && <LinearProgress sx={{ mb: 1 }} />}
 
-        {tagEntries.length > 0 && (
-          <Table size="small" sx={{ '& td, & th': { py: 0.5 } }}>
+        {/* Hidden tags restore bar */}
+        {hiddenTags.size > 0 && (
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              {hiddenTags.size} hidden:
+            </Typography>
+            {Array.from(hiddenTags).map((tag) => (
+              <Chip
+                key={tag}
+                label={TAG_LABELS[tag] || tag}
+                size="small"
+                variant="outlined"
+                onDelete={() => setHiddenTags((prev) => { const next = new Set(prev); next.delete(tag); return next; })}
+                sx={{ fontSize: '0.7rem' }}
+              />
+            ))}
+            <Chip
+              label="Show all"
+              size="small"
+              color="primary"
+              variant="outlined"
+              icon={<RestoreIcon sx={{ fontSize: 14 }} />}
+              onClick={() => setHiddenTags(new Set())}
+              sx={{ fontSize: '0.7rem' }}
+            />
+          </Stack>
+        )}
+
+        {visibleTagEntries.length > 0 && (
+          <Table
+            size="small"
+            ref={tableRef}
+            sx={{ tableLayout: 'fixed', '& td, & th': { py: 0.5, overflow: 'hidden', textOverflow: 'ellipsis' } }}
+          >
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', width: 180 }}>Tag</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>File Value</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>DB Value</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', ...colStyle(0) }}>
+                  Tag
+                  {resizeHandle(0)}
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', ...colStyle(1) }}>
+                  File Value
+                  {resizeHandle(1)}
+                </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', ...colStyle(2) }}>
+                  DB Value
+                  {resizeHandle(2)}
+                </TableCell>
                 {hasComparison && (
-                  <TableCell sx={{ fontWeight: 'bold' }}>Comparison Value</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', ...colStyle(3) }}>
+                    Comparison Value
+                    {resizeHandle(3)}
+                  </TableCell>
                 )}
+                <TableCell sx={{ width: 36, p: 0 }} />
               </TableRow>
             </TableHead>
             <TableBody>
-              {tagEntries.map(([tagName, tagValues]) => {
+              {visibleTagEntries.map(([tagName, tagValues]) => {
                 const fileVal = tagValues.file_value != null ? String(tagValues.file_value) : '\u2014';
                 const storedVal = tagValues.stored_value != null ? String(tagValues.stored_value) : '\u2014';
                 const compVal = (tagValues as TagSourceValues & { comparison_value?: string | number | boolean | null }).comparison_value;
@@ -231,20 +348,31 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
 
                 return (
                   <TableRow key={tagName} sx={getRowStyle(tagValues, tagName)}>
-                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '0.8rem' }}>
+                    <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary', fontSize: '0.85rem' }}>
                       {TAG_LABELS[tagName] || tagName}
                     </TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                    <TableCell sx={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
                       {fileVal}
                     </TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem', wordBreak: 'break-all', ...(storedColor && { color: storedColor }) }}>
+                    <TableCell sx={{ fontSize: '0.85rem', wordBreak: 'break-all', ...(storedColor && { color: storedColor }) }}>
                       {storedVal}
                     </TableCell>
                     {hasComparison && (
-                      <TableCell sx={{ fontSize: '0.8rem', wordBreak: 'break-all', ...(compColor && { color: compColor }) }}>
+                      <TableCell sx={{ fontSize: '0.85rem', wordBreak: 'break-all', ...(compColor && { color: compColor }) }}>
                         {compStr}
                       </TableCell>
                     )}
+                    <TableCell sx={{ p: 0, textAlign: 'center' }}>
+                      <Tooltip title={`Hide "${TAG_LABELS[tagName] || tagName}"`}>
+                        <IconButton
+                          size="small"
+                          onClick={() => setHiddenTags((prev) => new Set(prev).add(tagName))}
+                          sx={{ opacity: 0.3, '&:hover': { opacity: 1 } }}
+                        >
+                          <VisibilityOffIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -252,7 +380,7 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp 
           </Table>
         )}
 
-        {tagEntries.length === 0 && !loading && (
+        {visibleTagEntries.length === 0 && !loading && tagEntries.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
             No tag data available.
           </Typography>
