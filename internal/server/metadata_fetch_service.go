@@ -1193,24 +1193,10 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 	return created
 }
 
-// findLocalCover returns the path to a locally-cached cover image for the
-// given book ID, or "" if none exists on disk.
-func (mfs *MetadataFetchService) findLocalCover(bookID string) string {
-	coversDir := filepath.Join(config.AppConfig.RootDir, "covers")
-	matches, _ := filepath.Glob(filepath.Join(coversDir, bookID+".*"))
-	for _, m := range matches {
-		ext := strings.ToLower(filepath.Ext(m))
-		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" {
-			return m
-		}
-	}
-	return ""
-}
-
 // embedCoverInBookFiles embeds cover art into all audio files for a book.
-// For single-file books where book.FilePath has an audio extension, it embeds there directly.
-// For multi-segment books (where book.FilePath may be a directory-like path without extension),
-// it lists segments and embeds cover art into each active segment file.
+// Always overwrites existing cover art. Before overwriting, extracts the old
+// cover and saves it as a timestamped version in covers/history/ so it can be
+// restored later via the changelog.
 func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, coverPath string) {
 	if book == nil || book.FilePath == "" || coverPath == "" {
 		return
@@ -1231,51 +1217,101 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 		book = libCopy
 	}
 
+	// collectFiles gathers all audio files that need cover embedding
+	var files []string
 	ext := strings.ToLower(filepath.Ext(book.FilePath))
 	if audioExts[ext] {
-		// Single audio file — embed directly
-		if !metadata.HasExistingCoverArt(book.FilePath) {
-			if err := tagger.EmbedCoverArt(book.FilePath, coverPath); err != nil {
-				log.Printf("[WARN] cover art embedding failed for %s: %v", book.FilePath, err)
-			} else {
-				log.Printf("[INFO] cover art embedded into %s", book.FilePath)
+		files = append(files, book.FilePath)
+	} else {
+		// Multi-segment book
+		bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+		segments, err := mfs.db.ListBookSegments(bookNumericID)
+		if err != nil {
+			log.Printf("[WARN] failed to list segments for cover embedding on book %s: %v", book.ID, err)
+			return
+		}
+		for _, seg := range segments {
+			if !seg.Active {
+				continue
+			}
+			if isProtectedPath(seg.FilePath) {
+				continue
+			}
+			segExt := strings.ToLower(filepath.Ext(seg.FilePath))
+			if audioExts[segExt] {
+				files = append(files, seg.FilePath)
 			}
 		}
+	}
+
+	if len(files) == 0 {
 		return
 	}
 
-	// Multi-segment book — embed cover in all active segment files
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := mfs.db.ListBookSegments(bookNumericID)
-	if err != nil {
-		log.Printf("[WARN] failed to list segments for cover embedding on book %s: %v", book.ID, err)
-		return
-	}
+	// Archive the old cover from the first file before overwriting
+	mfs.archiveExistingCover(book.ID, files[0])
 
+	// Embed new cover into all files (always overwrite)
 	embedded := 0
-	for _, seg := range segments {
-		if !seg.Active {
-			continue
-		}
-		if isProtectedPath(seg.FilePath) {
-			log.Printf("[INFO] skipping cover embed for protected segment: %s", seg.FilePath)
-			continue
-		}
-		segExt := strings.ToLower(filepath.Ext(seg.FilePath))
-		if !audioExts[segExt] {
-			continue
-		}
-		if metadata.HasExistingCoverArt(seg.FilePath) {
-			continue
-		}
-		if err := tagger.EmbedCoverArt(seg.FilePath, coverPath); err != nil {
-			log.Printf("[WARN] cover art embedding failed for segment %s: %v", seg.FilePath, err)
+	for _, f := range files {
+		if err := tagger.EmbedCoverArt(f, coverPath); err != nil {
+			log.Printf("[WARN] cover art embedding failed for %s: %v", f, err)
 		} else {
 			embedded++
 		}
 	}
 	if embedded > 0 {
-		log.Printf("[INFO] cover art embedded into %d segment files for book %s", embedded, book.ID)
+		log.Printf("[INFO] cover art embedded into %d file(s) for book %s", embedded, book.ID)
+	}
+}
+
+// archiveExistingCover extracts the current embedded cover art from an audio
+// file and saves it as a timestamped version in covers/history/{bookID}/ so it
+// can be restored later. Records a metadata change for changelog tracking.
+func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePath string) {
+	data, mimeType, err := metadata.ExtractCoverArtBytes(audioFilePath)
+	if err != nil || len(data) == 0 {
+		return // no existing cover to archive
+	}
+
+	// Determine extension from MIME type
+	ext := ".jpg"
+	switch {
+	case strings.Contains(mimeType, "png"):
+		ext = ".png"
+	case strings.Contains(mimeType, "webp"):
+		ext = ".webp"
+	case strings.Contains(mimeType, "gif"):
+		ext = ".gif"
+	}
+
+	historyDir := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID)
+	if err := os.MkdirAll(historyDir, 0755); err != nil {
+		log.Printf("[WARN] failed to create cover history dir: %v", err)
+		return
+	}
+
+	ts := time.Now().Format("20060102-150405")
+	archivePath := filepath.Join(historyDir, ts+ext)
+	if err := os.WriteFile(archivePath, data, 0644); err != nil {
+		log.Printf("[WARN] failed to archive old cover for %s: %v", bookID, err)
+		return
+	}
+	log.Printf("[INFO] archived old cover art: %s", archivePath)
+
+	// Record in metadata change history so it appears in the changelog
+	now := time.Now()
+	summaryJSON := jsonEncodeString(fmt.Sprintf("cover_art: archived previous cover to %s", filepath.Base(archivePath)))
+	record := &database.MetadataChangeRecord{
+		BookID:     bookID,
+		Field:      "cover_art",
+		NewValue:   &summaryJSON,
+		ChangeType: "cover-archive",
+		Source:     "system",
+		ChangedAt:  now,
+	}
+	if err := mfs.db.RecordMetadataChange(record); err != nil {
+		log.Printf("[WARN] failed to record cover archive history for %s: %v", bookID, err)
 	}
 }
 
@@ -1959,7 +1995,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 
 	// Embed cover art if we have one on disk
 	if config.AppConfig.RootDir != "" {
-		mfs.embedCoverInBookFiles(book, mfs.findLocalCover(book.ID))
+		mfs.embedCoverInBookFiles(book, metadata.CoverPathForBook(config.AppConfig.RootDir, book.ID))
 	}
 
 	// Stamp last_written_at

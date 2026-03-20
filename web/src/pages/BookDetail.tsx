@@ -2028,7 +2028,7 @@ export const BookDetail = () => {
               { label: 'Open Library', value: book?.open_library_id },
               { label: 'Google Books', value: book?.google_books_id },
               { label: 'Hardcover', value: book?.hardcover_id },
-              { label: 'Cover art', value: book?.cover_url ? 'embedded from downloaded image' : undefined },
+              { label: 'Cover art', value: book?.cover_url ? 'embedded (old cover archived to history)' : undefined },
               { label: 'Track numbers', value: segments.length > 1 ? 'written for multi-file books' : undefined },
             ]
               .filter((item) => item.value != null && item.value !== '' && item.value !== 0)
