@@ -151,5 +151,22 @@ func (s *ISBNEnrichmentService) searchSourceForASIN(src metadata.MetadataSource,
 func isStrictTitleMatch(dbTitle, searchTitle string) bool {
 	a := strings.ToLower(strings.TrimSpace(dbTitle))
 	b := strings.ToLower(strings.TrimSpace(searchTitle))
-	return a == b || strings.Contains(a, b) || strings.Contains(b, a)
+	if a == "" || b == "" {
+		return false
+	}
+	// Exact match
+	if a == b {
+		return true
+	}
+	// One is a prefix of the other (e.g., "Shadows of Self" matches "Shadows of Self: A Mistborn Novel")
+	if strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+		// But only if the shorter one is at least 60% of the longer one's length
+		shorter := len(a)
+		longer := len(b)
+		if shorter > longer {
+			shorter, longer = longer, shorter
+		}
+		return float64(shorter)/float64(longer) >= 0.6
+	}
+	return false
 }

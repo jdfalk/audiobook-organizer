@@ -450,6 +450,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 }
 
 func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
+	originalTitle := book.Title
 	if meta.Title != "" && meta.Title != "Untitled" && isBetterValue(book.Title, meta.Title) {
 		// Don't replace a real title with something shorter/worse
 		if book.Title != "" && !isGarbageValue(book.Title) && len(meta.Title) < 3 {
@@ -457,6 +458,11 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 		} else {
 			book.Title = meta.Title
 		}
+	}
+	// Final safety: never leave title empty if it was set before
+	if book.Title == "" && originalTitle != "" {
+		book.Title = originalTitle
+		log.Printf("[WARN] applyMetadataToBook: prevented title from being cleared for book %s", book.ID)
 	}
 	if meta.Publisher != "" && isBetterStringPtr(book.Publisher, meta.Publisher) {
 		book.Publisher = stringPtr(meta.Publisher)
