@@ -1,5 +1,5 @@
 // file: web/src/components/ChangeLog.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 00f575de-ecea-45b7-9aa5-d6dbbc3f21f6
 
 import { useCallback, useEffect, useState } from 'react';
@@ -18,6 +18,7 @@ interface ChangeLogProps {
   bookId: string;
   refreshKey?: number;
   onRevert?: () => void; // called after successful revert so parent can refresh
+  onCompareSnapshot?: (timestamp: string) => void; // called when user clicks "Compare →" on a tag_write entry
 }
 
 const TYPE_ICONS: Record<string, string> = {
@@ -42,7 +43,7 @@ const formatTimestamp = (ts: string): string => {
   return date.toLocaleString();
 };
 
-export const ChangeLog = ({ bookId, refreshKey, onRevert }: ChangeLogProps) => {
+export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: ChangeLogProps) => {
   const [reverting, setReverting] = useState<string | null>(null);
 
   const handleRevert = async (timestamp: string) => {
@@ -152,6 +153,7 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert }: ChangeLogProps) => {
                   cursor: 'pointer',
                   '&:hover': { textDecoration: 'underline' },
                 }}
+                onClick={() => onCompareSnapshot?.(entry.timestamp)}
               >
                 Compare &rarr;
               </Typography>

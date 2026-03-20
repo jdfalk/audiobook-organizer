@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -75,6 +77,7 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 		"tombstone_cleanup",
 		"purge_deleted",
 		"purge_old_logs",
+		"cleanup_old_backups",
 		"db_optimize",
 	}
 	return ts
@@ -475,6 +478,55 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return time.Duration(mins) * time.Minute
 		},
 		RunOnStart:             func() bool { return config.AppConfig.ScheduledDbOptimizeOnStartup },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDbOptimize },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "cleanup_old_backups",
+		Description: "Remove old .bak-* backup files past retention",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("cleanup-old-backups", func(ctx context.Context, progress operations.ProgressReporter) error {
+				rootDir := config.AppConfig.RootDir
+				if rootDir == "" {
+					_ = progress.Log("info", "No root directory configured, skipping backup cleanup", nil)
+					return nil
+				}
+				retentionDays := config.AppConfig.PurgeSoftDeletedAfterDays
+				if retentionDays <= 0 {
+					retentionDays = 30
+				}
+				maxAge := time.Duration(retentionDays) * 24 * time.Hour
+				removed := 0
+				_ = progress.Log("info", fmt.Sprintf("Scanning %s for .bak-* files older than %d days", rootDir, retentionDays), nil)
+
+				err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+					if ctx.Err() != nil {
+						return ctx.Err()
+					}
+					if err != nil || info.IsDir() {
+						return nil
+					}
+					if strings.Contains(info.Name(), ".bak-") {
+						age := time.Since(info.ModTime())
+						if age > maxAge {
+							if rmErr := os.Remove(path); rmErr != nil {
+								log.Printf("[WARN] failed to remove old backup: %s: %v", path, rmErr)
+							} else {
+								removed++
+								log.Printf("[INFO] cleaned up old backup: %s (age: %s)", path, age.Round(time.Hour))
+							}
+						}
+					}
+					return nil
+				})
+				_ = progress.Log("info", fmt.Sprintf("Backup cleanup complete: removed %d file(s)", removed), nil)
+				return err
+			})
+		},
+		IsEnabled:              func() bool { return config.AppConfig.ScheduledDbOptimizeEnabled }, // piggyback on db_optimize enable
+		GetInterval:            func() time.Duration { return 0 },                                  // manual or maintenance window only
+		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDbOptimize },
 	})
 
@@ -1144,6 +1196,7 @@ func (ts *TaskScheduler) isTaskRunning(name string) bool {
 		"author_split_scan": "author-split-scan", "db_optimize": "db-optimize",
 		"purge_deleted": "purge-deleted", "tombstone_cleanup": "tombstone-cleanup",
 		"reconcile_scan": "reconcile_scan", "purge_old_logs": "purge_old_logs",
+		"cleanup_old_backups": "cleanup-old-backups",
 		"metadata_refresh": "metadata-refresh",
 	}
 	opType, ok := opTypeMap[name]
