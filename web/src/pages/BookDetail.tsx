@@ -2022,6 +2022,13 @@ export const BookDetail = () => {
               { label: 'ISBN-13', value: book?.isbn13 },
               { label: 'ISBN-10', value: book?.isbn10 },
               { label: 'ASIN', value: book?.asin },
+              { label: 'Edition', value: book?.edition },
+              { label: 'Print Year', value: book?.print_year },
+              { label: 'Book ID', value: book?.id },
+              { label: 'Open Library', value: book?.open_library_id },
+              { label: 'Google Books', value: book?.google_books_id },
+              { label: 'Hardcover', value: book?.hardcover_id },
+              { label: 'Cover URL', value: book?.cover_url },
               { label: 'Track numbers', value: segments.length > 1 ? 'written for multi-file books' : undefined },
             ]
               .filter((item) => item.value != null && item.value !== '' && item.value !== 0)

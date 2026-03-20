@@ -75,6 +75,9 @@ export interface Book {
   isbn10?: string;
   isbn13?: string;
   asin?: string;
+  open_library_id?: string;
+  hardcover_id?: string;
+  google_books_id?: string;
   work_id?: string;
   edition?: string;
   print_year?: number;
