@@ -2159,14 +2159,22 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	}
 
 	currentVals := map[string]string{
-		"title":    current.Title,
-		"album":    current.Album,
-		"artist":   current.Artist,
-		"narrator": current.Narrator,
-		"genre":    current.Genre,
-		"year":     fmt.Sprintf("%d", current.Year),
-		"language": current.Language,
-		"series":   current.Series,
+		"title":          current.Title,
+		"album":          current.Album,
+		"artist":         current.Artist,
+		"narrator":       current.Narrator,
+		"genre":          current.Genre,
+		"year":           fmt.Sprintf("%d", current.Year),
+		"language":       current.Language,
+		"series":         current.Series,
+		"asin":           current.ASIN,
+		"description":    current.Comments, // description is stored in comments field
+		"edition":        current.Edition,
+		"print_year":     current.PrintYear,
+		"book_id":        current.BookOrganizerID,
+		"open_library_id": current.OpenLibraryID,
+		"hardcover_id":   current.HardcoverID,
+		"google_books_id": current.GoogleBooksID,
 	}
 	if current.Publisher != "" {
 		currentVals["publisher"] = current.Publisher
