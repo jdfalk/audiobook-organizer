@@ -676,6 +676,7 @@ export function Settings() {
     loadConfig();
     loadImportFolders();
     loadBackups();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
