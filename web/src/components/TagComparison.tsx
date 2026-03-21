@@ -48,8 +48,15 @@ const TAG_LABELS: Record<string, string> = {
   publisher: 'publisher',
   language: 'language',
   isbn13: 'isbn',
+  isbn10: 'isbn10',
   audiobook_release_year: 'year',
   description: 'description',
+  asin: 'asin',
+  edition: 'edition',
+  print_year: 'print year',
+  series_index: 'series #',
+  album: 'album',
+  genre: 'genre',
 };
 
 export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp, onClearSnapshot }: TagComparisonProps) => {
