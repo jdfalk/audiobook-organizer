@@ -348,9 +348,11 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 		}
 	}
 
-	metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
-	if metadata.SeriesIndex > 0 {
-		seriesIndexSource = "title"
+	if metadata.SeriesIndex == 0 {
+		metadata.SeriesIndex = DetectVolumeNumber(metadata.Title)
+		if metadata.SeriesIndex > 0 {
+			seriesIndexSource = "title"
+		}
 	}
 	if metadata.SeriesIndex == 0 {
 		if idx := DetectVolumeNumber(metadata.Album); idx > 0 {
