@@ -33,6 +33,8 @@ type CustomTags struct {
 	OpenLibraryID string
 	HardcoverID   string
 	GoogleBooksID string
+	Edition       string
+	PrintYear     string
 }
 
 // ToMap converts CustomTags to a map[string]string for writing to audio files.
@@ -60,6 +62,12 @@ func (ct CustomTags) ToMap() map[string]string {
 	}
 	if ct.GoogleBooksID != "" {
 		m[TagGoogleBooks] = ct.GoogleBooksID
+	}
+	if ct.Edition != "" {
+		m[TagEdition] = ct.Edition
+	}
+	if ct.PrintYear != "" {
+		m[TagPrintYear] = ct.PrintYear
 	}
 	return m
 }
