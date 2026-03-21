@@ -1034,6 +1034,10 @@ func (mfs *MetadataFetchService) syncMetadataToLibraryCopy(original, libCopy *da
 	libCopy.ISBN13 = original.ISBN13
 	libCopy.ASIN = original.ASIN
 	libCopy.Edition = original.Edition
+	libCopy.Genre = original.Genre
+	libCopy.OpenLibraryID = original.OpenLibraryID
+	libCopy.HardcoverID = original.HardcoverID
+	libCopy.GoogleBooksID = original.GoogleBooksID
 	libCopy.CoverURL = original.CoverURL
 	libCopy.MetadataReviewStatus = original.MetadataReviewStatus
 
