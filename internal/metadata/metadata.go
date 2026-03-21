@@ -55,6 +55,8 @@ type Metadata struct {
 	OpenLibraryID       string
 	HardcoverID         string
 	GoogleBooksID       string
+	Edition             string
+	PrintYear           string
 	// UsedFilenameFallback indicates filename parsing filled metadata gaps.
 	UsedFilenameFallback bool
 }
@@ -413,6 +415,8 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 	metadata.OpenLibraryID = cleanTagValue(getRawString(raw, "TXXX:"+TagOpenLibrary, TagOpenLibrary))
 	metadata.HardcoverID = cleanTagValue(getRawString(raw, "TXXX:"+TagHardcover, TagHardcover))
 	metadata.GoogleBooksID = cleanTagValue(getRawString(raw, "TXXX:"+TagGoogleBooks, TagGoogleBooks))
+	metadata.Edition = cleanTagValue(getRawString(raw, "TXXX:"+TagEdition, TagEdition))
+	metadata.PrintYear = cleanTagValue(getRawString(raw, "TXXX:"+TagPrintYear, TagPrintYear))
 	metadata.AuthorSource = sourceOrUnknown(fieldSources, "author")
 
 	if seriesIndexSource == "" && metadata.SeriesIndex > 0 {

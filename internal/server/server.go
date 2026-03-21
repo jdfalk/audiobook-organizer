@@ -501,14 +501,14 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("isbn13", meta.ISBN13, stringVal(book.ISBN13))
 	addEntry("genre", meta.Genre, stringVal(book.Genre))
 	addEntry("album", meta.Album, book.Title)
-	addEntry("asin", nil, stringVal(book.ASIN))
+	addEntry("asin", nonEmpty(meta.ASIN), stringVal(book.ASIN))
 	var seriesIdx any
 	if meta.SeriesIndex > 0 {
 		seriesIdx = meta.SeriesIndex
 	}
 	addEntry("series_index", seriesIdx, intVal(book.SeriesSequence))
-	addEntry("print_year", nil, intVal(book.PrintYear))
-	addEntry("edition", nil, stringVal(book.Edition))
+	addEntry("print_year", nonEmpty(meta.PrintYear), intVal(book.PrintYear))
+	addEntry("edition", nonEmpty(meta.Edition), stringVal(book.Edition))
 
 	return provenance
 }
