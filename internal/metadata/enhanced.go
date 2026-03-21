@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -234,12 +235,17 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 	}
 }
 
-// writeM4BMetadata writes metadata to M4B/M4A files using AtomicParsley
+// writeM4BMetadata writes metadata to M4B/M4A files using AtomicParsley.
+// This is the CLI fallback path; the native taglib writer is preferred and
+// handles all fields. AtomicParsley supports standard MP4 atoms and custom
+// reverse-DNS atoms (--rDNSatom) for extended metadata.
 func writeM4BMetadata(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
 	// Check if AtomicParsley is available
 	if _, err := exec.LookPath("AtomicParsley"); err != nil {
 		return fmt.Errorf("AtomicParsley not found in PATH (install: brew install atomicparsley): %w", err)
 	}
+
+	log.Printf("[WARN] writeM4BMetadata: using AtomicParsley CLI fallback for %s; native taglib writer is preferred for full tag support", filePath)
 
 	// Create backup using safe copy with config
 	backupPath := filePath + ".backup"
@@ -255,6 +261,8 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 
 	// Build AtomicParsley command with metadata updates
 	args := []string{filePath, "--overWrite"}
+
+	// --- Standard MP4 atoms ---
 	if title, ok := metadata["title"].(string); ok && title != "" {
 		args = append(args, "--title", title)
 	}
@@ -263,9 +271,6 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 	}
 	if album, ok := metadata["album"].(string); ok && album != "" {
 		args = append(args, "--album", album)
-	}
-	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
-		args = append(args, "--comment", "Narrator: "+narrator)
 	}
 	if genre, ok := metadata["genre"].(string); ok && genre != "" {
 		args = append(args, "--genre", genre)
@@ -276,6 +281,56 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 	if track, ok := metadata["track"].(string); ok && track != "" {
 		args = append(args, "--tracknum", track)
 	}
+	if desc, ok := metadata["description"].(string); ok && desc != "" {
+		args = append(args, "--description", desc)
+	}
+	// --composer maps to ©wrt; use it for narrator (matches tag priority: composer = narrator)
+	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
+		args = append(args, "--composer", narrator)
+	}
+	// --grouping maps to ©grp; use for series name
+	if series, ok := metadata["series"].(string); ok && series != "" {
+		args = append(args, "--grouping", series)
+	}
+
+	// --- Reverse-DNS atoms for fields without standard AtomicParsley flags ---
+	// These are stored as ----:domain:name atoms and can be read back by taglib.
+	const rdnsDomain = "audiobook-organizer"
+
+	rdnsPairs := [][2]string{
+		{"NARRATOR", "narrator"},
+		{"LANGUAGE", "language"},
+		{"PUBLISHER", "publisher"},
+		{"SERIES", "series"},
+		{"ISBN10", "isbn10"},
+		{"ISBN13", "isbn13"},
+	}
+	for _, pair := range rdnsPairs {
+		if val, ok := metadata[pair[1]].(string); ok && val != "" {
+			args = append(args, "--rDNSatom", val, "name="+pair[0], "domain="+rdnsDomain)
+		}
+	}
+	if si, ok := metadata["series_index"].(int); ok && si > 0 {
+		args = append(args, "--rDNSatom", fmt.Sprintf("%d", si), "name=SERIES_INDEX", "domain="+rdnsDomain)
+	}
+	// Also try string form of series_index (some callers pass it as string)
+	if si, ok := metadata["series_index"].(string); ok && si != "" {
+		args = append(args, "--rDNSatom", si, "name=SERIES_INDEX", "domain="+rdnsDomain)
+	}
+
+	// --- Custom AUDIOBOOK_ORGANIZER_* reverse-DNS atoms ---
+	customPairs := [][2]string{
+		{TagBookID, "book_id"}, {TagISBN10, "isbn10"}, {TagISBN13, "isbn13"},
+		{TagASIN, "asin"}, {TagOpenLibrary, "open_library_id"},
+		{TagHardcover, "hardcover_id"}, {TagGoogleBooks, "google_books_id"},
+		{TagEdition, "edition"}, {TagPrintYear, "print_year"},
+	}
+	for _, pair := range customPairs {
+		if val, ok := metadata[pair[1]].(string); ok && val != "" {
+			args = append(args, "--rDNSatom", val, "name="+pair[0], "domain="+rdnsDomain)
+		}
+	}
+	args = append(args, "--rDNSatom", CustomTagVersion, "name="+TagVersion, "domain="+rdnsDomain)
 
 	cmd := exec.Command("AtomicParsley", args...)
 	output, err := cmd.CombinedOutput()
