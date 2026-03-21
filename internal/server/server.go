@@ -397,6 +397,9 @@ func buildComparisonValuesFromMetadata(comparisonMeta *metadata.Metadata) map[st
 		"isbn13":      nonEmpty(comparisonMeta.ISBN13),
 		"genre":       nonEmpty(comparisonMeta.Genre),
 		"album":       nonEmpty(comparisonMeta.Album),
+		"asin":        nonEmpty(comparisonMeta.ASIN),
+		"edition":     nonEmpty(comparisonMeta.Edition),
+		"print_year":  nonEmpty(comparisonMeta.PrintYear),
 	}
 	if comparisonMeta.Year > 0 {
 		compMap["audiobook_release_year"] = comparisonMeta.Year
