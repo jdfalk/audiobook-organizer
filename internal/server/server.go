@@ -400,6 +400,7 @@ func buildComparisonValuesFromMetadata(comparisonMeta *metadata.Metadata) map[st
 		"asin":        nonEmpty(comparisonMeta.ASIN),
 		"edition":     nonEmpty(comparisonMeta.Edition),
 		"print_year":  nonEmpty(comparisonMeta.PrintYear),
+		"description": nonEmpty(comparisonMeta.Comments),
 	}
 	if comparisonMeta.Year > 0 {
 		compMap["audiobook_release_year"] = comparisonMeta.Year
@@ -428,6 +429,7 @@ func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName s
 		"album":       nonEmpty(book.Title),
 		"asin":        nonEmpty(ptrStr(book.ASIN)),
 		"edition":     nonEmpty(ptrStr(book.Edition)),
+		"description": nonEmpty(ptrStr(book.Description)),
 	}
 	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
 		compMap["audiobook_release_year"] = *book.AudiobookReleaseYear
@@ -512,6 +514,7 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("series_index", seriesIdx, intVal(book.SeriesSequence))
 	addEntry("print_year", nonEmpty(meta.PrintYear), intVal(book.PrintYear))
 	addEntry("edition", nonEmpty(meta.Edition), stringVal(book.Edition))
+	addEntry("description", nonEmpty(meta.Comments), stringVal(book.Description))
 
 	return provenance
 }

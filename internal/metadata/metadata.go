@@ -259,6 +259,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 	}
 
 	commentValue, commentSource := pickFirstNonEmpty(
+		fieldCandidate{value: getRawString(raw, "DESCRIPTION", "description"), source: "raw.description"},
 		fieldCandidate{value: m.Comment(), source: "tag.Comment"},
 		fieldCandidate{value: getRawString(raw, "COMM", "comment", "©cmt", "\xa9cmt"), source: "raw.comment"},
 	)
