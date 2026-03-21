@@ -93,13 +93,14 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp,
     loadTags();
   }, [loadTags, refreshKey]);
 
+  // Auto-expand when snapshot is selected; loadTags fires automatically
+  // via the first useEffect since snapshotTimestamp changes loadTags' dependencies
   useEffect(() => {
     if (snapshotTimestamp) {
       setExpanded(true);
       setCompareId('');
-      loadTags();
     }
-  }, [snapshotTimestamp, loadTags]);
+  }, [snapshotTimestamp]);
 
   const tagEntries = useMemo(() => {
     if (!tags?.tags) return [];
