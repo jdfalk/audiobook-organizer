@@ -303,7 +303,7 @@ export const Library = () => {
                 })),
               }));
             }
-          } catch (e) {
+          } catch (_e) {
             // ignore hydration errors
           }
         }
@@ -1539,7 +1539,7 @@ export const Library = () => {
             if (attempts < maxAttempts) {
               setTimeout(poll, pollInterval);
             }
-          } catch (e) {
+          } catch (_e) {
             attempts++;
             if (attempts < maxAttempts) {
               setTimeout(poll, pollInterval);
@@ -1756,7 +1756,7 @@ export const Library = () => {
               try {
                 const status = await api.getSystemStatus();
                 setSystemStatus(status);
-              } catch (e) {
+              } catch (_e) {
                 /* ignore refresh error */
               }
             }}

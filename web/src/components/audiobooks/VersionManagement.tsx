@@ -108,7 +108,7 @@ export function VersionManagement({
         if (!cancelled) {
           setSearchResults(results);
         }
-      } catch (err) {
+      } catch (_err) {
         if (!cancelled) {
           setSearchError('Failed to search audiobooks');
         }

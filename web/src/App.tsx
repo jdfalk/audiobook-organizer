@@ -68,7 +68,7 @@ function App() {
             localStorage.setItem('welcome_wizard_completed', 'true');
           }
         }
-      } catch (error) {
+      } catch (_error) {
         const wizardCompleted = localStorage.getItem(
           'welcome_wizard_completed'
         );
@@ -112,7 +112,7 @@ function App() {
           // Server is back, reload the page
           window.location.reload();
         }
-      } catch (e) {
+      } catch (_e) {
         // Server still down, increment attempts
         setReconnectAttempts((prev) => prev + 1);
       }

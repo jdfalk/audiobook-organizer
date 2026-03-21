@@ -100,7 +100,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         if (cancelled) return;
         setHomePath(path);
         setLibraryPath((prev) => ((prev || '').trim() ? prev : path));
-      } catch (error) {
+      } catch (_error) {
         if (cancelled) return;
         setHomePath((prev) => ((prev || '').trim() ? prev : '/'));
         setLibraryPath((prev) => ((prev || '').trim() ? prev : '/'));
@@ -161,7 +161,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       } else {
         setKeyTestResult('error');
       }
-    } catch (error) {
+    } catch (_error) {
       setKeyTestResult('error');
     } finally {
       setTestingKey(false);
