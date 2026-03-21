@@ -318,7 +318,9 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 					localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
 					if updatedBook != nil {
 						updatedBook.CoverURL = &localCoverURL
-						mfs.db.UpdateBook(id, &database.Book{CoverURL: &localCoverURL})
+						// Write the full book back — UpdateBook does full column
+						// replacement, so passing only CoverURL would wipe everything.
+						mfs.db.UpdateBook(id, updatedBook)
 					}
 					// Embed cover art into all audio files for this book
 					if updatedBook != nil {
@@ -1995,8 +1997,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
 				tagMap = filterUnchangedTags(sib.FilePath, tagMap)
 				if len(tagMap) == 0 {
-					writtenCount++
-					continue
+					continue // tags already match, nothing to write
 				}
 				backupFileBeforeWrite(sib.FilePath)
 				if err := metadata.WriteMetadataToFile(sib.FilePath, tagMap, opConfig); err != nil {
