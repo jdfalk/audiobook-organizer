@@ -62,8 +62,8 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
       });
       loadChangelog();
       onRevert?.();
-    } catch {
-      // silently fail
+    } catch (err) {
+      console.error('Revert failed:', err);
     } finally {
       setReverting(null);
     }
