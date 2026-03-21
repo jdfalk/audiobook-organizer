@@ -80,6 +80,7 @@ export interface Book {
   google_books_id?: string;
   work_id?: string;
   edition?: string;
+  genre?: string;
   print_year?: number;
   audiobook_release_year?: number;
   original_filename?: string;

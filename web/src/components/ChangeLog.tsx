@@ -1,5 +1,5 @@
 // file: web/src/components/ChangeLog.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 00f575de-ecea-45b7-9aa5-d6dbbc3f21f6
 
 import { useCallback, useEffect, useState } from 'react';
@@ -44,32 +44,9 @@ const formatTimestamp = (ts: string): string => {
 };
 
 export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: ChangeLogProps) => {
-  const [reverting, setReverting] = useState<string | null>(null);
-
-  const handleRevert = async (timestamp: string) => {
-    setReverting(timestamp);
-    try {
-      await fetch(`/api/v1/audiobooks/${bookId}/revert-metadata`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timestamp }),
-      });
-      // Also trigger write-back to sync tags to file
-      await fetch(`/api/v1/audiobooks/${bookId}/write-back`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rename: true }),
-      });
-      loadChangelog();
-      onRevert?.();
-    } catch (err) {
-      console.error('Revert failed:', err);
-    } finally {
-      setReverting(null);
-    }
-  };
   const [entries, setEntries] = useState<ChangeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reverting, setReverting] = useState<string | null>(null);
 
   const loadChangelog = useCallback(async () => {
     setLoading(true);
@@ -86,6 +63,36 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
   useEffect(() => {
     loadChangelog();
   }, [loadChangelog, refreshKey]);
+
+  const handleRevert = async (timestamp: string) => {
+    setReverting(timestamp);
+    try {
+      const revertResp = await fetch(`/api/v1/audiobooks/${bookId}/revert-metadata`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timestamp }),
+      });
+      if (!revertResp.ok) {
+        console.error('Revert failed:', revertResp.status, await revertResp.text());
+        return;
+      }
+      // Also trigger write-back to sync tags to file
+      const wbResp = await fetch(`/api/v1/audiobooks/${bookId}/write-back`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rename: true }),
+      });
+      if (!wbResp.ok) {
+        console.error('Write-back after revert failed:', wbResp.status);
+      }
+      loadChangelog();
+      onRevert?.();
+    } catch (err) {
+      console.error('Revert failed:', err);
+    } finally {
+      setReverting(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -151,19 +158,6 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
 
           {/* Actions */}
           <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
-            {entry.type === 'tag_write' && (
-              <Typography
-                variant="caption"
-                color="primary"
-                sx={{
-                  cursor: 'pointer',
-                  '&:hover': { textDecoration: 'underline' },
-                }}
-                onClick={() => onCompareSnapshot?.(entry.timestamp)}
-              >
-                Compare snapshot &rarr;
-              </Typography>
-            )}
             {idx > 0 && (entry.type === 'metadata_apply' || entry.type === 'tag_write' || entry.type === 'rename') && (
               <Button
                 size="small"

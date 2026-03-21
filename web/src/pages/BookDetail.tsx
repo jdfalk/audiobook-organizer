@@ -1288,7 +1288,7 @@ export const BookDetail = () => {
                     { label: 'Print Year', value: book.print_year ? String(book.print_year) : undefined },
                     { label: 'ISBN 13', value: book.isbn13 },
                     { label: 'ISBN 10', value: book.isbn10 },
-                    { label: 'Genre', value: book.quality },
+                    { label: 'Genre', value: book.genre },
                     { label: 'Format', value: book.format?.toUpperCase() },
                     { label: 'Codec', value: book.codec },
                     { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
