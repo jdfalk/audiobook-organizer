@@ -567,7 +567,6 @@ func looksLikeReleaseGroupTag(value string) bool {
 }
 
 func extractYearDigits(value string) string {
-	yearPattern := regexp.MustCompile(`(\d{4})`)
 	if match := yearPattern.FindStringSubmatch(value); len(match) > 1 {
 		return match[1]
 	}
