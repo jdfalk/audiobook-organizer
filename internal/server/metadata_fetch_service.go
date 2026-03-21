@@ -5,6 +5,7 @@
 package server
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -1285,6 +1286,26 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 		ext = ".gif"
 	}
 
+	// Hash the cover data for deduplication
+	coverHash := fmt.Sprintf("%x", sha256.Sum256(data))
+
+	// Check if we already have this exact image archived (by hash)
+	dedupDir := filepath.Join(config.AppConfig.RootDir, "covers", "dedup")
+	if err := os.MkdirAll(dedupDir, 0755); err != nil {
+		log.Printf("[WARN] failed to create cover dedup dir: %v", err)
+		return
+	}
+
+	dedupPath := filepath.Join(dedupDir, coverHash+ext)
+	if _, err := os.Stat(dedupPath); err != nil {
+		// New unique image — save to dedup store
+		if err := os.WriteFile(dedupPath, data, 0644); err != nil {
+			log.Printf("[WARN] failed to write dedup cover for %s: %v", bookID, err)
+			return
+		}
+	}
+
+	// Create a history entry that references the dedup hash instead of storing a copy
 	historyDir := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID)
 	if err := os.MkdirAll(historyDir, 0755); err != nil {
 		log.Printf("[WARN] failed to create cover history dir: %v", err)
@@ -1292,12 +1313,19 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 	}
 
 	ts := time.Now().Format("20060102-150405")
+	// History entry is a symlink to the dedup store to avoid duplicate storage
 	archivePath := filepath.Join(historyDir, ts+ext)
-	if err := os.WriteFile(archivePath, data, 0644); err != nil {
-		log.Printf("[WARN] failed to archive old cover for %s: %v", bookID, err)
-		return
+	if err := os.Symlink(dedupPath, archivePath); err != nil {
+		// Symlink failed (cross-device, Windows, etc.) — fall back to hardlink or copy
+		if err := os.Link(dedupPath, archivePath); err != nil {
+			// Hardlink also failed — just copy
+			if err := os.WriteFile(archivePath, data, 0644); err != nil {
+				log.Printf("[WARN] failed to archive old cover for %s: %v", bookID, err)
+				return
+			}
+		}
 	}
-	log.Printf("[INFO] archived old cover art: %s", archivePath)
+	log.Printf("[INFO] archived old cover art: %s (hash=%s)", archivePath, coverHash[:12])
 
 	// Record in metadata change history so it appears in the changelog
 	now := time.Now()
