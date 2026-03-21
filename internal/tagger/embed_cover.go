@@ -89,9 +89,11 @@ func embedWithFFmpeg(audioPath, coverPath, format string) error {
 		// Map audio + chapters from input, plus the new cover image.
 		// Skip data/subtitle streams (bin_data) that the ipod muxer can't handle,
 		// and skip old video/cover streams so we replace rather than append.
+		// -map_metadata 0 preserves all custom tags (NARRATOR, SERIES, etc.)
 		args = append(args,
 			"-map", "0:a",              // audio streams
 			"-map_chapters", "0",       // preserve chapter metadata
+			"-map_metadata", "0",       // preserve ALL metadata tags from input
 			"-map", "1:0",              // new cover image
 			"-c", "copy",               // copy all codecs
 			"-disposition:v:0", "attached_pic",
@@ -100,6 +102,7 @@ func embedWithFFmpeg(audioPath, coverPath, format string) error {
 	} else {
 		args = append(args,
 			"-map", "0",                // all streams from audio
+			"-map_metadata", "0",       // preserve ALL metadata tags from input
 			"-map", "1",                // cover image
 			"-c", "copy",               // copy all codecs
 			"-disposition:v:0", "attached_pic",
