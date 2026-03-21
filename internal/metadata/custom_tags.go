@@ -15,8 +15,8 @@ const (
 	TagOpenLibrary = "AUDIOBOOK_ORGANIZER_OPENLIBRARY"
 	TagHardcover   = "AUDIOBOOK_ORGANIZER_HARDCOVER"
 	TagGoogleBooks = "AUDIOBOOK_ORGANIZER_GOOGLEBOOKS"
-	TagEdition   = "AUDIOBOOK_ORGANIZER_EDITION"
-	TagPrintYear = "AUDIOBOOK_ORGANIZER_PRINT_YEAR"
+	TagEdition     = "AUDIOBOOK_ORGANIZER_EDITION"
+	TagPrintYear   = "AUDIOBOOK_ORGANIZER_PRINT_YEAR"
 
 	// CustomTagVersion is the current schema version for custom tags.
 	CustomTagVersion = "1"
