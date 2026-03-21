@@ -710,64 +710,65 @@ export const BookDetail = () => {
     if (!book) return;
     setActionLoading(true);
     setActionLabel('Saving changes...');
-    try {
-      // Map form field names to API field names for overrides
-      const FIELD_TO_API: Record<string, string> = {
-        title: 'title',
-        author: 'author_name',
-        narrator: 'narrator',
-        series: 'series_name',
-        series_number: 'series_position',
-        genre: 'genre',
-        year: 'audiobook_release_year',
-        language: 'language',
-        publisher: 'publisher',
-        isbn10: 'isbn10',
-        isbn13: 'isbn13',
-        description: 'description',
-      };
 
-      // Use ?? '' to ensure all fields are present in JSON (undefined is dropped by JSON.stringify)
-      const payload: Partial<Book> & { overrides?: Record<string, OverridePayload> } = {
-        title: updated.title ?? '',
-        description: updated.description ?? '',
-        publisher: updated.publisher ?? '',
-        language: updated.language ?? '',
-        narrator: updated.narrator ?? '',
-        series_position: updated.series_number ?? undefined,
-        audiobook_release_year:
-          updated.audiobook_release_year ||
-          updated.year ||
-          book.audiobook_release_year ||
-          undefined,
-        print_year: updated.year || book.print_year || undefined,
-        isbn:
-          updated.isbn13 ||
-          updated.isbn10 ||
-          book.isbn ||
-          '',
-        author_name: updated.author ?? '',
-        series_name: updated.series ?? '',
-      };
+    // Map form field names to API field names for overrides
+    const FIELD_TO_API: Record<string, string> = {
+      title: 'title',
+      author: 'author_name',
+      narrator: 'narrator',
+      series: 'series_name',
+      series_number: 'series_position',
+      genre: 'genre',
+      year: 'audiobook_release_year',
+      language: 'language',
+      publisher: 'publisher',
+      isbn10: 'isbn10',
+      isbn13: 'isbn13',
+      description: 'description',
+    };
 
-      // Auto-lock edited fields (Plex-style: edits are automatically locked)
-      if (dirtyFields && dirtyFields.size > 0) {
-        const overrides: Record<string, OverridePayload> = {};
-        for (const field of dirtyFields) {
-          const apiField = FIELD_TO_API[field];
-          if (!apiField) continue;
-          const value = field === 'year'
-            ? (updated.year ?? updated.audiobook_release_year ?? null)
-            : field === 'series_number'
-              ? (updated.series_number ?? null)
-              : ((updated as unknown as Record<string, unknown>)[field] ?? null);
-          overrides[apiField] = { value, locked: true };
-        }
-        if (Object.keys(overrides).length > 0) {
-          payload.overrides = overrides;
-        }
+    // Build payload outside try so it's accessible in catch for conflict retry
+    const payload: Partial<Book> & { overrides?: Record<string, OverridePayload> } = {
+      title: updated.title ?? '',
+      description: updated.description ?? '',
+      publisher: updated.publisher ?? '',
+      language: updated.language ?? '',
+      narrator: updated.narrator ?? '',
+      series_position: updated.series_number ?? undefined,
+      audiobook_release_year:
+        updated.audiobook_release_year ||
+        updated.year ||
+        book.audiobook_release_year ||
+        undefined,
+      print_year: updated.year || book.print_year || undefined,
+      isbn:
+        updated.isbn13 ||
+        updated.isbn10 ||
+        book.isbn ||
+        '',
+      author_name: updated.author ?? '',
+      series_name: updated.series ?? '',
+    };
+
+    // Auto-lock edited fields (Plex-style: edits are automatically locked)
+    if (dirtyFields && dirtyFields.size > 0) {
+      const overrides: Record<string, OverridePayload> = {};
+      for (const field of dirtyFields) {
+        const apiField = FIELD_TO_API[field];
+        if (!apiField) continue;
+        const value = field === 'year'
+          ? (updated.year ?? updated.audiobook_release_year ?? null)
+          : field === 'series_number'
+            ? (updated.series_number ?? null)
+            : ((updated as unknown as Record<string, unknown>)[field] ?? null);
+        overrides[apiField] = { value, locked: true };
       }
+      if (Object.keys(overrides).length > 0) {
+        payload.overrides = overrides;
+      }
+    }
 
+    try {
       const saved = await api.updateBook(book.id, payload);
       setBook(saved);
       toast('Metadata saved. Edited fields are now locked.', 'success');
@@ -775,7 +776,7 @@ export const BookDetail = () => {
     } catch (error) {
       if (error instanceof api.ApiError) {
         if (error.status === 409) {
-          setPendingUpdate(null);
+          setPendingUpdate(payload);
           setConflictDialogOpen(true);
           toast('Book was updated by another user.', 'warning');
           return;
