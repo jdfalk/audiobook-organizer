@@ -1213,7 +1213,6 @@ export async function pollOperation(
   onProgress?: (op: Operation) => void,
   intervalMs = 1000
 ): Promise<Operation> {
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const op = await getOperationStatus(id);
     onProgress?.(op);
