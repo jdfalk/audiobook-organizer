@@ -57,6 +57,10 @@ const TAG_LABELS: Record<string, string> = {
   series_index: 'series #',
   album: 'album',
   genre: 'genre',
+  book_id: 'book ID',
+  open_library_id: 'OpenLibrary',
+  hardcover_id: 'Hardcover',
+  google_books_id: 'Google Books',
 };
 
 export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp, onClearSnapshot }: TagComparisonProps) => {
