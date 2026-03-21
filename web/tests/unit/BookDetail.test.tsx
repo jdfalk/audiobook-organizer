@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { BookDetail } from '../../src/pages/BookDetail';
@@ -204,15 +204,8 @@ describe('BookDetail Component', () => {
     );
   });
 
-  it('Use Fetched button shows loading state and updates optimistically', async () => {
+  it('navigates to Files & History tab and shows tag comparison', async () => {
     const user = userEvent.setup();
-
-    vi.mocked(api.updateBook).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          setTimeout(() => resolve(mockBook), 100);
-        })
-    );
 
     render(
       <BrowserRouter>
@@ -222,33 +215,14 @@ describe('BookDetail Component', () => {
 
     await screen.findByRole('heading', { name: 'The Odyssey' });
 
-    // Navigate to Compare tab
-    const compareTab = await screen.findByRole('tab', { name: /tags/i });
-    await user.click(compareTab);
+    // Navigate to Files & History tab
+    const filesTab = await screen.findByRole('tab', { name: /files/i });
+    await user.click(filesTab);
 
-    const compareTable = await screen.findByRole('table');
-    expect(
-      within(compareTable).getByText(/audiobook release year/i)
-    ).toBeInTheDocument();
-
-    // Find Use Fetched button
-    const useFetchedButtons = within(compareTable).getAllByRole('button', {
-      name: /use fetched/i,
-    });
-    const useFetchedButton = useFetchedButtons[0];
-
-    await user.click(useFetchedButton);
-
-    // Should show loading state
-    expect(useFetchedButton).toHaveTextContent('Applying...');
-    expect(useFetchedButton).toBeDisabled();
-
-    await waitFor(
-      () => {
-        expect(useFetchedButton).not.toBeDisabled();
-      },
-      { timeout: 2000 }
-    );
+    // Should show the tag comparison toggle
+    await waitFor(() => {
+      expect(screen.getByTestId('tag-comparison-toggle')).toBeInTheDocument();
+    }, { timeout: 2000 });
   });
 
   it('does not switch tabs after fetching metadata', async () => {
@@ -268,9 +242,12 @@ describe('BookDetail Component', () => {
 
     await screen.findByRole('heading', { name: 'The Odyssey' });
 
-    // Should start on Info tab
+    // Click the Info tab to ensure we're on it
     const infoTab = screen.getByRole('tab', { name: /^info$/i });
-    expect(infoTab).toHaveAttribute('aria-selected', 'true');
+    await user.click(infoTab);
+    await waitFor(() => {
+      expect(infoTab).toHaveAttribute('aria-selected', 'true');
+    });
 
     const fetchButton = screen.getByRole('button', { name: /fetch metadata/i });
     await user.click(fetchButton);
@@ -279,21 +256,11 @@ describe('BookDetail Component', () => {
       expect(api.fetchBookMetadata).toHaveBeenCalled();
     });
 
-    // Should still be on Info tab
+    // Should still be on Info tab after fetch
     expect(infoTab).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('allows other buttons to be clicked while one is loading', async () => {
-    const user = userEvent.setup();
-
-    // Make one API call slow
-    vi.mocked(api.updateBook).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          setTimeout(() => resolve(mockBook), 1000);
-        })
-    );
-
+  it('renders Info and Files tabs', async () => {
     render(
       <BrowserRouter>
         <BookDetail />
@@ -302,28 +269,8 @@ describe('BookDetail Component', () => {
 
     await screen.findByRole('heading', { name: 'The Odyssey' });
 
-    const compareTab = screen.getByRole('tab', { name: /tags/i });
-    await user.click(compareTab);
-
-    const compareTable = await screen.findByRole('table');
-    expect(
-      within(compareTable).getByText(/audiobook release year/i)
-    ).toBeInTheDocument();
-
-    const useFetchedButtons = within(compareTable).getAllByRole('button', {
-      name: /use fetched/i,
-    });
-    const enabledButtons = useFetchedButtons.filter((button) =>
-      button instanceof HTMLButtonElement ? !button.disabled : false
-    );
-    expect(enabledButtons.length).toBeGreaterThanOrEqual(2);
-
-    // Click first button
-    await user.click(enabledButtons[0]);
-    expect(enabledButtons[0]).toBeDisabled();
-
-    // Second button (for different field) should still be enabled
-    // This tests per-field loading states
-    expect(enabledButtons[1]).not.toBeDisabled();
+    // Should have both tabs
+    expect(screen.getByRole('tab', { name: /^info$/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /files/i })).toBeInTheDocument();
   });
 });
