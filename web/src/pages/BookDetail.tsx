@@ -1608,7 +1608,7 @@ export const BookDetail = () => {
                         )}
 
                         {/* Tag comparison component (replaces inline tags table) */}
-                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} />
+                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} onClearSnapshot={() => setCompareSnapshotTs(null)} />
 
                         {/* Segments/files table for multi-file books */}
                         {vSegs.length > 0 && (() => {
