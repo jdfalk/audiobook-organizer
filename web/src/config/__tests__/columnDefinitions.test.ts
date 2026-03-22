@@ -173,7 +173,7 @@ describe('columnDefinitions', () => {
       expect(tagsCol.accessor(sampleBook)).toBe('fiction, adventure');
 
       const bookNoTags: Audiobook = { ...sampleBook, tags: undefined };
-      expect(tagsCol.accessor(bookNoTags)).toBeUndefined();
+      expect(tagsCol.accessor(bookNoTags)).toBe('');
     });
   });
 
