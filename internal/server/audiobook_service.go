@@ -241,6 +241,12 @@ var sortFieldMap = map[string]func(a, b *database.Book) int{
 	"library_state": func(a, b *database.Book) int {
 		return strings.Compare(strings.ToLower(derefStr(a.LibraryState)), strings.ToLower(derefStr(b.LibraryState)))
 	},
+	"quality": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Quality)), strings.ToLower(derefStr(b.Quality)))
+	},
+	"edition": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Edition)), strings.ToLower(derefStr(b.Edition)))
+	},
 }
 
 // applySorting sorts a slice of books in-place based on the filter's SortBy and SortOrder.
