@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.59.0
+// version: 1.60.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -562,6 +562,7 @@ export async function getBooks(
     sortOrder?: string;
     tag?: string;
     libraryState?: string;
+    filters?: string;
   }
 ): Promise<Book[]> {
   const params = new URLSearchParams();
@@ -572,6 +573,7 @@ export async function getBooks(
   if (options?.tag) params.set('tag', options.tag);
   if (options?.libraryState)
     params.set('library_state', options.libraryState);
+  if (options?.filters) params.set('filters', options.filters);
 
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);
   if (!response.ok) {
