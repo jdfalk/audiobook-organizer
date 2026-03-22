@@ -342,7 +342,8 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	if len(filters) > 0 {
 		f = filters[0]
 	}
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0
+	hasSorting := f.SortBy != ""
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0 || hasSorting
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
