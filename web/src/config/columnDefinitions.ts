@@ -1,5 +1,5 @@
 // file: web/src/config/columnDefinitions.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b8c9d0-e1f2-4a3b-5c6d-7e8f9a0b1c2d
 
 import { Audiobook } from '../types';
@@ -230,10 +230,10 @@ export const ALL_COLUMNS: ColumnDefinition[] = [
     id: 'tags',
     label: 'Tags',
     category: 'Basic',
-    accessor: (b) => b.tags?.join(', '),
+    accessor: (b) => b.tags?.join(', ') ?? '',
     sortKey: 'tags',
-    searchKey: 'tags',
-    defaultWidth: 160,
+    searchKey: 'tag',
+    defaultWidth: 200,
     minWidth: 80,
     sortable: false,
     defaultVisible: false,

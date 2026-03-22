@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/FilterSidebar.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 import React from 'react';
@@ -15,6 +15,8 @@ import {
   MenuItem,
   Chip,
   Stack,
+  Autocomplete,
+  TextField,
 } from '@mui/material';
 import { FilterList as FilterListIcon } from '@mui/icons-material';
 import type { FilterOptions } from '../../types';
@@ -28,6 +30,9 @@ interface FilterSidebarProps {
   series?: string[];
   genres?: string[];
   languages?: string[];
+  availableTags?: Array<{ tag: string; count: number }>;
+  selectedTags?: string[];
+  onTagsChange?: (tags: string[]) => void;
 }
 
 export const FilterSidebar: React.FC<FilterSidebarProps> = ({
@@ -39,6 +44,9 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   series = [],
   genres = [],
   languages = [],
+  availableTags = [],
+  selectedTags = [],
+  onTagsChange,
 }) => {
   const handleFilterChange = (key: keyof FilterOptions, value: string) => {
     onFiltersChange({ ...filters, [key]: value || undefined });
@@ -46,12 +54,18 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
   const handleClearFilters = () => {
     onFiltersChange({});
+    onTagsChange?.([]);
   };
 
   const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '')
-      .length;
+    let count = Object.values(filters).filter(
+      (v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
+    ).length;
+    if (selectedTags.length > 0) count++;
+    return count;
   };
+
+  const tagOptions = availableTags.map((t) => t.tag);
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose}>
@@ -175,6 +189,77 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
               ))}
             </Select>
           </FormControl>
+
+          {onTagsChange && (
+            <div>
+              <Typography variant="subtitle2" gutterBottom>
+                Tags
+              </Typography>
+              <Autocomplete
+                multiple
+                size="small"
+                options={tagOptions}
+                value={selectedTags}
+                onChange={(_e, value) => onTagsChange(value)}
+                renderTags={(value, getTagProps) =>
+                  value.map((tag, index) => {
+                    const { key, ...rest } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        label={tag}
+                        size="small"
+                        variant="outlined"
+                        {...rest}
+                      />
+                    );
+                  })
+                }
+                renderOption={(props, option) => {
+                  const tagInfo = availableTags.find((t) => t.tag === option);
+                  const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key: string };
+                  return (
+                    <li key={key} {...rest}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                        }}
+                      >
+                        <span>{option}</span>
+                        {tagInfo && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            ({tagInfo.count})
+                          </Typography>
+                        )}
+                      </Box>
+                    </li>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    placeholder={
+                      selectedTags.length === 0 ? 'Filter by tags...' : ''
+                    }
+                  />
+                )}
+              />
+              {selectedTags.length > 0 && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: 'block' }}
+                >
+                  Books must have ALL selected tags
+                </Typography>
+              )}
+            </div>
+          )}
 
         </Stack>
       </Box>

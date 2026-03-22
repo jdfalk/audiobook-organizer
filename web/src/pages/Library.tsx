@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.43.0
+// version: 1.44.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -58,6 +58,7 @@ import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog'
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { BulkMetadataSearchDialog } from '../components/audiobooks/BulkMetadataSearchDialog';
+import { BulkTagDialog } from '../components/audiobooks/BulkTagDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
@@ -172,6 +173,9 @@ export const Library = () => {
   const [availableSeries, setAvailableSeries] = useState<string[]>([]);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<Array<{ tag: string; count: number }>>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
 
   // Column config
   const {
@@ -268,6 +272,24 @@ export const Library = () => {
   useEffect(() => {
     localStorage.setItem('library-storage-pin-mode', storagePinMode);
   }, [storagePinMode]);
+
+  // Fetch all available tags on mount
+  useEffect(() => {
+    api.listAllUserTags().then(setAvailableTags).catch((_err) => {
+      console.error('Failed to load tags:', _err);
+    });
+  }, []);
+
+  const handleTagFilterChange = useCallback((tags: string[]) => {
+    setSelectedTags(tags);
+    setFilters((prev) => ({ ...prev, tags: tags.length > 0 ? tags : undefined }));
+  }, []);
+
+  const refreshTags = useCallback(() => {
+    api.listAllUserTags().then(setAvailableTags).catch((_err) => {
+      console.error('Failed to refresh tags:', _err);
+    });
+  }, []);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -2034,6 +2056,21 @@ export const Library = () => {
                       <Button
                         size="small"
                         variant="outlined"
+                        onClick={() => setBulkTagDialogOpen(true)}
+                        disabled={!hasSelection}
+                      >
+                        Tag
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={!hasSelection ? 'Select books first' : ''}
+                    disableHoverListener={hasSelection}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
                         onClick={() => setBulkFetchDialogOpen(true)}
                         disabled={!hasSelection}
                       >
@@ -2349,6 +2386,9 @@ export const Library = () => {
           series={availableSeries}
           genres={availableGenres}
           languages={availableLanguages}
+          availableTags={availableTags}
+          selectedTags={selectedTags}
+          onTagsChange={handleTagFilterChange}
         />
 
         <MetadataEditDialog
@@ -2363,6 +2403,17 @@ export const Library = () => {
           audiobooks={selectedAudiobooks}
           onClose={() => setBatchEditOpen(false)}
           onSave={handleBatchSave}
+        />
+
+        <BulkTagDialog
+          open={bulkTagDialogOpen}
+          onClose={() => setBulkTagDialogOpen(false)}
+          bookIds={selectedAudiobooks.map((b) => b.id)}
+          allTags={availableTags.map((t) => t.tag)}
+          onComplete={() => {
+            refreshTags();
+            loadAudiobooks();
+          }}
         />
 
         <Dialog open={batchDeleteDialogOpen} onClose={() => setBatchDeleteDialogOpen(false)}>
