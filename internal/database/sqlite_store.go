@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.44.0
+// version: 1.45.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -4169,6 +4169,132 @@ func (s *SQLiteStore) GetBookPathHistory(bookID string) ([]BookPathChange, error
 		results = append(results, c)
 	}
 	return results, rows.Err()
+}
+
+// AddBookTag adds a tag to a book (idempotent — no error if already exists).
+func (s *SQLiteStore) AddBookTag(bookID, tag string) error {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)`,
+		bookID, tag,
+	)
+	return err
+}
+
+// RemoveBookTag removes a tag from a book.
+func (s *SQLiteStore) RemoveBookTag(bookID, tag string) error {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+	_, err := s.db.Exec(
+		`DELETE FROM book_tags WHERE book_id = ? AND tag = ?`,
+		bookID, tag,
+	)
+	return err
+}
+
+// GetBookTags returns all tags for a book, sorted alphabetically.
+func (s *SQLiteStore) GetBookTags(bookID string) ([]string, error) {
+	rows, err := s.db.Query(
+		`SELECT tag FROM book_tags WHERE book_id = ? ORDER BY tag`,
+		bookID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	return tags, rows.Err()
+}
+
+// SetBookTags replaces all tags on a book with the given set.
+func (s *SQLiteStore) SetBookTags(bookID string, tags []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Remove all existing tags
+	if _, err := tx.Exec(`DELETE FROM book_tags WHERE book_id = ?`, bookID); err != nil {
+		return err
+	}
+
+	// Insert new tags
+	for _, tag := range tags {
+		tag = strings.ToLower(strings.TrimSpace(tag))
+		if tag == "" {
+			continue
+		}
+		if _, err := tx.Exec(
+			`INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)`,
+			bookID, tag,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// ListAllTags returns all unique tags with their usage counts.
+func (s *SQLiteStore) ListAllTags() ([]TagWithCount, error) {
+	rows, err := s.db.Query(
+		`SELECT tag, COUNT(*) as count FROM book_tags GROUP BY tag ORDER BY tag`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []TagWithCount
+	for rows.Next() {
+		var tc TagWithCount
+		if err := rows.Scan(&tc.Tag, &tc.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, tc)
+	}
+	return result, rows.Err()
+}
+
+// GetBooksByTag returns all book IDs that have the given tag.
+func (s *SQLiteStore) GetBooksByTag(tag string) ([]string, error) {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return nil, fmt.Errorf("tag cannot be empty")
+	}
+
+	rows, err := s.db.Query(
+		`SELECT book_id FROM book_tags WHERE tag = ?`,
+		tag,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bookIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		bookIDs = append(bookIDs, id)
+	}
+	return bookIDs, rows.Err()
 }
 
 func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {

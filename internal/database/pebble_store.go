@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.36.0
+// version: 1.37.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4692,4 +4692,180 @@ func (p *PebbleStore) GetBookPathHistory(bookID string) ([]BookPathChange, error
 		results[i], results[j] = results[j], results[i]
 	}
 	return results, nil
+}
+
+// AddBookTag adds a tag to a book (idempotent — no error if already exists).
+func (p *PebbleStore) AddBookTag(bookID, tag string) error {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+
+	bt := BookTag{
+		BookID:    bookID,
+		Tag:       tag,
+		CreatedAt: time.Now(),
+	}
+	data, err := json.Marshal(bt)
+	if err != nil {
+		return err
+	}
+
+	// Primary key: book_tag:<bookID>:<tag>
+	bookTagKey := []byte(fmt.Sprintf("book_tag:%s:%s", bookID, tag))
+	if err := p.db.Set(bookTagKey, data, pebble.Sync); err != nil {
+		return err
+	}
+
+	// Reverse index: tag_idx:<tag>:<bookID>
+	tagIdxKey := []byte(fmt.Sprintf("tag_idx:%s:%s", tag, bookID))
+	return p.db.Set(tagIdxKey, []byte{}, pebble.Sync)
+}
+
+// RemoveBookTag removes a tag from a book.
+func (p *PebbleStore) RemoveBookTag(bookID, tag string) error {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return fmt.Errorf("tag cannot be empty")
+	}
+
+	bookTagKey := []byte(fmt.Sprintf("book_tag:%s:%s", bookID, tag))
+	if err := p.db.Delete(bookTagKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
+		return err
+	}
+
+	tagIdxKey := []byte(fmt.Sprintf("tag_idx:%s:%s", tag, bookID))
+	if err := p.db.Delete(tagIdxKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
+		return err
+	}
+
+	return nil
+}
+
+// GetBookTags returns all tags for a book, sorted alphabetically.
+func (p *PebbleStore) GetBookTags(bookID string) ([]string, error) {
+	prefix := []byte(fmt.Sprintf("book_tag:%s:", bookID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var tags []string
+	for iter.First(); iter.Valid(); iter.Next() {
+		var bt BookTag
+		if err := json.Unmarshal(iter.Value(), &bt); err != nil {
+			continue
+		}
+		tags = append(tags, bt.Tag)
+	}
+	sort.Strings(tags)
+	return tags, nil
+}
+
+// SetBookTags replaces all tags on a book with the given set.
+func (p *PebbleStore) SetBookTags(bookID string, tags []string) error {
+	existing, err := p.GetBookTags(bookID)
+	if err != nil {
+		return err
+	}
+
+	// Normalize incoming tags
+	normalized := make(map[string]bool)
+	for _, t := range tags {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t != "" {
+			normalized[t] = true
+		}
+	}
+
+	// Build set of existing
+	existingSet := make(map[string]bool)
+	for _, t := range existing {
+		existingSet[t] = true
+	}
+
+	// Remove tags not in new set
+	for _, t := range existing {
+		if !normalized[t] {
+			if err := p.RemoveBookTag(bookID, t); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Add tags not in existing set
+	for t := range normalized {
+		if !existingSet[t] {
+			if err := p.AddBookTag(bookID, t); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// ListAllTags returns all unique tags with their usage counts.
+func (p *PebbleStore) ListAllTags() ([]TagWithCount, error) {
+	prefix := []byte("tag_idx:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	counts := make(map[string]int)
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Key format: tag_idx:<tag>:<bookID>
+		key := string(iter.Key())
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) >= 2 {
+			counts[parts[1]]++
+		}
+	}
+
+	result := make([]TagWithCount, 0, len(counts))
+	for tag, count := range counts {
+		result = append(result, TagWithCount{Tag: tag, Count: count})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Tag < result[j].Tag
+	})
+	return result, nil
+}
+
+// GetBooksByTag returns all book IDs that have the given tag.
+func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if tag == "" {
+		return nil, fmt.Errorf("tag cannot be empty")
+	}
+
+	prefix := []byte(fmt.Sprintf("tag_idx:%s:", tag))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var bookIDs []string
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Key format: tag_idx:<tag>:<bookID>
+		key := string(iter.Key())
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) == 3 {
+			bookIDs = append(bookIDs, parts[2])
+		}
+	}
+	return bookIDs, nil
 }
