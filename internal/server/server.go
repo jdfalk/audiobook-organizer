@@ -1643,9 +1643,11 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Parse field filters from JSON query param
 	if filtersJSON := c.Query("filters"); filtersJSON != "" {
 		var fieldFilters []FieldFilter
-		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err == nil {
-			filters.FieldFilters = fieldFilters
+		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filters parameter: " + err.Error()})
+			return
 		}
+		filters.FieldFilters = fieldFilters
 	}
 
 	// Call service
