@@ -1,5 +1,5 @@
 // file: internal/server/error_handler.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5d6e7f8a-9b0c-1d2e-3f4a-5b6c7d8e9f0a
 // last-edited: 2026-02-04
 
@@ -13,6 +13,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// internalError logs the full error internally and returns a generic message to the client.
+// Use this for 500-level errors where internal details should not be exposed.
+func internalError(c *gin.Context, msg string, err error) {
+	log.Printf("[ERROR] %s: %v", msg, err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+}
 
 // ErrorResponse provides a consistent error response format
 type ErrorResponse struct {

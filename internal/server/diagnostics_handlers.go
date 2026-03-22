@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -66,7 +66,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 	opID := ulid.Make().String()
 	_, err := store.CreateOperation(opID, "diagnostics_export", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create operation: %v", err)})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 	opID := ulid.Make().String()
 	_, err := store.CreateOperation(opID, "diagnostics_ai", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create operation: %v", err)})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 

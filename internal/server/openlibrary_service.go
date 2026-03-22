@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -99,7 +99,7 @@ func (s *Server) getOLStatus(c *gin.Context) {
 	if svc.store != nil {
 		status, err := svc.store.GetStatus()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, "failed to get OpenLibrary status", err)
 			return
 		}
 		resp["status"] = status
@@ -227,7 +227,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 		store, err := openlibrary.NewOLStore(storePath)
 		if err != nil {
 			svc.mu.Unlock()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to open store: %v", err)})
+			internalError(c, "failed to open store", err)
 			return
 		}
 		svc.store = store
@@ -415,7 +415,7 @@ func (s *Server) deleteOLData(c *gin.Context) {
 	targetDir := getOLDumpDir()
 	if targetDir != "" {
 		if err := os.RemoveAll(targetDir); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete data: %v", err)})
+			internalError(c, "failed to delete data", err)
 			return
 		}
 	}

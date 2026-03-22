@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -80,7 +80,7 @@ func (s *Server) reconcilePreview(c *gin.Context) {
 
 	result, err := buildReconcilePreview(store)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to build reconcile preview", err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -101,7 +101,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := store.CreateOperation(id, "reconcile_scan", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -140,7 +140,7 @@ func (s *Server) latestReconcileScan(c *gin.Context) {
 	// Find the most recent reconcile_scan operation
 	ops, _, err := store.ListOperations(50, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list operations", err)
 		return
 	}
 
@@ -198,7 +198,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := store.CreateOperation(id, "reconcile", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -208,7 +208,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -755,7 +755,7 @@ func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := cleanupDuplicateVersionGroups(database.GlobalStore, config.AppConfig.RootDir, dryRun)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to cleanup version groups", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -858,7 +858,7 @@ func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := findBrokenSegmentBooks(database.GlobalStore, dryRun)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to find broken segments", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -1216,7 +1216,7 @@ func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := mergeNoVGDuplicates(database.GlobalStore, config.AppConfig.RootDir, dryRun)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to merge duplicates", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -1291,7 +1291,7 @@ func assignOrphanVGs(store database.Store, rootDir string) (*AssignVGResult, err
 func (s *Server) assignOrphanVGsHandler(c *gin.Context) {
 	result, err := assignOrphanVGs(database.GlobalStore, config.AppConfig.RootDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to assign version groups", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"result": result})

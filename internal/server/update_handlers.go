@@ -1,5 +1,5 @@
 // file: internal/server/update_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -32,7 +32,7 @@ func (s *Server) checkForUpdate(c *gin.Context) {
 	channel := config.AppConfig.AutoUpdateChannel
 	info, err := s.updater.CheckForUpdate(channel)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to check for updates", err)
 		return
 	}
 	c.JSON(http.StatusOK, info)
@@ -47,7 +47,7 @@ func (s *Server) applyUpdate(c *gin.Context) {
 	}
 
 	if err := s.updater.DownloadAndReplace(info); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to apply update", err)
 		return
 	}
 
