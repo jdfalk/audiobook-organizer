@@ -258,8 +258,12 @@ func applySorting(books []database.Book, f ListFilters) {
 	if !ok {
 		return
 	}
-	sort.Slice(books, func(i, j int) bool {
+	sort.SliceStable(books, func(i, j int) bool {
 		result := cmpFn(&books[i], &books[j])
+		if result == 0 {
+			// Tiebreaker: sort by ID for stable ordering
+			result = strings.Compare(books[i].ID, books[j].ID)
+		}
 		if f.SortOrder == "desc" {
 			return result > 0
 		}

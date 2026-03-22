@@ -117,12 +117,15 @@ export function parseSearch(input: string): ParsedSearch {
     const fieldMatch = tryMatchFieldValue(str, pos);
 
     if (fieldMatch && isKnownField(fieldMatch.field)) {
-      fieldFilters.push({
-        field: fieldMatch.field,
-        value: fieldMatch.value,
-        negated,
-        quoted: fieldMatch.quoted,
-      });
+      const trimmedValue = fieldMatch.value.trim();
+      if (trimmedValue) {
+        fieldFilters.push({
+          field: fieldMatch.field,
+          value: trimmedValue,
+          negated,
+          quoted: fieldMatch.quoted,
+        });
+      }
       pos = fieldMatch.endPos;
     } else {
       // Not a field:value — consume as free text word
