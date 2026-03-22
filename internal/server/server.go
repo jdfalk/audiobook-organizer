@@ -2942,6 +2942,10 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 
 func (s *Server) setBookUserTags(c *gin.Context) {
 	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
 	var body struct {
 		Tags []string `json:"tags"`
 	}
@@ -2949,7 +2953,14 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	tags, err := s.audiobookService.SetBookUserTags(id, body.Tags)
+	// Filter out empty tags
+	validTags := make([]string, 0, len(body.Tags))
+	for _, t := range body.Tags {
+		if strings.TrimSpace(t) != "" {
+			validTags = append(validTags, t)
+		}
+	}
+	tags, err := s.audiobookService.SetBookUserTags(id, validTags)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -2980,6 +2991,10 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 
 func (s *Server) removeBookUserTag(c *gin.Context) {
 	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
 	tag := c.Param("tag")
 	if tag == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tag is required"})
@@ -3011,6 +3026,18 @@ func (s *Server) batchUpdateTags(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of add_tags or remove_tags is required"})
 		return
 	}
+	// Filter out empty strings from tag arrays
+	filterEmpty := func(tags []string) []string {
+		out := make([]string, 0, len(tags))
+		for _, t := range tags {
+			if strings.TrimSpace(t) != "" {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	body.AddTags = filterEmpty(body.AddTags)
+	body.RemoveTags = filterEmpty(body.RemoveTags)
 	updated, err := s.audiobookService.BatchUpdateUserTags(body.BookIDs, body.AddTags, body.RemoveTags)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

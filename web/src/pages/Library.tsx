@@ -103,6 +103,51 @@ type OrganizeErrorState = {
   message: string;
 };
 
+const convertApiBook = (book: api.Book): Audiobook => ({
+  id: book.id,
+  title: book.title,
+  author: book.author_name || 'Unknown',
+  narrator: book.narrator,
+  series: book.series_name,
+  series_number: book.series_position,
+  genre: book.genre,
+  language: book.language,
+  publisher: book.publisher,
+  edition: book.edition,
+  description: book.description,
+  audiobook_release_year: book.audiobook_release_year,
+  year: book.audiobook_release_year || book.print_year,
+  print_year: book.print_year,
+  isbn10: book.isbn10,
+  isbn13: book.isbn13,
+  duration_seconds: book.duration,
+  cover_url: book.cover_url,
+  file_path: book.file_path,
+  original_filename: book.original_filename,
+  format: book.format || book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
+  file_size_bytes: book.file_size,
+  quality: book.quality,
+  bitrate_kbps: book.bitrate,
+  codec: book.codec,
+  sample_rate_hz: book.sample_rate,
+  channels: book.channels,
+  bit_depth: book.bit_depth,
+  file_hash: book.file_hash,
+  is_primary_version: book.is_primary_version,
+  version_group_id: book.version_group_id,
+  version_notes: book.version_notes,
+  created_at: book.created_at,
+  updated_at: book.updated_at,
+  library_state: book.library_state,
+  metadata_review_status: book.metadata_review_status,
+  marked_for_deletion: book.marked_for_deletion,
+  marked_for_deletion_at: book.marked_for_deletion_at,
+  original_file_hash: book.original_file_hash,
+  organized_file_hash: book.organized_file_hash,
+  organize_error: book.organize_error,
+  work_id: book.work_id,
+});
+
 const buildHashCandidates = (book: Audiobook): string[] => {
   const hashes: string[] = [];
   if (book.file_hash) hashes.push(book.file_hash);
@@ -558,32 +603,7 @@ export const Library = () => {
     setSelectedAudiobooks([]);
   };
 
-  const convertApiBook = useCallback((book: api.Book): Audiobook => ({
-    id: book.id,
-    title: book.title,
-    author: book.author_name || 'Unknown',
-    narrator: book.narrator,
-    series: book.series_name,
-    series_number: book.series_position,
-    language: book.language,
-    audiobook_release_year: book.audiobook_release_year,
-    year: book.audiobook_release_year || book.print_year,
-    print_year: book.print_year,
-    duration_seconds: book.duration,
-    cover_url: book.cover_url,
-    file_path: book.file_path,
-    format: book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
-    quality: book.quality,
-    bitrate_kbps: book.bitrate,
-    created_at: book.created_at,
-    updated_at: book.updated_at,
-    library_state: book.library_state,
-    marked_for_deletion: book.marked_for_deletion,
-    marked_for_deletion_at: book.marked_for_deletion_at,
-    original_file_hash: book.original_file_hash,
-    organized_file_hash: book.organized_file_hash,
-    organize_error: book.organize_error,
-  }), []);
+  // convertApiBook is defined above the component as a pure function
 
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);

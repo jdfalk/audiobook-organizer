@@ -2,7 +2,7 @@
 // version: 2.0.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -75,6 +75,14 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     startWidth: number;
     minWidth: number;
   } | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  // Cleanup resize listeners on unmount
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+    };
+  }, []);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, id: string) => {
     event.stopPropagation();
@@ -138,6 +146,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
       const handleMouseUp = (upEvt: MouseEvent) => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        cleanupRef.current = null;
         if (!resizingRef.current) return;
         const delta = upEvt.clientX - resizingRef.current.startX;
         const newWidth = Math.max(
@@ -150,6 +159,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
 
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      cleanupRef.current = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        resizingRef.current = null;
+      };
     },
     [columnWidths, onColumnResize]
   );

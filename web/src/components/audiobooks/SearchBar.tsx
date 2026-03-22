@@ -2,7 +2,7 @@
 // version: 1.4.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   TextField,
   InputAdornment,
@@ -54,33 +54,26 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 }) => {
   const parsed = useMemo(() => parseSearch(value), [value]);
 
+  // Notify parent of parsed search changes
+  useEffect(() => {
+    onParsedSearchChange?.(parsed);
+  }, [parsed, onParsedSearchChange]);
+
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = event.target.value;
-    onChange(newValue);
-    if (onParsedSearchChange) {
-      onParsedSearchChange(parseSearch(newValue));
-    }
+    onChange(event.target.value);
   };
 
   const handleClear = () => {
     onChange('');
-    if (onParsedSearchChange) {
-      onParsedSearchChange({ freeText: '', fieldFilters: [] });
-    }
   };
 
   const handleRemoveFilter = (index: number) => {
     const filter = parsed.fieldFilters[index];
-    // Reconstruct the token string that was in the input
     const prefix = filter.negated ? (value.includes('NOT ') ? 'NOT ' : '-') : '';
     const valStr = filter.quoted ? `"${filter.value}"` : filter.value;
     const token = `${prefix}${filter.field}:${valStr}`;
-    // Remove the token from the raw input
     const newValue = value.replace(token, '').replace(/\s{2,}/g, ' ').trim();
     onChange(newValue);
-    if (onParsedSearchChange) {
-      onParsedSearchChange(parseSearch(newValue));
-    }
   };
 
   const handleViewModeChange = (
