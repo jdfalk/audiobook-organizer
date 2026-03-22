@@ -152,6 +152,63 @@ func (_c *MockStore_AddBookTag_Call) RunAndReturn(run func(bookID string, tag st
 	return _c
 }
 
+// AddBookUserTag provides a mock function for the type MockStore
+func (_mock *MockStore) AddBookUserTag(bookID string, tag string) error {
+	ret := _mock.Called(bookID, tag)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddBookUserTag")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(bookID, tag)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_AddBookUserTag_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddBookUserTag'
+type MockStore_AddBookUserTag_Call struct {
+	*mock.Call
+}
+
+// AddBookUserTag is a helper method to define mock.On call
+//   - bookID string
+//   - tag string
+func (_e *MockStore_Expecter) AddBookUserTag(bookID interface{}, tag interface{}) *MockStore_AddBookUserTag_Call {
+	return &MockStore_AddBookUserTag_Call{Call: _e.mock.On("AddBookUserTag", bookID, tag)}
+}
+
+func (_c *MockStore_AddBookUserTag_Call) Run(run func(bookID string, tag string)) *MockStore_AddBookUserTag_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_AddBookUserTag_Call) Return(err error) *MockStore_AddBookUserTag_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_AddBookUserTag_Call) RunAndReturn(run func(bookID string, tag string) error) *MockStore_AddBookUserTag_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // AddOperationLog provides a mock function for the type MockStore
 func (_mock *MockStore) AddOperationLog(operationID string, level string, message string, details *string) error {
 	ret := _mock.Called(operationID, level, message, details)
@@ -4887,6 +4944,68 @@ func (_c *MockStore_GetBookTombstone_Call) RunAndReturn(run func(id string) (*da
 	return _c
 }
 
+// GetBookUserTags provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookUserTags(bookID string) ([]string, error) {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookUserTags")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]string, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []string); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetBookUserTags_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookUserTags'
+type MockStore_GetBookUserTags_Call struct {
+	*mock.Call
+}
+
+// GetBookUserTags is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) GetBookUserTags(bookID interface{}) *MockStore_GetBookUserTags_Call {
+	return &MockStore_GetBookUserTags_Call{Call: _e.mock.On("GetBookUserTags", bookID)}
+}
+
+func (_c *MockStore_GetBookUserTags_Call) Run(run func(bookID string)) *MockStore_GetBookUserTags_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookUserTags_Call) Return(strings []string, err error) *MockStore_GetBookUserTags_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookUserTags_Call) RunAndReturn(run func(bookID string) ([]string, error)) *MockStore_GetBookUserTags_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookVersions provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookVersions(id string, limit int) ([]database.BookVersion, error) {
 	ret := _mock.Called(id, limit)
@@ -9467,6 +9586,63 @@ func (_c *MockStore_RemoveBookTag_Call) RunAndReturn(run func(bookID string, tag
 	return _c
 }
 
+// RemoveBookUserTag provides a mock function for the type MockStore
+func (_mock *MockStore) RemoveBookUserTag(bookID string, tag string) error {
+	ret := _mock.Called(bookID, tag)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveBookUserTag")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(bookID, tag)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_RemoveBookUserTag_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveBookUserTag'
+type MockStore_RemoveBookUserTag_Call struct {
+	*mock.Call
+}
+
+// RemoveBookUserTag is a helper method to define mock.On call
+//   - bookID string
+//   - tag string
+func (_e *MockStore_Expecter) RemoveBookUserTag(bookID interface{}, tag interface{}) *MockStore_RemoveBookUserTag_Call {
+	return &MockStore_RemoveBookUserTag_Call{Call: _e.mock.On("RemoveBookUserTag", bookID, tag)}
+}
+
+func (_c *MockStore_RemoveBookUserTag_Call) Run(run func(bookID string, tag string)) *MockStore_RemoveBookUserTag_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_RemoveBookUserTag_Call) Return(err error) *MockStore_RemoveBookUserTag_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RemoveBookUserTag_Call) RunAndReturn(run func(bookID string, tag string) error) *MockStore_RemoveBookUserTag_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Reset provides a mock function for the type MockStore
 func (_mock *MockStore) Reset() error {
 	ret := _mock.Called()
@@ -10209,6 +10385,63 @@ func (_c *MockStore_SetBookTags_Call) Return(err error) *MockStore_SetBookTags_C
 }
 
 func (_c *MockStore_SetBookTags_Call) RunAndReturn(run func(bookID string, tags []string) error) *MockStore_SetBookTags_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetBookUserTags provides a mock function for the type MockStore
+func (_mock *MockStore) SetBookUserTags(bookID string, tags []string) error {
+	ret := _mock.Called(bookID, tags)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBookUserTags")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []string) error); ok {
+		r0 = returnFunc(bookID, tags)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetBookUserTags_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetBookUserTags'
+type MockStore_SetBookUserTags_Call struct {
+	*mock.Call
+}
+
+// SetBookUserTags is a helper method to define mock.On call
+//   - bookID string
+//   - tags []string
+func (_e *MockStore_Expecter) SetBookUserTags(bookID interface{}, tags interface{}) *MockStore_SetBookUserTags_Call {
+	return &MockStore_SetBookUserTags_Call{Call: _e.mock.On("SetBookUserTags", bookID, tags)}
+}
+
+func (_c *MockStore_SetBookUserTags_Call) Run(run func(bookID string, tags []string)) *MockStore_SetBookUserTags_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetBookUserTags_Call) Return(err error) *MockStore_SetBookUserTags_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetBookUserTags_Call) RunAndReturn(run func(bookID string, tags []string) error) *MockStore_SetBookUserTags_Call {
 	_c.Call.Return(run)
 	return _c
 }
