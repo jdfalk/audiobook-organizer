@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -55,7 +56,8 @@ import (
 // - author_tombstone:<old_id>        -> canonical_id (merged author redirect)
 
 type PebbleStore struct {
-	db *pebble.DB
+	db      *pebble.DB
+	counterMu sync.Mutex // protects nextID read-modify-write
 }
 
 // NewPebbleStore creates a new PebbleDB store
@@ -104,6 +106,9 @@ func (p *PebbleStore) Close() error {
 // Helper functions
 
 func (p *PebbleStore) nextID(counter string) (int, error) {
+	p.counterMu.Lock()
+	defer p.counterMu.Unlock()
+
 	key := []byte(fmt.Sprintf("counter:%s", counter))
 
 	value, closer, err := p.db.Get(key)

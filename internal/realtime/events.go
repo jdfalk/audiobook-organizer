@@ -37,6 +37,7 @@ type Client struct {
 	ID         string
 	Channel    chan *Event
 	Operations map[string]bool // Operations this client is interested in
+	closed     bool            // true after Channel is closed
 	mu         sync.RWMutex
 }
 
@@ -99,7 +100,10 @@ func (h *EventHub) UnregisterClient(clientID string) {
 	defer h.mu.Unlock()
 
 	if client, exists := h.clients[clientID]; exists {
+		client.mu.Lock()
+		client.closed = true
 		close(client.Channel)
+		client.mu.Unlock()
 		delete(h.clients, clientID)
 		log.Printf("Client %s unregistered, remaining clients: %d", clientID, len(h.clients))
 	}
@@ -112,6 +116,14 @@ func (h *EventHub) Broadcast(event *Event) {
 
 	count := 0
 	for _, client := range h.clients {
+		// Skip clients that have been closed (race protection)
+		client.mu.RLock()
+		if client.closed {
+			client.mu.RUnlock()
+			continue
+		}
+		client.mu.RUnlock()
+
 		// Send to clients if:
 		// 1. Event has no ID (system-wide events), OR
 		// 2. Client has no subscriptions (wants all events), OR
