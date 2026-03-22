@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.8.0
+// version: 1.9.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -58,6 +58,7 @@ export interface Audiobook {
   created_at: string;
   updated_at: string;
   work_id?: string;
+  tags?: string[];
 }
 
 // Alias for backend compatibility
@@ -119,6 +120,17 @@ export enum SortField {
   Year = 'year',
   Series = 'series',
   CreatedAt = 'created_at',
+  Narrator = 'narrator',
+  Genre = 'genre',
+  Language = 'language',
+  Publisher = 'publisher',
+  Format = 'format',
+  Duration = 'duration_seconds',
+  Bitrate = 'bitrate_kbps',
+  Codec = 'codec',
+  FileSize = 'file_size_bytes',
+  UpdatedAt = 'updated_at',
+  LibraryState = 'library_state',
 }
 
 // Sort order enum for type safety
