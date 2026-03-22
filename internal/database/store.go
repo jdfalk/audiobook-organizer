@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.44.0
+// version: 2.45.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -265,6 +265,14 @@ type Store interface {
 	// Book Path History (file rename/move tracking)
 	RecordPathChange(change *BookPathChange) error
 	GetBookPathHistory(bookID string) ([]BookPathChange, error)
+
+	// Book User Tags (user-defined labels like "litrpg", "scifi", etc.)
+	AddBookTag(bookID, tag string) error
+	RemoveBookTag(bookID, tag string) error
+	GetBookTags(bookID string) ([]string, error)
+	SetBookTags(bookID string, tags []string) error // bulk replace
+	ListAllTags() ([]TagWithCount, error)
+	GetBooksByTag(tag string) ([]string, error) // returns book IDs
 
 	// External ID mapping (PID map for iTunes, Audible, etc.)
 	CreateExternalIDMapping(mapping *ExternalIDMapping) error
@@ -699,6 +707,19 @@ type BookPathChange struct {
 	NewPath    string    `json:"new_path"`
 	ChangeType string    `json:"change_type"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+// BookTag represents a user-defined tag on a book
+type BookTag struct {
+	BookID    string    `json:"book_id"`
+	Tag       string    `json:"tag"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TagWithCount represents a tag with its usage count
+type TagWithCount struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
 }
 
 // ScanCacheEntry holds mtime/size for incremental scan skip checks.
