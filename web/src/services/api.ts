@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.56.0
+// version: 1.57.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3166,4 +3166,94 @@ export async function getBookExternalIDs(bookId: string): Promise<{
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/external-ids`);
   if (!response.ok) return { external_ids: [], itunes_linked: false, total: 0 };
   return response.json();
+}
+
+// --- User tag API functions ---
+
+export async function getBookUserTags(bookId: string): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/user-tags`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get book tags');
+  }
+  const data = await response.json();
+  return data.tags;
+}
+
+export async function setBookUserTags(
+  bookId: string,
+  tags: string[]
+): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/user-tags`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to set book tags');
+  }
+  const data = await response.json();
+  return data.tags;
+}
+
+export async function addBookUserTag(
+  bookId: string,
+  tag: string
+): Promise<string[]> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/user-tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to add book tag');
+  }
+  const data = await response.json();
+  return data.tags;
+}
+
+export async function removeBookUserTag(
+  bookId: string,
+  tag: string
+): Promise<string[]> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/user-tags/${encodeURIComponent(tag)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to remove book tag');
+  }
+  const data = await response.json();
+  return data.tags;
+}
+
+export async function bulkUpdateTags(
+  bookIds: string[],
+  addTags: string[],
+  removeTags: string[]
+): Promise<number> {
+  const response = await fetch(`${API_BASE}/audiobooks/batch-tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      book_ids: bookIds,
+      add_tags: addTags,
+      remove_tags: removeTags,
+    }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to bulk update tags');
+  }
+  const data = await response.json();
+  return data.updated;
+}
+
+export async function listAllUserTags(): Promise<
+  Array<{ tag: string; count: number }>
+> {
+  const response = await fetch(`${API_BASE}/tags`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list tags');
+  }
+  const data = await response.json();
+  return data.tags;
 }
