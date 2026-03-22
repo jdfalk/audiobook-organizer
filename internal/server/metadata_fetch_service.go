@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.32.0
+// version: 4.33.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -704,53 +704,50 @@ func parseSeriesFromTitle(s string) (series, position, title string) {
 
 // writeBackMetadata writes enriched metadata back to audio file(s).
 func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta metadata.BookMetadata) {
-	tagMap := make(map[string]interface{})
-	if meta.Title != "" {
-		tagMap["title"] = meta.Title
-	}
-	// Resolve multi-author from DB (join table), fall back to meta.Author
+	// --- Resolve author names (same logic as WriteBackMetadataForBook) ---
+	var authorNames []string
 	if bookAuthors, err := mfs.db.GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
-		var names []string
 		for _, ba := range bookAuthors {
 			if author, aerr := mfs.db.GetAuthorByID(ba.AuthorID); aerr == nil && author != nil {
-				names = append(names, author.Name)
+				authorNames = append(authorNames, author.Name)
 			}
 		}
-		if len(names) > 0 {
-			tagMap["artist"] = strings.Join(names, ", ")
+	} else if book.AuthorID != nil {
+		if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			authorNames = append(authorNames, author.Name)
 		}
-	} else if meta.Author != "" {
-		tagMap["artist"] = meta.Author
 	}
-	if meta.Publisher != "" {
-		tagMap["publisher"] = meta.Publisher
+	if len(authorNames) == 0 && meta.Author != "" {
+		authorNames = append(authorNames, meta.Author)
 	}
-	if meta.PublishYear != 0 {
-		tagMap["year"] = meta.PublishYear
+	artistStr := strings.Join(authorNames, ", ")
+
+	// --- Resolve narrator names ---
+	var narratorNames []string
+	if bookNarrators, err := mfs.db.GetBookNarrators(book.ID); err == nil && len(bookNarrators) > 0 {
+		for _, bn := range bookNarrators {
+			if narrator, nerr := mfs.db.GetNarratorByID(bn.NarratorID); nerr == nil && narrator != nil {
+				narratorNames = append(narratorNames, narrator.Name)
+			}
+		}
+	} else if book.Narrator != nil && *book.Narrator != "" {
+		narratorNames = append(narratorNames, *book.Narrator)
 	}
-	// Include custom AUDIOBOOK_ORGANIZER_* tags for book tracking and re-linking
-	tagMap["book_id"] = book.ID
-	if book.ISBN10 != nil {
-		tagMap["isbn10"] = *book.ISBN10
-	}
-	if book.ISBN13 != nil {
-		tagMap["isbn13"] = *book.ISBN13
-	}
-	if book.ASIN != nil {
-		tagMap["asin"] = *book.ASIN
-	}
-	if book.OpenLibraryID != nil {
-		tagMap["open_library_id"] = *book.OpenLibraryID
-	}
-	if book.HardcoverID != nil {
-		tagMap["hardcover_id"] = *book.HardcoverID
-	}
-	if book.GoogleBooksID != nil {
-		tagMap["google_books_id"] = *book.GoogleBooksID
+	narratorStr := strings.Join(narratorNames, " & ")
+
+	// --- Determine year ---
+	year := 0
+	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
+		year = *book.AudiobookReleaseYear
+	} else if book.PrintYear != nil && *book.PrintYear > 0 {
+		year = *book.PrintYear
+	} else if meta.PublishYear > 0 {
+		year = meta.PublishYear
 	}
 
-	if len(tagMap) == 0 {
-		return
+	bookTitle := meta.Title
+	if bookTitle == "" {
+		bookTitle = book.Title
 	}
 
 	opConfig := fileops.OperationConfig{VerifyChecksums: true}
@@ -762,37 +759,60 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 		return
 	}
 
-	// Write to primary file
-	backupFileBeforeWrite(book.FilePath)
-	if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
-		log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
-	} else {
-		log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
-		// Stamp last_written_at after successful write-back.
-		if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
-			log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+	// Collect active segments for multi-file books
+	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
+	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
+	var activeSegments []database.BookSegment
+	if segErr == nil {
+		for _, seg := range segments {
+			if seg.Active {
+				activeSegments = append(activeSegments, seg)
+			}
 		}
-		// Flag for rescan so the next incremental scan re-reads the updated tags.
-		_ = mfs.db.MarkNeedsRescan(book.ID)
 	}
 
-	// Write to each segment file for multi-file books
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := mfs.db.ListBookSegments(bookNumericID)
-	if err != nil {
-		return
-	}
-	for _, seg := range segments {
-		if !seg.Active {
-			continue
+	totalTracks := len(activeSegments)
+
+	if totalTracks > 1 {
+		// Multi-file: write to each segment with per-track title and numbering
+		digits := len(fmt.Sprintf("%d", totalTracks))
+		trackFmt := fmt.Sprintf("%%0%dd", digits)
+		for i, seg := range activeSegments {
+			trackNum := i + 1
+			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
+			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
+			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
+			if len(tagMap) == 0 {
+				continue
+			}
+			if isProtectedPath(seg.FilePath) {
+				log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
+				continue
+			}
+			backupFileBeforeWrite(seg.FilePath)
+			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+			}
 		}
-		if isProtectedPath(seg.FilePath) {
-			log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
-			continue
+	} else {
+		// Single-file or no segments: write to book.FilePath
+		tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+		tagMap = filterUnchangedTags(book.FilePath, tagMap)
+		if len(tagMap) == 0 {
+			return
 		}
-		backupFileBeforeWrite(seg.FilePath)
-		if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
-			log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+		backupFileBeforeWrite(book.FilePath)
+		if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+			log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+		} else {
+			log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
+			// Stamp last_written_at after successful write-back.
+			if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
+				log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+			}
+			// Flag for rescan so the next incremental scan re-reads the updated tags.
+			_ = mfs.db.MarkNeedsRescan(book.ID)
 		}
 	}
 }
