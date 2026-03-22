@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -253,6 +253,12 @@ var migrations = []Migration{
 		Version:     36,
 		Description: "Add genre column to books table",
 		Up:          migration036Up,
+		Down:        nil,
+	},
+	{
+		Version:     37,
+		Description: "Add book_tags table for user-defined tags",
+		Up:          migration037Up,
 		Down:        nil,
 	},
 }
@@ -1866,5 +1872,35 @@ func migration036Up(store Store) error {
 	}
 
 	log.Println("  - genre column added successfully")
+	return nil
+}
+
+// migration037Up creates the book_tags table for user-defined tags.
+func migration037Up(store Store) error {
+	log.Println("  - Creating book_tags table for user-defined tags")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS book_tags (
+			book_id TEXT NOT NULL,
+			tag TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (book_id, tag)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_tags_tag ON book_tags(tag)`,
+	}
+
+	for _, stmt := range statements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 37 failed: %w", err)
+		}
+	}
+
+	log.Println("  - book_tags table created successfully")
 	return nil
 }

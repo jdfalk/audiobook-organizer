@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -218,6 +218,14 @@ type MockStore struct {
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
 	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
+
+	// Book User Tags
+	AddBookTagFunc    func(bookID, tag string) error
+	RemoveBookTagFunc func(bookID, tag string) error
+	GetBookTagsFunc   func(bookID string) ([]string, error)
+	SetBookTagsFunc   func(bookID string, tags []string) error
+	ListAllTagsFunc   func() ([]TagWithCount, error)
+	GetBooksByTagFunc func(tag string) ([]string, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1405,6 +1413,48 @@ func (m *MockStore) RecordPathChange(change *BookPathChange) error {
 func (m *MockStore) GetBookPathHistory(bookID string) ([]BookPathChange, error) {
 	if m.GetBookPathHistoryFunc != nil {
 		return m.GetBookPathHistoryFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) AddBookTag(bookID, tag string) error {
+	if m.AddBookTagFunc != nil {
+		return m.AddBookTagFunc(bookID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveBookTag(bookID, tag string) error {
+	if m.RemoveBookTagFunc != nil {
+		return m.RemoveBookTagFunc(bookID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookTags(bookID string) ([]string, error) {
+	if m.GetBookTagsFunc != nil {
+		return m.GetBookTagsFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SetBookTags(bookID string, tags []string) error {
+	if m.SetBookTagsFunc != nil {
+		return m.SetBookTagsFunc(bookID, tags)
+	}
+	return nil
+}
+
+func (m *MockStore) ListAllTags() ([]TagWithCount, error) {
+	if m.ListAllTagsFunc != nil {
+		return m.ListAllTagsFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBooksByTag(tag string) ([]string, error) {
+	if m.GetBooksByTagFunc != nil {
+		return m.GetBooksByTagFunc(tag)
 	}
 	return nil, nil
 }
