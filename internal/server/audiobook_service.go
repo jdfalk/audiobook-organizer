@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -38,9 +38,16 @@ func NewAudiobookService(store database.Store) *AudiobookService {
 
 // InvalidateBookCaches clears all book-related caches. Called after any
 // mutation (create, update, delete) to keep reads consistent.
+//
+// Order matters: invalidate bookCache first, then listCache. If we did it the
+// other way around, a concurrent reader could miss the list cache (just
+// cleared), re-fetch a fresh list from the DB, but still hit stale individual
+// book entries that haven't been invalidated yet. By clearing individual books
+// first, any concurrent reader that re-fetches the list will also get fresh
+// individual books on subsequent lookups.
 func (svc *AudiobookService) InvalidateBookCaches() {
-	svc.listCache.InvalidateAll()
 	svc.bookCache.InvalidateAll()
+	svc.listCache.InvalidateAll()
 }
 
 // AudiobooksListResponse represents the response for listing audiobooks
