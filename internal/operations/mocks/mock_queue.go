@@ -205,6 +205,46 @@ func (_c *MockQueue_Enqueue_Call) RunAndReturn(run func(id string, opType string
 	return _c
 }
 
+// SetStore provides a mock function for the type MockQueue
+func (_mock *MockQueue) SetStore(store database.Store) {
+	_mock.Called(store)
+	return
+}
+
+// MockQueue_SetStore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetStore'
+type MockQueue_SetStore_Call struct {
+	*mock.Call
+}
+
+// SetStore is a helper method to define mock.On call
+//   - store database.Store
+func (_e *MockQueue_Expecter) SetStore(store interface{}) *MockQueue_SetStore_Call {
+	return &MockQueue_SetStore_Call{Call: _e.mock.On("SetStore", store)}
+}
+
+func (_c *MockQueue_SetStore_Call) Run(run func(store database.Store)) *MockQueue_SetStore_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.Store
+		if args[0] != nil {
+			arg0 = args[0].(database.Store)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockQueue_SetStore_Call) Return() *MockQueue_SetStore_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockQueue_SetStore_Call) RunAndReturn(run func(store database.Store)) *MockQueue_SetStore_Call {
+	_c.Run(run)
+	return _c
+}
+
 // Shutdown provides a mock function for the type MockQueue
 func (_mock *MockQueue) Shutdown(timeout time.Duration) error {
 	ret := _mock.Called(timeout)
@@ -252,42 +292,6 @@ func (_c *MockQueue_Shutdown_Call) Return(err error) *MockQueue_Shutdown_Call {
 }
 
 func (_c *MockQueue_Shutdown_Call) RunAndReturn(run func(timeout time.Duration) error) *MockQueue_Shutdown_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// SetStore provides a mock function for the type MockQueue
-func (_mock *MockQueue) SetStore(store database.Store) {
-	_mock.Called(store)
-}
-
-// MockQueue_SetStore_Call is a *mock.Call
-type MockQueue_SetStore_Call struct {
-	*mock.Call
-}
-
-// SetStore is a helper method to define mock.On call
-func (_e *MockQueue_Expecter) SetStore(store interface{}) *MockQueue_SetStore_Call {
-	return &MockQueue_SetStore_Call{Call: _e.mock.On("SetStore", store)}
-}
-
-func (_c *MockQueue_SetStore_Call) Run(run func(store database.Store)) *MockQueue_SetStore_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 database.Store
-		if args[0] != nil {
-			arg0 = args[0].(database.Store)
-		}
-		run(arg0)
-	})
-	return _c
-}
-
-func (_c *MockQueue_SetStore_Call) Return() *MockQueue_SetStore_Call {
-	_c.Call.Return()
-	return _c
-}
-
-func (_c *MockQueue_SetStore_Call) RunAndReturn(run func(database.Store)) *MockQueue_SetStore_Call {
 	_c.Call.Return(run)
 	return _c
 }

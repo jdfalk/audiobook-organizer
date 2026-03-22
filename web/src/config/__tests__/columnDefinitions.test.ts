@@ -15,9 +15,8 @@ import {
   formatDate,
   formatBoolean,
   formatNumber,
-  ColumnDefinition,
 } from '../columnDefinitions';
-import { Audiobook } from '../../types';
+import type { Audiobook } from '../../types';
 
 const sampleBook: Audiobook = {
   id: 'test-id-123',
