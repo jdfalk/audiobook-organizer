@@ -1,5 +1,5 @@
 // file: internal/server/bench.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5e6f7a8b-9c0d-1234-ef01-555555555555
 
 //go:build bench
@@ -45,7 +45,7 @@ func (s *Server) setupBenchRoutes(protected *gin.RouterGroup) {
 func (s *Server) benchStatus(c *gin.Context) {
 	client, err := benchOpenAIClient()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create OpenAI client", err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (s *Server) benchStatus(c *gin.Context) {
 		Limit: openai.Int(100),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("list batches: %v", err)})
+		internalError(c, "failed to list batches", err)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join("testdata/dedup-bench", ts)
 	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create run directory", err)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (s *Server) benchCheck(c *gin.Context) {
 
 	client, err := benchOpenAIClient()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create OpenAI client", err)
 		return
 	}
 

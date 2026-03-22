@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.13.0
+// version: 2.14.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -301,7 +301,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(opID, "itunes_import", &req.LibraryPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -313,7 +313,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -482,7 +482,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	// Parse iTunes library to build persistent ID -> location map
 	library, err := itunes.ParseLibrary(req.LibraryPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse iTunes library: %v", err)})
+		internalError(c, "failed to parse iTunes library", err)
 		return
 	}
 
@@ -588,7 +588,7 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 		allBooks, err = database.GlobalStore.GetAllBooks(0, 0)
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to list books: %v", err)})
+		internalError(c, "failed to list books", err)
 		return
 	}
 
@@ -1717,7 +1717,7 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 
 	rec, err := database.GlobalStore.GetLibraryFingerprint(path)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get library fingerprint", err)
 		return
 	}
 
@@ -1811,7 +1811,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1821,7 +1821,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 

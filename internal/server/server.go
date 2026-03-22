@@ -6414,7 +6414,7 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 func (s *Server) resetSystem(c *gin.Context) {
 	// Reset database
 	if err := database.GlobalStore.Reset(); err != nil {
-		RespondWithInternalError(c, "failed to reset database: "+err.Error())
+		internalError(c, "failed to reset database", err)
 		return
 	}
 
@@ -6442,7 +6442,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	// Reset database (books, authors, series, settings)
 	if err := database.GlobalStore.Reset(); err != nil {
 		log.Printf("[ERROR] Factory reset: database reset failed: %v", err)
-		RespondWithInternalError(c, "failed to reset database: "+err.Error())
+		internalError(c, "failed to reset database", err)
 		return
 	}
 	log.Printf("[INFO] Factory reset: database cleared")
@@ -6834,7 +6834,7 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("metadata search failed: %v", err)})
+		internalError(c, "metadata search failed", err)
 		return
 	}
 
@@ -7675,14 +7675,14 @@ func (s *Server) splitVersion(c *gin.Context) {
 
 	createdBook, err := database.GlobalStore.CreateBook(newBook)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create new version: %v", err)})
+		internalError(c, "failed to create new version", err)
 		return
 	}
 
 	// 5. Move segments to the new book (DB-only, does NOT touch files on disk)
 	targetNumericID := int(crc32.ChecksumIEEE([]byte(createdBook.ID)))
 	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to move segments: %v", err)})
+		internalError(c, "failed to move segments", err)
 		return
 	}
 
@@ -7928,7 +7928,7 @@ func (s *Server) moveSegments(c *gin.Context) {
 	// 4. Move segments
 	targetNumericID := int(crc32.ChecksumIEEE([]byte(req.TargetBookID)))
 	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to move segments: %v", err)})
+		internalError(c, "failed to move segments", err)
 		return
 	}
 
@@ -7960,7 +7960,7 @@ func (s *Server) parseFilenameWithAI(c *gin.Context) {
 	// Parse filename
 	metadata, err := parser.ParseFilename(c.Request.Context(), req.Filename)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse filename: %v", err)})
+		internalError(c, "failed to parse filename", err)
 		return
 	}
 
@@ -7988,7 +7988,8 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	// Create parser with the provided/configured API key
 	parser := ai.NewOpenAIParser(apiKey, true)
 	if err := parser.TestConnection(c.Request.Context()); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("connection test failed: %v", err), "success": false})
+		log.Printf("[ERROR] connection test failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "connection test failed", "success": false})
 		return
 	}
 
@@ -8080,7 +8081,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	// Parse with AI using full context
 	metadata, err := parser.ParseAudiobook(c.Request.Context(), abCtx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to parse filename: %v", err)})
+		internalError(c, "failed to parse audiobook", err)
 		return
 	}
 
@@ -8112,7 +8113,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	// Route through the service layer for proper multi-author/narrator handling
 	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to update audiobook: %v", err)})
+		internalError(c, "failed to update audiobook", err)
 		return
 	}
 
@@ -8324,7 +8325,7 @@ func (s *Server) listBlockedHashes(c *gin.Context) {
 
 	hashes, err := database.GlobalStore.GetAllBlockedHashes()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get blocked hashes: %v", err)})
+		internalError(c, "failed to get blocked hashes", err)
 		return
 	}
 
@@ -8359,7 +8360,7 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 
 	err := database.GlobalStore.AddBlockedHash(req.Hash, req.Reason)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add blocked hash: %v", err)})
+		internalError(c, "failed to add blocked hash", err)
 		return
 	}
 
@@ -8385,7 +8386,7 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 
 	err := database.GlobalStore.RemoveBlockedHash(hash)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to remove blocked hash: %v", err)})
+		internalError(c, "failed to remove blocked hash", err)
 		return
 	}
 
@@ -8644,12 +8645,12 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 			// Cache is cold — compute dedup groups inline instead of requiring a separate refresh
 			authors, err := store.GetAllAuthors()
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch authors: " + err.Error()})
+				internalError(c, "failed to fetch authors", err)
 				return
 			}
 			bookCounts, err := store.GetAllAuthorBookCounts()
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch book counts: " + err.Error()})
+				internalError(c, "failed to fetch book counts", err)
 				return
 			}
 			bookCountFn := func(authorID int) int { return bookCounts[authorID] }

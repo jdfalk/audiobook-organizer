@@ -1,11 +1,10 @@
 // file: internal/server/user_tags.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +39,7 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 		return
 	}
 	if err := store.SetBookUserTags(id, req.Tags); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set tags: %v", err)})
+		internalError(c, "failed to set tags", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"tags": req.Tags})
@@ -67,7 +66,7 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 		return
 	}
 	if err := store.AddBookUserTag(id, req.Tag); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to add tag: %v", err)})
+		internalError(c, "failed to add tag", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"tag": req.Tag})
@@ -92,7 +91,7 @@ func (s *Server) removeBookUserTag(c *gin.Context) {
 		return
 	}
 	if err := store.RemoveBookUserTag(id, tag); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to remove tag: %v", err)})
+		internalError(c, "failed to remove tag", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "tag removed"})
