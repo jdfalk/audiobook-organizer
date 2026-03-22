@@ -282,6 +282,12 @@ type Store interface {
 	TombstoneExternalID(source, externalID string) error
 	ReassignExternalIDs(oldBookID, newBookID string) error
 	BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error
+
+	// User Tags (free-form labels on books)
+	GetBookUserTags(bookID string) ([]string, error)
+	SetBookUserTags(bookID string, tags []string) error
+	AddBookUserTag(bookID string, tag string) error
+	RemoveBookUserTag(bookID string, tag string) error
 }
 
 // Common data structures used by all store implementations

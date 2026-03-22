@@ -241,6 +241,10 @@ func (s *stubStore) ReassignExternalIDs(oldBookID, newBookID string) error      
 func (s *stubStore) BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error {
 	return nil
 }
+func (s *stubStore) GetBookUserTags(bookID string) ([]string, error)      { return nil, nil }
+func (s *stubStore) SetBookUserTags(bookID string, tags []string) error   { return nil }
+func (s *stubStore) AddBookUserTag(bookID string, tag string) error       { return nil }
+func (s *stubStore) RemoveBookUserTag(bookID string, tag string) error    { return nil }
 func (s *stubStore) RecordPathChange(change *database.BookPathChange) error {
 	return nil
 }

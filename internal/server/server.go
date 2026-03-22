@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.129.0
+// version: 1.130.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1531,6 +1531,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/diagnostics/apply-suggestions", s.applyDiagnosticsSuggestions)
 
 			// Bench routes (only available with -tags bench)
+			s.setupUserTagRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
@@ -1658,7 +1659,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Call service
 	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list audiobooks", err)
 		return
 	}
 
@@ -1688,7 +1689,7 @@ func (s *Server) searchAudiobooks(c *gin.Context) {
 	search := strings.TrimSpace(c.Query("q"))
 	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, search, nil, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to search audiobooks", err)
 		return
 	}
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
@@ -1703,7 +1704,7 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 
 	result, err := s.audiobookService.GetDuplicateBooks(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list duplicate audiobooks", err)
 		return
 	}
 
@@ -1736,7 +1737,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "book-dedup-scan", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1835,7 +1836,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, "book-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -1866,7 +1867,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, "failed to merge duplicate books", err)
 		}
 		return
 	}
@@ -2037,7 +2038,7 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 
 	books, err := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), params.Limit, params.Offset, olderThanDays)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list deleted audiobooks", err)
 		return
 	}
 
@@ -2067,7 +2068,7 @@ func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
 
 	result, err := s.audiobookService.PurgeSoftDeletedBooks(c.Request.Context(), deleteFiles, olderThanDays)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to purge deleted audiobooks", err)
 		return
 	}
 
@@ -2246,7 +2247,7 @@ func (s *Server) getSystemActivityLog(c *gin.Context) {
 	}
 	logs, err := database.GlobalStore.GetSystemActivityLogs(source, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get activity log", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
@@ -2269,7 +2270,7 @@ func (s *Server) restoreAudiobook(c *gin.Context) {
 func (s *Server) countAudiobooks(c *gin.Context) {
 	count, err := s.audiobookService.CountAudiobooks(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to count audiobooks", err)
 		return
 	}
 
@@ -2298,7 +2299,7 @@ func (s *Server) getAudiobook(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get audiobook", err)
 		return
 	}
 
@@ -2322,7 +2323,7 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
 	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list segments", err)
 		return
 	}
 
@@ -2364,7 +2365,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
 	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list segments", err)
 		return
 	}
 
@@ -2476,7 +2477,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
 	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list segments", err)
 		return
 	}
 
@@ -2560,7 +2561,7 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
 	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list segments", err)
 		return
 	}
 
@@ -2658,7 +2659,7 @@ func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	}
 	records, err := database.GlobalStore.GetBookChangeHistory(id, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get metadata history", err)
 		return
 	}
 	if records == nil {
@@ -2671,7 +2672,7 @@ func (s *Server) getAudiobookFieldStates(c *gin.Context) {
 	id := c.Param("id")
 	states, err := s.metadataStateService.LoadMetadataState(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get field states", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"field_states": states})
@@ -2692,7 +2693,7 @@ func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	}
 	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get field history", err)
 		return
 	}
 	if records == nil {
@@ -2712,7 +2713,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 	// Get the latest change for this field
 	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, 1)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get field history", err)
 		return
 	}
 	if len(records) == 0 {
@@ -2729,7 +2730,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 			prevValue = *latest.PreviousValue
 		}
 		if err := s.metadataStateService.SetOverride(id, field, prevValue, false); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to apply undo: %v", err)})
+			internalError(c, "failed to apply undo", err)
 			return
 		}
 	} else {
@@ -2737,7 +2738,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		if err := s.metadataStateService.ClearOverride(id, field); err != nil {
 			// Ignore "not found" errors when clearing
 			if !strings.Contains(err.Error(), "not found") {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to clear override: %v", err)})
+				internalError(c, "failed to clear override", err)
 				return
 			}
 		}
@@ -2771,7 +2772,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	// Get recent history for this book (enough to find the last apply batch)
 	history, err := database.GlobalStore.GetBookChangeHistory(id, 50)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get change history", err)
 		return
 	}
 	if len(history) == 0 {
@@ -2913,7 +2914,7 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get tags", err)
 		return
 	}
 
@@ -3057,7 +3058,7 @@ func (s *Server) getBookChangelog(c *gin.Context) {
 	id := c.Param("id")
 	entries, err := s.changelogService.GetBookChangelog(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get changelog", err)
 		return
 	}
 	if entries == nil {
@@ -3087,7 +3088,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to update audiobook", err)
 		return
 	}
 
@@ -3369,7 +3370,7 @@ func (s *Server) batchOperations(c *gin.Context) {
 func (s *Server) listWorks(c *gin.Context) {
 	resp, err := s.workService.ListWorks()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list works", err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
@@ -3416,7 +3417,7 @@ func (s *Server) updateWork(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to update work", err)
 		return
 	}
 	c.JSON(http.StatusOK, updated)
@@ -3429,7 +3430,7 @@ func (s *Server) deleteWork(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete work", err)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -3443,7 +3444,7 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 	id := c.Param("id")
 	books, err := database.GlobalStore.GetBooksByWorkID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list work books", err)
 		return
 	}
 	if books == nil {
@@ -3455,7 +3456,7 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 func (s *Server) listAuthors(c *gin.Context) {
 	resp, err := s.authorSeriesService.ListAuthorsWithCounts()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list authors", err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
@@ -3464,7 +3465,7 @@ func (s *Server) listAuthors(c *gin.Context) {
 func (s *Server) countAuthors(c *gin.Context) {
 	count, err := database.GlobalStore.CountAuthors()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to count authors", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": count})
@@ -3490,7 +3491,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "author-dedup-scan", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -3529,7 +3530,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, "author-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -3607,7 +3608,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	if err != nil || narrator == nil {
 		narrator, err = store.CreateNarrator(author.Name)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create narrator: %v", err)})
+			internalError(c, "failed to create narrator", err)
 			return
 		}
 	}
@@ -3615,7 +3616,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	// Get all books linked to this author
 	books, err := store.GetBooksByAuthorIDWithRole(authorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get books: %v", err)})
+		internalError(c, "failed to get author books", err)
 		return
 	}
 
@@ -3664,7 +3665,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 
 	// Delete the author record
 	if err := store.DeleteAuthor(authorID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete author: %v", err)})
+		internalError(c, "failed to delete author", err)
 		return
 	}
 
@@ -3695,7 +3696,7 @@ func (s *Server) renameAuthor(c *gin.Context) {
 
 	store := database.GlobalStore
 	if err := store.UpdateAuthorName(authorID, name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to rename author", err)
 		return
 	}
 
@@ -3749,7 +3750,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 		}
 		created, err := store.CreateAuthor(name)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create author %q: %v", name, err)})
+			internalError(c, "failed to create author", err)
 			return
 		}
 		newAuthors = append(newAuthors, *created)
@@ -3758,7 +3759,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 	// Get all books linked to the composite author
 	books, err := store.GetBooksByAuthorIDWithRole(authorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get books: %v", err)})
+		internalError(c, "failed to get author books", err)
 		return
 	}
 
@@ -3811,7 +3812,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 
 	// Delete the composite author
 	if err := store.DeleteAuthor(authorID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete composite author: %v", err)})
+		internalError(c, "failed to delete author", err)
 		return
 	}
 
@@ -3849,7 +3850,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "resolve-production-author", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -3941,7 +3942,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, "resolve-production-author", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -3979,7 +3980,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 	detail := fmt.Sprintf("merge-authors:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
 	op, err := store.CreateOperation(opID, "author-merge", &detail)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4082,7 +4083,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "author-merge", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -4110,7 +4111,7 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 	}
 	store := database.GlobalStore
 	if err := store.UpdateSeriesName(id, name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to update series", err)
 		return
 	}
 	s.dedupCache.Invalidate("series-duplicates")
@@ -4151,7 +4152,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	detail := fmt.Sprintf("merge-series:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
 	op, err := store.CreateOperation(opID, "series-merge", &detail)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4304,7 +4305,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "series-merge", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -4342,7 +4343,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 	detail := fmt.Sprintf("merge-books:keep=%s,merge=%d", req.KeepID, len(req.MergeIDs))
 	op, err := store.CreateOperation(opID, "book-merge", &detail)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4424,7 +4425,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "book-merge", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -4480,7 +4481,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "series-dedup-scan", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4654,7 +4655,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, "series-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -4742,7 +4743,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	detail := "series-deduplicate"
 	op, err := store.CreateOperation(opID, "series-dedup", &detail)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4830,7 +4831,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "series-dedup", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -4960,7 +4961,7 @@ func (s *Server) seriesPrunePreview(c *gin.Context) {
 
 	preview, err := computeSeriesPrunePreview(store)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to compute series prune preview", err)
 		return
 	}
 
@@ -4982,7 +4983,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 	detail := "series-prune"
 	op, err := store.CreateOperation(opID, "series-prune", &detail)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -4991,7 +4992,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "series-prune", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -5173,7 +5174,7 @@ func (s *Server) listNarrators(c *gin.Context) {
 	}
 	narrators, err := database.GlobalStore.ListNarrators()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list narrators", err)
 		return
 	}
 	c.JSON(http.StatusOK, narrators)
@@ -5186,7 +5187,7 @@ func (s *Server) countNarrators(c *gin.Context) {
 	}
 	narrators, err := database.GlobalStore.ListNarrators()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to count narrators", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": len(narrators)})
@@ -5200,7 +5201,7 @@ func (s *Server) listAudiobookNarrators(c *gin.Context) {
 	}
 	narrators, err := database.GlobalStore.GetBookNarrators(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list audiobook narrators", err)
 		return
 	}
 	if narrators == nil {
@@ -5221,7 +5222,7 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 		return
 	}
 	if err := database.GlobalStore.SetBookNarrators(id, narrators); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to set audiobook narrators", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -5230,7 +5231,7 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 func (s *Server) countSeries(c *gin.Context) {
 	count, err := database.GlobalStore.CountSeries()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to count series", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"count": count})
@@ -5239,7 +5240,7 @@ func (s *Server) countSeries(c *gin.Context) {
 func (s *Server) listSeries(c *gin.Context) {
 	resp, err := s.authorSeriesService.ListSeriesWithCounts()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list series", err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
@@ -5254,7 +5255,7 @@ func (s *Server) getSeriesBooks(c *gin.Context) {
 	store := database.GlobalStore
 	books, err := store.GetBooksBySeriesID(seriesID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get series books", err)
 		return
 	}
 	enriched := make([]enrichedBookResponse, len(books))
@@ -5284,7 +5285,7 @@ func (s *Server) renameSeriesHandler(c *gin.Context) {
 	}
 	store := database.GlobalStore
 	if err := store.UpdateSeriesName(seriesID, name); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to rename series", err)
 		return
 	}
 	if s.dedupCache != nil {
@@ -5319,7 +5320,7 @@ func (s *Server) splitSeriesHandler(c *gin.Context) {
 	}
 	newSeries, err := store.CreateSeries(oldSeries.Name+" (Split)", oldSeries.AuthorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to create new series: %v", err)})
+		internalError(c, "failed to create new series", err)
 		return
 	}
 	moved := 0
@@ -5352,7 +5353,7 @@ func (s *Server) deleteEmptySeries(c *gin.Context) {
 	store := database.GlobalStore
 	books, err := store.GetBooksBySeriesID(seriesID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get series books", err)
 		return
 	}
 	if len(books) > 0 {
@@ -5360,7 +5361,7 @@ func (s *Server) deleteEmptySeries(c *gin.Context) {
 		return
 	}
 	if err := store.DeleteSeries(seriesID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete series", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "series deleted"})
@@ -5375,7 +5376,7 @@ func (s *Server) getAuthorBooks(c *gin.Context) {
 	store := database.GlobalStore
 	books, err := store.GetBooksByAuthorID(authorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get author books", err)
 		return
 	}
 	enriched := make([]enrichedBookResponse, len(books))
@@ -5394,7 +5395,7 @@ func (s *Server) deleteAuthorHandler(c *gin.Context) {
 	store := database.GlobalStore
 	books, err := store.GetBooksByAuthorID(authorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get author books", err)
 		return
 	}
 	if len(books) > 0 {
@@ -5402,7 +5403,7 @@ func (s *Server) deleteAuthorHandler(c *gin.Context) {
 		return
 	}
 	if err := store.DeleteAuthor(authorID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete author", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "author deleted"})
@@ -5540,7 +5541,7 @@ func (s *Server) listImportPaths(c *gin.Context) {
 	}
 	folders, err := database.GlobalStore.GetAllImportPaths()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list import paths", err)
 		return
 	}
 
@@ -5719,7 +5720,7 @@ func (s *Server) removeImportPath(c *gin.Context) {
 		return
 	}
 	if err := database.GlobalStore.DeleteImportPath(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to remove import path", err)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -5745,7 +5746,7 @@ func (s *Server) startScan(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -5768,7 +5769,7 @@ func (s *Server) startScan(c *gin.Context) {
 
 	// Enqueue the operation
 	if err := operations.GlobalQueue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -5796,7 +5797,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "organize", req.FolderPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -5821,7 +5822,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 	// Enqueue the operation
 	if err := operations.GlobalQueue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -5858,7 +5859,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := database.GlobalStore.CreateOperation(id, "transcode", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -5980,7 +5981,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -6033,7 +6034,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 
 	// Fallback: force-update DB status (e.g., stale after restart)
 	if dbErr := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": dbErr.Error()})
+		internalError(c, "failed to cancel operation", dbErr)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -6048,7 +6049,7 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 
 	ops, err := database.GlobalStore.GetRecentOperations(500)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get operations", err)
 		return
 	}
 
@@ -6089,7 +6090,7 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 
 	deleted, err := database.GlobalStore.DeleteOperationsByStatus(statuses)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete operations", err)
 		return
 	}
 
@@ -6105,7 +6106,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 
 	books, err := database.GlobalStore.GetAllBooks(10000, 0)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get audiobooks", err)
 		return
 	}
 
@@ -6182,7 +6183,7 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 	}
 	result, err := SweepTombstones(database.GlobalStore)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to sweep tombstones", err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -6195,7 +6196,7 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 	}
 	result, err := AuditFileConsistency(database.GlobalStore)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to audit file consistency", err)
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -6211,7 +6212,7 @@ func (s *Server) listOperations(c *gin.Context) {
 	}
 	ops, total, err := store.ListOperations(params.Limit, params.Offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list operations", err)
 		return
 	}
 	if ops == nil {
@@ -6293,7 +6294,7 @@ func (s *Server) importFile(c *gin.Context) {
 func (s *Server) getSystemStatus(c *gin.Context) {
 	status, err := s.systemService.CollectSystemStatus()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get system status", err)
 		return
 	}
 
@@ -6398,7 +6399,7 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 
 	logs, total, err := s.systemService.CollectSystemLogs(level, params.Search, params.Limit, params.Offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get system logs", err)
 		return
 	}
 
@@ -6548,7 +6549,7 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 	id := c.Param("id")
 	logs, err := database.GlobalStore.GetOperationLogs(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get operation logs", err)
 		return
 	}
 	// Optional tail parameter for last N log lines
@@ -6593,7 +6594,7 @@ func (s *Server) createBackup(c *gin.Context) {
 
 	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create backup", err)
 		return
 	}
 
@@ -6609,7 +6610,7 @@ func (s *Server) listBackups(c *gin.Context) {
 
 	backups, err := backup.ListBackups(backupConfig.BackupDir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list backups", err)
 		return
 	}
 
@@ -6650,7 +6651,7 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	}
 
 	if err := backup.RestoreBackup(backupPath, targetPath, req.Verify); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to restore backup", err)
 		return
 	}
 
@@ -6677,7 +6678,7 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	backupPath := filepath.Join(backupConfig.BackupDir, filename)
 
 	if err := backup.DeleteBackup(backupPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete backup", err)
 		return
 	}
 
@@ -6761,14 +6762,14 @@ func (s *Server) exportMetadata(c *gin.Context) {
 	// Get all books
 	books, err := database.GlobalStore.GetAllBooks(0, 0) // No limit/offset
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get audiobooks", err)
 		return
 	}
 
 	// Export metadata
 	exportData, err := metadata.ExportMetadata(books)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to export metadata", err)
 		return
 	}
 
@@ -6991,7 +6992,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	}
 	resp, err := s.metadataFetchService.ApplyMetadataCandidate(id, body.Candidate, body.Fields)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to apply metadata", err)
 		return
 	}
 	// Write back to files: defaults to true if not specified
@@ -7019,7 +7020,7 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		return
 	}
 	if err := s.metadataFetchService.MarkNoMatch(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to mark no match", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Book marked as no match"})
@@ -7047,7 +7048,7 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 	}
 	book, err := database.GlobalStore.RevertBookToVersion(id, ts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to revert metadata", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Book reverted to version", "book": book})
@@ -7069,7 +7070,7 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 	}
 	versions, err := database.GlobalStore.GetBookVersions(id, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list versions", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"versions": versions})
@@ -7092,7 +7093,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 	}
 	pruned, err := database.GlobalStore.PruneBookVersions(id, body.KeepCount)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to prune versions", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"pruned": pruned})
@@ -7141,8 +7142,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id)
 	}
 	if err != nil {
-		log.Printf("[ERROR] write-back failed for book %s: %v", id, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to write back metadata", err)
 		return
 	}
 
@@ -8583,7 +8583,7 @@ func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 	}
 	ctx := context.WithValue(c.Request.Context(), ignoreWindowKey, true)
 	if err := s.scheduler.RunMaintenanceWindow(ctx); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to run maintenance", err)
 		return
 	}
 	c.JSON(http.StatusAccepted, gin.H{"message": "maintenance window triggered"})
@@ -8667,7 +8667,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, opType, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -8682,7 +8682,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, opType, operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -8872,7 +8872,7 @@ func (s *Server) getAuthorAliases(c *gin.Context) {
 	}
 	aliases, err := database.GlobalStore.GetAuthorAliases(authorID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get author aliases", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"aliases": aliases})
@@ -8901,7 +8901,7 @@ func (s *Server) createAuthorAlias(c *gin.Context) {
 	}
 	alias, err := database.GlobalStore.CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create author alias", err)
 		return
 	}
 	c.JSON(http.StatusCreated, alias)
@@ -8914,7 +8914,7 @@ func (s *Server) deleteAuthorAlias(c *gin.Context) {
 		return
 	}
 	if err := database.GlobalStore.DeleteAuthorAlias(aliasID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete author alias", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
@@ -8925,7 +8925,7 @@ func (s *Server) getOperationResult(c *gin.Context) {
 	store := database.GlobalStore
 	op, err := store.GetOperationByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get operation", err)
 		return
 	}
 	if op == nil {
@@ -8978,7 +8978,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "ai-author-merge-apply", nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -9156,7 +9156,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 	}
 
 	if err := operations.GlobalQueue.Enqueue(opID, "ai-author-merge-apply", operations.PriorityNormal, operationFunc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
@@ -9168,7 +9168,7 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 	id := c.Param("id")
 	changes, err := database.GlobalStore.GetOperationChanges(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get operation changes", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"changes": changes})
@@ -9179,7 +9179,7 @@ func (s *Server) revertOperation(c *gin.Context) {
 	id := c.Param("id")
 	revertSvc := NewRevertService(database.GlobalStore)
 	if err := revertSvc.RevertOperation(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to revert operation", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "operation reverted successfully"})
@@ -9190,7 +9190,7 @@ func (s *Server) getBookChanges(c *gin.Context) {
 	id := c.Param("id")
 	changes, err := database.GlobalStore.GetBookChanges(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get book changes", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"changes": changes})
@@ -9215,7 +9215,7 @@ func (s *Server) startAIScan(c *gin.Context) {
 	}
 	scan, err := s.pipelineManager.StartScan(c.Request.Context(), req.Mode)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to start AI scan", err)
 		return
 	}
 	c.JSON(http.StatusAccepted, scan)
@@ -9229,7 +9229,7 @@ func (s *Server) listAIScans(c *gin.Context) {
 	}
 	scans, err := s.aiScanStore.ListScans()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to list AI scans", err)
 		return
 	}
 	if scans == nil {
@@ -9251,7 +9251,7 @@ func (s *Server) getAIScan(c *gin.Context) {
 	}
 	scan, err := s.aiScanStore.GetScan(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get AI scan", err)
 		return
 	}
 	if scan == nil {
@@ -9275,7 +9275,7 @@ func (s *Server) getAIScanResults(c *gin.Context) {
 	}
 	results, err := s.aiScanStore.GetScanResults(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to get AI scan results", err)
 		return
 	}
 
@@ -9341,7 +9341,7 @@ func (s *Server) deleteAIScan(c *gin.Context) {
 		return
 	}
 	if err := s.aiScanStore.DeleteScan(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to delete AI scan", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
@@ -9435,7 +9435,7 @@ func (s *Server) previewRename(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to preview rename", err)
 		return
 	}
 
@@ -9466,7 +9466,7 @@ func (s *Server) applyRename(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, "failed to apply rename", err)
 		return
 	}
 
