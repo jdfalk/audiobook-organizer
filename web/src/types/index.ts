@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.9.0
+// version: 1.10.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 
 // Audiobook (Book) type
@@ -147,6 +147,7 @@ export interface FilterOptions {
   genre?: string;
   language?: string;
   libraryState?: string;
+  tags?: string[];
   sortBy?: SortField;
   sortOrder?: SortOrder;
 }
