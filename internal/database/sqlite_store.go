@@ -3836,6 +3836,59 @@ func (s *SQLiteStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 	return tx.Commit()
 }
 
+// --- User Tags (free-form labels on books) ---
+
+// GetBookUserTags returns all user-defined tags for a book.
+func (s *SQLiteStore) GetBookUserTags(bookID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT tag FROM book_user_tags WHERE book_id = ? ORDER BY tag`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	return tags, rows.Err()
+}
+
+// SetBookUserTags replaces all user-defined tags for a book.
+func (s *SQLiteStore) SetBookUserTags(bookID string, tags []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM book_user_tags WHERE book_id = ?`, bookID); err != nil {
+		return err
+	}
+	for _, tag := range tags {
+		if _, err := tx.Exec(`INSERT INTO book_user_tags (book_id, tag) VALUES (?, ?)`, bookID, tag); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// AddBookUserTag adds a single user-defined tag to a book (idempotent).
+func (s *SQLiteStore) AddBookUserTag(bookID string, tag string) error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO book_user_tags (book_id, tag) VALUES (?, ?)`, bookID, tag)
+	return err
+}
+
+// RemoveBookUserTag removes a single user-defined tag from a book.
+func (s *SQLiteStore) RemoveBookUserTag(bookID string, tag string) error {
+	_, err := s.db.Exec(`DELETE FROM book_user_tags WHERE book_id = ? AND tag = ?`, bookID, tag)
+	return err
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

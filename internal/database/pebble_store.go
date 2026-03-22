@@ -4224,6 +4224,67 @@ func (p *PebbleStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 	return batch.Commit(pebble.Sync)
 }
 
+// --- User Tags (free-form labels on books) ---
+
+// GetBookUserTags returns all user-defined tags for a book.
+func (p *PebbleStore) GetBookUserTags(bookID string) ([]string, error) {
+	dbKey := []byte(fmt.Sprintf("user_tag:book:%s", bookID))
+	value, closer, err := p.db.Get(dbKey)
+	if err == pebble.ErrNotFound {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var tags []string
+	if err := json.Unmarshal(value, &tags); err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// SetBookUserTags replaces all user-defined tags for a book.
+func (p *PebbleStore) SetBookUserTags(bookID string, tags []string) error {
+	dbKey := []byte(fmt.Sprintf("user_tag:book:%s", bookID))
+	data, err := json.Marshal(tags)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(dbKey, data, pebble.Sync)
+}
+
+// AddBookUserTag adds a single user-defined tag to a book (idempotent).
+func (p *PebbleStore) AddBookUserTag(bookID string, tag string) error {
+	existing, err := p.GetBookUserTags(bookID)
+	if err != nil {
+		return err
+	}
+	for _, t := range existing {
+		if t == tag {
+			return nil // already present
+		}
+	}
+	existing = append(existing, tag)
+	return p.SetBookUserTags(bookID, existing)
+}
+
+// RemoveBookUserTag removes a single user-defined tag from a book.
+func (p *PebbleStore) RemoveBookUserTag(bookID string, tag string) error {
+	existing, err := p.GetBookUserTags(bookID)
+	if err != nil {
+		return err
+	}
+	filtered := make([]string, 0, len(existing))
+	for _, t := range existing {
+		if t != tag {
+			filtered = append(filtered, t)
+		}
+	}
+	return p.SetBookUserTags(bookID, filtered)
+}
+
 // Reset clears all data from the store and resets all counters to initial state
 func (p *PebbleStore) Reset() error {
 	// Use DeleteRange to wipe the entire keyspace in one operation.
