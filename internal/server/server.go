@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.126.0
+// version: 1.128.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1628,10 +1628,24 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	seriesID := ParseQueryIntPtr(c, "series_id")
 
 	// Parse optional filters
+	sortOrder := ParseQueryString(c, "sort_order")
+	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "asc"
+	}
 	filters := ListFilters{
 		IsPrimaryVersion: ParseQueryBoolPtr(c, "is_primary_version"),
 		LibraryState:     ParseQueryString(c, "library_state"),
 		Tag:              ParseQueryString(c, "tag"),
+		SortBy:           ParseQueryString(c, "sort_by"),
+		SortOrder:        sortOrder,
+	}
+
+	// Parse field filters from JSON query param
+	if filtersJSON := c.Query("filters"); filtersJSON != "" {
+		var fieldFilters []FieldFilter
+		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err == nil {
+			filters.FieldFilters = fieldFilters
+		}
 	}
 
 	// Call service
