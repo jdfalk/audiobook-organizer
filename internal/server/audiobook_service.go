@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.9.0
+// version: 1.11.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -98,11 +99,222 @@ type OverridePayload struct {
 	Clear        bool            `json:"clear,omitempty"`
 }
 
+// FieldFilter represents a field-specific search filter from advanced search.
+type FieldFilter struct {
+	Field   string `json:"field"`
+	Value   string `json:"value"`
+	Negated bool   `json:"negated"`
+}
+
 // ListFilters holds optional filters for listing audiobooks.
 type ListFilters struct {
 	IsPrimaryVersion *bool
 	LibraryState     string
 	Tag              string
+	SortBy           string        // column sort key
+	SortOrder        string        // "asc" or "desc"
+	FieldFilters     []FieldFilter // advanced field-specific filters
+}
+
+// derefStr safely dereferences a *string, returning "" for nil.
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// derefInt safely dereferences a *int, returning 0 for nil.
+func derefInt(i *int) int {
+	if i == nil {
+		return 0
+	}
+	return *i
+}
+
+// derefInt64 safely dereferences a *int64, returning 0 for nil.
+func derefInt64(i *int64) int64 {
+	if i == nil {
+		return 0
+	}
+	return *i
+}
+
+// cmpTime compares two *time.Time values, treating nil as zero time.
+func cmpTime(a, b *time.Time) int {
+	ta := time.Time{}
+	tb := time.Time{}
+	if a != nil {
+		ta = *a
+	}
+	if b != nil {
+		tb = *b
+	}
+	if ta.Before(tb) {
+		return -1
+	}
+	if ta.After(tb) {
+		return 1
+	}
+	return 0
+}
+
+// sortFieldMap maps sort keys to comparison functions.
+// Each function returns <0 if a<b, 0 if equal, >0 if a>b.
+var sortFieldMap = map[string]func(a, b *database.Book) int{
+	"title": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
+	},
+	"author": func(a, b *database.Book) int {
+		an := ""
+		bn := ""
+		if a.Author != nil {
+			an = a.Author.Name
+		}
+		if b.Author != nil {
+			bn = b.Author.Name
+		}
+		return strings.Compare(strings.ToLower(an), strings.ToLower(bn))
+	},
+	"narrator": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Narrator)), strings.ToLower(derefStr(b.Narrator)))
+	},
+	"series": func(a, b *database.Book) int {
+		an := ""
+		bn := ""
+		if a.Series != nil {
+			an = a.Series.Name
+		}
+		if b.Series != nil {
+			bn = b.Series.Name
+		}
+		return strings.Compare(strings.ToLower(an), strings.ToLower(bn))
+	},
+	"genre": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Genre)), strings.ToLower(derefStr(b.Genre)))
+	},
+	"year": func(a, b *database.Book) int {
+		ay := derefInt(a.AudiobookReleaseYear)
+		by := derefInt(b.AudiobookReleaseYear)
+		if ay == 0 {
+			ay = derefInt(a.PrintYear)
+		}
+		if by == 0 {
+			by = derefInt(b.PrintYear)
+		}
+		return ay - by
+	},
+	"language": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Language)), strings.ToLower(derefStr(b.Language)))
+	},
+	"publisher": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Publisher)), strings.ToLower(derefStr(b.Publisher)))
+	},
+	"format": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(a.Format), strings.ToLower(b.Format))
+	},
+	"duration": func(a, b *database.Book) int {
+		return derefInt(a.Duration) - derefInt(b.Duration)
+	},
+	"bitrate": func(a, b *database.Book) int {
+		return derefInt(a.Bitrate) - derefInt(b.Bitrate)
+	},
+	"file_size": func(a, b *database.Book) int {
+		diff := derefInt64(a.FileSize) - derefInt64(b.FileSize)
+		if diff < 0 {
+			return -1
+		}
+		if diff > 0 {
+			return 1
+		}
+		return 0
+	},
+	"codec": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.Codec)), strings.ToLower(derefStr(b.Codec)))
+	},
+	"created_at": func(a, b *database.Book) int {
+		return cmpTime(a.CreatedAt, b.CreatedAt)
+	},
+	"updated_at": func(a, b *database.Book) int {
+		return cmpTime(a.UpdatedAt, b.UpdatedAt)
+	},
+	"library_state": func(a, b *database.Book) int {
+		return strings.Compare(strings.ToLower(derefStr(a.LibraryState)), strings.ToLower(derefStr(b.LibraryState)))
+	},
+}
+
+// applySorting sorts a slice of books in-place based on the filter's SortBy and SortOrder.
+func applySorting(books []database.Book, f ListFilters) {
+	if f.SortBy == "" {
+		return
+	}
+	cmpFn, ok := sortFieldMap[f.SortBy]
+	if !ok {
+		return
+	}
+	sort.Slice(books, func(i, j int) bool {
+		result := cmpFn(&books[i], &books[j])
+		if f.SortOrder == "desc" {
+			return result > 0
+		}
+		return result < 0
+	})
+}
+
+// matchesFieldFilters returns true if a book matches all the given field filters.
+// All filters are ANDed: every filter must match for the book to be included.
+func matchesFieldFilters(book database.Book, filters []FieldFilter) bool {
+	for _, f := range filters {
+		matches := fieldMatchesValue(book, f.Field, f.Value)
+		if f.Negated && matches {
+			return false // NOT filter: exclude if matches
+		}
+		if !f.Negated && !matches {
+			return false // positive filter: exclude if doesn't match
+		}
+	}
+	return true
+}
+
+// fieldMatchesValue checks whether a book's field value contains the search value
+// (case-insensitive). Unknown fields return false.
+func fieldMatchesValue(book database.Book, field, value string) bool {
+	var bookValue string
+	switch field {
+	case "title":
+		bookValue = book.Title
+	case "author":
+		if book.Author != nil {
+			bookValue = book.Author.Name
+		}
+	case "narrator":
+		bookValue = derefStr(book.Narrator)
+	case "series":
+		if book.Series != nil {
+			bookValue = book.Series.Name
+		}
+	case "genre":
+		bookValue = derefStr(book.Genre)
+	case "language":
+		bookValue = derefStr(book.Language)
+	case "publisher":
+		bookValue = derefStr(book.Publisher)
+	case "edition":
+		bookValue = derefStr(book.Edition)
+	case "format":
+		bookValue = book.Format
+	case "codec":
+		bookValue = derefStr(book.Codec)
+	case "quality":
+		bookValue = derefStr(book.Quality)
+	case "library_state":
+		bookValue = derefStr(book.LibraryState)
+	case "description":
+		bookValue = derefStr(book.Description)
+	default:
+		return false // unknown field
+	}
+	return strings.Contains(strings.ToLower(bookValue), strings.ToLower(value))
 }
 
 // GetAudiobooks retrieves audiobooks with optional filtering.
@@ -124,7 +336,7 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	if len(filters) > 0 {
 		f = filters[0]
 	}
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != ""
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
@@ -207,6 +419,18 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 			}
 			filtered = append(filtered, b)
 		}
+
+		// Apply field-specific filters (advanced search)
+		if len(f.FieldFilters) > 0 {
+			fieldFiltered := make([]database.Book, 0, len(filtered))
+			for _, b := range filtered {
+				if matchesFieldFilters(b, f.FieldFilters) {
+					fieldFiltered = append(fieldFiltered, b)
+				}
+			}
+			filtered = fieldFiltered
+		}
+
 		// Apply pagination after filtering
 		if offset > 0 && offset < len(filtered) {
 			filtered = filtered[offset:]
@@ -218,6 +442,9 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 		}
 		books = filtered
 	}
+
+	// Apply sorting after all filtering but before returning
+	applySorting(books, f)
 
 	// Ensure we never return null - always return empty array
 	if books == nil {
