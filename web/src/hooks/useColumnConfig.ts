@@ -11,7 +11,6 @@ import {
 } from '../services/api';
 import {
   type ColumnDefinition,
-  ALL_COLUMNS,
   COLUMN_MAP,
   getDefaultVisibleColumns,
 } from '../config/columnDefinitions';
