@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.44.0
+// version: 1.45.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -62,6 +62,7 @@ import { BulkTagDialog } from '../components/audiobooks/BulkTagDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
+import { parseSearch, type ParsedSearch } from '../utils/searchParser';
 import * as api from '../services/api';
 import {
   eventSourceManager,
@@ -175,6 +176,7 @@ export const Library = () => {
   const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
   const [availableTags, setAvailableTags] = useState<Array<{ tag: string; count: number }>>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [parsedSearch, setParsedSearch] = useState<ParsedSearch>(() => parseSearch(initialSearch));
   const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
 
   // Column config
@@ -441,7 +443,7 @@ export const Library = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, filters, sortBy, sortOrder, itemsPerPage]);
+  }, [searchQuery, filters, selectedTags, sortBy, sortOrder, itemsPerPage]);
 
   // Sync state FROM URL when user navigates (back/forward) or edits URL directly
   const isInternalUpdate = useRef(false);
@@ -460,12 +462,15 @@ export const Library = () => {
     const urlView = (searchParams.get('view') as ViewMode) || 'grid';
     const urlLimit = Math.max(10, parseInt(searchParams.get('limit') || '20', 10));
 
+    const urlTag = searchParams.get('tag') || '';
+
     if (urlPage !== page) setPage(urlPage);
     if (urlSearch !== searchQuery) setSearchQuery(urlSearch);
     if (urlSort !== sortBy) setSortBy(urlSort);
     if (urlOrder !== sortOrder) setSortOrder(urlOrder);
     if (urlView !== viewMode) setViewMode(urlView);
     if (urlLimit !== itemsPerPage) setItemsPerPage(urlLimit);
+    if (urlTag !== (selectedTags[0] || '')) setSelectedTags(urlTag ? [urlTag] : []);
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevPageRef = useRef(page);
@@ -483,6 +488,7 @@ export const Library = () => {
     if (viewMode !== 'grid') params.set('view', viewMode);
     if (page > 1) params.set('page', page.toString());
     if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
+    if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
 
     // Push a new history entry when page changes so back button works;
     // replace for other changes (search typing, etc.) to avoid history spam.
@@ -491,7 +497,7 @@ export const Library = () => {
     isInternalUpdate.current = true;
     setSearchParams(params, { replace: !pageChanged });
     localStorage.setItem('library_page', page.toString());
-  }, [filters, itemsPerPage, page, searchQuery, setSearchParams, sortBy, sortOrder, viewMode]);
+  }, [filters, itemsPerPage, page, searchQuery, selectedTags, setSearchParams, sortBy, sortOrder, viewMode]);
 
   const loadSoftDeleted = useCallback(async () => {
     setSoftDeletedLoading(true);
@@ -552,51 +558,90 @@ export const Library = () => {
     setSelectedAudiobooks([]);
   };
 
+  const convertApiBook = useCallback((book: api.Book): Audiobook => ({
+    id: book.id,
+    title: book.title,
+    author: book.author_name || 'Unknown',
+    narrator: book.narrator,
+    series: book.series_name,
+    series_number: book.series_position,
+    language: book.language,
+    audiobook_release_year: book.audiobook_release_year,
+    year: book.audiobook_release_year || book.print_year,
+    print_year: book.print_year,
+    duration_seconds: book.duration,
+    cover_url: book.cover_url,
+    file_path: book.file_path,
+    format: book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
+    quality: book.quality,
+    bitrate_kbps: book.bitrate,
+    created_at: book.created_at,
+    updated_at: book.updated_at,
+    library_state: book.library_state,
+    marked_for_deletion: book.marked_for_deletion,
+    marked_for_deletion_at: book.marked_for_deletion_at,
+    original_file_hash: book.original_file_hash,
+    organized_file_hash: book.organized_file_hash,
+    organize_error: book.organize_error,
+  }), []);
+
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
     try {
       const offset = (page - 1) * itemsPerPage;
 
+      // Build field filters from sidebar filters + parsed search
+      const fieldFilters: Array<{ field: string; value: string; negated: boolean }> = [];
+
+      if (filters.author) fieldFilters.push({ field: 'author', value: filters.author, negated: false });
+      if (filters.series) fieldFilters.push({ field: 'series', value: filters.series, negated: false });
+      if (filters.genre) fieldFilters.push({ field: 'genre', value: filters.genre, negated: false });
+      if (filters.language) fieldFilters.push({ field: 'language', value: filters.language, negated: false });
+
+      // Add parsed search field filters (excluding tag, which is a separate param)
+      if (parsedSearch) {
+        for (const ff of parsedSearch.fieldFilters) {
+          if (ff.field !== 'tag') {
+            fieldFilters.push({ field: ff.field, value: ff.value, negated: ff.negated });
+          }
+        }
+      }
+
+      // Determine search text (free text from parsed search, or raw search if no parse)
+      const searchText = parsedSearch?.freeText || debouncedSearch;
+
+      // Get tag filter from sidebar tags or parsed search
+      const tagFilter =
+        selectedTags?.[0] ||
+        parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+
+      // Determine library state for server filter
+      const libraryState =
+        filters.libraryState === 'deleted' ? undefined : filters.libraryState;
+
       const [bookCount, folders] = await Promise.all([api.countBooks(), api.getImportPaths()]);
 
       const fetchLimit = Math.max(bookCount, itemsPerPage);
-      const books = debouncedSearch
-        ? await api.searchBooks(debouncedSearch, fetchLimit)
-        : await api.getBooks(fetchLimit, 0);
+
+      let books: api.Book[];
+      if (searchText) {
+        // Search endpoint — server handles text matching
+        books = await api.searchBooks(searchText, fetchLimit);
+      } else {
+        // Standard listing with server-side sort, filter, and tag filtering
+        books = await api.getBooks(fetchLimit, 0, {
+          sortBy: sortBy,
+          sortOrder: sortOrder,
+          tag: tagFilter,
+          libraryState: libraryState,
+          filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
+        });
+      }
 
       // Convert API books to Audiobook type
-      const convertedBooks: Audiobook[] = books.map((book) => ({
-        id: book.id,
-        title: book.title,
-        author: book.author_name || 'Unknown',
-        narrator: book.narrator,
-        series: book.series_name,
-        series_number: book.series_position,
-        language: book.language,
-        audiobook_release_year: book.audiobook_release_year,
-        year: book.audiobook_release_year || book.print_year,
-        print_year: book.print_year,
-        duration: book.duration,
-        cover_url: book.cover_url,
-        coverImage: book.cover_url || book.cover_image,
-        filePath: book.file_path,
-        file_path: book.file_path,
-        fileSize: 0, // Not provided by API
-        format: book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
-        quality: book.quality,
-        bitrate: book.bitrate,
-        addedDate: book.created_at,
-        created_at: book.created_at,
-        updated_at: book.updated_at,
-        lastPlayed: undefined,
-        library_state: book.library_state,
-        marked_for_deletion: book.marked_for_deletion,
-        marked_for_deletion_at: book.marked_for_deletion_at,
-        original_file_hash: book.original_file_hash,
-        organized_file_hash: book.organized_file_hash,
-        organize_error: book.organize_error,
-      }));
+      const convertedBooks: Audiobook[] = books.map(convertApiBook);
 
+      // Extract unique values for filter sidebar dropdowns
       const uniqueAuthors = Array.from(
         new Set(
           convertedBooks
@@ -631,70 +676,15 @@ export const Library = () => {
       setAvailableGenres(uniqueGenres);
       setAvailableLanguages(uniqueLanguages);
 
-      let filteredBooks = [...convertedBooks];
-      if (filters.author) {
-        const authorFilter = filters.author.toLowerCase();
-        filteredBooks = filteredBooks.filter((book) =>
-          (book.author || '').toLowerCase().includes(authorFilter)
-        );
-      }
-      if (filters.series) {
-        const seriesFilter = filters.series.toLowerCase();
-        filteredBooks = filteredBooks.filter((book) =>
-          (book.series || '').toLowerCase().includes(seriesFilter)
-        );
-      }
-      if (filters.genre) {
-        const genreFilter = filters.genre.toLowerCase();
-        filteredBooks = filteredBooks.filter((book) =>
-          (book.genre || '').toLowerCase().includes(genreFilter)
-        );
-      }
-      if (filters.language) {
-        const languageFilter = filters.language.toLowerCase();
-        filteredBooks = filteredBooks.filter((book) =>
-          (book.language || '').toLowerCase().includes(languageFilter)
-        );
-      }
-      if (filters.libraryState) {
-        if (filters.libraryState === 'deleted') {
-          filteredBooks = filteredBooks.filter((book) => book.marked_for_deletion);
-        } else {
-          filteredBooks = filteredBooks.filter(
-            (book) => book.library_state === filters.libraryState
-          );
-        }
+      // Client-side filter for deleted state (server doesn't have a 'deleted' library_state)
+      let filteredBooks = convertedBooks;
+      if (filters.libraryState === 'deleted') {
+        filteredBooks = convertedBooks.filter((book) => book.marked_for_deletion);
       }
 
-      const sortedBooks = filteredBooks.sort((a, b) => {
-        let comparison = 0;
-        switch (sortBy) {
-          case SortField.Title:
-            comparison = a.title.localeCompare(b.title);
-            break;
-          case SortField.Author:
-            comparison = (a.author || '').localeCompare(b.author || '');
-            break;
-          case SortField.Series:
-            comparison = (a.series || '').localeCompare(b.series || '');
-            break;
-          case SortField.Year: {
-            const aYear = a.audiobook_release_year || a.print_year || 0;
-            const bYear = b.audiobook_release_year || b.print_year || 0;
-            comparison = aYear - bYear;
-            break;
-          }
-          case SortField.CreatedAt:
-            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-            break;
-          default:
-            comparison = 0;
-        }
-        return sortOrder === SortOrder.Descending ? comparison * -1 : comparison;
-      });
-
-      const total = sortedBooks.length;
-      const paginatedBooks = sortedBooks.slice(offset, offset + itemsPerPage);
+      // Client-side pagination (server returns full filtered/sorted set)
+      const total = filteredBooks.length;
+      const paginatedBooks = filteredBooks.slice(offset, offset + itemsPerPage);
 
       setAudiobooks(paginatedBooks);
       setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
@@ -725,7 +715,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filters, itemsPerPage, page, sortBy, sortOrder, navigate, toast]);
+  }, [convertApiBook, debouncedSearch, filters, itemsPerPage, page, parsedSearch, selectedTags, sortBy, sortOrder, navigate, toast]);
 
   // Reload books when scan/organize completes
   useEffect(() => {
@@ -1991,6 +1981,7 @@ export const Library = () => {
             <SearchBar
               value={searchQuery}
               onChange={setSearchQuery}
+              onParsedSearchChange={setParsedSearch}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
