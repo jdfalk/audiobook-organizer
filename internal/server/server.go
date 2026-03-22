@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.125.0
+// version: 1.126.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1303,6 +1303,14 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/batch-write-back", s.batchWriteBackAudiobooks)
 			protected.POST("/audiobooks/batch-operations", s.batchOperations)
 
+			// User tag routes
+			protected.GET("/tags", s.listAllUserTags)
+			protected.GET("/audiobooks/:id/user-tags", s.getBookUserTags)
+			protected.PUT("/audiobooks/:id/user-tags", s.setBookUserTags)
+			protected.POST("/audiobooks/:id/user-tags", s.addBookUserTag)
+			protected.DELETE("/audiobooks/:id/user-tags/:tag", s.removeBookUserTag)
+			protected.POST("/audiobooks/batch-tags", s.batchUpdateTags)
+
 			// Metadata change history
 			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
 			protected.GET("/audiobooks/:id/metadata-history/:field", s.getFieldMetadataHistory)
@@ -1623,6 +1631,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	filters := ListFilters{
 		IsPrimaryVersion: ParseQueryBoolPtr(c, "is_primary_version"),
 		LibraryState:     ParseQueryString(c, "library_state"),
+		Tag:              ParseQueryString(c, "tag"),
 	}
 
 	// Call service
@@ -1637,7 +1646,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	// Get total count for proper pagination
 	totalCount := len(enriched)
-	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != ""
+	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != "" || filters.Tag != ""
 	if params.Search == "" && authorID == nil && seriesID == nil {
 		if hasFilters {
 			if tc, err := s.audiobookService.CountAudiobooksFiltered(c.Request.Context(), filters); err == nil {
@@ -2888,6 +2897,112 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// --- User tag handlers ---
+
+func (s *Server) listAllUserTags(c *gin.Context) {
+	tags, err := s.audiobookService.ListAllUserTags()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if tags == nil {
+		tags = []database.TagWithCount{}
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+func (s *Server) getBookUserTags(c *gin.Context) {
+	id := c.Param("id")
+	tags, err := s.audiobookService.GetBookUserTags(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+func (s *Server) setBookUserTags(c *gin.Context) {
+	id := c.Param("id")
+	var body struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	tags, err := s.audiobookService.SetBookUserTags(id, body.Tags)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+func (s *Server) addBookUserTag(c *gin.Context) {
+	id := c.Param("id")
+	var body struct {
+		Tag string `json:"tag"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if body.Tag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tag is required"})
+		return
+	}
+	tags, err := s.audiobookService.AddBookUserTag(id, body.Tag)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+func (s *Server) removeBookUserTag(c *gin.Context) {
+	id := c.Param("id")
+	tag := c.Param("tag")
+	if tag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tag is required"})
+		return
+	}
+	tags, err := s.audiobookService.RemoveBookUserTag(id, tag)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+func (s *Server) batchUpdateTags(c *gin.Context) {
+	var body struct {
+		BookIDs    []string `json:"book_ids"`
+		AddTags    []string `json:"add_tags"`
+		RemoveTags []string `json:"remove_tags"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if len(body.BookIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids is required"})
+		return
+	}
+	if len(body.AddTags) == 0 && len(body.RemoveTags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of add_tags or remove_tags is required"})
+		return
+	}
+	updated, err := s.audiobookService.BatchUpdateUserTags(body.BookIDs, body.AddTags, body.RemoveTags)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": updated})
 }
 
 func (s *Server) getBookChangelog(c *gin.Context) {

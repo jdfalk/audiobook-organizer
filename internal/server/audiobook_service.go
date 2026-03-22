@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -102,6 +102,7 @@ type OverridePayload struct {
 type ListFilters struct {
 	IsPrimaryVersion *bool
 	LibraryState     string
+	Tag              string
 }
 
 // GetAudiobooks retrieves audiobooks with optional filtering.
@@ -123,7 +124,7 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	if len(filters) > 0 {
 		f = filters[0]
 	}
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != ""
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != ""
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
@@ -169,8 +170,26 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Apply post-filters
 	if hasPostFilters {
+		// If tag filter is set, build a set of matching book IDs
+		var tagBookIDs map[string]struct{}
+		if f.Tag != "" {
+			ids, tagErr := svc.store.GetBooksByTag(f.Tag)
+			if tagErr != nil {
+				return nil, tagErr
+			}
+			tagBookIDs = make(map[string]struct{}, len(ids))
+			for _, id := range ids {
+				tagBookIDs[id] = struct{}{}
+			}
+		}
+
 		filtered := make([]database.Book, 0, len(books))
 		for _, b := range books {
+			if f.Tag != "" {
+				if _, ok := tagBookIDs[b.ID]; !ok {
+					continue
+				}
+			}
 			if f.IsPrimaryVersion != nil {
 				bPrimary := b.IsPrimaryVersion != nil && *b.IsPrimaryVersion
 				if *f.IsPrimaryVersion != bPrimary {
@@ -1139,4 +1158,86 @@ func applyOverrideToPayload(payload *AudiobookUpdate, field string, value any) {
 			payload.ASIN = stringPtr(v)
 		}
 	}
+}
+
+// --- User tag service methods ---
+
+// ListAllUserTags returns all unique user tags with usage counts.
+func (svc *AudiobookService) ListAllUserTags() ([]database.TagWithCount, error) {
+	if svc.store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return svc.store.ListAllTags()
+}
+
+// GetBookUserTags returns all user tags for a specific book.
+func (svc *AudiobookService) GetBookUserTags(bookID string) ([]string, error) {
+	if svc.store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	return svc.store.GetBookTags(bookID)
+}
+
+// SetBookUserTags replaces all user tags on a book and returns the new set.
+func (svc *AudiobookService) SetBookUserTags(bookID string, tags []string) ([]string, error) {
+	if svc.store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if err := svc.store.SetBookTags(bookID, tags); err != nil {
+		return nil, err
+	}
+	svc.InvalidateBookCaches()
+	return svc.store.GetBookTags(bookID)
+}
+
+// AddBookUserTag adds a single user tag to a book and returns all tags.
+func (svc *AudiobookService) AddBookUserTag(bookID, tag string) ([]string, error) {
+	if svc.store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if err := svc.store.AddBookTag(bookID, tag); err != nil {
+		return nil, err
+	}
+	svc.InvalidateBookCaches()
+	return svc.store.GetBookTags(bookID)
+}
+
+// RemoveBookUserTag removes a single user tag from a book and returns remaining tags.
+func (svc *AudiobookService) RemoveBookUserTag(bookID, tag string) ([]string, error) {
+	if svc.store == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if err := svc.store.RemoveBookTag(bookID, tag); err != nil {
+		return nil, err
+	}
+	svc.InvalidateBookCaches()
+	return svc.store.GetBookTags(bookID)
+}
+
+// BatchUpdateUserTags applies tag additions and removals to multiple books.
+// Returns the number of books successfully updated.
+func (svc *AudiobookService) BatchUpdateUserTags(bookIDs []string, addTags []string, removeTags []string) (int, error) {
+	if svc.store == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	updated := 0
+	for _, bookID := range bookIDs {
+		for _, tag := range addTags {
+			if err := svc.store.AddBookTag(bookID, tag); err != nil {
+				log.Printf("[WARN] BatchUpdateUserTags: failed to add tag %q to book %s: %v", tag, bookID, err)
+				continue
+			}
+		}
+		for _, tag := range removeTags {
+			if err := svc.store.RemoveBookTag(bookID, tag); err != nil {
+				log.Printf("[WARN] BatchUpdateUserTags: failed to remove tag %q from book %s: %v", tag, bookID, err)
+				continue
+			}
+		}
+		updated++
+	}
+	if updated > 0 {
+		svc.InvalidateBookCaches()
+	}
+	return updated, nil
 }
