@@ -1,5 +1,5 @@
 // file: internal/server/changelog_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 93167949-a587-41e9-8ef9-92d03f86aea6
 
 package server
@@ -70,11 +70,11 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	} else {
 		for _, mh := range metaHistory {
 			entryType := "metadata_apply"
-			summary := fmt.Sprintf("Metadata applied — %s: %s (%s)", mh.Field, derefStr(mh.NewValue), mh.Source)
+			summary := fmt.Sprintf("Metadata applied — %s: %s (%s)", mh.Field, derefStrDisplay(mh.NewValue), mh.Source)
 
 			if mh.ChangeType == "override" || mh.ChangeType == "clear" || mh.ChangeType == "undo" {
 				entryType = "tag_write"
-				summary = fmt.Sprintf("Tag written — %s set to %s (%s)", mh.Field, derefStr(mh.NewValue), mh.ChangeType)
+				summary = fmt.Sprintf("Tag written — %s set to %s (%s)", mh.Field, derefStrDisplay(mh.NewValue), mh.ChangeType)
 			}
 
 			details := map[string]any{
@@ -152,8 +152,8 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	return entries, nil
 }
 
-// derefStr safely dereferences a *string, returning "<nil>" for nil pointers.
-func derefStr(s *string) string {
+// derefStrDisplay safely dereferences a *string, returning "<nil>" for nil pointers (display-oriented).
+func derefStrDisplay(s *string) string {
 	if s == nil {
 		return "<nil>"
 	}
