@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.128.0
+// version: 1.129.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1310,6 +1310,11 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/user-tags", s.addBookUserTag)
 			protected.DELETE("/audiobooks/:id/user-tags/:tag", s.removeBookUserTag)
 			protected.POST("/audiobooks/batch-tags", s.batchUpdateTags)
+
+			// User preferences
+			protected.GET("/preferences/:key", s.getUserPreference)
+			protected.PUT("/preferences/:key", s.setUserPreference)
+			protected.DELETE("/preferences/:key", s.deleteUserPreference)
 
 			// Metadata change history
 			protected.GET("/audiobooks/:id/metadata-history", s.getBookMetadataHistory)
@@ -9466,4 +9471,59 @@ func (s *Server) applyRename(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// getUserPreference returns a single user preference by key.
+func (s *Server) getUserPreference(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
+	pref, err := database.GlobalStore.GetUserPreference(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get preference"})
+		return
+	}
+	if pref == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "preference not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"key": pref.Key, "value": pref.Value})
+}
+
+// setUserPreference creates or updates a user preference.
+func (s *Server) setUserPreference(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
+	var body struct {
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if err := database.GlobalStore.SetUserPreference(key, body.Value); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save preference"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"key": key, "value": body.Value})
+}
+
+// deleteUserPreference removes a user preference by setting it to empty.
+func (s *Server) deleteUserPreference(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
+		return
+	}
+	// Set to empty string to "delete" (store doesn't have a delete method)
+	if err := database.GlobalStore.SetUserPreference(key, ""); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete preference"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "preference deleted"})
 }

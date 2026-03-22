@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -247,6 +247,26 @@ var sortFieldMap = map[string]func(a, b *database.Book) int{
 	"edition": func(a, b *database.Book) int {
 		return strings.Compare(strings.ToLower(derefStr(a.Edition)), strings.ToLower(derefStr(b.Edition)))
 	},
+	// Aliases for frontend field names (e.g. SortField enum uses suffixed variants)
+	"duration_seconds": func(a, b *database.Book) int {
+		return derefInt(a.Duration) - derefInt(b.Duration)
+	},
+	"bitrate_kbps": func(a, b *database.Book) int {
+		return derefInt(a.Bitrate) - derefInt(b.Bitrate)
+	},
+	"file_size_bytes": func(a, b *database.Book) int {
+		diff := derefInt64(a.FileSize) - derefInt64(b.FileSize)
+		if diff < 0 {
+			return -1
+		}
+		if diff > 0 {
+			return 1
+		}
+		return 0
+	},
+	"sample_rate_hz": func(a, b *database.Book) int {
+		return derefInt(a.SampleRate) - derefInt(b.SampleRate)
+	},
 }
 
 // applySorting sorts a slice of books in-place based on the filter's SortBy and SortOrder.
@@ -321,6 +341,15 @@ func fieldMatchesValue(book database.Book, field, value string) bool {
 		bookValue = derefStr(book.LibraryState)
 	case "description":
 		bookValue = derefStr(book.Description)
+	// Aliases for frontend field names
+	case "duration_seconds":
+		bookValue = fmt.Sprintf("%d", derefInt(book.Duration))
+	case "bitrate_kbps":
+		bookValue = fmt.Sprintf("%d", derefInt(book.Bitrate))
+	case "file_size_bytes":
+		bookValue = fmt.Sprintf("%d", derefInt64(book.FileSize))
+	case "sample_rate_hz":
+		bookValue = fmt.Sprintf("%d", derefInt(book.SampleRate))
 	default:
 		return false // unknown field
 	}
