@@ -1403,6 +1403,11 @@ func (m *MockStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) e
 	return nil
 }
 
+func (m *MockStore) GetBookUserTags(bookID string) ([]string, error) { return nil, nil }
+func (m *MockStore) SetBookUserTags(bookID string, tags []string) error { return nil }
+func (m *MockStore) AddBookUserTag(bookID string, tag string) error { return nil }
+func (m *MockStore) RemoveBookUserTag(bookID string, tag string) error { return nil }
+
 func (m *MockStore) RecordPathChange(change *BookPathChange) error {
 	if m.RecordPathChangeFunc != nil {
 		return m.RecordPathChangeFunc(change)
