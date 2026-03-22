@@ -672,15 +672,16 @@ func TestServerSideFieldFiltering(t *testing.T) {
 		assert.Empty(t, titles, "unknown field should match nothing")
 	})
 
-	t.Run("invalid filters JSON ignored", func(t *testing.T) {
+	t.Run("invalid filters JSON returns 400", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?filters=NOT_JSON", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code, "malformed JSON should not cause an error")
+		assert.Equal(t, http.StatusBadRequest, w.Code, "malformed JSON should return 400")
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
-		assert.GreaterOrEqual(t, len(items), 3, "should return all books when filters are invalid")
+		errorMsg, ok := resp["error"].(string)
+		require.True(t, ok, "error field should be a string")
+		assert.Contains(t, errorMsg, "invalid filters parameter")
 	})
 
 	t.Run("combined sort and filter", func(t *testing.T) {
