@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.58.0
+// version: 1.59.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -554,10 +554,26 @@ export interface AuthSession {
 // API functions
 
 // Books
-export async function getBooks(limit = 100, offset = 0): Promise<Book[]> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks?limit=${limit}&offset=${offset}`
-  );
+export async function getBooks(
+  limit = 100,
+  offset = 0,
+  options?: {
+    sortBy?: string;
+    sortOrder?: string;
+    tag?: string;
+    libraryState?: string;
+  }
+): Promise<Book[]> {
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
+  if (options?.sortBy) params.set('sort_by', options.sortBy);
+  if (options?.sortOrder) params.set('sort_order', options.sortOrder);
+  if (options?.tag) params.set('tag', options.tag);
+  if (options?.libraryState)
+    params.set('library_state', options.libraryState);
+
+  const response = await fetch(`${API_BASE}/audiobooks?${params}`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch books');
   }
