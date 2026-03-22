@@ -121,8 +121,8 @@ func TestChangelogEndpoint_WithEntries(t *testing.T) {
 	assert.Equal(t, "rename", resp.Entries[0].Type)
 }
 
-func TestDerefStr(t *testing.T) {
+func TestDerefStrDisplay(t *testing.T) {
 	s := "hello"
-	assert.Equal(t, "hello", derefStr(&s))
-	assert.Equal(t, "<nil>", derefStr(nil))
+	assert.Equal(t, "hello", derefStrDisplay(&s))
+	assert.Equal(t, "<nil>", derefStrDisplay(nil))
 }

@@ -344,6 +344,12 @@ func (s *stubStore) GetScanCacheMap() (map[string]database.ScanCacheEntry, error
 func (s *stubStore) UpdateScanCache(bookID string, mtime int64, size int64) error { return nil }
 func (s *stubStore) MarkNeedsRescan(bookID string) error                         { return nil }
 func (s *stubStore) GetDirtyBookFolders() ([]string, error)                      { return nil, nil }
+func (s *stubStore) AddBookTag(bookID, tag string) error                         { return nil }
+func (s *stubStore) RemoveBookTag(bookID, tag string) error                      { return nil }
+func (s *stubStore) GetBookTags(bookID string) ([]string, error)                 { return nil, nil }
+func (s *stubStore) SetBookTags(bookID string, tags []string) error              { return nil }
+func (s *stubStore) ListAllTags() ([]database.TagWithCount, error)               { return nil, nil }
+func (s *stubStore) GetBooksByTag(tag string) ([]string, error)                  { return nil, nil }
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()

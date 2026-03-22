@@ -89,7 +89,7 @@ export function parseSearch(input: string): ParsedSearch {
 
     // Try to match NOT prefix
     let negated = false;
-    let startPos = pos;
+    const startPos = pos;
 
     if (
       str.substring(pos, pos + 4) === 'NOT ' &&
