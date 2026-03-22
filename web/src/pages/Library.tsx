@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.42.0
+// version: 1.43.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -49,7 +49,9 @@ import {
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
 import { AudiobookList } from '../components/audiobooks/AudiobookList';
+import { ColumnChooser } from '../components/audiobooks/ColumnChooser';
 import { SearchBar, ViewMode } from '../components/audiobooks/SearchBar';
+import { useColumnConfig } from '../hooks/useColumnConfig';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
@@ -120,8 +122,7 @@ export const Library = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const initialSearch = searchParams.get('search') ?? '';
-  const initialViewMode =
-    (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
+  const initialViewMode = (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
   const initialSortBy = ((): SortField => {
     const value = searchParams.get('sort');
     if (value && Object.values(SortField).includes(value as SortField)) {
@@ -130,16 +131,17 @@ export const Library = () => {
     return SortField.Title;
   })();
   const initialSortOrder =
-    searchParams.get('order') === SortOrder.Descending
-      ? SortOrder.Descending
-      : SortOrder.Ascending;
+    searchParams.get('order') === SortOrder.Descending ? SortOrder.Descending : SortOrder.Ascending;
   const initialPage = Math.max(
     1,
     parseInt(searchParams.get('page') || localStorage.getItem('library_page') || '1', 10)
   );
   const initialItemsPerPage = Math.max(
     10,
-    parseInt(searchParams.get('limit') || localStorage.getItem('library_items_per_page') || '20', 10)
+    parseInt(
+      searchParams.get('limit') || localStorage.getItem('library_items_per_page') || '20',
+      10
+    )
   );
   const initialFilters: FilterOptions = {
     author: searchParams.get('author') || undefined,
@@ -161,18 +163,25 @@ export const Library = () => {
   const [page, setPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
   const [totalPages, setTotalPages] = useState(1);
-  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(
-    null
-  );
+  const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(null);
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
-  const [versionManagingAudiobook, setVersionManagingAudiobook] =
-    useState<Audiobook | null>(null);
+  const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
   const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);
   const [availableSeries, setAvailableSeries] = useState<string[]>([]);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
+
+  // Column config
+  const {
+    columns: columnDefs,
+    visibleColumnIds,
+    columnWidths,
+    toggleColumn,
+    resizeColumn,
+    resetToDefaults: resetColumnsToDefaults,
+  } = useColumnConfig();
 
   // Import path management
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
@@ -180,13 +189,10 @@ export const Library = () => {
   const [addPathDialogOpen, setAddPathDialogOpen] = useState(false);
   const [newImportPath, setNewImportPath] = useState('');
   const [showServerBrowser, setShowServerBrowser] = useState(false);
-  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(
-    null
-  );
+  const [systemStatus, setSystemStatus] = useState<api.SystemStatus | null>(null);
   const [organizeRunning, setOrganizeRunning] = useState(false);
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
-  const [activeOrganizeOp, setActiveOrganizeOp] =
-    useState<api.Operation | null>(null);
+  const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
 
   // Storage section pin mode: 'scrollable' (default), 'floating', or 'pinned'
   const [storagePinMode, setStoragePinMode] = useState<'scrollable' | 'floating' | 'pinned'>(() => {
@@ -213,9 +219,7 @@ export const Library = () => {
   const [softDeletedLoading, setSoftDeletedLoading] = useState(false);
   const [softDeletedExpanded, setSoftDeletedExpanded] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [bookPendingDelete, setBookPendingDelete] = useState<Audiobook | null>(
-    null
-  );
+  const [bookPendingDelete, setBookPendingDelete] = useState<Audiobook | null>(null);
   const [deleteOptions, setDeleteOptions] = useState({
     softDelete: true,
     blockHash: true,
@@ -245,26 +249,20 @@ export const Library = () => {
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
   const [bulkSearchOpen, setBulkSearchOpen] = useState(false);
   const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
-  const [bulkFetchProgress, setBulkFetchProgress] =
-    useState<BulkActionProgress | null>(null);
+  const [bulkFetchProgress, setBulkFetchProgress] = useState<BulkActionProgress | null>(null);
   const [bulkOrganizeDialogOpen, setBulkOrganizeDialogOpen] = useState(false);
   const [bulkOrganizeInProgress, setBulkOrganizeInProgress] = useState(false);
-  const [bulkOrganizeProgress, setBulkOrganizeProgress] =
-    useState<BulkActionProgress | null>(null);
+  const [bulkOrganizeProgress, setBulkOrganizeProgress] = useState<BulkActionProgress | null>(null);
   const [bulkWriteBackDialogOpen, setBulkWriteBackDialogOpen] = useState(false);
   const [bulkWriteBackInProgress, setBulkWriteBackInProgress] = useState(false);
   const [bulkWriteBackRename, setBulkWriteBackRename] = useState(false);
-  const [bulkWriteBackResult, setBulkWriteBackResult] =
-    useState<api.BatchWriteBackResponse | null>(null);
-  const [duplicateDialog, setDuplicateDialog] =
-    useState<DuplicateDialogState | null>(null);
-  const duplicateResolverRef =
-    useRef<((action: DuplicateAction) => void) | null>(null);
-  const [bulkOrganizeError, setBulkOrganizeError] =
-    useState<OrganizeErrorState | null>(null);
-  const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(
-    new Map()
+  const [bulkWriteBackResult, setBulkWriteBackResult] = useState<api.BatchWriteBackResponse | null>(
+    null
   );
+  const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState | null>(null);
+  const duplicateResolverRef = useRef<((action: DuplicateAction) => void) | null>(null);
+  const [bulkOrganizeError, setBulkOrganizeError] = useState<OrganizeErrorState | null>(null);
+  const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(new Map());
 
   // Save storage pin mode preference
   useEffect(() => {
@@ -332,10 +330,7 @@ export const Library = () => {
             ];
             return { ...prev, [opId]: next.slice(-200) };
           });
-        } else if (
-          evt.type === 'operation.progress' &&
-          evt.data?.operation_id
-        ) {
+        } else if (evt.type === 'operation.progress' && evt.data?.operation_id) {
           const opId = String(evt.data.operation_id);
           const update = (op: api.Operation | null): api.Operation | null => {
             if (!op || op.id !== opId) return op;
@@ -435,8 +430,11 @@ export const Library = () => {
     }
     const urlPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const urlSearch = searchParams.get('search') ?? '';
-    const urlSort = searchParams.get('sort') as SortField || SortField.Title;
-    const urlOrder = searchParams.get('order') === SortOrder.Descending ? SortOrder.Descending : SortOrder.Ascending;
+    const urlSort = (searchParams.get('sort') as SortField) || SortField.Title;
+    const urlOrder =
+      searchParams.get('order') === SortOrder.Descending
+        ? SortOrder.Descending
+        : SortOrder.Ascending;
     const urlView = (searchParams.get('view') as ViewMode) || 'grid';
     const urlLimit = Math.max(10, parseInt(searchParams.get('limit') || '20', 10));
 
@@ -471,16 +469,7 @@ export const Library = () => {
     isInternalUpdate.current = true;
     setSearchParams(params, { replace: !pageChanged });
     localStorage.setItem('library_page', page.toString());
-  }, [
-    filters,
-    itemsPerPage,
-    page,
-    searchQuery,
-    setSearchParams,
-    sortBy,
-    sortOrder,
-    viewMode,
-  ]);
+  }, [filters, itemsPerPage, page, searchQuery, setSearchParams, sortBy, sortOrder, viewMode]);
 
   const loadSoftDeleted = useCallback(async () => {
     setSoftDeletedLoading(true);
@@ -500,20 +489,11 @@ export const Library = () => {
   const selectedIds = new Set(selectedAudiobooks.map((book) => book.id));
   const hasSelection = selectedAudiobooks.length > 0;
   const allOnPageSelected =
-    audiobooks.length > 0 &&
-    audiobooks.every((book) => selectedIds.has(book.id));
-  const someOnPageSelected = audiobooks.some((book) =>
-    selectedIds.has(book.id)
-  );
-  const selectedHasDeleted = selectedAudiobooks.some(
-    (book) => book.marked_for_deletion
-  );
-  const selectedHasActive = selectedAudiobooks.some(
-    (book) => !book.marked_for_deletion
-  );
-  const selectedHasImport = selectedAudiobooks.some(
-    (book) => book.library_state === 'import'
-  );
+    audiobooks.length > 0 && audiobooks.every((book) => selectedIds.has(book.id));
+  const someOnPageSelected = audiobooks.some((book) => selectedIds.has(book.id));
+  const selectedHasDeleted = selectedAudiobooks.some((book) => book.marked_for_deletion);
+  const selectedHasActive = selectedAudiobooks.some((book) => !book.marked_for_deletion);
+  const selectedHasImport = selectedAudiobooks.some((book) => book.library_state === 'import');
 
   const handleToggleSelect = (audiobook: Audiobook) => {
     setSelectedAudiobooks((prev) => {
@@ -539,10 +519,7 @@ export const Library = () => {
   const handleToggleSelectAllOnPage = () => {
     if (allOnPageSelected) {
       setSelectedAudiobooks((prev) =>
-        prev.filter(
-          (book) =>
-            !audiobooks.some((pageBook) => pageBook.id === book.id)
-        )
+        prev.filter((book) => !audiobooks.some((pageBook) => pageBook.id === book.id))
       );
       return;
     }
@@ -558,10 +535,7 @@ export const Library = () => {
     try {
       const offset = (page - 1) * itemsPerPage;
 
-      const [bookCount, folders] = await Promise.all([
-        api.countBooks(),
-        api.getImportPaths(),
-      ]);
+      const [bookCount, folders] = await Promise.all([api.countBooks(), api.getImportPaths()]);
 
       const fetchLimit = Math.max(bookCount, itemsPerPage);
       const books = debouncedSearch
@@ -662,9 +636,7 @@ export const Library = () => {
       }
       if (filters.libraryState) {
         if (filters.libraryState === 'deleted') {
-          filteredBooks = filteredBooks.filter(
-            (book) => book.marked_for_deletion
-          );
+          filteredBooks = filteredBooks.filter((book) => book.marked_for_deletion);
         } else {
           filteredBooks = filteredBooks.filter(
             (book) => book.library_state === filters.libraryState
@@ -691,9 +663,7 @@ export const Library = () => {
             break;
           }
           case SortField.CreatedAt:
-            comparison =
-              new Date(a.created_at).getTime() -
-              new Date(b.created_at).getTime();
+            comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
             break;
           default:
             comparison = 0;
@@ -702,10 +672,7 @@ export const Library = () => {
       });
 
       const total = sortedBooks.length;
-      const paginatedBooks = sortedBooks.slice(
-        offset,
-        offset + itemsPerPage
-      );
+      const paginatedBooks = sortedBooks.slice(offset, offset + itemsPerPage);
 
       setAudiobooks(paginatedBooks);
       setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
@@ -726,8 +693,7 @@ export const Library = () => {
       if (error instanceof api.ApiError && error.status >= 500) {
         toast('Server error occurred.', 'error');
       }
-      const message =
-        error instanceof Error ? error.message : 'Failed to load audiobooks.';
+      const message = error instanceof Error ? error.message : 'Failed to load audiobooks.';
       if (message.toLowerCase().includes('timeout')) {
         toast('Request timed out.', 'error');
       }
@@ -737,16 +703,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [
-    debouncedSearch,
-    filters,
-    itemsPerPage,
-    page,
-    sortBy,
-    sortOrder,
-    navigate,
-    toast,
-  ]);
+  }, [debouncedSearch, filters, itemsPerPage, page, sortBy, sortOrder, navigate, toast]);
 
   // Reload books when scan/organize completes
   useEffect(() => {
@@ -782,9 +739,7 @@ export const Library = () => {
   const handleAddImportFilePath = () => {
     const trimmed = importFilePath.trim();
     if (!trimmed) return;
-    setImportFilePaths((prev) =>
-      prev.includes(trimmed) ? prev : [...prev, trimmed]
-    );
+    setImportFilePaths((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     setImportFilePath('');
   };
 
@@ -815,9 +770,7 @@ export const Library = () => {
       const results = await Promise.allSettled(
         targets.map((path) => api.importFile(path, importFileOrganize))
       );
-      const failures = results.filter(
-        (result) => result.status === 'rejected'
-      );
+      const failures = results.filter((result) => result.status === 'rejected');
       if (failures.length === 0) {
         toast(
           targets.length === 1
@@ -840,8 +793,7 @@ export const Library = () => {
       await loadAudiobooks();
     } catch (error) {
       console.error('Failed to import file:', error);
-      const message =
-        error instanceof Error ? error.message : 'Failed to import file.';
+      const message = error instanceof Error ? error.message : 'Failed to import file.';
       toast(message, 'error');
     } finally {
       setImportFileInProgress(false);
@@ -880,9 +832,7 @@ export const Library = () => {
     try {
       const saved = await api.updateBook(audiobook.id, audiobook);
       // Update local state with server response
-      setAudiobooks((prev) =>
-        prev.map((ab) => (ab.id === audiobook.id ? saved : ab))
-      );
+      setAudiobooks((prev) => prev.map((ab) => (ab.id === audiobook.id ? saved : ab)));
       setEditingAudiobook(null);
       toast('Metadata saved.', 'success');
     } catch (error) {
@@ -907,8 +857,7 @@ export const Library = () => {
           ? ' Hash blocked.'
           : ' Hash could not be blocked.'
         : '';
-      const severity =
-        deleteOptions.blockHash && !result.blocked ? 'warning' : 'success';
+      const severity = deleteOptions.blockHash && !result.blocked ? 'warning' : 'success';
       toast(`${baseMessage}${blockNotice}`, severity);
       setDeleteDialogOpen(false);
       setBookPendingDelete(null);
@@ -931,17 +880,11 @@ export const Library = () => {
     if (!hasSelection) return;
     setBatchDeleteInProgress(true);
     try {
-      const activeBooks = selectedAudiobooks.filter(
-        (book) => !book.marked_for_deletion
-      );
+      const activeBooks = selectedAudiobooks.filter((book) => !book.marked_for_deletion);
       const results = await Promise.all(
-        activeBooks.map((book) =>
-          api.deleteBook(book.id, { softDelete: true, blockHash: true })
-        )
+        activeBooks.map((book) => api.deleteBook(book.id, { softDelete: true, blockHash: true }))
       );
-      const blockedFailures = results.filter(
-        (result) => result.blocked !== true
-      ).length;
+      const blockedFailures = results.filter((result) => result.blocked !== true).length;
       const baseMessage = `Soft deleted ${activeBooks.length} selected audiobooks.`;
       if (blockedFailures > 0) {
         toast(
@@ -967,16 +910,9 @@ export const Library = () => {
     if (!hasSelection) return;
     setBatchRestoreInProgress(true);
     try {
-      const deletedBooks = selectedAudiobooks.filter(
-        (book) => book.marked_for_deletion
-      );
-      await Promise.all(
-        deletedBooks.map((book) => api.restoreSoftDeletedBook(book.id))
-      );
-      toast(
-        `Restored ${deletedBooks.length} selected audiobooks.`,
-        'success'
-      );
+      const deletedBooks = selectedAudiobooks.filter((book) => book.marked_for_deletion);
+      await Promise.all(deletedBooks.map((book) => api.restoreSoftDeletedBook(book.id)));
+      toast(`Restored ${deletedBooks.length} selected audiobooks.`, 'success');
       setSelectedAudiobooks([]);
       await loadAudiobooks();
       await loadSoftDeleted();
@@ -1059,11 +995,13 @@ export const Library = () => {
     }
   };
 
-
   const handleClick = useCallback(
     (audiobook: Audiobook) => {
       // Save current library URL so BookDetail can return here directly
-      sessionStorage.setItem('library_return_url', window.location.pathname + window.location.search);
+      sessionStorage.setItem(
+        'library_return_url',
+        window.location.pathname + window.location.search
+      );
       navigate(`/library/${audiobook.id}`);
     },
     [navigate]
@@ -1123,8 +1061,7 @@ export const Library = () => {
             status: 'updated',
           });
         } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Failed to fetch metadata';
+          const message = error instanceof Error ? error.message : 'Failed to fetch metadata';
           results.push({
             book_id: book.id,
             title: book.title,
@@ -1140,8 +1077,7 @@ export const Library = () => {
       if (bulkFetchCancelRef.current) {
         toast('Bulk fetch cancelled.', 'info');
       } else {
-        const successCount = results.filter((result) => result.status !== 'error')
-          .length;
+        const successCount = results.filter((result) => result.status !== 'error').length;
         const failedCount = results.length - successCount;
 
         toast(
@@ -1173,9 +1109,7 @@ export const Library = () => {
   };
 
   const handleBulkWriteBack = async () => {
-    const activeBooks = selectedAudiobooks.filter(
-      (book) => !book.marked_for_deletion
-    );
+    const activeBooks = selectedAudiobooks.filter((book) => !book.marked_for_deletion);
     if (activeBooks.length === 0) {
       toast('Select active audiobooks to save to files.', 'info');
       return;
@@ -1189,17 +1123,10 @@ export const Library = () => {
       );
       setBulkWriteBackResult(result);
       if (result.failed > 0) {
-        toast(
-          `Saved ${result.written} books to files, ${result.failed} failed.`,
-          'warning'
-        );
+        toast(`Saved ${result.written} books to files, ${result.failed} failed.`, 'warning');
       } else {
-        const renameNote =
-          result.renamed > 0 ? ` and renamed ${result.renamed}` : '';
-        toast(
-          `Saved ${result.written} books to files${renameNote}.`,
-          'success'
-        );
+        const renameNote = result.renamed > 0 ? ` and renamed ${result.renamed}` : '';
+        toast(`Saved ${result.written} books to files${renameNote}.`, 'success');
         setSelectedAudiobooks([]);
       }
       await loadAudiobooks();
@@ -1243,9 +1170,7 @@ export const Library = () => {
       return;
     }
 
-    const importBooks = selectedAudiobooks.filter(
-      (book) => book.library_state === 'import'
-    );
+    const importBooks = selectedAudiobooks.filter((book) => book.library_state === 'import');
     if (importBooks.length === 0) {
       toast('Select import-state audiobooks to organize.', 'info');
       return;
@@ -1295,9 +1220,7 @@ export const Library = () => {
         }
         const organizeError = book.organize_error;
         if (organizeError) {
-          const errorMessage = `Failed to organize ${
-            book.title || 'audiobook'
-          }.`;
+          const errorMessage = `Failed to organize ${book.title || 'audiobook'}.`;
           results.push({
             book_id: book.id,
             title: book.title,
@@ -1337,8 +1260,7 @@ export const Library = () => {
             continue;
           }
           if (action === 'link') {
-            const groupId =
-              duplicate.version_group_id || `group-${duplicate.id}`;
+            const groupId = duplicate.version_group_id || `group-${duplicate.id}`;
             await api.linkBookVersion(duplicate.id, book.id);
             setAudiobooks((prev) =>
               prev.map((item) => {
@@ -1359,9 +1281,7 @@ export const Library = () => {
           if (action === 'replace') {
             setAudiobooks((prev) =>
               prev.map((item) =>
-                item.id === duplicate.id
-                  ? { ...item, marked_for_deletion: true }
-                  : item
+                item.id === duplicate.id ? { ...item, marked_for_deletion: true } : item
               )
             );
           }
@@ -1373,11 +1293,7 @@ export const Library = () => {
           status: 'organized',
         });
         setAudiobooks((prev) =>
-          prev.map((ab) =>
-            ab.id === book.id
-              ? { ...ab, library_state: 'organized' }
-              : ab
-          )
+          prev.map((ab) => (ab.id === book.id ? { ...ab, library_state: 'organized' } : ab))
         );
         buildHashCandidates(book).forEach((hash) => {
           organizedByHash.set(hash, book);
@@ -1446,10 +1362,7 @@ export const Library = () => {
   const handleParseWithAI = async (audiobook: Audiobook) => {
     try {
       const result = await api.parseAudiobookWithAI(audiobook.id);
-      console.log(
-        `AI parsing completed with ${result.confidence} confidence:`,
-        result.book
-      );
+      console.log(`AI parsing completed with ${result.confidence} confidence:`, result.book);
       // Reload audiobooks to show updated data
       loadAudiobooks();
     } catch (error) {
@@ -1470,23 +1383,23 @@ export const Library = () => {
     }
   };
 
+  const handleColumnSortChange = (sortKey: string, order: 'asc' | 'desc') => {
+    setSortBy(sortKey as SortField);
+    setSortOrder(order === 'asc' ? SortOrder.Ascending : SortOrder.Descending);
+  };
+
   const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '')
-      .length;
+    return Object.values(filters).filter((v) => v !== undefined && v !== '').length;
   };
 
   const libraryBookCount =
     systemStatus?.library_book_count ?? systemStatus?.library.book_count ?? 0;
   const importBookCount =
-    systemStatus?.import_book_count ??
-    systemStatus?.import_paths?.book_count ??
-    0;
+    systemStatus?.import_book_count ?? systemStatus?.import_paths?.book_count ?? 0;
   const librarySizeBytes =
     systemStatus?.library_size_bytes ?? systemStatus?.library.total_size ?? 0;
   const importSizeBytes =
-    systemStatus?.import_size_bytes ??
-    systemStatus?.import_paths?.total_size ??
-    0;
+    systemStatus?.import_size_bytes ?? systemStatus?.import_paths?.total_size ?? 0;
 
   // Import path management handlers
   const handleAddImportPath = async () => {
@@ -1518,11 +1431,7 @@ export const Library = () => {
         const poll = async () => {
           try {
             const op = await api.getOperationStatus(opId);
-            if (
-              op.status === 'completed' ||
-              op.status === 'failed' ||
-              op.status === 'canceled'
-            ) {
+            if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
               // Refresh folder list to get updated book counts
               const folders = await api.getImportPaths();
               setImportPaths(
@@ -1610,16 +1519,12 @@ export const Library = () => {
       const pathEntry = importPaths.find((p) => p.id === id);
       const path = pathEntry?.path;
       if (!path) return;
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p))
-      );
+      setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p)));
       const op = await api.startScan(path);
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
-      setImportPaths((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p))
-      );
+      setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'idle' } : p)));
       setScanningPathId(null);
     }
   };
@@ -1697,14 +1602,14 @@ export const Library = () => {
           >
             Filters
             {getActiveFilterCount() > 0 && (
-              <Chip
-                label={getActiveFilterCount()}
-                size="small"
-                color="primary"
-                sx={{ ml: 1 }}
-              />
+              <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 1 }} />
             )}
           </Button>
+          <ColumnChooser
+            visibleColumnIds={visibleColumnIds}
+            onToggleColumn={toggleColumn}
+            onResetDefaults={resetColumnsToDefaults}
+          />
           <Button
             startIcon={<CloudDownloadIcon />}
             onClick={() => setBulkFetchDialogOpen(true)}
@@ -1726,9 +1631,7 @@ export const Library = () => {
           <Button
             variant="outlined"
             size="small"
-            startIcon={
-              organizeRunning ? <CircularProgress size={16} /> : undefined
-            }
+            startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined}
             disabled={organizeRunning}
             onClick={handleOrganizeLibrary}
           >
@@ -1737,13 +1640,7 @@ export const Library = () => {
           <Button
             variant="outlined"
             size="small"
-            startIcon={
-              activeScanOp !== null ? (
-                <CircularProgress size={16} />
-              ) : (
-                <RefreshIcon />
-              )
-            }
+            startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />}
             disabled={activeScanOp !== null}
             onClick={handleFullRescan}
           >
@@ -1796,29 +1693,24 @@ export const Library = () => {
             }),
           }}
         >
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            gap={2}
-          >
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
             <Box flex={1}>
               <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
                 <Typography variant="subtitle1" fontWeight="600">
                   Main Library Storage
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {libraryBookCount} in Library • {importBookCount} Scanned but not imported • {systemStatus.import_paths?.folder_count || 0} Import Paths
+                  {libraryBookCount} in Library • {importBookCount} Scanned but not imported •{' '}
+                  {systemStatus.import_paths?.folder_count || 0} Import Paths
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {(librarySizeBytes / (1024 * 1024)).toFixed(0)} MB Library • {(importSizeBytes / (1024 * 1024)).toFixed(0)} MB Scanned
+                  {(librarySizeBytes / (1024 * 1024)).toFixed(0)} MB Library •{' '}
+                  {(importSizeBytes / (1024 * 1024)).toFixed(0)} MB Scanned
                 </Typography>
               </Stack>
               <Typography
                 variant="caption"
-                color={
-                  systemStatus.library.path ? 'text.secondary' : 'warning.main'
-                }
+                color={systemStatus.library.path ? 'text.secondary' : 'warning.main'}
                 display="block"
                 mt={0.5}
               >
@@ -1829,8 +1721,8 @@ export const Library = () => {
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="caption" color="text.secondary">
-                      Organizing: {activeOrganizeOp.progress}/
-                      {activeOrganizeOp.total} {activeOrganizeOp.message}
+                      Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}{' '}
+                      {activeOrganizeOp.message}
                     </Typography>
                     <Button
                       size="small"
@@ -1874,9 +1766,7 @@ export const Library = () => {
                               setOperationLogs((prev) => {
                                 const arr = prev[activeOrganizeOp.id] || [];
                                 const updated = arr.map((item, i) =>
-                                  i === idx
-                                    ? { ...item, expanded: !item.expanded }
-                                    : item
+                                  i === idx ? { ...item, expanded: !item.expanded } : item
                                 );
                                 return {
                                   ...prev,
@@ -1888,10 +1778,7 @@ export const Library = () => {
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography
-                              variant="caption"
-                              sx={{ ml: 1.5, color: 'text.secondary' }}
-                            >
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
                               {l.details}
                             </Typography>
                           )}
@@ -1952,9 +1839,7 @@ export const Library = () => {
                               setOperationLogs((prev) => {
                                 const arr = prev[activeScanOp.id] || [];
                                 const updated = arr.map((item, i) =>
-                                  i === idx
-                                    ? { ...item, expanded: !item.expanded }
-                                    : item
+                                  i === idx ? { ...item, expanded: !item.expanded } : item
                                 );
                                 return { ...prev, [activeScanOp.id]: updated };
                               });
@@ -1963,10 +1848,7 @@ export const Library = () => {
                             {l.message}
                           </Typography>
                           {l.details && l.expanded && (
-                            <Typography
-                              variant="caption"
-                              sx={{ ml: 1.5, color: 'text.secondary' }}
-                            >
+                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
                               {l.details}
                             </Typography>
                           )}
@@ -1990,7 +1872,11 @@ export const Library = () => {
                   <PushPinIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={storagePinMode === 'floating' ? 'Floating (follows scroll)' : 'Float with scroll'}>
+              <Tooltip
+                title={
+                  storagePinMode === 'floating' ? 'Floating (follows scroll)' : 'Float with scroll'
+                }
+              >
                 <IconButton
                   size="small"
                   onClick={() => setStoragePinMode('floating')}
@@ -1999,7 +1885,11 @@ export const Library = () => {
                   <PushPinOutlinedIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={storagePinMode === 'scrollable' ? 'Scrollable (scrolls away)' : 'Make scrollable'}>
+              <Tooltip
+                title={
+                  storagePinMode === 'scrollable' ? 'Scrollable (scrolls away)' : 'Make scrollable'
+                }
+              >
                 <IconButton
                   size="small"
                   onClick={() => setStoragePinMode('scrollable')}
@@ -2015,43 +1905,29 @@ export const Library = () => {
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
         {audiobooks.length === 0 && !loading && !searchQuery ? (
-          <Paper
-            sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}
-          >
-            <FolderOpenIcon
-              sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }}
-            />
+          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
+            <FolderOpenIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
             <Alert severity="info" sx={{ textAlign: 'center' }}>
               <AlertTitle>No Audiobooks Found</AlertTitle>
               {importPaths.length === 0 ? (
                 <>
                   You haven't added any import paths yet. Get started by:
-                  <ul
-                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
-                  >
+                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
                     <li>
-                      Importing individual audiobook files using the "Import
-                      Files" button below
+                      Importing individual audiobook files using the "Import Files" button below
                     </li>
                     <li>
-                      Adding import paths using the "Add Import Path" button
-                      below (watches folders for new files)
+                      Adding import paths using the "Add Import Path" button below (watches folders
+                      for new files)
                     </li>
                   </ul>
                 </>
               ) : (
                 <>
                   No audiobooks found in your library. Try:
-                  <ul
-                    style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}
-                  >
-                    <li>
-                      Scanning your import paths using the "Scan All" button
-                      below
-                    </li>
-                    <li>
-                      Adding more import paths where audiobooks are located
-                    </li>
+                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
+                    <li>Scanning your import paths using the "Scan All" button below</li>
+                    <li>Adding more import paths where audiobooks are located</li>
                   </ul>
                 </>
               )}
@@ -2079,9 +1955,7 @@ export const Library = () => {
                 <Button
                   variant="outlined"
                   size="large"
-                  startIcon={
-                    scanningAll ? <CircularProgress size={20} /> : <RefreshIcon />
-                  }
+                  startIcon={scanningAll ? <CircularProgress size={20} /> : <RefreshIcon />}
                   onClick={handleScanAll}
                   disabled={scanningAll}
                 >
@@ -2270,9 +2144,7 @@ export const Library = () => {
                         onClick={handleBatchRestore}
                         disabled={!selectedHasDeleted || batchRestoreInProgress}
                       >
-                        {batchRestoreInProgress
-                          ? 'Restoring...'
-                          : 'Restore Selected'}
+                        {batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}
                       </Button>
                     </span>
                   </Tooltip>
@@ -2289,11 +2161,7 @@ export const Library = () => {
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Try a different search term or clear the search to see all books.
                 </Typography>
-                <Button
-                  variant="outlined"
-                  sx={{ mt: 2 }}
-                  onClick={() => setSearchQuery('')}
-                >
+                <Button variant="outlined" sx={{ mt: 2 }} onClick={() => setSearchQuery('')}>
                   Clear Search
                 </Button>
               </Paper>
@@ -2320,6 +2188,12 @@ export const Library = () => {
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 onSelectAll={handleToggleSelectAllOnPage}
+                columns={columnDefs}
+                columnWidths={columnWidths}
+                sortBy={sortBy}
+                sortOrder={sortOrder === SortOrder.Ascending ? 'asc' : 'desc'}
+                onSortChange={handleColumnSortChange}
+                onColumnResize={resizeColumn}
               />
             )}
 
@@ -2411,8 +2285,7 @@ export const Library = () => {
               <List dense sx={{ mt: 1 }}>
                 {softDeletedBooks.map((book) => {
                   const deletedAt =
-                    book.marked_for_deletion_at &&
-                    new Date(book.marked_for_deletion_at);
+                    book.marked_for_deletion_at && new Date(book.marked_for_deletion_at);
                   return (
                     <ListItem key={book.id} alignItems="flex-start">
                       <ListItemText
@@ -2423,18 +2296,12 @@ export const Library = () => {
                               {book.author || 'Unknown Author'}
                             </Typography>
                             {deletedAt && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
+                              <Typography variant="caption" color="text.secondary">
                                 Soft deleted at {deletedAt.toLocaleString()}
                               </Typography>
                             )}
                             {book.file_path && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
+                              <Typography variant="caption" color="text.secondary">
                                 {book.file_path}
                               </Typography>
                             )}
@@ -2453,9 +2320,7 @@ export const Library = () => {
                             purgingBookId === book.id
                           }
                         >
-                          {restoringBookId === book.id
-                            ? 'Restoring...'
-                            : 'Restore'}
+                          {restoringBookId === book.id ? 'Restoring...' : 'Restore'}
                         </Button>
                         <Button
                           size="small"
@@ -2500,19 +2365,15 @@ export const Library = () => {
           onSave={handleBatchSave}
         />
 
-        <Dialog
-          open={batchDeleteDialogOpen}
-          onClose={() => setBatchDeleteDialogOpen(false)}
-        >
+        <Dialog open={batchDeleteDialogOpen} onClose={() => setBatchDeleteDialogOpen(false)}>
           <DialogTitle>Delete Selected Audiobooks</DialogTitle>
           <DialogContent>
             <Typography variant="body1" gutterBottom>
-              Are you sure you want to soft delete{' '}
-              {selectedAudiobooks.length} selected audiobooks?
+              Are you sure you want to soft delete {selectedAudiobooks.length} selected audiobooks?
             </Typography>
             <Alert severity="warning">
-              Selected books will be hidden from the library and can be restored
-              from the soft-deleted list.
+              Selected books will be hidden from the library and can be restored from the
+              soft-deleted list.
             </Alert>
           </DialogContent>
           <DialogActions>
@@ -2533,10 +2394,7 @@ export const Library = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={bulkOrganizeDialogOpen}
-          onClose={handleCancelBulkOrganize}
-        >
+        <Dialog open={bulkOrganizeDialogOpen} onClose={handleCancelBulkOrganize}>
           <DialogTitle>Organize Selected Audiobooks</DialogTitle>
           <DialogContent>
             <Typography variant="body1" gutterBottom>
@@ -2545,16 +2403,13 @@ export const Library = () => {
             {bulkOrganizeProgress && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="body2" gutterBottom>
-                  Organized {bulkOrganizeProgress.completed} of{' '}
-                  {bulkOrganizeProgress.total}
+                  Organized {bulkOrganizeProgress.completed} of {bulkOrganizeProgress.total}
                 </Typography>
                 <LinearProgress
                   variant="determinate"
                   value={
                     bulkOrganizeProgress.total > 0
-                      ? (bulkOrganizeProgress.completed /
-                          bulkOrganizeProgress.total) *
-                        100
+                      ? (bulkOrganizeProgress.completed / bulkOrganizeProgress.total) * 100
                       : 0
                   }
                 />
@@ -2587,15 +2442,11 @@ export const Library = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={bulkWriteBackDialogOpen}
-          onClose={handleCloseBulkWriteBackDialog}
-        >
+        <Dialog open={bulkWriteBackDialogOpen} onClose={handleCloseBulkWriteBackDialog}>
           <DialogTitle>Save Selected to Files</DialogTitle>
           <DialogContent>
             <Typography variant="body1" gutterBottom>
-              Write current database metadata to {selectedAudiobooks.length}{' '}
-              selected books.
+              Write current database metadata to {selectedAudiobooks.length} selected books.
             </Typography>
             <FormControlLabel
               control={
@@ -2619,18 +2470,13 @@ export const Library = () => {
                   {bulkWriteBackResult.renamed > 0
                     ? `, renamed ${bulkWriteBackResult.renamed}`
                     : ''}
-                  {bulkWriteBackResult.failed > 0
-                    ? `, ${bulkWriteBackResult.failed} failed`
-                    : ''}.
+                  {bulkWriteBackResult.failed > 0 ? `, ${bulkWriteBackResult.failed} failed` : ''}.
                 </Alert>
                 {bulkWriteBackResult.errors.length > 0 && (
                   <List dense>
                     {bulkWriteBackResult.errors.map((error) => (
                       <ListItem key={`${error.book_id}-${error.error}`}>
-                        <ListItemText
-                          primary={error.book_id}
-                          secondary={error.error}
-                        />
+                        <ListItemText primary={error.book_id} secondary={error.error} />
                       </ListItem>
                     ))}
                   </List>
@@ -2639,10 +2485,7 @@ export const Library = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={handleCloseBulkWriteBackDialog}
-              disabled={bulkWriteBackInProgress}
-            >
+            <Button onClick={handleCloseBulkWriteBackDialog} disabled={bulkWriteBackInProgress}>
               Close
             </Button>
             <Button
@@ -2655,31 +2498,20 @@ export const Library = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={Boolean(duplicateDialog)}
-          onClose={() => handleDuplicateAction('skip')}
-        >
+        <Dialog open={Boolean(duplicateDialog)} onClose={() => handleDuplicateAction('skip')}>
           <DialogTitle>Duplicate File Detected</DialogTitle>
           <DialogContent>
             <Typography variant="body2" gutterBottom>
-              The file for{' '}
-              <strong>
-                {duplicateDialog?.duplicate.title || 'this audiobook'}
-              </strong>{' '}
+              The file for <strong>{duplicateDialog?.duplicate.title || 'this audiobook'}</strong>{' '}
               matches an existing audiobook.
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Existing:{' '}
-              {duplicateDialog?.existing.title || 'Unknown audiobook'}
+              Existing: {duplicateDialog?.existing.title || 'Unknown audiobook'}
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => handleDuplicateAction('skip')}>
-              Skip
-            </Button>
-            <Button onClick={() => handleDuplicateAction('link')}>
-              Link as Version
-            </Button>
+            <Button onClick={() => handleDuplicateAction('skip')}>Skip</Button>
+            <Button onClick={() => handleDuplicateAction('link')}>Link as Version</Button>
             <Button
               color="warning"
               variant="contained"
@@ -2690,24 +2522,16 @@ export const Library = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={Boolean(bulkOrganizeError)}
-          onClose={handleCloseOrganizeError}
-        >
+        <Dialog open={Boolean(bulkOrganizeError)} onClose={handleCloseOrganizeError}>
           <DialogTitle>Organize Error</DialogTitle>
           <DialogContent>
             <Typography variant="body2" gutterBottom>
-              {bulkOrganizeError?.message ||
-                'Organize operation failed.'}
+              {bulkOrganizeError?.message || 'Organize operation failed.'}
             </Typography>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseOrganizeError}>Close</Button>
-            <Button
-              color="warning"
-              variant="contained"
-              onClick={handleOrganizeRollback}
-            >
+            <Button color="warning" variant="contained" onClick={handleOrganizeRollback}>
               Rollback
             </Button>
           </DialogActions>
@@ -2722,14 +2546,10 @@ export const Library = () => {
           <DialogTitle>Import Audiobook File</DialogTitle>
           <DialogContent>
             <Alert severity="info" sx={{ mb: 2 }}>
-              Select a file on the server to import into the library. Use the
-              organize toggle to immediately move it into the library layout.
+              Select a file on the server to import into the library. Use the organize toggle to
+              immediately move it into the library layout.
             </Alert>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ mb: 2 }}
-            >
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
               <TextField
                 fullWidth
                 label="Import file path"
@@ -2757,11 +2577,7 @@ export const Library = () => {
                 }
               }}
             />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mt: 1 }}
-            >
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               Click files to add or remove them from the import list.
             </Typography>
             {importFilePaths.length > 0 && (
@@ -2798,18 +2614,14 @@ export const Library = () => {
             />
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={() => setImportFileDialogOpen(false)}
-              disabled={importFileInProgress}
-            >
+            <Button onClick={() => setImportFileDialogOpen(false)} disabled={importFileInProgress}>
               Cancel
             </Button>
             <Button
               variant="contained"
               onClick={handleImportFile}
               disabled={
-                importFileInProgress ||
-                (!importFilePath.trim() && importFilePaths.length === 0)
+                importFileInProgress || (!importFilePath.trim() && importFilePaths.length === 0)
               }
             >
               {importFileInProgress ? 'Importing…' : 'Import'}
@@ -2817,10 +2629,7 @@ export const Library = () => {
           </DialogActions>
         </Dialog>
 
-        <Dialog
-          open={bulkFetchDialogOpen}
-          onClose={handleCancelBulkFetch}
-        >
+        <Dialog open={bulkFetchDialogOpen} onClose={handleCancelBulkFetch}>
           <DialogTitle>Bulk Fetch Metadata</DialogTitle>
           <DialogContent>
             <Typography variant="body1" gutterBottom>
@@ -2829,16 +2638,13 @@ export const Library = () => {
             {bulkFetchProgress && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="body2" gutterBottom>
-                  {bulkFetchProgress.completed} / {bulkFetchProgress.total}{' '}
-                  completed
+                  {bulkFetchProgress.completed} / {bulkFetchProgress.total} completed
                 </Typography>
                 <LinearProgress
                   variant="determinate"
                   value={
                     bulkFetchProgress.total > 0
-                      ? (bulkFetchProgress.completed /
-                          bulkFetchProgress.total) *
-                        100
+                      ? (bulkFetchProgress.completed / bulkFetchProgress.total) * 100
                       : 0
                   }
                 />
@@ -2858,9 +2664,7 @@ export const Library = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={handleCancelBulkFetch}
-            >
+            <Button onClick={handleCancelBulkFetch}>
               {bulkFetchInProgress ? 'Cancel' : 'Close'}
             </Button>
             <Button
@@ -2877,7 +2681,10 @@ export const Library = () => {
           open={bulkSearchOpen}
           books={selectedAudiobooks}
           onClose={() => setBulkSearchOpen(false)}
-          onComplete={() => { loadAudiobooks(); setSelectedAudiobooks([]); }}
+          onComplete={() => {
+            loadAudiobooks();
+            setSelectedAudiobooks([]);
+          }}
           toast={toast}
         />
 
@@ -2925,8 +2732,8 @@ export const Library = () => {
               label="Prevent reimporting this file (block hash)"
             />
             <Alert severity="warning" sx={{ mt: 2 }}>
-              Soft deleting keeps the record for auditing and purging. Use purge
-              to permanently remove it later.
+              Soft deleting keeps the record for auditing and purging. Use purge to permanently
+              remove it later.
             </Alert>
           </DialogContent>
           <DialogActions>
@@ -2972,8 +2779,8 @@ export const Library = () => {
               label="Also delete files from disk (if they still exist)"
             />
             <Alert severity="warning" sx={{ mt: 2 }}>
-              This cannot be undone. Purge removes the records entirely and
-              deletes files when selected.
+              This cannot be undone. Purge removes the records entirely and deletes files when
+              selected.
             </Alert>
           </DialogContent>
           <DialogActions>
@@ -3006,10 +2813,9 @@ export const Library = () => {
           <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
           <DialogContent>
             <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>Import folders</strong> are watch locations where the
-              scanner looks for new audiobooks. Files discovered here will be
-              copied and organized into your main library path (configured in
-              Settings).
+              <strong>Import folders</strong> are watch locations where the scanner looks for new
+              audiobooks. Files discovered here will be copied and organized into your main library
+              path (configured in Settings).
             </Alert>
 
             {!showServerBrowser ? (
@@ -3033,10 +2839,7 @@ export const Library = () => {
               </Box>
             ) : (
               <Box>
-                <Button
-                  onClick={() => setShowServerBrowser(false)}
-                  sx={{ mb: 2 }}
-                >
+                <Button onClick={() => setShowServerBrowser(false)} sx={{ mb: 2 }}>
                   ← Back to Manual Entry
                 </Button>
                 <ServerFileBrowser
@@ -3088,16 +2891,12 @@ export const Library = () => {
               }}
               onClick={() => setImportPathsExpanded(!importPathsExpanded)}
             >
-              <Typography variant="h6">
-                Import Paths ({importPaths.length})
-              </Typography>
+              <Typography variant="h6">Import Paths ({importPaths.length})</Typography>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Button
                   size="small"
                   variant="outlined"
-                  startIcon={
-                    scanningAll ? <CircularProgress size={16} /> : undefined
-                  }
+                  startIcon={scanningAll ? <CircularProgress size={16} /> : undefined}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleScanAll();
@@ -3119,9 +2918,7 @@ export const Library = () => {
                 >
                   <ExpandMoreIcon
                     sx={{
-                      transform: importPathsExpanded
-                        ? 'rotate(180deg)'
-                        : 'rotate(0deg)',
+                      transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                       transition: 'transform 0.3s',
                     }}
                   />
@@ -3145,8 +2942,7 @@ export const Library = () => {
                         edge="end"
                         onClick={() => handleScanImportPath(path.id)}
                         disabled={
-                          path.status === 'scanning' ||
-                          scanningPathId === path.id.toString()
+                          path.status === 'scanning' || scanningPathId === path.id.toString()
                         }
                         sx={{ mr: 1 }}
                       >

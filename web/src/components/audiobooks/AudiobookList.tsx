@@ -1,8 +1,8 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 1.1.0
+// version: 2.0.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -11,12 +11,10 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Avatar,
   IconButton,
   Menu,
   MenuItem,
   Typography,
-  Chip,
   Box,
   CircularProgress,
   Checkbox,
@@ -25,8 +23,11 @@ import {
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
+import { type ColumnDefinition, getDefaultVisibleColumns } from '../../config/columnDefinitions';
 
 interface AudiobookListProps {
   audiobooks: Audiobook[];
@@ -37,7 +38,15 @@ interface AudiobookListProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (audiobook: Audiobook) => void;
   onSelectAll?: () => void;
+  columns?: ColumnDefinition[];
+  columnWidths?: Record<string, number>;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  onSortChange?: (sortKey: string, order: 'asc' | 'desc') => void;
+  onColumnResize?: (columnId: string, width: number) => void;
 }
+
+const fallbackColumns = getDefaultVisibleColumns();
 
 export const AudiobookList: React.FC<AudiobookListProps> = ({
   audiobooks,
@@ -48,15 +57,26 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   selectedIds,
   onToggleSelect,
   onSelectAll,
+  columns,
+  columnWidths,
+  sortBy,
+  sortOrder = 'asc',
+  onSortChange,
+  onColumnResize,
 }) => {
-  const [anchorEls, setAnchorEls] = React.useState<
-    Record<string, HTMLElement | null>
-  >({});
+  const activeColumns = columns ?? fallbackColumns;
 
-  const handleMenuClick = (
-    event: React.MouseEvent<HTMLElement>,
-    id: string
-  ) => {
+  const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
+
+  // --- Resize state (non-React for perf during drag) ---
+  const resizingRef = useRef<{
+    columnId: string;
+    startX: number;
+    startWidth: number;
+    minWidth: number;
+  } | null>(null);
+
+  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, id: string) => {
     event.stopPropagation();
     setAnchorEls((prev) => ({ ...prev, [id]: event.currentTarget }));
   };
@@ -79,35 +99,77 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     onClick?.(audiobook);
   };
 
+  const handleSortClick = useCallback(
+    (col: ColumnDefinition) => {
+      if (!col.sortable || !onSortChange) return;
+      const newOrder = sortBy === col.sortKey && sortOrder === 'asc' ? 'desc' : 'asc';
+      onSortChange(col.sortKey, newOrder);
+    },
+    [sortBy, sortOrder, onSortChange]
+  );
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, col: ColumnDefinition) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const currentWidth = columnWidths?.[col.id] ?? col.defaultWidth;
+      resizingRef.current = {
+        columnId: col.id,
+        startX: e.clientX,
+        startWidth: currentWidth,
+        minWidth: col.minWidth,
+      };
+
+      const handleMouseMove = (moveEvt: MouseEvent) => {
+        if (!resizingRef.current) return;
+        const delta = moveEvt.clientX - resizingRef.current.startX;
+        const newWidth = Math.max(
+          resizingRef.current.minWidth,
+          resizingRef.current.startWidth + delta
+        );
+        // Apply width visually via the header cell's parent
+        const th = (e.target as HTMLElement).closest('th');
+        if (th) {
+          th.style.width = `${newWidth}px`;
+          th.style.minWidth = `${newWidth}px`;
+        }
+      };
+
+      const handleMouseUp = (upEvt: MouseEvent) => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        if (!resizingRef.current) return;
+        const delta = upEvt.clientX - resizingRef.current.startX;
+        const newWidth = Math.max(
+          resizingRef.current.minWidth,
+          resizingRef.current.startWidth + delta
+        );
+        onColumnResize?.(resizingRef.current.columnId, newWidth);
+        resizingRef.current = null;
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    },
+    [columnWidths, onColumnResize]
+  );
+
   const allSelected =
-    audiobooks.length > 0 &&
-    audiobooks.every((book) => selectedIds?.has(book.id));
+    audiobooks.length > 0 && audiobooks.every((book) => selectedIds?.has(book.id));
   const someSelected = audiobooks.some((book) => selectedIds?.has(book.id));
 
-  const formatDuration = (seconds?: number): string => {
-    if (!seconds) return '--';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
-  };
+  const hasSelection = Boolean(onToggleSelect);
+  const hasActions = Boolean(onEdit || onDelete);
 
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return '--';
-    const mb = bytes / (1024 * 1024);
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(2)} GB`;
-    }
-    return `${mb.toFixed(2)} MB`;
+  const formatCellValue = (col: ColumnDefinition, book: Audiobook): string => {
+    const raw = col.accessor(book);
+    if (col.formatter) return col.formatter(raw);
+    return raw != null ? String(raw) : '--';
   };
 
   if (loading) {
     return (
-      <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight="400px"
-      >
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
         <CircularProgress />
       </Box>
     );
@@ -134,31 +196,85 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   }
 
   return (
-    <TableContainer component={Paper}>
-      <Table>
+    <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+      <Table sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
-            <TableCell width={50} padding="checkbox">
-              {onSelectAll && (
-                <Checkbox
-                  checked={allSelected}
-                  indeterminate={someSelected && !allSelected}
-                  onChange={onSelectAll}
-                  inputProps={{
-                    'aria-label': 'Select all books on page',
+            {/* Checkbox column */}
+            {hasSelection && (
+              <TableCell width={50} padding="checkbox">
+                {onSelectAll && (
+                  <Checkbox
+                    checked={allSelected}
+                    indeterminate={someSelected && !allSelected}
+                    onChange={onSelectAll}
+                    inputProps={{
+                      'aria-label': 'Select all books on page',
+                    }}
+                  />
+                )}
+              </TableCell>
+            )}
+
+            {/* Dynamic columns */}
+            {activeColumns.map((col) => {
+              const width = columnWidths?.[col.id] ?? col.defaultWidth;
+              const isActiveSortCol = sortBy === col.sortKey;
+              return (
+                <TableCell
+                  key={col.id}
+                  sx={{
+                    width,
+                    minWidth: col.minWidth,
+                    position: 'relative',
+                    userSelect: 'none',
+                    cursor: col.sortable ? 'pointer' : 'default',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    pr: 2,
                   }}
-                />
-              )}
-            </TableCell>
-            <TableCell width={50}></TableCell>
-            <TableCell>Title</TableCell>
-            <TableCell>Author</TableCell>
-            <TableCell>Narrator</TableCell>
-            <TableCell>Series</TableCell>
-            <TableCell>Genre</TableCell>
-            <TableCell>Duration</TableCell>
-            <TableCell>Size</TableCell>
-            <TableCell width={50}></TableCell>
+                  onClick={() => handleSortClick(col)}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
+                    <span>{col.label}</span>
+                    {isActiveSortCol &&
+                      (sortOrder === 'asc' ? (
+                        <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                      ) : (
+                        <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                      ))}
+                  </Box>
+
+                  {/* Resize handle */}
+                  {onColumnResize && (
+                    <Box
+                      onMouseDown={(e) => handleResizeStart(e, col)}
+                      sx={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 5,
+                        cursor: 'col-resize',
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                        },
+                      }}
+                    />
+                  )}
+                </TableCell>
+              );
+            })}
+
+            {/* Actions column */}
+            {hasActions && <TableCell width={50} />}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -169,100 +285,65 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               onClick={() => handleRowClick(audiobook)}
               sx={{ cursor: onClick ? 'pointer' : 'default' }}
             >
-              <TableCell>
-                {onToggleSelect && (
-                  <Checkbox
-                    checked={selectedIds?.has(audiobook.id) || false}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={() => onToggleSelect(audiobook)}
-                    inputProps={{
-                      'aria-label': `Select ${audiobook.title || 'audiobook'}`,
-                    }}
-                  />
-                )}
-              </TableCell>
-              <TableCell>
-                {audiobook.cover_url ? (
-                  <Avatar
-                    src={audiobook.cover_url.startsWith('/api/') ? audiobook.cover_url : `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}`}
-                    alt={audiobook.title}
-                    variant="rounded"
-                    sx={{ width: 40, height: 40 }}
-                  />
-                ) : (
-                  <Avatar variant="rounded" sx={{ width: 40, height: 40 }}>
-                    {audiobook.title?.charAt(0).toUpperCase() || '?'}
-                  </Avatar>
-                )}
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2" fontWeight="medium">
-                  {audiobook.title || 'Untitled'}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2" color="text.secondary">
-                  {audiobook.author || '--'}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2" color="text.secondary">
-                  {audiobook.narrator || '--'}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                {audiobook.series && (
-                  <Typography variant="body2" color="text.secondary">
-                    {audiobook.series}
-                    {audiobook.series_number && ` #${audiobook.series_number}`}
+              {/* Checkbox cell */}
+              {hasSelection && (
+                <TableCell padding="checkbox">
+                  {onToggleSelect && (
+                    <Checkbox
+                      checked={selectedIds?.has(audiobook.id) || false}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={() => onToggleSelect(audiobook)}
+                      inputProps={{
+                        'aria-label': `Select ${audiobook.title || 'audiobook'}`,
+                      }}
+                    />
+                  )}
+                </TableCell>
+              )}
+
+              {/* Dynamic data cells */}
+              {activeColumns.map((col) => (
+                <TableCell
+                  key={col.id}
+                  sx={{
+                    maxWidth: columnWidths?.[col.id] ?? col.defaultWidth,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {formatCellValue(col, audiobook)}
                   </Typography>
-                )}
-              </TableCell>
-              <TableCell>
-                {audiobook.genre && (
-                  <Chip
-                    label={audiobook.genre}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2" color="text.secondary">
-                  {formatDuration(audiobook.duration_seconds)}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                <Typography variant="body2" color="text.secondary">
-                  {formatFileSize(audiobook.file_size_bytes)}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                <IconButton
-                  size="small"
-                  onClick={(e) => handleMenuClick(e, audiobook.id)}
-                >
-                  <MoreVertIcon />
-                </IconButton>
-                <Menu
-                  anchorEl={anchorEls[audiobook.id] || null}
-                  open={Boolean(anchorEls[audiobook.id])}
-                  onClose={() => handleClose(audiobook.id)}
-                >
-                  {onEdit && (
-                    <MenuItem onClick={() => handleEdit(audiobook)}>
-                      <EditIcon sx={{ mr: 1 }} fontSize="small" />
-                      Edit
-                    </MenuItem>
-                  )}
-                  {onDelete && (
-                    <MenuItem onClick={() => handleDelete(audiobook)}>
-                      <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
-                      Delete
-                    </MenuItem>
-                  )}
-                </Menu>
-              </TableCell>
+                </TableCell>
+              ))}
+
+              {/* Actions cell */}
+              {hasActions && (
+                <TableCell>
+                  <IconButton size="small" onClick={(e) => handleMenuClick(e, audiobook.id)}>
+                    <MoreVertIcon />
+                  </IconButton>
+                  <Menu
+                    anchorEl={anchorEls[audiobook.id] || null}
+                    open={Boolean(anchorEls[audiobook.id])}
+                    onClose={() => handleClose(audiobook.id)}
+                  >
+                    {onEdit && (
+                      <MenuItem onClick={() => handleEdit(audiobook)}>
+                        <EditIcon sx={{ mr: 1 }} fontSize="small" />
+                        Edit
+                      </MenuItem>
+                    )}
+                    {onDelete && (
+                      <MenuItem onClick={() => handleDelete(audiobook)}>
+                        <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
+                        Delete
+                      </MenuItem>
+                    )}
+                  </Menu>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
