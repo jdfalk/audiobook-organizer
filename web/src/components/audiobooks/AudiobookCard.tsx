@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -22,6 +22,7 @@ import {
   Compare as CompareIcon,
   CloudDownload as CloudDownloadIcon,
   Psychology as PsychologyIcon,
+  LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
 
@@ -245,6 +246,24 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           )}
           {audiobook.language && (
             <Chip label={audiobook.language} size="small" variant="outlined" />
+          )}
+          {audiobook.tags && audiobook.tags.length > 0 && audiobook.tags.slice(0, 3).map((tag) => (
+            <Chip
+              key={tag}
+              label={tag}
+              size="small"
+              variant="outlined"
+              color="secondary"
+              icon={<LocalOfferIcon />}
+            />
+          ))}
+          {audiobook.tags && audiobook.tags.length > 3 && (
+            <Chip
+              label={`+${audiobook.tags.length - 3}`}
+              size="small"
+              variant="outlined"
+              color="secondary"
+            />
           )}
         </Box>
       </CardContent>
