@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.57.0
+// version: 1.58.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3256,4 +3256,55 @@ export async function listAllUserTags(): Promise<
   }
   const data = await response.json();
   return data.tags;
+}
+
+// --- Column config preferences ---
+
+export interface ColumnConfig {
+  visibleColumns: string[]; // column IDs
+  columnOrder: string[]; // column IDs in display order
+  columnWidths: Record<string, number>; // column ID -> width in px
+}
+
+const COLUMN_CONFIG_KEY = 'library_column_config';
+
+export async function getUserColumnConfig(): Promise<ColumnConfig | null> {
+  const response = await fetch(
+    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`
+  );
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (!data.value) return null;
+  try {
+    return JSON.parse(data.value) as ColumnConfig;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveUserColumnConfig(
+  config: ColumnConfig
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: JSON.stringify(config) }),
+    }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to save column config');
+  }
+}
+
+export async function deleteUserColumnConfig(): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/preferences/${COLUMN_CONFIG_KEY}`,
+    { method: 'DELETE' }
+  );
+  // Ignore 404 — config may not exist
+  if (!response.ok && response.status !== 404) {
+    throw await buildApiError(response, 'Failed to delete column config');
+  }
 }
