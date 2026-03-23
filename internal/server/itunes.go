@@ -514,7 +514,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		// Get all books and filter to those with iTunes persistent IDs
 		allBooks, bErr := database.GlobalStore.GetAllBooks(0, 0)
 		if bErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to list books: %v", bErr)})
+			internalError(c, "failed to list books", bErr)
 			return
 		}
 		for _, book := range allBooks {
