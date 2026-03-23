@@ -1306,9 +1306,6 @@ func (s *Server) setupRoutes() {
 			// User tag routes
 			protected.GET("/tags", s.listAllUserTags)
 			protected.GET("/audiobooks/:id/user-tags", s.getBookUserTags)
-			protected.PUT("/audiobooks/:id/user-tags", s.setBookUserTags)
-			protected.POST("/audiobooks/:id/user-tags", s.addBookUserTag)
-			protected.DELETE("/audiobooks/:id/user-tags/:tag", s.removeBookUserTag)
 			protected.POST("/audiobooks/batch-tags", s.batchUpdateTags)
 
 			// User preferences
@@ -2944,74 +2941,6 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 	}
 	if tags == nil {
 		tags = []string{}
-	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
-}
-
-func (s *Server) setBookUserTags(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
-		return
-	}
-	var body struct {
-		Tags []string `json:"tags"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	// Filter out empty tags
-	validTags := make([]string, 0, len(body.Tags))
-	for _, t := range body.Tags {
-		if strings.TrimSpace(t) != "" {
-			validTags = append(validTags, t)
-		}
-	}
-	tags, err := s.audiobookService.SetBookUserTags(id, validTags)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
-}
-
-func (s *Server) addBookUserTag(c *gin.Context) {
-	id := c.Param("id")
-	var body struct {
-		Tag string `json:"tag"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	if body.Tag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "tag is required"})
-		return
-	}
-	tags, err := s.audiobookService.AddBookUserTag(id, body.Tag)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
-}
-
-func (s *Server) removeBookUserTag(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
-		return
-	}
-	tag := c.Param("tag")
-	if tag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "tag is required"})
-		return
-	}
-	tags, err := s.audiobookService.RemoveBookUserTag(id, tag)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
 	}
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
