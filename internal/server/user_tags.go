@@ -6,6 +6,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -38,11 +39,24 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := store.SetBookUserTags(id, req.Tags); err != nil {
+	// Filter empty and normalize to lowercase
+	validTags := make([]string, 0, len(req.Tags))
+	for _, t := range req.Tags {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t != "" {
+			validTags = append(validTags, t)
+		}
+	}
+	if err := store.SetBookUserTags(id, validTags); err != nil {
 		internalError(c, "failed to set tags", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": req.Tags})
+	tags, err := store.GetBookUserTags(id)
+	if err != nil {
+		internalError(c, "failed to get tags after set", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
 
 // addBookUserTag adds a single user-defined tag to a book.
@@ -65,11 +79,17 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := store.AddBookUserTag(id, req.Tag); err != nil {
+	tag := strings.ToLower(strings.TrimSpace(req.Tag))
+	if err := store.AddBookUserTag(id, tag); err != nil {
 		internalError(c, "failed to add tag", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tag": req.Tag})
+	tags, err := store.GetBookUserTags(id)
+	if err != nil {
+		internalError(c, "failed to get tags after add", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
 
 // removeBookUserTag removes a single user-defined tag from a book.
@@ -94,5 +114,10 @@ func (s *Server) removeBookUserTag(c *gin.Context) {
 		internalError(c, "failed to remove tag", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "tag removed"})
+	tags, err := store.GetBookUserTags(id)
+	if err != nil {
+		internalError(c, "failed to get tags after remove", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
