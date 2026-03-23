@@ -251,7 +251,7 @@ func BuildMetadataFromTag(m tag.Metadata, filePath string, metaLog logger.Logger
 	}
 
 	publisherValue, publisherSource := pickFirstNonEmpty(
-		fieldCandidate{value: getRawString(raw, "TPUB", "publisher", "PUBLISHER", "©pub", "\xa9pub"), source: "raw.publisher"},
+		fieldCandidate{value: getRawString(raw, "TPUB", "publisher", "PUBLISHER", "LABEL", "©pub", "\xa9pub"), source: "raw.publisher"},
 	)
 	metadata.Publisher = cleanTagValue(publisherValue)
 	if metadata.Publisher != "" {
