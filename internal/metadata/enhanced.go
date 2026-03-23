@@ -216,6 +216,14 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 	// Attempt native writer first if compiled in
 	if taglibAvailable {
 		if err := writeMetadataWithTaglib(filePath, metadata, config); err == nil {
+			// For M4B/M4A: taglib handles standard atoms but silently drops
+			// custom/freeform tags. Use ffmpeg to write those separately.
+			ext := strings.ToLower(filepath.Ext(filePath))
+			if ext == ".m4b" || ext == ".m4a" {
+				if err := writeM4BCustomTagsWithFFmpeg(filePath, metadata); err != nil {
+					log.Printf("[WARN] ffmpeg custom tag write failed for %s: %v", filePath, err)
+				}
+			}
 			return nil
 		}
 		// Native failed; continue with CLI fallback
@@ -233,6 +241,87 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 	default:
 		return fmt.Errorf("unsupported file format: %s", ext)
 	}
+}
+
+// writeM4BCustomTagsWithFFmpeg writes custom/freeform tags to M4B files using ffmpeg.
+// TagLib handles standard MP4 atoms but silently drops custom tags.
+// ffmpeg can write arbitrary metadata including custom fields.
+func writeM4BCustomTagsWithFFmpeg(filePath string, metadata map[string]interface{}) error {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
+	// Only write tags that taglib can't handle for MP4
+	customTags := map[string]string{}
+
+	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
+		customTags["NARRATOR"] = narrator
+	}
+	if lang, ok := metadata["language"].(string); ok && lang != "" {
+		customTags["LANGUAGE"] = strings.ToLower(lang)
+	}
+	if pub, ok := metadata["publisher"].(string); ok && pub != "" {
+		customTags["PUBLISHER"] = pub
+	}
+	if isbn10, ok := metadata["isbn10"].(string); ok && isbn10 != "" {
+		customTags["ISBN10"] = isbn10
+	}
+	if isbn13, ok := metadata["isbn13"].(string); ok && isbn13 != "" {
+		customTags["ISBN13"] = isbn13
+	}
+	if series, ok := metadata["series"].(string); ok && series != "" {
+		customTags["SERIES"] = series
+	}
+	if si, ok := metadata["series_index"].(int); ok && si > 0 {
+		customTags["SERIES_INDEX"] = fmt.Sprintf("%d", si)
+	}
+	if asin, ok := metadata["asin"].(string); ok && asin != "" {
+		customTags["ASIN"] = asin
+	}
+	customTags["AUDIOBOOK_ORGANIZER_VERSION"] = CustomTagVersion
+
+	if len(customTags) == 0 {
+		return nil
+	}
+
+	// Build ffmpeg command: copy all streams, add metadata
+	tmpPath := filePath + ".tmp-ffmeta"
+	args := []string{"-y", "-i", filePath}
+
+	// Preserve all existing streams and chapters
+	args = append(args, "-map", "0:a")
+	args = append(args, "-map_chapters", "0")
+	args = append(args, "-map_metadata", "0")
+	args = append(args, "-c", "copy") // No re-encoding
+
+	for k, v := range customTags {
+		args = append(args, "-metadata", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	args = append(args, tmpPath)
+
+	cmd := exec.Command(ffmpegPath, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("ffmpeg failed: %w, output: %s", err, string(output[:min(len(output), 200)]))
+	}
+
+	// Atomic replace
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("rename failed: %w", err)
+	}
+
+	return nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // writeM4BMetadata writes metadata to M4B/M4A files using AtomicParsley.
