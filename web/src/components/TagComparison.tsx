@@ -37,8 +37,7 @@ interface TagComparisonProps {
   onClearSnapshot?: () => void;
 }
 
-/** Key tags we always show badges for */
-const KEY_TAGS = ['title', 'author_name', 'narrator', 'series_name', 'publisher', 'language', 'isbn13'] as const;
+// KEY_TAGS removed — badges now dynamically show all tags from the comparison table
 
 const TAG_LABELS: Record<string, string> = {
   title: 'title',
@@ -67,7 +66,7 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp,
   const [tags, setTags] = useState<BookTags | null>(null);
   const [loading, setLoading] = useState(false);
   const [compareId, setCompareId] = useState<string>('');
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true); // Always show table when tray is open
   const [hiddenTags, setHiddenTags] = useState<Set<string>>(new Set());
   const [colWidths, setColWidths] = useState<Record<number, number>>({});
   const resizingCol = useRef<number | null>(null);
@@ -116,15 +115,7 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp,
     [tagEntries, hiddenTags]
   );
 
-  const keyTagStatus = useMemo(() => {
-    const status: Record<string, boolean> = {};
-    for (const key of KEY_TAGS) {
-      const entry = tags?.tags?.[key];
-      const val = entry?.file_value;
-      status[key] = val != null && val !== '' && val !== false;
-    }
-    return status;
-  }, [tags]);
+  // keyTagStatus removed — badges are now dynamic from tagEntries
 
   const otherVersions = useMemo(
     () => versions.filter((v) => v.id !== bookId),
@@ -209,30 +200,45 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp,
 
   return (
     <Box>
-      {/* Key tag badges */}
+      {/* Dynamic tag badges — click to toggle column visibility */}
+      {/* Tags visible in the table below are shown as hidden badges; clicking shows them */}
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-        {KEY_TAGS.map((key) => (
-          <Chip
-            key={key}
-            label={`${keyTagStatus[key] ? '\u2713' : '\u2717'} ${TAG_LABELS[key] || key}`}
-            size="small"
-            color={keyTagStatus[key] ? 'success' : 'default'}
-            variant={keyTagStatus[key] ? 'filled' : 'outlined'}
-            sx={{ fontSize: '0.75rem' }}
-          />
-        ))}
-      </Stack>
+        {tagEntries.map(([key, tagValues]) => {
+          const isVisible = !hiddenTags.has(key);
+          const fileVal = tagValues.file_value;
+          const hasValue = fileVal != null && fileVal !== '' && fileVal !== false;
+          const storedVal = tagValues.stored_value;
+          const hasStored = storedVal != null && storedVal !== '' && storedVal !== false;
+          const matches = hasValue && hasStored && String(fileVal) === String(storedVal);
 
-      {/* Toggle for full comparison */}
-      <Typography
-        variant="body2"
-        color="primary"
-        sx={{ cursor: 'pointer', mb: 1, '&:hover': { textDecoration: 'underline' } }}
-        onClick={() => setExpanded(!expanded)}
-        data-testid="tag-comparison-toggle"
-      >
-        {expanded ? 'Hide full tag comparison' : 'View full tag comparison \u2192'}
-      </Typography>
+          return (
+            <Chip
+              key={key}
+              label={`${matches ? '\u2713' : hasValue || hasStored ? '\u2717' : '\u2013'} ${TAG_LABELS[key] || key}`}
+              size="small"
+              color={matches ? 'success' : (hasValue || hasStored) ? 'warning' : 'default'}
+              variant={isVisible ? 'outlined' : 'filled'}
+              clickable
+              onClick={() => {
+                setHiddenTags((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(key)) {
+                    next.delete(key);
+                  } else {
+                    next.add(key);
+                  }
+                  return next;
+                });
+              }}
+              sx={{
+                fontSize: '0.7rem',
+                opacity: isVisible ? 0.6 : 1,
+                textDecoration: isVisible ? 'none' : 'none',
+              }}
+            />
+          );
+        })}
+      </Stack>
 
       <Collapse in={expanded}>
         {/* Snapshot/comparison banner with dismiss */}

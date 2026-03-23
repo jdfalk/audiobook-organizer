@@ -59,14 +59,17 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		tags["DATE"] = []string{fmt.Sprintf("%d", year)}
 	}
 	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
-		tags["NARRATOR"] = []string{narrator}
+		// Use PERFORMER for narrator (TagLib maps this to MP4 ©prf atom)
+		tags["PERFORMER"] = []string{narrator}
+		tags["NARRATOR"] = []string{narrator} // Also set custom key for ID3/Vorbis
 	}
-	// Include language/publisher as custom tags if present
 	if lang, ok := metadata["language"].(string); ok && lang != "" {
-		tags["LANGUAGE"] = []string{strings.ToLower(lang)}
+		tags[taglib.Language] = []string{strings.ToLower(lang)}
 	}
 	if pub, ok := metadata["publisher"].(string); ok && pub != "" {
-		tags["PUBLISHER"] = []string{pub}
+		// LABEL is mapped by TagLib for MP4 (to ----:com.apple.iTunes:LABEL)
+		tags["LABEL"] = []string{pub}
+		tags["PUBLISHER"] = []string{pub} // Also set for ID3/Vorbis
 	}
 	if isbn10, ok := metadata["isbn10"].(string); ok && isbn10 != "" {
 		tags["ISBN10"] = []string{isbn10}
@@ -79,17 +82,20 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		tags["COMMENT"] = []string{desc} // Standard comment field
 	}
 	if series, ok := metadata["series"].(string); ok && series != "" {
-		tags["SERIES"] = []string{series}
-		tags["MVNM"] = []string{series} // MP4 movement name (used by some players for series)
+		tags["SERIES"] = []string{series}                  // ID3/Vorbis custom
+		tags[taglib.MovementName] = []string{series}       // MP4 ©mvn atom (TagLib mapped)
+		tags["GROUPING"] = []string{series}                // MP4 ©grp atom (widely supported)
 		if _, hasAlbum := metadata["album"]; !hasAlbum {
-			// Legacy files sometimes misuse ALBUM for series; clear it when we are
-			// only updating the dedicated series field.
 			tags[taglib.Album] = []string{""}
 		}
 	}
 	if si, ok := metadata["series_index"].(int); ok && si > 0 {
-		tags["SERIES_INDEX"] = []string{fmt.Sprintf("%d", si)}
-		tags["MVIN"] = []string{fmt.Sprintf("%d", si)} // MP4 movement number
+		tags["SERIES_INDEX"] = []string{fmt.Sprintf("%d", si)}     // ID3/Vorbis custom
+		tags[taglib.MovementNumber] = []string{fmt.Sprintf("%d", si)} // MP4 ©mvi atom
+	}
+	// Enable show-work-movement flag so players display series info
+	if _, hasSeries := metadata["series"]; hasSeries {
+		tags[taglib.ShowWorkMovement] = []string{"1"}
 	}
 
 	// Write custom AUDIOBOOK_ORGANIZER_* tags for book tracking
