@@ -3840,7 +3840,7 @@ func (s *SQLiteStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 
 // GetBookUserTags returns all user-defined tags for a book.
 func (s *SQLiteStore) GetBookUserTags(bookID string) ([]string, error) {
-	rows, err := s.db.Query(`SELECT tag FROM book_user_tags WHERE book_id = ? ORDER BY tag`, bookID)
+	rows, err := s.db.Query(`SELECT tag FROM book_tags WHERE book_id = ? ORDER BY tag`, bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -3866,11 +3866,11 @@ func (s *SQLiteStore) SetBookUserTags(bookID string, tags []string) error {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM book_user_tags WHERE book_id = ?`, bookID); err != nil {
+	if _, err := tx.Exec(`DELETE FROM book_tags WHERE book_id = ?`, bookID); err != nil {
 		return err
 	}
 	for _, tag := range tags {
-		if _, err := tx.Exec(`INSERT INTO book_user_tags (book_id, tag) VALUES (?, ?)`, bookID, tag); err != nil {
+		if _, err := tx.Exec(`INSERT INTO book_tags (book_id, tag) VALUES (?, ?)`, bookID, tag); err != nil {
 			return err
 		}
 	}
@@ -3879,13 +3879,13 @@ func (s *SQLiteStore) SetBookUserTags(bookID string, tags []string) error {
 
 // AddBookUserTag adds a single user-defined tag to a book (idempotent).
 func (s *SQLiteStore) AddBookUserTag(bookID string, tag string) error {
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO book_user_tags (book_id, tag) VALUES (?, ?)`, bookID, tag)
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO book_tags (book_id, tag) VALUES (?, ?)`, bookID, tag)
 	return err
 }
 
 // RemoveBookUserTag removes a single user-defined tag from a book.
 func (s *SQLiteStore) RemoveBookUserTag(bookID string, tag string) error {
-	_, err := s.db.Exec(`DELETE FROM book_user_tags WHERE book_id = ? AND tag = ?`, bookID, tag)
+	_, err := s.db.Exec(`DELETE FROM book_tags WHERE book_id = ? AND tag = ?`, bookID, tag)
 	return err
 }
 
