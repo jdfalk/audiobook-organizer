@@ -1992,11 +1992,14 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			skippedProtected++
 		} else {
 			tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+			log.Printf("[DEBUG] WriteBack: full tag map has %d entries for %s", len(tagMap), book.FilePath)
 			tagMap = filterUnchangedTags(book.FilePath, tagMap)
+			log.Printf("[DEBUG] WriteBack: after filter, %d entries remain for %s", len(tagMap), book.FilePath)
 			if len(tagMap) == 0 {
-				log.Printf("[DEBUG] write-back: %s tags already match, skipping", book.FilePath)
+				log.Printf("[DEBUG] WriteBack: all tags match, skipping write for %s", book.FilePath)
 			} else {
 				backupFileBeforeWrite(book.FilePath)
+				log.Printf("[DEBUG] WriteBack: writing %d tags to %s", len(tagMap), book.FilePath)
 				if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 					log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 				} else {
