@@ -798,8 +798,14 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 	} else {
 		// Single-file or no segments: write to book.FilePath
 		tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+		log.Printf("[DEBUG] write-back: full tag map has %d entries for %s", len(tagMap), book.FilePath)
+		for k, v := range tagMap {
+			log.Printf("[DEBUG] write-back:   %s = %v", k, v)
+		}
 		tagMap = filterUnchangedTags(book.FilePath, tagMap)
+		log.Printf("[DEBUG] write-back: after filter, %d entries remain", len(tagMap))
 		if len(tagMap) == 0 {
+			log.Printf("[DEBUG] write-back: all tags match, skipping write for %s", book.FilePath)
 			return
 		}
 		backupFileBeforeWrite(book.FilePath)
