@@ -243,6 +243,12 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 	}
 }
 
+// WriteM4BCustomTags writes custom tags to M4B/M4A files using ffmpeg.
+// Exported so it can be called separately from the main write path.
+func WriteM4BCustomTags(filePath string, metadata map[string]interface{}) error {
+	return writeM4BCustomTagsWithFFmpeg(filePath, metadata)
+}
+
 // writeM4BCustomTagsWithFFmpeg writes custom/freeform tags to M4B files using ffmpeg.
 // TagLib handles standard MP4 atoms but silently drops custom tags.
 // ffmpeg can write arbitrary metadata including custom fields.

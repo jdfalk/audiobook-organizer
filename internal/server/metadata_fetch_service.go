@@ -1991,19 +1991,26 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
 		} else {
-			tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
-			log.Printf("[DEBUG] WriteBack: full tag map has %d entries for %s", len(tagMap), book.FilePath)
-			tagMap = filterUnchangedTags(book.FilePath, tagMap)
-			log.Printf("[DEBUG] WriteBack: after filter, %d entries remain for %s", len(tagMap), book.FilePath)
-			if len(tagMap) == 0 {
-				log.Printf("[DEBUG] WriteBack: all tags match, skipping write for %s", book.FilePath)
-			} else {
+			fullTagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+			tagMap := filterUnchangedTags(book.FilePath, fullTagMap)
+			if len(tagMap) > 0 {
 				backupFileBeforeWrite(book.FilePath)
-				log.Printf("[DEBUG] WriteBack: writing %d tags to %s", len(tagMap), book.FilePath)
 				if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
 					log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 				} else {
 					writtenCount++
+				}
+			}
+			// Always attempt to write custom tags for M4B/M4A via ffmpeg,
+			// since taglib silently drops them for MP4 containers.
+			ext := strings.ToLower(filepath.Ext(book.FilePath))
+			if ext == ".m4b" || ext == ".m4a" {
+				if err := metadata.WriteM4BCustomTags(book.FilePath, fullTagMap); err != nil {
+					log.Printf("[WARN] custom tag write failed for %s: %v", book.FilePath, err)
+				} else {
+					if len(tagMap) == 0 {
+						writtenCount++ // count as written even if standard tags were unchanged
+					}
 				}
 			}
 		}
