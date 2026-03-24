@@ -286,10 +286,13 @@ func writeM4BCustomTagsWithFFmpeg(filePath string, metadata map[string]interface
 	}
 
 	// Build ffmpeg command: copy all streams, add metadata
+	// Use -nostdin and -loglevel error to suppress progress output
 	tmpPath := filePath + ".tmp-ffmeta"
-	args := []string{"-y", "-i", filePath}
+	args := []string{"-nostdin", "-loglevel", "error", "-y", "-i", filePath}
 
-	// Preserve all existing streams and chapters
+	// Preserve audio streams, chapters, and existing metadata. Use -map 0:a
+	// (not -map 0) because M4B files may have bin_data subtitle streams that
+	// cause ffmpeg to fail.
 	args = append(args, "-map", "0:a")
 	args = append(args, "-map_chapters", "0")
 	args = append(args, "-map_metadata", "0")
@@ -302,10 +305,11 @@ func writeM4BCustomTagsWithFFmpeg(filePath string, metadata map[string]interface
 	args = append(args, tmpPath)
 
 	cmd := exec.Command(ffmpegPath, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
 		_ = os.Remove(tmpPath)
-		return fmt.Errorf("ffmpeg failed: %w, output: %s", err, string(output[:min(len(output), 200)]))
+		return fmt.Errorf("ffmpeg failed: %w, stderr: %s", err, stderr.String()[:min(stderr.Len(), 500)])
 	}
 
 	// Atomic replace
