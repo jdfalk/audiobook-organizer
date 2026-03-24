@@ -287,7 +287,9 @@ func writeM4BCustomTagsWithFFmpeg(filePath string, metadata map[string]interface
 
 	// Build ffmpeg command: copy all streams, add metadata
 	// Use -nostdin and -loglevel error to suppress progress output
-	tmpPath := filePath + ".tmp-ffmeta"
+	// Use same extension so ffmpeg can detect the output format
+	ext := filepath.Ext(filePath) // .m4b or .m4a
+	tmpPath := filePath + ".tmp" + ext
 	args := []string{"-nostdin", "-loglevel", "error", "-y", "-i", filePath}
 
 	// Preserve audio streams, chapters, and existing metadata. Use -map 0:a
