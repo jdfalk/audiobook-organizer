@@ -1957,6 +1957,12 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	writtenCount := 0
 	skippedProtected := 0
 
+	// Embed cover art BEFORE writing tags — ffmpeg's cover embed (-map_metadata 0)
+	// does not preserve freeform iTunes atoms, so we embed first and write tags last.
+	if config.AppConfig.RootDir != "" {
+		mfs.embedCoverInBookFiles(book, metadata.CoverPathForBook(config.AppConfig.RootDir, book.ID))
+	}
+
 	// Use the original book's title for tag content (it has freshly-applied metadata)
 	bookTitle := originalBook.Title
 	if totalTracks > 1 {
@@ -2062,10 +2068,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 		log.Printf("[WARN] failed to record write-back history for %s: %v", book.ID, err)
 	}
 
-	// Embed cover art if we have one on disk
-	if config.AppConfig.RootDir != "" {
-		mfs.embedCoverInBookFiles(book, metadata.CoverPathForBook(config.AppConfig.RootDir, book.ID))
-	}
+	// Cover art already embedded above (before tag write) to prevent
+	// ffmpeg's -map_metadata from clobbering freeform iTunes atoms.
 
 	// Stamp last_written_at
 	if writtenCount > 0 {
