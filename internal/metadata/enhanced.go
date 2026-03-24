@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -213,23 +213,45 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 // Prefers native TagLib writer when built with 'taglib'; falls back to external CLI tools if unavailable or failed.
 // Uses backup/rollback strategy via fileops.SafeCopy for all paths.
 func WriteMetadataToFile(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	log.Printf("[TAG-DIAG] WriteMetadataToFile: path=%s ext=%s entries=%d taglibAvailable=%v",
+		filePath, ext, len(metadata), taglibAvailable)
+	for k, v := range metadata {
+		log.Printf("[TAG-DIAG]   input metadata: %s = %v", k, v)
+	}
+
 	// Attempt native writer first if compiled in
 	if taglibAvailable {
 		if err := writeMetadataWithTaglib(filePath, metadata, config); err == nil {
+			log.Printf("[TAG-DIAG] taglib write succeeded for %s", filePath)
 			// For M4B/M4A: taglib handles standard atoms but silently drops
 			// custom/freeform tags. Use ffmpeg to write those separately.
-			ext := strings.ToLower(filepath.Ext(filePath))
 			if ext == ".m4b" || ext == ".m4a" {
+				log.Printf("[TAG-DIAG] M4B/M4A detected, running ffmpeg custom tag pass for %s", filePath)
 				if err := writeM4BCustomTagsWithFFmpeg(filePath, metadata); err != nil {
 					log.Printf("[WARN] ffmpeg custom tag write failed for %s: %v", filePath, err)
+				} else {
+					log.Printf("[TAG-DIAG] ffmpeg custom tag pass succeeded for %s", filePath)
+					// Read back AFTER ffmpeg to see if it preserved taglib's tags
+					taglibPostFFmpeg, readErr := readTagsForDiag(filePath)
+					if readErr != nil {
+						log.Printf("[TAG-DIAG] post-ffmpeg ReadTags error: %v", readErr)
+					} else {
+						log.Printf("[TAG-DIAG] post-ffmpeg tag count: %d", len(taglibPostFFmpeg))
+						for k, v := range taglibPostFFmpeg {
+							log.Printf("[TAG-DIAG]   POST-FFMPEG %s = %q", k, v)
+						}
+					}
 				}
 			}
 			return nil
+		} else {
+			log.Printf("[TAG-DIAG] taglib write FAILED for %s: %v, falling back to CLI", filePath, err)
 		}
 		// Native failed; continue with CLI fallback
 	}
-	// Determine file type
-	ext := strings.ToLower(filepath.Ext(filePath))
+	// Determine file type (ext already computed above)
+	log.Printf("[TAG-DIAG] falling through to CLI path for %s (ext=%s)", filePath, ext)
 
 	switch ext {
 	case ".m4b", ".m4a":
