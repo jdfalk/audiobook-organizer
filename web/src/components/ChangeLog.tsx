@@ -1,5 +1,5 @@
 // file: web/src/components/ChangeLog.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 00f575de-ecea-45b7-9aa5-d6dbbc3f21f6
 
 import { useCallback, useEffect, useState } from 'react';
@@ -13,6 +13,8 @@ import {
 import RestoreIcon from '@mui/icons-material/Restore.js';
 import type { ChangeLogEntry } from '../services/api';
 import * as api from '../services/api';
+import { fetchActivity } from '../services/activityApi';
+import type { ActivityEntry } from '../services/activityApi';
 
 interface ChangeLogProps {
   bookId: string;
@@ -48,9 +50,26 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
   const [loading, setLoading] = useState(true);
   const [reverting, setReverting] = useState<string | null>(null);
 
+  const mapActivityToChangeLogEntry = (a: ActivityEntry): ChangeLogEntry => ({
+    timestamp: a.timestamp,
+    type: a.type as ChangeLogEntry['type'],
+    summary: a.summary,
+    details: a.details,
+  });
+
   const loadChangelog = useCallback(async () => {
     setLoading(true);
     try {
+      // Try the unified activity log first; fall back to the legacy endpoint
+      try {
+        const result = await fetchActivity({ book_id: bookId, tier: 'change', limit: 50 });
+        if (result.entries && result.entries.length > 0) {
+          setEntries(result.entries.map(mapActivityToChangeLogEntry));
+          return;
+        }
+      } catch {
+        // Fall through to legacy endpoint
+      }
       const result = await api.getBookChangelog(bookId);
       setEntries(result.entries || []);
     } catch {
@@ -58,6 +77,7 @@ export const ChangeLog = ({ bookId, refreshKey, onRevert, onCompareSnapshot }: C
     } finally {
       setLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 // file: web/src/pages/Operations.tsx
-// version: 2.3.0
+// version: 2.4.0
 // guid: 3b2a1c4d-5e6f-7081-9a0b-1c2d3e4f5a6b
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -30,6 +30,8 @@ import {
   Typography,
 } from '@mui/material';
 import * as api from '../services/api';
+import { fetchActivity } from '../services/activityApi';
+import type { ActivityEntry } from '../services/activityApi';
 
 const HISTORY_PAGE_SIZE = 20;
 
@@ -92,7 +94,7 @@ export function Operations() {
   const [notice, setNotice] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedChanges, setExpandedChanges] = useState<string | null>(null);
-  const [changes, setChanges] = useState<api.OperationChange[]>([]);
+  const [changes, setChanges] = useState<ActivityEntry[]>([]);
   const [changesLoading, setChangesLoading] = useState(false);
   const [revertConfirmOp, setRevertConfirmOp] = useState<api.Operation | null>(null);
   const [reverting, setReverting] = useState(false);
@@ -229,8 +231,8 @@ export function Operations() {
     setExpandedChanges(opId);
     setChangesLoading(true);
     try {
-      const data = await api.getOperationChanges(opId);
-      setChanges(data);
+      const data = await fetchActivity({ operation_id: opId, tier: 'change', limit: 100 });
+      setChanges(data.entries || []);
     } catch (error) {
       console.error('Failed to load changes', error);
       setChanges([]);
@@ -583,30 +585,22 @@ export function Operations() {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
+                          <TableCell>Time</TableCell>
                           <TableCell>Type</TableCell>
-                          <TableCell>Field</TableCell>
-                          <TableCell>Old Value</TableCell>
-                          <TableCell>New Value</TableCell>
-                          <TableCell>Reverted</TableCell>
+                          <TableCell>Summary</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {changes.map((ch) => (
                           <TableRow key={ch.id}>
-                            <TableCell>
-                              <Chip size="small" label={ch.change_type.replace(/_/g, ' ')} />
-                            </TableCell>
-                            <TableCell>{ch.field_name}</TableCell>
-                            <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {ch.old_value || '—'}
-                            </TableCell>
-                            <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {ch.new_value || '—'}
+                            <TableCell sx={{ whiteSpace: 'nowrap', color: 'text.secondary', fontSize: '0.75rem' }}>
+                              {new Date(ch.timestamp).toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              {ch.reverted_at ? (
-                                <Chip size="small" color="warning" label="Reverted" />
-                              ) : '—'}
+                              <Chip size="small" label={ch.type.replace(/_/g, ' ')} />
+                            </TableCell>
+                            <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {ch.summary || '—'}
                             </TableCell>
                           </TableRow>
                         ))}
