@@ -220,33 +220,12 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 		log.Printf("[TAG-DIAG]   input metadata: %s = %v", k, v)
 	}
 
-	// Attempt native writer first if compiled in
+	// Attempt native writer first if compiled in.
+	// Upstream taglib v0.11.1+ writes custom freeform atoms natively for MP4.
+	// Do NOT run ffmpeg after taglib — ffmpeg's -map_metadata strips freeform atoms.
 	if taglibAvailable {
 		if err := writeMetadataWithTaglib(filePath, metadata, config); err == nil {
-			log.Printf("[TAG-DIAG] taglib write succeeded for %s", filePath)
-			// For M4B/M4A: taglib handles standard atoms but silently drops
-			// custom/freeform tags. Use ffmpeg to write those separately.
-			if ext == ".m4b" || ext == ".m4a" {
-				log.Printf("[TAG-DIAG] M4B/M4A detected, running ffmpeg custom tag pass for %s", filePath)
-				if err := writeM4BCustomTagsWithFFmpeg(filePath, metadata); err != nil {
-					log.Printf("[WARN] ffmpeg custom tag write failed for %s: %v", filePath, err)
-				} else {
-					log.Printf("[TAG-DIAG] ffmpeg custom tag pass succeeded for %s", filePath)
-					// Read back AFTER ffmpeg to see if it preserved taglib's tags
-					taglibPostFFmpeg, readErr := readTagsForDiag(filePath)
-					if readErr != nil {
-						log.Printf("[TAG-DIAG] post-ffmpeg ReadTags error: %v", readErr)
-					} else {
-						log.Printf("[TAG-DIAG] post-ffmpeg tag count: %d", len(taglibPostFFmpeg))
-						for k, v := range taglibPostFFmpeg {
-							log.Printf("[TAG-DIAG]   POST-FFMPEG %s = %q", k, v)
-						}
-					}
-				}
-			}
 			return nil
-		} else {
-			log.Printf("[TAG-DIAG] taglib write FAILED for %s: %v, falling back to CLI", filePath, err)
 		}
 		// Native failed; continue with CLI fallback
 	}
