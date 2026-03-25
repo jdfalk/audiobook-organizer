@@ -1816,6 +1816,12 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	}
 
 	pathMappings := req.PathMappings
+	// Fall back to configured path mappings if none in the request
+	if len(pathMappings) == 0 {
+		for _, m := range config.AppConfig.ITunesPathMappings {
+			pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
+		}
+	}
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
 		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, pathMappings)
 	}
