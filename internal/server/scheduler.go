@@ -78,6 +78,7 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 		"tombstone_cleanup",
 		"purge_deleted",
 		"purge_old_logs",
+		"cleanup_activity_log",
 		"cleanup_old_backups",
 		"db_optimize",
 	}
@@ -963,6 +964,56 @@ func (ts *TaskScheduler) registerAllTasks() {
 		GetInterval:            func() time.Duration { return 7 * 24 * time.Hour },
 		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowPurgeOldLogs },
+	})
+
+	// Activity Log Cleanup — summarize old change entries and prune old debug entries
+	ts.registerTask(TaskDefinition{
+		Name:        "cleanup_activity_log",
+		Description: "Summarize old change entries and prune old debug entries from activity log",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			opID := ulid.Make().String()
+			op, err := database.GlobalStore.CreateOperation(opID, "cleanup_activity_log", nil)
+			if err != nil {
+				return nil, err
+			}
+			_ = operations.GlobalQueue.Enqueue(opID, "cleanup_activity_log", operations.PriorityLow,
+				func(ctx context.Context, progress operations.ProgressReporter) error {
+					if ts.server.activityService == nil {
+						return nil
+					}
+					changeDays := config.AppConfig.ActivityLogRetentionChangeDays
+					if changeDays <= 0 {
+						changeDays = 90
+					}
+					debugDays := config.AppConfig.ActivityLogRetentionDebugDays
+					if debugDays <= 0 {
+						debugDays = 30
+					}
+
+					changeCutoff := time.Now().AddDate(0, 0, -changeDays)
+					debugCutoff := time.Now().AddDate(0, 0, -debugDays)
+
+					summarized, err := ts.server.activityService.Summarize(changeCutoff, "change")
+					if err != nil {
+						return fmt.Errorf("summarize activity: %w", err)
+					}
+
+					pruned, err := ts.server.activityService.Prune(debugCutoff, "debug")
+					if err != nil {
+						return fmt.Errorf("prune activity: %w", err)
+					}
+
+					log.Printf("Activity log cleanup: summarized %d change entries, pruned %d debug entries", summarized, pruned)
+					return nil
+				},
+			)
+			return op, nil
+		},
+		IsEnabled:              func() bool { return ts.server.activityService != nil },
+		GetInterval:            func() time.Duration { return 24 * time.Hour },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return true },
 	})
 }
 
