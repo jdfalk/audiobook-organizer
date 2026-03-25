@@ -769,6 +769,41 @@ func NewServer() *Server {
 		}
 	}
 
+	// Wire activity log dual-write hooks
+	if server.activityService != nil {
+		// Task 10: Operation changes → activity log
+		operations.ActivityRecorder = func(entry database.ActivityEntry) {
+			_ = server.activityService.Record(entry)
+		}
+
+		// Task 11/14: Metadata fetch service → activity log
+		server.metadataFetchService.SetActivityService(server.activityService)
+
+		// Task 12: System logger → activity log
+		logger.SetGlobalActivityRecorder(func(tier, typ, level, source, summary string) {
+			_ = server.activityService.Record(database.ActivityEntry{
+				Tier: tier, Type: typ, Level: level, Source: source, Summary: summary,
+			})
+		})
+
+		// Task 15: iTunes sync → activity log
+		itunesActivityRecorder = func(entry database.ActivityEntry) {
+			_ = server.activityService.Record(entry)
+		}
+
+		// Task 16: Scanner → activity log
+		scanner.ScanActivityRecorder = func(bookID, title string) {
+			_ = server.activityService.Record(database.ActivityEntry{
+				Tier:    "change",
+				Type:    "scan",
+				Level:   "info",
+				Source:  "background",
+				BookID:  bookID,
+				Summary: fmt.Sprintf("Scan found: %s", title),
+			})
+		}
+	}
+
 	server.setupRoutes()
 
 	// Initialize the iTunes auto write-back batcher
