@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -214,11 +214,6 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validat
 // Uses backup/rollback strategy via fileops.SafeCopy for all paths.
 func WriteMetadataToFile(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	log.Printf("[TAG-DIAG] WriteMetadataToFile: path=%s ext=%s entries=%d taglibAvailable=%v",
-		filePath, ext, len(metadata), taglibAvailable)
-	for k, v := range metadata {
-		log.Printf("[TAG-DIAG]   input metadata: %s = %v", k, v)
-	}
 
 	// Attempt native writer first if compiled in.
 	// Upstream taglib v0.11.1+ writes custom freeform atoms natively for MP4.
@@ -229,8 +224,6 @@ func WriteMetadataToFile(filePath string, metadata map[string]interface{}, confi
 		}
 		// Native failed; continue with CLI fallback
 	}
-	// Determine file type (ext already computed above)
-	log.Printf("[TAG-DIAG] falling through to CLI path for %s (ext=%s)", filePath, ext)
 
 	switch ext {
 	case ".m4b", ".m4a":

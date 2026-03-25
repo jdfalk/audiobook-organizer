@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 // TagLib native writer support (default). Falls back to CLI tools on failure.
@@ -8,36 +8,13 @@ package metadata
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	taglib "go.senan.xyz/taglib"
 )
-
-// standardTagKeys is the set of well-known tag keys that TagLib maps to native
-// atoms/frames. Anything not in this set is considered a "custom" tag.
-// Built at init time to avoid duplicate-key issues with taglib constants
-// that resolve to the same string as a literal key.
-var standardTagKeys map[string]bool
-
-func init() {
-	standardTagKeys = map[string]bool{
-		"TITLE": true, "ARTIST": true, "ALBUM": true, "GENRE": true, "DATE": true,
-		"COMMENT": true, "PERFORMER": true, "DESCRIPTION": true, "GROUPING": true,
-	}
-	// Add taglib constants (some may overlap with the literals above, which is fine).
-	for _, k := range []string{
-		taglib.AlbumArtist, taglib.Composer, taglib.Album,
-		taglib.Language, taglib.MovementName, taglib.MovementNumber,
-		taglib.ShowWorkMovement,
-	} {
-		standardTagKeys[k] = true
-	}
-}
 
 // taglibAvailable indicates native taglib path compiled in
 var taglibAvailable = true
@@ -139,93 +116,19 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		return fmt.Errorf("no writable metadata supplied")
 	}
 
-	// --- Instrumentation: log the full tag map being sent to taglib ---
-	log.Printf("[TAG-DIAG] writeMetadataWithTaglib: file=%s, tag_count=%d", abs, len(tags))
-	sortedKeys := make([]string, 0, len(tags))
-	for k := range tags {
-		sortedKeys = append(sortedKeys, k)
-	}
-	sort.Strings(sortedKeys)
-	customCount := 0
-	for _, k := range sortedKeys {
-		isCustom := !standardTagKeys[k]
-		marker := ""
-		if isCustom {
-			marker = " [CUSTOM]"
-			customCount++
-		}
-		log.Printf("[TAG-DIAG]   WRITE %s = %q%s", k, tags[k], marker)
-	}
-	log.Printf("[TAG-DIAG]   total=%d standard=%d custom=%d", len(tags), len(tags)-customCount, customCount)
-
 	if err := taglib.WriteTags(abs, tags, 0); err != nil {
-		log.Printf("[TAG-DIAG]   WriteTags ERROR: %v", err)
 		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
 			return fmt.Errorf("taglib write failed and restore failed: write=%w restore=%v", err, restoreErr)
 		}
 		return fmt.Errorf("taglib write failed (restored): %w", err)
 	}
-	log.Printf("[TAG-DIAG]   WriteTags OK (no error)")
 
 	// Force fsync to ensure ZFS/COW filesystems flush all data.
 	// Without this, freeform atoms may not be written to disk on ZFS.
 	if f, err := os.OpenFile(abs, os.O_RDWR, 0); err == nil {
 		_ = f.Sync()
 		f.Close()
-		log.Printf("[TAG-DIAG]   fsync completed for %s", abs)
-	}
-
-	// --- Instrumentation: read back and compare ---
-	readBack, readErr := taglib.ReadTags(abs)
-	if readErr != nil {
-		log.Printf("[TAG-DIAG]   ReadTags VERIFY ERROR: %v", readErr)
-	} else {
-		log.Printf("[TAG-DIAG]   ReadTags returned %d keys", len(readBack))
-		readKeys := make([]string, 0, len(readBack))
-		for k := range readBack {
-			readKeys = append(readKeys, k)
-		}
-		sort.Strings(readKeys)
-		for _, k := range readKeys {
-			log.Printf("[TAG-DIAG]   READ  %s = %q", k, readBack[k])
-		}
-
-		// Compare: which written tags survived?
-		survived := 0
-		missing := 0
-		for _, k := range sortedKeys {
-			if _, found := readBack[k]; found {
-				survived++
-			} else {
-				log.Printf("[TAG-DIAG]   MISSING after round-trip: %s (wrote %q)", k, tags[k])
-				missing++
-			}
-		}
-		customSurvived := 0
-		customMissing := 0
-		for _, k := range sortedKeys {
-			if standardTagKeys[k] {
-				continue
-			}
-			if _, found := readBack[k]; found {
-				customSurvived++
-			} else {
-				customMissing++
-			}
-		}
-		log.Printf("[TAG-DIAG]   ROUND-TRIP: total survived=%d missing=%d | custom survived=%d missing=%d",
-			survived, missing, customSurvived, customMissing)
 	}
 
 	return nil
-}
-
-// readTagsForDiag reads all tags from a file using taglib for diagnostic purposes.
-// Exported logic is in taglib_support to keep the taglib import in one file.
-func readTagsForDiag(filePath string) (map[string][]string, error) {
-	abs, err := filepath.Abs(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return taglib.ReadTags(abs)
 }
