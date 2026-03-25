@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -33,6 +33,10 @@ import (
 )
 
 var saveBook = saveBookToDatabase
+
+// ScanActivityRecorder is a package-level hook for dual-writing scan events
+// to the unified activity log. Set by server.go after the ActivityService is created.
+var ScanActivityRecorder func(bookID, title string)
 
 // defaultLog is a package-level logger for functions that cannot accept a logger parameter.
 var defaultLog = logger.New("scanner")
@@ -1519,6 +1523,9 @@ func saveBookToDatabase(book *Book) error {
 			}
 
 			_, err = database.GlobalStore.CreateBook(dbBook)
+			if err == nil && ScanActivityRecorder != nil {
+				ScanActivityRecorder(dbBook.ID, dbBook.Title)
+			}
 			return err
 		}
 
