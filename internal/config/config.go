@@ -130,6 +130,9 @@ type Config struct {
 	OperationTimeoutMinutes int `json:"operation_timeout_minutes"`
 	// Log retention in days (0 = keep forever)
 	LogRetentionDays int `json:"log_retention_days"`
+	// Activity log retention (separate from operation log retention)
+	ActivityLogRetentionChangeDays int `json:"activity_log_retention_change_days"` // default 90
+	ActivityLogRetentionDebugDays  int `json:"activity_log_retention_debug_days"`  // default 30
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -823,8 +826,10 @@ func ResetToDefaults() {
 		MemoryLimitMB:      512,
 
 		// Lifecycle / retention
-		PurgeSoftDeletedAfterDays:   30,
-		PurgeSoftDeletedDeleteFiles: false,
+		PurgeSoftDeletedAfterDays:      30,
+		PurgeSoftDeletedDeleteFiles:    false,
+		ActivityLogRetentionChangeDays: 90,
+		ActivityLogRetentionDebugDays:  30,
 
 		// Logging
 		LogLevel:          "info",
