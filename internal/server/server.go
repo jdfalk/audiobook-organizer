@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.130.0
+// version: 1.131.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -660,6 +660,7 @@ type Server struct {
 	mergeService           *MergeService
 	diagnosticsService     *DiagnosticsService
 	changelogService       *ChangelogService
+	activityService        *ActivityService
 }
 
 // ServerConfig holds server configuration
@@ -754,6 +755,17 @@ func NewServer() *Server {
 				server.batchPoller = NewBatchPoller(database.GlobalStore, p)
 				server.registerBatchPollerHandlers()
 			}
+		}
+	}
+
+	// Open activity log store alongside main DB
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
+		activityDBPath := filepath.Join(filepath.Dir(dbPath), "activity.db")
+		activityStore, err := database.NewActivityStore(activityDBPath)
+		if err != nil {
+			log.Printf("[WARN] Failed to open activity log store: %v", err)
+		} else {
+			server.activityService = NewActivityService(activityStore)
 		}
 	}
 
@@ -1159,6 +1171,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
+	// Close activity log store
+	if s.activityService != nil {
+		if err := s.activityService.Store().Close(); err != nil {
+			log.Printf("[WARN] Failed to close activity log store: %v", err)
+		} else {
+			log.Println("[INFO] Activity log store closed")
+		}
+	}
+
 	// Stop file watcher
 	if fileWatcher != nil {
 		fileWatcher.Stop()
@@ -1425,6 +1446,9 @@ func (s *Server) setupRoutes() {
 			protected.POST("/tasks/:name/run", s.runTask)
 			protected.PUT("/tasks/:name", s.updateTaskConfig)
 			protected.POST("/maintenance-window/run", s.runMaintenanceWindowNow)
+
+			// Unified activity log
+			protected.GET("/activity", s.listActivity)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)
