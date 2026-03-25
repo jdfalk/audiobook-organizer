@@ -519,7 +519,12 @@ func (a *queueStoreAdapter) AddOperationLog(operationID, level, message string, 
 }
 
 func (a *queueStoreAdapter) CreateOperationChange(change interface{}) error {
-	// Changes are tracked in-memory by OperationLogger; not persisted here.
+	if a.store == nil {
+		return nil
+	}
+	if c, ok := change.(*database.OperationChange); ok {
+		return a.store.CreateOperationChange(c)
+	}
 	return nil
 }
 
