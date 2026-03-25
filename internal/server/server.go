@@ -802,6 +802,16 @@ func NewServer() *Server {
 				Summary: fmt.Sprintf("Scan found: %s", title),
 			})
 		}
+
+		// Record server startup in activity log
+		_ = server.activityService.Record(database.ActivityEntry{
+			Tier:    "debug",
+			Type:    "system",
+			Level:   "info",
+			Source:  "server",
+			Summary: "Server started, activity log initialized",
+		})
+		log.Println("[INFO] Activity log service initialized and recording")
 	}
 
 	server.setupRoutes()
