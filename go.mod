@@ -98,5 +98,3 @@ require (
 	golang.org/x/term v0.41.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace go.senan.xyz/taglib => github.com/jdfalk/go-taglib v0.0.0-20260324171844-fffa0c4145a6

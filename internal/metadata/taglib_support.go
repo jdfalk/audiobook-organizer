@@ -167,6 +167,14 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 	log.Printf("[TAG-DIAG]   WriteTags OK (no error)")
 
+	// Force fsync to ensure ZFS/COW filesystems flush all data.
+	// Without this, freeform atoms may not be written to disk on ZFS.
+	if f, err := os.OpenFile(abs, os.O_RDWR, 0); err == nil {
+		_ = f.Sync()
+		f.Close()
+		log.Printf("[TAG-DIAG]   fsync completed for %s", abs)
+	}
+
 	// --- Instrumentation: read back and compare ---
 	readBack, readErr := taglib.ReadTags(abs)
 	if readErr != nil {
