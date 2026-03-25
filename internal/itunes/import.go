@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,11 +85,47 @@ func (o *ImportOptions) RemapPath(p string) string {
 		return p
 	}
 	normalized := strings.ReplaceAll(p, "\\", "/")
+
+	// Strip file://localhost/ or file:/// prefix for matching, but preserve
+	// it in the output if the mapping's From also has it.
+	stripped := normalized
+	prefix := ""
+	if strings.HasPrefix(normalized, "file://localhost/") {
+		prefix = "file://localhost/"
+		stripped = normalized[len("file://localhost/"):]
+	} else if strings.HasPrefix(normalized, "file:///") {
+		prefix = "file:///"
+		stripped = normalized[len("file:///"):]
+	}
+
+	// URL-decode the stripped path for matching
+	if strings.Contains(stripped, "%") {
+		if decoded, err := url.PathUnescape(stripped); err == nil {
+			stripped = decoded
+		}
+	}
+
 	for _, m := range o.PathMappings {
 		from := strings.ReplaceAll(m.From, "\\", "/")
-		if from != "" && m.To != "" && strings.HasPrefix(normalized, from) {
-			return m.To + normalized[len(from):]
+		if from == "" || m.To == "" {
+			continue
 		}
+
+		// Try matching against the stripped (no prefix, decoded) path
+		if strings.HasPrefix(stripped, from) {
+			return m.To + stripped[len(from):]
+		}
+
+		// Also try matching the full normalized path (for mappings that include file://)
+		fromNorm := strings.ReplaceAll(from, "\\", "/")
+		if strings.HasPrefix(normalized, fromNorm) {
+			return m.To + normalized[len(fromNorm):]
+		}
+	}
+
+	// No mapping matched — return with prefix stripped but URL-decoded
+	if prefix != "" {
+		return stripped
 	}
 	return p
 }
