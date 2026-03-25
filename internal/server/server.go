@@ -2155,8 +2155,14 @@ func (s *Server) triggerITunesSync() {
 		return
 	}
 
+	// Load path mappings from config for the scheduled sync
+	var scheduledMappings []itunes.PathMapping
+	for _, m := range config.AppConfig.ITunesPathMappings {
+		scheduledMappings = append(scheduledMappings, itunes.PathMapping{From: m.From, To: m.To})
+	}
+
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, nil)
+		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, scheduledMappings)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
