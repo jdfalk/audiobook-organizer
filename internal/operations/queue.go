@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -18,6 +18,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
+
+// ActivityRecorder is a package-level hook for dual-writing operation changes
+// to the unified activity log. Set by server.go after the ActivityService is created.
+var ActivityRecorder func(entry database.ActivityEntry)
 
 // Priority levels for operations
 const (
@@ -523,9 +527,41 @@ func (a *queueStoreAdapter) CreateOperationChange(change interface{}) error {
 		return nil
 	}
 	if c, ok := change.(*database.OperationChange); ok {
-		return a.store.CreateOperationChange(c)
+		err := a.store.CreateOperationChange(c)
+		// Dual-write to unified activity log
+		if ActivityRecorder != nil {
+			ActivityRecorder(database.ActivityEntry{
+				Tier:        "change",
+				Type:        c.ChangeType,
+				Level:       "info",
+				Source:      "background",
+				OperationID: c.OperationID,
+				BookID:      c.BookID,
+				Summary:     formatChangeSummary(c),
+				Details:     map[string]any{"field": c.FieldName, "old_value": c.OldValue, "new_value": c.NewValue},
+			})
+		}
+		return err
 	}
 	return nil
+}
+
+// formatChangeSummary builds a human-readable summary for an operation change.
+func formatChangeSummary(c *database.OperationChange) string {
+	if c.FieldName != "" {
+		old := truncateStr(c.OldValue, 50)
+		new := truncateStr(c.NewValue, 50)
+		return fmt.Sprintf("%s: %s → %s", c.FieldName, old, new)
+	}
+	return c.ChangeType
+}
+
+// truncateStr shortens s to maxLen characters, appending "…" if truncated.
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "…"
 }
 
 func (a *queueStoreAdapter) UpdateOperationProgress(id string, current, total int, message string) error {

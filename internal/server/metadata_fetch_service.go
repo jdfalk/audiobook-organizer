@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.33.0
+// version: 4.34.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -34,6 +34,12 @@ type MetadataFetchService struct {
 	olStore         *openlibrary.OLStore
 	overrideSources []metadata.MetadataSource // for testing
 	isbnEnrichment  *ISBNEnrichmentService
+	activityService *ActivityService
+}
+
+// SetActivityService sets the activity service for dual-writing to the unified activity log.
+func (mfs *MetadataFetchService) SetActivityService(svc *ActivityService) {
+	mfs.activityService = svc
 }
 
 func NewMetadataFetchService(db database.Store) *MetadataFetchService {
@@ -636,6 +642,18 @@ func (mfs *MetadataFetchService) recordChangeHistory(book *database.Book, meta m
 		}
 		if err := mfs.db.RecordMetadataChange(record); err != nil {
 			log.Printf("[WARN] failed to record metadata change for %s.%s: %v", book.ID, c.field, err)
+		}
+		// Dual-write to unified activity log
+		if mfs.activityService != nil {
+			_ = mfs.activityService.Record(database.ActivityEntry{
+				Tier:    "change",
+				Type:    "metadata_apply",
+				Level:   "info",
+				Source:  "background",
+				BookID:  book.ID,
+				Summary: fmt.Sprintf("Applied %s: %s → %s", c.field, truncateActivity(c.oldVal, 50), truncateActivity(c.newVal, 50)),
+				Details: map[string]any{"field": c.field, "old_value": c.oldVal, "new_value": c.newVal, "source": sourceName},
+			})
 		}
 	}
 }
@@ -1373,6 +1391,17 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 	if err := mfs.db.RecordMetadataChange(record); err != nil {
 		log.Printf("[WARN] failed to record cover archive history for %s: %v", bookID, err)
 	}
+	// Dual-write to unified activity log
+	if mfs.activityService != nil {
+		_ = mfs.activityService.Record(database.ActivityEntry{
+			Tier:    "change",
+			Type:    "metadata_apply",
+			Level:   "info",
+			Source:  "background",
+			BookID:  bookID,
+			Summary: fmt.Sprintf("Archived cover art to %s", filepath.Base(archivePath)),
+		})
+	}
 }
 
 func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
@@ -2055,6 +2084,17 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	if err := mfs.db.RecordMetadataChange(record); err != nil {
 		log.Printf("[WARN] failed to record write-back history for %s: %v", book.ID, err)
 	}
+	// Dual-write to unified activity log (Task 16: tag_write)
+	if mfs.activityService != nil && writtenCount > 0 {
+		_ = mfs.activityService.Record(database.ActivityEntry{
+			Tier:    "change",
+			Type:    "tag_write",
+			Level:   "info",
+			Source:  "background",
+			BookID:  book.ID,
+			Summary: fmt.Sprintf("Wrote tags to %d file(s) for %s", writtenCount, book.Title),
+		})
+	}
 
 	// Cover art already embedded above (before tag write) to prevent
 	// ffmpeg's -map_metadata from clobbering freeform iTunes atoms.
@@ -2396,6 +2436,18 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 					NewPath:    entry.TargetPath,
 					ChangeType: "rename",
 				})
+				// Dual-write to unified activity log
+				if mfs.activityService != nil {
+					_ = mfs.activityService.Record(database.ActivityEntry{
+						Tier:    "change",
+						Type:    "rename",
+						Level:   "info",
+						Source:  "background",
+						BookID:  id,
+						Summary: fmt.Sprintf("Moved: %s → %s", filepath.Base(entry.SourcePath), filepath.Base(entry.TargetPath)),
+						Details: map[string]any{"old_path": entry.SourcePath, "new_path": entry.TargetPath},
+					})
+				}
 			}
 		}
 
@@ -2536,6 +2588,18 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 				NewPath:    entry.TargetPath,
 				ChangeType: "rename",
 			})
+			// Dual-write to unified activity log
+			if mfs.activityService != nil {
+				_ = mfs.activityService.Record(database.ActivityEntry{
+					Tier:    "change",
+					Type:    "rename",
+					Level:   "info",
+					Source:  "background",
+					BookID:  id,
+					Summary: fmt.Sprintf("Moved: %s → %s", filepath.Base(entry.SourcePath), filepath.Base(entry.TargetPath)),
+					Details: map[string]any{"old_path": entry.SourcePath, "new_path": entry.TargetPath},
+				})
+			}
 		}
 	}
 
@@ -2561,6 +2625,14 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 	}
 
 	return nil
+}
+
+// truncateActivity shortens s to maxLen runes, appending "..." if truncated.
+func truncateActivity(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // removeEmptyDirs removes empty directories walking up from dir until reaching stopAt.

@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.14.0
+// version: 2.15.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -136,6 +136,10 @@ type itunesImportStatus struct {
 	Failed    int
 	Errors    []string
 }
+
+// itunesActivityRecorder is a package-level hook for dual-writing iTunes sync
+// changes to the unified activity log. Set by server.go.
+var itunesActivityRecorder func(entry database.ActivityEntry)
 
 var itunesImportStatuses sync.Map
 
@@ -2010,6 +2014,18 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 					log.Error("Failed to update '%s': %v", existing.Title, err)
 				} else {
 					updated++
+					// Dual-write to unified activity log
+					if itunesActivityRecorder != nil {
+						itunesActivityRecorder(database.ActivityEntry{
+							Tier:    "change",
+							Type:    "itunes_sync",
+							Level:   "info",
+							Source:  "scheduler",
+							BookID:  existing.ID,
+							Summary: fmt.Sprintf("iTunes sync updated: %s", existing.Title),
+							Tags:    []string{"itunes"},
+						})
+					}
 				}
 			} else {
 				unchanged++
