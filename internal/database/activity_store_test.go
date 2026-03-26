@@ -1,5 +1,5 @@
 // file: internal/database/activity_store_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
@@ -274,4 +274,96 @@ func TestActivityStore_Prune(t *testing.T) {
 	for _, e := range all {
 		assert.NotEqual(t, "old debug", e.Summary)
 	}
+}
+
+// TestActivityStore_SearchFilter verifies that Search filters on summary substring.
+func TestActivityStore_SearchFilter(t *testing.T) {
+	s := newTestActivityStore(t)
+
+	entries := []ActivityEntry{
+		{Tier: "realtime", Type: "info_event", Level: "info", Source: "gin",
+			Summary: "Project Hail Mary is a great book"},
+		{Tier: "realtime", Type: "info_event", Level: "info", Source: "gin",
+			Summary: "The Martian is also excellent"},
+		{Tier: "realtime", Type: "info_event", Level: "info", Source: "gin",
+			Summary: "Andromeda Strain is a classic"},
+	}
+	for _, e := range entries {
+		_, err := s.Record(e)
+		require.NoError(t, err)
+	}
+
+	res, total, err := s.Query(ActivityFilter{Search: "Hail Mary", Limit: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total)
+	require.Len(t, res, 1)
+	assert.Contains(t, res[0].Summary, "Hail Mary")
+}
+
+// TestActivityStore_SourceFilters verifies Source and ExcludeSources filters.
+func TestActivityStore_SourceFilters(t *testing.T) {
+	s := newTestActivityStore(t)
+
+	entries := []ActivityEntry{
+		{Tier: "realtime", Type: "request", Level: "info", Source: "gin", Summary: "GET /api/1"},
+		{Tier: "realtime", Type: "request", Level: "info", Source: "gin", Summary: "GET /api/2"},
+		{Tier: "background", Type: "cron_tick", Level: "info", Source: "scheduler", Summary: "daily tick"},
+		{Tier: "background", Type: "metadata_apply", Level: "info", Source: "metadata", Summary: "applied"},
+	}
+	for _, e := range entries {
+		_, err := s.Record(e)
+		require.NoError(t, err)
+	}
+
+	t.Run("source_exact", func(t *testing.T) {
+		res, total, err := s.Query(ActivityFilter{Source: "scheduler", Limit: 50})
+		require.NoError(t, err)
+		assert.Equal(t, 1, total)
+		require.Len(t, res, 1)
+		assert.Equal(t, "scheduler", res[0].Source)
+	})
+
+	t.Run("exclude_sources", func(t *testing.T) {
+		res, total, err := s.Query(ActivityFilter{ExcludeSources: []string{"gin"}, Limit: 50})
+		require.NoError(t, err)
+		assert.Equal(t, 2, total)
+		require.Len(t, res, 2)
+		for _, r := range res {
+			assert.NotEqual(t, "gin", r.Source)
+		}
+	})
+}
+
+// TestActivityStore_GetDistinctSources verifies source aggregation with and without filters.
+func TestActivityStore_GetDistinctSources(t *testing.T) {
+	s := newTestActivityStore(t)
+
+	entries := []ActivityEntry{
+		{Tier: "realtime", Type: "request", Level: "info", Source: "gin", Summary: "req 1"},
+		{Tier: "debug", Type: "request", Level: "debug", Source: "gin", Summary: "req 2"},
+		{Tier: "background", Type: "scan", Level: "info", Source: "scanner", Summary: "scan 1"},
+		{Tier: "realtime", Type: "metadata_apply", Level: "info", Source: "metadata", Summary: "apply 1"},
+	}
+	for _, e := range entries {
+		_, err := s.Record(e)
+		require.NoError(t, err)
+	}
+
+	t.Run("unfiltered_returns_all_sources", func(t *testing.T) {
+		sources, err := s.GetDistinctSources(ActivityFilter{})
+		require.NoError(t, err)
+		assert.Len(t, sources, 3, "expected gin, scanner, metadata")
+
+		// gin has 2 entries so should be first
+		assert.Equal(t, "gin", sources[0].Source)
+		assert.Equal(t, 2, sources[0].Count)
+	})
+
+	t.Run("filtered_by_tier_debug", func(t *testing.T) {
+		sources, err := s.GetDistinctSources(ActivityFilter{Tier: "debug"})
+		require.NoError(t, err)
+		assert.Len(t, sources, 1)
+		assert.Equal(t, "gin", sources[0].Source)
+		assert.Equal(t, 1, sources[0].Count)
+	})
 }
