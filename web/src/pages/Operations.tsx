@@ -597,7 +597,7 @@ export function Operations() {
                               {new Date(ch.timestamp).toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              <Chip size="small" label={ch.type.replace(/_/g, ' ')} />
+                              <Chip size="small" label={(ch.type || '').replace(/_/g, ' ')} />
                             </TableCell>
                             <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {ch.summary || '—'}

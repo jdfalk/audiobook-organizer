@@ -210,7 +210,7 @@ export default function ActivityLog() {
                   <TableCell>{tierChip(entry.tier)}</TableCell>
                   <TableCell>
                     <Typography variant="caption">
-                      {entry.type.replace(/_/g, ' ')}
+                      {(entry.type || '').replace(/_/g, ' ')}
                     </Typography>
                   </TableCell>
                   <TableCell>{levelChip(entry.level)}</TableCell>
