@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
 
 package server
@@ -123,4 +123,109 @@ func TestListActivity_WithFilters(t *testing.T) {
 	require.Len(t, resp.Entries, 1)
 	assert.Equal(t, "change", resp.Entries[0].Tier)
 	assert.Equal(t, "metadata_apply", resp.Entries[0].Type)
+}
+
+// TestListActivity_SearchParam verifies that the search query param filters
+// entries by substring match on summary.
+func TestListActivity_SearchParam(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "search_test.db")
+	store, err := database.NewActivityStore(dbPath)
+	require.NoError(t, err)
+	defer store.Close()
+
+	svc := NewActivityService(store)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	srv := &Server{activityService: svc}
+	r.GET("/api/v1/activity", srv.listActivity)
+
+	now := time.Now().UTC()
+
+	require.NoError(t, svc.Record(database.ActivityEntry{
+		Tier:      "realtime",
+		Type:      "scanner",
+		Level:     "info",
+		Source:    "scanner",
+		Summary:   "Found: Project Hail Mary",
+		Timestamp: now,
+	}))
+	require.NoError(t, svc.Record(database.ActivityEntry{
+		Tier:      "realtime",
+		Type:      "scanner",
+		Level:     "info",
+		Source:    "scanner",
+		Summary:   "Found: The Martian",
+		Timestamp: now,
+	}))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/activity?search=Hail+Mary", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Entries []database.ActivityEntry `json:"entries"`
+		Total   int                      `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, 1, resp.Total)
+	require.Len(t, resp.Entries, 1)
+	assert.Contains(t, resp.Entries[0].Summary, "Hail Mary")
+}
+
+// TestListActivitySources verifies that the sources endpoint returns distinct
+// source names with counts, ordered by count descending.
+func TestListActivitySources(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "sources_test.db")
+	store, err := database.NewActivityStore(dbPath)
+	require.NoError(t, err)
+	defer store.Close()
+
+	svc := NewActivityService(store)
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	srv := &Server{activityService: svc}
+	r.GET("/api/v1/activity/sources", srv.listActivitySources)
+
+	now := time.Now().UTC()
+
+	// Record 2 gin entries and 1 scanner entry.
+	for i := 0; i < 2; i++ {
+		require.NoError(t, svc.Record(database.ActivityEntry{
+			Tier:      "realtime",
+			Type:      "request",
+			Level:     "info",
+			Source:    "gin",
+			Summary:   "HTTP request",
+			Timestamp: now,
+		}))
+	}
+	require.NoError(t, svc.Record(database.ActivityEntry{
+		Tier:      "background",
+		Type:      "scan",
+		Level:     "info",
+		Source:    "scanner",
+		Summary:   "scan complete",
+		Timestamp: now,
+	}))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/api/v1/activity/sources", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Sources []database.SourceCount `json:"sources"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Sources, 2)
+	// Ordered by count DESC: gin (2) first, scanner (1) second.
+	assert.Equal(t, "gin", resp.Sources[0].Source)
+	assert.Equal(t, 2, resp.Sources[0].Count)
+	assert.Equal(t, "scanner", resp.Sources[1].Source)
+	assert.Equal(t, 1, resp.Sources[1].Count)
 }

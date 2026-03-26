@@ -1,5 +1,5 @@
 // file: internal/server/activity_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -43,6 +43,12 @@ func (s *ActivityService) Summarize(olderThan time.Time, tier string) (int, erro
 // Returns the number of rows deleted.
 func (s *ActivityService) Prune(olderThan time.Time, tier string) (int, error) {
 	return s.store.Prune(olderThan, tier)
+}
+
+// GetDistinctSources returns all unique sources with their entry counts,
+// narrowed by the given filter's tier/level/since/until/search fields.
+func (s *ActivityService) GetDistinctSources(filter database.ActivityFilter) ([]database.SourceCount, error) {
+	return s.store.GetDistinctSources(filter)
 }
 
 // Store returns the underlying ActivityStore (e.g. for direct access or close).
