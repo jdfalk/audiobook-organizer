@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.15.0
+// version: 1.16.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -21,7 +21,7 @@ import { System } from './pages/System';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { FileBrowser } from './pages/FileBrowser';
-import { Operations } from './pages/Operations';
+// Operations page removed — redirects to /activity
 import { Maintenance } from './pages/Maintenance';
 import { BookDedup } from './pages/BookDedup';
 import { Series } from './pages/Series';
@@ -176,7 +176,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/login" element={<Navigate to="/dashboard" replace />} />
             <Route path="/files" element={<FileBrowser />} />
-            <Route path="/operations" element={<Operations />} />
+            <Route path="/operations" element={<Navigate to="/activity" replace />} />
             <Route path="/maintenance" element={<Maintenance />} />
             <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
             <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
