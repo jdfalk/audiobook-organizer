@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -32,16 +32,19 @@ type ActivityEntry struct {
 
 // ActivityFilter controls which entries Query returns.
 type ActivityFilter struct {
-	Limit       int
-	Offset      int
-	Type        string
-	Tier        string
-	Level       string
-	OperationID string
-	BookID      string
-	Since       *time.Time
-	Until       *time.Time
-	Tags        []string
+	Limit          int
+	Offset         int
+	Type           string
+	Tier           string
+	Level          string
+	OperationID    string
+	BookID         string
+	Since          *time.Time
+	Until          *time.Time
+	Tags           []string
+	Search         string   // LIKE %search% on summary
+	Source         string   // show only this source
+	ExcludeSources []string // hide these sources
 }
 
 // ActivityStore persists activity log entries in a dedicated SQLite sidecar database.
@@ -70,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_operation_id     ON activity_log (operat
 CREATE INDEX IF NOT EXISTS idx_activity_book_timestamp   ON activity_log (book_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_activity_tier             ON activity_log (tier);
 CREATE INDEX IF NOT EXISTS idx_activity_tags             ON activity_log (tags);
+CREATE INDEX IF NOT EXISTS idx_activity_source           ON activity_log (source);
 `
 
 // NewActivityStore opens (or creates) the SQLite activity log at dbPath.
@@ -321,6 +325,33 @@ func (s *ActivityStore) Prune(olderThan time.Time, tier string) (int, error) {
 	return int(n), nil
 }
 
+// SourceCount holds a source name and how many activity entries it has.
+type SourceCount struct {
+	Source string `json:"source"`
+	Count  int    `json:"count"`
+}
+
+// GetDistinctSources returns all unique sources with their entry counts,
+// ordered by count descending, optionally narrowed by f.
+func (s *ActivityStore) GetDistinctSources(f ActivityFilter) ([]SourceCount, error) {
+	where, args := buildActivityWhere(f)
+	query := "SELECT source, COUNT(*) as cnt FROM activity_log" + where + " GROUP BY source ORDER BY cnt DESC"
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("get distinct sources: %w", err)
+	}
+	defer rows.Close()
+	var sources []SourceCount
+	for rows.Next() {
+		var sc SourceCount
+		if err := rows.Scan(&sc.Source, &sc.Count); err != nil {
+			return nil, err
+		}
+		sources = append(sources, sc)
+	}
+	return sources, rows.Err()
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // buildActivityWhere constructs a WHERE clause and positional args from f.
@@ -369,6 +400,18 @@ func buildActivityWhere(f ActivityFilter) (string, []any) {
 			"%,"+t+",%",   // middle: "...,alpha,..."
 			"%,"+t,        // suffix: "...,alpha"
 		)
+	}
+	if f.Search != "" {
+		clauses = append(clauses, "summary LIKE ?")
+		args = append(args, "%"+f.Search+"%")
+	}
+	if f.Source != "" {
+		clauses = append(clauses, "source = ?")
+		args = append(args, f.Source)
+	}
+	for _, src := range f.ExcludeSources {
+		clauses = append(clauses, "(source != ? OR source IS NULL)")
+		args = append(args, src)
 	}
 
 	if len(clauses) == 0 {
