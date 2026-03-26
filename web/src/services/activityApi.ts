@@ -1,5 +1,5 @@
 // file: web/src/services/activityApi.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -35,6 +35,18 @@ export interface ActivityFilter {
   since?: string;
   until?: string;
   tags?: string;
+  search?: string;
+  source?: string;
+  exclude_sources?: string;
+}
+
+export interface SourceCount {
+  source: string;
+  count: number;
+}
+
+export interface SourcesResponse {
+  sources: SourceCount[];
 }
 
 export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityResponse> {
@@ -50,6 +62,9 @@ export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityRe
     if (filter.since) params.set('since', filter.since);
     if (filter.until) params.set('until', filter.until);
     if (filter.tags) params.set('tags', filter.tags);
+    if (filter.search) params.set('search', filter.search);
+    if (filter.source) params.set('source', filter.source);
+    if (filter.exclude_sources) params.set('exclude_sources', filter.exclude_sources);
   }
   const query = params.toString();
   const response = await fetch(`${API_BASE}/activity${query ? `?${query}` : ''}`);
@@ -57,4 +72,16 @@ export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityRe
     throw new Error(`Failed to fetch activity: ${response.status}`);
   }
   return response.json();
+}
+
+export async function fetchActivitySources(filter: Partial<ActivityFilter> = {}): Promise<SourcesResponse> {
+  const params = new URLSearchParams();
+  if (filter.tier) params.set('tier', filter.tier);
+  if (filter.level) params.set('level', filter.level);
+  if (filter.since) params.set('since', filter.since);
+  if (filter.until) params.set('until', filter.until);
+  const url = `${API_BASE}/activity/sources?${params.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sources API error: ${res.status}`);
+  return res.json();
 }
