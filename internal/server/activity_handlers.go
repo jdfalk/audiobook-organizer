@@ -100,6 +100,14 @@ func (s *Server) listActivity(c *gin.Context) {
 			}
 		}
 	}
+	if v := c.Query("exclude_tiers"); v != "" {
+		for _, tier := range strings.Split(v, ",") {
+			tier = strings.TrimSpace(tier)
+			if tier != "" {
+				filter.ExcludeTiers = append(filter.ExcludeTiers, tier)
+			}
+		}
+	}
 
 	entries, total, err := s.activityService.Query(filter)
 	if err != nil {

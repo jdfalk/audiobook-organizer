@@ -38,6 +38,7 @@ export interface ActivityFilter {
   search?: string;
   source?: string;
   exclude_sources?: string;
+  exclude_tiers?: string;
 }
 
 export interface SourceCount {
@@ -65,6 +66,7 @@ export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityRe
     if (filter.search) params.set('search', filter.search);
     if (filter.source) params.set('source', filter.source);
     if (filter.exclude_sources) params.set('exclude_sources', filter.exclude_sources);
+    if (filter.exclude_tiers) params.set('exclude_tiers', filter.exclude_tiers);
   }
   const query = params.toString();
   const response = await fetch(`${API_BASE}/activity${query ? `?${query}` : ''}`);

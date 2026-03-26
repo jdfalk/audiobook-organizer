@@ -176,6 +176,12 @@ export default function ActivityLog() {
     setLoading(true);
     try {
       const excludeStr = excludedSources.size > 0 ? [...excludedSources].join(',') : undefined;
+
+      // Server-side tier filtering via exclude_tiers
+      const allTiers = ['audit', 'change', 'debug'];
+      const inactiveTiers = allTiers.filter((t) => !tiers.has(t));
+      const excludeTiersStr = inactiveTiers.length > 0 ? inactiveTiers.join(',') : undefined;
+
       const result = await fetchActivity({
         limit: PAGE_SIZE,
         offset: (p - 1) * PAGE_SIZE,
@@ -186,10 +192,10 @@ export default function ActivityLog() {
         until: untilFilter || undefined,
         search: search.trim() || undefined,
         exclude_sources: excludeStr,
+        exclude_tiers: excludeTiersStr,
       });
-      // Client-side tier filtering
-      const filtered = (result.entries || []).filter((e) => tiers.has(e.tier));
-      setEntries(filtered);
+
+      setEntries(result.entries || []);
       setTotal(result.total || 0);
     } catch (err) {
       console.error('Failed to load activity', err);
@@ -487,21 +493,31 @@ export default function ActivityLog() {
             <TextField
               size="small"
               label="Since"
-              type="datetime-local"
+              type={sinceFilter ? 'datetime-local' : 'text'}
+              placeholder="All time"
               value={sinceFilter}
+              onFocus={(e) => { if (!sinceFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
               onChange={(e) => setSinceFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 200 }}
+              InputProps={sinceFilter ? {
+                endAdornment: <IconButton size="small" onClick={() => setSinceFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+              } : undefined}
+              sx={{ minWidth: 180 }}
             />
 
             <TextField
               size="small"
               label="Until"
-              type="datetime-local"
+              type={untilFilter ? 'datetime-local' : 'text'}
+              placeholder="Now"
               value={untilFilter}
+              onFocus={(e) => { if (!untilFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
               onChange={(e) => setUntilFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{ minWidth: 200 }}
+              InputProps={untilFilter ? {
+                endAdornment: <IconButton size="small" onClick={() => setUntilFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+              } : undefined}
+              sx={{ minWidth: 180 }}
             />
 
             {/* Sources dropdown */}
