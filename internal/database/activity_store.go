@@ -45,6 +45,7 @@ type ActivityFilter struct {
 	Search         string   // LIKE %search% on summary
 	Source         string   // show only this source
 	ExcludeSources []string // hide these sources
+	ExcludeTiers   []string // hide these tiers
 }
 
 // ActivityStore persists activity log entries in a dedicated SQLite sidecar database.
@@ -412,6 +413,10 @@ func buildActivityWhere(f ActivityFilter) (string, []any) {
 	for _, src := range f.ExcludeSources {
 		clauses = append(clauses, "(source != ? OR source IS NULL)")
 		args = append(args, src)
+	}
+	for _, tier := range f.ExcludeTiers {
+		clauses = append(clauses, "tier != ?")
+		args = append(args, tier)
 	}
 
 	if len(clauses) == 0 {
