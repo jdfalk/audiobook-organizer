@@ -1494,6 +1494,7 @@ func (s *Server) setupRoutes() {
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
+			protected.GET("/activity/sources", s.listActivitySources)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)
