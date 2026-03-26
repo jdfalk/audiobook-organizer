@@ -9,10 +9,23 @@
 
 ---
 
-## 🎯 Current Status — March 19, 2026
+## 🎯 Current Status — March 26, 2026
 
-**Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned from 68K/6K/19K)
+**Library:** 10,891 books / 2,970 authors / 8,507 series
 **Production:** PebbleDB, Linux, HTTPS at 172.16.2.30:8484
+**Activity Log:** Unified page captures all server logs, replaces Operations page
+
+---
+
+## 🐛 Bugs — Confirmed Broken
+
+| # | Item | Details |
+|---|------|---------|
+| B1 | **Author merge click not working** | On dedup/authors page, clicking an author variant (e.g., "J.T. Wright") doesn't add it to the merge list. The merge button shows but the click handler for adding variants is broken. |
+| B2 | **Tag extraction reads conflicting metadata** | After writing correct tags, `ExtractMetadata` re-reads wrong values from legacy `composer`/`album` tags. Composer should be cleared when we write `artist`/`album_artist`. |
+| B3 | **Author/narrator swap in many files** | `composer` = narrator in Audible M4Bs. Priority fix (album_artist > artist > composer) helps but doesn't solve files where `artist` IS the narrator. |
+| B4 | **series_index not read back** | Custom SERIES_INDEX tag is written to files but `ExtractMetadata` doesn't read it back from the custom tag. |
+| B5 | **35 remaining iTunes sync path errors** | Files genuinely missing on disk. May need cleanup or manual resolution. |
 
 ---
 
@@ -20,20 +33,20 @@
 
 | # | Item | Details | Spec/Plan |
 |---|------|---------|-----------|
-| 1 | **Tag extraction reads conflicting metadata** | After writing correct tags, `ExtractMetadata` re-reads and gets wrong values from legacy `composer`, `album`, or other conflicting tags. Composer should be cleared when we write `artist`/`album_artist`. | [Implementation Guide §1](docs/implementation-guide.md#1-clear-conflicting-tags-during-write) |
-| 2 | **Author/narrator swap in many files** | `composer` field contains narrator in Audible M4Bs. Our fix (album_artist > artist > composer) helps but doesn't solve files where `artist` IS the narrator. Need to cross-reference with DB author. | [Implementation Guide §2](docs/implementation-guide.md#2-smart-author-narrator-resolution) |
-| 3 | **ISBN enrichment matched wrong book** | `isStrictTitleMatch` was too loose. Fixed to prefix match with 60% length ratio. Needs live testing to confirm fix works. | [Implementation Guide §3](docs/implementation-guide.md#3-isbn-enrichment-validation) |
+| 1 | **ISBN enrichment matched wrong book** | `isStrictTitleMatch` was too loose. Fixed to prefix match with 60% length ratio. Needs live testing. | [Implementation Guide §3](docs/implementation-guide.md#3-isbn-enrichment-validation) |
 
 ---
 
-## 🔴 P1 — High Priority
+## 🔴 P1 — High Priority (New Features / Major Improvements)
 
 | # | Item | Details | Spec/Plan |
 |---|------|---------|-----------|
-| 4 | **M4B conversion live test** | Integration test passes but never tested on production server with real files. Need to verify chapters, version linking, primary/non-primary, deferred iTunes update. | [Transcode Integration Test](internal/transcode/transcode_integration_test.go) |
-| 5 | **Bulk "Save to Files" for all books** | Currently per-book only. Need a batch operation to write tags + rename for all books (or filtered set). | [Implementation Guide §5](docs/implementation-guide.md#5-bulk-save-to-files) |
-| 6 | **Series dedup cleanup** | 8,507 series for 10,891 books. Many 1-book series, some should be merged or removed. | [Implementation Guide §6](docs/implementation-guide.md#6-series-dedup) |
-| 7 | **"read by narrator" books metadata fix** | ~100+ books still have title/author as "read by narrator". Need bulk AI-assisted metadata correction. | [Diagnostics Page](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
+| 2 | **Preview Organize (single book)** | Merge "Preview Rename" and organize into one flow. Shows step-by-step preview (copy to library, rename, write tags, embed cover), then "Apply" executes. Currently can only organize in bulk. | — |
+| 3 | **Playlist system** | Completely dead code. No API, no UI, no tagging. Need to decide: tag-based playlists vs stored playlists vs iTunes playlist sync. | — |
+| 4 | **Bulk "Save to Files" for all books** | Currently per-book only. Need batch operation for tags + rename across all/filtered books. | [Implementation Guide §5](docs/implementation-guide.md#5-bulk-save-to-files) |
+| 5 | **Series dedup cleanup** | 8,507 series for 10,891 books. Many 1-book series, some should be merged or removed. | [Implementation Guide §6](docs/implementation-guide.md#6-series-dedup) |
+| 6 | **"read by narrator" books metadata fix** | ~100+ books still have title/author as "read by narrator". Need bulk AI-assisted correction. | [Diagnostics Page](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
+| 7 | **M4B conversion live test** | Integration test passes but never tested on production with real files. | [Transcode Test](internal/transcode/transcode_integration_test.go) |
 
 ---
 
@@ -41,11 +54,15 @@
 
 | # | Item | Details | Spec/Plan |
 |---|------|---------|-----------|
-| 8 | **Version vs Snapshot UI polish** | Tab renamed to "Files & History" with format trays, changelog, comparison. Needs UX polish and edge case handling. | [Files & History Spec](docs/superpowers/specs/2026-03-18-files-history-redesign.md) |
-| 9 | **Compare snapshot wiring** | ChangeLog "Compare →" link communicates timestamp to TagComparison but doesn't load snapshot data yet. | [Implementation Guide §9](docs/implementation-guide.md#9-snapshot-comparison) |
-| 10 | **Background ISBN enrichment expansion** | Currently searches after metadata apply. Should also run as a scheduled maintenance task for all books missing ISBN. | [Implementation Guide §10](docs/implementation-guide.md#10-scheduled-isbn-enrichment) |
-| 11 | **Copy-on-write TTL tuning** | Hardlink backups created before tag writes. Cleanup task registered. Need to verify TTL works and test disk usage. | [Implementation Guide §11](docs/implementation-guide.md#11-copy-on-write-verification) |
-| 12 | **iTunes PID detail view** | Badge clickable, banner expandable with PID table. Could show more info (file paths, track names from XML). | [Implementation Guide §12](docs/implementation-guide.md#12-itunes-pid-detail-expansion) |
+| 8 | **Activity page mobile layout** | Filter bar is cramped on mobile. Need collapsible filter drawer or responsive layout. | — |
+| 9 | **Activity page auto-refresh speed** | 30s polling feels slow during active operations. Consider faster poll when ops are running, slower when idle. | — |
+| 10 | **Version vs Snapshot UI polish** | Files & History tab needs UX polish and edge case handling. | [Files & History Spec](docs/superpowers/specs/2026-03-18-files-history-redesign.md) |
+| 11 | **Compare snapshot wiring** | ChangeLog "Compare →" link communicates timestamp but doesn't load snapshot data. | [Implementation Guide §9](docs/implementation-guide.md#9-snapshot-comparison) |
+| 12 | **Background ISBN enrichment expansion** | Should also run as scheduled maintenance for all books missing ISBN. | [Implementation Guide §10](docs/implementation-guide.md#10-scheduled-isbn-enrichment) |
+| 13 | **Copy-on-write TTL tuning** | Verify TTL works and test disk usage on production. | [Implementation Guide §11](docs/implementation-guide.md#11-copy-on-write-verification) |
+| 14 | **iTunes PID detail view expansion** | Show file paths, track names from XML. | [Implementation Guide §12](docs/implementation-guide.md#12-itunes-pid-detail-expansion) |
+| 15 | **ITL write-back testing** | Experimental ITL copied and config set, but write-back still disabled. | — |
+| 16 | **Remove TAG-DIAG instrumentation** | Diagnostic logging may still be in taglib_support.go. | — |
 
 ---
 
@@ -53,10 +70,13 @@
 
 | # | Item | Details | Spec/Plan |
 |---|------|---------|-----------|
-| 13 | **OpenAI batch polling via app** | Universal batch poller deployed but gpt-5.4 hit token limits. Need to handle rate limiting gracefully. | [Diagnostics Spec](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
-| 14 | **Deferred iTunes updates** | Table/code deployed. Untested on production (requires M4B transcode + iTunes write-back disabled scenario). | [Deferred iTunes Spec](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md) |
-| 15 | **File count display** | Dashboard/Authors/Series pages show "N books (M files)" when counts differ. Verified working. | Completed |
-| 16 | **Path format customization UI** | Settings page should expose path_format and segment_title_format for user editing. | — |
+| 17 | **OpenAI batch polling rate limiting** | gpt-5.4 hit token limits. Need graceful handling. | [Diagnostics Spec](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
+| 18 | **Deferred iTunes updates live test** | Deployed but untested on production. | [Deferred iTunes Spec](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md) |
+| 19 | **Path format customization UI** | Settings page should expose path_format and segment_title_format. | — |
+| 20 | **Migrate old logging tables to activity.db** | Convert operations/operation_logs/operation_changes/metadata_changes_history into activity summary entries. | [Activity Log Spec](docs/superpowers/specs/2026-03-25-unified-activity-page-design.md) |
+| 21 | **Delete GitHub fork repos** | User needs to run `gh auth refresh` then delete jdfalk/go-taglib and jdfalk/go-taglib-1. | — |
+| 22 | **Dynamic/smart playlist support** | Auto-updating playlists based on metadata queries. Depends on playlist system (#3). | — |
+| 23 | **Database migration to PostgreSQL** | Research recommended PostgreSQL as next step (gives CockroachDB/YugabyteDB for free). | — |
 
 ---
 
