@@ -1,11 +1,12 @@
 // file: internal/server/activity_integration_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f8a3b2c1-d4e5-6f7a-8b9c-0d1e2f3a4b5c
 
 package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -115,4 +116,66 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	if v, ok := resp.Entries[0].Details["updated"]; !ok || v != float64(312) {
 		t.Errorf("details.updated mismatch: %v", resp.Entries[0].Details)
 	}
+
+	// Search filter
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/v1/activity?search=312+updated", nil)
+	r.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total != 1 {
+		t.Errorf("search '312 updated': expected 1, got %d", resp.Total)
+	}
+
+	// Exclude sources
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/api/v1/activity?exclude_sources=background", nil)
+	r.ServeHTTP(w, req)
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Total != 2 {
+		t.Errorf("exclude background: expected 2, got %d", resp.Total)
+	}
+}
+
+func TestActivity_Integration_TeeWriterCapture(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "tee_integ.db")
+	store, err := database.NewActivityStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewActivityStore: %v", err)
+	}
+	defer store.Close()
+
+	w := newActivityWriter(store, 1000)
+	w.Start()
+
+	fmt.Fprintln(w, "2026/03/25 17:35:08 logger.go:103: [info] scheduler: iTunes sync started")
+	fmt.Fprintln(w, "[GIN] 2026/03/25 - 17:35:11 | 200 |    1.44s |    172.16.3.164 | GET      \"/api/v1/health\"")
+	fmt.Fprintln(w, "2026/03/25 17:35:08 logger.go:103: [warn] server: No params found for scan")
+
+	w.Stop()
+
+	entries, total, err := store.Query(database.ActivityFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if total < 3 {
+		t.Fatalf("expected at least 3 entries, got %d", total)
+	}
+
+	// Source filtering
+	_, total, _ = store.Query(database.ActivityFilter{Source: "gin"})
+	if total != 1 {
+		t.Errorf("expected 1 gin entry, got %d", total)
+	}
+
+	_, total, _ = store.Query(database.ActivityFilter{ExcludeSources: []string{"gin"}})
+	if total < 2 {
+		t.Errorf("expected at least 2 non-gin entries, got %d", total)
+	}
+
+	// Search
+	_, total, _ = store.Query(database.ActivityFilter{Search: "iTunes"})
+	if total != 1 {
+		t.Errorf("expected 1 entry matching 'iTunes', got %d", total)
+	}
+	_ = entries
 }
