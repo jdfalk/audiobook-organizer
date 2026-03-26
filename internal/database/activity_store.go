@@ -16,18 +16,18 @@ import (
 
 // ActivityEntry represents a single entry in the unified activity log.
 type ActivityEntry struct {
-	ID          int64
-	Timestamp   time.Time
-	Tier        string            // realtime | background | debug | audit
-	Type        string            // e.g. metadata_apply, tag_write, isbn_lookup
-	Level       string            // info | warn | error | debug
-	Source      string            // subsystem/handler name
-	OperationID string            // optional: links related entries
-	BookID      string            // optional: the book this entry is about
-	Summary     string            // short human-readable description
-	Details     map[string]any    // arbitrary structured data (stored as JSON)
-	Tags        []string          // labels for filtering (stored as comma-separated)
-	PrunedAt    *time.Time        // set when this row is a summary placeholder
+	ID          int64          `json:"id"`
+	Timestamp   time.Time      `json:"timestamp"`
+	Tier        string         `json:"tier"`
+	Type        string         `json:"type"`
+	Level       string         `json:"level"`
+	Source      string         `json:"source"`
+	OperationID string         `json:"operation_id,omitempty"`
+	BookID      string         `json:"book_id,omitempty"`
+	Summary     string         `json:"summary"`
+	Details     map[string]any `json:"details,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	PrunedAt    *time.Time     `json:"pruned_at,omitempty"`
 }
 
 // ActivityFilter controls which entries Query returns.
