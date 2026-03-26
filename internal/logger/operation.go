@@ -1,5 +1,5 @@
 // file: internal/logger/operation.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7b3f9c1a-4e2d-4a8b-9c5e-1d2f3a4b5c6d
 
 package logger
@@ -33,25 +33,23 @@ type sharedState struct {
 
 // OperationLogger logs to stdout + operation DB + real-time hub.
 type OperationLogger struct {
-	operationID      string
-	subsystem        string
-	store            OperationStore
-	hub              RealtimeHub
-	minDBLevel       Level
-	minStdout        Level
-	shared           *sharedState
-	activityRecorder ActivityEntryRecorder
+	operationID string
+	subsystem   string
+	store       OperationStore
+	hub         RealtimeHub
+	minDBLevel  Level
+	minStdout   Level
+	shared      *sharedState
 }
 
 // ForOperation creates an OperationLogger bound to a specific operation.
 func ForOperation(operationID string, store OperationStore, hub RealtimeHub) *OperationLogger {
 	return &OperationLogger{
-		operationID:      operationID,
-		store:            store,
-		hub:              hub,
-		minDBLevel:       LevelInfo,
-		minStdout:        LevelDebug,
-		activityRecorder: getGlobalActivityRecorder(),
+		operationID: operationID,
+		store:       store,
+		hub:         hub,
+		minDBLevel:  LevelInfo,
+		minStdout:   LevelDebug,
 		shared: &sharedState{
 			counters: make(map[string]int),
 			canceled: &atomic.Bool{},
@@ -83,11 +81,6 @@ func (l *OperationLogger) log(level Level, msg string, args ...any) {
 		if l.hub != nil {
 			l.hub.SendOperationLog(l.operationID, level.String(), formatted, nil)
 		}
-	}
-
-	// Dual-write to unified activity log (INFO+ only)
-	if l.activityRecorder != nil && level >= LevelInfo {
-		l.activityRecorder("debug", l.operationID, level.String(), l.subsystem, formatted)
 	}
 }
 
@@ -152,14 +145,13 @@ func (l *OperationLogger) With(subsystem string) Logger {
 		prefix = l.subsystem + "." + subsystem
 	}
 	return &OperationLogger{
-		operationID:      l.operationID,
-		subsystem:        prefix,
-		store:            l.store,
-		hub:              l.hub,
-		minDBLevel:       l.minDBLevel,
-		minStdout:        l.minStdout,
-		shared:           l.shared, // shared state
-		activityRecorder: l.activityRecorder,
+		operationID: l.operationID,
+		subsystem:   prefix,
+		store:       l.store,
+		hub:         l.hub,
+		minDBLevel:  l.minDBLevel,
+		minStdout:   l.minStdout,
+		shared:      l.shared, // shared state
 	}
 }
 

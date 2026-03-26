@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.131.0
+// version: 1.132.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -661,6 +661,7 @@ type Server struct {
 	diagnosticsService     *DiagnosticsService
 	changelogService       *ChangelogService
 	activityService        *ActivityService
+	activityWriter         *activityWriter
 }
 
 // ServerConfig holds server configuration
@@ -779,12 +780,11 @@ func NewServer() *Server {
 		// Task 11/14: Metadata fetch service → activity log
 		server.metadataFetchService.SetActivityService(server.activityService)
 
-		// Task 12: System logger → activity log
-		logger.SetGlobalActivityRecorder(func(tier, typ, level, source, summary string) {
-			_ = server.activityService.Record(database.ActivityEntry{
-				Tier: tier, Type: typ, Level: level, Source: source, Summary: summary,
-			})
-		})
+		// Global log capture via teeWriter — replaces globalActivityRecorder
+		aw := newActivityWriter(server.activityService.Store(), 10000)
+		aw.Start()
+		server.activityWriter = aw
+		log.SetOutput(aw)
 
 		// Task 15: iTunes sync → activity log
 		itunesActivityRecorder = func(entry database.ActivityEntry) {
@@ -1214,6 +1214,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		} else {
 			log.Println("[INFO] AI scan store closed")
 		}
+	}
+
+	// Stop activity writer before closing store
+	if s.activityWriter != nil {
+		s.activityWriter.Stop()
 	}
 
 	// Close activity log store
