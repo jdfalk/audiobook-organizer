@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.34.0
+// version: 4.35.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -814,29 +814,59 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 			}
 		}
 	} else {
-		// Single-file or no segments: write to book.FilePath
+		// Single-file or no segments: write to book.FilePath.
+		// If book.FilePath is a directory (multi-file book with no segment records),
+		// glob for audio files inside and write to each one individually.
 		tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
 		log.Printf("[DEBUG] write-back: full tag map has %d entries for %s", len(tagMap), book.FilePath)
 		for k, v := range tagMap {
 			log.Printf("[DEBUG] write-back:   %s = %v", k, v)
 		}
-		tagMap = filterUnchangedTags(book.FilePath, tagMap)
-		log.Printf("[DEBUG] write-back: after filter, %d entries remain", len(tagMap))
-		if len(tagMap) == 0 {
-			log.Printf("[DEBUG] write-back: all tags match, skipping write for %s", book.FilePath)
-			return
-		}
-		backupFileBeforeWrite(book.FilePath)
-		if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
-			log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
-		} else {
-			log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
-			// Stamp last_written_at after successful write-back.
-			if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
-				log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+
+		dirFiles := audioFilesInDir(book.FilePath)
+		if len(dirFiles) > 0 {
+			// book.FilePath is a directory — write to each audio file found inside.
+			log.Printf("[INFO] write-back: %s is a directory; writing to %d audio file(s) inside", book.FilePath, len(dirFiles))
+			wroteAny := false
+			for _, f := range dirFiles {
+				fm := filterUnchangedTags(f, tagMap)
+				if len(fm) == 0 {
+					log.Printf("[DEBUG] write-back: all tags match, skipping %s", f)
+					continue
+				}
+				backupFileBeforeWrite(f)
+				if err := metadata.WriteMetadataToFile(f, fm, opConfig); err != nil {
+					log.Printf("[WARN] write-back failed for %s: %v", f, err)
+				} else {
+					log.Printf("[INFO] wrote metadata back to %s", f)
+					wroteAny = true
+				}
 			}
-			// Flag for rescan so the next incremental scan re-reads the updated tags.
-			_ = mfs.db.MarkNeedsRescan(book.ID)
+			if wroteAny {
+				if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
+					log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+				}
+				_ = mfs.db.MarkNeedsRescan(book.ID)
+			}
+		} else {
+			tagMap = filterUnchangedTags(book.FilePath, tagMap)
+			log.Printf("[DEBUG] write-back: after filter, %d entries remain", len(tagMap))
+			if len(tagMap) == 0 {
+				log.Printf("[DEBUG] write-back: all tags match, skipping write for %s", book.FilePath)
+				return
+			}
+			backupFileBeforeWrite(book.FilePath)
+			if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+			} else {
+				log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
+				// Stamp last_written_at after successful write-back.
+				if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
+					log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", book.ID, err)
+				}
+				// Flag for rescan so the next incremental scan re-reads the updated tags.
+				_ = mfs.db.MarkNeedsRescan(book.ID)
+			}
 		}
 	}
 }
@@ -2021,7 +2051,9 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			}
 		}
 	} else {
-		// Single-file or no segments: write to book.FilePath
+		// Single-file or no segments: write to book.FilePath.
+		// If book.FilePath is a directory (multi-file book with no segment records),
+		// glob for audio files inside and write to each one individually.
 		if isProtectedPath(book.FilePath) {
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
@@ -2030,11 +2062,31 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			// Always write all tags — taglib fork handles custom MP4 atoms natively.
 			// The filter previously skipped writes when standard tags matched,
 			// but custom tags (NARRATOR, SERIES, etc.) need writing too.
-			backupFileBeforeWrite(book.FilePath)
-			if err := metadata.WriteMetadataToFile(book.FilePath, fullTagMap, opConfig); err != nil {
-				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+			dirFiles := audioFilesInDir(book.FilePath)
+			if len(dirFiles) > 0 {
+				// book.FilePath is a directory — write to each audio file found inside.
+				log.Printf("[INFO] write-back: %s is a directory; writing to %d audio file(s) inside", book.FilePath, len(dirFiles))
+				for _, f := range dirFiles {
+					if isProtectedPath(f) {
+						log.Printf("[DEBUG] skipping write-back for protected file: %s", f)
+						skippedProtected++
+						continue
+					}
+					backupFileBeforeWrite(f)
+					if err := metadata.WriteMetadataToFile(f, fullTagMap, opConfig); err != nil {
+						log.Printf("[WARN] write-back failed for %s: %v", f, err)
+					} else {
+						log.Printf("[INFO] wrote metadata back to %s", f)
+						writtenCount++
+					}
+				}
 			} else {
-				writtenCount++
+				backupFileBeforeWrite(book.FilePath)
+				if err := metadata.WriteMetadataToFile(book.FilePath, fullTagMap, opConfig); err != nil {
+					log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+				} else {
+					writtenCount++
+				}
 			}
 		}
 	}
@@ -2113,6 +2165,26 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	}
 
 	return writtenCount, nil
+}
+
+// audioFilesInDir returns the audio files found directly inside dir.
+// It globs for common audiobook extensions. Returns nil if dir is not a
+// directory or contains no matching files.
+var audioExtensions = []string{"*.m4b", "*.m4a", "*.mp3", "*.flac", "*.ogg", "*.opus", "*.wma", "*.aac"}
+
+func audioFilesInDir(dir string) []string {
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	var files []string
+	for _, ext := range audioExtensions {
+		matches, err := filepath.Glob(filepath.Join(dir, ext))
+		if err == nil {
+			files = append(files, matches...)
+		}
+	}
+	return files
 }
 
 // backupFileBeforeWrite creates a timestamped .bak copy of a file before writing tags.
