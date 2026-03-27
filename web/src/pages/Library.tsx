@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.45.0
+// version: 1.46.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -310,6 +310,10 @@ export const Library = () => {
   const [bulkWriteBackResult, setBulkWriteBackResult] = useState<api.BatchWriteBackResponse | null>(
     null
   );
+  const [bulkSaveAllDialogOpen, setBulkSaveAllDialogOpen] = useState(false);
+  const [bulkSaveAllEstimate, setBulkSaveAllEstimate] = useState<number | null>(null);
+  const [bulkSaveAllRename, setBulkSaveAllRename] = useState(false);
+  const [bulkSaveAllStarting, setBulkSaveAllStarting] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState | null>(null);
   const duplicateResolverRef = useRef<((action: DuplicateAction) => void) | null>(null);
   const [bulkOrganizeError, setBulkOrganizeError] = useState<OrganizeErrorState | null>(null);
@@ -1177,6 +1181,46 @@ export const Library = () => {
     setBulkWriteBackDialogOpen(false);
     setBulkWriteBackResult(null);
     setBulkWriteBackRename(false);
+  };
+
+  const handleOpenBulkSaveAll = async () => {
+    setBulkSaveAllDialogOpen(true);
+    setBulkSaveAllEstimate(null);
+    setBulkSaveAllRename(false);
+    setBulkSaveAllStarting(false);
+    try {
+      const result = await api.bulkWriteBackMetadata({ dry_run: true });
+      setBulkSaveAllEstimate(result.estimated_books);
+    } catch (error) {
+      console.error('Failed to estimate bulk write-back:', error);
+      toast('Failed to estimate book count.', 'error');
+    }
+  };
+
+  const handleBulkSaveAll = async () => {
+    setBulkSaveAllStarting(true);
+    try {
+      const result = await api.bulkWriteBackMetadata({ rename: bulkSaveAllRename });
+      if (result.operation_id) {
+        toast(
+          `Bulk save started for ${result.estimated_books} books. Check Activity for progress.`,
+          'success'
+        );
+        setBulkSaveAllDialogOpen(false);
+      } else {
+        toast(result.message || 'No books matched the filters.', 'info');
+      }
+    } catch (error) {
+      console.error('Failed to start bulk write-back:', error);
+      toast('Failed to start bulk save operation.', 'error');
+    } finally {
+      setBulkSaveAllStarting(false);
+    }
+  };
+
+  const handleCloseBulkSaveAllDialog = () => {
+    if (bulkSaveAllStarting) return;
+    setBulkSaveAllDialogOpen(false);
   };
 
   const requestDuplicateAction = (
@@ -2196,6 +2240,14 @@ export const Library = () => {
                       </Button>
                     </span>
                   </Tooltip>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="primary"
+                    onClick={handleOpenBulkSaveAll}
+                  >
+                    Save All to Files
+                  </Button>
                 </Stack>
               </Stack>
             </Paper>
@@ -2556,6 +2608,50 @@ export const Library = () => {
               disabled={bulkWriteBackInProgress || !selectedHasActive}
             >
               {bulkWriteBackInProgress ? 'Saving…' : 'Save to Files'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={bulkSaveAllDialogOpen} onClose={handleCloseBulkSaveAllDialog}>
+          <DialogTitle>Save All to Files</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" gutterBottom>
+              This will write metadata tags and rename files for all organized and imported
+              books in your library.
+            </Typography>
+            {bulkSaveAllEstimate !== null ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {bulkSaveAllEstimate} book{bulkSaveAllEstimate === 1 ? '' : 's'} will be
+                processed. Books in protected paths (iTunes) will be skipped.
+              </Alert>
+            ) : (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={bulkSaveAllRename}
+                  onChange={(event) => setBulkSaveAllRename(event.target.checked)}
+                  disabled={bulkSaveAllStarting}
+                />
+              }
+              label="Rename files after write-back"
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseBulkSaveAllDialog} disabled={bulkSaveAllStarting}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleBulkSaveAll}
+              disabled={
+                bulkSaveAllStarting || bulkSaveAllEstimate === null || bulkSaveAllEstimate === 0
+              }
+            >
+              {bulkSaveAllStarting ? 'Starting...' : 'Save All to Files'}
             </Button>
           </DialogActions>
         </Dialog>

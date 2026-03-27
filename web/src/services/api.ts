@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.60.0
+// version: 1.61.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -2135,6 +2135,40 @@ export async function batchWriteBackMetadata(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
+  }
+  return response.json();
+}
+
+// Bulk write-back (async operation for all/filtered books)
+export interface BulkWriteBackFilter {
+  library_state?: string;
+  author_id?: string;
+  series_id?: string;
+}
+
+export interface BulkWriteBackRequest {
+  filter?: BulkWriteBackFilter;
+  dry_run?: boolean;
+  rename?: boolean;
+}
+
+export interface BulkWriteBackResponse {
+  operation_id?: string;
+  estimated_books: number;
+  dry_run?: boolean;
+  message?: string;
+}
+
+export async function bulkWriteBackMetadata(
+  options: BulkWriteBackRequest = {}
+): Promise<BulkWriteBackResponse> {
+  const response = await fetch(`${API_BASE}/audiobooks/bulk-write-back`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start bulk write-back');
   }
   return response.json();
 }
