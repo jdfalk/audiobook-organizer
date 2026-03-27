@@ -1497,6 +1497,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/tasks/:name/run", s.runTask)
 			protected.PUT("/tasks/:name", s.updateTaskConfig)
 			protected.POST("/maintenance-window/run", s.runMaintenanceWindowNow)
+			protected.POST("/maintenance/fix-read-by-narrator", s.handleFixReadByNarrator)
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
