@@ -860,7 +860,8 @@ func (s *Server) resumeInterruptedOperations() {
 		case "itunes_import":
 			params, _ := operations.LoadParams[operations.ITunesImportParams](store, opID)
 			if params == nil {
-				log.Printf("[WARN] No params found for interrupted iTunes import %s, skipping", opID)
+				log.Printf("[WARN] No params found for interrupted iTunes import %s, marking as failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
 				continue
 			}
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -881,7 +882,8 @@ func (s *Server) resumeInterruptedOperations() {
 		case "scan":
 			params, _ := operations.LoadParams[operations.ScanParams](store, opID)
 			if params == nil {
-				log.Printf("[WARN] No params found for interrupted scan %s, skipping", opID)
+				log.Printf("[WARN] No params found for interrupted scan %s, marking as failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
 				continue
 			}
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
