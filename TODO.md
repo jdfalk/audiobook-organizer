@@ -21,11 +21,13 @@
 
 | # | Item | Details |
 |---|------|---------|
-| B1 | **Author merge click not working** | On dedup/authors page, clicking an author variant (e.g., "J.T. Wright") doesn't add it to the merge list. The merge button shows but the click handler for adding variants is broken. |
+| B1 | **Author merge doesn't show all variants being merged** | Dedup/authors page: after selecting the canonical name, the variant list only shows one entry making it look like you're merging a name into itself. The other variant spellings (e.g., "J.T. Wright" vs "J. T. Wright") should all be listed so you can see what's actually being merged. |
 | B2 | **Tag extraction reads conflicting metadata** | After writing correct tags, `ExtractMetadata` re-reads wrong values from legacy `composer`/`album` tags. Composer should be cleared when we write `artist`/`album_artist`. |
 | B3 | **Author/narrator swap in many files** | `composer` = narrator in Audible M4Bs. Priority fix (album_artist > artist > composer) helps but doesn't solve files where `artist` IS the narrator. |
 | B4 | **series_index not read back** | Custom SERIES_INDEX tag is written to files but `ExtractMetadata` doesn't read it back from the custom tag. |
 | B5 | **35 remaining iTunes sync path errors** | Files genuinely missing on disk. May need cleanup or manual resolution. |
+| B6 | **File version separator too faint** | In Files & History tag comparison, the horizontal line between two file versions (e.g., library copy vs iTunes copy) needs to be darker/bolder for clearer visual separation. |
+| B7 | **Book detail page doesn't refresh after metadata apply** | After applying metadata, the page shows stale data. Need a refresh button on the book detail page. |
 
 ---
 

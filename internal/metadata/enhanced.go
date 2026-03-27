@@ -379,10 +379,9 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 	if desc, ok := metadata["description"].(string); ok && desc != "" {
 		args = append(args, "--description", desc)
 	}
-	// --composer maps to ©wrt; use it for narrator (matches tag priority: composer = narrator)
-	if narrator, ok := metadata["narrator"].(string); ok && narrator != "" {
-		args = append(args, "--composer", narrator)
-	}
+	// Clear composer to prevent stale narrator data from polluting author on re-read.
+	// Do NOT write narrator to --composer (©wrt) — use custom NARRATOR tag instead.
+	args = append(args, "--composer", "")
 	// --grouping maps to ©grp; use for series name
 	if series, ok := metadata["series"].(string); ok && series != "" {
 		args = append(args, "--grouping", series)
