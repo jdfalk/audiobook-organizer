@@ -212,7 +212,6 @@ permissions:
 **Recommended Actions**:
 
 - CodeQL for code analysis
-- Trivy for vulnerability scanning
 - GitLeaks for secret detection
 
 ### 2. Dynamic Analysis
