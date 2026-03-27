@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -22,9 +22,15 @@ import (
 
 // AudiobookService handles all audiobook business logic
 type AudiobookService struct {
-	store     database.Store
-	bookCache *cache.Cache[*database.Book]
-	listCache *cache.Cache[[]database.Book]
+	store           database.Store
+	bookCache       *cache.Cache[*database.Book]
+	listCache       *cache.Cache[[]database.Book]
+	activityService *ActivityService
+}
+
+// SetActivityService wires the activity service for snapshot fallback in GetAudiobookTags.
+func (svc *AudiobookService) SetActivityService(as *ActivityService) {
+	svc.activityService = as
 }
 
 // NewAudiobookService creates a new AudiobookService instance
@@ -699,12 +705,17 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 		if err != nil {
 			return nil, fmt.Errorf("invalid snapshot timestamp: %w", err)
 		}
-		snapshotBook, err := svc.store.GetBookAtVersion(id, ts)
-		if err != nil {
-			return nil, err
+		snapshotBook, verErr := svc.store.GetBookAtVersion(id, ts)
+		if verErr == nil && snapshotBook != nil {
+			snapshotAuthorName, snapshotSeriesName := resolveAuthorAndSeriesNames(snapshotBook)
+			comparisonValues = buildComparisonValuesFromBook(snapshotBook, snapshotAuthorName, snapshotSeriesName)
+		} else {
+			// Fallback: reconstruct "before" state from activity log old_values
+			log.Printf("[DEBUG] GetAudiobookTags: GetBookAtVersion failed (%v), falling back to activity log for snapshot at %s", verErr, snapshotTS)
+			if svc.activityService != nil {
+				comparisonValues = buildComparisonValuesFromActivityLog(svc.activityService, id, ts)
+			}
 		}
-		snapshotAuthorName, snapshotSeriesName := resolveAuthorAndSeriesNames(snapshotBook)
-		comparisonValues = buildComparisonValuesFromBook(snapshotBook, snapshotAuthorName, snapshotSeriesName)
 	} else if compareID != "" {
 		compBook, err := svc.store.GetBookByID(compareID)
 		if err != nil {

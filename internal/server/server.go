@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.134.0
+// version: 1.135.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -451,6 +451,53 @@ func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName s
 	return compMap
 }
 
+// buildComparisonValuesFromActivityLog reconstructs a "before" tag snapshot by
+// querying the activity log for metadata_apply entries for the given book
+// recorded within a ±5 second window of ts. For each field found, the
+// old_value (i.e. the value BEFORE that operation) is used as the comparison
+// value. This is the fallback when GetBookAtVersion is unavailable (SQLite) or
+// when the exact version key is not present in PebbleDB.
+func buildComparisonValuesFromActivityLog(as *ActivityService, bookID string, ts time.Time) map[string]any {
+	window := 5 * time.Second
+	since := ts.Add(-window)
+	until := ts.Add(window)
+
+	entries, _, err := as.Query(database.ActivityFilter{
+		BookID: bookID,
+		Type:   "metadata_apply",
+		Since:  &since,
+		Until:  &until,
+		Limit:  200,
+	})
+	if err != nil || len(entries) == 0 {
+		return nil
+	}
+
+	compMap := map[string]any{}
+	for _, e := range entries {
+		if e.Details == nil {
+			continue
+		}
+		field, _ := e.Details["field"].(string)
+		if field == "" {
+			continue
+		}
+		// old_value is the state BEFORE this operation — that's what we want
+		// to show as the "snapshot" comparison row.
+		if oldVal, ok := e.Details["old_value"]; ok && oldVal != nil {
+			if s, ok := oldVal.(string); ok && s != "" {
+				compMap[field] = s
+			} else if oldVal != nil {
+				compMap[field] = oldVal
+			}
+		}
+	}
+	if len(compMap) == 0 {
+		return nil
+	}
+	return compMap
+}
+
 func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonValues map[string]any) map[string]database.MetadataProvenanceEntry {
 	if state == nil {
 		state = map[string]metadataFieldState{}
@@ -779,6 +826,9 @@ func NewServer() *Server {
 
 		// Task 11/14: Metadata fetch service → activity log
 		server.metadataFetchService.SetActivityService(server.activityService)
+
+		// Wire activity service into audiobook service for snapshot comparison fallback
+		server.audiobookService.SetActivityService(server.activityService)
 
 		// Global log capture via teeWriter — replaces globalActivityRecorder
 		aw := newActivityWriter(server.activityService.Store(), 10000)
