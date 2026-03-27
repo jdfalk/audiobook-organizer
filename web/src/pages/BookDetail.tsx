@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.38.0
+// version: 1.39.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -58,7 +58,12 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp.js';
 import StarIcon from '@mui/icons-material/Star.js';
 import StarBorderIcon from '@mui/icons-material/StarBorder.js';
 import RefreshIcon from '@mui/icons-material/Refresh.js';
-import type { Book, BookSegment, BookTags, SegmentTags, OverridePayload, RenamePreview } from '../services/api';
+import type { Book, BookSegment, BookTags, SegmentTags, OverridePayload, OrganizePreviewResponse } from '../services/api';
+import FileCopyIcon from '@mui/icons-material/FileCopy.js';
+import LabelIcon from '@mui/icons-material/Label.js';
+import ImageIcon from '@mui/icons-material/Image.js';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber.js';
+import BuildIcon from '@mui/icons-material/Build.js';
 import * as api from '../services/api';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { MetadataHistory } from '../components/MetadataHistory';
@@ -136,10 +141,11 @@ export const BookDetail = () => {
   const [splittingVersion, setSplittingVersion] = useState(false);
   const [splittingToBooks, setSplittingToBooks] = useState(false);
   // moveToVersionDialogOpen removed — "Move to Existing Version" is now inline
-  const [renamePreviewDialogOpen, setRenamePreviewDialogOpen] = useState(false);
-  const [renamePreview, setRenamePreview] = useState<RenamePreview | null>(null);
-  const [renamePreviewLoading, setRenamePreviewLoading] = useState(false);
-  const [applyingRename, setApplyingRename] = useState(false);
+  const [organizePreviewDialogOpen, setOrganizePreviewDialogOpen] = useState(false);
+  const [organizePreview, setOrganizePreview] = useState<OrganizePreviewResponse | null>(null);
+  const [organizePreviewLoading, setOrganizePreviewLoading] = useState(false);
+  const [applyingOrganize, setApplyingOrganize] = useState(false);
+  const [expandedTagStep, setExpandedTagStep] = useState(false);
   // Sonarr-style version expansion
   const [expandedVersionIds, setExpandedVersionIds] = useState<Set<string>>(new Set());
   const [expandedSegmentVersionIds, setExpandedSegmentVersionIds] = useState<Set<string>>(new Set());
@@ -448,38 +454,39 @@ export const BookDetail = () => {
     }
   };
 
-  const handlePreviewRename = async () => {
+  const handlePreviewOrganize = async () => {
     if (!book) return;
-    setRenamePreviewLoading(true);
+    setOrganizePreviewLoading(true);
     try {
-      const preview = await api.previewRename(book.id);
-      setRenamePreview(preview);
-      setRenamePreviewDialogOpen(true);
+      const preview = await api.previewOrganize(book.id);
+      setOrganizePreview(preview);
+      setExpandedTagStep(false);
+      setOrganizePreviewDialogOpen(true);
     } catch (error: unknown) {
-      console.error('Failed to preview rename', error);
+      console.error('Failed to preview organize', error);
       const msg =
-        error instanceof Error ? error.message : 'Preview rename failed.';
+        error instanceof Error ? error.message : 'Preview organize failed.';
       toast(msg, 'error');
     } finally {
-      setRenamePreviewLoading(false);
+      setOrganizePreviewLoading(false);
     }
   };
 
-  const handleApplyRename = async () => {
+  const handleApplyOrganize = async () => {
     if (!book) return;
-    setApplyingRename(true);
-    setRenamePreviewDialogOpen(false);
+    setApplyingOrganize(true);
+    setOrganizePreviewDialogOpen(false);
     try {
-      const result = await api.applyRename(book.id);
-      toast(result.message || 'Rename applied successfully.', 'success');
+      const result = await api.organizeBook(book.id);
+      toast(result.message || 'Organize applied successfully.', 'success');
       await refreshBook();
     } catch (error: unknown) {
-      console.error('Failed to apply rename', error);
+      console.error('Failed to organize book', error);
       const msg =
-        error instanceof Error ? error.message : 'Apply rename failed.';
+        error instanceof Error ? error.message : 'Organize failed.';
       toast(msg, 'error');
     } finally {
-      setApplyingRename(false);
+      setApplyingOrganize(false);
     }
   };
 
@@ -1140,16 +1147,16 @@ export const BookDetail = () => {
             <Button
               variant="outlined"
               startIcon={
-                renamePreviewLoading || applyingRename ? (
+                organizePreviewLoading || applyingOrganize ? (
                   <CircularProgress size={20} />
                 ) : (
-                  <DriveFileRenameOutlineIcon />
+                  <BuildIcon />
                 )
               }
-              onClick={handlePreviewRename}
-              disabled={renamePreviewLoading || applyingRename || actionLoading}
+              onClick={handlePreviewOrganize}
+              disabled={organizePreviewLoading || applyingOrganize || actionLoading}
             >
-              {applyingRename ? 'Renaming...' : renamePreviewLoading ? 'Loading...' : 'Preview Rename'}
+              {applyingOrganize ? 'Organizing...' : organizePreviewLoading ? 'Loading...' : 'Preview Organize'}
             </Button>
             <Button
               variant="outlined"
@@ -1924,88 +1931,128 @@ export const BookDetail = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Rename preview dialog */}
+      {/* Organize preview dialog */}
       <Dialog
-        open={renamePreviewDialogOpen}
-        onClose={() => setRenamePreviewDialogOpen(false)}
+        open={organizePreviewDialogOpen}
+        onClose={() => setOrganizePreviewDialogOpen(false)}
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Preview Rename</DialogTitle>
+        <DialogTitle>Preview Organize</DialogTitle>
         <DialogContent>
-          {renamePreview && (
+          {organizePreview && (
             <>
-              <Typography variant="subtitle2" gutterBottom>
-                File Path
-              </Typography>
-              <Table size="small" sx={{ mb: 2 }}>
-                <TableBody>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Current</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>
-                      {renamePreview.current_path}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold' }}>Proposed</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem', wordBreak: 'break-all' }}>
-                      {renamePreview.proposed_path}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-
-              {renamePreview.current_path === renamePreview.proposed_path && (
+              {organizePreview.steps.length === 0 && (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  File path will not change.
+                  This book is already organized. No changes needed.
                 </Alert>
               )}
 
-              {renamePreview.tag_changes.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Tag Changes
-                  </Typography>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Field</TableCell>
-                        <TableCell>Current</TableCell>
-                        <TableCell>Proposed</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {renamePreview.tag_changes.map((change) => (
-                        <TableRow key={change.field}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>{change.field}</TableCell>
-                          <TableCell sx={{ color: 'text.secondary' }}>
-                            {change.current || '(empty)'}
-                          </TableCell>
-                          <TableCell>{change.proposed || '(empty)'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </>
-              )}
+              {organizePreview.steps.map((step, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 1.5,
+                    mb: 2,
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: step.action === 'warning' ? 'warning.main' : 'action.hover',
+                    opacity: step.action === 'warning' ? 0.9 : 1,
+                  }}
+                >
+                  <Box sx={{ mt: 0.25, color: step.action === 'warning' ? 'warning.contrastText' : 'primary.main' }}>
+                    {step.action === 'copy' && <FileCopyIcon />}
+                    {step.action === 'rename' && <DriveFileRenameOutlineIcon />}
+                    {step.action === 'write_tags' && <LabelIcon />}
+                    {step.action === 'embed_cover' && <ImageIcon />}
+                    {step.action === 'warning' && <WarningAmberIcon />}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        color: step.action === 'warning' ? 'warning.contrastText' : 'text.primary',
+                      }}
+                    >
+                      {step.description}
+                    </Typography>
 
-              {renamePreview.tag_changes.length === 0 && (
-                <Alert severity="info" sx={{ mt: 1 }}>
-                  No tag changes to apply.
-                </Alert>
-              )}
+                    {(step.from || step.to) && (
+                      <Table size="small" sx={{ mt: 0.5 }}>
+                        <TableBody>
+                          {step.from && (
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold', width: 60, py: 0.5, border: 0 }}>From</TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all', py: 0.5, border: 0 }}>
+                                {step.from}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {step.to && (
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold', width: 60, py: 0.5, border: 0 }}>To</TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all', py: 0.5, border: 0 }}>
+                                {step.to}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    )}
+
+                    {step.tags && (
+                      <>
+                        <Button
+                          size="small"
+                          onClick={() => setExpandedTagStep(!expandedTagStep)}
+                          endIcon={expandedTagStep ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+                          sx={{ mt: 0.5, textTransform: 'none' }}
+                        >
+                          {Object.keys(step.tags).length} tags will be written
+                        </Button>
+                        <Collapse in={expandedTagStep}>
+                          <Table size="small" sx={{ mt: 0.5 }}>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Tag</TableCell>
+                                <TableCell>Value</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {Object.entries(step.tags).map(([key, val]) => (
+                                <TableRow key={key}>
+                                  <TableCell sx={{ fontWeight: 'bold' }}>{key}</TableCell>
+                                  <TableCell>{String(val)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </Collapse>
+                      </>
+                    )}
+
+                    {step.cover_url && (
+                      <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                        {step.cover_url}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              ))}
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenamePreviewDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setOrganizePreviewDialogOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
-            startIcon={<DriveFileRenameOutlineIcon />}
-            onClick={handleApplyRename}
-            disabled={applyingRename}
+            startIcon={<BuildIcon />}
+            onClick={handleApplyOrganize}
+            disabled={applyingOrganize || (organizePreview?.is_protected ?? false)}
           >
-            Apply Rename
+            Apply
           </Button>
         </DialogActions>
       </Dialog>

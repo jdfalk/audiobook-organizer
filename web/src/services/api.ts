@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.61.0
+// version: 1.62.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3053,6 +3053,57 @@ export async function applyRename(bookId: string): Promise<RenameApplyResult> {
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply rename');
+  }
+  return response.json();
+}
+
+// ---- Organize Preview & Execute ----
+
+export interface OrganizePreviewStep {
+  action: string;
+  description: string;
+  from?: string;
+  to?: string;
+  tags?: Record<string, unknown>;
+  cover_url?: string;
+  warning?: string;
+}
+
+export interface OrganizePreviewResponse {
+  steps: OrganizePreviewStep[];
+  needs_copy: boolean;
+  needs_rename: boolean;
+  current_path: string;
+  target_path: string;
+  is_protected: boolean;
+}
+
+export interface OrganizeResult {
+  message: string;
+  book_id: string;
+  old_path: string;
+  new_path: string;
+  tags_written: number;
+  operation_id: string;
+}
+
+export async function previewOrganize(bookId: string): Promise<OrganizePreviewResponse> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/preview-organize`
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to preview organize');
+  }
+  return response.json();
+}
+
+export async function organizeBook(bookId: string): Promise<OrganizeResult> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/organize`,
+    { method: 'POST' }
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to organize book');
   }
   return response.json();
 }
