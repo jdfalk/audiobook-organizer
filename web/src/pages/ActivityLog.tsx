@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.0.0
+// version: 2.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,6 +9,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -27,6 +28,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh.js';
 import PushPinIcon from '@mui/icons-material/PushPin.js';
@@ -34,6 +37,7 @@ import TimelineIcon from '@mui/icons-material/Timeline.js';
 import ClearIcon from '@mui/icons-material/Clear.js';
 import UndoIcon from '@mui/icons-material/Undo.js';
 import CancelIcon from '@mui/icons-material/Cancel.js';
+import FilterListIcon from '@mui/icons-material/FilterList.js';
 import { fetchActivity, fetchActivitySources } from '../services/activityApi';
 import type { ActivityEntry, SourceCount } from '../services/activityApi';
 import * as api from '../services/api';
@@ -95,8 +99,16 @@ const formatTimestamp = (ts: string): string => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
+const formatTimestampCompact = (ts: string): string => {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function ActivityLog() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Filters
   const [search, setSearch] = useState('');
@@ -110,6 +122,9 @@ export default function ActivityLog() {
     const saved = localStorage.getItem('activity-source-prefs');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+
+  // Mobile filter collapse
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Active ops
   const [activeOps, setActiveOps] = useState<api.ActiveOperationSummary[]>([]);
@@ -227,19 +242,20 @@ export default function ActivityLog() {
     loadFeed(page);
   }, [page, loadFeed]);
 
-  // Auto-refresh feed (30s)
+  // Auto-refresh feed — 5s when active ops exist, 30s when idle
+  const refreshInterval = activeOps.length > 0 ? 5000 : 30000;
   useEffect(() => {
     if (feedIntervalRef.current) window.clearInterval(feedIntervalRef.current);
     if (autoRefresh) {
       feedIntervalRef.current = window.setInterval(() => {
         loadFeed(page);
         loadSources();
-      }, 30000);
+      }, refreshInterval);
     }
     return () => {
       if (feedIntervalRef.current) window.clearInterval(feedIntervalRef.current);
     };
-  }, [autoRefresh, page, loadFeed, loadSources]);
+  }, [autoRefresh, page, refreshInterval, loadFeed, loadSources]);
 
   // Close sources dropdown on outside click
   useEffect(() => {
@@ -322,6 +338,17 @@ export default function ActivityLog() {
     untilFilter !== '' ||
     excludedSources.size > 0;
 
+  // Count active non-search filters (for mobile badge)
+  const activeFilterCount = [
+    tiers.size !== 2 || !tiers.has('audit') || !tiers.has('change'),
+    typeFilter !== '',
+    levelFilter !== '',
+    operationId !== '',
+    sinceFilter !== '',
+    untilFilter !== '',
+    excludedSources.size > 0,
+  ].filter(Boolean).length;
+
   const clearFilters = () => {
     setSearch('');
     setTiers(new Set(['audit', 'change']));
@@ -336,6 +363,127 @@ export default function ActivityLog() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showOpsSection = pinned || activeOps.length > 0;
 
+  // Shared filter controls (used in both mobile collapsed and desktop layouts)
+  const tierChips = (
+    <Stack direction="row" spacing={1} flexWrap="wrap">
+      {['audit', 'change', 'debug'].map((tier) => (
+        <Chip
+          key={tier}
+          label={tiers.has(tier) ? `\u2713 ${tier}` : tier}
+          onClick={() => toggleTier(tier)}
+          variant={tiers.has(tier) ? 'filled' : 'outlined'}
+          sx={{
+            borderColor: tiers.has(tier) ? TIER_COLORS[tier] : undefined,
+            borderWidth: tiers.has(tier) ? 2 : 1,
+            color: tiers.has(tier) ? TIER_COLORS[tier] : undefined,
+            fontWeight: tiers.has(tier) ? 'bold' : 'normal',
+            cursor: 'pointer',
+          }}
+        />
+      ))}
+    </Stack>
+  );
+
+  const sourcesButton = (fullWidth?: boolean) => (
+    <Box sx={{ position: 'relative', width: fullWidth ? '100%' : undefined }} ref={sourcesDropdownRef}>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={() => setSourcesOpen(!sourcesOpen)}
+        fullWidth={fullWidth}
+      >
+        Sources
+        {excludedSources.size > 0 && (
+          <Chip
+            size="small"
+            label={`-${excludedSources.size}`}
+            color="warning"
+            sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
+          />
+        )}
+      </Button>
+      {sourcesOpen && (
+        <Paper
+          elevation={8}
+          sx={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            zIndex: 10,
+            minWidth: 280,
+            maxHeight: 400,
+            overflow: 'auto',
+            mt: 0.5,
+            p: 1,
+          }}
+        >
+          {sources.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
+              No sources found.
+            </Typography>
+          ) : (
+            sources.map((s) => {
+              const isExcluded = excludedSources.has(s.source);
+              return (
+                <Stack
+                  key={s.source}
+                  direction="row"
+                  alignItems="center"
+                  spacing={1}
+                  sx={{
+                    px: 1,
+                    py: 0.5,
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                  onClick={() => {
+                    setExcludedSources((prev) => {
+                      const next = new Set(prev);
+                      if (isExcluded) {
+                        next.delete(s.source);
+                      } else {
+                        next.add(s.source);
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  <input type="checkbox" checked={!isExcluded} readOnly style={{ pointerEvents: 'none' }} />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      textDecoration: isExcluded ? 'line-through' : 'none',
+                      opacity: isExcluded ? 0.5 : 1,
+                      flexGrow: 1,
+                    }}
+                  >
+                    {s.source}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {s.count}
+                  </Typography>
+                </Stack>
+              );
+            })
+          )}
+          <Stack direction="row" spacing={1} sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Button size="small" onClick={() => setExcludedSources(new Set())}>All</Button>
+            <Button size="small" onClick={() => setExcludedSources(new Set(sources.map((s) => s.source)))}>None</Button>
+            <Button
+              size="small"
+              onClick={() => {
+                setExcludedSources(new Set());
+                localStorage.removeItem('activity-source-prefs');
+              }}
+            >
+              Reset
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+    </Box>
+  );
+
   return (
     <Box sx={{ height: '100%', overflow: 'auto', p: 2 }}>
       {/* Header */}
@@ -344,13 +492,15 @@ export default function ActivityLog() {
         <Typography variant="h4" sx={{ flexGrow: 1 }}>
           Activity
         </Typography>
-        <Button
-          size="small"
-          variant={autoRefresh ? 'contained' : 'outlined'}
-          onClick={() => setAutoRefresh(!autoRefresh)}
-        >
-          {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
-        </Button>
+        {!isMobile && (
+          <Button
+            size="small"
+            variant={autoRefresh ? 'contained' : 'outlined'}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+          </Button>
+        )}
         <IconButton onClick={handleRefresh} title="Refresh">
           <RefreshIcon />
         </IconButton>
@@ -430,217 +580,230 @@ export default function ActivityLog() {
 
       {/* Compound Filter Bar */}
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1.5}>
-          {/* Row 1: Search + tier chips */}
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+        {isMobile ? (
+          /* ---- Mobile layout ---- */
+          <Stack spacing={1.5}>
+            {/* Search always visible */}
             <TextField
               size="small"
               placeholder="Search summaries..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              sx={{ minWidth: 220 }}
-            />
-            {['audit', 'change', 'debug'].map((tier) => (
-              <Chip
-                key={tier}
-                label={tiers.has(tier) ? `\u2713 ${tier}` : tier}
-                onClick={() => toggleTier(tier)}
-                variant={tiers.has(tier) ? 'filled' : 'outlined'}
-                sx={{
-                  borderColor: tiers.has(tier) ? TIER_COLORS[tier] : undefined,
-                  borderWidth: tiers.has(tier) ? 2 : 1,
-                  color: tiers.has(tier) ? TIER_COLORS[tier] : undefined,
-                  fontWeight: tiers.has(tier) ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                }}
-              />
-            ))}
-          </Stack>
-
-          {/* Row 2: Type, Level, dates, sources */}
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <TextField
-              select
-              size="small"
-              label="Type"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              sx={{ minWidth: 180 }}
-            >
-              <MenuItem value="">All Types</MenuItem>
-              {EVENT_TYPES.map((t) => (
-                <MenuItem key={t} value={t}>
-                  {t.replace(/_/g, ' ')}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="Level"
-              value={levelFilter}
-              onChange={(e) => setLevelFilter(e.target.value)}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value="">All Levels</MenuItem>
-              <MenuItem value="debug">debug</MenuItem>
-              <MenuItem value="info">info</MenuItem>
-              <MenuItem value="warn">warn</MenuItem>
-              <MenuItem value="error">error</MenuItem>
-            </TextField>
-
-            <TextField
-              size="small"
-              label="Since"
-              type={sinceFilter ? 'datetime-local' : 'text'}
-              placeholder="All time"
-              value={sinceFilter}
-              onFocus={(e) => { if (!sinceFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
-              onChange={(e) => setSinceFilter(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              InputProps={sinceFilter ? {
-                endAdornment: <IconButton size="small" onClick={() => setSinceFilter('')}><ClearIcon fontSize="small" /></IconButton>,
-              } : undefined}
-              sx={{ minWidth: 180 }}
+              fullWidth
             />
 
-            <TextField
-              size="small"
-              label="Until"
-              type={untilFilter ? 'datetime-local' : 'text'}
-              placeholder="Now"
-              value={untilFilter}
-              onFocus={(e) => { if (!untilFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
-              onChange={(e) => setUntilFilter(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              InputProps={untilFilter ? {
-                endAdornment: <IconButton size="small" onClick={() => setUntilFilter('')}><ClearIcon fontSize="small" /></IconButton>,
-              } : undefined}
-              sx={{ minWidth: 180 }}
-            />
-
-            {/* Sources dropdown */}
-            <Box sx={{ position: 'relative' }} ref={sourcesDropdownRef}>
+            {/* Toggle row */}
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
               <Button
                 size="small"
                 variant="outlined"
-                onClick={() => setSourcesOpen(!sourcesOpen)}
+                startIcon={<FilterListIcon />}
+                onClick={() => setFiltersExpanded(!filtersExpanded)}
+                endIcon={
+                  activeFilterCount > 0 ? (
+                    <Chip
+                      size="small"
+                      label={activeFilterCount}
+                      color="primary"
+                      sx={{ height: 18, fontSize: '0.65rem' }}
+                    />
+                  ) : undefined
+                }
               >
-                Sources
-                {excludedSources.size > 0 && (
-                  <Chip
-                    size="small"
-                    label={`-${excludedSources.size}`}
-                    color="warning"
-                    sx={{ ml: 0.5, height: 20, fontSize: '0.7rem' }}
-                  />
+                Filters
+              </Button>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="caption" color="text.secondary">
+                  {total} entries
+                </Typography>
+                {hasActiveFilters && (
+                  <IconButton size="small" onClick={clearFilters} title="Clear filters">
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
                 )}
-              </Button>
-              {sourcesOpen && (
-                <Paper
-                  elevation={8}
-                  sx={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    zIndex: 10,
-                    minWidth: 280,
-                    maxHeight: 400,
-                    overflow: 'auto',
-                    mt: 0.5,
-                    p: 1,
-                  }}
-                >
-                  {sources.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                      No sources found.
-                    </Typography>
-                  ) : (
-                    sources.map((s) => {
-                      const isExcluded = excludedSources.has(s.source);
-                      return (
-                        <Stack
-                          key={s.source}
-                          direction="row"
-                          alignItems="center"
-                          spacing={1}
-                          sx={{
-                            px: 1,
-                            py: 0.5,
-                            cursor: 'pointer',
-                            '&:hover': { bgcolor: 'action.hover' },
-                          }}
-                          onClick={() => {
-                            setExcludedSources((prev) => {
-                              const next = new Set(prev);
-                              if (isExcluded) {
-                                next.delete(s.source);
-                              } else {
-                                next.add(s.source);
-                              }
-                              return next;
-                            });
-                          }}
-                        >
-                          <input type="checkbox" checked={!isExcluded} readOnly style={{ pointerEvents: 'none' }} />
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              textDecoration: isExcluded ? 'line-through' : 'none',
-                              opacity: isExcluded ? 0.5 : 1,
-                              flexGrow: 1,
-                            }}
-                          >
-                            {s.source}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {s.count}
-                          </Typography>
-                        </Stack>
-                      );
-                    })
-                  )}
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-                    <Button
-                      size="small"
-                      onClick={() => setExcludedSources(new Set())}
-                    >
-                      All
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => setExcludedSources(new Set(sources.map((s) => s.source)))}
-                    >
-                      None
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setExcludedSources(new Set());
-                        localStorage.removeItem('activity-source-prefs');
-                      }}
-                    >
-                      Reset
-                    </Button>
-                  </Stack>
-                </Paper>
-              )}
-            </Box>
-          </Stack>
+              </Stack>
+            </Stack>
 
-          {/* Row 3: Active filter summary */}
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="caption" color="text.secondary">
-              {total} entries
-            </Typography>
-            {hasActiveFilters && (
-              <Button size="small" startIcon={<ClearIcon />} onClick={clearFilters}>
-                Clear filters
-              </Button>
-            )}
+            {/* Collapsible filters */}
+            <Collapse in={filtersExpanded}>
+              <Stack spacing={1.5}>
+                {/* Tier chips */}
+                {tierChips}
+
+                {/* Type dropdown */}
+                <TextField
+                  select
+                  size="small"
+                  label="Type"
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="">All Types</MenuItem>
+                  {EVENT_TYPES.map((t) => (
+                    <MenuItem key={t} value={t}>
+                      {t.replace(/_/g, ' ')}
+                    </MenuItem>
+                  ))}
+                </TextField>
+
+                {/* Level dropdown */}
+                <TextField
+                  select
+                  size="small"
+                  label="Level"
+                  value={levelFilter}
+                  onChange={(e) => setLevelFilter(e.target.value)}
+                  fullWidth
+                >
+                  <MenuItem value="">All Levels</MenuItem>
+                  <MenuItem value="debug">debug</MenuItem>
+                  <MenuItem value="info">info</MenuItem>
+                  <MenuItem value="warn">warn</MenuItem>
+                  <MenuItem value="error">error</MenuItem>
+                </TextField>
+
+                {/* Date range */}
+                <TextField
+                  size="small"
+                  label="Since"
+                  type={sinceFilter ? 'datetime-local' : 'text'}
+                  placeholder="All time"
+                  value={sinceFilter}
+                  onFocus={(e) => { if (!sinceFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
+                  onChange={(e) => setSinceFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={sinceFilter ? {
+                    endAdornment: <IconButton size="small" onClick={() => setSinceFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+                  } : undefined}
+                  fullWidth
+                />
+
+                <TextField
+                  size="small"
+                  label="Until"
+                  type={untilFilter ? 'datetime-local' : 'text'}
+                  placeholder="Now"
+                  value={untilFilter}
+                  onFocus={(e) => { if (!untilFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
+                  onChange={(e) => setUntilFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={untilFilter ? {
+                    endAdornment: <IconButton size="small" onClick={() => setUntilFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+                  } : undefined}
+                  fullWidth
+                />
+
+                {/* Sources */}
+                {sourcesButton(true)}
+
+                {/* Auto-refresh (moved here on mobile) */}
+                <Button
+                  size="small"
+                  variant={autoRefresh ? 'contained' : 'outlined'}
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  fullWidth
+                >
+                  {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'}
+                </Button>
+              </Stack>
+            </Collapse>
           </Stack>
-        </Stack>
+        ) : (
+          /* ---- Desktop layout (unchanged) ---- */
+          <Stack spacing={1.5}>
+            {/* Row 1: Search + tier chips */}
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+              <TextField
+                size="small"
+                placeholder="Search summaries..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                sx={{ minWidth: 220 }}
+              />
+              {tierChips}
+            </Stack>
+
+            {/* Row 2: Type, Level, dates, sources */}
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+              <TextField
+                select
+                size="small"
+                label="Type"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                sx={{ minWidth: 180 }}
+              >
+                <MenuItem value="">All Types</MenuItem>
+                {EVENT_TYPES.map((t) => (
+                  <MenuItem key={t} value={t}>
+                    {t.replace(/_/g, ' ')}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                size="small"
+                label="Level"
+                value={levelFilter}
+                onChange={(e) => setLevelFilter(e.target.value)}
+                sx={{ minWidth: 140 }}
+              >
+                <MenuItem value="">All Levels</MenuItem>
+                <MenuItem value="debug">debug</MenuItem>
+                <MenuItem value="info">info</MenuItem>
+                <MenuItem value="warn">warn</MenuItem>
+                <MenuItem value="error">error</MenuItem>
+              </TextField>
+
+              <TextField
+                size="small"
+                label="Since"
+                type={sinceFilter ? 'datetime-local' : 'text'}
+                placeholder="All time"
+                value={sinceFilter}
+                onFocus={(e) => { if (!sinceFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
+                onChange={(e) => setSinceFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                InputProps={sinceFilter ? {
+                  endAdornment: <IconButton size="small" onClick={() => setSinceFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+                } : undefined}
+                sx={{ minWidth: 180 }}
+              />
+
+              <TextField
+                size="small"
+                label="Until"
+                type={untilFilter ? 'datetime-local' : 'text'}
+                placeholder="Now"
+                value={untilFilter}
+                onFocus={(e) => { if (!untilFilter) (e.target as HTMLInputElement).type = 'datetime-local'; }}
+                onChange={(e) => setUntilFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                InputProps={untilFilter ? {
+                  endAdornment: <IconButton size="small" onClick={() => setUntilFilter('')}><ClearIcon fontSize="small" /></IconButton>,
+                } : undefined}
+                sx={{ minWidth: 180 }}
+              />
+
+              {/* Sources dropdown */}
+              {sourcesButton()}
+            </Stack>
+
+            {/* Row 3: Active filter summary */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="caption" color="text.secondary">
+                {total} entries
+              </Typography>
+              {hasActiveFilters && (
+                <Button size="small" startIcon={<ClearIcon />} onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        )}
       </Paper>
 
       {/* Activity Feed */}
@@ -667,8 +830,8 @@ export default function ActivityLog() {
                 <TableCell>Level</TableCell>
                 <TableCell>Type</TableCell>
                 <TableCell sx={{ width: '40%' }}>Summary</TableCell>
-                <TableCell>Source</TableCell>
-                <TableCell>Tags</TableCell>
+                {!isMobile && <TableCell>Source</TableCell>}
+                {!isMobile && <TableCell>Tags</TableCell>}
                 <TableCell />
               </TableRow>
             </TableHead>
@@ -683,13 +846,13 @@ export default function ActivityLog() {
                   }}
                 >
                   <TableCell sx={{ whiteSpace: 'nowrap', color: 'text.secondary', fontSize: '0.75rem' }}>
-                    {formatTimestamp(entry.timestamp)}
+                    {isMobile ? formatTimestampCompact(entry.timestamp) : formatTimestamp(entry.timestamp)}
                   </TableCell>
                   <TableCell>{levelChip(entry.level)}</TableCell>
                   <TableCell>
                     <Chip size="small" label={(entry.type || '').replace(/_/g, ' ')} />
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 400 }}>
+                  <TableCell sx={{ maxWidth: isMobile ? 180 : 400 }}>
                     <Typography variant="body2" noWrap title={entry.summary}>
                       {entry.summary}
                     </Typography>
@@ -712,20 +875,24 @@ export default function ActivityLog() {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">
-                      {entry.source}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {entry.tags && entry.tags.length > 0 ? (
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                        {entry.tags.map((tag) => (
-                          <Chip key={tag} size="small" label={tag} variant="outlined" />
-                        ))}
-                      </Stack>
-                    ) : null}
-                  </TableCell>
+                  {!isMobile && (
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {entry.source}
+                      </Typography>
+                    </TableCell>
+                  )}
+                  {!isMobile && (
+                    <TableCell>
+                      {entry.tags && entry.tags.length > 0 ? (
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                          {entry.tags.map((tag) => (
+                            <Chip key={tag} size="small" label={tag} variant="outlined" />
+                          ))}
+                        </Stack>
+                      ) : null}
+                    </TableCell>
+                  )}
                   <TableCell>
                     {entry.operation_id &&
                       (entry.type === 'organize_completed' || entry.type === 'metadata_applied') && (
@@ -752,6 +919,7 @@ export default function ActivityLog() {
               page={page}
               onChange={(_, p) => setPage(p)}
               color="primary"
+              size={isMobile ? 'small' : 'medium'}
             />
           </Box>
         )}
