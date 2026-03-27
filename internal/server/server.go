@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.133.0
+// version: 1.134.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1540,6 +1540,10 @@ func (s *Server) setupRoutes() {
 			// Rename preview and apply
 			protected.POST("/audiobooks/:id/rename/preview", s.previewRename)
 			protected.POST("/audiobooks/:id/rename/apply", s.applyRename)
+
+			// Organize preview and execute (single book)
+			protected.GET("/audiobooks/:id/preview-organize", s.previewOrganize)
+			protected.POST("/audiobooks/:id/organize", s.organizeBook)
 
 			// AI-powered parsing routes
 			protected.POST("/ai/parse-filename", s.parseFilenameWithAI)
@@ -9671,6 +9675,75 @@ func (s *Server) applyRename(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// --- Preview Organize & Single-Book Organize Handlers ---
+
+// previewOrganize returns a step-by-step preview of what organizing a single book would do.
+func (s *Server) previewOrganize(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+
+	svc := NewOrganizePreviewService(database.GlobalStore)
+	preview, err := svc.PreviewOrganize(id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		internalError(c, "failed to preview organize", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, preview)
+}
+
+// organizeBook executes the full organize pipeline for a single book:
+// copy to library (if needed), rename, write tags, embed cover, update DB.
+func (s *Server) organizeBook(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+
+	// Create an operation for tracking and undo support
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "organize", stringPtr(id))
+	if err != nil {
+		log.Printf("[ERROR] organize: failed to create operation: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
+		return
+	}
+
+	// Reuse the RenameService which already handles:
+	// - protected path detection and copy
+	// - tag writing
+	// - file rename/move
+	// - DB update with rollback
+	// - operation change tracking for undo
+	svc := NewRenameService(database.GlobalStore)
+	result, err := svc.ApplyRename(id, op.ID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		internalError(c, "failed to organize book", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":      fmt.Sprintf("Organized: %s", result.Message),
+		"book_id":      result.BookID,
+		"old_path":     result.OldPath,
+		"new_path":     result.NewPath,
+		"tags_written": result.TagsWritten,
+		"operation_id": op.ID,
+	})
 }
 
 // getUserPreference returns a single user preference by key.
