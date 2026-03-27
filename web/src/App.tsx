@@ -1,9 +1,9 @@
 // file: web/src/App.tsx
-// version: 1.16.0
+// version: 1.17.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import {
   Box,
@@ -13,27 +13,51 @@ import {
   Stack,
 } from '@mui/material';
 import { MainLayout } from './components/layout/MainLayout';
-import { Dashboard } from './pages/Dashboard';
-import { Library } from './pages/Library';
-import { BookDetail } from './pages/BookDetail';
-import { Works } from './pages/Works';
-import { System } from './pages/System';
-import { Settings } from './pages/Settings';
-import { Login } from './pages/Login';
-import { FileBrowser } from './pages/FileBrowser';
-// Operations page removed — redirects to /activity
-import { Maintenance } from './pages/Maintenance';
-import { BookDedup } from './pages/BookDedup';
-import { Series } from './pages/Series';
-import { Authors } from './pages/Authors';
-import { Diagnostics } from './pages/Diagnostics';
-import ActivityLog from './pages/ActivityLog';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
+import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
+import { Dashboard } from './pages/Dashboard';
+import { Login } from './pages/Login';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
 import { useAuth } from './contexts/AuthContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
+
+// Lazy-loaded pages (code-split for smaller initial bundle)
+const Library = lazy(() =>
+  import('./pages/Library').then((m) => ({ default: m.Library }))
+);
+const BookDetail = lazy(() =>
+  import('./pages/BookDetail').then((m) => ({ default: m.BookDetail }))
+);
+const Works = lazy(() =>
+  import('./pages/Works').then((m) => ({ default: m.Works }))
+);
+const System = lazy(() =>
+  import('./pages/System').then((m) => ({ default: m.System }))
+);
+const Settings = lazy(() =>
+  import('./pages/Settings').then((m) => ({ default: m.Settings }))
+);
+const FileBrowser = lazy(() =>
+  import('./pages/FileBrowser').then((m) => ({ default: m.FileBrowser }))
+);
+// Operations page removed — redirects to /activity
+const Maintenance = lazy(() =>
+  import('./pages/Maintenance').then((m) => ({ default: m.Maintenance }))
+);
+const BookDedup = lazy(() =>
+  import('./pages/BookDedup').then((m) => ({ default: m.BookDedup }))
+);
+const Series = lazy(() =>
+  import('./pages/Series').then((m) => ({ default: m.Series }))
+);
+const Authors = lazy(() =>
+  import('./pages/Authors').then((m) => ({ default: m.Authors }))
+);
+const Diagnostics = lazy(() =>
+  import('./pages/Diagnostics').then((m) => ({ default: m.Diagnostics }))
+);
+const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 
 function App() {
   const auth = useAuth();
@@ -166,26 +190,28 @@ function App() {
         </Routes>
       ) : (
         <MainLayout>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/library/:id" element={<BookDetail />} />
-            <Route path="/works" element={<Works />} />
-            <Route path="/system" element={<System />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/login" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/files" element={<FileBrowser />} />
-            <Route path="/operations" element={<Navigate to="/activity" replace />} />
-            <Route path="/maintenance" element={<Maintenance />} />
-            <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
-            <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
-            <Route path="/dedup" element={<BookDedup />} />
-            <Route path="/series" element={<Series />} />
-            <Route path="/authors" element={<Authors />} />
-            <Route path="/diagnostics" element={<Diagnostics />} />
-            <Route path="/activity" element={<ActivityLog />} />
-          </Routes>
+          <Suspense fallback={<CircularProgress sx={{ m: 4 }} />}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/library" element={<Library />} />
+              <Route path="/library/:id" element={<BookDetail />} />
+              <Route path="/works" element={<Works />} />
+              <Route path="/system" element={<System />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/files" element={<FileBrowser />} />
+              <Route path="/operations" element={<Navigate to="/activity" replace />} />
+              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
+              <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
+              <Route path="/dedup" element={<BookDedup />} />
+              <Route path="/series" element={<Series />} />
+              <Route path="/authors" element={<Authors />} />
+              <Route path="/diagnostics" element={<Diagnostics />} />
+              <Route path="/activity" element={<ActivityLog />} />
+            </Routes>
+          </Suspense>
         </MainLayout>
       )}
       <KeyboardShortcutsDialog
