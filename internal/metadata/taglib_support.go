@@ -42,12 +42,13 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 		tags["TITLE"] = []string{title}
 	}
 	if artist, ok := metadata["artist"].(string); ok && artist != "" {
-		// Prefer ALBUMARTIST if we have a single artist (semantic for audiobooks narrator/author)
 		tags[taglib.AlbumArtist] = []string{artist}
 		tags["ARTIST"] = []string{artist}
-		// Overwrite legacy composer values so stale narrator data does not win
-		// when metadata is extracted later.
-		tags[taglib.Composer] = []string{artist}
+		// Clear composer to prevent stale narrator data from winning on re-read.
+		// In audiobooks, composer often contains the narrator (from Audible).
+		// The priority chain is album_artist > artist > composer, so leaving
+		// a stale composer causes wrong author on re-extraction.
+		tags[taglib.Composer] = []string{""}
 	}
 	if album, ok := metadata["album"].(string); ok && album != "" {
 		tags[taglib.Album] = []string{album}
