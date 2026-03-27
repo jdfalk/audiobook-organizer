@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.37.0
+// version: 1.38.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -57,6 +57,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown.js';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp.js';
 import StarIcon from '@mui/icons-material/Star.js';
 import StarBorderIcon from '@mui/icons-material/StarBorder.js';
+import RefreshIcon from '@mui/icons-material/Refresh.js';
 import type { Book, BookSegment, BookTags, SegmentTags, OverridePayload, RenamePreview } from '../services/api';
 import * as api from '../services/api';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
@@ -436,6 +437,7 @@ export const BookDetail = () => {
       const result = await api.writeBackMetadata(book.id);
       toast(result.message || 'Metadata written to files.', 'success');
       refreshFilesTab(); // reload tags and changelog after write
+      await refreshBook(); // refresh book data to reflect any changes
     } catch (error: unknown) {
       console.error('Failed to write metadata to files', error);
       const msg =
@@ -773,6 +775,7 @@ export const BookDetail = () => {
       setBook(saved);
       toast('Metadata saved. Edited fields are now locked.', 'success');
       setEditDialogOpen(false);
+      refreshFilesTab(); // reload tags/changelog to reflect saved changes
     } catch (error) {
       if (error instanceof api.ApiError) {
         if (error.status === 409) {
@@ -1077,7 +1080,17 @@ export const BookDetail = () => {
             spacing={1}
             flexWrap="wrap"
             justifyContent="flex-end"
+            alignItems="center"
           >
+            <Tooltip title="Refresh book data">
+              <IconButton
+                onClick={() => { loadBook(); loadVersions(); refreshFilesTab(); }}
+                disabled={loading || actionLoading}
+                size="small"
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
             <Button
               variant="outlined"
               startIcon={<EditIcon />}
@@ -1474,7 +1487,7 @@ export const BookDetail = () => {
                       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
                     return (
-                      <Box key={version.id} sx={{ p: 2, borderBottom: groupVersions.length > 1 ? '1px solid' : 'none', borderColor: 'divider' }}>
+                      <Box key={version.id} sx={{ p: 2, borderBottom: groupVersions.length > 1 ? '2px solid' : 'none', borderColor: 'divider', '&:not(:last-child)': { pb: 3 }, '&:not(:first-of-type)': { pt: 3 } }}>
                         {/* Version action buttons */}
                         <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
                           {!isPrimary && versions.length > 1 && (
