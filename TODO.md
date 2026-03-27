@@ -74,7 +74,7 @@
 | 22 | **iTunes sync dialog pre-fill from config** | "Force Sync" dialog should auto-fill XML path from config, not require user to enter it | Open |
 | 23 | **iTunes sync should support ITL** | Force sync should write to ITL file, not just read XML | Open |
 | 24 | **Force Import always greyed out** | Button is disabled for unknown reason — investigate and fix | Open |
-| 25 | **ITL write-back after sync** | Need a "Write paths to ITL" button/operation that pushes all organized book paths to the ITL copy | Open |
+| 25 | **ITL write-back after sync** | Endpoint exists (`POST /itunes/write-back-all`) but ITL parser returns 0 tracks from the copied ITL file (v12.13.10.3). Either parser doesn't handle this version or the file needs special handling. Also: need to store original iTunes path during sync so we don't need reverse path calculation. | Open — blocked on ITL parser |
 
 ---
 
