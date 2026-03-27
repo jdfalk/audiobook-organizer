@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.15.0
+// version: 2.16.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -462,6 +462,106 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		UpdatedCount: result.UpdatedCount,
 		BackupPath:   result.BackupPath,
 		Message:      result.Message + itlMessage,
+	})
+}
+
+// handleITunesWriteBackAll writes ALL books with iTunes persistent IDs back to
+// the ITL binary file in a single bulk operation. This is useful when the ITL
+// file needs a full refresh (e.g., after restoring from backup or initial setup).
+func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	if !config.AppConfig.ITLWriteBackEnabled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL write-back is not enabled in config"})
+		return
+	}
+
+	itlPath := config.AppConfig.ITunesLibraryITLPath
+	if itlPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no ITL library path configured"})
+		return
+	}
+
+	if _, err := os.Stat(itlPath); os.IsNotExist(err) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL file not found at configured path"})
+		return
+	}
+
+	// Build path mappings from config
+	var pathMappings []itunes.PathMapping
+	for _, m := range config.AppConfig.ITunesPathMappings {
+		pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
+	}
+
+	// Paginate through all books and collect those with iTunes PIDs
+	store := database.GlobalStore
+	var itlUpdates []itunes.ITLLocationUpdate
+	const pageSize = 10000
+	offset := 0
+
+	for {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to query books: %v", err)})
+			return
+		}
+		if len(books) == 0 {
+			break
+		}
+		for i := range books {
+			book := &books[i]
+			if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
+				continue
+			}
+			if book.FilePath == "" {
+				continue
+			}
+			itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
+			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+				PersistentID: *book.ITunesPersistentID,
+				NewLocation:  itunesPath,
+			})
+		}
+		if len(books) < pageSize {
+			break
+		}
+		offset += pageSize
+	}
+
+	if len(itlUpdates) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success":       true,
+			"updated_count": 0,
+			"message":       "no books with iTunes persistent IDs found",
+		})
+		return
+	}
+
+	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
+	if itlErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("ITL write-back failed: %v", itlErr),
+		})
+		return
+	}
+
+	if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
+		})
+		return
+	}
+
+	stdlog.Printf("[INFO] Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"updated_count": itlResult.UpdatedCount,
+		"total_books":   len(itlUpdates),
+		"message":       fmt.Sprintf("ITL write-back complete: %d tracks updated out of %d books with iTunes PIDs", itlResult.UpdatedCount, len(itlUpdates)),
 	})
 }
 

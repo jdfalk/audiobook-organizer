@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.34.0
+// version: 1.35.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -3249,6 +3249,8 @@ export function Settings() {
 
         <Box
           sx={{
+            position: 'sticky',
+            bottom: 0,
             p: 2,
             display: 'flex',
             gap: 2,
@@ -3256,6 +3258,8 @@ export function Settings() {
             borderTop: 1,
             borderColor: 'divider',
             bgcolor: 'background.paper',
+            zIndex: 10,
+            boxShadow: '0 -2px 8px rgba(0,0,0,0.3)',
           }}
         >
           <input

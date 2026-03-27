@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.12.0
+// version: 1.13.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -58,6 +58,7 @@ import {
   ApiError,
   cancelOperation,
   getActiveOperations,
+  getConfig,
   getITunesBooks,
   getITunesImportStatus,
   getITunesLibraryStatus,
@@ -140,7 +141,7 @@ export function ITunesImport() {
   const [writeBackResult, setWriteBackResult] =
     useState<ITunesWriteBackResponse | null>(null);
   const [writeBackBackup, setWriteBackBackup] = useState(true);
-  const [writeBackLibraryPath, setWriteBackLibraryPath] = useState('');
+  const [writeBackLibraryPath, setWriteBackLibraryPath] = useState(settings.libraryPath || '');
   const [writeBackMode, setWriteBackMode] = useState(0); // 0=manual, 1=sync all, 2=browse
   const [previewItems, setPreviewItems] = useState<ITunesBookMapping[]>([]);
   const [browseItems, setBrowseItems] = useState<ITunesBookMapping[]>([]);
@@ -170,6 +171,29 @@ export function ITunesImport() {
       }
     };
   }, []);
+
+  // Pre-fill library path from server config if not already set
+  useEffect(() => {
+    if (!settings.libraryPath) {
+      getConfig().then((cfg) => {
+        if (cfg.itunes_library_xml_path) {
+          setSettings((prev) => {
+            if (!prev.libraryPath) {
+              return { ...prev, libraryPath: cfg.itunes_library_xml_path! };
+            }
+            return prev;
+          });
+        }
+      }).catch(() => { /* ignore */ });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep writeBackLibraryPath in sync when settings.libraryPath changes
+  useEffect(() => {
+    if (settings.libraryPath && !writeBackLibraryPath) {
+      setWriteBackLibraryPath(settings.libraryPath);
+    }
+  }, [settings.libraryPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll library status when a library path is configured
   useEffect(() => {
@@ -858,14 +882,18 @@ export function ITunesImport() {
               Sync Now
             </Button>
 
-            <Button
-              variant="contained"
-              startIcon={<CloudDownloadIcon />}
-              onClick={() => setForceImportConfirmOpen(true)}
-              disabled={!validationResult || importing}
-            >
-              Force Import from iTunes
-            </Button>
+            <Tooltip title={!settings.libraryPath ? 'Set an iTunes Library XML path first' : ''}>
+              <span>
+                <Button
+                  variant="contained"
+                  startIcon={<CloudDownloadIcon />}
+                  onClick={() => setForceImportConfirmOpen(true)}
+                  disabled={!settings.libraryPath || importing}
+                >
+                  Force Import from iTunes
+                </Button>
+              </span>
+            </Tooltip>
 
             <Button
               variant="contained"
