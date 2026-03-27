@@ -85,6 +85,7 @@
 | 26 | **Delete GitHub fork repos** | `gh repo delete jdfalk/go-taglib`. | — |
 | 27 | **Dynamic/smart playlists** | Auto-updating based on queries. | — |
 | 28 | **Database migration to PostgreSQL** | Research recommended. | — |
+| 29 | **Add ffmpeg to production Dockerfile** | Runtime stage (`alpine:3.23`) is missing ffmpeg — transcoding, cover art embedding, and M4B tag writing silently fail in Docker. Add `apk add --no-cache ffmpeg`. | — |
 
 ---
 
