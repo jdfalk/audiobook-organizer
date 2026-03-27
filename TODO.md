@@ -28,6 +28,7 @@
 | B5 | **35 remaining iTunes sync path errors** | Files genuinely missing on disk. May need cleanup or manual resolution. |
 | B6 | **File version separator too faint** | In Files & History tag comparison, the horizontal line between two file versions (e.g., library copy vs iTunes copy) needs to be darker/bolder for clearer visual separation. |
 | B7 | **Book detail page doesn't refresh after metadata apply** | After applying metadata, the page shows stale data. Need a refresh button on the book detail page. |
+| B8 | **Write-back fails on multi-file books** | Backup + write-back fails with "is a directory" when file_path points to a directory (multi-file books). The write-back code needs to find individual files inside the directory and write to each one. Affects "This Book Is Full of Spiders" and other multi-segment books. |
 
 ---
 
