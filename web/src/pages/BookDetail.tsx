@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.39.0
+// version: 1.40.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -123,6 +123,7 @@ export const BookDetail = () => {
   const refreshFilesTab = () => setFilesRefreshKey((k) => k + 1);
   const [compareSnapshotTs, setCompareSnapshotTs] = useState<string | null>(null);
   const [itunesPidCount, setItunesPidCount] = useState(0);
+  const [itunesExternalIDs, setItunesExternalIDs] = useState<api.ExternalIDMapping[]>([]);
   const [linkSearchOpen, setLinkSearchOpen] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [linkSearchResults, setLinkSearchResults] = useState<Book[]>([]);
@@ -217,6 +218,7 @@ export const BookDetail = () => {
     api.getBookExternalIDs(id!).then((data) => {
       setItunesLinked(data.itunes_linked);
       setItunesPidCount(data.total);
+      setItunesExternalIDs(data.external_ids.filter((e) => e.source === 'itunes' && !e.tombstoned));
     }).catch(() => {});
   }, [id, loadBook, loadVersions]);
 
@@ -1852,6 +1854,40 @@ export const BookDetail = () => {
                   <Box sx={{ flex: '1 1 100%' }}>
                     <Typography variant="caption" color="text.secondary">File Path</Typography>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>{book.file_path}</Typography>
+                  </Box>
+                )}
+                {/* Per-track file paths from external_id_map (when no book-level file_path or when multi-track) */}
+                {itunesExternalIDs.length > 0 && itunesExternalIDs.some((e) => e.file_path) && (
+                  <Box sx={{ flex: '1 1 100%' }}>
+                    <Typography variant="caption" color="text.secondary">iTunes Track Files</Typography>
+                    {itunesExternalIDs.map((e) => (
+                      e.file_path ? (
+                        <Typography
+                          key={e.id}
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}
+                        >
+                          {e.track_number != null ? `[${e.track_number}] ` : ''}{e.file_path}
+                        </Typography>
+                      ) : null
+                    ))}
+                  </Box>
+                )}
+                {/* Track PIDs when multiple tracks mapped */}
+                {itunesExternalIDs.length > 1 && (
+                  <Box sx={{ flex: '1 1 100%' }}>
+                    <Typography variant="caption" color="text.secondary">Track PIDs ({itunesExternalIDs.length})</Typography>
+                    <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap sx={{ mt: 0.25 }}>
+                      {itunesExternalIDs.map((e) => (
+                        <Typography
+                          key={e.id}
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', fontSize: '0.75rem', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 }}
+                        >
+                          {e.track_number != null ? `${e.track_number}: ` : ''}{e.external_id}
+                        </Typography>
+                      ))}
+                    </Stack>
                   </Box>
                 )}
               </Stack>
