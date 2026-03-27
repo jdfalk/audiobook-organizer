@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.132.0
+// version: 1.133.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1372,6 +1372,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/audiobooks/:id/relocate", s.relocateBookFiles)
 			protected.POST("/audiobooks/batch", s.batchUpdateAudiobooks)
 			protected.POST("/audiobooks/batch-write-back", s.batchWriteBackAudiobooks)
+			protected.POST("/audiobooks/bulk-write-back", s.handleBulkWriteBack)
 			protected.POST("/audiobooks/batch-operations", s.batchOperations)
 
 			// User tag routes
@@ -3284,6 +3285,194 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// handleBulkWriteBack handles POST /api/v1/audiobooks/bulk-write-back.
+// It creates an async operation that writes metadata tags and renames files
+// for all books matching the provided filters (or all organized/imported books).
+func (s *Server) handleBulkWriteBack(c *gin.Context) {
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	var req struct {
+		Filter struct {
+			LibraryState *string `json:"library_state"`
+			AuthorID     *int    `json:"author_id"`
+			SeriesID     *int    `json:"series_id"`
+		} `json:"filter"`
+		DryRun bool `json:"dry_run"`
+		Rename bool `json:"rename"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	store := database.GlobalStore
+
+	// Gather matching books based on filters
+	var books []database.Book
+	var err error
+
+	if req.Filter.AuthorID != nil {
+		books, err = store.GetBooksByAuthorID(*req.Filter.AuthorID)
+	} else if req.Filter.SeriesID != nil {
+		books, err = store.GetBooksBySeriesID(*req.Filter.SeriesID)
+	} else {
+		// Get all books, then filter by library_state
+		books, err = store.GetAllBooks(1_000_000, 0)
+	}
+	if err != nil {
+		internalError(c, "failed to query books", err)
+		return
+	}
+
+	// Filter by library_state if specified, otherwise default to organized+imported
+	targetStates := map[string]bool{"organized": true, "imported": true}
+	if req.Filter.LibraryState != nil && *req.Filter.LibraryState != "" {
+		targetStates = map[string]bool{*req.Filter.LibraryState: true}
+	}
+
+	var filtered []database.Book
+	for _, book := range books {
+		// Skip soft-deleted books
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		// Skip books with empty file paths
+		if book.FilePath == "" {
+			continue
+		}
+		// Skip protected paths
+		if isProtectedPath(book.FilePath) {
+			continue
+		}
+		// Filter by library state (only when not filtering by author/series exclusively)
+		if book.LibraryState != nil {
+			if !targetStates[*book.LibraryState] {
+				continue
+			}
+		} else if req.Filter.AuthorID == nil && req.Filter.SeriesID == nil {
+			// No library_state set and no author/series filter: skip
+			continue
+		}
+		filtered = append(filtered, book)
+	}
+
+	estimatedBooks := len(filtered)
+
+	// Dry run: just return the count
+	if req.DryRun {
+		c.JSON(http.StatusOK, gin.H{
+			"estimated_books": estimatedBooks,
+			"dry_run":         true,
+		})
+		return
+	}
+
+	if estimatedBooks == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"estimated_books": 0,
+			"message":         "no books match the given filters",
+		})
+		return
+	}
+
+	// Create the operation
+	opID := ulid.Make().String()
+	op, err := store.CreateOperation(opID, "bulk_write_back", nil)
+	if err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
+
+	doRename := req.Rename
+	mfs := s.metadataFetchService
+	bookIDs := make([]string, len(filtered))
+	for i, b := range filtered {
+		bookIDs[i] = b.ID
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		total := len(bookIDs)
+		written := 0
+		failed := 0
+
+		for i, bookID := range bookIDs {
+			if progress.IsCanceled() {
+				msg := fmt.Sprintf("canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
+				_ = progress.Log("info", msg, nil)
+				return nil
+			}
+
+			// Check context cancellation
+			select {
+			case <-ctx.Done():
+				msg := fmt.Sprintf("context canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
+				_ = progress.Log("info", msg, nil)
+				return ctx.Err()
+			default:
+			}
+
+			book, err := store.GetBookByID(bookID)
+			if err != nil || book == nil {
+				failed++
+				detail := fmt.Sprintf("book %s: not found", bookID)
+				_ = progress.Log("warn", detail, nil)
+				_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: not found)", i+1, total))
+				continue
+			}
+
+			// Skip protected paths (re-check in case data changed)
+			if isProtectedPath(book.FilePath) {
+				detail := fmt.Sprintf("book %s: skipping protected path %s", bookID, book.FilePath)
+				_ = progress.Log("info", detail, nil)
+				_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: protected)", i+1, total))
+				continue
+			}
+
+			// Step 1: Rename if requested
+			if doRename {
+				if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
+					detail := fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr)
+					_ = progress.Log("warn", detail, nil)
+				}
+			}
+
+			// Step 2: Write tags
+			count, writeErr := mfs.WriteBackMetadataForBook(bookID)
+			if writeErr != nil {
+				failed++
+				detail := fmt.Sprintf("book %s: write-back failed: %v", bookID, writeErr)
+				_ = progress.Log("warn", detail, nil)
+			} else {
+				written++
+				if count > 0 {
+					detail := fmt.Sprintf("book %s: wrote %d file(s)", bookID, count)
+					_ = progress.Log("debug", detail, nil)
+				}
+			}
+
+			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", i+1, total, written, failed))
+		}
+
+		summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written, failed, total)
+		_ = progress.Log("info", summary, nil)
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"operation_id":    op.ID,
+		"estimated_books": estimatedBooks,
+	})
 }
 
 func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
