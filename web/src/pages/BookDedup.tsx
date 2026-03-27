@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.3.0
+// version: 3.4.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -1059,17 +1059,25 @@ function AuthorDedupTab() {
                   ) : group.variants.length > 0 ? (
                     <>
                       <Divider sx={{ my: 1 }} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Variants to merge:</Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary">Merge target:</Typography>
+                        <Chip label={group.canonical.name} color="primary" size="small" variant="outlined" />
+                        <Typography variant="body2" color="text.secondary" sx={{ mx: 0.5 }}>←</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {group.variants.filter((v) => !removedVariants.has(`${group.canonical.id}:${v.id}`)).length} variant(s) will be merged into it:
+                        </Typography>
+                      </Box>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         {group.variants.map((v) => {
                           const removeKey = `${group.canonical.id}:${v.id}`;
                           if (removedVariants.has(removeKey)) return null;
                           const isNarrator = narratorFlags.has(String(v.id));
+                          const isSameAsCanonical = v.name === group.canonical.name;
                           return (
                             <Box key={v.id} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                              <Tooltip title={`Click to use "${v.name}" as canonical spelling`}>
-                                <Chip label={v.name} color="warning" variant="outlined" size="small"
-                                  onClick={async () => {
+                              <Tooltip title={isSameAsCanonical ? `"${v.name}" is the current canonical name (ID ${v.id} will be merged)` : `Click to use "${v.name}" as the merge target (canonical spelling)`}>
+                                <Chip label={v.name} color={isSameAsCanonical ? 'default' : 'warning'} variant="outlined" size="small"
+                                  onClick={isSameAsCanonical ? undefined : async () => {
                                     try {
                                       await api.renameAuthor(group.canonical.id, v.name);
                                       setGroups((prev) => prev.map((g) =>
@@ -1081,7 +1089,7 @@ function AuthorDedupTab() {
                                       setError(err instanceof Error ? err.message : 'Failed to rename author');
                                     }
                                   }}
-                                  sx={{ cursor: 'pointer' }} />
+                                  sx={{ cursor: isSameAsCanonical ? 'default' : 'pointer' }} />
                               </Tooltip>
                               <Chip
                                 label={isNarrator ? 'Narrator' : 'Author'}
