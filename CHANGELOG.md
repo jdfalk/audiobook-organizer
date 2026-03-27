@@ -9,6 +9,38 @@
 
 ### Added / Changed
 
+#### March 25-27, 2026 — Unified Activity Page, Bug Fixes, Maintenance Tools (v3.0.0)
+
+##### Unified Activity Log System
+- **Replaced Operations page** with unified Activity page — one place for all events, logs, and operation progress
+- **Global log capture** via `teeWriter` — every `log.Printf` in the entire codebase flows to `activity.db` without changing any call sites
+- **Buffered channel** (10K capacity) with batch INSERT prevents log capture from blocking the hot path
+- **Compound filter bar**: text search, tier chips (audit/change/debug), type/level dropdowns, date range, source dropdown with localStorage persistence
+- **Pinned operations section** with progress bars, cancel buttons, pin toggle
+- **Source filtering**: mute noisy sources (gin, etc.) with persistent preferences
+- **Adaptive auto-refresh**: 5s when operations are running, 30s when idle
+- **Responsive mobile layout**: collapsible filter drawer, compact table columns
+- **Server-side tier filtering** via `exclude_tiers` API param
+- **`GET /api/v1/activity/sources`** endpoint with filter-aware entry counts
+- **Spec**: `docs/superpowers/specs/2026-03-25-unified-activity-log-design.md`, `docs/superpowers/specs/2026-03-25-unified-activity-page-design.md`
+
+##### New Features
+- **Preview Organize** (single book): step-by-step preview showing copy, rename, tag write, cover embed. "Apply" button executes. Replaces "Preview Rename".
+- **Bulk Save to Files**: `POST /api/v1/audiobooks/bulk-write-back` — write tags + rename for all/filtered books. "Save All to Files" button on Library page with dry-run estimate.
+- **Maintenance: fix-read-by-narrator**: `POST /api/v1/maintenance/fix-read-by-narrator` — parses and fixes ~156 books with swapped title/author metadata. Dry-run by default.
+- **Maintenance: cleanup-series**: `POST /api/v1/maintenance/cleanup-series` — removes 1-book series and merges duplicates. Dry-run by default.
+
+##### Bug Fixes
+- **Composer tag clearing**: Clear composer instead of setting to artist on write — prevents stale narrator data from polluting author on re-read
+- **Multi-file book write-back**: Globs for audio files when file_path is a directory
+- **Author merge variant display**: Shows all variant names being merged, not just the canonical
+- **File version separator**: Thicker, more visible separator in tag comparison
+- **Book detail refresh**: Added refresh button + auto-refresh after write-back and metadata edit
+- **Date picker defaults**: Empty by default ("All time" / "Now") instead of current time
+- **Server-side tier filtering**: Prevents empty pages from client-side filtering mismatch
+- **Stale interrupted operations**: Marked as failed on startup instead of retrying indefinitely
+- **JSON tags on ActivityEntry**: Fixed uppercase field names breaking frontend
+
 #### March 14-19, 2026 — Major Data Cleanup, External IDs, Files & History Redesign (v2.0.0)
 
 ##### Data Architecture
