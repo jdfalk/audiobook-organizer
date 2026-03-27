@@ -70,6 +70,11 @@
 | 18 | **3-state library badge** | scanned → imported → organized states | Open — needs brainstorming |
 | 19 | **Vite chunk splitting** | Code-split large JS bundle | Open — optimization |
 | 20 | **Stale interrupted operations** | Mark as failed on startup | ✅ Fixed |
+| 21 | **Settings save/buttons not visible** | Save/reset buttons at bottom of Settings page need to float/stick so they're always visible when scrolling | Open |
+| 22 | **iTunes sync dialog pre-fill from config** | "Force Sync" dialog should auto-fill XML path from config, not require user to enter it | Open |
+| 23 | **iTunes sync should support ITL** | Force sync should write to ITL file, not just read XML | Open |
+| 24 | **Force Import always greyed out** | Button is disabled for unknown reason — investigate and fix | Open |
+| 25 | **ITL write-back after sync** | Need a "Write paths to ITL" button/operation that pushes all organized book paths to the ITL copy | Open |
 
 ---
 
