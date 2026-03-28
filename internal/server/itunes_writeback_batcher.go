@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 
 package server
@@ -89,12 +89,6 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	// Build path mappings from config
-	var pathMappings []itunes.PathMapping
-	for _, m := range config.AppConfig.ITunesPathMappings {
-		pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
-	}
-
 	var itlUpdates []itunes.ITLLocationUpdate
 
 	for _, id := range ids {
@@ -105,8 +99,10 @@ func (b *WriteBackBatcher) flush() {
 		if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
 			continue
 		}
-
-		itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
+		if book.ITunesPath == nil || *book.ITunesPath == "" {
+			continue
+		}
+		itunesPath := *book.ITunesPath
 		itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
 			PersistentID: *book.ITunesPersistentID,
 			NewLocation:  itunesPath,

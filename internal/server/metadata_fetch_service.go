@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.35.0
+// version: 4.36.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -2529,11 +2530,24 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 			newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 			if newBookPath != book.FilePath {
 				book.FilePath = newBookPath
+				if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+					book.ITunesPath = &itunesPath
+				}
 				if _, err := mfs.db.UpdateBook(id, book); err != nil {
 					log.Printf("[WARN] failed to update book path for %s: %v", id, err)
 				} else {
 					log.Printf("[INFO] updated book path for %s: %s", id, newBookPath)
 				}
+			}
+		}
+	}
+
+	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
+	if book.ITunesPath == nil || *book.ITunesPath == "" {
+		if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+			book.ITunesPath = &itunesPath
+			if _, err := mfs.db.UpdateBook(id, book); err != nil {
+				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
 			}
 		}
 	}
@@ -2641,6 +2655,9 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		if strings.HasPrefix(entry.SegmentID, "virtual-") {
 			// Virtual segment = single-file book. Update book.FilePath directly to the new file path.
 			book.FilePath = entry.TargetPath
+			if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+				book.ITunesPath = &itunesPath
+			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
 			} else {
@@ -2680,10 +2697,23 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
+			if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+				book.ITunesPath = &itunesPath
+			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
 			} else {
 				log.Printf("[INFO] renamed book files for %s: %s", id, newBookPath)
+			}
+		}
+	}
+
+	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
+	if book.ITunesPath == nil || *book.ITunesPath == "" {
+		if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+			book.ITunesPath = &itunesPath
+			if _, err := mfs.db.UpdateBook(id, book); err != nil {
+				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
 			}
 		}
 	}
@@ -2705,6 +2735,23 @@ func truncateActivity(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// computeITunesPath converts a local file path to an iTunes file:// URL
+// using the configured path mappings (m.To = Linux prefix, m.From = Windows prefix).
+// Returns an empty string if no mapping matches.
+func computeITunesPath(localPath string) string {
+	for _, m := range config.AppConfig.ITunesPathMappings {
+		if m.To != "" && m.From != "" && strings.HasPrefix(localPath, m.To) {
+			remainder := localPath[len(m.To):]
+			windowsPath := m.From + remainder
+			encoded := url.PathEscape(windowsPath)
+			encoded = strings.ReplaceAll(encoded, "%2F", "/")
+			encoded = strings.ReplaceAll(encoded, "%3A", ":")
+			return "file://localhost/" + encoded
+		}
+	}
+	return ""
 }
 
 // removeEmptyDirs removes empty directories walking up from dir until reaching stopAt.
