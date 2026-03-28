@@ -496,7 +496,7 @@ func TestBuildHtimChunk(t *testing.T) {
 	htim := buildHtimChunk(100, track)
 
 	// Parse it back
-	parsed := parseHtim(htim, 0, len(htim))
+	parsed := parseHtimBE(htim, 0, len(htim))
 	assert.Equal(t, 100, parsed.TrackID)
 	assert.Equal(t, 1234567, parsed.Size)
 	assert.Equal(t, 300000, parsed.TotalTime)
