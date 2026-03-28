@@ -464,13 +464,21 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 			trackCount++
 
 		case "mith":
-			// Direct mith (not wrapped in miah) — handle it
+			// mith is a container: headerLen = fixed track fields, totalLen includes mhoh sub-blocks
 			trackCount++
 			if subOffset+136 <= len(msdh) {
 				pid := pidToHex([8]byte(msdh[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
+				if trackCount <= 5 {
+					_, inMap := updateMap[*currentPID]
+					log.Printf("[DEBUG] LE mith #%d: PID=%s inUpdateMap=%v headerLen=%d totalLen=%d", trackCount, *currentPID, inMap, chunkHeaderLen, chunkTotalLen)
+				}
 			}
-			out.Write(msdh[subOffset : subOffset+chunkLen])
+			// Walk mhoh sub-blocks inside this mith
+			mithData := msdh[subOffset : subOffset+chunkLen]
+			rewritten, cnt := rewriteMithContentLE(mithData, updateMap, *currentPID)
+			out.Write(rewritten)
+			updatedCount += cnt
 
 		case "mhoh":
 			if newLoc, ok := shouldUpdateMhohLE(msdh, subOffset, chunkLen, *currentPID, updateMap); ok {
@@ -567,6 +575,65 @@ func rewriteMiahContentLE(miah []byte, updateMap map[string]string, currentPID *
 	// Update miah length fields
 	if len(result) >= 12 {
 		writeUint32LE(result, 4, uint32(len(result)))
+		writeUint32LE(result, 8, uint32(len(result)))
+	}
+
+	return result, updatedCount
+}
+
+// rewriteMithContentLE walks mhoh sub-blocks inside a mith container and rewrites locations.
+func rewriteMithContentLE(mith []byte, updateMap map[string]string, currentPID string) ([]byte, int) {
+	if len(mith) < 12 {
+		return mith, 0
+	}
+	mithHeaderLen := int(readUint32LE(mith, 4)) // fixed track header portion
+	if mithHeaderLen < 8 || mithHeaderLen >= len(mith) {
+		return mith, 0
+	}
+
+	var out bytes.Buffer
+	out.Write(mith[:mithHeaderLen]) // copy the fixed track header
+
+	updatedCount := 0
+	subOffset := mithHeaderLen
+
+	for subOffset+8 <= len(mith) {
+		tag := readTag(mith, subOffset)
+		if tag == "" {
+			break
+		}
+		mhohHeaderLen := int(readUint32LE(mith, subOffset+4))
+		mhohTotalLen := int(readUint32LE(mith, subOffset+8))
+		chunkLen := mhohHeaderLen
+		if tag == "mhoh" && mhohTotalLen > mhohHeaderLen && subOffset+mhohTotalLen <= len(mith) {
+			chunkLen = mhohTotalLen
+		}
+		if chunkLen < 8 || subOffset+chunkLen > len(mith) {
+			break
+		}
+
+		if tag == "mhoh" {
+			if newLoc, ok := shouldUpdateMhohLE(mith, subOffset, chunkLen, currentPID, updateMap); ok {
+				rewritten := rewriteHohmLocationLE(mith, subOffset, chunkLen, newLoc)
+				out.Write(rewritten)
+				updatedCount++
+			} else {
+				out.Write(mith[subOffset : subOffset+chunkLen])
+			}
+		} else {
+			out.Write(mith[subOffset : subOffset+chunkLen])
+		}
+		subOffset += chunkLen
+	}
+
+	// Trailing bytes
+	if subOffset < len(mith) {
+		out.Write(mith[subOffset:])
+	}
+
+	result := out.Bytes()
+	// Update mith totalLen (offset 8)
+	if len(result) >= 12 {
 		writeUint32LE(result, 8, uint32(len(result)))
 	}
 
