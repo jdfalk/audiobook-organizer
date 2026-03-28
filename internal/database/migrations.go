@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -259,6 +259,12 @@ var migrations = []Migration{
 		Version:     37,
 		Description: "Add book_tags table for user-defined tags",
 		Up:          migration037Up,
+		Down:        nil,
+	},
+	{
+		Version:     38,
+		Description: "Add itunes_path column to books table",
+		Up:          migration038Up,
 		Down:        nil,
 	},
 }
@@ -1872,6 +1878,29 @@ func migration036Up(store Store) error {
 	}
 
 	log.Println("  - genre column added successfully")
+	return nil
+}
+
+// migration038Up adds itunes_path column to books table.
+func migration038Up(store Store) error {
+	log.Println("  - Adding itunes_path column to books table")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	_, err := sqliteStore.db.Exec("ALTER TABLE books ADD COLUMN itunes_path TEXT")
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			log.Println("  - Column itunes_path already exists, skipping")
+			return nil
+		}
+		return fmt.Errorf("migration 38 failed: %w", err)
+	}
+
+	log.Println("  - itunes_path column added successfully")
 	return nil
 }
 
