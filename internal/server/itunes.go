@@ -6,7 +6,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	stdlog "log"
@@ -72,20 +71,18 @@ type ITunesImportResponse struct {
 	Message     string `json:"message"`
 }
 
-// ITunesWriteBackRequest represents a write-back request for iTunes updates.
+// ITunesWriteBackRequest represents a write-back request for iTunes ITL updates.
+// LibraryPath is kept for backward compatibility but is no longer used (XML write-back removed).
 type ITunesWriteBackRequest struct {
-	LibraryPath    string               `json:"library_path" binding:"required"`
-	AudiobookIDs   []string             `json:"audiobook_ids"`
-	CreateBackup   bool                 `json:"create_backup"`
-	ForceOverwrite bool                 `json:"force_overwrite"`
-	PathMappings   []itunes.PathMapping `json:"path_mappings,omitempty"` // Used to reverse-map local paths to iTunes paths
+	LibraryPath  string               `json:"library_path"`
+	AudiobookIDs []string             `json:"audiobook_ids"`
+	PathMappings []itunes.PathMapping `json:"path_mappings,omitempty"` // Used to reverse-map local paths to iTunes paths
 }
 
 // ITunesWriteBackResponse summarizes write-back results.
 type ITunesWriteBackResponse struct {
 	Success      bool   `json:"success"`
 	UpdatedCount int    `json:"updated_count"`
-	BackupPath   string `json:"backup_path,omitempty"`
 	Message      string `json:"message"`
 }
 
@@ -328,7 +325,8 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	})
 }
 
-// handleITunesWriteBack updates iTunes Library.xml with new file paths.
+// handleITunesWriteBack updates the iTunes ITL binary with new file paths.
+// XML write-back has been removed; only ITL write-back is supported.
 func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -341,8 +339,8 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		return
 	}
 
-	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryITLPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL write-back is not enabled in config"})
 		return
 	}
 
@@ -355,7 +353,6 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		}
 	}
 
-	updates := make([]*itunes.WriteBackUpdate, 0, len(req.AudiobookIDs))
 	var itlUpdates []itunes.ITLLocationUpdate
 	for _, id := range req.AudiobookIDs {
 		book, err := database.GlobalStore.GetBookByID(id)
@@ -369,99 +366,42 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 			continue
 		}
 
-		// Reverse-map local path back to iTunes path using path mappings
 		itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
-
-		updates = append(updates, &itunes.WriteBackUpdate{
-			ITunesPersistentID: *book.ITunesPersistentID,
-			OldPath:            "",
-			NewPath:            itunesPath,
+		itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+			PersistentID: *book.ITunesPersistentID,
+			NewLocation:  itunesPath,
 		})
-
-		// Build ITL update using the persistent ID hex bytes
-		if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
-			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  itunesPath,
-			})
-		}
 	}
 
-	if len(updates) == 0 {
+	if len(itlUpdates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no audiobooks with iTunes persistent IDs found"})
 		return
 	}
 
-	// Load stored fingerprint for conflict detection
-	var storedFP *itunes.LibraryFingerprint
-	if rec, err := database.GlobalStore.GetLibraryFingerprint(req.LibraryPath); err == nil && rec != nil {
-		storedFP = &itunes.LibraryFingerprint{
-			Path:    rec.Path,
-			Size:    rec.Size,
-			ModTime: rec.ModTime,
-			CRC32:   rec.CRC32,
-		}
-	}
-
-	opts := itunes.WriteBackOptions{
-		LibraryPath:       req.LibraryPath,
-		Updates:           updates,
-		CreateBackup:      req.CreateBackup,
-		ForceOverwrite:    req.ForceOverwrite,
-		StoredFingerprint: storedFP,
-	}
-
-	result, err := itunes.WriteBack(opts)
-	if err != nil {
-		var modErr *itunes.ErrLibraryModified
-		if errors.As(err, &modErr) {
-			c.JSON(http.StatusConflict, gin.H{
-				"error":         "library_modified",
-				"message":       modErr.Error(),
-				"stored_size":   modErr.Stored.Size,
-				"current_size":  modErr.Current.Size,
-				"stored_mtime":  modErr.Stored.ModTime,
-				"current_mtime": modErr.Current.ModTime,
-			})
-			return
-		}
+	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
+	if itlErr != nil {
+		stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("write-back failed: %v", err),
+			"error": fmt.Sprintf("ITL write-back failed: %v", itlErr),
 		})
 		return
 	}
 
-	// Update fingerprint after successful write-back
-	if fp, err := itunes.ComputeFingerprint(req.LibraryPath); err == nil {
-		_ = database.GlobalStore.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
+	// Atomic replace
+	if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
+		stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
+		})
+		return
 	}
 
-	// Also write back to ITL binary if configured
-	itlMessage := ""
-	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
-		itlPath := config.AppConfig.ITunesLibraryITLPath
-		// Write to a temp file first, then replace
-		itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
-		if itlErr != nil {
-			stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
-			itlMessage = fmt.Sprintf(" (ITL write-back failed: %v)", itlErr)
-		} else {
-			// Atomic replace
-			if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
-				stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
-				itlMessage = fmt.Sprintf(" (ITL rename failed: %v)", renameErr)
-			} else {
-				stdlog.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
-				itlMessage = fmt.Sprintf(" + ITL: %d tracks updated", itlResult.UpdatedCount)
-			}
-		}
-	}
-
+	stdlog.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
 	c.JSON(http.StatusOK, ITunesWriteBackResponse{
-		Success:      result.Success,
-		UpdatedCount: result.UpdatedCount,
-		BackupPath:   result.BackupPath,
-		Message:      result.Message + itlMessage,
+		Success:      true,
+		UpdatedCount: itlResult.UpdatedCount,
+		Message:      fmt.Sprintf("Successfully updated %d audiobook locations in ITL", itlResult.UpdatedCount),
 	})
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 
 package server
@@ -16,15 +16,15 @@ import (
 )
 
 // WriteBackBatcher collects book IDs that need iTunes write-back and flushes
-// them in a single batch after a debounce delay. This avoids writing the XML/ITL
-// files on every single edit when multiple edits happen in rapid succession.
+// them in a single batch after a debounce delay. This avoids writing the ITL
+// file on every single edit when multiple edits happen in rapid succession.
 type WriteBackBatcher struct {
-	mu       sync.Mutex
-	pending  map[string]bool // book IDs awaiting write-back
-	timer    *time.Timer
-	delay    time.Duration
-	stopCh   chan struct{}
-	stopped  bool
+	mu      sync.Mutex
+	pending map[string]bool // book IDs awaiting write-back
+	timer   *time.Timer
+	delay   time.Duration
+	stopCh  chan struct{}
+	stopped bool
 }
 
 // GlobalWriteBackBatcher is the singleton batcher instance.
@@ -45,9 +45,6 @@ func (b *WriteBackBatcher) Enqueue(bookID string) {
 	if !config.AppConfig.ITunesAutoWriteBack {
 		return
 	}
-	if config.AppConfig.ITunesLibraryXMLPath == "" {
-		return
-	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -65,7 +62,7 @@ func (b *WriteBackBatcher) Enqueue(bookID string) {
 	b.timer = time.AfterFunc(b.delay, b.flush)
 }
 
-// flush writes all pending book changes to the iTunes XML and optionally ITL.
+// flush writes all pending book changes to the iTunes ITL binary.
 func (b *WriteBackBatcher) flush() {
 	b.mu.Lock()
 	if len(b.pending) == 0 {
@@ -87,9 +84,8 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	xmlPath := config.AppConfig.ITunesLibraryXMLPath
-	if xmlPath == "" {
-		log.Printf("[WARN] iTunes auto write-back: no XML library path configured")
+	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryITLPath == "" {
+		log.Printf("[WARN] iTunes auto write-back: ITL write-back not configured")
 		return
 	}
 
@@ -99,7 +95,6 @@ func (b *WriteBackBatcher) flush() {
 		pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
 	}
 
-	var xmlUpdates []*itunes.WriteBackUpdate
 	var itlUpdates []itunes.ITLLocationUpdate
 
 	for _, id := range ids {
@@ -112,52 +107,26 @@ func (b *WriteBackBatcher) flush() {
 		}
 
 		itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
-
-		xmlUpdates = append(xmlUpdates, &itunes.WriteBackUpdate{
-			ITunesPersistentID: *book.ITunesPersistentID,
-			NewPath:            itunesPath,
+		itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+			PersistentID: *book.ITunesPersistentID,
+			NewLocation:  itunesPath,
 		})
-
-		if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
-			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  itunesPath,
-			})
-		}
 	}
 
-	if len(xmlUpdates) == 0 {
+	if len(itlUpdates) == 0 {
 		return
 	}
 
-	// Write XML
-	result, err := itunes.WriteBack(itunes.WriteBackOptions{
-		LibraryPath:  xmlPath,
-		Updates:      xmlUpdates,
-		CreateBackup: false, // Don't backup on every auto write-back
-	})
-	if err != nil {
-		log.Printf("[WARN] iTunes auto write-back XML failed: %v", err)
-	} else {
-		log.Printf("[INFO] iTunes auto write-back XML: updated %d tracks", result.UpdatedCount)
-		// Update fingerprint
-		if fp, fpErr := itunes.ComputeFingerprint(xmlPath); fpErr == nil {
-			_ = store.SaveLibraryFingerprint(fp.Path, fp.Size, fp.ModTime, fp.CRC32)
-		}
-	}
-
 	// Write ITL
-	if len(itlUpdates) > 0 {
-		itlPath := config.AppConfig.ITunesLibraryITLPath
-		itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
-		if itlErr != nil {
-			log.Printf("[WARN] iTunes auto write-back ITL failed: %v", itlErr)
+	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
+	if itlErr != nil {
+		log.Printf("[WARN] iTunes auto write-back ITL failed: %v", itlErr)
+	} else {
+		if renameErr := renameFile(itlPath+".tmp", itlPath); renameErr != nil {
+			log.Printf("[WARN] iTunes auto write-back ITL rename failed: %v", renameErr)
 		} else {
-			if renameErr := renameFile(itlPath+".tmp", itlPath); renameErr != nil {
-				log.Printf("[WARN] iTunes auto write-back ITL rename failed: %v", renameErr)
-			} else {
-				log.Printf("[INFO] iTunes auto write-back ITL: updated %d tracks", itlResult.UpdatedCount)
-			}
+			log.Printf("[INFO] iTunes auto write-back ITL: updated %d tracks", itlResult.UpdatedCount)
 		}
 	}
 }
