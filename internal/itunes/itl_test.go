@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8a3b9c4d-5e6f-7012-b3c4-d5e6f7a8b9c0
 
 package itunes
@@ -21,10 +21,10 @@ func TestITLDecryptEncryptRoundTrip(t *testing.T) {
 	original := []byte("Hello, ITL world!!!!!!!!!!!!!!!!") // 32 bytes
 	assert.Equal(t, 0, len(original)%16)
 
-	encrypted := itlEncrypt("12.0.0", original)
+	encrypted := itlEncrypt(&hdfmHeader{version: "12.0.0"}, original)
 	assert.NotEqual(t, original, encrypted, "encrypted should differ from original")
 
-	decrypted := itlDecrypt("12.0.0", encrypted)
+	decrypted := itlDecrypt(&hdfmHeader{version: "12.0.0"}, encrypted)
 	assert.Equal(t, original, decrypted)
 }
 
@@ -34,8 +34,8 @@ func TestITLDecryptEncryptRoundTrip_OldVersion(t *testing.T) {
 		original[i] = byte(i % 256)
 	}
 
-	encrypted := itlEncrypt("9.0.0", original)
-	decrypted := itlDecrypt("9.0.0", encrypted)
+	encrypted := itlEncrypt(&hdfmHeader{version: "9.0.0"}, original)
+	decrypted := itlDecrypt(&hdfmHeader{version: "9.0.0"}, encrypted)
 	assert.Equal(t, original, decrypted)
 }
 
@@ -214,7 +214,7 @@ func buildSyntheticITL(t *testing.T, version string, compress bool, pid [8]byte,
 	if compress {
 		payloadBytes = itlDeflate(payloadBytes)
 	}
-	encrypted := itlEncrypt(version, payloadBytes)
+	encrypted := itlEncrypt(&hdfmHeader{version: version}, payloadBytes)
 
 	// Build hdfm header
 	// Header: "hdfm"(4) + headerLen(4) + fileLen(4) + unknown(4) + verLen(1) + version(N) = 17 + N
@@ -347,7 +347,7 @@ func buildSyntheticITLWithPlaylist(t *testing.T, version string, trackID int, pi
 	payload.Write(titleHohm)
 	payload.Write(hptm)
 
-	encrypted := itlEncrypt(version, payload.Bytes())
+	encrypted := itlEncrypt(&hdfmHeader{version: version}, payload.Bytes())
 	fileLen := uint32(len(encrypted)) + 17 + uint32(len(version))
 	hdr := buildHdfmHeader(version, nil, fileLen, 0)
 
@@ -633,7 +633,7 @@ func buildFixtureITL() []byte {
 
 	// Compress and encrypt
 	compressed := itlDeflate(payload.Bytes())
-	encrypted := itlEncrypt(version, compressed)
+	encrypted := itlEncrypt(&hdfmHeader{version: version}, compressed)
 
 	// Build hdfm header
 	hdr := buildHdfmHeader(version, nil, uint32(len(encrypted))+17+uint32(len(version)), 0)
