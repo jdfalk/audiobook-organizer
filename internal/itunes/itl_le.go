@@ -6,7 +6,6 @@ package itunes
 
 import (
 	"bytes"
-	"log"
 	"strings"
 )
 
@@ -382,22 +381,15 @@ func rewriteChunksLEImpl(data []byte, updateMap map[string]string) ([]byte, int)
 	for offset+16 <= len(data) {
 		tag := readTag(data, offset)
 		if tag != "msdh" {
-			log.Printf("[DEBUG] rewriteChunksLE: non-msdh tag at offset %d: %q (hex: %x), stopping after %d containers", offset, tag, data[offset:offset+4], msdhCount)
 			out.Write(data[offset:])
 			break
 		}
 
-		headerLen := int(readUint32LE(data, offset+4))
 		totalLen := int(readUint32LE(data, offset+8))
 		blockType := int(readUint32LE(data, offset+12))
 		msdhCount++
 
-		if msdhCount <= 5 {
-			log.Printf("[DEBUG] rewriteChunksLE: msdh #%d at offset %d headerLen=%d totalLen=%d blockType=0x%02x", msdhCount, offset, headerLen, totalLen, blockType)
-		}
-
 		if totalLen < 16 || offset+totalLen > len(data) {
-			log.Printf("[DEBUG] rewriteChunksLE: bad totalLen %d at offset %d (dataLen=%d), stopping", totalLen, offset, len(data))
 			out.Write(data[offset:])
 			break
 		}
@@ -422,7 +414,6 @@ func rewriteChunksLEImpl(data []byte, updateMap map[string]string) ([]byte, int)
 
 // rewriteMsdhContentLE rewrites mith/mhoh content inside an msdh container.
 func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *string) ([]byte, int) {
-	log.Printf("[DEBUG] ENTERING rewriteMsdhContentLE: msdhLen=%d updateMapSize=%d", len(msdh), len(updateMap))
 	if len(msdh) < 16 {
 		return msdh, 0
 	}
@@ -444,7 +435,6 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 	for subOffset+8 <= contentEnd {
 		tag := readTag(msdh, subOffset)
 		if tag == "" {
-			log.Printf("[DEBUG] rewriteMsdhContentLE: empty tag at subOffset %d (headerLen=%d contentEnd=%d), found %d tracks, tagCounts=%v", subOffset, headerLen, contentEnd, trackCount, tagCounts)
 			break
 		}
 		chunkHeaderLen := int(readUint32LE(msdh, subOffset+4))
@@ -454,7 +444,6 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 			chunkLen = chunkTotalLen
 		}
 		if chunkLen < 8 || subOffset+chunkLen > contentEnd {
-			log.Printf("[DEBUG] rewriteMsdhContentLE: bad chunkLen %d (hdr=%d total=%d) for tag %q at subOffset %d, found %d tracks, tagCounts=%v", chunkLen, chunkHeaderLen, chunkTotalLen, tag, subOffset, trackCount, tagCounts)
 			break
 		}
 		tagCounts[tag]++
@@ -478,10 +467,6 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 			if subOffset+136 <= len(msdh) {
 				pid := pidToHexLE([8]byte(msdh[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
-				if trackCount <= 5 {
-					_, inMap := updateMap[*currentPID]
-					log.Printf("[DEBUG] LE mith #%d: PID=%s inUpdateMap=%v headerLen=%d totalLen=%d", trackCount, *currentPID, inMap, chunkHeaderLen, chunkTotalLen)
-				}
 			}
 			// Walk mhoh sub-blocks inside this mith
 			mithData := msdh[subOffset : subOffset+chunkLen]
@@ -514,8 +499,6 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 	// Update msdh totalLen field (offset 8)
 	newLen := uint32(len(result))
 	writeUint32LE(result, 8, newLen)
-
-	log.Printf("[DEBUG] rewriteMsdhContentLE done: %d tracks, %d updates, tagCounts=%v", trackCount, updatedCount, tagCounts)
 
 	return result, updatedCount
 }
