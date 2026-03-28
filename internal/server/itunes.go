@@ -2044,10 +2044,14 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 
 			// Store the iTunes file location URL for write-back
 			if firstTrack.Location != "" {
-				if existing.ITunesPath == nil || *existing.ITunesPath != firstTrack.Location {
-					existing.ITunesPath = &firstTrack.Location
+				loc := firstTrack.Location
+				if existing.ITunesPath == nil || *existing.ITunesPath != loc {
+					existing.ITunesPath = &loc
 					changed = true
+					log.Info("Set itunes_path for %s: %s", existing.Title, loc[:min(80, len(loc))])
 				}
+			} else {
+				log.Debug("No Location for PID %s (%s)", persistentID, existing.Title)
 			}
 
 			if changed {
