@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -47,6 +48,11 @@ type ITLLibrary struct {
 	UseCompression  bool
 	rawData         []byte // decrypted (and decompressed) payload
 	unknown         uint32 // from hdfm header
+}
+
+// RawData returns the decrypted/decompressed payload for debugging.
+func (lib *ITLLibrary) RawData() []byte {
+	return lib.rawData
 }
 
 // ITLTrack represents a track from the ITL binary.
@@ -491,6 +497,10 @@ func parseITLData(data []byte) (*ITLLibrary, error) {
 	}
 
 	// Walk chunks — dispatch on endianness
+	if len(decompressed) >= 4 {
+		log.Printf("[DEBUG] ITL decompressed: first 4 bytes = %q (hex: %x), len=%d, wasCompressed=%v, maxCryptSize=%d",
+			string(decompressed[0:4]), decompressed[0:4], len(decompressed), wasCompressed, hdr.maxCryptSize)
+	}
 	if detectLE(decompressed) {
 		walkChunksLE(decompressed, lib)
 	} else {
@@ -656,12 +666,20 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 	decrypted := itlDecrypt(hdr, payload)
 	decompressed, wasCompressed := itlInflate(decrypted)
 
+	if len(decompressed) >= 4 {
+		log.Printf("[DEBUG] UpdateITLLocations: version=%s maxCryptSize=%d payloadLen=%d decompressedLen=%d wasCompressed=%v first4=%q (hex: %x)",
+			hdr.version, hdr.maxCryptSize, len(payload), len(decompressed), wasCompressed,
+			string(decompressed[0:4]), decompressed[0:4])
+	}
+
 	// Walk and rewrite — dispatch on endianness
 	var newData []byte
 	var updatedCount int
 	if detectLE(decompressed) {
+		log.Printf("[DEBUG] UpdateITLLocations: detected LE format, using rewriteChunksLE")
 		newData, updatedCount = rewriteChunksLE(decompressed, updateMap)
 	} else {
+		log.Printf("[DEBUG] UpdateITLLocations: detected BE format, using rewriteChunksBE")
 		newData, updatedCount = rewriteChunksBE(decompressed, updateMap)
 	}
 

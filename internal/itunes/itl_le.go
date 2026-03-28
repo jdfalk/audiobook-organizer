@@ -6,6 +6,7 @@ package itunes
 
 import (
 	"bytes"
+	"log"
 	"strings"
 )
 
@@ -55,12 +56,26 @@ func walkMsdhTracksLE(data []byte, start, end int, lib *ITLLibrary) {
 		if tag == "" {
 			break
 		}
-		length := int(readUint32LE(data, offset+4))
+		// In LE format: mith/mhoh have headerLen at +4, totalLen at +8.
+		// Use totalLen for mith/mhoh (includes sub-data), headerLen for others (mlth).
+		headerLen := int(readUint32LE(data, offset+4))
+		totalLen := int(readUint32LE(data, offset+8))
+		length := headerLen // default: use headerLen
+		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && totalLen > headerLen && totalLen <= end-offset {
+			length = totalLen // container: use totalLen
+		}
 		if length < 8 || offset+length > end {
 			break
 		}
 
 		switch tag {
+		case "mlth":
+			// Track list header — skip
+
+		case "miah":
+			// Track item array — descend into it
+			walkMiahContent(data, offset, length, lib, &currentTrack)
+
 		case "mith":
 			t := parseMithLE(data, offset, length)
 			lib.Tracks = append(lib.Tracks, t)
@@ -72,6 +87,47 @@ func walkMsdhTracksLE(data []byte, start, end int, lib *ITLLibrary) {
 			}
 		}
 
+		offset += length
+	}
+}
+
+// walkMiahContent walks the sub-blocks inside a miah (track item array) wrapper.
+func walkMiahContent(data []byte, miahStart, miahLen int, lib *ITLLibrary, currentTrack **ITLTrack) {
+	miahHeaderLen := int(readUint32LE(data, miahStart+4))
+	if miahHeaderLen < 8 {
+		miahHeaderLen = 12 // fallback
+	}
+	offset := miahStart + miahHeaderLen
+	end := miahStart + miahLen
+
+	for offset+8 <= end {
+		tag := readTag(data, offset)
+		if tag == "" {
+			break
+		}
+		// In LE format: mith/mhoh have headerLen at +4, totalLen at +8.
+		// Use totalLen for mith/mhoh (includes sub-data), headerLen for others (mlth).
+		headerLen := int(readUint32LE(data, offset+4))
+		totalLen := int(readUint32LE(data, offset+8))
+		length := headerLen // default: use headerLen
+		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && totalLen > headerLen && totalLen <= end-offset {
+			length = totalLen // container: use totalLen
+		}
+		if length < 8 || offset+length > end {
+			break
+		}
+
+		switch tag {
+		case "mith":
+			t := parseMithLE(data, offset, length)
+			lib.Tracks = append(lib.Tracks, t)
+			*currentTrack = &lib.Tracks[len(lib.Tracks)-1]
+
+		case "mhoh":
+			if *currentTrack != nil {
+				parseMhohLE(data, offset, length, *currentTrack)
+			}
+		}
 		offset += length
 	}
 }
@@ -192,7 +248,14 @@ func walkMsdhPlaylistsLE(data []byte, start, end int, lib *ITLLibrary) {
 		if tag == "" {
 			break
 		}
-		length := int(readUint32LE(data, offset+4))
+		// In LE format: mith/mhoh have headerLen at +4, totalLen at +8.
+		// Use totalLen for mith/mhoh (includes sub-data), headerLen for others (mlth).
+		headerLen := int(readUint32LE(data, offset+4))
+		totalLen := int(readUint32LE(data, offset+8))
+		length := headerLen // default: use headerLen
+		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && totalLen > headerLen && totalLen <= end-offset {
+			length = totalLen // container: use totalLen
+		}
 		if length < 8 || offset+length > end {
 			break
 		}
@@ -306,17 +369,26 @@ func rewriteChunksLEImpl(data []byte, updateMap map[string]string) ([]byte, int)
 	offset := 0
 	updatedCount := 0
 
+	msdhCount := 0
 	for offset+16 <= len(data) {
 		tag := readTag(data, offset)
 		if tag != "msdh" {
+			log.Printf("[DEBUG] rewriteChunksLE: non-msdh tag at offset %d: %q (hex: %x), stopping after %d containers", offset, tag, data[offset:offset+4], msdhCount)
 			out.Write(data[offset:])
 			break
 		}
 
+		headerLen := int(readUint32LE(data, offset+4))
 		totalLen := int(readUint32LE(data, offset+8))
 		blockType := int(readUint32LE(data, offset+12))
+		msdhCount++
+
+		if msdhCount <= 5 {
+			log.Printf("[DEBUG] rewriteChunksLE: msdh #%d at offset %d headerLen=%d totalLen=%d blockType=0x%02x", msdhCount, offset, headerLen, totalLen, blockType)
+		}
 
 		if totalLen < 16 || offset+totalLen > len(data) {
+			log.Printf("[DEBUG] rewriteChunksLE: bad totalLen %d at offset %d (dataLen=%d), stopping", totalLen, offset, len(data))
 			out.Write(data[offset:])
 			break
 		}
@@ -341,6 +413,7 @@ func rewriteChunksLEImpl(data []byte, updateMap map[string]string) ([]byte, int)
 
 // rewriteMsdhContentLE rewrites mith/mhoh content inside an msdh container.
 func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *string) ([]byte, int) {
+	log.Printf("[DEBUG] ENTERING rewriteMsdhContentLE: msdhLen=%d updateMapSize=%d", len(msdh), len(updateMap))
 	if len(msdh) < 16 {
 		return msdh, 0
 	}
@@ -357,18 +430,42 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 	subOffset := headerLen
 	contentEnd := len(msdh)
 
+	trackCount := 0
+	tagCounts := make(map[string]int)
 	for subOffset+8 <= contentEnd {
 		tag := readTag(msdh, subOffset)
 		if tag == "" {
+			log.Printf("[DEBUG] rewriteMsdhContentLE: empty tag at subOffset %d (headerLen=%d contentEnd=%d), found %d tracks, tagCounts=%v", subOffset, headerLen, contentEnd, trackCount, tagCounts)
 			break
 		}
-		chunkLen := int(readUint32LE(msdh, subOffset+4))
+		chunkHeaderLen := int(readUint32LE(msdh, subOffset+4))
+		chunkTotalLen := int(readUint32LE(msdh, subOffset+8))
+		chunkLen := chunkHeaderLen
+		if (tag == "mith" || tag == "mhoh" || tag == "miah" || tag == "miph") && chunkTotalLen > chunkHeaderLen && subOffset+chunkTotalLen <= contentEnd {
+			chunkLen = chunkTotalLen
+		}
 		if chunkLen < 8 || subOffset+chunkLen > contentEnd {
+			log.Printf("[DEBUG] rewriteMsdhContentLE: bad chunkLen %d (hdr=%d total=%d) for tag %q at subOffset %d, found %d tracks, tagCounts=%v", chunkLen, chunkHeaderLen, chunkTotalLen, tag, subOffset, trackCount, tagCounts)
 			break
 		}
+		tagCounts[tag]++
 
 		switch tag {
+		case "mlth":
+			out.Write(msdh[subOffset : subOffset+chunkLen])
+
+		case "miah":
+			// Track item array wrapper — contains mith + mhoh sub-blocks
+			// We need to descend into it and rewrite its content
+			miahData := msdh[subOffset : subOffset+chunkLen]
+			rewritten, cnt := rewriteMiahContentLE(miahData, updateMap, currentPID)
+			out.Write(rewritten)
+			updatedCount += cnt
+			trackCount++
+
 		case "mith":
+			// Direct mith (not wrapped in miah) — handle it
+			trackCount++
 			if subOffset+136 <= len(msdh) {
 				pid := pidToHex([8]byte(msdh[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
@@ -400,6 +497,78 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 	// Update msdh totalLen field (offset 8)
 	newLen := uint32(len(result))
 	writeUint32LE(result, 8, newLen)
+
+	log.Printf("[DEBUG] rewriteMsdhContentLE done: %d tracks, %d updates, tagCounts=%v", trackCount, updatedCount, tagCounts)
+
+	return result, updatedCount
+}
+
+// rewriteMiahContentLE walks mith + mhoh blocks inside a miah (track item array) wrapper.
+// miah layout: tag(4) + headerLen(4) + totalLen(4) + ... then sub-blocks
+func rewriteMiahContentLE(miah []byte, updateMap map[string]string, currentPID *string) ([]byte, int) {
+	if len(miah) < 12 {
+		return miah, 0
+	}
+	miahHeaderLen := int(readUint32LE(miah, 4))
+	if miahHeaderLen < 8 || miahHeaderLen > len(miah) {
+		return miah, 0
+	}
+
+	var out bytes.Buffer
+	out.Write(miah[:miahHeaderLen]) // preserve miah header
+
+	updatedCount := 0
+	subOffset := miahHeaderLen
+
+	for subOffset+8 <= len(miah) {
+		tag := readTag(miah, subOffset)
+		if tag == "" {
+			break
+		}
+		chunkHeaderLen := int(readUint32LE(miah, subOffset+4))
+		chunkTotalLen := int(readUint32LE(miah, subOffset+8))
+		chunkLen := chunkHeaderLen
+		if (tag == "mith" || tag == "mhoh") && chunkTotalLen > chunkHeaderLen && subOffset+chunkTotalLen <= len(miah) {
+			chunkLen = chunkTotalLen
+		}
+		if chunkLen < 8 || subOffset+chunkLen > len(miah) {
+			break
+		}
+
+		switch tag {
+		case "mith":
+			if subOffset+136 <= len(miah) {
+				pid := pidToHex([8]byte(miah[subOffset+128 : subOffset+136]))
+				*currentPID = strings.ToLower(pid)
+			}
+			out.Write(miah[subOffset : subOffset+chunkLen])
+
+		case "mhoh":
+			if newLoc, ok := shouldUpdateMhohLE(miah, subOffset, chunkLen, *currentPID, updateMap); ok {
+				rewritten := rewriteHohmLocationLE(miah, subOffset, chunkLen, newLoc)
+				out.Write(rewritten)
+				updatedCount++
+			} else {
+				out.Write(miah[subOffset : subOffset+chunkLen])
+			}
+
+		default:
+			out.Write(miah[subOffset : subOffset+chunkLen])
+		}
+		subOffset += chunkLen
+	}
+
+	// Write trailing bytes
+	if subOffset < len(miah) {
+		out.Write(miah[subOffset:])
+	}
+
+	result := out.Bytes()
+	// Update miah length fields
+	if len(result) >= 12 {
+		writeUint32LE(result, 4, uint32(len(result)))
+		writeUint32LE(result, 8, uint32(len(result)))
+	}
 
 	return result, updatedCount
 }
