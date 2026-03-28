@@ -1,5 +1,5 @@
 // file: internal/itunes/itl.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
 
 package itunes
@@ -500,14 +500,14 @@ func parseITLData(data []byte) (*ITLLibrary, error) {
 	return lib, nil
 }
 
-// walkChunksLE is a stub — implemented in itl_le.go (Task 3).
+// walkChunksLE dispatches to the LE implementation in itl_le.go.
 func walkChunksLE(data []byte, lib *ITLLibrary) {
-	// Stub — implemented in itl_le.go (Task 3)
+	walkChunksLEImpl(data, lib)
 }
 
-// rewriteChunksLE is a stub — implemented in itl_le.go (Task 3).
+// rewriteChunksLE dispatches to the LE implementation in itl_le.go.
 func rewriteChunksLE(data []byte, updateMap map[string]string) ([]byte, int) {
-	return data, 0 // Stub — implemented in itl_le.go (Task 3)
+	return rewriteChunksLEImpl(data, updateMap)
 }
 
 // ---------------------------------------------------------------------------
