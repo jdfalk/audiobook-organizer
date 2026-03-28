@@ -82,7 +82,9 @@
 
 | # | Item | Details | Spec/Plan |
 |---|------|---------|-----------|
-| 21 | **Playlist system (full)** | Tag-based vs stored vs iTunes sync. Needs brainstorming. | — |
+| 21 | **Playlist system (full)** | Tag-based vs stored vs iTunes sync. Smart playlists based on play counts. Bidirectional sync to iTunes. Needs brainstorming. | — |
+| 29 | **Empty folder cleanup** | Audiobook organizer folder has empty directories from renames. Need maintenance task to clean up. | — |
+| 30 | **External library sync abstraction** | Sonarr-style pluggable connectors for syncing with external libraries (iTunes, future apps). Needs brainstorming. | — |
 | 22 | **OpenAI batch polling rate limiting** | gpt-5.4 hit token limits. | [Diagnostics Spec](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
 | 23 | **Deferred iTunes updates live test** | Deployed but untested. | [Deferred iTunes Spec](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md) |
 | 24 | **Path format customization UI** | Expose in Settings. | — |
