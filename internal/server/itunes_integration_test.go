@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,6 +174,8 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 }
 
 func TestITunesWriteBack(t *testing.T) {
+	// XML write-back has been removed. The write-back endpoint now only supports
+	// ITL binary write-back. When ITL is not configured, it returns 400.
 	env, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
@@ -193,37 +194,18 @@ func TestITunesWriteBack(t *testing.T) {
 	created, err := env.Store.CreateBook(book)
 	require.NoError(t, err)
 
-	// Generate iTunes XML with original path
-	xmlPath := filepath.Join(env.TempDir, "iTunes Library.xml")
-	testutil.GenerateITunesXML(t, []testutil.ITunesTestTrack{
-		{TrackID: 100, PersistentID: persistentID, Name: "The Hobbit",
-			Artist: "J.R.R. Tolkien", Genre: "Audiobook", Kind: "Audiobook",
-			FilePath: origPath, TotalTime: 36000000},
-	}, xmlPath)
-
-	// Execute write-back via HTTP
+	// Execute write-back via HTTP — ITL is not configured in test, so should return 400
 	server := NewServer()
-	body := fmt.Sprintf(`{"library_path":"%s","audiobook_ids":["%s"],"create_backup":true}`, xmlPath, created.ID)
+	body := fmt.Sprintf(`{"audiobook_ids":["%s"]}`, created.ID)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Verify iTunes library was updated
-	updatedLib, err := itunes.ParseLibrary(xmlPath)
-	require.NoError(t, err)
-	for _, track := range updatedLib.Tracks {
-		if track.PersistentID == persistentID {
-			decodedPath, err := itunes.DecodeLocation(track.Location)
-			require.NoError(t, err)
-			assert.Equal(t, newPath, decodedPath, "iTunes location should point to organized path")
-		}
-	}
-
-	// Verify backup was created
-	matches, _ := filepath.Glob(filepath.Join(env.TempDir, "*.backup.*"))
-	assert.NotEmpty(t, matches, "backup file should exist")
+	// Without ITL configured, endpoint returns 400
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Contains(t, resp["error"], "ITL write-back is not enabled")
 }
 
 func TestITunesValidate_Endpoint(t *testing.T) {
