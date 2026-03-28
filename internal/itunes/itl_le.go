@@ -188,11 +188,17 @@ func parseMithLE(data []byte, offset, length int) ITLTrack {
 		t.DateAdded = macDateToTime(readUint32LE(data, base+120))
 	}
 	if safe(128, 8) {
-		copy(t.PersistentID[:], data[base+128:base+136])
+		// LE format stores PID bytes in reverse order compared to XML hex strings.
+		// Reverse them so PersistentID matches the XML format (BE / MSB first).
+		for i := 0; i < 8; i++ {
+			t.PersistentID[i] = data[base+135-i]
+		}
 	}
 	// Album persistent ID at +300 if header is big enough
 	if length > 308 && safe(300, 8) {
-		copy(t.AlbumPersistentID[:], data[base+300:base+308])
+		for i := 0; i < 8; i++ {
+			t.AlbumPersistentID[i] = data[base+307-i]
+		}
 	}
 
 	return t
@@ -292,7 +298,10 @@ func parseMiphLE(data []byte, offset, length int) ITLPlaylist {
 	if remaining >= 428 {
 		base := offset + 20
 		if base+428 <= len(data) {
-			copy(p.PersistentID[:], data[base+420:base+428])
+			// Reverse byte order for LE → BE PID matching
+			for i := 0; i < 8; i++ {
+				p.PersistentID[i] = data[base+427-i]
+			}
 		}
 	}
 	return p
@@ -467,7 +476,7 @@ func rewriteMsdhContentLE(msdh []byte, updateMap map[string]string, currentPID *
 			// mith is a container: headerLen = fixed track fields, totalLen includes mhoh sub-blocks
 			trackCount++
 			if subOffset+136 <= len(msdh) {
-				pid := pidToHex([8]byte(msdh[subOffset+128 : subOffset+136]))
+				pid := pidToHexLE([8]byte(msdh[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
 				if trackCount <= 5 {
 					_, inMap := updateMap[*currentPID]
@@ -546,7 +555,7 @@ func rewriteMiahContentLE(miah []byte, updateMap map[string]string, currentPID *
 		switch tag {
 		case "mith":
 			if subOffset+136 <= len(miah) {
-				pid := pidToHex([8]byte(miah[subOffset+128 : subOffset+136]))
+				pid := pidToHexLE([8]byte(miah[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
 			}
 			out.Write(miah[subOffset : subOffset+chunkLen])

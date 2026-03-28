@@ -106,7 +106,8 @@ func buildMtphLE(trackID int) []byte {
 // ---------------------------------------------------------------------------
 
 func TestWalkChunksLE_ParsesTracks(t *testing.T) {
-	pid := [8]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22}
+	// LE byte order: reversed from XML hex "aabbccddeeff1122"
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	location := "/music/audiobooks/test.m4b"
 
 	// Build track content: mith + mhoh(name) + mhoh(location)
@@ -194,7 +195,8 @@ func TestWalkChunksLE_ParsesTracks(t *testing.T) {
 }
 
 func TestRewriteChunksLE_UpdatesLocation(t *testing.T) {
-	pid := [8]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22}
+	// LE byte order: reversed from XML hex "aabbccddeeff1122"
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	oldLocation := "/old/path/book.m4b"
 	newLocation := "/new/path/book.m4b"
 
@@ -208,9 +210,9 @@ func TestRewriteChunksLE_UpdatesLocation(t *testing.T) {
 
 	data := buildMsdhLE(0x01, content)
 
-	pidHex := strings.ToLower(hex.EncodeToString(pid[:]))
+	// updateMap uses XML-format (BE) hex — pidToHexLE reverses the LE bytes to match
 	updateMap := map[string]string{
-		pidHex: newLocation,
+		"aabbccddeeff1122": newLocation,
 	}
 
 	rewritten, count := rewriteChunksLEImpl(data, updateMap)
@@ -234,7 +236,8 @@ func TestRewriteChunksLE_UpdatesLocation(t *testing.T) {
 }
 
 func TestWalkChunksLE_ParsesPlaylists(t *testing.T) {
-	playlistPID := [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+	// LE order: reverses to "1122334455667788"
+	playlistPID := [8]byte{0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11}
 
 	// Build playlist content: miph + mhoh(title) + mtph + mtph
 	miph := buildMiphLE(playlistPID)
@@ -277,8 +280,8 @@ func TestWalkChunksLE_ParsesPlaylists(t *testing.T) {
 }
 
 func TestWalkChunksLE_MultipleMsdhContainers(t *testing.T) {
-	trackPID := [8]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22}
-	playlistPID := [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
+	trackPID := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
+	playlistPID := [8]byte{0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11}
 
 	// Build track msdh
 	mith := buildMithLE(42, trackPID, 1024000, 360000)
@@ -321,7 +324,7 @@ func TestWalkChunksLE_MultipleMsdhContainers(t *testing.T) {
 }
 
 func TestRewriteChunksLE_NoMatchReturnsUnchanged(t *testing.T) {
-	pid := [8]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22}
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	mith := buildMithLE(42, pid, 1024000, 360000)
 	locMhoh := buildMhohLE(0x0D, "/original/path.m4b")
 
@@ -352,7 +355,7 @@ func TestRewriteChunksLE_NoMatchReturnsUnchanged(t *testing.T) {
 }
 
 func TestRewriteChunksLE_LocalURLUpdate(t *testing.T) {
-	pid := [8]byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22}
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	mith := buildMithLE(42, pid, 1024000, 360000)
 	localURLMhoh := buildMhohLE(0x0B, "file://localhost/old/path.m4b")
 
@@ -361,9 +364,8 @@ func TestRewriteChunksLE_LocalURLUpdate(t *testing.T) {
 	content = append(content, localURLMhoh...)
 	data := buildMsdhLE(0x01, content)
 
-	pidHex := strings.ToLower(hex.EncodeToString(pid[:]))
 	updateMap := map[string]string{
-		pidHex: "/new/path.m4b",
+		"aabbccddeeff1122": "/new/path.m4b",
 	}
 
 	rewritten, count := rewriteChunksLEImpl(data, updateMap)
