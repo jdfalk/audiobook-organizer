@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.45.0
+// version: 1.46.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -29,7 +29,7 @@ const bookSelectColumns = `
 	print_year, audiobook_release_year, isbn10, isbn13, asin,
 	open_library_id, hardcover_id, google_books_id,
 	itunes_persistent_id, itunes_date_added, itunes_play_count,
-	itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source,
+	itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source, itunes_path,
 	file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 	bit_depth, quality, is_primary_version, version_group_id, version_notes,
 	original_file_hash, organized_file_hash, library_state, quantity,
@@ -45,7 +45,7 @@ const bookSelectColumnsQualified = `
 	books.print_year, books.audiobook_release_year, books.isbn10, books.isbn13, books.asin,
 	books.open_library_id, books.hardcover_id, books.google_books_id,
 	books.itunes_persistent_id, books.itunes_date_added, books.itunes_play_count,
-	books.itunes_last_played, books.itunes_rating, books.itunes_bookmark, books.itunes_import_source,
+	books.itunes_last_played, books.itunes_rating, books.itunes_bookmark, books.itunes_import_source, books.itunes_path,
 	books.file_hash, books.file_size, books.bitrate_kbps, books.codec, books.sample_rate_hz, books.channels,
 	books.bit_depth, books.quality, books.is_primary_version, books.version_group_id, books.version_notes,
 	books.original_file_hash, books.organized_file_hash, books.library_state, books.quantity,
@@ -61,7 +61,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		title, filePath, format                                              string
 		originalFilename                                                     sql.NullString
 		workID, narrator, edition, description, language, publisher, genre    sql.NullString
-		itunesPersistentID, itunesImportSource                               sql.NullString
+		itunesPersistentID, itunesImportSource, itunesPath                   sql.NullString
 		itunesDateAdded, itunesLastPlayed                                    sql.NullTime
 		isbn10, isbn13, asin                                                  sql.NullString
 		openLibraryID, hardcoverID, googleBooksID                              sql.NullString
@@ -83,7 +83,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&printYear, &releaseYear, &isbn10, &isbn13, &asin,
 		&openLibraryID, &hardcoverID, &googleBooksID,
 		&itunesPersistentID, &itunesDateAdded, &itunesPlayCount,
-		&itunesLastPlayed, &itunesRating, &itunesBookmark, &itunesImportSource,
+		&itunesLastPlayed, &itunesRating, &itunesBookmark, &itunesImportSource, &itunesPath,
 		&fileHash, &fileSize, &bitrate, &codec, &sampleRate, &channels,
 		&bitDepth, &quality, &isPrimaryVersion, &versionGroupID, &versionNotes,
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
@@ -130,6 +130,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		book.ITunesBookmark = &bookmark
 	}
 	book.ITunesImportSource = nullableString(itunesImportSource)
+	book.ITunesPath = nullableString(itunesPath)
 	book.FileHash = nullableString(fileHash)
 	if fileSize.Valid {
 		size := fileSize.Int64
@@ -323,6 +324,7 @@ func (s *SQLiteStore) createTables() error {
 		itunes_rating INTEGER,
 		itunes_bookmark INTEGER,
 		itunes_import_source TEXT,
+		itunes_path TEXT,
 		file_hash TEXT,
 		file_size INTEGER,
 		bitrate_kbps INTEGER,
@@ -2367,19 +2369,19 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		print_year, audiobook_release_year, isbn10, isbn13, asin,
 		open_library_id, hardcover_id, google_books_id,
 		itunes_persistent_id, itunes_date_added, itunes_play_count, itunes_last_played,
-		itunes_rating, itunes_bookmark, itunes_import_source,
+		itunes_rating, itunes_bookmark, itunes_import_source, itunes_path,
 		file_hash, file_size, bitrate_kbps, codec, sample_rate_hz, channels,
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
-		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
+		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource, book.ITunesPath,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
@@ -2486,7 +2488,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		print_year = ?, audiobook_release_year = ?, isbn10 = ?, isbn13 = ?, asin = ?,
 		open_library_id = ?, hardcover_id = ?, google_books_id = ?,
 		itunes_persistent_id = ?, itunes_date_added = ?, itunes_play_count = ?, itunes_last_played = ?,
-		itunes_rating = ?, itunes_bookmark = ?, itunes_import_source = ?,
+		itunes_rating = ?, itunes_bookmark = ?, itunes_import_source = ?, itunes_path = ?,
 		file_hash = ?, file_size = ?, bitrate_kbps = ?, codec = ?, sample_rate_hz = ?, channels = ?,
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
@@ -2501,7 +2503,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
 		book.OpenLibraryID, book.HardcoverID, book.GoogleBooksID,
 		book.ITunesPersistentID, book.ITunesDateAdded, book.ITunesPlayCount, book.ITunesLastPlayed,
-		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource,
+		book.ITunesRating, book.ITunesBookmark, book.ITunesImportSource, book.ITunesPath,
 		book.FileHash, book.FileSize, book.Bitrate, book.Codec, book.SampleRate, book.Channels,
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,

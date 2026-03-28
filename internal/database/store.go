@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.45.0
+// version: 2.46.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -373,6 +373,7 @@ type Book struct {
 	ITunesRating       *int       `json:"itunes_rating,omitempty"`
 	ITunesBookmark     *int64     `json:"itunes_bookmark,omitempty"`
 	ITunesImportSource *string    `json:"itunes_import_source,omitempty"`
+	ITunesPath         *string    `json:"itunes_path,omitempty"`
 	OriginalFilename   *string    `json:"original_filename,omitempty"`
 	// Media info fields
 	Bitrate    *int    `json:"bitrate_kbps,omitempty"`
