@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.16.0
+// version: 2.17.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -430,12 +430,6 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
-	// Build path mappings from config
-	var pathMappings []itunes.PathMapping
-	for _, m := range config.AppConfig.ITunesPathMappings {
-		pathMappings = append(pathMappings, itunes.PathMapping{From: m.From, To: m.To})
-	}
-
 	// Paginate through all books and collect those with iTunes PIDs
 	store := database.GlobalStore
 	var itlUpdates []itunes.ITLLocationUpdate
@@ -456,13 +450,12 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 			if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
 				continue
 			}
-			if book.FilePath == "" {
+			if book.ITunesPath == nil || *book.ITunesPath == "" {
 				continue
 			}
-			itunesPath := itunes.ReverseRemapPath(book.FilePath, pathMappings)
 			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
 				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  itunesPath,
+				NewLocation:  *book.ITunesPath,
 			})
 		}
 		if len(books) < pageSize {
@@ -2045,6 +2038,14 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				lastPlayed := time.Unix(firstTrack.PlayDate, 0)
 				if existing.ITunesLastPlayed == nil || !existing.ITunesLastPlayed.Equal(lastPlayed) {
 					existing.ITunesLastPlayed = &lastPlayed
+					changed = true
+				}
+			}
+
+			// Store the iTunes file location URL for write-back
+			if firstTrack.Location != "" {
+				if existing.ITunesPath == nil || *existing.ITunesPath != firstTrack.Location {
+					existing.ITunesPath = &firstTrack.Location
 					changed = true
 				}
 			}
