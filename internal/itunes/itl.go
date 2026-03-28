@@ -183,6 +183,13 @@ func pidToHex(pid [8]byte) string {
 	return hex.EncodeToString(pid[:])
 }
 
+// pidToHexLE converts a PID stored in little-endian byte order (v10+ ITL)
+// to the same hex string format used in the XML (big-endian / MSB first).
+func pidToHexLE(pid [8]byte) string {
+	reversed := [8]byte{pid[7], pid[6], pid[5], pid[4], pid[3], pid[2], pid[1], pid[0]}
+	return hex.EncodeToString(reversed[:])
+}
+
 func hexToPID(h string) ([8]byte, error) {
 	var pid [8]byte
 	b, err := hex.DecodeString(h)
