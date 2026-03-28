@@ -1,5 +1,5 @@
 // file: internal/itunes/itl.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
 
 package itunes
@@ -144,6 +144,35 @@ func writeUint32BE(buf []byte, offset int, val uint32) {
 	}
 }
 
+func readUint32LE(data []byte, offset int) uint32 {
+	if offset+4 > len(data) {
+		return 0
+	}
+	return uint32(data[offset]) | uint32(data[offset+1])<<8 |
+		uint32(data[offset+2])<<16 | uint32(data[offset+3])<<24
+}
+
+func readUint16LE(data []byte, offset int) uint16 {
+	if offset+2 > len(data) {
+		return 0
+	}
+	return uint16(data[offset]) | uint16(data[offset+1])<<8
+}
+
+func writeUint32LE(buf []byte, offset int, val uint32) {
+	buf[offset] = byte(val)
+	buf[offset+1] = byte(val >> 8)
+	buf[offset+2] = byte(val >> 16)
+	buf[offset+3] = byte(val >> 24)
+}
+
+func detectLE(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	return string(data[0:4]) == "msdh"
+}
+
 func pidToHex(pid [8]byte) string {
 	return hex.EncodeToString(pid[:])
 }
@@ -184,7 +213,7 @@ func isVersionAtLeast(version string, major int) bool {
 // AES-128/ECB encrypt/decrypt
 // ---------------------------------------------------------------------------
 
-func itlDecrypt(version string, data []byte) []byte {
+func itlDecrypt(hdr *hdfmHeader, data []byte) []byte {
 	if len(data) == 0 {
 		return data
 	}
@@ -195,12 +224,16 @@ func itlDecrypt(version string, data []byte) []byte {
 	bs := block.BlockSize()
 
 	limit := len(data)
-	if isVersionAtLeast(version, 10) {
-		if limit > 102400 {
+	if isVersionAtLeast(hdr.version, 10) {
+		if hdr.maxCryptSize > 0 {
+			limit = int(hdr.maxCryptSize)
+		} else if limit > 102400 {
 			limit = 102400
 		}
 	}
-	// Align to block size
+	if limit > len(data) {
+		limit = len(data)
+	}
 	limit = (limit / bs) * bs
 
 	out := make([]byte, len(data))
@@ -212,7 +245,7 @@ func itlDecrypt(version string, data []byte) []byte {
 	return out
 }
 
-func itlEncrypt(version string, data []byte) []byte {
+func itlEncrypt(hdr *hdfmHeader, data []byte) []byte {
 	if len(data) == 0 {
 		return data
 	}
@@ -223,10 +256,15 @@ func itlEncrypt(version string, data []byte) []byte {
 	bs := block.BlockSize()
 
 	limit := len(data)
-	if isVersionAtLeast(version, 10) {
-		if limit > 102400 {
+	if isVersionAtLeast(hdr.version, 10) {
+		if hdr.maxCryptSize > 0 {
+			limit = int(hdr.maxCryptSize)
+		} else if limit > 102400 {
 			limit = 102400
 		}
+	}
+	if limit > len(data) {
+		limit = len(data)
 	}
 	limit = (limit / bs) * bs
 
@@ -344,6 +382,7 @@ type hdfmHeader struct {
 	unknown         uint32
 	version         string
 	headerRemainder []byte
+	maxCryptSize    uint32 // from offset 92 in header, controls encryption boundary
 }
 
 func parseHdfmHeader(data []byte) (*hdfmHeader, error) {
@@ -378,6 +417,12 @@ func parseHdfmHeader(data []byte) (*hdfmHeader, error) {
 	version := string(data[off : off+verLen])
 	off += verLen
 
+	// Read max_crypt_size at absolute offset 92 if header is large enough
+	var maxCryptSize uint32
+	if headerLen > 96 {
+		maxCryptSize = readUint32BE(data, 92)
+	}
+
 	var remainder []byte
 	if off < int(headerLen) {
 		remainder = make([]byte, int(headerLen)-off)
@@ -390,6 +435,7 @@ func parseHdfmHeader(data []byte) (*hdfmHeader, error) {
 		unknown:         unknown,
 		version:         version,
 		headerRemainder: remainder,
+		maxCryptSize:    maxCryptSize,
 	}, nil
 }
 
@@ -431,7 +477,7 @@ func parseITLData(data []byte) (*ITLLibrary, error) {
 
 	// Decrypt payload (everything after hdfm header)
 	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 
 	// Decompress
 	decompressed, wasCompressed := itlInflate(decrypted)
@@ -899,7 +945,7 @@ func ValidateITL(path string) error {
 		return fmt.Errorf("ITL has no payload after header")
 	}
 
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 	decompressed, _ := itlInflate(decrypted)
 
 	if len(decompressed) < 4 {
@@ -943,7 +989,7 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 	}
 
 	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 	decompressed, wasCompressed := itlInflate(decrypted)
 
 	// Walk and rewrite
@@ -958,7 +1004,7 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 	}
 
 	// Encrypt
-	encrypted := itlEncrypt(hdr.version, finalPayload)
+	encrypted := itlEncrypt(hdr, finalPayload)
 
 	// Build new file
 	newFileLen := uint32(len(encrypted)) + hdr.headerLen
@@ -1193,7 +1239,7 @@ func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWr
 	}
 
 	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 	decompressed, wasCompressed := itlInflate(decrypted)
 
 	// Find max track ID
@@ -1328,7 +1374,7 @@ func RewriteITLExtensions(inputPath, outputPath string, oldExt, newExt string) (
 	}
 
 	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 	decompressed, wasCompressed := itlInflate(decrypted)
 
 	newData, count := rewriteExtensionsInChunks(decompressed, oldExt, newExt)
@@ -1400,7 +1446,7 @@ func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*
 	}
 
 	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr.version, payload)
+	decrypted := itlDecrypt(hdr, payload)
 	decompressed, wasCompressed := itlInflate(decrypted)
 
 	// Build playlist chunks
@@ -1428,7 +1474,7 @@ func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress b
 		finalPayload = payload
 	}
 
-	encrypted := itlEncrypt(hdr.version, finalPayload)
+	encrypted := itlEncrypt(hdr, finalPayload)
 
 	newFileLen := uint32(len(encrypted)) + hdr.headerLen
 	newHeader := buildHdfmHeader(hdr.version, hdr.headerRemainder, newFileLen, hdr.unknown)
