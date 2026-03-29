@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.136.0
+// version: 1.137.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1417,6 +1417,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/cover", s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/segments", s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.getSegmentTags)
+			protected.GET("/audiobooks/:id/files", s.listBookFiles)
 			protected.GET("/audiobooks/:id/changelog", s.getBookChangelog)
 			protected.GET("/audiobooks/:id/path-history", s.getBookPathHistory)
 			protected.GET("/audiobooks/:id/external-ids", s.getAudiobookExternalIDs)
@@ -1552,6 +1553,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance-window/run", s.runMaintenanceWindowNow)
 			protected.POST("/maintenance/fix-read-by-narrator", s.handleFixReadByNarrator)
 			protected.POST("/maintenance/cleanup-series", s.handleCleanupSeries)
+			protected.POST("/maintenance/backfill-book-files", s.handleBackfillBookFiles)
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
@@ -2484,6 +2486,54 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// listBookFiles returns all book_files rows for a book with live disk-existence check.
+func (s *Server) listBookFiles(c *gin.Context) {
+	bookID := c.Param("id")
+	if database.GlobalStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	files, err := database.GlobalStore.GetBookFiles(bookID)
+	if err != nil {
+		internalError(c, "failed to get book files", err)
+		return
+	}
+	if files == nil {
+		files = []database.BookFile{}
+	}
+	results := make([]gin.H, 0, len(files))
+	for _, f := range files {
+		_, statErr := os.Stat(f.FilePath)
+		results = append(results, gin.H{
+			"id":                   f.ID,
+			"book_id":              f.BookID,
+			"file_path":            f.FilePath,
+			"original_filename":    f.OriginalFilename,
+			"itunes_path":          f.ITunesPath,
+			"itunes_persistent_id": f.ITunesPersistentID,
+			"track_number":         f.TrackNumber,
+			"track_count":          f.TrackCount,
+			"disc_number":          f.DiscNumber,
+			"disc_count":           f.DiscCount,
+			"title":                f.Title,
+			"format":               f.Format,
+			"codec":                f.Codec,
+			"duration":             f.Duration,
+			"file_size":            f.FileSize,
+			"bitrate_kbps":         f.BitrateKbps,
+			"sample_rate_hz":       f.SampleRateHz,
+			"channels":             f.Channels,
+			"bit_depth":            f.BitDepth,
+			"file_hash":            f.FileHash,
+			"missing":              f.Missing,
+			"file_exists":          statErr == nil,
+			"created_at":           f.CreatedAt,
+			"updated_at":           f.UpdatedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"files": results, "count": len(results)})
 }
 
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
