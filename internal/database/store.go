@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.46.0
+// version: 2.47.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -224,6 +224,16 @@ type Store interface {
 	GetBookSegmentByID(segmentID string) (*BookSegment, error)
 	MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error
 
+	// Book files (replaces book_segments for new code)
+	CreateBookFile(file *BookFile) error
+	UpdateBookFile(id string, file *BookFile) error
+	GetBookFiles(bookID string) ([]BookFile, error)
+	GetBookFileByPID(itunesPID string) (*BookFile, error)
+	GetBookFileByPath(filePath string) (*BookFile, error)
+	DeleteBookFile(id string) error
+	DeleteBookFilesForBook(bookID string) error
+	UpsertBookFile(file *BookFile) error
+
 	// Playback events & progress
 	AddPlaybackEvent(event *PlaybackEvent) error
 	ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error)
@@ -373,6 +383,7 @@ type Book struct {
 	ITunesRating       *int       `json:"itunes_rating,omitempty"`
 	ITunesBookmark     *int64     `json:"itunes_bookmark,omitempty"`
 	ITunesImportSource *string    `json:"itunes_import_source,omitempty"`
+	// Deprecated: use book_files.itunes_path instead. Will be removed in a future migration.
 	ITunesPath         *string    `json:"itunes_path,omitempty"`
 	OriginalFilename   *string    `json:"original_filename,omitempty"`
 	// Media info fields
@@ -610,6 +621,36 @@ type BookSegment struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Version      int       `json:"version"`
+}
+
+// BookFile represents an individual audio file within a book.
+// Replaces BookSegment with ULID string book_id, iTunes integration fields,
+// and comprehensive audio metadata.
+type BookFile struct {
+	ID                 string    `json:"id"`
+	BookID             string    `json:"book_id"`
+	FilePath           string    `json:"file_path"`
+	OriginalFilename   string    `json:"original_filename,omitempty"`
+	ITunesPath         string    `json:"itunes_path,omitempty"`
+	ITunesPersistentID string    `json:"itunes_persistent_id,omitempty"`
+	TrackNumber        int       `json:"track_number,omitempty"`
+	TrackCount         int       `json:"track_count,omitempty"`
+	DiscNumber         int       `json:"disc_number,omitempty"`
+	DiscCount          int       `json:"disc_count,omitempty"`
+	Title              string    `json:"title,omitempty"`
+	Format             string    `json:"format,omitempty"`
+	Codec              string    `json:"codec,omitempty"`
+	Duration           int       `json:"duration,omitempty"`
+	FileSize           int64     `json:"file_size,omitempty"`
+	BitrateKbps        int       `json:"bitrate_kbps,omitempty"`
+	SampleRateHz       int       `json:"sample_rate_hz,omitempty"`
+	Channels           int       `json:"channels,omitempty"`
+	BitDepth           int       `json:"bit_depth,omitempty"`
+	FileHash           string    `json:"file_hash,omitempty"`
+	OriginalFileHash   string    `json:"original_file_hash,omitempty"`
+	Missing            bool      `json:"missing"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // PlaybackEvent immutable event

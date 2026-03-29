@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -1463,3 +1463,14 @@ func (m *MockStore) GetBooksByTag(tag string) ([]string, error) {
 	}
 	return nil, nil
 }
+
+// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 2) ----
+
+func (m *MockStore) CreateBookFile(file *BookFile) error          { return nil }
+func (m *MockStore) UpdateBookFile(id string, file *BookFile) error { return nil }
+func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error) { return nil, nil }
+func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error) { return nil, nil }
+func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error) { return nil, nil }
+func (m *MockStore) DeleteBookFile(id string) error               { return nil }
+func (m *MockStore) DeleteBookFilesForBook(bookID string) error    { return nil }
+func (m *MockStore) UpsertBookFile(file *BookFile) error           { return nil }
