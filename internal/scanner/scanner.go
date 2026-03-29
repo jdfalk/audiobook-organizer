@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -422,7 +422,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				if err := saveBook(&books[idx]); err != nil {
 					errChan <- fmt.Errorf("failed to save book %s: %w", books[idx].FilePath, err)
 				} else {
-					createSegmentsForBook(dirPath, nil, scanLog)
+					createBookFilesForBook(dirPath, nil, scanLog)
 				}
 				return // Done with this directory-based book
 			}
@@ -570,7 +570,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			} else {
 				// Create segments for multi-file books grouped by album
 				if len(books[idx].SegmentFiles) > 1 {
-					createSegmentsForBook(books[idx].FilePath, books[idx].SegmentFiles, scanLog)
+					createBookFilesForBook(books[idx].FilePath, books[idx].SegmentFiles, scanLog)
 				}
 				// Update scan cache so next incremental scan skips this file.
 				// Use a deferred recover guard in case GlobalStore is a non-nil interface
@@ -953,9 +953,95 @@ func isInitialToken(word string) bool {
 	return len(word) == 2 && word[1] == '.' && word[0] >= 'A' && word[0] <= 'Z'
 }
 
+// createBookFilesForBook creates BookFile records for a book.
+// If segmentFiles is nil, it scans dirPath for all audio files.
+// If segmentFiles is provided, only those specific files become BookFile records.
+// After creating book files, if book.FilePath points to a file (not a directory),
+// it normalizes it to the parent directory.
+func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog logger.Logger) {
+	if database.GlobalStore == nil {
+		return
+	}
+
+	dbBook, err := database.GlobalStore.GetBookByFilePath(bookFilePath)
+	if err != nil || dbBook == nil {
+		return
+	}
+
+	// Check if book files already exist
+	existing, _ := database.GlobalStore.GetBookFiles(dbBook.ID)
+	if len(existing) > 0 {
+		return // BookFiles already created (rescan)
+	}
+
+	// If no specific files provided, scan the directory
+	scanDir := bookFilePath
+	info, statErr := os.Stat(bookFilePath)
+	if statErr == nil && !info.IsDir() {
+		scanDir = filepath.Dir(bookFilePath)
+	}
+
+	if len(segmentFiles) == 0 {
+		entries, rerr := os.ReadDir(scanDir)
+		if rerr != nil {
+			return
+		}
+		audioExts := make(map[string]bool)
+		for _, ext := range config.AppConfig.SupportedExtensions {
+			audioExts[ext] = true
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if audioExts[ext] {
+				segmentFiles = append(segmentFiles, filepath.Join(scanDir, entry.Name()))
+			}
+		}
+	}
+
+	for i, filePath := range segmentFiles {
+		trackNum := i + 1
+		ext := strings.ToLower(filepath.Ext(filePath))
+		var sizeBytes int64
+		if fi, serr := os.Stat(filePath); serr == nil {
+			sizeBytes = fi.Size()
+		}
+
+		bf := &database.BookFile{
+			ID:               ulid.Make().String(),
+			BookID:           dbBook.ID,
+			FilePath:         filePath,
+			OriginalFilename: filepath.Base(filePath),
+			Format:           strings.TrimPrefix(ext, "."),
+			FileSize:         sizeBytes,
+			TrackNumber:      trackNum,
+		}
+
+		if serr := database.GlobalStore.UpsertBookFile(bf); serr != nil {
+			scanLog.Warn("failed to upsert book file for %s: %v", filePath, serr)
+		}
+	}
+
+	// Normalize book.FilePath to directory if it currently points to a file
+	if statErr == nil && !info.IsDir() {
+		dirPath := filepath.Dir(bookFilePath)
+		dbBook.FilePath = dirPath
+		if _, updateErr := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); updateErr != nil {
+			scanLog.Warn("failed to normalize FilePath for book %s: %v", dbBook.ID, updateErr)
+		}
+	}
+
+	if len(segmentFiles) > 0 {
+		scanLog.Debug("Created %d book files for book %s", len(segmentFiles), dbBook.Title)
+	}
+}
+
 // createSegmentsForBook creates BookSegment records for a multi-file book.
 // If segmentFiles is nil, it scans dirPath for all audio files.
 // If segmentFiles is provided, only those specific files become segments.
+// Deprecated: use createBookFilesForBook instead.
 func createSegmentsForBook(bookFilePath string, segmentFiles []string, scanLog logger.Logger) {
 	if database.GlobalStore == nil {
 		return
