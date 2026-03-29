@@ -74,7 +74,11 @@
 | 22 | **iTunes sync dialog pre-fill from config** | "Force Sync" dialog should auto-fill XML path from config, not require user to enter it | Open |
 | 23 | **iTunes sync should support ITL** | Force sync should write to ITL file, not just read XML | Open |
 | 24 | **Force Import always greyed out** | Button is disabled for unknown reason — investigate and fix | Open |
-| 25 | **ITL write-back after sync** | Endpoint exists (`POST /itunes/write-back-all`) but ITL parser returns 0 tracks from the copied ITL file (v12.13.10.3). Either parser doesn't handle this version or the file needs special handling. Also: need to store original iTunes path during sync so we don't need reverse path calculation. | Open — blocked on ITL parser |
+| 25 | **ITL write-back — multi-file books** | Write-back works (21,228 tracks updated) BUT multi-file books (40 MP3s) store only the directory path on the organized version. Write-back would point all 40 iTunes tracks to one directory instead of individual files. Need per-file `itunes_path` mapping for multi-file books. | Open — blocks safe write-back |
+| 26 | **Files & History layout — separate version boxes** | Format tray header says "MP3" which is useless when both versions are MP3. Each version should be in its own clearly labeled box (use book title or path segment, not format). | Open |
+| 27 | **Files & History — show individual files for multi-file books** | Organized version of multi-file books only shows directory path. Should list individual files sorted by track number. The data exists in external_id_map but isn't surfaced. | Open |
+| 28 | **Track PIDs should be sorted by track number** | iTunes Linked panel lists PIDs in import order, not track order. Sort by track number prefix. | Open |
+| 29 | **Deprecate XML functions** | Eventually read all data directly from ITL instead of XML to avoid format mismatches. | Open — long term |
 
 ---
 
