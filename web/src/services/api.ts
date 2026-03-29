@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.62.0
+// version: 1.63.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -197,6 +197,33 @@ export interface BookSegment {
   total_tracks?: number;
   active: boolean;
   file_exists?: boolean;
+}
+
+export interface BookFile {
+  id: string;
+  book_id: string;
+  file_path: string;
+  original_filename?: string;
+  itunes_path?: string;
+  itunes_persistent_id?: string;
+  track_number?: number;
+  track_count?: number;
+  disc_number?: number;
+  disc_count?: number;
+  title?: string;
+  format?: string;
+  codec?: string;
+  duration?: number;
+  file_size?: number;
+  bitrate_kbps?: number;
+  sample_rate_hz?: number;
+  channels?: number;
+  bit_depth?: number;
+  file_hash?: string;
+  missing: boolean;
+  file_exists?: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SegmentTags {
@@ -754,6 +781,15 @@ export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book segments');
   }
+  return response.json();
+}
+
+export async function getBookFiles(
+  bookId: string
+): Promise<{ files: BookFile[]; count: number }> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`);
+  if (!response.ok)
+    throw new Error(`Failed to fetch book files: ${response.status}`);
   return response.json();
 }
 

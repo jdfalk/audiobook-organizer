@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.40.0
+// version: 1.41.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -58,7 +58,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp.js';
 import StarIcon from '@mui/icons-material/Star.js';
 import StarBorderIcon from '@mui/icons-material/StarBorder.js';
 import RefreshIcon from '@mui/icons-material/Refresh.js';
-import type { Book, BookSegment, BookTags, SegmentTags, OverridePayload, OrganizePreviewResponse } from '../services/api';
+import type { Book, BookFile, BookSegment, BookTags, SegmentTags, OverridePayload, OrganizePreviewResponse } from '../services/api';
 import FileCopyIcon from '@mui/icons-material/FileCopy.js';
 import LabelIcon from '@mui/icons-material/Label.js';
 import ImageIcon from '@mui/icons-material/Image.js';
@@ -133,6 +133,7 @@ export const BookDetail = () => {
   const [metadataSearchOpen, setMetadataSearchOpen] = useState(false);
   const [segments, setSegments] = useState<BookSegment[]>([]);
   const [segmentsLoaded, setSegmentsLoaded] = useState(false);
+  const [bookFiles, setBookFiles] = useState<BookFile[]>([]);
   const [relocateSegment, setRelocateSegment] = useState<BookSegment | null>(null);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
@@ -256,21 +257,55 @@ export const BookDetail = () => {
     }
   };
 
-  // Load segments on mount (after book loads)
+  // Load book files (new API) first; fall back to legacy segments if unavailable.
   useEffect(() => {
     if (!id || segmentsLoaded) return;
     const loadSegments = async () => {
       try {
-        const data = await api.getBookSegments(id);
-        setSegments(data);
+        // Prefer the new book_files endpoint.
+        const result = await api.getBookFiles(id);
+        if (result.files && result.files.length > 0) {
+          setBookFiles(result.files);
+        } else {
+          // Fall back to legacy segments when no book_files exist yet.
+          const data = await api.getBookSegments(id);
+          setSegments(data);
+        }
       } catch {
-        // Segments not available, that's fine
+        // New endpoint unavailable — fall back to segments.
+        try {
+          const data = await api.getBookSegments(id);
+          setSegments(data);
+        } catch {
+          // Segments not available either, that's fine
+        }
       } finally {
         setSegmentsLoaded(true);
       }
     };
     loadSegments();
   }, [id, segmentsLoaded]);
+
+  // Reload files for the current book — prefers bookFiles, falls back to segments.
+  const reloadCurrentBookFiles = useCallback(async (bookId: string) => {
+    try {
+      const result = await api.getBookFiles(bookId);
+      if (result.files && result.files.length > 0) {
+        setBookFiles(result.files);
+        setSegments([]);
+        return;
+      }
+    } catch {
+      // fall through to segments
+    }
+    try {
+      const segs = await api.getBookSegments(bookId);
+      setSegments(segs);
+      setBookFiles([]);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Load segment tags when selection changes
   const loadSegmentTags = useCallback(async (segmentId: string) => {
@@ -502,8 +537,7 @@ export const BookDetail = () => {
       loadBook();
       loadVersions();
       // Reload segments since some moved
-      const segs = await api.getBookSegments(book.id);
-      setSegments(segs);
+      await reloadCurrentBookFiles(book.id);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to split version';
       toast(msg, 'error');
@@ -520,8 +554,7 @@ export const BookDetail = () => {
       toast(`Created ${result.count} new book${result.count !== 1 ? 's' : ''}`, 'success');
       setSelectedSegmentIds(new Set());
       loadBook();
-      const segs = await api.getBookSegments(book.id);
-      setSegments(segs);
+      await reloadCurrentBookFiles(book.id);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to split to books';
       toast(msg, 'error');
@@ -539,8 +572,7 @@ export const BookDetail = () => {
       // Dialog removed — move-to-version is now inline
       loadBook();
       loadVersions();
-      const segs = await api.getBookSegments(book.id);
-      setSegments(segs);
+      await reloadCurrentBookFiles(book.id);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'Failed to move segments';
       toast(msg, 'error');
@@ -1400,7 +1432,13 @@ export const BookDetail = () => {
             const hasPrimary = groupVersions.some((v) => v.is_primary_version);
             const hasItunes = groupVersions.some((v) => v.itunes_persistent_id);
             const totalFiles = groupVersions.reduce((sum, v) => {
-              const segs = v.id === book.id ? segments : (versionSegments[v.id] || []);
+              // Prefer bookFiles for the current book; fall back to segments.
+              const segs =
+                v.id === book.id
+                  ? bookFiles.length > 0
+                    ? bookFiles
+                    : segments
+                  : (versionSegments[v.id] || []);
               return sum + (segs.length || 1);
             }, 0);
             const totalSize = groupVersions.reduce((sum, v) => sum + (v.file_size || 0), 0);
@@ -1469,7 +1507,22 @@ export const BookDetail = () => {
                   {groupVersions.map((version) => {
                     const isCurrent = version.id === book.id;
                     const isPrimary = version.is_primary_version;
-                    const vSegs = isCurrent ? segments : (versionSegments[version.id] || []);
+                    // Prefer bookFiles for the current book; normalize to BookSegment shape.
+                    const vSegs: BookSegment[] = isCurrent && bookFiles.length > 0
+                      ? bookFiles.map((f) => ({
+                          id: f.id,
+                          file_path: f.file_path,
+                          format: f.format ?? '',
+                          size_bytes: f.file_size ?? 0,
+                          duration_seconds: f.duration ?? 0,
+                          track_number: f.track_number,
+                          total_tracks: f.track_count,
+                          active: !f.missing,
+                          file_exists: f.file_exists,
+                        }))
+                      : isCurrent
+                        ? segments
+                        : (versionSegments[version.id] || []);
                     const showAllSegments = expandedSegmentVersionIds.has(version.id);
                     const visibleSegments = showAllSegments
                       ? vSegs
@@ -1654,8 +1707,7 @@ export const BookDetail = () => {
                                         const result = await api.extractTrackInfo(book.id);
                                         toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
                                         if (id) {
-                                          const segs = await api.getBookSegments(id);
-                                          setSegments(segs);
+                                          await reloadCurrentBookFiles(id);
                                         }
                                       } catch {
                                         toast('Failed to extract track info', 'error');
@@ -2266,8 +2318,7 @@ export const BookDetail = () => {
           bookId={book.id}
           onRelocated={async () => {
             if (id) {
-              const segs = await api.getBookSegments(id);
-              setSegments(segs);
+              await reloadCurrentBookFiles(id);
             }
           }}
         />
