@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.47.0
+// version: 1.48.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -4364,44 +4364,309 @@ func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
 	return changes, rows.Err()
 }
 
-// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 2) ----
+// ---- BookFile CRUD ----
 
-// CreateBookFile inserts a new book_files row. TODO: implement in Task 2.
+// bookFileScanCols is the canonical column list used by all SELECT queries on book_files.
+// Order must match bookFileScan.
+const bookFileCols = `id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
+	track_number, track_count, disc_number, disc_count, title, format, codec, duration,
+	file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
+	missing, created_at, updated_at`
+
+// bookFileScan scans a single row into a BookFile.
+// Use with queries that SELECT bookFileCols in the same order.
+func bookFileScan(row interface {
+	Scan(dest ...any) error
+}) (BookFile, error) {
+	var f BookFile
+	var originalFilename, itunesPath, itunesPID sql.NullString
+	var trackNumber, trackCount, discNumber, discCount sql.NullInt64
+	var title, format, codec sql.NullString
+	var duration, fileSize, bitrateKbps, sampleRateHz, channels, bitDepth sql.NullInt64
+	var fileHash, originalFileHash sql.NullString
+	var missing int
+	err := row.Scan(
+		&f.ID, &f.BookID, &f.FilePath,
+		&originalFilename, &itunesPath, &itunesPID,
+		&trackNumber, &trackCount, &discNumber, &discCount,
+		&title, &format, &codec,
+		&duration, &fileSize, &bitrateKbps, &sampleRateHz, &channels, &bitDepth,
+		&fileHash, &originalFileHash,
+		&missing, &f.CreatedAt, &f.UpdatedAt,
+	)
+	if err != nil {
+		return f, err
+	}
+	if originalFilename.Valid {
+		f.OriginalFilename = originalFilename.String
+	}
+	if itunesPath.Valid {
+		f.ITunesPath = itunesPath.String
+	}
+	if itunesPID.Valid {
+		f.ITunesPersistentID = itunesPID.String
+	}
+	if trackNumber.Valid {
+		f.TrackNumber = int(trackNumber.Int64)
+	}
+	if trackCount.Valid {
+		f.TrackCount = int(trackCount.Int64)
+	}
+	if discNumber.Valid {
+		f.DiscNumber = int(discNumber.Int64)
+	}
+	if discCount.Valid {
+		f.DiscCount = int(discCount.Int64)
+	}
+	if title.Valid {
+		f.Title = title.String
+	}
+	if format.Valid {
+		f.Format = format.String
+	}
+	if codec.Valid {
+		f.Codec = codec.String
+	}
+	if duration.Valid {
+		f.Duration = int(duration.Int64)
+	}
+	if fileSize.Valid {
+		f.FileSize = fileSize.Int64
+	}
+	if bitrateKbps.Valid {
+		f.BitrateKbps = int(bitrateKbps.Int64)
+	}
+	if sampleRateHz.Valid {
+		f.SampleRateHz = int(sampleRateHz.Int64)
+	}
+	if channels.Valid {
+		f.Channels = int(channels.Int64)
+	}
+	if bitDepth.Valid {
+		f.BitDepth = int(bitDepth.Int64)
+	}
+	if fileHash.Valid {
+		f.FileHash = fileHash.String
+	}
+	if originalFileHash.Valid {
+		f.OriginalFileHash = originalFileHash.String
+	}
+	f.Missing = missing != 0
+	return f, nil
+}
+
+// nullableStringVal converts a string to sql.NullString (empty string = NULL).
+func nullableStringVal(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+// nullableIntVal converts an int to sql.NullInt64 (zero = NULL).
+func nullableIntVal(n int) sql.NullInt64 {
+	if n == 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(n), Valid: true}
+}
+
+// nullableInt64Val converts an int64 to sql.NullInt64 (zero = NULL).
+func nullableInt64Val(n int64) sql.NullInt64 {
+	if n == 0 {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: n, Valid: true}
+}
+
+// CreateBookFile inserts a new book_files row.
+// Generates a ULID if file.ID is empty, and sets CreatedAt/UpdatedAt to now.
 func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
-	return fmt.Errorf("CreateBookFile: not yet implemented")
+	if file.ID == "" {
+		file.ID = ulid.Make().String()
+	}
+	now := time.Now()
+	file.CreatedAt = now
+	file.UpdatedAt = now
+	missingInt := 0
+	if file.Missing {
+		missingInt = 1
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO book_files (
+			id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
+			track_number, track_count, disc_number, disc_count, title, format, codec, duration,
+			file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
+			missing, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		file.ID, file.BookID, file.FilePath,
+		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
+		nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
+		nullableIntVal(file.DiscNumber), nullableIntVal(file.DiscCount),
+		nullableStringVal(file.Title), nullableStringVal(file.Format), nullableStringVal(file.Codec),
+		nullableIntVal(file.Duration), nullableInt64Val(file.FileSize),
+		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
+		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
+		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+		missingInt, file.CreatedAt, file.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("CreateBookFile: %w", err)
+	}
+	return nil
 }
 
-// UpdateBookFile updates an existing book_files row. TODO: implement in Task 2.
+// UpdateBookFile updates all mutable fields of a book_files row identified by id.
 func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
-	return fmt.Errorf("UpdateBookFile: not yet implemented")
+	file.UpdatedAt = time.Now()
+	missingInt := 0
+	if file.Missing {
+		missingInt = 1
+	}
+	_, err := s.db.Exec(
+		`UPDATE book_files SET
+			book_id=?, file_path=?, original_filename=?, itunes_path=?, itunes_persistent_id=?,
+			track_number=?, track_count=?, disc_number=?, disc_count=?,
+			title=?, format=?, codec=?, duration=?,
+			file_size=?, bitrate_kbps=?, sample_rate_hz=?, channels=?, bit_depth=?,
+			file_hash=?, original_file_hash=?, missing=?, updated_at=?
+		WHERE id=?`,
+		file.BookID, file.FilePath,
+		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
+		nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
+		nullableIntVal(file.DiscNumber), nullableIntVal(file.DiscCount),
+		nullableStringVal(file.Title), nullableStringVal(file.Format), nullableStringVal(file.Codec),
+		nullableIntVal(file.Duration), nullableInt64Val(file.FileSize),
+		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
+		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
+		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+		missingInt, file.UpdatedAt,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("UpdateBookFile %s: %w", id, err)
+	}
+	return nil
 }
 
-// GetBookFiles returns all book_files rows for a given book. TODO: implement in Task 2.
+// GetBookFiles returns all book_files rows for the given book, ordered by
+// disc_number ASC, track_number ASC, file_path ASC.
 func (s *SQLiteStore) GetBookFiles(bookID string) ([]BookFile, error) {
-	return nil, fmt.Errorf("GetBookFiles: not yet implemented")
+	rows, err := s.db.Query(
+		`SELECT `+bookFileCols+`
+		 FROM book_files WHERE book_id = ?
+		 ORDER BY disc_number ASC, track_number ASC, file_path ASC`,
+		bookID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFiles: %w", err)
+	}
+	defer rows.Close()
+	var files []BookFile
+	for rows.Next() {
+		f, err := bookFileScan(rows)
+		if err != nil {
+			return nil, fmt.Errorf("GetBookFiles scan: %w", err)
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
 }
 
-// GetBookFileByPID returns the book_file with the given iTunes persistent ID. TODO: implement in Task 2.
+// GetBookFileByPID returns the book_file with the given iTunes persistent ID, or
+// nil if not found.
 func (s *SQLiteStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
-	return nil, fmt.Errorf("GetBookFileByPID: not yet implemented")
+	row := s.db.QueryRow(
+		`SELECT `+bookFileCols+` FROM book_files WHERE itunes_persistent_id = ? LIMIT 1`,
+		itunesPID,
+	)
+	f, err := bookFileScan(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetBookFileByPID: %w", err)
+	}
+	return &f, nil
 }
 
-// GetBookFileByPath returns the book_file with the given file path. TODO: implement in Task 2.
+// GetBookFileByPath returns the book_file with the given file path, or nil if
+// not found.
 func (s *SQLiteStore) GetBookFileByPath(filePath string) (*BookFile, error) {
-	return nil, fmt.Errorf("GetBookFileByPath: not yet implemented")
+	row := s.db.QueryRow(
+		`SELECT `+bookFileCols+` FROM book_files WHERE file_path = ? LIMIT 1`,
+		filePath,
+	)
+	f, err := bookFileScan(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetBookFileByPath: %w", err)
+	}
+	return &f, nil
 }
 
-// DeleteBookFile deletes a book_file by ID. TODO: implement in Task 2.
+// DeleteBookFile deletes a book_file by its ID.
 func (s *SQLiteStore) DeleteBookFile(id string) error {
-	return fmt.Errorf("DeleteBookFile: not yet implemented")
+	_, err := s.db.Exec(`DELETE FROM book_files WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("DeleteBookFile %s: %w", id, err)
+	}
+	return nil
 }
 
-// DeleteBookFilesForBook deletes all book_files for a given book. TODO: implement in Task 2.
+// DeleteBookFilesForBook deletes all book_files rows that belong to a given book.
 func (s *SQLiteStore) DeleteBookFilesForBook(bookID string) error {
-	return fmt.Errorf("DeleteBookFilesForBook: not yet implemented")
+	_, err := s.db.Exec(`DELETE FROM book_files WHERE book_id = ?`, bookID)
+	if err != nil {
+		return fmt.Errorf("DeleteBookFilesForBook %s: %w", bookID, err)
+	}
+	return nil
 }
 
-// UpsertBookFile inserts or replaces a book_file row. TODO: implement in Task 2.
+// UpsertBookFile inserts or updates a book_files row.
+// Match priority:
+//  1. If ITunesPersistentID is set: look up by (book_id, itunes_persistent_id).
+//  2. Otherwise: look up by (book_id, file_path).
+//
+// If found, UpdateBookFile is called. If not found, CreateBookFile is called.
 func (s *SQLiteStore) UpsertBookFile(file *BookFile) error {
-	return fmt.Errorf("UpsertBookFile: not yet implemented")
+	var existing *BookFile
+	var err error
+
+	if file.ITunesPersistentID != "" {
+		row := s.db.QueryRow(
+			`SELECT `+bookFileCols+` FROM book_files WHERE book_id = ? AND itunes_persistent_id = ? LIMIT 1`,
+			file.BookID, file.ITunesPersistentID,
+		)
+		f, scanErr := bookFileScan(row)
+		if scanErr != nil && scanErr != sql.ErrNoRows {
+			return fmt.Errorf("UpsertBookFile lookup by PID: %w", scanErr)
+		}
+		if scanErr == nil {
+			existing = &f
+		}
+	} else {
+		row := s.db.QueryRow(
+			`SELECT `+bookFileCols+` FROM book_files WHERE book_id = ? AND file_path = ? LIMIT 1`,
+			file.BookID, file.FilePath,
+		)
+		f, scanErr := bookFileScan(row)
+		if scanErr != nil && scanErr != sql.ErrNoRows {
+			return fmt.Errorf("UpsertBookFile lookup by path: %w", scanErr)
+		}
+		if scanErr == nil {
+			existing = &f
+		}
+	}
+
+	if existing != nil {
+		file.ID = existing.ID
+		file.CreatedAt = existing.CreatedAt
+		err = s.UpdateBookFile(existing.ID, file)
+	} else {
+		err = s.CreateBookFile(file)
+	}
+	return err
 }
