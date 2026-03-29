@@ -945,7 +945,7 @@ func TestWriteBackMetadataForBook_SingleFile(t *testing.T) {
 	}, nil)
 	mockStore.On("GetAuthorByID", 42).Return(author, nil)
 	mockStore.On("GetBookNarrators", book.ID).Return([]database.BookNarrator{}, nil)
-	mockStore.On("ListBookSegments", mock.AnythingOfType("int")).Return([]database.BookSegment{}, nil)
+	mockStore.On("GetBookFiles", book.ID).Return([]database.BookFile{}, nil)
 	mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
 
 	svc := NewMetadataFetchService(mockStore)
