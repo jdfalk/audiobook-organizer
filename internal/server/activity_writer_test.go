@@ -1,5 +1,5 @@
 // file: internal/server/activity_writer_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f7e8d9c0-b1a2-4e3f-9c8d-7b6a5e4f3d2c
 
 package server
@@ -156,6 +156,128 @@ func TestActivityWriter_CapturesLogs(t *testing.T) {
 		t.Error("missing metadata entry")
 	} else if e.Level != "debug" {
 		t.Errorf("metadata level: got %q, want debug", e.Level)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// New edge-case tests
+// ---------------------------------------------------------------------------
+
+// TestParseLogLine_SyncCompleted verifies that a plain info message without a
+// source prefix is parsed with the full message text preserved.
+func TestParseLogLine_SyncCompleted(t *testing.T) {
+	line := "[info] Sync completed: 321 updated, 0 new"
+	level, source, msg := parseLogLine(line)
+
+	if level != "info" {
+		t.Errorf("level: expected %q, got %q", "info", level)
+	}
+	if source != "server" {
+		t.Errorf("source: expected %q, got %q", "server", source)
+	}
+	// The full sync message should be preserved, not stripped.
+	wantMsg := "Sync completed: 321 updated, 0 new"
+	if msg != wantMsg {
+		t.Errorf("message: expected %q, got %q", wantMsg, msg)
+	}
+}
+
+// TestParseLogLine_SubsystemWithColon verifies that a source subsystem name
+// containing a hyphen is correctly extracted as the source field.
+func TestParseLogLine_SubsystemWithColon(t *testing.T) {
+	line := "[info] itunes-sync: Starting sync"
+	level, source, msg := parseLogLine(line)
+
+	if level != "info" {
+		t.Errorf("level: expected %q, got %q", "info", level)
+	}
+	if source != "itunes-sync" {
+		t.Errorf("source: expected %q, got %q", "itunes-sync", source)
+	}
+	if msg != "Starting sync" {
+		t.Errorf("message: expected %q, got %q", "Starting sync", msg)
+	}
+}
+
+// TestParseLogLine_MessageWithMultipleColons verifies that only the first
+// "source: " segment is used for source extraction and the rest of the
+// message (including additional colons) is kept intact.
+func TestParseLogLine_MessageWithMultipleColons(t *testing.T) {
+	line := "[warn] server: path not found: /foo/bar"
+	level, source, msg := parseLogLine(line)
+
+	if level != "warn" {
+		t.Errorf("level: expected %q, got %q", "warn", level)
+	}
+	if source != "server" {
+		t.Errorf("source: expected %q, got %q", "server", source)
+	}
+	// The full message after "server: " must be preserved with its colon intact.
+	wantMsg := "path not found: /foo/bar"
+	if msg != wantMsg {
+		t.Errorf("message: expected %q, got %q", wantMsg, msg)
+	}
+}
+
+// TestActivityWriter_Flush verifies that Flush() synchronously drains all
+// pending channel entries into the store.
+//
+// The background drain goroutine is intentionally NOT started (no w.Start())
+// so that all written entries accumulate in the buffered channel and Flush()
+// is the only thing that persists them. This isolates Flush() from the timer-
+// based drain path and avoids races between the goroutine and the test query.
+func TestActivityWriter_Flush(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "flush_test.db")
+
+	store, err := database.NewActivityStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewActivityStore: %v", err)
+	}
+	defer store.Close()
+
+	devNull, _ := os.Open(os.DevNull)
+	defer devNull.Close()
+
+	// Large channel so all writes buffer without blocking; no Start() call —
+	// the drain goroutine is not running for this test.
+	w := newActivityWriter(store, 50)
+	w.stdout = devNull
+
+	lines := []string{
+		"2026/03/25 17:35:08 logger.go:103: [info] scheduler: Flush entry one",
+		"2026/03/25 17:35:08 server.go:874: [warn] server: Flush entry two",
+		"2026/03/25 17:35:08 logger.go:103: [debug] metadata: Flush entry three",
+	}
+
+	for _, line := range lines {
+		fmt.Fprintln(w, line)
+	}
+
+	// Flush synchronously drains all buffered channel entries into the store.
+	w.Flush()
+
+	// Verify all three entries are now persisted.
+	entries, total, err := store.Query(database.ActivityFilter{Limit: 50})
+	if err != nil {
+		t.Fatalf("Query after Flush: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("total after Flush: got %d, want 3", total)
+	}
+	if len(entries) != 3 {
+		t.Errorf("entries len after Flush: got %d, want 3", len(entries))
+	}
+
+	// Spot-check one entry to confirm parsing worked correctly.
+	bySource := make(map[string]database.ActivityEntry)
+	for _, e := range entries {
+		bySource[e.Source] = e
+	}
+	if e, ok := bySource["scheduler"]; !ok {
+		t.Error("missing scheduler entry after Flush")
+	} else if e.Level != "info" {
+		t.Errorf("scheduler level: got %q, want info", e.Level)
 	}
 }
 

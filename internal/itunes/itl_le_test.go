@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_le_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c5f9e038-7d4a-4b92-af13-g8c4d9e5f67b
 
 package itunes
@@ -381,5 +381,207 @@ func TestRewriteChunksLE_LocalURLUpdate(t *testing.T) {
 	}
 	if !strings.HasPrefix(lib.Tracks[0].LocalURL, "file://localhost/") {
 		t.Errorf("LocalURL should start with file://localhost/, got %q", lib.Tracks[0].LocalURL)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// New edge-case tests
+// ---------------------------------------------------------------------------
+
+// buildMiahLE builds a little-endian miah (track item array) wrapper containing
+// the given sub-content. The miah header is 12 bytes.
+func buildMiahLE(subContent []byte) []byte {
+	headerLen := 12
+	totalLen := headerLen + len(subContent)
+	buf := make([]byte, totalLen)
+	copy(buf[0:4], "miah")
+	putUint32LE(buf, 4, uint32(headerLen))
+	putUint32LE(buf, 8, uint32(totalLen))
+	copy(buf[headerLen:], subContent)
+	return buf
+}
+
+// TestWalkMiahContent verifies that tracks nested inside a miah wrapper are
+// parsed correctly when a track msdh contains miah → mith + mhoh sub-blocks.
+func TestWalkMiahContent(t *testing.T) {
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
+	location := "/audiobooks/nested/book.m4b"
+
+	mith := buildMithLE(77, pid, 2048000, 720000)
+	nameMhoh := buildMhohLE(0x02, "Nested Track")
+	locMhoh := buildMhohLE(0x0D, location)
+
+	// Pack mith + mhoh into a miah wrapper
+	var subContent []byte
+	subContent = append(subContent, mith...)
+	subContent = append(subContent, nameMhoh...)
+	subContent = append(subContent, locMhoh...)
+	miah := buildMiahLE(subContent)
+
+	// Wrap the miah in a track-list msdh
+	data := buildMsdhLE(0x01, miah)
+
+	lib := &ITLLibrary{}
+	walkChunksLEImpl(data, lib)
+
+	if len(lib.Tracks) != 1 {
+		t.Fatalf("expected 1 track from miah wrapper, got %d", len(lib.Tracks))
+	}
+
+	tr := lib.Tracks[0]
+	if tr.TrackID != 77 {
+		t.Errorf("TrackID: expected 77, got %d", tr.TrackID)
+	}
+	if tr.Name != "Nested Track" {
+		t.Errorf("Name: expected 'Nested Track', got %q", tr.Name)
+	}
+	if tr.Location != location {
+		t.Errorf("Location: expected %q, got %q", location, tr.Location)
+	}
+	// PID bytes [0x22,0x11,...,0xAA] in LE → reversed → "aabbccddeeff1122"
+	pidHex := hex.EncodeToString(tr.PersistentID[:])
+	if pidHex != "aabbccddeeff1122" {
+		t.Errorf("PersistentID: expected aabbccddeeff1122, got %s", pidHex)
+	}
+}
+
+// TestPidToHexLE verifies that pidToHexLE reverses the LE byte order so that the
+// resulting hex string matches the XML (big-endian / MSB-first) representation.
+func TestPidToHexLE(t *testing.T) {
+	// LE stored bytes — these are in reversed order compared to the XML string.
+	input := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
+	want := "aabbccddeeff1122"
+
+	got := pidToHexLE(input)
+	if got != want {
+		t.Errorf("pidToHexLE: expected %q, got %q", want, got)
+	}
+}
+
+// TestDetectLE verifies that detectLE returns true for data starting with "msdh",
+// false for data starting with "hdsm", and false for data shorter than 4 bytes.
+func TestDetectLE(t *testing.T) {
+	cases := []struct {
+		name string
+		data []byte
+		want bool
+	}{
+		{
+			name: "msdh prefix",
+			data: []byte("msdh" + "extra data here"),
+			want: true,
+		},
+		{
+			name: "hdsm prefix (BE format)",
+			data: []byte("hdsm" + "extra data here"),
+			want: false,
+		},
+		{
+			name: "short data (3 bytes)",
+			data: []byte("msd"),
+			want: false,
+		},
+		{
+			name: "empty data",
+			data: []byte{},
+			want: false,
+		},
+		{
+			name: "exactly 4 bytes msdh",
+			data: []byte("msdh"),
+			want: true,
+		},
+		{
+			name: "exactly 4 bytes non-msdh",
+			data: []byte("abcd"),
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := detectLE(tc.data)
+			if got != tc.want {
+				t.Errorf("detectLE(%q): expected %v, got %v", tc.data, tc.want, got)
+			}
+		})
+	}
+}
+
+// TestRewriteMithContentLE verifies that rewriteMithContentLE correctly rewrites
+// the location mhoh sub-block embedded inside a mith container.
+//
+// Layout contract used by rewriteMithContentLE:
+//   - bytes [4:8]  — headerLen: length of the fixed mith fields only
+//   - bytes [8:12] — totalLen:  length of fixed fields + all mhoh sub-blocks
+//
+// Note: the walker (walkMsdhTracksLE) expects a flat layout where mhoh blocks
+// are siblings of mith, not children. rewriteMithContentLE is used only on the
+// write path where mhoh are already embedded inside mith. This test exercises
+// the write path directly and verifies the rewritten bytes contain the new
+// location string.
+func TestRewriteMithContentLE(t *testing.T) {
+	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
+	oldLocation := "/old/location/book.m4b"
+	newLocation := "/new/location/book.m4b"
+	currentPID := "aabbccddeeff1122" // BE hex — what the updateMap is keyed on
+
+	// buildMithLE returns a 156-byte block; headerLen and totalLen are both 156.
+	// For rewriteMithContentLE we need headerLen=156 (fixed portion) and
+	// totalLen = 156 + size_of_mhoh_sub_blocks.
+	mithHeader := buildMithLE(55, pid, 500000, 180000)
+	mithFixedLen := len(mithHeader) // 156
+
+	// Build mhoh sub-blocks: name + location, to be nested inside the mith.
+	nameMhoh := buildMhohLE(0x02, "Rewrite Test Book")
+	locMhoh := buildMhohLE(0x0D, oldLocation)
+
+	// Assemble the mith container: fixed header + mhoh sub-blocks appended.
+	var mithContainer []byte
+	mithContainer = append(mithContainer, mithHeader...)
+	mithContainer = append(mithContainer, nameMhoh...)
+	mithContainer = append(mithContainer, locMhoh...)
+
+	// Update length fields: headerLen stays 156 (fixed portion boundary),
+	// totalLen = full container length (covers the mhoh sub-blocks too).
+	putUint32LE(mithContainer, 4, uint32(mithFixedLen))
+	putUint32LE(mithContainer, 8, uint32(len(mithContainer)))
+
+	updateMap := map[string]string{
+		currentPID: newLocation,
+	}
+
+	// Invoke the function under test.
+	rewritten, count := rewriteMithContentLE(mithContainer, updateMap, currentPID)
+	if count != 1 {
+		t.Fatalf("expected 1 rewrite, got %d", count)
+	}
+
+	// The rewritten mith must:
+	// 1. Still have the same fixed headerLen (156).
+	rewrittenHeaderLen := int(readUint32LE(rewritten, 4))
+	if rewrittenHeaderLen != mithFixedLen {
+		t.Errorf("rewritten headerLen: expected %d, got %d", mithFixedLen, rewrittenHeaderLen)
+	}
+
+	// 2. Contain the new location string somewhere in the rewritten bytes.
+	if !strings.Contains(string(rewritten), newLocation) {
+		t.Errorf("rewritten mith does not contain new location %q", newLocation)
+	}
+
+	// 3. NOT contain the old location string.
+	if strings.Contains(string(rewritten), oldLocation) {
+		t.Errorf("rewritten mith still contains old location %q", oldLocation)
+	}
+
+	// 4. Still contain the track name (other mhoh sub-blocks must be preserved).
+	if !strings.Contains(string(rewritten), "Rewrite Test Book") {
+		t.Errorf("rewritten mith lost the name mhoh sub-block")
+	}
+
+	// 5. totalLen must reflect the new (possibly different-length) content.
+	rewrittenTotalLen := int(readUint32LE(rewritten, 8))
+	if rewrittenTotalLen != len(rewritten) {
+		t.Errorf("rewritten totalLen: expected %d (len of result), got %d", len(rewritten), rewrittenTotalLen)
 	}
 }
