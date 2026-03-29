@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.41.0
+// version: 1.42.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -1385,11 +1385,20 @@ export const BookDetail = () => {
       )}
 
       {activeTab === 'files' && (() => {
-        // Group versions by format
+        // Group versions by format, but use a unique key per version when
+        // multiple versions share the same format (so each gets its own tray).
         const allVersions = versions.length > 0 ? versions : [book];
+        // Count how many versions exist per format to detect collisions.
+        const formatCounts = new Map<string, number>();
+        for (const v of allVersions) {
+          const fmt = v.format?.toUpperCase() || 'UNKNOWN';
+          formatCounts.set(fmt, (formatCounts.get(fmt) ?? 0) + 1);
+        }
+        // Build one tray per version. Key = format when unique, else version.id.
         const formatGroups = new Map<string, Book[]>();
         for (const v of allVersions) {
-          const key = v.format?.toUpperCase() || 'UNKNOWN';
+          const fmt = v.format?.toUpperCase() || 'UNKNOWN';
+          const key = (formatCounts.get(fmt) ?? 0) > 1 ? v.id : fmt;
           if (!formatGroups.has(key)) formatGroups.set(key, []);
           formatGroups.get(key)!.push(v);
         }
@@ -1424,7 +1433,7 @@ export const BookDetail = () => {
           </Box>
 
           {/* Format group sections */}
-          {Array.from(formatGroups.entries()).map(([formatKey, groupVersions]) => {
+          {Array.from(formatGroups.entries()).map(([, groupVersions]) => {
             // Use first version in group as the representative
             const representative = groupVersions[0];
             const isExpanded = groupVersions.some((v) => expandedVersionIds.has(v.id));
@@ -1444,8 +1453,27 @@ export const BookDetail = () => {
             const totalSize = groupVersions.reduce((sum, v) => sum + (v.file_size || 0), 0);
             const totalDuration = groupVersions.reduce((sum, v) => sum + (v.duration || 0), 0);
 
+            // Build a descriptive label for the tray header.
+            // When there is only one version in the group (unique format), show
+            // just the format.  When grouped by version ID (same format, multiple
+            // versions) show the last 2-3 path segments so the user can tell the
+            // copies apart.
+            const fmt = representative.format?.toUpperCase() || 'UNKNOWN';
+            const trayLabel = (() => {
+              if (groupVersions.length === 1 && representative.file_path) {
+                const parts = representative.file_path.replace(/\\/g, '/').split('/').filter(Boolean);
+                const segments = parts.slice(-3).join('/');
+                // Prefer iTunes-prefixed label for iTunes copies
+                if (hasItunes && representative.itunes_persistent_id) {
+                  return `iTunes: ${segments}`;
+                }
+                return segments || fmt;
+              }
+              return fmt;
+            })();
+
             return (
-              <Paper key={groupId} sx={{ mb: 1, overflow: 'hidden' }} data-testid={`format-tray-${formatKey.toLowerCase()}`}>
+              <Paper key={groupId} sx={{ mb: 1, overflow: 'hidden' }} data-testid={`format-tray-${fmt.toLowerCase()}`}>
                 {/* Format tray header */}
                 <Box
                   sx={{
@@ -1475,7 +1503,12 @@ export const BookDetail = () => {
                     <StarBorderIcon fontSize="small" sx={{ mr: 1, opacity: 0.4 }} />
                   )}
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {formatKey}{representative.codec ? ` (${representative.codec})` : ''}
+                    {fmt}{representative.codec ? ` (${representative.codec})` : ''}
+                    {trayLabel !== fmt && (
+                      <Typography component="span" variant="body2" sx={{ ml: 1, opacity: 0.75, fontWeight: 'normal' }}>
+                        {trayLabel}
+                      </Typography>
+                    )}
                   </Typography>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 2, flexShrink: 0 }}>
                     <Chip
@@ -1912,17 +1945,19 @@ export const BookDetail = () => {
                 {itunesExternalIDs.length > 0 && itunesExternalIDs.some((e) => e.file_path) && (
                   <Box sx={{ flex: '1 1 100%' }}>
                     <Typography variant="caption" color="text.secondary">iTunes Track Files</Typography>
-                    {itunesExternalIDs.map((e) => (
-                      e.file_path ? (
-                        <Typography
-                          key={e.id}
-                          variant="body2"
-                          sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}
-                        >
-                          {e.track_number != null ? `[${e.track_number}] ` : ''}{e.file_path}
-                        </Typography>
-                      ) : null
-                    ))}
+                    {[...itunesExternalIDs]
+                      .sort((a, b) => (a.track_number ?? Infinity) - (b.track_number ?? Infinity))
+                      .map((e) => (
+                        e.file_path ? (
+                          <Typography
+                            key={e.id}
+                            variant="body2"
+                            sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}
+                          >
+                            {e.track_number != null ? `[${e.track_number}] ` : ''}{e.file_path}
+                          </Typography>
+                        ) : null
+                      ))}
                   </Box>
                 )}
                 {/* Track PIDs when multiple tracks mapped */}
@@ -1930,15 +1965,17 @@ export const BookDetail = () => {
                   <Box sx={{ flex: '1 1 100%' }}>
                     <Typography variant="caption" color="text.secondary">Track PIDs ({itunesExternalIDs.length})</Typography>
                     <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap sx={{ mt: 0.25 }}>
-                      {itunesExternalIDs.map((e) => (
-                        <Typography
-                          key={e.id}
-                          variant="body2"
-                          sx={{ fontFamily: 'monospace', fontSize: '0.75rem', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 }}
-                        >
-                          {e.track_number != null ? `${e.track_number}: ` : ''}{e.external_id}
-                        </Typography>
-                      ))}
+                      {[...itunesExternalIDs]
+                        .sort((a, b) => (a.track_number ?? Infinity) - (b.track_number ?? Infinity))
+                        .map((e) => (
+                          <Typography
+                            key={e.id}
+                            variant="body2"
+                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 }}
+                          >
+                            {e.track_number != null ? `${e.track_number}: ` : ''}{e.external_id}
+                          </Typography>
+                        ))}
                     </Stack>
                   </Box>
                 )}
