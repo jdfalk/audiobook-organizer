@@ -1,5 +1,5 @@
 // file: internal/server/rename_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -187,6 +187,19 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 				_ = os.Remove(proposedPath)
 			}
 			return nil, fmt.Errorf("DB update failed (rolled back): %w", err)
+		}
+
+		// Update corresponding BookFile records with the new path
+		if bookFiles, bfErr := rs.db.GetBookFiles(bookID); bfErr == nil {
+			for _, bf := range bookFiles {
+				if bf.FilePath == oldPath {
+					bf.FilePath = proposedPath
+					bf.ITunesPath = computeITunesPath(proposedPath)
+					if ufErr := rs.db.UpdateBookFile(bf.ID, &bf); ufErr != nil {
+						log.Printf("[WARN] rename: failed to update book_file %s path: %v", bf.ID, ufErr)
+					}
+				}
+			}
 		}
 
 		// Record library_state change for undo

@@ -1,5 +1,5 @@
 // file: internal/server/file_pipeline.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f01234567890
 
 package server
@@ -28,26 +28,26 @@ type FilePipelineResult struct {
 	Errors  []string          `json:"errors,omitempty"`
 }
 
-// ComputeTargetPaths computes the target file paths for all segments of a book
+// ComputeTargetPaths computes the target file paths for all files of a book
 // using the path format template and format variables.
-func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *database.Book, segments []database.BookSegment, vars FormatVars) []FileRenameEntry {
-	if rootDir == "" || len(segments) == 0 {
+func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *database.Book, files []database.BookFile, vars FormatVars) []FileRenameEntry {
+	if rootDir == "" || len(files) == 0 {
 		return nil
 	}
 
-	// Sort segments by track number then filepath
-	sorted := make([]database.BookSegment, len(segments))
-	copy(sorted, segments)
+	// Sort files by track number then filepath
+	sorted := make([]database.BookFile, len(files))
+	copy(sorted, files)
 	sort.Slice(sorted, func(i, j int) bool {
 		ti := sorted[i].TrackNumber
 		tj := sorted[j].TrackNumber
-		if ti != nil && tj != nil {
-			if *ti != *tj {
-				return *ti < *tj
+		if ti != 0 && tj != 0 {
+			if ti != tj {
+				return ti < tj
 			}
-		} else if ti != nil {
+		} else if ti != 0 {
 			return true
-		} else if tj != nil {
+		} else if tj != 0 {
 			return false
 		}
 		return sorted[i].FilePath < sorted[j].FilePath
@@ -56,19 +56,19 @@ func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *databa
 	totalTracks := len(sorted)
 	var entries []FileRenameEntry
 
-	for i, seg := range sorted {
-		if !seg.Active {
+	for i, f := range sorted {
+		if f.Missing {
 			continue
 		}
 
 		trackNum := i + 1
-		if seg.TrackNumber != nil {
-			trackNum = *seg.TrackNumber
+		if f.TrackNumber != 0 {
+			trackNum = f.TrackNumber
 		}
 
-		ext := strings.TrimPrefix(filepath.Ext(seg.FilePath), ".")
+		ext := strings.TrimPrefix(filepath.Ext(f.FilePath), ".")
 		if ext == "" {
-			ext = seg.Format
+			ext = f.Format
 		}
 
 		segVars := vars
@@ -88,16 +88,51 @@ func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *databa
 		relPath := FormatPath(pathFormat, segVars)
 		targetPath := filepath.Join(rootDir, relPath)
 
-		if targetPath != seg.FilePath {
+		if targetPath != f.FilePath {
 			entries = append(entries, FileRenameEntry{
-				SegmentID:  seg.ID,
-				SourcePath: seg.FilePath,
+				SegmentID:  f.ID,
+				SourcePath: f.FilePath,
 				TargetPath: targetPath,
 			})
 		}
 	}
 
 	return entries
+}
+
+// ComputeTargetPathsFromSegments is a backward-compatible wrapper that accepts
+// BookSegment slices and converts them to BookFile before computing paths.
+func ComputeTargetPathsFromSegments(rootDir, pathFormat, segTitleFormat string, book *database.Book, segments []database.BookSegment, vars FormatVars) []FileRenameEntry {
+	files := make([]database.BookFile, 0, len(segments))
+	for _, seg := range segments {
+		trackNum := 0
+		if seg.TrackNumber != nil {
+			trackNum = *seg.TrackNumber
+		}
+		trackCount := 0
+		if seg.TotalTracks != nil {
+			trackCount = *seg.TotalTracks
+		}
+		bf := database.BookFile{
+			ID:          seg.ID,
+			BookID:      fmt.Sprintf("%d", seg.BookID),
+			FilePath:    seg.FilePath,
+			Format:      seg.Format,
+			FileSize:    seg.SizeBytes,
+			Duration:    seg.DurationSec * 1000, // seconds to milliseconds
+			TrackNumber: trackNum,
+			TrackCount:  trackCount,
+			Missing:     !seg.Active,
+		}
+		if seg.FileHash != nil {
+			bf.FileHash = *seg.FileHash
+		}
+		if seg.SegmentTitle != nil {
+			bf.Title = *seg.SegmentTitle
+		}
+		files = append(files, bf)
+	}
+	return ComputeTargetPaths(rootDir, pathFormat, segTitleFormat, book, files, vars)
 }
 
 // RenameResult holds the outcome of a rename operation.
