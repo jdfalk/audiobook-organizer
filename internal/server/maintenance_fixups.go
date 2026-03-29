@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/oklog/ulid/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -596,4 +598,202 @@ func normalizeSeriesName(name string) string {
 	// Collapse whitespace
 	fields := strings.FieldsFunc(s, unicode.IsSpace)
 	return strings.Join(fields, " ")
+}
+
+// ---------------------------------------------------------------------------
+// Backfill book_files
+// ---------------------------------------------------------------------------
+
+// bookFilesBackfillResult describes one book processed during the backfill.
+type bookFilesBackfillResult struct {
+	BookID       string   `json:"book_id"`
+	BookTitle    string   `json:"book_title"`
+	FilePath     string   `json:"file_path"`
+	FilesCreated int      `json:"files_created"`
+	FilePaths    []string `json:"file_paths"`
+	Skipped      bool     `json:"skipped,omitempty"`
+	SkipReason   string   `json:"skip_reason,omitempty"`
+	Missing      bool     `json:"missing,omitempty"`
+	Applied      bool     `json:"applied"`
+	Error        string   `json:"error,omitempty"`
+}
+
+// handleBackfillBookFiles scans all books and creates book_files rows where
+// none exist yet.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would be created without modifying
+//   - dry_run=false — actually create the rows
+func (s *Server) handleBackfillBookFiles(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") == "true"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Fetch all books (0,0 = no pagination).
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var results []bookFilesBackfillResult
+	totalFiles := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+
+		// Check whether book_files rows already exist for this book.
+		existing, bfErr := store.GetBookFiles(book.ID)
+		if bfErr != nil {
+			results = append(results, bookFilesBackfillResult{
+				BookID:    book.ID,
+				BookTitle: book.Title,
+				FilePath:  book.FilePath,
+				Error:     fmt.Sprintf("GetBookFiles: %v", bfErr),
+			})
+			continue
+		}
+		if len(existing) > 0 {
+			results = append(results, bookFilesBackfillResult{
+				BookID:     book.ID,
+				BookTitle:  book.Title,
+				FilePath:   book.FilePath,
+				Skipped:    true,
+				SkipReason: fmt.Sprintf("already has %d book_file row(s)", len(existing)),
+			})
+			continue
+		}
+
+		// Determine what files to create rows for.
+		var filesToCreate []string
+		var isMissing bool
+
+		if book.FilePath == "" {
+			results = append(results, bookFilesBackfillResult{
+				BookID:     book.ID,
+				BookTitle:  book.Title,
+				Skipped:    true,
+				SkipReason: "empty file_path",
+			})
+			continue
+		}
+
+		fi, statErr := os.Stat(book.FilePath)
+		if statErr != nil {
+			// Path doesn't exist — create one row marked missing.
+			filesToCreate = []string{book.FilePath}
+			isMissing = true
+		} else if fi.IsDir() {
+			// Directory: glob for audio files using the shared audioFilesInDir helper.
+			filesToCreate = audioFilesInDir(book.FilePath)
+			if len(filesToCreate) == 0 {
+				results = append(results, bookFilesBackfillResult{
+					BookID:     book.ID,
+					BookTitle:  book.Title,
+					FilePath:   book.FilePath,
+					Skipped:    true,
+					SkipReason: "directory contains no recognised audio files",
+				})
+				continue
+			}
+		} else {
+			// Single file.
+			filesToCreate = []string{book.FilePath}
+		}
+
+		result := bookFilesBackfillResult{
+			BookID:       book.ID,
+			BookTitle:    book.Title,
+			FilePath:     book.FilePath,
+			FilesCreated: len(filesToCreate),
+			FilePaths:    filesToCreate,
+			Missing:      isMissing,
+		}
+
+		if !dryRun {
+			createErr := createBookFilesForBook(store, book, filesToCreate, isMissing)
+			if createErr != nil {
+				result.Error = createErr.Error()
+				log.Printf("[WARN] backfill-book-files: book %s (%q): %v", book.ID, book.Title, createErr)
+			} else {
+				result.Applied = true
+				// If file_path pointed directly at a file (not a directory), normalise
+				// book.file_path to the parent directory.
+				if !isMissing && fi != nil && !fi.IsDir() && len(filesToCreate) == 1 {
+					current, getErr := store.GetBookByID(book.ID)
+					if getErr == nil && current != nil {
+						current.FilePath = filepath.Dir(book.FilePath)
+						if _, upErr := store.UpdateBook(book.ID, current); upErr != nil {
+							log.Printf("[WARN] backfill-book-files: normalise file_path for book %s: %v", book.ID, upErr)
+						}
+					}
+				}
+				log.Printf("[INFO] backfill-book-files: created %d book_file row(s) for book %s (%q)",
+					len(filesToCreate), book.ID, book.Title)
+			}
+		}
+
+		results = append(results, result)
+		totalFiles += len(filesToCreate)
+	}
+
+	// Compute summary counts.
+	applied := 0
+	skipped := 0
+	errors := 0
+	for _, r := range results {
+		switch {
+		case r.Error != "":
+			errors++
+		case r.Skipped:
+			skipped++
+		case r.Applied || dryRun:
+			applied++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":      dryRun,
+		"books_total":  len(allBooks),
+		"books_found":  len(results) - skipped,
+		"books_skipped": skipped,
+		"files_total":  totalFiles,
+		"applied":      applied,
+		"errors":       errors,
+		"results":      results,
+	})
+}
+
+// createBookFilesForBook inserts a BookFile row for each path in filePaths.
+func createBookFilesForBook(store database.Store, book *database.Book, filePaths []string, missing bool) error {
+	for _, fp := range filePaths {
+		ext := strings.ToLower(filepath.Ext(fp))
+		// Strip leading dot from extension for the format field.
+		format := strings.TrimPrefix(ext, ".")
+
+		var fileSize int64
+		if !missing {
+			if info, err := os.Stat(fp); err == nil {
+				fileSize = info.Size()
+			}
+		}
+
+		bf := &database.BookFile{
+			ID:               ulid.Make().String(),
+			BookID:           book.ID,
+			FilePath:         fp,
+			OriginalFilename: filepath.Base(fp),
+			Format:           format,
+			FileSize:         fileSize,
+			Missing:          missing,
+		}
+		if err := store.CreateBookFile(bf); err != nil {
+			return fmt.Errorf("CreateBookFile(%q): %w", fp, err)
+		}
+	}
+	return nil
 }
