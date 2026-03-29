@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.17.0
+// version: 2.18.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -447,16 +447,30 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		}
 		for i := range books {
 			book := &books[i]
-			if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
-				continue
+			files, _ := store.GetBookFiles(book.ID)
+			if len(files) > 0 {
+				// Use per-file persistent IDs and paths from book_files
+				for _, f := range files {
+					if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+						itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  f.ITunesPath,
+						})
+					}
+				}
+			} else {
+				// Fallback: use book-level iTunes fields for books without book_files rows
+				if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
+					continue
+				}
+				if book.ITunesPath == nil || *book.ITunesPath == "" {
+					continue
+				}
+				itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+					PersistentID: *book.ITunesPersistentID,
+					NewLocation:  *book.ITunesPath,
+				})
 			}
-			if book.ITunesPath == nil || *book.ITunesPath == "" {
-				continue
-			}
-			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  *book.ITunesPath,
-			})
 		}
 		if len(books) < pageSize {
 			break
@@ -2075,6 +2089,29 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 			} else {
 				unchanged++
 			}
+
+			// Upsert book_files for every track in the group (multi-file books have 40+ tracks)
+			for _, track := range group.tracks {
+				remappedPath := importOpts.RemapPath(track.Location)
+				decodedPath, _ := itunes.DecodeLocation(remappedPath)
+				if decodedPath == "" {
+					decodedPath = remappedPath
+				}
+				_ = store.UpsertBookFile(&database.BookFile{
+					BookID:             existing.ID,
+					FilePath:           decodedPath,
+					ITunesPath:         track.Location,
+					ITunesPersistentID: track.PersistentID,
+					TrackNumber:        track.TrackNumber,
+					TrackCount:         track.TrackCount,
+					DiscNumber:         track.DiscNumber,
+					DiscCount:          track.DiscCount,
+					Title:              track.Name,
+					Format:             strings.TrimPrefix(filepath.Ext(decodedPath), "."),
+					Duration:           int(track.TotalTime),
+					FileSize:           track.Size,
+				})
+			}
 		} else {
 			// Import as new book
 			book, err := buildBookFromAlbumGroup(group, libraryPath, importOpts)
@@ -2099,6 +2136,29 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				} else if created.AuthorID != nil {
 					_ = store.SetBookAuthors(created.ID, []database.BookAuthor{
 						{BookID: created.ID, AuthorID: *created.AuthorID, Role: "author", Position: 0},
+					})
+				}
+
+				// Upsert book_files for every track in the group
+				for _, track := range group.tracks {
+					remappedPath := importOpts.RemapPath(track.Location)
+					decodedPath, _ := itunes.DecodeLocation(remappedPath)
+					if decodedPath == "" {
+						decodedPath = remappedPath
+					}
+					_ = store.UpsertBookFile(&database.BookFile{
+						BookID:             created.ID,
+						FilePath:           decodedPath,
+						ITunesPath:         track.Location,
+						ITunesPersistentID: track.PersistentID,
+						TrackNumber:        track.TrackNumber,
+						TrackCount:         track.TrackCount,
+						DiscNumber:         track.DiscNumber,
+						DiscCount:          track.DiscCount,
+						Title:              track.Name,
+						Format:             strings.TrimPrefix(filepath.Ext(decodedPath), "."),
+						Duration:           int(track.TotalTime),
+						FileSize:           track.Size,
 					})
 				}
 			}

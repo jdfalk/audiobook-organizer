@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 
 package server
@@ -96,17 +96,30 @@ func (b *WriteBackBatcher) flush() {
 		if err != nil || book == nil {
 			continue
 		}
-		if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
-			continue
+		files, _ := store.GetBookFiles(id)
+		if len(files) > 0 {
+			// Use per-file persistent IDs and paths from book_files
+			for _, f := range files {
+				if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+					itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+						PersistentID: f.ITunesPersistentID,
+						NewLocation:  f.ITunesPath,
+					})
+				}
+			}
+		} else {
+			// Fallback: use book-level iTunes fields for books without book_files rows
+			if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
+				continue
+			}
+			if book.ITunesPath == nil || *book.ITunesPath == "" {
+				continue
+			}
+			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
+				PersistentID: *book.ITunesPersistentID,
+				NewLocation:  *book.ITunesPath,
+			})
 		}
-		if book.ITunesPath == nil || *book.ITunesPath == "" {
-			continue
-		}
-		itunesPath := *book.ITunesPath
-		itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-			PersistentID: *book.ITunesPersistentID,
-			NewLocation:  itunesPath,
-		})
 	}
 
 	if len(itlUpdates) == 0 {
