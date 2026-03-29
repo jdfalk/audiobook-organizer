@@ -203,8 +203,9 @@ func parseLogLine(line string) (level, source, message string) {
 		if end := strings.Index(work, "] "); end > 0 {
 			level = strings.ToLower(work[1:end])
 			work = work[end+2:]
-			// Check for "source: message" — source name is short (< 30 chars)
-			if idx := strings.Index(work, ": "); idx > 0 && idx < 30 {
+			// Check for "source: message" — source must look like a subsystem name:
+			// short (< 30 chars), no spaces, typically lowercase with hyphens/underscores
+			if idx := strings.Index(work, ": "); idx > 0 && idx < 30 && !strings.Contains(work[:idx], " ") {
 				source = work[:idx]
 				message = work[idx+2:]
 				return level, source, message
