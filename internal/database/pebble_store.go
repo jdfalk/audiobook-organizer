@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.38.0
+// version: 1.39.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4936,44 +4936,345 @@ func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
 	return bookIDs, nil
 }
 
-// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 3) ----
+// ---- BookFile CRUD ----
 
-// CreateBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+// bookFilePathCRC returns the lowercase hex CRC32 of the file path, used as
+// the secondary index key suffix for book_file_path lookups.
+func bookFilePathCRC(filePath string) string {
+	return fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(filePath)))
+}
+
+// getBookFileByID fetches a BookFile by its primary key (book_file:<bookID>:<fileID>).
+func (s *PebbleStore) getBookFileByID(bookID, fileID string) (*BookFile, error) {
+	key := []byte(fmt.Sprintf("book_file:%s:%s", bookID, fileID))
+	value, closer, err := s.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var f BookFile
+	if err := json.Unmarshal(value, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// writeBookFileSecondaryIndexes adds the PID and path secondary index entries
+// to the batch. Either index is only written when the relevant field is non-empty.
+func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
+	ref := []byte(fmt.Sprintf("%s:%s", f.BookID, f.ID))
+
+	if f.ITunesPersistentID != "" {
+		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
+		if err := batch.Set(pidKey, ref, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.FilePath != "" {
+		pathKey := []byte(fmt.Sprintf("book_file_path:%s", bookFilePathCRC(f.FilePath)))
+		if err := batch.Set(pathKey, ref, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteBookFileSecondaryIndexes removes PID and path secondary index entries
+// from the batch for the given BookFile.
+func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
+	if f.ITunesPersistentID != "" {
+		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
+		if err := batch.Delete(pidKey, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.FilePath != "" {
+		pathKey := []byte(fmt.Sprintf("book_file_path:%s", bookFilePathCRC(f.FilePath)))
+		if err := batch.Delete(pathKey, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateBookFile stores a new BookFile, generating a ULID if the ID is empty.
+// It writes the primary key book_file:<bookID>:<fileID> and secondary indexes
+// for iTunes PID and file path (when non-empty) atomically in a single batch.
 func (s *PebbleStore) CreateBookFile(file *BookFile) error {
-	return fmt.Errorf("CreateBookFile: not supported by PebbleStore")
+	if file.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return err
+		}
+		file.ID = id
+	}
+
+	now := time.Now()
+	if file.CreatedAt.IsZero() {
+		file.CreatedAt = now
+	}
+	file.UpdatedAt = now
+
+	data, err := json.Marshal(file)
+	if err != nil {
+		return err
+	}
+
+	batch := s.db.NewBatch()
+
+	key := []byte(fmt.Sprintf("book_file:%s:%s", file.BookID, file.ID))
+	if err := batch.Set(key, data, nil); err != nil {
+		batch.Close()
+		return err
+	}
+
+	if err := writeBookFileSecondaryIndexes(batch, file); err != nil {
+		batch.Close()
+		return err
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
-// UpdateBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+// UpdateBookFile replaces an existing BookFile, cleaning up stale secondary
+// indexes when the PID or path changes.
 func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
-	return fmt.Errorf("UpdateBookFile: not supported by PebbleStore")
+	// We need the bookID to build the primary key; it must be set on file.
+	old, err := s.getBookFileByID(file.BookID, id)
+	if err != nil {
+		return err
+	}
+	if old == nil {
+		return fmt.Errorf("book file not found: %s", id)
+	}
+
+	file.ID = id
+	file.CreatedAt = old.CreatedAt
+	file.UpdatedAt = time.Now()
+
+	data, err := json.Marshal(file)
+	if err != nil {
+		return err
+	}
+
+	batch := s.db.NewBatch()
+
+	// Remove stale secondary indexes before writing new ones.
+	if err := deleteBookFileSecondaryIndexes(batch, old); err != nil {
+		batch.Close()
+		return err
+	}
+
+	key := []byte(fmt.Sprintf("book_file:%s:%s", file.BookID, file.ID))
+	if err := batch.Set(key, data, nil); err != nil {
+		batch.Close()
+		return err
+	}
+
+	if err := writeBookFileSecondaryIndexes(batch, file); err != nil {
+		batch.Close()
+		return err
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
-// GetBookFiles is not supported by PebbleStore. TODO: implement in Task 3.
+// GetBookFiles returns all BookFile records for the given bookID by iterating
+// the prefix book_file:<bookID>:.
 func (s *PebbleStore) GetBookFiles(bookID string) ([]BookFile, error) {
-	return nil, fmt.Errorf("GetBookFiles: not supported by PebbleStore")
+	prefix := []byte(fmt.Sprintf("book_file:%s:", bookID))
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(append([]byte(nil), prefix...), 0xFF),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var files []BookFile
+	for iter.First(); iter.Valid(); iter.Next() {
+		var f BookFile
+		if err := json.Unmarshal(iter.Value(), &f); err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
 }
 
-// GetBookFileByPID is not supported by PebbleStore. TODO: implement in Task 3.
+// GetBookFileByPID looks up a BookFile by iTunes persistent ID using the
+// book_file_pid:<pid> secondary index.
 func (s *PebbleStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
-	return nil, fmt.Errorf("GetBookFileByPID: not supported by PebbleStore")
+	if itunesPID == "" {
+		return nil, nil
+	}
+	pidKey := []byte(fmt.Sprintf("book_file_pid:%s", itunesPID))
+	value, closer, err := s.db.Get(pidKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ref := string(value)
+	closer.Close()
+
+	parts := strings.SplitN(ref, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("corrupt book_file_pid index value: %q", ref)
+	}
+	return s.getBookFileByID(parts[0], parts[1])
 }
 
-// GetBookFileByPath is not supported by PebbleStore. TODO: implement in Task 3.
+// GetBookFileByPath looks up a BookFile by file path using the
+// book_file_path:<crc32hex> secondary index.
 func (s *PebbleStore) GetBookFileByPath(filePath string) (*BookFile, error) {
-	return nil, fmt.Errorf("GetBookFileByPath: not supported by PebbleStore")
+	if filePath == "" {
+		return nil, nil
+	}
+	pathKey := []byte(fmt.Sprintf("book_file_path:%s", bookFilePathCRC(filePath)))
+	value, closer, err := s.db.Get(pathKey)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ref := string(value)
+	closer.Close()
+
+	parts := strings.SplitN(ref, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("corrupt book_file_path index value: %q", ref)
+	}
+	f, err := s.getBookFileByID(parts[0], parts[1])
+	if err != nil {
+		return nil, err
+	}
+	// Verify the stored path matches (CRC collision guard).
+	if f != nil && f.FilePath != filePath {
+		return nil, nil
+	}
+	return f, nil
 }
 
-// DeleteBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+// DeleteBookFile removes the BookFile with the given ID (and its secondary
+// indexes) from the store. It requires the bookID to be available on the
+// struct; the caller must have obtained the record first, so we scan the
+// secondary path index or retrieve by ID. Since we only have fileID here we
+// perform a prefix scan to locate the record.
 func (s *PebbleStore) DeleteBookFile(id string) error {
-	return fmt.Errorf("DeleteBookFile: not supported by PebbleStore")
+	// Scan all book_file: keys to find the one with this file ID.
+	prefix := []byte("book_file:")
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: []byte("book_file;"),
+	})
+	if err != nil {
+		return err
+	}
+
+	var found *BookFile
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Key format: book_file:<bookID>:<fileID>
+		key := string(iter.Key())
+		parts := strings.SplitN(key, ":", 3)
+		if len(parts) == 3 && parts[2] == id {
+			var f BookFile
+			if jsonErr := json.Unmarshal(iter.Value(), &f); jsonErr == nil {
+				found = &f
+			}
+			break
+		}
+	}
+	iter.Close()
+
+	if found == nil {
+		return nil // already gone
+	}
+
+	batch := s.db.NewBatch()
+
+	// Delete primary key.
+	primaryKey := []byte(fmt.Sprintf("book_file:%s:%s", found.BookID, found.ID))
+	if err := batch.Delete(primaryKey, nil); err != nil {
+		batch.Close()
+		return err
+	}
+
+	// Delete secondary indexes.
+	if err := deleteBookFileSecondaryIndexes(batch, found); err != nil {
+		batch.Close()
+		return err
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
-// DeleteBookFilesForBook is not supported by PebbleStore. TODO: implement in Task 3.
+// DeleteBookFilesForBook removes all BookFile records for a given bookID,
+// including their secondary indexes.
 func (s *PebbleStore) DeleteBookFilesForBook(bookID string) error {
-	return fmt.Errorf("DeleteBookFilesForBook: not supported by PebbleStore")
+	files, err := s.GetBookFiles(bookID)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	batch := s.db.NewBatch()
+
+	for i := range files {
+		f := &files[i]
+		primaryKey := []byte(fmt.Sprintf("book_file:%s:%s", f.BookID, f.ID))
+		if err := batch.Delete(primaryKey, nil); err != nil {
+			batch.Close()
+			return err
+		}
+		if err := deleteBookFileSecondaryIndexes(batch, f); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
-// UpsertBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+// UpsertBookFile creates or updates a BookFile. Lookup order:
+//  1. If ITunesPersistentID is set, look up by PID.
+//  2. Otherwise look up by FilePath.
+//  3. If still not found, create a new record.
 func (s *PebbleStore) UpsertBookFile(file *BookFile) error {
-	return fmt.Errorf("UpsertBookFile: not supported by PebbleStore")
+	var existing *BookFile
+	var err error
+
+	if file.ITunesPersistentID != "" {
+		existing, err = s.GetBookFileByPID(file.ITunesPersistentID)
+		if err != nil {
+			return err
+		}
+	}
+
+	if existing == nil && file.FilePath != "" {
+		existing, err = s.GetBookFileByPath(file.FilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	if existing == nil {
+		return s.CreateBookFile(file)
+	}
+
+	// Preserve the existing ID and bookID; update in place.
+	file.ID = existing.ID
+	file.BookID = existing.BookID
+	return s.UpdateBookFile(existing.ID, file)
 }
