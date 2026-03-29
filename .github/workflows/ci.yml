@@ -29,7 +29,7 @@ permissions:
 jobs:
   ci:
     name: Run CI
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@36775c335a07fd1daf32393ceeb6fc04663765a2 # v2.10.0
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@378e23a96c00d719075732dd2af4de45f7523cbb # v1.10.4
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'
