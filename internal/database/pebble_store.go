@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.37.0
+// version: 1.38.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4934,4 +4934,46 @@ func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
 		}
 	}
 	return bookIDs, nil
+}
+
+// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 3) ----
+
+// CreateBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) CreateBookFile(file *BookFile) error {
+	return fmt.Errorf("CreateBookFile: not supported by PebbleStore")
+}
+
+// UpdateBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
+	return fmt.Errorf("UpdateBookFile: not supported by PebbleStore")
+}
+
+// GetBookFiles is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) GetBookFiles(bookID string) ([]BookFile, error) {
+	return nil, fmt.Errorf("GetBookFiles: not supported by PebbleStore")
+}
+
+// GetBookFileByPID is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
+	return nil, fmt.Errorf("GetBookFileByPID: not supported by PebbleStore")
+}
+
+// GetBookFileByPath is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) GetBookFileByPath(filePath string) (*BookFile, error) {
+	return nil, fmt.Errorf("GetBookFileByPath: not supported by PebbleStore")
+}
+
+// DeleteBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) DeleteBookFile(id string) error {
+	return fmt.Errorf("DeleteBookFile: not supported by PebbleStore")
+}
+
+// DeleteBookFilesForBook is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) DeleteBookFilesForBook(bookID string) error {
+	return fmt.Errorf("DeleteBookFilesForBook: not supported by PebbleStore")
+}
+
+// UpsertBookFile is not supported by PebbleStore. TODO: implement in Task 3.
+func (s *PebbleStore) UpsertBookFile(file *BookFile) error {
+	return fmt.Errorf("UpsertBookFile: not supported by PebbleStore")
 }
