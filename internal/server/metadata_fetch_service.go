@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.36.0
+// version: 4.37.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"log"
 	"net/url"
 	"os"
@@ -778,40 +777,39 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 		return
 	}
 
-	// Collect active segments for multi-file books
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
-	var activeSegments []database.BookSegment
-	if segErr == nil {
-		for _, seg := range segments {
-			if seg.Active {
-				activeSegments = append(activeSegments, seg)
+	// Collect active book files for multi-file books
+	bookFiles, bfErr := mfs.db.GetBookFiles(book.ID)
+	var activeFiles []database.BookFile
+	if bfErr == nil {
+		for _, bf := range bookFiles {
+			if !bf.Missing {
+				activeFiles = append(activeFiles, bf)
 			}
 		}
 	}
 
-	totalTracks := len(activeSegments)
+	totalTracks := len(activeFiles)
 
 	if totalTracks > 1 {
-		// Multi-file: write to each segment with per-track title and numbering
+		// Multi-file: write to each file with per-track title and numbering
 		digits := len(fmt.Sprintf("%d", totalTracks))
 		trackFmt := fmt.Sprintf("%%0%dd", digits)
-		for i, seg := range activeSegments {
+		for i, bf := range activeFiles {
 			trackNum := i + 1
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
 			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
-			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
+			tagMap = filterUnchangedTags(bf.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				continue
 			}
-			if isProtectedPath(seg.FilePath) {
-				log.Printf("[INFO] skipping write-back for protected segment: %s", seg.FilePath)
+			if isProtectedPath(bf.FilePath) {
+				log.Printf("[INFO] skipping write-back for protected file: %s", bf.FilePath)
 				continue
 			}
-			backupFileBeforeWrite(seg.FilePath)
-			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
-				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+			backupFileBeforeWrite(bf.FilePath)
+			if err := metadata.WriteMetadataToFile(bf.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for file %s: %v", bf.FilePath, err)
 			}
 		}
 	} else {
@@ -1176,14 +1174,13 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 		}
 	}
 
-	// Collect segment paths for multi-file books
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
-	var activeSegments []database.BookSegment
-	if segErr == nil {
-		for _, seg := range segments {
-			if seg.Active {
-				activeSegments = append(activeSegments, seg)
+	// Collect file paths for multi-file books
+	bookFiles, bfErr := mfs.db.GetBookFiles(book.ID)
+	var activeFiles []database.BookFile
+	if bfErr == nil {
+		for _, bf := range bookFiles {
+			if !bf.Missing {
+				activeFiles = append(activeFiles, bf)
 			}
 		}
 	}
@@ -1192,13 +1189,13 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 	var newBookPath string
 	var pathMap map[string]string
 
-	if len(activeSegments) > 1 {
-		// Multi-file: organize all segment files to library directory
-		segPaths := make([]string, len(activeSegments))
-		for i, seg := range activeSegments {
-			segPaths[i] = seg.FilePath
+	if len(activeFiles) > 1 {
+		// Multi-file: organize all book files to library directory
+		filePaths := make([]string, len(activeFiles))
+		for i, bf := range activeFiles {
+			filePaths[i] = bf.FilePath
 		}
-		targetDir, pm, err := org.OrganizeBookDirectory(book, segPaths)
+		targetDir, pm, err := org.OrganizeBookDirectory(book, filePaths)
 		if err != nil {
 			log.Printf("[WARN] failed to create library copy for multi-file book %s: %v", book.ID, err)
 			return nil
@@ -1251,17 +1248,18 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 		_ = mfs.db.SetBookAuthors(created.ID, newAuthors)
 	}
 
-	// Copy segments with updated file paths for multi-file books
-	if len(activeSegments) > 1 && pathMap != nil {
-		newBookNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
-		for _, seg := range activeSegments {
-			newSeg := seg
-			newSeg.ID = ulid.Make().String()
-			if newPath, ok := pathMap[seg.FilePath]; ok {
-				newSeg.FilePath = newPath
+	// Copy book files with updated file paths for multi-file books
+	if len(activeFiles) > 1 && pathMap != nil {
+		for _, bf := range activeFiles {
+			newBF := bf
+			newBF.ID = ulid.Make().String()
+			newBF.BookID = created.ID
+			if newPath, ok := pathMap[bf.FilePath]; ok {
+				newBF.FilePath = newPath
+				newBF.ITunesPath = computeITunesPath(newPath)
 			}
-			if _, err := mfs.db.CreateBookSegment(newBookNumericID, &newSeg); err != nil {
-				log.Printf("[WARN] failed to copy segment %s for library book %s: %v", seg.ID, created.ID, err)
+			if err := mfs.db.CreateBookFile(&newBF); err != nil {
+				log.Printf("[WARN] failed to copy book_file %s for library book %s: %v", bf.ID, created.ID, err)
 			}
 		}
 	}
@@ -1271,7 +1269,7 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 	book.IsPrimaryVersion = &isNotPrimary
 	_, _ = mfs.db.UpdateBook(book.ID, book)
 
-	log.Printf("[INFO] created library copy %s -> %s for protected book %s (%d segment(s))", newBookPath, created.ID, book.ID, len(activeSegments))
+	log.Printf("[INFO] created library copy %s -> %s for protected book %s (%d file(s))", newBookPath, created.ID, book.ID, len(activeFiles))
 	return created
 }
 
@@ -1305,23 +1303,22 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 	if audioExts[ext] {
 		files = append(files, book.FilePath)
 	} else {
-		// Multi-segment book
-		bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-		segments, err := mfs.db.ListBookSegments(bookNumericID)
+		// Multi-file book
+		bookFiles, err := mfs.db.GetBookFiles(book.ID)
 		if err != nil {
-			log.Printf("[WARN] failed to list segments for cover embedding on book %s: %v", book.ID, err)
+			log.Printf("[WARN] failed to list book files for cover embedding on book %s: %v", book.ID, err)
 			return
 		}
-		for _, seg := range segments {
-			if !seg.Active {
+		for _, bf := range bookFiles {
+			if bf.Missing {
 				continue
 			}
-			if isProtectedPath(seg.FilePath) {
+			if isProtectedPath(bf.FilePath) {
 				continue
 			}
-			segExt := strings.ToLower(filepath.Ext(seg.FilePath))
-			if audioExts[segExt] {
-				files = append(files, seg.FilePath)
+			bfExt := strings.ToLower(filepath.Ext(bf.FilePath))
+			if audioExts[bfExt] {
+				files = append(files, bf.FilePath)
 			}
 		}
 	}
@@ -1984,36 +1981,35 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 
 	opConfig := fileops.OperationConfig{VerifyChecksums: true}
 
-	// --- Collect active segments ---
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, segErr := mfs.db.ListBookSegments(bookNumericID)
-	if segErr != nil {
-		segments = nil
+	// --- Collect active book files ---
+	bookFiles, bfErr := mfs.db.GetBookFiles(book.ID)
+	if bfErr != nil {
+		bookFiles = nil
 	}
-	// Filter to active only
-	var activeSegments []database.BookSegment
-	for _, seg := range segments {
-		if seg.Active {
-			activeSegments = append(activeSegments, seg)
+	// Filter to non-missing only
+	var activeFiles []database.BookFile
+	for _, bf := range bookFiles {
+		if !bf.Missing {
+			activeFiles = append(activeFiles, bf)
 		}
 	}
 
-	// Apply optional segment filter
+	// Apply optional segment/file filter
 	if len(segmentFilter) > 0 && len(segmentFilter[0]) > 0 {
 		filterSet := make(map[string]struct{}, len(segmentFilter[0]))
 		for _, sid := range segmentFilter[0] {
 			filterSet[sid] = struct{}{}
 		}
-		var filtered []database.BookSegment
-		for _, seg := range activeSegments {
-			if _, ok := filterSet[seg.ID]; ok {
-				filtered = append(filtered, seg)
+		var filtered []database.BookFile
+		for _, bf := range activeFiles {
+			if _, ok := filterSet[bf.ID]; ok {
+				filtered = append(filtered, bf)
 			}
 		}
-		activeSegments = filtered
+		activeFiles = filtered
 	}
 
-	totalTracks := len(activeSegments)
+	totalTracks := len(activeFiles)
 	writtenCount := 0
 	skippedProtected := 0
 
@@ -2026,34 +2022,34 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 	// Use the original book's title for tag content (it has freshly-applied metadata)
 	bookTitle := originalBook.Title
 	if totalTracks > 1 {
-		// Multi-file: write to each segment with per-track title and numbering
+		// Multi-file: write to each file with per-track title and numbering
 		digits := len(fmt.Sprintf("%d", totalTracks))
 		trackFmt := fmt.Sprintf("%%0%dd", digits)
-		for i, seg := range activeSegments {
+		for i, bf := range activeFiles {
 			trackNum := i + 1
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
 			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
-			tagMap = filterUnchangedTags(seg.FilePath, tagMap)
+			tagMap = filterUnchangedTags(bf.FilePath, tagMap)
 			if len(tagMap) == 0 {
-				log.Printf("[DEBUG] write-back: segment %s tags already match, skipping", seg.FilePath)
+				log.Printf("[DEBUG] write-back: file %s tags already match, skipping", bf.FilePath)
 				continue
 			}
-			if isProtectedPath(seg.FilePath) {
-				log.Printf("[DEBUG] skipping write-back for protected segment: %s", seg.FilePath)
+			if isProtectedPath(bf.FilePath) {
+				log.Printf("[DEBUG] skipping write-back for protected file: %s", bf.FilePath)
 				skippedProtected++
 				continue
 			}
-			backupFileBeforeWrite(seg.FilePath)
-			if err := metadata.WriteMetadataToFile(seg.FilePath, tagMap, opConfig); err != nil {
-				log.Printf("[WARN] write-back failed for segment %s: %v", seg.FilePath, err)
+			backupFileBeforeWrite(bf.FilePath)
+			if err := metadata.WriteMetadataToFile(bf.FilePath, tagMap, opConfig); err != nil {
+				log.Printf("[WARN] write-back failed for file %s: %v", bf.FilePath, err)
 			} else {
 				writtenCount++
 			}
 		}
 	} else {
-		// Single-file or no segments: write to book.FilePath.
-		// If book.FilePath is a directory (multi-file book with no segment records),
+		// Single-file or no files: write to book.FilePath.
+		// If book.FilePath is a directory (multi-file book with no file records),
 		// glob for audio files inside and write to each one individually.
 		if isProtectedPath(book.FilePath) {
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
@@ -2355,34 +2351,33 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	return filtered
 }
 
-// generateSegmentTitles computes and persists segment titles for all segments of a book.
+// generateSegmentTitles computes and persists file titles for all book files of a book.
 func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle string) error {
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(bookID)))
-	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	bookFiles, err := mfs.db.GetBookFiles(bookID)
 	if err != nil {
-		return fmt.Errorf("list segments: %w", err)
+		return fmt.Errorf("list book files: %w", err)
 	}
-	if len(segments) == 0 {
+	if len(bookFiles) == 0 {
 		return nil
 	}
 
-	// Sort by track number (nil last), then filepath
-	sort.Slice(segments, func(i, j int) bool {
-		ti := segments[i].TrackNumber
-		tj := segments[j].TrackNumber
-		if ti != nil && tj != nil {
-			if *ti != *tj {
-				return *ti < *tj
+	// Sort by track number (0 last), then filepath
+	sort.Slice(bookFiles, func(i, j int) bool {
+		ti := bookFiles[i].TrackNumber
+		tj := bookFiles[j].TrackNumber
+		if ti != 0 && tj != 0 {
+			if ti != tj {
+				return ti < tj
 			}
-		} else if ti != nil {
+		} else if ti != 0 {
 			return true
-		} else if tj != nil {
+		} else if tj != 0 {
 			return false
 		}
-		return segments[i].FilePath < segments[j].FilePath
+		return bookFiles[i].FilePath < bookFiles[j].FilePath
 	})
 
-	totalTracks := len(segments)
+	totalTracks := len(bookFiles)
 
 	// Determine segment title format from config
 	segTitleFormat := config.AppConfig.SegmentTitleFormat
@@ -2390,20 +2385,19 @@ func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle 
 		segTitleFormat = DefaultSegmentTitleFormat
 	}
 
-	for i := range segments {
-		// Auto-assign track numbers if nil
-		if segments[i].TrackNumber == nil {
-			trackNum := i + 1
-			segments[i].TrackNumber = &trackNum
+	for i := range bookFiles {
+		// Auto-assign track numbers if zero
+		if bookFiles[i].TrackNumber == 0 {
+			bookFiles[i].TrackNumber = i + 1
 		}
-		segments[i].TotalTracks = &totalTracks
+		bookFiles[i].TrackCount = totalTracks
 
-		// Compute segment title
-		title := FormatSegmentTitle(segTitleFormat, bookTitle, *segments[i].TrackNumber, totalTracks)
-		segments[i].SegmentTitle = &title
+		// Compute file title
+		title := FormatSegmentTitle(segTitleFormat, bookTitle, bookFiles[i].TrackNumber, totalTracks)
+		bookFiles[i].Title = title
 
-		if err := mfs.db.UpdateBookSegment(&segments[i]); err != nil {
-			log.Printf("[WARN] failed to update segment title for %s: %v", segments[i].ID, err)
+		if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
+			log.Printf("[WARN] failed to update book file title for %s: %v", bookFiles[i].ID, err)
 		}
 	}
 
@@ -2426,12 +2420,11 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 		book = libCopy
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(id)))
-	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	bookFiles, err := mfs.db.GetBookFiles(id)
 	if err != nil {
-		return fmt.Errorf("list segments: %w", err)
+		return fmt.Errorf("list book files: %w", err)
 	}
-	if len(segments) == 0 {
+	if len(bookFiles) == 0 {
 		return nil
 	}
 
@@ -2478,7 +2471,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 		segTitleFormat = DefaultSegmentTitleFormat
 	}
 
-	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, segments, vars)
+	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, bookFiles, vars)
 
 	if config.AppConfig.AutoRenameOnApply {
 		renameResult, err := RenameFiles(entries)
@@ -2489,16 +2482,17 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 			log.Printf("[WARN] %d files skipped (source missing) during rename", len(renameResult.Skipped))
 		}
 
-		// Update segment records with new paths (only for succeeded renames)
-		segMap := make(map[string]*database.BookSegment, len(segments))
-		for i := range segments {
-			segMap[segments[i].ID] = &segments[i]
+		// Update book file records with new paths (only for succeeded renames)
+		bfMap := make(map[string]*database.BookFile, len(bookFiles))
+		for i := range bookFiles {
+			bfMap[bookFiles[i].ID] = &bookFiles[i]
 		}
 		for _, entry := range renameResult.Succeeded {
-			if seg, ok := segMap[entry.SegmentID]; ok {
-				seg.FilePath = entry.TargetPath
-				if err := mfs.db.UpdateBookSegment(seg); err != nil {
-					log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
+			if bf, ok := bfMap[entry.SegmentID]; ok {
+				bf.FilePath = entry.TargetPath
+				bf.ITunesPath = computeITunesPath(entry.TargetPath)
+				if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
+					log.Printf("[WARN] failed to update book_file path for %s: %v", bf.ID, err)
 				}
 			}
 			// Record path change for each successful rename
@@ -2577,26 +2571,25 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		book = libCopy
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(id)))
-	segments, err := mfs.db.ListBookSegments(bookNumericID)
+	bookFiles, err := mfs.db.GetBookFiles(id)
 	if err != nil {
-		return fmt.Errorf("list segments: %w", err)
+		return fmt.Errorf("list book files: %w", err)
 	}
 
-	// For single-file books with no segments, create a virtual segment from book.FilePath
-	if len(segments) == 0 && book.FilePath != "" {
+	// For single-file books with no book files, create a virtual entry from book.FilePath
+	if len(bookFiles) == 0 && book.FilePath != "" {
 		ext := strings.TrimPrefix(filepath.Ext(book.FilePath), ".")
 		if ext != "" {
-			// This is a file, not a directory — create a virtual segment
-			segments = []database.BookSegment{{
+			// This is a file, not a directory — create a virtual book file entry
+			bookFiles = []database.BookFile{{
 				ID:       "virtual-" + id,
+				BookID:   id,
 				FilePath: book.FilePath,
 				Format:   ext,
-				Active:   true,
 			}}
 		}
 	}
-	if len(segments) == 0 {
+	if len(bookFiles) == 0 {
 		return nil
 	}
 
@@ -2639,21 +2632,21 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		segTitleFormat = DefaultSegmentTitleFormat
 	}
 
-	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, segments, vars)
+	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, bookFiles, vars)
 
 	renameResult, err := RenameFiles(entries)
 	if err != nil {
 		return fmt.Errorf("rename files: %w", err)
 	}
 
-	// Update segment records with new paths
-	segMap := make(map[string]*database.BookSegment, len(segments))
-	for i := range segments {
-		segMap[segments[i].ID] = &segments[i]
+	// Update book file records with new paths
+	bfMap := make(map[string]*database.BookFile, len(bookFiles))
+	for i := range bookFiles {
+		bfMap[bookFiles[i].ID] = &bookFiles[i]
 	}
 	for _, entry := range renameResult.Succeeded {
 		if strings.HasPrefix(entry.SegmentID, "virtual-") {
-			// Virtual segment = single-file book. Update book.FilePath directly to the new file path.
+			// Virtual entry = single-file book. Update book.FilePath directly to the new file path.
 			book.FilePath = entry.TargetPath
 			if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
 				book.ITunesPath = &itunesPath
@@ -2663,10 +2656,11 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 			} else {
 				log.Printf("[INFO] renamed single-file book %s: %s", id, entry.TargetPath)
 			}
-		} else if seg, ok := segMap[entry.SegmentID]; ok {
-			seg.FilePath = entry.TargetPath
-			if err := mfs.db.UpdateBookSegment(seg); err != nil {
-				log.Printf("[WARN] failed to update segment path for %s: %v", seg.ID, err)
+		} else if bf, ok := bfMap[entry.SegmentID]; ok {
+			bf.FilePath = entry.TargetPath
+			bf.ITunesPath = computeITunesPath(entry.TargetPath)
+			if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
+				log.Printf("[WARN] failed to update book_file path for %s: %v", bf.ID, err)
 			}
 		}
 		// Record path change for each successful rename

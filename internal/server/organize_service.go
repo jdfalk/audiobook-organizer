@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -7,7 +7,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"hash/crc32"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -176,7 +175,7 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 
 func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
 	booksToOrganize := make([]database.Book, 0)
-	skippedMissingSegments := 0
+	skippedMissingFiles := 0
 	for _, book := range allBooks {
 		// Skip non-primary versions — unless they're the only version in their VG
 		// (i.e., no organized primary copy exists yet)
@@ -211,31 +210,30 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 			log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
 			continue
 		}
-		// For directory-based (multi-file) books, verify segment files exist
+		// For directory-based (multi-file) books, verify book files exist on disk
 		if err == nil && info.IsDir() {
-			numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-			segments, segErr := orgSvc.db.ListBookSegments(numericID)
-			if segErr == nil && len(segments) > 0 {
+			bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID)
+			if bfErr == nil && len(bookFiles) > 0 {
 				missingCount := 0
-				for _, seg := range segments {
-					if seg.FilePath == "" || !seg.Active {
+				for _, bf := range bookFiles {
+					if bf.FilePath == "" || bf.Missing {
 						continue
 					}
-					if _, serr := os.Stat(seg.FilePath); os.IsNotExist(serr) {
+					if _, serr := os.Stat(bf.FilePath); os.IsNotExist(serr) {
 						missingCount++
 					}
 				}
 				if missingCount > 0 {
-					log.Debug("Organize: Skipping %s — %d segment file(s) missing on disk", book.Title, missingCount)
-					skippedMissingSegments++
+					log.Debug("Organize: Skipping %s — %d book file(s) missing on disk", book.Title, missingCount)
+					skippedMissingFiles++
 					continue
 				}
 			}
 		}
 		booksToOrganize = append(booksToOrganize, book)
 	}
-	if skippedMissingSegments > 0 {
-		log.Info("Organize: Skipped %d book(s) with missing segment files", skippedMissingSegments)
+	if skippedMissingFiles > 0 {
+		log.Info("Organize: Skipped %d book(s) with missing book files", skippedMissingFiles)
 	}
 	return booksToOrganize
 }
@@ -357,22 +355,21 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 }
 
 // organizeDirectoryBook handles organizing a multi-file book where file_path is a directory.
-// It finds all segment files, organizes them into the target directory, and returns the new directory path.
+// It finds all book files, organizes them into the target directory, and returns the new directory path.
 func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, book *database.Book, log logger.Logger) (string, error) {
-	// Get segment files from DB
-	numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := orgSvc.db.ListBookSegments(numericID)
+	// Get book files from DB
+	bookFiles, err := orgSvc.db.GetBookFiles(book.ID)
 
 	var segmentPaths []string
-	if err == nil && len(segments) > 0 {
-		for _, seg := range segments {
-			if seg.FilePath != "" {
-				segmentPaths = append(segmentPaths, seg.FilePath)
+	if err == nil && len(bookFiles) > 0 {
+		for _, bf := range bookFiles {
+			if bf.FilePath != "" && !bf.Missing {
+				segmentPaths = append(segmentPaths, bf.FilePath)
 			}
 		}
 	}
 
-	// If no segments in DB, scan the directory for audio files
+	// If no book files in DB, scan the directory for audio files
 	if len(segmentPaths) == 0 {
 		entries, err := os.ReadDir(book.FilePath)
 		if err != nil {
@@ -491,20 +488,19 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 		_ = orgSvc.db.SetBookAuthors(newBookID, newAuthors)
 	}
 
-	// Copy segments to the new book with updated paths
-	oldNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	newNumericID := int(crc32.ChecksumIEEE([]byte(newBookID)))
-	if segments, err := orgSvc.db.ListBookSegments(oldNumericID); err == nil && len(segments) > 0 {
-		for _, seg := range segments {
-			newSeg := seg
-			newSeg.ID = ulid.Make().String()
-			newSeg.BookID = newNumericID
-			// For directory books, update segment paths to point to the organized location
-			if isDir && seg.FilePath != "" {
-				fileName := filepath.Base(seg.FilePath)
-				newSeg.FilePath = filepath.Join(newPath, fileName)
+	// Copy book files to the new book with updated paths
+	if bookFiles, err := orgSvc.db.GetBookFiles(book.ID); err == nil && len(bookFiles) > 0 {
+		for _, bf := range bookFiles {
+			newBF := bf
+			newBF.ID = ulid.Make().String()
+			newBF.BookID = newBookID
+			// For directory books, update file paths to point to the organized location
+			if isDir && bf.FilePath != "" {
+				fileName := filepath.Base(bf.FilePath)
+				newBF.FilePath = filepath.Join(newPath, fileName)
+				newBF.ITunesPath = computeITunesPath(newBF.FilePath)
 			}
-			_, _ = orgSvc.db.CreateBookSegment(newNumericID, &newSeg)
+			_ = orgSvc.db.CreateBookFile(&newBF)
 		}
 	}
 
