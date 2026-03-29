@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"log"
 	"strings"
 	"time"
@@ -265,6 +266,12 @@ var migrations = []Migration{
 		Version:     38,
 		Description: "Add itunes_path column to books table",
 		Up:          migration038Up,
+		Down:        nil,
+	},
+	{
+		Version:     39,
+		Description: "Create book_files table and migrate book_segments data",
+		Up:          migration039Up,
 		Down:        nil,
 	},
 }
@@ -1931,5 +1938,179 @@ func migration037Up(store Store) error {
 	}
 
 	log.Println("  - book_tags table created successfully")
+	return nil
+}
+
+// migration039Up creates the book_files table and migrates data from book_segments.
+// book_files uses ULID string book_id (matching books.id directly), whereas
+// book_segments used a legacy CRC32 numeric hash of the ULID as book_id.
+func migration039Up(store Store) error {
+	log.Println("  - Creating book_files table and migrating book_segments data")
+
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		log.Println("  - Non-SQLite store detected, skipping SQL migration (PebbleDB uses JSON)")
+		return nil
+	}
+
+	// Create table and indexes
+	ddlStatements := []string{
+		`CREATE TABLE IF NOT EXISTS book_files (
+			id TEXT PRIMARY KEY,
+			book_id TEXT NOT NULL,
+			file_path TEXT NOT NULL,
+			original_filename TEXT,
+			itunes_path TEXT,
+			itunes_persistent_id TEXT,
+			track_number INTEGER,
+			track_count INTEGER,
+			disc_number INTEGER,
+			disc_count INTEGER,
+			title TEXT,
+			format TEXT,
+			codec TEXT,
+			duration INTEGER,
+			file_size INTEGER,
+			bitrate_kbps INTEGER,
+			sample_rate_hz INTEGER,
+			channels INTEGER,
+			bit_depth INTEGER,
+			file_hash TEXT,
+			original_file_hash TEXT,
+			missing INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_book_id ON book_files(book_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_itunes_pid ON book_files(itunes_persistent_id) WHERE itunes_persistent_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_file_hash ON book_files(file_hash) WHERE file_hash IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_file_path ON book_files(file_path)`,
+	}
+
+	for _, stmt := range ddlStatements {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 39: failed to execute DDL: %w", err)
+		}
+	}
+
+	// Migrate data from book_segments to book_files.
+	// book_segments.book_id is a CRC32 of the ULID string (numeric legacy field).
+	// We need to build a CRC32(book.id) → book.id map to resolve the relationship.
+	rows, err := sqliteStore.db.Query("SELECT id FROM books")
+	if err != nil {
+		return fmt.Errorf("migration 39: failed to query books: %w", err)
+	}
+	crcToULID := make(map[uint32]string)
+	for rows.Next() {
+		var bookID string
+		if err := rows.Scan(&bookID); err != nil {
+			rows.Close()
+			return fmt.Errorf("migration 39: failed to scan book id: %w", err)
+		}
+		crc := crc32.ChecksumIEEE([]byte(bookID))
+		crcToULID[crc] = bookID
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("migration 39: books query error: %w", err)
+	}
+
+	// Fetch all book_segments
+	segRows, err := sqliteStore.db.Query(`
+		SELECT id, book_id, file_path, format, size_bytes, duration_seconds,
+		       track_number, total_tracks, file_hash, active, created_at, updated_at
+		FROM book_segments
+	`)
+	if err != nil {
+		// Table may not exist on a fresh DB — that is fine.
+		if strings.Contains(err.Error(), "no such table") {
+			log.Println("  - No book_segments table found, skipping data migration")
+			log.Println("  - book_files table created successfully")
+			return nil
+		}
+		return fmt.Errorf("migration 39: failed to query book_segments: %w", err)
+	}
+	defer segRows.Close()
+
+	type segRow struct {
+		id              string
+		bookIDNumeric   int64
+		filePath        string
+		format          string
+		sizeBytes       int64
+		durationSeconds int
+		trackNumber     sql.NullInt64
+		totalTracks     sql.NullInt64
+		fileHash        sql.NullString
+		active          int
+		createdAt       time.Time
+		updatedAt       time.Time
+	}
+
+	var segments []segRow
+	for segRows.Next() {
+		var s segRow
+		if err := segRows.Scan(
+			&s.id, &s.bookIDNumeric, &s.filePath, &s.format,
+			&s.sizeBytes, &s.durationSeconds,
+			&s.trackNumber, &s.totalTracks,
+			&s.fileHash, &s.active, &s.createdAt, &s.updatedAt,
+		); err != nil {
+			return fmt.Errorf("migration 39: failed to scan segment row: %w", err)
+		}
+		segments = append(segments, s)
+	}
+	if err := segRows.Err(); err != nil {
+		return fmt.Errorf("migration 39: segment rows error: %w", err)
+	}
+
+	skipped := 0
+	inserted := 0
+	for _, s := range segments {
+		ulidBookID, ok := crcToULID[uint32(s.bookIDNumeric)]
+		if !ok {
+			log.Printf("    - migration 39: no ULID found for CRC32=%d (segment %s), skipping", s.bookIDNumeric, s.id)
+			skipped++
+			continue
+		}
+
+		missing := 0
+		if s.active == 0 {
+			missing = 1
+		}
+
+		// Duration stored in book_files as milliseconds; book_segments stores seconds.
+		durationMs := s.durationSeconds * 1000
+
+		var trackNumber, totalTracks *int64
+		if s.trackNumber.Valid {
+			trackNumber = &s.trackNumber.Int64
+		}
+		if s.totalTracks.Valid {
+			totalTracks = &s.totalTracks.Int64
+		}
+
+		var fileHash *string
+		if s.fileHash.Valid {
+			fileHash = &s.fileHash.String
+		}
+
+		_, err := sqliteStore.db.Exec(`
+			INSERT OR IGNORE INTO book_files
+				(id, book_id, file_path, format, file_size, duration,
+				 track_number, track_count, file_hash, missing, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`,
+			s.id, ulidBookID, s.filePath, s.format, s.sizeBytes, durationMs,
+			trackNumber, totalTracks, fileHash, missing, s.createdAt, s.updatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("migration 39: failed to insert book_file %s: %w", s.id, err)
+		}
+		inserted++
+	}
+
+	log.Printf("  - book_files table created successfully (inserted %d rows, skipped %d)", inserted, skipped)
 	return nil
 }

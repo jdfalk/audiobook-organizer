@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.46.0
+// version: 1.47.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -4362,4 +4362,46 @@ func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
 		changes = append(changes, c)
 	}
 	return changes, rows.Err()
+}
+
+// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 2) ----
+
+// CreateBookFile inserts a new book_files row. TODO: implement in Task 2.
+func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
+	return fmt.Errorf("CreateBookFile: not yet implemented")
+}
+
+// UpdateBookFile updates an existing book_files row. TODO: implement in Task 2.
+func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
+	return fmt.Errorf("UpdateBookFile: not yet implemented")
+}
+
+// GetBookFiles returns all book_files rows for a given book. TODO: implement in Task 2.
+func (s *SQLiteStore) GetBookFiles(bookID string) ([]BookFile, error) {
+	return nil, fmt.Errorf("GetBookFiles: not yet implemented")
+}
+
+// GetBookFileByPID returns the book_file with the given iTunes persistent ID. TODO: implement in Task 2.
+func (s *SQLiteStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
+	return nil, fmt.Errorf("GetBookFileByPID: not yet implemented")
+}
+
+// GetBookFileByPath returns the book_file with the given file path. TODO: implement in Task 2.
+func (s *SQLiteStore) GetBookFileByPath(filePath string) (*BookFile, error) {
+	return nil, fmt.Errorf("GetBookFileByPath: not yet implemented")
+}
+
+// DeleteBookFile deletes a book_file by ID. TODO: implement in Task 2.
+func (s *SQLiteStore) DeleteBookFile(id string) error {
+	return fmt.Errorf("DeleteBookFile: not yet implemented")
+}
+
+// DeleteBookFilesForBook deletes all book_files for a given book. TODO: implement in Task 2.
+func (s *SQLiteStore) DeleteBookFilesForBook(bookID string) error {
+	return fmt.Errorf("DeleteBookFilesForBook: not yet implemented")
+}
+
+// UpsertBookFile inserts or replaces a book_file row. TODO: implement in Task 2.
+func (s *SQLiteStore) UpsertBookFile(file *BookFile) error {
+	return fmt.Errorf("UpsertBookFile: not yet implemented")
 }
