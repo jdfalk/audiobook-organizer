@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"hash/crc32"
-
 	"github.com/dhowden/tag"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -1038,76 +1036,7 @@ func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog 
 	}
 }
 
-// createSegmentsForBook creates BookSegment records for a multi-file book.
-// If segmentFiles is nil, it scans dirPath for all audio files.
-// If segmentFiles is provided, only those specific files become segments.
-// Deprecated: use createBookFilesForBook instead.
-func createSegmentsForBook(bookFilePath string, segmentFiles []string, scanLog logger.Logger) {
-	if database.GlobalStore == nil {
-		return
-	}
-
-	dbBook, err := database.GlobalStore.GetBookByFilePath(bookFilePath)
-	if err != nil || dbBook == nil {
-		return
-	}
-
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(dbBook.ID)))
-
-	// Check if segments already exist
-	existing, _ := database.GlobalStore.ListBookSegments(bookNumericID)
-	if len(existing) > 0 {
-		return // Segments already created (rescan)
-	}
-
-	// If no specific files provided, scan the directory
-	if len(segmentFiles) == 0 {
-		dirPath := bookFilePath
-		entries, rerr := os.ReadDir(dirPath)
-		if rerr != nil {
-			return
-		}
-		audioExts := make(map[string]bool)
-		for _, ext := range config.AppConfig.SupportedExtensions {
-			audioExts[ext] = true
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if audioExts[ext] {
-				segmentFiles = append(segmentFiles, filepath.Join(dirPath, entry.Name()))
-			}
-		}
-	}
-
-	for i, filePath := range segmentFiles {
-		trackNum := i + 1
-		ext := strings.ToLower(filepath.Ext(filePath))
-		var sizeBytes int64
-		if fi, serr := os.Stat(filePath); serr == nil {
-			sizeBytes = fi.Size()
-		}
-
-		seg := &database.BookSegment{
-			ID:          ulid.Make().String(),
-			FilePath:    filePath,
-			Format:      strings.TrimPrefix(ext, "."),
-			SizeBytes:   sizeBytes,
-			TrackNumber: &trackNum,
-			Active:      true,
-		}
-
-		if _, serr := database.GlobalStore.CreateBookSegment(bookNumericID, seg); serr != nil {
-			scanLog.Warn("failed to create segment for %s: %v", filePath, serr)
-		}
-	}
-
-	if len(segmentFiles) > 0 {
-		scanLog.Debug("Created %d segments for book %s", len(segmentFiles), dbBook.Title)
-	}
-}
+// createSegmentsForBook is deprecated and removed — use createBookFilesForBook instead.
 
 // parseCueFile reads a CUE sheet and returns the audio files it references.
 // CUE files use FILE "name.mp3" BINARY/WAVE/MP3 to list tracks.

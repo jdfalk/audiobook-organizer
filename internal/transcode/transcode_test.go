@@ -141,15 +141,14 @@ func TestCollectInputFiles_Segments(t *testing.T) {
 		defer os.Remove(tmp.Name())
 	}
 
-	track1, track2, track3 := 3, 1, 2
-	segments := []database.BookSegment{
-		{ID: "s1", FilePath: tmpFiles[0], TrackNumber: &track1, Active: true},
-		{ID: "s2", FilePath: tmpFiles[1], TrackNumber: &track2, Active: true},
-		{ID: "s3", FilePath: tmpFiles[2], TrackNumber: &track3, Active: true},
+	bookFiles := []database.BookFile{
+		{ID: "s1", FilePath: tmpFiles[0], TrackNumber: 3},
+		{ID: "s2", FilePath: tmpFiles[1], TrackNumber: 1},
+		{ID: "s3", FilePath: tmpFiles[2], TrackNumber: 2},
 	}
 
 	book := &database.Book{ID: "test-id"}
-	files, err := CollectInputFiles(book, segments)
+	files, err := CollectInputFiles(book, bookFiles)
 	if err != nil {
 		t.Fatalf("CollectInputFiles failed: %v", err)
 	}

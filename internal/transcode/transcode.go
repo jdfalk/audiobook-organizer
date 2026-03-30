@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"log"
 	"os"
 	"bufio"
@@ -50,37 +49,30 @@ func FindFFprobe() (string, error) {
 }
 
 // CollectInputFiles gathers audio files for a book, sorted by track number.
-// If the book has segments, those are used; otherwise the book's file_path is used.
-func CollectInputFiles(book *database.Book, segments []database.BookSegment) ([]string, error) {
-	if len(segments) > 0 {
+// If the book has files, those are used; otherwise the book's file_path is used.
+func CollectInputFiles(book *database.Book, files []database.BookFile) ([]string, error) {
+	if len(files) > 0 {
 		// Sort by track number, then by file path as tiebreaker
-		sort.Slice(segments, func(i, j int) bool {
-			ti, tj := 0, 0
-			if segments[i].TrackNumber != nil {
-				ti = *segments[i].TrackNumber
+		sort.Slice(files, func(i, j int) bool {
+			if files[i].TrackNumber != files[j].TrackNumber {
+				return files[i].TrackNumber < files[j].TrackNumber
 			}
-			if segments[j].TrackNumber != nil {
-				tj = *segments[j].TrackNumber
-			}
-			if ti != tj {
-				return ti < tj
-			}
-			return segments[i].FilePath < segments[j].FilePath
+			return files[i].FilePath < files[j].FilePath
 		})
-		var files []string
-		for _, seg := range segments {
-			if !seg.Active {
+		var paths []string
+		for _, f := range files {
+			if f.Missing {
 				continue
 			}
-			if _, err := os.Stat(seg.FilePath); err != nil {
-				return nil, fmt.Errorf("segment file not found: %s: %w", seg.FilePath, err)
+			if _, err := os.Stat(f.FilePath); err != nil {
+				return nil, fmt.Errorf("book file not found: %s: %w", f.FilePath, err)
 			}
-			files = append(files, seg.FilePath)
+			paths = append(paths, f.FilePath)
 		}
-		if len(files) == 0 {
-			return nil, fmt.Errorf("no active segments found for book %s", book.ID)
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("no active files found for book %s", book.ID)
 		}
-		return files, nil
+		return paths, nil
 	}
 
 	if book.FilePath == "" {
@@ -216,17 +208,16 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 		return "", fmt.Errorf("failed to get book: %w", err)
 	}
 
-	// Get segments for multi-file books
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, segErr := store.ListBookSegments(bookNumericID)
-	if segErr != nil {
-		progress.Log("warn", fmt.Sprintf("Could not fetch segments: %v, falling back to book file path", segErr), nil)
-		segments = nil
+	// Get files for multi-file books
+	bookFiles, filesErr := store.GetBookFiles(book.ID)
+	if filesErr != nil {
+		progress.Log("warn", fmt.Sprintf("Could not fetch book files: %v, falling back to book file path", filesErr), nil)
+		bookFiles = nil
 	} else {
-		progress.Log("info", fmt.Sprintf("Found %d segments for book %s", len(segments), book.ID), nil)
+		progress.Log("info", fmt.Sprintf("Found %d files for book %s", len(bookFiles), book.ID), nil)
 	}
 
-	inputFiles, err := CollectInputFiles(book, segments)
+	inputFiles, err := CollectInputFiles(book, bookFiles)
 	if err != nil {
 		progress.Log("error", fmt.Sprintf("Failed to collect input files: %v", err), nil)
 		return "", fmt.Errorf("failed to collect input files: %w", err)
@@ -266,8 +257,8 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 
 	// Compute total duration (microseconds) for progress reporting
 	var totalDurationUs int64
-	for _, seg := range segments {
-		totalDurationUs += int64(seg.DurationSec) * 1_000_000
+	for _, f := range bookFiles {
+		totalDurationUs += int64(f.Duration) * 1_000 // BookFile stores ms
 	}
 	if totalDurationUs == 0 && book.Duration != nil && *book.Duration > 0 {
 		totalDurationUs = int64(*book.Duration) * 1_000_000
@@ -280,7 +271,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, pr
 			}
 		}
 	}
-	progress.Log("info", fmt.Sprintf("Total duration for progress: %d us (from %d segments)", totalDurationUs, len(segments)), nil)
+	progress.Log("info", fmt.Sprintf("Total duration for progress: %d us (from %d files)", totalDurationUs, len(bookFiles)), nil)
 
 	if multiFile {
 		// Build concat file

@@ -102,6 +102,7 @@ func ComputeTargetPaths(rootDir, pathFormat, segTitleFormat string, book *databa
 
 // ComputeTargetPathsFromSegments is a backward-compatible wrapper that accepts
 // BookSegment slices and converts them to BookFile before computing paths.
+// Deprecated: callers should use ComputeTargetPaths with []BookFile directly.
 func ComputeTargetPathsFromSegments(rootDir, pathFormat, segTitleFormat string, book *database.Book, segments []database.BookSegment, vars FormatVars) []FileRenameEntry {
 	files := make([]database.BookFile, 0, len(segments))
 	for _, seg := range segments {

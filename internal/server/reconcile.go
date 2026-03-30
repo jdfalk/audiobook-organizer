@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -804,22 +803,21 @@ func findBrokenSegmentBooks(store database.Store, dryRun bool) (*BrokenSegmentRe
 			continue
 		}
 
-		numericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-		segments, segErr := store.ListBookSegments(numericID)
-		if segErr != nil || len(segments) == 0 {
+		files, segErr := store.GetBookFiles(book.ID)
+		if segErr != nil || len(files) == 0 {
 			continue
 		}
 
 		result.BooksChecked++
 		var missingPaths []string
 		activeCount := 0
-		for _, seg := range segments {
-			if !seg.Active || seg.FilePath == "" {
+		for _, f := range files {
+			if f.Missing || f.FilePath == "" {
 				continue
 			}
 			activeCount++
-			if _, ferr := os.Stat(seg.FilePath); os.IsNotExist(ferr) {
-				missingPaths = append(missingPaths, seg.FilePath)
+			if _, ferr := os.Stat(f.FilePath); os.IsNotExist(ferr) {
+				missingPaths = append(missingPaths, f.FilePath)
 			}
 		}
 

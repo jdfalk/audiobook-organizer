@@ -2017,15 +2017,15 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 	})
 }
 
-// segmentsCommonDir finds the common parent directory of all segment file paths.
-func segmentsCommonDir(segments []database.BookSegment) string {
-	if len(segments) == 0 {
+// filesCommonDir finds the common parent directory of all BookFile file paths.
+func filesCommonDir(files []database.BookFile) string {
+	if len(files) == 0 {
 		return ""
 	}
-	common := filepath.Dir(segments[0].FilePath)
-	for _, seg := range segments[1:] {
-		segDir := filepath.Dir(seg.FilePath)
-		for common != segDir && !strings.HasPrefix(segDir, common+string(filepath.Separator)) {
+	common := filepath.Dir(files[0].FilePath)
+	for _, f := range files[1:] {
+		fDir := filepath.Dir(f.FilePath)
+		for common != fDir && !strings.HasPrefix(fDir, common+string(filepath.Separator)) {
 			common = filepath.Dir(common)
 			if common == "/" || common == "." {
 				return common
@@ -2448,6 +2448,8 @@ func (s *Server) getAudiobook(c *gin.Context) {
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
+// Backward-compatible: internally queries book_files and returns data in the
+// legacy BookSegment JSON shape so the frontend continues to work.
 func (s *Server) listAudiobookSegments(c *gin.Context) {
 	id := c.Param("id")
 	if database.GlobalStore == nil {
@@ -2461,29 +2463,36 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 		return
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	files, err := database.GlobalStore.GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list segments", err)
+		internalError(c, "failed to list book files", err)
 		return
 	}
-
-	if segments == nil {
-		segments = []database.BookSegment{}
+	if files == nil {
+		files = []database.BookFile{}
 	}
 
-	// Wrap segments with file_exists check
-	type segmentWithStatus struct {
-		database.BookSegment
-		FileExists bool `json:"file_exists"`
-	}
-	result := make([]segmentWithStatus, len(segments))
-	for i, seg := range segments {
-		_, statErr := os.Stat(seg.FilePath)
-		result[i] = segmentWithStatus{
-			BookSegment: seg,
-			FileExists:  statErr == nil,
-		}
+	// Convert BookFile to legacy segment JSON shape with file_exists
+	result := make([]gin.H, 0, len(files))
+	for _, f := range files {
+		_, statErr := os.Stat(f.FilePath)
+		result = append(result, gin.H{
+			"id":               f.ID,
+			"book_id":          int(crc32.ChecksumIEEE([]byte(f.BookID))),
+			"file_path":        f.FilePath,
+			"format":           f.Format,
+			"size_bytes":       f.FileSize,
+			"duration_seconds": f.Duration / 1000, // BookFile stores ms
+			"track_number":     f.TrackNumber,
+			"total_tracks":     f.TrackCount,
+			"segment_title":    f.Title,
+			"file_hash":        f.FileHash,
+			"active":           !f.Missing,
+			"superseded_by":    nil,
+			"created_at":       f.CreatedAt,
+			"updated_at":       f.UpdatedAt,
+			"file_exists":      statErr == nil,
+		})
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -2551,16 +2560,15 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		return
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	files, err := database.GlobalStore.GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list segments", err)
+		internalError(c, "failed to list book files", err)
 		return
 	}
 
-	filePaths := make([]string, len(segments))
-	for i, seg := range segments {
-		filePaths[i] = seg.FilePath
+	filePaths := make([]string, len(files))
+	for i, f := range files {
+		filePaths[i] = f.FilePath
 	}
 
 	trackInfos := metadata.ExtractTrackInfoBatch(filePaths)
@@ -2591,7 +2599,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		}
 	}
 	nextNum := 1
-	total := len(segments)
+	total := len(files)
 	for i := range trackInfos {
 		if trackInfos[i].TrackNumber == nil {
 			for usedNumbers[nextNum] {
@@ -2608,21 +2616,27 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 
 	updated := 0
 	for i, info := range trackInfos {
-		oldTrack := segments[i].TrackNumber
-		segments[i].TrackNumber = info.TrackNumber
-		segments[i].TotalTracks = info.TotalTracks
-		if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
-			log.Printf("WARN: failed to update segment %s track info: %v", segments[i].ID, err)
+		oldTrack := files[i].TrackNumber
+		if info.TrackNumber != nil {
+			files[i].TrackNumber = *info.TrackNumber
+		}
+		if info.TotalTracks != nil {
+			files[i].TrackCount = *info.TotalTracks
+		}
+		if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+			log.Printf("WARN: failed to update book file %s track info: %v", files[i].ID, err)
 			continue
 		}
 		updated++
 
 		// Record the track number change in history
 		var prevVal, newVal string
-		if oldTrack != nil {
-			prevVal = strconv.Itoa(*oldTrack)
+		if oldTrack != 0 {
+			prevVal = strconv.Itoa(oldTrack)
 		}
-		newVal = strconv.Itoa(*info.TrackNumber)
+		if info.TrackNumber != nil {
+			newVal = strconv.Itoa(*info.TrackNumber)
+		}
 		prev := prevVal
 		nv := newVal
 		_ = database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
@@ -2637,9 +2651,9 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"updated":  updated,
-		"total":    len(segments),
-		"segments": segments,
+		"updated": updated,
+		"total":   len(files),
+		"files":   files,
 	})
 }
 
@@ -2663,26 +2677,25 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		return
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	files, err := database.GlobalStore.GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list segments", err)
+		internalError(c, "failed to list book files", err)
 		return
 	}
 
 	result := RelocateResult{}
 
 	if req.SegmentID != "" && req.NewPath != "" {
-		// Individual mode: update one segment
-		for i, seg := range segments {
-			if seg.ID == req.SegmentID {
+		// Individual mode: update one file (SegmentID maps to file ID)
+		for i, f := range files {
+			if f.ID == req.SegmentID {
 				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "new path does not exist on disk"})
 					return
 				}
-				segments[i].FilePath = req.NewPath
-				if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
-					result.Errors = append(result.Errors, fmt.Sprintf("update segment %s: %v", seg.ID, err))
+				files[i].FilePath = req.NewPath
+				if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("update file %s: %v", f.ID, err))
 				} else {
 					result.Updated++
 				}
@@ -2705,12 +2718,12 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 			}
 		}
 
-		for i, seg := range segments {
-			oldName := filepath.Base(seg.FilePath)
+		for i, f := range files {
+			oldName := filepath.Base(f.FilePath)
 			if newPath, ok := fileMap[oldName]; ok {
-				segments[i].FilePath = newPath
-				if err := database.GlobalStore.UpdateBookSegment(&segments[i]); err != nil {
-					result.Errors = append(result.Errors, fmt.Sprintf("update segment %s: %v", seg.ID, err))
+				files[i].FilePath = newPath
+				if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("update file %s: %v", f.ID, err))
 				} else {
 					result.Updated++
 				}
@@ -2721,9 +2734,9 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		return
 	}
 
-	// Update book's file_path to match first segment
-	if result.Updated > 0 && len(segments) > 0 {
-		book.FilePath = segments[0].FilePath
+	// Update book's file_path to match first file
+	if result.Updated > 0 && len(files) > 0 {
+		book.FilePath = files[0].FilePath
 		if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
 			log.Printf("[WARN] failed to update book file_path: %v", err)
 		}
@@ -2747,19 +2760,10 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 		return
 	}
 
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	found, err := database.GlobalStore.GetBookFileByID(book.ID, segmentId)
 	if err != nil {
-		internalError(c, "failed to list segments", err)
+		internalError(c, "failed to get book file", err)
 		return
-	}
-
-	var found *database.BookSegment
-	for i := range segments {
-		if segments[i].ID == segmentId {
-			found = &segments[i]
-			break
-		}
 	}
 	if found == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "segment not found"})
@@ -2820,10 +2824,10 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 		"segment_id":             found.ID,
 		"file_path":              found.FilePath,
 		"format":                 found.Format,
-		"size_bytes":             found.SizeBytes,
-		"duration_sec":           found.DurationSec,
+		"size_bytes":             found.FileSize,
+		"duration_sec":           found.Duration / 1000,
 		"track_number":           found.TrackNumber,
-		"total_tracks":           found.TotalTracks,
+		"total_tracks":           found.TrackCount,
 		"tags":                   tags,
 		"used_filename_fallback": usedFallback,
 	}
@@ -7988,35 +7992,32 @@ func (s *Server) splitVersion(c *gin.Context) {
 		return
 	}
 
-	// 5. Move segments to the new book (DB-only, does NOT touch files on disk)
-	targetNumericID := int(crc32.ChecksumIEEE([]byte(createdBook.ID)))
-	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
-		internalError(c, "failed to move segments", err)
+	// 5. Move files to the new book (DB-only, does NOT touch files on disk)
+	if err := database.GlobalStore.MoveBookFilesToBook(req.SegmentIDs, sourceBook.ID, createdBook.ID); err != nil {
+		internalError(c, "failed to move files", err)
 		return
 	}
 
-	// 6. Derive the new book's FilePath from its segments.
+	// 6. Derive the new book's FilePath from its files.
 	// For multi-file books, FilePath is the common parent directory.
 	// For single-file books, FilePath is the file path itself.
-	newSegments, _ := database.GlobalStore.ListBookSegments(targetNumericID)
-	if len(newSegments) > 0 {
-		if len(newSegments) == 1 {
-			createdBook.FilePath = newSegments[0].FilePath
+	newFiles, _ := database.GlobalStore.GetBookFiles(createdBook.ID)
+	if len(newFiles) > 0 {
+		if len(newFiles) == 1 {
+			createdBook.FilePath = newFiles[0].FilePath
 		} else {
-			// Find common parent directory of all segment file paths
-			createdBook.FilePath = segmentsCommonDir(newSegments)
+			createdBook.FilePath = filesCommonDir(newFiles)
 		}
 		database.GlobalStore.UpdateBook(createdBook.ID, createdBook)
 	}
 
-	// 7. Also update the source book's FilePath from its remaining segments
-	sourceNumericID := int(crc32.ChecksumIEEE([]byte(sourceBook.ID)))
-	remainingSegments, _ := database.GlobalStore.ListBookSegments(sourceNumericID)
-	if len(remainingSegments) > 0 {
-		if len(remainingSegments) == 1 {
-			sourceBook.FilePath = remainingSegments[0].FilePath
+	// 7. Also update the source book's FilePath from its remaining files
+	remainingFiles, _ := database.GlobalStore.GetBookFiles(sourceBook.ID)
+	if len(remainingFiles) > 0 {
+		if len(remainingFiles) == 1 {
+			sourceBook.FilePath = remainingFiles[0].FilePath
 		} else {
-			sourceBook.FilePath = segmentsCommonDir(remainingSegments)
+			sourceBook.FilePath = filesCommonDir(remainingFiles)
 		}
 		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
 	}
@@ -8057,49 +8058,49 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		return
 	}
 
-	// Build a lookup of segment ID → segment
-	sourceNumericID := int(crc32.ChecksumIEEE([]byte(sourceBook.ID)))
-	allSegments, err := database.GlobalStore.ListBookSegments(sourceNumericID)
+	// Build a lookup of file ID → BookFile
+	allFiles, err := database.GlobalStore.GetBookFiles(sourceBook.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list segments"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list book files"})
 		return
 	}
-	segMap := make(map[string]database.BookSegment, len(allSegments))
-	for _, seg := range allSegments {
-		segMap[seg.ID] = seg
+	fileMap := make(map[string]database.BookFile, len(allFiles))
+	for _, f := range allFiles {
+		fileMap[f.ID] = f
 	}
 
-	// Create one new book per selected segment
+	// Create one new book per selected file
 	var createdBooks []interface{}
-	for _, segID := range req.SegmentIDs {
-		seg, ok := segMap[segID]
+	for _, fileID := range req.SegmentIDs {
+		f, ok := fileMap[fileID]
 		if !ok {
 			continue
 		}
 
-		// Extract title from segment filename
+		// Extract title from file name
 		// e.g. "01 ASoIaF 1 - A Game of Thrones.m4b" → "A Game of Thrones"
-		title := extractTitleFromSegmentFilename(filepath.Base(seg.FilePath))
+		title := extractTitleFromSegmentFilename(filepath.Base(f.FilePath))
 		if title == "" {
 			title = sourceBook.Title + " (split)"
 		}
 
+		durationSec := f.Duration / 1000 // BookFile stores ms
 		newBook := &database.Book{
 			Title:     title,
 			AuthorID:  sourceBook.AuthorID,
 			SeriesID:  sourceBook.SeriesID,
-			FilePath:  seg.FilePath,
-			Format:    seg.Format,
+			FilePath:  f.FilePath,
+			Format:    f.Format,
 			Narrator:  sourceBook.Narrator,
 			Language:  sourceBook.Language,
 			Publisher: sourceBook.Publisher,
-			Duration:  &seg.DurationSec,
-			FileSize:  &seg.SizeBytes,
+			Duration:  &durationSec,
+			FileSize:  &f.FileSize,
 		}
 
 		created, createErr := database.GlobalStore.CreateBook(newBook)
 		if createErr != nil {
-			log.Printf("[WARN] splitSegmentsToBooks: failed to create book for segment %s: %v", segID, createErr)
+			log.Printf("[WARN] splitSegmentsToBooks: failed to create book for file %s: %v", fileID, createErr)
 			continue
 		}
 
@@ -8116,20 +8117,19 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 			_ = database.GlobalStore.SetBookAuthors(created.ID, newAuthors)
 		}
 
-		// Move the segment to the new book
-		newNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
-		_ = database.GlobalStore.MoveSegmentsToBook([]string{segID}, newNumericID)
+		// Move the file to the new book
+		_ = database.GlobalStore.MoveBookFilesToBook([]string{fileID}, sourceBook.ID, created.ID)
 
 		createdBooks = append(createdBooks, created)
 	}
 
-	// Update source book's FilePath from remaining segments
-	remainingSegments, _ := database.GlobalStore.ListBookSegments(sourceNumericID)
-	if len(remainingSegments) > 0 {
-		if len(remainingSegments) == 1 {
-			sourceBook.FilePath = remainingSegments[0].FilePath
+	// Update source book's FilePath from remaining files
+	remainingFiles, _ := database.GlobalStore.GetBookFiles(sourceBook.ID)
+	if len(remainingFiles) > 0 {
+		if len(remainingFiles) == 1 {
+			sourceBook.FilePath = remainingFiles[0].FilePath
 		} else {
-			sourceBook.FilePath = segmentsCommonDir(remainingSegments)
+			sourceBook.FilePath = filesCommonDir(remainingFiles)
 		}
 		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
 	}
@@ -8216,28 +8216,26 @@ func (s *Server) moveSegments(c *gin.Context) {
 		return
 	}
 
-	// 3. Verify the segments belong to the source book
-	sourceNumericID := int(crc32.ChecksumIEEE([]byte(id)))
-	sourceSegments, err := database.GlobalStore.ListBookSegments(sourceNumericID)
+	// 3. Verify the files belong to the source book
+	sourceFiles, err := database.GlobalStore.GetBookFiles(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list source segments"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list source book files"})
 		return
 	}
-	sourceSegMap := make(map[string]bool, len(sourceSegments))
-	for _, seg := range sourceSegments {
-		sourceSegMap[seg.ID] = true
+	sourceFileMap := make(map[string]bool, len(sourceFiles))
+	for _, f := range sourceFiles {
+		sourceFileMap[f.ID] = true
 	}
 	for _, segID := range req.SegmentIDs {
-		if !sourceSegMap[segID] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("segment %s does not belong to source book", segID)})
+		if !sourceFileMap[segID] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file %s does not belong to source book", segID)})
 			return
 		}
 	}
 
-	// 4. Move segments
-	targetNumericID := int(crc32.ChecksumIEEE([]byte(req.TargetBookID)))
-	if err := database.GlobalStore.MoveSegmentsToBook(req.SegmentIDs, targetNumericID); err != nil {
-		internalError(c, "failed to move segments", err)
+	// 4. Move files
+	if err := database.GlobalStore.MoveBookFilesToBook(req.SegmentIDs, id, req.TargetBookID); err != nil {
+		internalError(c, "failed to move files", err)
 		return
 	}
 

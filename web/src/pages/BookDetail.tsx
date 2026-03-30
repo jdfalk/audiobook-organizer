@@ -257,36 +257,35 @@ export const BookDetail = () => {
     }
   };
 
-  // Load book files (new API) first; fall back to legacy segments if unavailable.
+  // Load book files from the canonical book_files endpoint.
+  // Falls back to legacy segments endpoint if book_files is unavailable.
   useEffect(() => {
     if (!id || segmentsLoaded) return;
-    const loadSegments = async () => {
+    const loadFiles = async () => {
       try {
-        // Prefer the new book_files endpoint.
         const result = await api.getBookFiles(id);
         if (result.files && result.files.length > 0) {
           setBookFiles(result.files);
         } else {
-          // Fall back to legacy segments when no book_files exist yet.
+          // No book_files rows yet — try legacy segments endpoint (which now proxies to book_files)
           const data = await api.getBookSegments(id);
           setSegments(data);
         }
       } catch {
-        // New endpoint unavailable — fall back to segments.
         try {
           const data = await api.getBookSegments(id);
           setSegments(data);
         } catch {
-          // Segments not available either, that's fine
+          // Neither endpoint available
         }
       } finally {
         setSegmentsLoaded(true);
       }
     };
-    loadSegments();
+    loadFiles();
   }, [id, segmentsLoaded]);
 
-  // Reload files for the current book — prefers bookFiles, falls back to segments.
+  // Reload files for the current book.
   const reloadCurrentBookFiles = useCallback(async (bookId: string) => {
     try {
       const result = await api.getBookFiles(bookId);
@@ -296,7 +295,7 @@ export const BookDetail = () => {
         return;
       }
     } catch {
-      // fall through to segments
+      // fall through
     }
     try {
       const segs = await api.getBookSegments(bookId);
@@ -598,13 +597,35 @@ export const BookDetail = () => {
       }
       return next;
     });
-    // Load segments for this version if not already loaded
+    // Load files for this version if not already loaded
     if (!versionSegments[versionId]) {
       try {
-        const segs = await api.getBookSegments(versionId);
-        setVersionSegments(prev => ({ ...prev, [versionId]: segs }));
+        const result = await api.getBookFiles(versionId);
+        if (result.files && result.files.length > 0) {
+          // Convert BookFile to BookSegment shape for versionSegments
+          const segs: BookSegment[] = result.files.map(f => ({
+            id: f.id,
+            file_path: f.file_path,
+            format: f.format || '',
+            size_bytes: f.file_size || 0,
+            duration_seconds: (f.duration || 0) / 1000,
+            track_number: f.track_number,
+            total_tracks: f.track_count,
+            active: !f.missing,
+            file_exists: f.file_exists,
+          }));
+          setVersionSegments(prev => ({ ...prev, [versionId]: segs }));
+        } else {
+          const segs = await api.getBookSegments(versionId);
+          setVersionSegments(prev => ({ ...prev, [versionId]: segs }));
+        }
       } catch {
-        setVersionSegments(prev => ({ ...prev, [versionId]: [] }));
+        try {
+          const segs = await api.getBookSegments(versionId);
+          setVersionSegments(prev => ({ ...prev, [versionId]: segs }));
+        } catch {
+          setVersionSegments(prev => ({ ...prev, [versionId]: [] }));
+        }
       }
     }
     // Load file tags if not already loaded
