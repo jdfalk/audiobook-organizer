@@ -1,5 +1,5 @@
 # file: Dockerfile
-# version: 2.3.0
+# version: 2.4.0
 # guid: audiobook-organizer-dockerfile-production
 
 # Multi-stage production Dockerfile for audiobook-organizer
@@ -47,7 +47,7 @@ RUN CGO_ENABLED=1 go build \
 # Stage 3: Minimal runtime image (scratch-compatible since binary is static)
 FROM alpine:3.23
 
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata ffmpeg \
     && addgroup -g 1000 audiobook \
     && adduser -D -u 1000 -G audiobook audiobook
 

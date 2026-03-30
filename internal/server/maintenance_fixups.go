@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -11,11 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/oklog/ulid/v2"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -766,6 +768,129 @@ func (s *Server) handleBackfillBookFiles(c *gin.Context) {
 		"errors":       errors,
 		"results":      results,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Empty folder cleanup
+// ---------------------------------------------------------------------------
+
+// emptyFolderResult describes a directory that was (or would be) removed.
+type emptyFolderResult struct {
+	Path    string `json:"path"`
+	Removed bool   `json:"removed"`
+	Error   string `json:"error,omitempty"`
+}
+
+// handleCleanupEmptyFolders walks the audiobook root directory, finds empty
+// directories (no files; only empty subdirectories), and removes them
+// bottom-up (deepest first).
+//
+// Query params:
+//   - dry_run=true  (default) — report what would be removed without deleting
+//   - dry_run=false — actually delete the directories
+func (s *Server) handleCleanupEmptyFolders(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") == "true"
+	rootDir := config.AppConfig.RootDir
+
+	if rootDir == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir is not configured"})
+		return
+	}
+
+	if _, err := os.Stat(rootDir); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("root_dir not accessible: %v", err)})
+		return
+	}
+
+	// Collect all directories (depth-first, pre-order). We reverse the list
+	// afterward so we process deepest entries first (bottom-up).
+	var dirs []string
+	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			// Non-fatal: log and continue.
+			log.Printf("[WARN] cleanup-empty-folders: walk error at %q: %v", path, walkErr)
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if path == rootDir {
+			return nil // Never remove the root itself.
+		}
+		// Skip hidden directories (starting with a dot).
+		if strings.HasPrefix(filepath.Base(path), ".") {
+			return filepath.SkipDir
+		}
+		dirs = append(dirs, path)
+		return nil
+	})
+	if err != nil {
+		internalError(c, "failed to walk root directory", err)
+		return
+	}
+
+	// Reverse so deepest directories come first.
+	sort.Slice(dirs, func(i, j int) bool {
+		return len(dirs[i]) > len(dirs[j])
+	})
+
+	var results []emptyFolderResult
+	removedCount := 0
+
+	for _, dir := range dirs {
+		empty, checkErr := isDirEmpty(dir)
+		if checkErr != nil {
+			results = append(results, emptyFolderResult{
+				Path:  dir,
+				Error: fmt.Sprintf("stat error: %v", checkErr),
+			})
+			continue
+		}
+		if !empty {
+			continue
+		}
+
+		result := emptyFolderResult{Path: dir}
+
+		if !dryRun {
+			if removeErr := os.Remove(dir); removeErr != nil {
+				result.Error = removeErr.Error()
+				log.Printf("[WARN] cleanup-empty-folders: failed to remove %q: %v", dir, removeErr)
+			} else {
+				result.Removed = true
+				removedCount++
+				log.Printf("[INFO] cleanup-empty-folders: removed empty directory %q", dir)
+			}
+		} else {
+			removedCount++
+		}
+
+		results = append(results, result)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":        dryRun,
+		"root_dir":       rootDir,
+		"folders_found":  len(results),
+		"folders_removed": removedCount,
+		"folders":        results,
+	})
+}
+
+// isDirEmpty reports whether dir contains no files or non-hidden subdirectories.
+// It reads only the immediate children of dir.
+func isDirEmpty(dir string) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	for _, e := range entries {
+		// Any non-hidden entry means the directory is not empty.
+		if !strings.HasPrefix(e.Name(), ".") {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // createBookFilesForBook inserts a BookFile row for each path in filePaths.
