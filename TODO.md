@@ -60,25 +60,25 @@
 | 8 | **Activity page mobile layout** | Collapsible filter drawer for mobile | ✅ Fixed |
 | 9 | **Activity page adaptive refresh** | 5s when ops running, 30s when idle | ✅ Fixed |
 | 10 | **Version vs Snapshot UI polish** | Edge case handling | Open |
-| 11 | **Compare snapshot wiring** | Load snapshot data on Compare click | Open |
+| 11 | **Compare snapshot wiring** | Load snapshot data on Compare click | ✅ Partially fixed — falls back to activity log |
 | 12 | **Background ISBN enrichment** | Scheduled maintenance task | ✅ Already implemented |
-| 13 | **Copy-on-write TTL tuning** | Verify on production | Open |
-| 14 | **iTunes PID detail view** | Show file paths, track names | Open |
-| 15 | **ITL write-back testing** | Write-back still disabled | Open |
+| 13 | **Copy-on-write TTL tuning** | Verify on production | ✅ Verified — 23 files, TTL working |
+| 14 | **iTunes PID detail view** | Show file paths, track names | ✅ Fixed — shows file paths and track PIDs |
+| 15 | **ITL write-back testing** | 176K tracks written to ITL copy | ✅ Working — needs user to test with iTunes |
 | 16 | **TAG-DIAG instrumentation** | Clean up diagnostic logging | ✅ Already cleaned up |
 | 17 | **Author/narrator swap (full fix)** | Cross-reference DB author during tag extraction | Open — needs design |
 | 18 | **3-state library badge** | scanned → imported → organized states | Open — needs brainstorming |
-| 19 | **Vite chunk splitting** | Code-split large JS bundle | Open — optimization |
+| 19 | **Vite chunk splitting** | Code-split large JS bundle | ✅ Fixed — index 514KB → 107KB |
 | 20 | **Stale interrupted operations** | Mark as failed on startup | ✅ Fixed |
-| 21 | **Settings save/buttons not visible** | Save/reset buttons at bottom of Settings page need to float/stick so they're always visible when scrolling | Open |
-| 22 | **iTunes sync dialog pre-fill from config** | "Force Sync" dialog should auto-fill XML path from config, not require user to enter it | Open |
-| 23 | **iTunes sync should support ITL** | Force sync should write to ITL file, not just read XML | Open |
-| 24 | **Force Import always greyed out** | Button is disabled for unknown reason — investigate and fix | Open |
-| 25 | **ITL write-back — multi-file books** | Write-back works (21,228 tracks updated) BUT multi-file books (40 MP3s) store only the directory path on the organized version. Write-back would point all 40 iTunes tracks to one directory instead of individual files. Need per-file `itunes_path` mapping for multi-file books. | Open — blocks safe write-back |
-| 26 | **Files & History layout — separate version boxes** | Format tray header says "MP3" which is useless when both versions are MP3. Each version should be in its own clearly labeled box (use book title or path segment, not format). | Open |
-| 27 | **Files & History — show individual files for multi-file books** | Organized version of multi-file books only shows directory path. Should list individual files sorted by track number. The data exists in external_id_map but isn't surfaced. | Open |
-| 28 | **Track PIDs should be sorted by track number** | iTunes Linked panel lists PIDs in import order, not track order. Sort by track number prefix. | Open |
-| 29 | **Deprecate XML functions** | Eventually read all data directly from ITL instead of XML to avoid format mismatches. | Open — long term |
+| 21 | **Settings save/buttons not visible** | Sticky floating buttons | ✅ Already implemented |
+| 22 | **iTunes sync dialog pre-fill from config** | Auto-fill XML path | ✅ Fixed |
+| 23 | **iTunes sync should support ITL** | Read directly from ITL | Open — tied to XML deprecation |
+| 24 | **Force Import always greyed out** | Disabled condition fixed | ✅ Fixed |
+| 25 | **ITL write-back — multi-file books** | Per-file itunes_path via book_files | ✅ Fixed — 176K tracks updated |
+| 26 | **Files & History layout — separate version boxes** | Path-based labels when same format | ✅ Fixed |
+| 27 | **Files & History — show individual files** | book_files API + frontend | ✅ Fixed — 114K files tracked |
+| 28 | **Track PIDs sorted by track number** | Sorted in iTunes panel | ✅ Fixed |
+| 29 | **Deprecate XML functions** | Read from ITL directly | Open — long term |
 
 ---
 
