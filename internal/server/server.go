@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.137.0
+// version: 1.138.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -760,7 +760,7 @@ func NewServer() *Server {
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           NewMergeService(database.GlobalStore),
-		diagnosticsService:     NewDiagnosticsService(database.GlobalStore, nil, config.AppConfig.ITunesLibraryXMLPath),
+		diagnosticsService:     NewDiagnosticsService(database.GlobalStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       NewChangelogService(database.GlobalStore),
 	}
 
@@ -2054,15 +2054,15 @@ func isProtectedPath(filePath string) bool {
 	}
 
 	// Check iTunes library paths
-	if config.AppConfig.ITunesLibraryXMLPath != "" {
-		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryXMLPath)
+	if config.AppConfig.ITunesLibraryReadPath != "" {
+		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryReadPath)
 		itunesAbs, _ := filepath.Abs(itunesDir)
 		if strings.HasPrefix(absPath, itunesAbs+"/") || absPath == itunesAbs {
 			return true
 		}
 	}
-	if config.AppConfig.ITunesLibraryITLPath != "" {
-		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryITLPath)
+	if config.AppConfig.ITunesLibraryWritePath != "" {
+		itunesDir := filepath.Dir(config.AppConfig.ITunesLibraryWritePath)
 		itunesAbs, _ := filepath.Abs(itunesDir)
 		if strings.HasPrefix(absPath, itunesAbs+"/") || absPath == itunesAbs {
 			return true

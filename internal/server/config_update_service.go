@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -130,8 +130,8 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
 		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,
 		"auto_update_channel":      &config.AppConfig.AutoUpdateChannel,
-		"itunes_library_itl_path":  &config.AppConfig.ITunesLibraryITLPath,
-		"itunes_library_xml_path":  &config.AppConfig.ITunesLibraryXMLPath,
+		"itunes_library_write_path": &config.AppConfig.ITunesLibraryWritePath,
+		"itunes_library_read_path":  &config.AppConfig.ITunesLibraryReadPath,
 	}
 	for key, ptr := range stringFields {
 		if val, ok := cus.ExtractStringField(payload, key); ok {

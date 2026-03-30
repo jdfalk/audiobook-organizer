@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -164,9 +164,9 @@ type Config struct {
 	// iTunes sync
 	ITunesSyncEnabled    bool              `json:"itunes_sync_enabled"`
 	ITunesSyncInterval   int               `json:"itunes_sync_interval"` // minutes
-	ITLWriteBackEnabled  bool              `json:"itl_write_back_enabled"`
-	ITunesLibraryITLPath string            `json:"itunes_library_itl_path"`
-	ITunesLibraryXMLPath string            `json:"itunes_library_xml_path"`
+	ITLWriteBackEnabled     bool              `json:"itl_write_back_enabled"`
+	ITunesLibraryWritePath  string            `json:"itunes_library_write_path"`  // ITL path used for write-back (always ITL)
+	ITunesLibraryReadPath   string            `json:"itunes_library_read_path"`   // path used for sync (XML or ITL)
 	ITunesPathMappings   []ITunesPathMap   `json:"itunes_path_mappings"`  // Stored path mappings for write-back
 	ITunesAutoWriteBack  bool              `json:"itunes_auto_write_back"` // Auto write-back on every edit (batched)
 
@@ -344,8 +344,8 @@ func InitConfig() {
 	viper.SetDefault("itunes_sync_enabled", true)
 	viper.SetDefault("itunes_sync_interval", 30)
 	viper.SetDefault("itl_write_back_enabled", false)
-	viper.SetDefault("itunes_library_itl_path", "")
-	viper.SetDefault("itunes_library_xml_path", "")
+	viper.SetDefault("itunes_library_write_path", "")
+	viper.SetDefault("itunes_library_read_path", "")
 	viper.SetDefault("itunes_auto_write_back", false)
 
 	// Auto-update defaults
@@ -507,9 +507,9 @@ func InitConfig() {
 		// iTunes sync
 		ITunesSyncEnabled:    viper.GetBool("itunes_sync_enabled"),
 		ITunesSyncInterval:   viper.GetInt("itunes_sync_interval"),
-		ITLWriteBackEnabled:  viper.GetBool("itl_write_back_enabled"),
-		ITunesLibraryITLPath: viper.GetString("itunes_library_itl_path"),
-		ITunesLibraryXMLPath: viper.GetString("itunes_library_xml_path"),
+		ITLWriteBackEnabled:    viper.GetBool("itl_write_back_enabled"),
+		ITunesLibraryWritePath: viper.GetString("itunes_library_write_path"),
+		ITunesLibraryReadPath:  viper.GetString("itunes_library_read_path"),
 		ITunesAutoWriteBack:  viper.GetBool("itunes_auto_write_back"),
 
 		// Download client integration
@@ -618,8 +618,16 @@ func InitConfig() {
 		}
 	}
 
-	// Auto-enable ITL write-back when an ITL path is configured
-	if AppConfig.ITunesLibraryITLPath != "" && !AppConfig.ITLWriteBackEnabled {
+	// Backward compatibility: map old config key names to new ones
+	if AppConfig.ITunesLibraryWritePath == "" {
+		AppConfig.ITunesLibraryWritePath = viper.GetString("itunes_library_itl_path")
+	}
+	if AppConfig.ITunesLibraryReadPath == "" {
+		AppConfig.ITunesLibraryReadPath = viper.GetString("itunes_library_xml_path")
+	}
+
+	// Auto-enable ITL write-back when a write path is configured
+	if AppConfig.ITunesLibraryWritePath != "" && !AppConfig.ITLWriteBackEnabled {
 		AppConfig.ITLWriteBackEnabled = true
 	}
 
@@ -862,8 +870,8 @@ func ResetToDefaults() {
 		// iTunes sync
 		ITunesSyncEnabled:    true,
 		ITunesSyncInterval:   30,
-		ITLWriteBackEnabled:  false,
-		ITunesLibraryITLPath: "",
+		ITLWriteBackEnabled:    false,
+		ITunesLibraryWritePath: "",
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{

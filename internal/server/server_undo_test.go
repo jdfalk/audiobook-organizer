@@ -1,5 +1,5 @@
 // file: internal/server/server_undo_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -350,7 +350,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	origBatcher := GlobalWriteBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
-	config.AppConfig.ITunesLibraryXMLPath = "/fake/path.xml"
+	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour) // long delay so it won't flush
 	GlobalWriteBackBatcher = batcher
 	defer func() {
@@ -392,7 +392,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	origBatcher := GlobalWriteBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
-	config.AppConfig.ITunesLibraryXMLPath = "/fake/path.xml"
+	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {
@@ -447,7 +447,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	origBatcher := GlobalWriteBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
-	config.AppConfig.ITunesLibraryXMLPath = "/fake/path.xml"
+	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {
@@ -501,7 +501,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	origBatcher := GlobalWriteBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
-	config.AppConfig.ITunesLibraryXMLPath = "/fake/path.xml"
+	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {

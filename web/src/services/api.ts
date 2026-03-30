@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.63.0
+// version: 1.64.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -542,8 +542,8 @@ export interface Config {
   verify_after_write?: boolean;
 
   // iTunes sync
-  itunes_library_xml_path?: string;
-  itunes_library_itl_path?: string;
+  itunes_library_read_path?: string;
+  itunes_library_write_path?: string;
   itl_write_back_enabled?: boolean;
   itunes_auto_write_back?: boolean;
   itunes_sync_enabled?: boolean;

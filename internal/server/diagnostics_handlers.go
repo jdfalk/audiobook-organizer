@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -72,7 +72,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 
 	ds := s.diagnosticsService
 	if ds == nil {
-		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryXMLPath)
+		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 	}
 
 	category := req.Category
@@ -196,7 +196,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 
 	ds := s.diagnosticsService
 	if ds == nil {
-		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryXMLPath)
+		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 	}
 
 	category := req.Category

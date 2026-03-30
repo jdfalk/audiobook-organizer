@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -330,7 +330,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 	}
 
 	// Write back location changes to iTunes Library.itl
-	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryWritePath != "" {
 		orgSvc.writeBackITLLocations(itlUpdates, log)
 	}
 
@@ -537,7 +537,7 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 }
 
 func (orgSvc *OrganizeService) writeBackITLLocations(updates []itunes.ITLLocationUpdate, log logger.Logger) {
-	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlPath := config.AppConfig.ITunesLibraryWritePath
 
 	// Create backup before modifying
 	backupPath := itlPath + ".bak"

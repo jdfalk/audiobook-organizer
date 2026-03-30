@@ -1,5 +1,5 @@
 // file: internal/server/external_id_backfill.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d
 
 package server
@@ -98,7 +98,7 @@ func (s *Server) backfillExternalIDs() {
 // for existing books. This catches the multi-track albums where only the first
 // track's PID was stored on the book record.
 func (s *Server) backfillITunesTrackPIDs(store database.Store, eidStore ExternalIDStore) int {
-	xmlPath := config.AppConfig.ITunesLibraryXMLPath
+	xmlPath := config.AppConfig.ITunesLibraryReadPath
 	if xmlPath == "" {
 		log.Printf("[INFO] backfillITunesTrackPIDs: no iTunes XML path configured, skipping")
 		return 0

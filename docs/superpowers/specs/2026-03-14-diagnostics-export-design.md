@@ -40,7 +40,7 @@ ZIP contains:
 
 **Category-specific:**
 - **Error Analysis:** `logs.json` (last 24h system_activity_log — fetched via `GetSystemActivityLogs("", 10000)` then filtered by `CreatedAt >= now-24h` in application code), `operations.json` (last 100 operations with status/errors)
-- **Deduplication:** `itunes_albums.json` (parsed from iTunes XML via `itunes.ParseLibrary` if `config.ITunesLibraryXMLPath` is configured; **omitted with empty array if not configured**), `version_groups.json` (built by fetching all books via `GetAllBooks` and grouping by `VersionGroupID` in application memory)
+- **Deduplication:** `itunes_albums.json` (parsed from iTunes XML via `itunes.ParseLibrary` if `config.ITunesLibraryReadPath` is configured; **omitted with empty array if not configured**), `version_groups.json` (built by fetching all books via `GetAllBooks` and grouping by `VersionGroupID` in application memory)
 - **Metadata Quality:** `missing_fields.json` (books missing title/author/series — computed from books.json data, no ffprobe needed)
 - **General:** all of the above
 
@@ -195,7 +195,7 @@ Cross-chunk duplicates (book in chunk 1 is duplicate of book in chunk 37) are ha
 - Need to extract merge logic from `mergeBookDuplicatesAsVersions` HTTP handler into a `DiagnosticsService.MergeBooks(bookIDs []string, primaryID string)` service function
 - Need a generic `DownloadBatchRaw(ctx, outputFileID)` function in `openai_batch.go` that returns raw JSON responses (existing download functions are typed to author-dedup domain)
 - Need a multi-request JSONL builder (existing batch helpers create single-request JSONLs)
-- iTunes XML parsing via `itunes.ParseLibrary(config.ITunesLibraryXMLPath)` — **skip with empty array** if path not configured
+- iTunes XML parsing via `itunes.ParseLibrary(config.ITunesLibraryReadPath)` — **skip with empty array** if path not configured
 - `version_groups.json` built by loading all books and grouping by `VersionGroupID` in memory
 - `logs.json` time filtering: fetch via `GetSystemActivityLogs("", 10000)`, filter `CreatedAt >= now-24h` in Go
 - Config secrets redacted with `***REDACTED***`

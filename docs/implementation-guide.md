@@ -333,7 +333,8 @@ The iTunes banner already shows PID table. Enhance:
 | `root_dir` | — | Library root directory (must be set!) |
 | `auto_rename_on_apply` | `true` | Rename files when metadata is applied |
 | `auto_write_tags_on_apply` | `true` | Write tags when metadata is applied |
-| `itunes_library_xml_path` | — | Path to iTunes Library.xml for sync |
+| `itunes_library_read_path` | — | Path to iTunes library file for sync (XML or ITL) |
+| `itunes_library_write_path` | — | Path to iTunes Library.itl for write-back |
 | `path_format` | `{author}/{series_prefix}{title}/{track_title}.{ext}` | File path template |
 | `segment_title_format` | `{title} - {track}/{total_tracks}` | Segment filename template |
 | `purge_soft_deleted_after_days` | 30 | TTL for soft-deleted books and `.bak-*` backups |

@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 
 package server
@@ -84,7 +84,7 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryITLPath == "" {
+	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryWritePath == "" {
 		log.Printf("[WARN] iTunes auto write-back: ITL write-back not configured")
 		return
 	}
@@ -127,7 +127,7 @@ func (b *WriteBackBatcher) flush() {
 	}
 
 	// Write ITL
-	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlPath := config.AppConfig.ITunesLibraryWritePath
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
 		log.Printf("[WARN] iTunes auto write-back ITL failed: %v", itlErr)
