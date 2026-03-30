@@ -1557,6 +1557,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/cleanup-empty-folders", s.handleCleanupEmptyFolders)
 			protected.POST("/maintenance/fix-author-narrator-swap", s.handleFixAuthorNarratorSwap)
 			protected.POST("/maintenance/fix-version-groups", s.handleFixVersionGroups)
+			protected.POST("/maintenance/enrich-book-files", s.handleEnrichBookFiles)
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
