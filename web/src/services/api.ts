@@ -187,6 +187,7 @@ export interface BookTags {
   tags?: Record<string, TagSourceValues>;
 }
 
+/** @deprecated Use BookFile instead. Kept for backward compatibility with legacy endpoints. */
 export interface BookSegment {
   id: string;
   file_path: string;
@@ -789,6 +790,7 @@ export async function getBookChangelog(bookId: string): Promise<{ entries: Chang
   return response.json();
 }
 
+/** @deprecated Use getBookFiles instead. This calls the legacy segments endpoint. */
 export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/segments`);
   if (!response.ok) {

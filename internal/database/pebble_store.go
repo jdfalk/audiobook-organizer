@@ -768,15 +768,14 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
 				continue
 			}
-			numericID := int(crc32.ChecksumIEEE([]byte(b.ID)))
-			segs, err := p.ListBookSegments(numericID)
-			if err != nil || len(segs) == 0 {
+			files, err := p.GetBookFiles(b.ID)
+			if err != nil || len(files) == 0 {
 				total++
 				continue
 			}
 			activeCount := 0
-			for _, seg := range segs {
-				if seg.Active {
+			for _, f := range files {
+				if !f.Missing {
 					activeCount++
 				}
 			}
@@ -1295,15 +1294,14 @@ func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
 			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
 				continue
 			}
-			numericID := int(crc32.ChecksumIEEE([]byte(b.ID)))
-			segs, err := p.ListBookSegments(numericID)
-			if err != nil || len(segs) == 0 {
+			files, err := p.GetBookFiles(b.ID)
+			if err != nil || len(files) == 0 {
 				total++
 				continue
 			}
 			activeCount := 0
-			for _, seg := range segs {
-				if seg.Active {
+			for _, f := range files {
+				if !f.Missing {
 					activeCount++
 				}
 			}
@@ -1995,22 +1993,21 @@ func (p *PebbleStore) CountFiles() (int, error) {
 
 	totalFiles := 0
 	for _, id := range bookIDs {
-		numericID := int(crc32.ChecksumIEEE([]byte(id)))
-		segs, err := p.ListBookSegments(numericID)
-		if err != nil || len(segs) == 0 {
-			totalFiles++ // No segments means single file
+		files, err := p.GetBookFiles(id)
+		if err != nil || len(files) == 0 {
+			totalFiles++ // No files means single file
 			continue
 		}
 		activeCount := 0
-		for _, s := range segs {
-			if s.Active {
+		for _, f := range files {
+			if !f.Missing {
 				activeCount++
 			}
 		}
 		if activeCount > 0 {
 			totalFiles += activeCount
 		} else {
-			totalFiles++ // No active segments, treat as single file
+			totalFiles++ // No active files, treat as single file
 		}
 	}
 
@@ -5277,4 +5274,62 @@ func (s *PebbleStore) UpsertBookFile(file *BookFile) error {
 	file.ID = existing.ID
 	file.BookID = existing.BookID
 	return s.UpdateBookFile(existing.ID, file)
+}
+
+// GetBookFileByID returns a single BookFile by bookID and fileID.
+func (s *PebbleStore) GetBookFileByID(bookID, fileID string) (*BookFile, error) {
+	return s.getBookFileByID(bookID, fileID)
+}
+
+// MoveBookFilesToBook reassigns BookFile records from sourceBookID to targetBookID.
+func (s *PebbleStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error {
+	batch := s.db.NewBatch()
+
+	for _, fid := range fileIDs {
+		f, err := s.getBookFileByID(sourceBookID, fid)
+		if err != nil {
+			batch.Close()
+			return fmt.Errorf("file not found: %s: %w", fid, err)
+		}
+		if f == nil {
+			batch.Close()
+			return fmt.Errorf("file not found: %s", fid)
+		}
+
+		// Delete old primary key
+		oldKey := []byte(fmt.Sprintf("book_file:%s:%s", sourceBookID, fid))
+		if err := batch.Delete(oldKey, nil); err != nil {
+			batch.Close()
+			return err
+		}
+
+		// Delete old secondary indexes
+		if err := deleteBookFileSecondaryIndexes(batch, f); err != nil {
+			batch.Close()
+			return err
+		}
+
+		// Update book ID and write under new primary key
+		f.BookID = targetBookID
+		f.UpdatedAt = time.Now()
+
+		data, err := json.Marshal(f)
+		if err != nil {
+			batch.Close()
+			return err
+		}
+		newKey := []byte(fmt.Sprintf("book_file:%s:%s", targetBookID, fid))
+		if err := batch.Set(newKey, data, nil); err != nil {
+			batch.Close()
+			return err
+		}
+
+		// Re-create secondary indexes with updated bookID
+		if err := writeBookFileSecondaryIndexes(batch, f); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
+	return batch.Commit(pebble.Sync)
 }

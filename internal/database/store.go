@@ -216,7 +216,7 @@ type Store interface {
 	GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error)
 	GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error)
 
-	// Book segments & merge operations
+	// Book segments & merge operations (deprecated — use BookFile methods below)
 	CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error)
 	UpdateBookSegment(segment *BookSegment) error
 	ListBookSegments(bookNumericID int) ([]BookSegment, error)
@@ -224,15 +224,17 @@ type Store interface {
 	GetBookSegmentByID(segmentID string) (*BookSegment, error)
 	MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error
 
-	// Book files (replaces book_segments for new code)
+	// Book files (canonical — replaces book_segments)
 	CreateBookFile(file *BookFile) error
 	UpdateBookFile(id string, file *BookFile) error
 	GetBookFiles(bookID string) ([]BookFile, error)
+	GetBookFileByID(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPID(itunesPID string) (*BookFile, error)
 	GetBookFileByPath(filePath string) (*BookFile, error)
 	DeleteBookFile(id string) error
 	DeleteBookFilesForBook(bookID string) error
 	UpsertBookFile(file *BookFile) error
+	MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error
 
 	// Playback events & progress
 	AddPlaybackEvent(event *PlaybackEvent) error

@@ -7,12 +7,12 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,23 +66,22 @@ func TestGetSegmentTags_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Create a segment
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(book.ID)))
-	trackNum := 1
-	totalTracks := 2
-	seg, err := database.GlobalStore.CreateBookSegment(bookNumericID, &database.BookSegment{
+	// Create a book file
+	fileID := ulid.Make().String()
+	err = database.GlobalStore.CreateBookFile(&database.BookFile{
+		ID:          fileID,
+		BookID:      book.ID,
 		FilePath:    "/tmp/multi-file-book/part1.m4b",
 		Format:      "m4b",
-		SizeBytes:   1024,
-		DurationSec: 3600,
-		TrackNumber: &trackNum,
-		TotalTracks: &totalTracks,
-		Active:      true,
+		FileSize:    1024,
+		Duration:    3600000,
+		TrackNumber: 1,
+		TrackCount:  2,
 	})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet,
-		fmt.Sprintf("/api/v1/audiobooks/%s/segments/%s/tags", book.ID, seg.ID), nil)
+		fmt.Sprintf("/api/v1/audiobooks/%s/segments/%s/tags", book.ID, fileID), nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 

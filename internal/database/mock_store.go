@@ -1466,11 +1466,13 @@ func (m *MockStore) GetBooksByTag(tag string) ([]string, error) {
 
 // ---- BookFile stubs (Task 1 placeholder — full implementation in Task 2) ----
 
-func (m *MockStore) CreateBookFile(file *BookFile) error          { return nil }
-func (m *MockStore) UpdateBookFile(id string, file *BookFile) error { return nil }
-func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error) { return nil, nil }
-func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error) { return nil, nil }
-func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error) { return nil, nil }
-func (m *MockStore) DeleteBookFile(id string) error               { return nil }
-func (m *MockStore) DeleteBookFilesForBook(bookID string) error    { return nil }
-func (m *MockStore) UpsertBookFile(file *BookFile) error           { return nil }
+func (m *MockStore) CreateBookFile(file *BookFile) error                                       { return nil }
+func (m *MockStore) UpdateBookFile(id string, file *BookFile) error                            { return nil }
+func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error)                            { return nil, nil }
+func (m *MockStore) GetBookFileByID(bookID, fileID string) (*BookFile, error)                  { return nil, nil }
+func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error)                      { return nil, nil }
+func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error)                      { return nil, nil }
+func (m *MockStore) DeleteBookFile(id string) error                                            { return nil }
+func (m *MockStore) DeleteBookFilesForBook(bookID string) error                                { return nil }
+func (m *MockStore) UpsertBookFile(file *BookFile) error                                       { return nil }
+func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error { return nil }

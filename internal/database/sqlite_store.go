@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1403,17 +1402,18 @@ func (s *SQLiteStore) GetAllSeriesFileCounts() (map[int]int, error) {
 		return nil, err
 	}
 
-	// Get segment counts per book_id (numeric)
-	bookSegCounts := make(map[string]int)
-	segRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_segments WHERE active = 1 GROUP BY book_id")
+	// Get file counts per book_id from book_files table
+	bookFileCounts := make(map[string]int)
+	fileRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_files WHERE missing = 0 GROUP BY book_id")
 	if err == nil {
-		defer segRows.Close()
-		for segRows.Next() {
-			var numericID, count int
-			if err := segRows.Scan(&numericID, &count); err != nil {
+		defer fileRows.Close()
+		for fileRows.Next() {
+			var bookID string
+			var count int
+			if err := fileRows.Scan(&bookID, &count); err != nil {
 				break
 			}
-			bookSegCounts[fmt.Sprintf("%d", numericID)] = count
+			bookFileCounts[bookID] = count
 		}
 	}
 
@@ -1421,11 +1421,10 @@ func (s *SQLiteStore) GetAllSeriesFileCounts() (map[int]int, error) {
 	for seriesID, ids := range seriesBooks {
 		total := 0
 		for _, id := range ids {
-			crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
-			if segCount, ok := bookSegCounts[crc]; ok && segCount > 0 {
-				total += segCount
+			if fileCount, ok := bookFileCounts[id]; ok && fileCount > 0 {
+				total += fileCount
 			} else {
-				total++ // No segments, counts as 1 file
+				total++ // No files, counts as 1 file
 			}
 		}
 		counts[seriesID] = total
@@ -2203,34 +2202,19 @@ func (s *SQLiteStore) GetAllAuthorFileCounts() (map[int]int, error) {
 		return nil, err
 	}
 
-	// Build a set of all unique book IDs to look up segments
-	allBookIDs := make(map[string]bool)
-	for _, ids := range authorBooks {
-		for _, id := range ids {
-			allBookIDs[id] = true
-		}
-	}
-
-	// Get segment counts per book (using book_segments table)
-	bookSegCounts := make(map[string]int)
-	segRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_segments WHERE active = 1 GROUP BY book_id")
+	// Get file counts per book from book_files table
+	bookFileCounts := make(map[string]int)
+	fileRows, err := s.db.Query("SELECT book_id, COUNT(*) FROM book_files WHERE missing = 0 GROUP BY book_id")
 	if err == nil {
-		defer segRows.Close()
-		for segRows.Next() {
-			var numericID, count int
-			if err := segRows.Scan(&numericID, &count); err != nil {
+		defer fileRows.Close()
+		for fileRows.Next() {
+			var bookID string
+			var count int
+			if err := fileRows.Scan(&bookID, &count); err != nil {
 				break
 			}
-			// We need to map numeric IDs back; store by numeric ID for now
-			bookSegCounts[fmt.Sprintf("%d", numericID)] = count
+			bookFileCounts[bookID] = count
 		}
-	}
-
-	// Build CRC32 lookup for our book IDs
-	bookCRC := make(map[string]string) // CRC32 string -> book ID
-	for id := range allBookIDs {
-		crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
-		bookCRC[crc] = id
 	}
 
 	// Calculate file counts per author
@@ -2238,11 +2222,10 @@ func (s *SQLiteStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	for authorID, ids := range authorBooks {
 		total := 0
 		for _, id := range ids {
-			crc := fmt.Sprintf("%d", int(crc32.ChecksumIEEE([]byte(id))))
-			if segCount, ok := bookSegCounts[crc]; ok && segCount > 0 {
-				total += segCount
+			if fileCount, ok := bookFileCounts[id]; ok && fileCount > 0 {
+				total += fileCount
 			} else {
-				total++ // No segments, counts as 1 file
+				total++ // No files, counts as 1 file
 			}
 		}
 		counts[authorID] = total
@@ -2680,14 +2663,14 @@ func (s *SQLiteStore) CountBooks() (int, error) {
 }
 
 // CountFiles returns the total number of audio files across all books.
-// Books with active segments count their segments; books without segments count as 1 file each.
+// Books with book_files count their non-missing files; books without files count as 1 file each.
 func (s *SQLiteStore) CountFiles() (int, error) {
-	// Count active segments
-	var segCount int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM book_segments WHERE active = 1").Scan(&segCount)
+	// Count non-missing book files
+	var fileCount int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM book_files WHERE missing = 0").Scan(&fileCount)
 	if err != nil {
 		// Table may not exist yet; treat as 0
-		segCount = 0
+		fileCount = 0
 	}
 
 	// Count all primary, non-deleted books
@@ -2697,16 +2680,16 @@ func (s *SQLiteStore) CountFiles() (int, error) {
 		return 0, err
 	}
 
-	// Count distinct books that have active segments
-	var booksWithSegs int
-	err = s.db.QueryRow("SELECT COUNT(DISTINCT book_id) FROM book_segments WHERE active = 1").Scan(&booksWithSegs)
+	// Count distinct books that have non-missing files
+	var booksWithFiles int
+	err = s.db.QueryRow("SELECT COUNT(DISTINCT book_id) FROM book_files WHERE missing = 0").Scan(&booksWithFiles)
 	if err != nil {
 		// Table may not exist yet; treat as 0
-		booksWithSegs = 0
+		booksWithFiles = 0
 	}
 
-	// Total files = active segments + books without any segments (each counts as 1 file)
-	return segCount + (bookCount - booksWithSegs), nil
+	// Total files = non-missing book files + books without any files (each counts as 1 file)
+	return fileCount + (bookCount - booksWithFiles), nil
 }
 
 func (s *SQLiteStore) CountAuthors() (int, error) {
@@ -4669,4 +4652,41 @@ func (s *SQLiteStore) UpsertBookFile(file *BookFile) error {
 		err = s.CreateBookFile(file)
 	}
 	return err
+}
+
+// GetBookFileByID returns a single book_file by its ID within a book.
+func (s *SQLiteStore) GetBookFileByID(bookID, fileID string) (*BookFile, error) {
+	row := s.db.QueryRow(
+		`SELECT `+bookFileCols+` FROM book_files WHERE book_id = ? AND id = ? LIMIT 1`,
+		bookID, fileID,
+	)
+	f, err := bookFileScan(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("GetBookFileByID: %w", err)
+	}
+	return &f, nil
+}
+
+// MoveBookFilesToBook reassigns book_files from sourceBookID to targetBookID.
+func (s *SQLiteStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("MoveBookFilesToBook begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	now := time.Now()
+	for _, fid := range fileIDs {
+		_, err := tx.Exec(
+			`UPDATE book_files SET book_id = ?, updated_at = ? WHERE id = ? AND book_id = ?`,
+			targetBookID, now, fid, sourceBookID,
+		)
+		if err != nil {
+			return fmt.Errorf("MoveBookFilesToBook update %s: %w", fid, err)
+		}
+	}
+	return tx.Commit()
 }

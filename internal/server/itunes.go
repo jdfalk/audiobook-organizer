@@ -7,7 +7,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"hash/crc32"
 	stdlog "log"
 	"net/http"
 	"os"
@@ -935,9 +934,9 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			}
 		}
 
-		// Create BookSegments for multi-track albums
+		// Create BookFiles for multi-track albums
 		if len(group.tracks) > 1 {
-			bookNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
+			totalTracks := len(group.tracks)
 			for _, track := range group.tracks {
 				trackLoc := importOpts.RemapPath(track.Location)
 				trackPath, decErr := itunes.DecodeLocation(trackLoc)
@@ -945,22 +944,22 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 					continue
 				}
 				trackFormat := strings.TrimPrefix(strings.ToLower(filepath.Ext(trackPath)), ".")
-				trackNum := track.TrackNumber
-				totalTracks := len(group.tracks)
-				segment := &database.BookSegment{
-					FilePath:    trackPath,
-					Format:      trackFormat,
-					SizeBytes:   track.Size,
-					DurationSec: int(track.TotalTime / 1000),
-					TrackNumber: &trackNum,
-					TotalTracks: &totalTracks,
-					Active:      true,
+				bf := &database.BookFile{
+					ID:                 ulid.Make().String(),
+					BookID:             created.ID,
+					FilePath:           trackPath,
+					ITunesPersistentID: track.PersistentID,
+					Format:             trackFormat,
+					FileSize:           track.Size,
+					Duration:           int(track.TotalTime), // already ms
+					TrackNumber:        track.TrackNumber,
+					TrackCount:         totalTracks,
 				}
 				if segHash, hashErr := scanner.ComputeSegmentFileHash(trackPath); hashErr == nil {
-					segment.FileHash = &segHash
+					bf.FileHash = segHash
 				}
-				if _, segErr := database.GlobalStore.CreateBookSegment(bookNumericID, segment); segErr != nil {
-					log.Warn("Failed to create segment for track %d of '%s': %v", track.TrackNumber, book.Title, segErr)
+				if createErr := database.GlobalStore.CreateBookFile(bf); createErr != nil {
+					log.Warn("Failed to create book file for track %d of '%s': %v", track.TrackNumber, book.Title, createErr)
 				}
 			}
 		}

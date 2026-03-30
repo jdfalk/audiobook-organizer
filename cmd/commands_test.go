@@ -194,6 +194,16 @@ func (s *stubStore) GetBookSegmentByID(segmentID string) (*database.BookSegment,
 func (s *stubStore) MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error {
 	return nil
 }
+func (s *stubStore) CreateBookFile(file *database.BookFile) error                                          { return nil }
+func (s *stubStore) UpdateBookFile(id string, file *database.BookFile) error                               { return nil }
+func (s *stubStore) GetBookFiles(bookID string) ([]database.BookFile, error)                               { return nil, nil }
+func (s *stubStore) GetBookFileByID(bookID, fileID string) (*database.BookFile, error)                     { return nil, nil }
+func (s *stubStore) GetBookFileByPID(itunesPID string) (*database.BookFile, error)                         { return nil, nil }
+func (s *stubStore) GetBookFileByPath(filePath string) (*database.BookFile, error)                         { return nil, nil }
+func (s *stubStore) DeleteBookFile(id string) error                                                        { return nil }
+func (s *stubStore) DeleteBookFilesForBook(bookID string) error                                            { return nil }
+func (s *stubStore) UpsertBookFile(file *database.BookFile) error                                          { return nil }
+func (s *stubStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error         { return nil }
 func (s *stubStore) AddPlaybackEvent(event *database.PlaybackEvent) error { return nil }
 func (s *stubStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error) {
 	return []database.PlaybackEvent{}, nil
