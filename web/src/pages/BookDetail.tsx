@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.42.0
+// version: 1.43.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -579,9 +579,11 @@ export const BookDetail = () => {
     }
   };
 
-  // Auto-expand current book's version when versions load
+  // Auto-expand current book's version when versions load (or when there are none).
+  // When there are no linked versions the tray list falls back to [book], so we
+  // must also expand the book itself in that case.
   useEffect(() => {
-    if (id && versions.length > 0) {
+    if (id) {
       setExpandedVersionIds(new Set([id]));
     }
   }, [id, versions.length]);
@@ -1720,6 +1722,11 @@ export const BookDetail = () => {
                         <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} onClearSnapshot={() => setCompareSnapshotTs(null)} />
 
                         {/* Segments/files table for multi-file books */}
+                        {vSegs.length === 0 && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
+                            No files found for this version.
+                          </Typography>
+                        )}
                         {vSegs.length > 0 && (() => {
                           const missingCount = vSegs.filter((s) => s.file_exists === false).length;
                           const isCurrentBook = isCurrent;
