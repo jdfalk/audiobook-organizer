@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.64.0
+// version: 1.65.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -634,6 +634,19 @@ export async function countBooks(): Promise<number> {
   const response = await fetch(`${API_BASE}/audiobooks/count`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to count books');
+  }
+  const data = await response.json();
+  return data.count || 0;
+}
+
+export async function countBooksFiltered(options: {
+  libraryState?: string;
+}): Promise<number> {
+  const params = new URLSearchParams({ limit: '1', offset: '0' });
+  if (options.libraryState) params.set('library_state', options.libraryState);
+  const response = await fetch(`${API_BASE}/audiobooks?${params}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to count filtered books');
   }
   const data = await response.json();
   return data.count || 0;

@@ -1,5 +1,5 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.12.0
+// version: 1.13.0
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 
 import { useState, useEffect, useCallback } from 'react';
@@ -38,6 +38,7 @@ import {
   Storage as StorageIcon,
   Person as PersonIcon,
   MenuBook as MenuBookIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import * as api from '../services/api';
 import { useOperationsStore } from '../stores/useOperationsStore';
@@ -71,6 +72,7 @@ export function Dashboard() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [authorCount, setAuthorCount] = useState<number | null>(null);
   const [seriesCount, setSeriesCount] = useState<number | null>(null);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
   const [operations, setOperations] = useState<RecentOperation[] | null>(null);
   const [storageLoaded, setStorageLoaded] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -171,12 +173,22 @@ export function Dashboard() {
     }
   }, []);
 
+  const loadImportedCount = useCallback(async () => {
+    try {
+      const count = await api.countBooksFiltered({ libraryState: 'imported' });
+      setImportedCount(count);
+    } catch {
+      setImportedCount(0);
+    }
+  }, []);
+
   // Fire all requests in parallel — each section updates independently
   useEffect(() => {
     loadStats();
     loadAuthors();
     loadSeries();
-  }, [loadStats, loadAuthors, loadSeries]);
+    loadImportedCount();
+  }, [loadStats, loadAuthors, loadSeries, loadImportedCount]);
 
   // Auto-refresh every 15s while a scan is active
   useEffect(() => {
@@ -186,9 +198,10 @@ export function Dashboard() {
       loadStats();
       loadAuthors();
       loadSeries();
+      loadImportedCount();
     }, 15000);
     return () => clearInterval(interval);
-  }, [operations, loadStats, loadAuthors, loadSeries]);
+  }, [operations, loadStats, loadAuthors, loadSeries, loadImportedCount]);
 
   const handleScanAll = async () => {
     setScanInProgress(true);
@@ -237,6 +250,8 @@ export function Dashboard() {
     suffix = '',
     subtitle,
     onClick,
+    iconColor = 'primary.main',
+    valueColor,
   }: {
     title: string;
     value: number;
@@ -245,6 +260,8 @@ export function Dashboard() {
     suffix?: string;
     subtitle?: string;
     onClick?: () => void;
+    iconColor?: string;
+    valueColor?: string;
   }) => (
     <Card>
       <CardActionArea onClick={onClick} disabled={!onClick}>
@@ -262,7 +279,7 @@ export function Dashboard() {
                 <Skeleton variant="text" width={80} height={42} />
               ) : (
                 <>
-                  <Typography variant="h4">
+                  <Typography variant="h4" color={valueColor}>
                     {value.toLocaleString()}
                     {suffix}
                   </Typography>
@@ -274,7 +291,7 @@ export function Dashboard() {
                 </>
               )}
             </Box>
-            <Box sx={{ color: 'primary.main' }}>{icon}</Box>
+            <Box sx={{ color: iconColor }}>{icon}</Box>
           </Box>
         </CardContent>
       </CardActionArea>
@@ -307,6 +324,7 @@ export function Dashboard() {
   const bookStatsLoading = stats === null;
   const authorsLoading = authorCount === null && (stats === null || !stats.total_authors);
   const seriesLoading = seriesCount === null && (stats === null || !stats.total_series);
+  const importedLoading = importedCount === null;
 
   return (
     <Box sx={{ height: '100%', overflow: 'auto' }}>
@@ -362,6 +380,48 @@ export function Dashboard() {
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/series')}
           />
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          {(() => {
+            const allOrganized = !importedLoading && importedCount === 0;
+            return (
+              <StatCard
+                title={allOrganized ? 'All Books Organized' : 'Needs Organizing'}
+                value={importedCount ?? 0}
+                loading={importedLoading}
+                icon={
+                  allOrganized ? (
+                    <CheckCircleIcon sx={{ fontSize: 40 }} />
+                  ) : (
+                    <WarningIcon sx={{ fontSize: 40 }} />
+                  )
+                }
+                subtitle={
+                  allOrganized
+                    ? 'Library is fully organized'
+                    : importedCount !== null && importedCount > 0
+                      ? 'books awaiting organization'
+                      : undefined
+                }
+                iconColor={
+                  importedLoading
+                    ? 'primary.main'
+                    : allOrganized
+                      ? 'success.main'
+                      : 'warning.main'
+                }
+                valueColor={
+                  importedLoading
+                    ? undefined
+                    : allOrganized
+                      ? 'success.main'
+                      : 'warning.main'
+                }
+                onClick={() => navigate('/library?state=imported')}
+              />
+            );
+          })()}
         </Grid>
 
         <Grid item xs={12} md={6}>

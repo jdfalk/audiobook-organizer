@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.46.0
+// version: 1.47.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -570,7 +570,7 @@ export const Library = () => {
   const someOnPageSelected = audiobooks.some((book) => selectedIds.has(book.id));
   const selectedHasDeleted = selectedAudiobooks.some((book) => book.marked_for_deletion);
   const selectedHasActive = selectedAudiobooks.some((book) => !book.marked_for_deletion);
-  const selectedHasImport = selectedAudiobooks.some((book) => book.library_state === 'import');
+  const selectedHasImport = selectedAudiobooks.some((book) => book.library_state === 'imported');
 
   const handleToggleSelect = (audiobook: Audiobook) => {
     setSelectedAudiobooks((prev) => {
@@ -1246,7 +1246,7 @@ export const Library = () => {
       return;
     }
 
-    const importBooks = selectedAudiobooks.filter((book) => book.library_state === 'import');
+    const importBooks = selectedAudiobooks.filter((book) => book.library_state === 'imported');
     if (importBooks.length === 0) {
       toast('Select import-state audiobooks to organize.', 'info');
       return;

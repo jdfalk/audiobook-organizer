@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.43.0
+// version: 1.44.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -981,7 +981,13 @@ export const BookDetail = () => {
               {book.library_state && (
                 <Chip
                   label={`State: ${book.library_state}`}
-                  color="info"
+                  color={
+                    book.library_state === 'imported'
+                      ? 'warning'
+                      : book.library_state === 'organized'
+                        ? 'success'
+                        : 'default'
+                  }
                   size="small"
                 />
               )}
