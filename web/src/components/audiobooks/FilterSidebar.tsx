@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/FilterSidebar.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 import React from 'react';
@@ -109,7 +109,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
                 <em>All States</em>
               </MenuItem>
               <MenuItem value="organized">Organized</MenuItem>
-              <MenuItem value="import">Import</MenuItem>
+              <MenuItem value="imported">Imported</MenuItem>
               <MenuItem value="deleted">Deleted</MenuItem>
             </Select>
           </FormControl>
