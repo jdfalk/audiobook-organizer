@@ -1,3 +1,7 @@
+// file: internal/itunes/parser.go
+// version: 1.1.0
+// guid: 9c3d7e51-2f84-4b60-ae91-d8c72b4f36e0
+
 // Package itunes provides functionality for importing audiobooks from iTunes Library.xml files
 package itunes
 
@@ -58,22 +62,38 @@ type Playlist struct {
 	TrackIDs     []int  `xml:"-"`
 }
 
-// ParseLibrary parses an iTunes Library.xml file and returns a Library structure
+// ParseLibrary parses an iTunes library file and returns a Library structure.
+// It auto-detects the file format: if the file starts with the "hdfm" magic
+// bytes it is treated as an ITL binary; otherwise it is parsed as an XML plist.
+// This means callers can point at either iTunes Library.xml or iTunes Library.itl
+// and the correct parser will be used transparently.
 func ParseLibrary(path string) (*Library, error) {
-	// Open the file
+	// Peek at the first four bytes to detect the ITL binary format.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open iTunes library file: %w", err)
+	}
+	magic := make([]byte, 4)
+	_, readErr := io.ReadFull(f, magic)
+	f.Close()
+
+	if readErr == nil && string(magic) == "hdfm" {
+		// ITL binary format
+		return ParseITLAsLibrary(path)
+	}
+
+	// XML plist format (original behaviour)
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open iTunes library file: %w", err)
 	}
 	defer file.Close()
 
-	// Read the entire file
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read iTunes library file: %w", err)
 	}
 
-	// Parse the plist XML
 	library, err := parsePlist(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse iTunes library XML: %w", err)
