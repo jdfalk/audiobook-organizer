@@ -66,8 +66,8 @@
 | 14 | **iTunes PID detail view** | Show file paths, track names | ✅ Fixed — shows file paths and track PIDs |
 | 15 | **ITL write-back testing** | 176K tracks written to ITL copy | ✅ Working — needs user to test with iTunes |
 | 16 | **TAG-DIAG instrumentation** | Clean up diagnostic logging | ✅ Already cleaned up |
-| 17 | **Author/narrator swap (full fix)** | Cross-reference DB author during tag extraction | Open — needs design |
-| 18 | **3-state library badge** | scanned → imported → organized states | Open — needs brainstorming |
+| 17 | **Author/narrator swap (full fix)** | Post-extraction guard + maintenance endpoint | ✅ Built — deploy pending |
+| 18 | **Library state badges** | imported=amber, organized=green, filter, dashboard count | ✅ Fixed |
 | 19 | **Vite chunk splitting** | Code-split large JS bundle | ✅ Fixed — index 514KB → 107KB |
 | 20 | **Stale interrupted operations** | Mark as failed on startup | ✅ Fixed |
 | 21 | **Settings save/buttons not visible** | Sticky floating buttons | ✅ Already implemented |
