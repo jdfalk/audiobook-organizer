@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -474,10 +474,10 @@ func applySetting(key, value, typ string) error {
 		if b, err := strconv.ParseBool(value); err == nil {
 			AppConfig.ITLWriteBackEnabled = b
 		}
-	case "itunes_library_itl_path":
-		AppConfig.ITunesLibraryITLPath = value
-	case "itunes_library_xml_path":
-		AppConfig.ITunesLibraryXMLPath = value
+	case "itunes_library_write_path", "itunes_library_itl_path":
+		AppConfig.ITunesLibraryWritePath = value
+	case "itunes_library_read_path", "itunes_library_xml_path":
+		AppConfig.ITunesLibraryReadPath = value
 	case "itunes_auto_write_back":
 		if b, err := strconv.ParseBool(value); err == nil {
 			AppConfig.ITunesAutoWriteBack = b
@@ -751,8 +751,8 @@ func SaveConfigToDatabase(store database.Store) error {
 		"itunes_sync_enabled":    {strconv.FormatBool(AppConfig.ITunesSyncEnabled), "bool", false},
 		"itunes_sync_interval":   {strconv.Itoa(AppConfig.ITunesSyncInterval), "int", false},
 		"itl_write_back_enabled": {strconv.FormatBool(AppConfig.ITLWriteBackEnabled), "bool", false},
-		"itunes_library_itl_path": {AppConfig.ITunesLibraryITLPath, "string", false},
-		"itunes_library_xml_path": {AppConfig.ITunesLibraryXMLPath, "string", false},
+		"itunes_library_write_path": {AppConfig.ITunesLibraryWritePath, "string", false},
+		"itunes_library_read_path":  {AppConfig.ITunesLibraryReadPath, "string", false},
 		"itunes_auto_write_back":  {strconv.FormatBool(AppConfig.ITunesAutoWriteBack), "bool", false},
 		"itunes_path_mappings":    {string(pathMappingsJSON), "json", false},
 

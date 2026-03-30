@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.18.0
+// version: 2.19.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -339,7 +339,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		return
 	}
 
-	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryITLPath == "" {
+	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryWritePath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL write-back is not enabled in config"})
 		return
 	}
@@ -378,7 +378,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 		return
 	}
 
-	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlPath := config.AppConfig.ITunesLibraryWritePath
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
 		stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
@@ -419,7 +419,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
-	itlPath := config.AppConfig.ITunesLibraryITLPath
+	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no ITL library path configured"})
 		return
@@ -1931,7 +1931,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 	}
 
 	// Apply any deferred iTunes updates (e.g., from transcodes while write-back was disabled)
-	if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryITLPath != "" {
+	if config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryWritePath != "" {
 		pending, _ := store.GetPendingDeferredITunesUpdates()
 		if len(pending) > 0 {
 			updates := make([]itunes.ITLLocationUpdate, len(pending))
@@ -1941,7 +1941,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 					NewLocation:  p.NewPath,
 				}
 			}
-			itlPath := config.AppConfig.ITunesLibraryITLPath
+			itlPath := config.AppConfig.ITunesLibraryWritePath
 			tmpPath := itlPath + ".deferred-update.tmp"
 			result, itlErr := itunes.UpdateITLLocations(itlPath, tmpPath, updates)
 			if itlErr == nil && result.UpdatedCount > 0 {
