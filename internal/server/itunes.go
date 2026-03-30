@@ -407,6 +407,44 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 // handleITunesWriteBackAll writes ALL books with iTunes persistent IDs back to
 // the ITL binary file in a single bulk operation. This is useful when the ITL
 // file needs a full refresh (e.g., after restoring from backup or initial setup).
+// collectITLUpdates iterates all books and builds ITL location updates
+// from book_files (per-file itunes_path + itunes_persistent_id).
+func collectITLUpdates(store database.Store) []itunes.ITLLocationUpdate {
+	var updates []itunes.ITLLocationUpdate
+	const pageSize = 10000
+	offset := 0
+	for {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil || len(books) == 0 {
+			break
+		}
+		for i := range books {
+			files, _ := store.GetBookFiles(books[i].ID)
+			if len(files) > 0 {
+				for _, f := range files {
+					if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+						updates = append(updates, itunes.ITLLocationUpdate{
+							PersistentID: f.ITunesPersistentID,
+							NewLocation:  f.ITunesPath,
+						})
+					}
+				}
+			} else if books[i].ITunesPersistentID != nil && *books[i].ITunesPersistentID != "" &&
+				books[i].ITunesPath != nil && *books[i].ITunesPath != "" {
+				updates = append(updates, itunes.ITLLocationUpdate{
+					PersistentID: *books[i].ITunesPersistentID,
+					NewLocation:  *books[i].ITunesPath,
+				})
+			}
+		}
+		if len(books) < pageSize {
+			break
+		}
+		offset += pageSize
+	}
+	return updates
+}
+
 func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -2180,5 +2218,24 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 		updated, newBooks, unchanged, trackCount, totalGroups)
 	log.UpdateProgress(totalGroups, totalGroups, summary)
 	log.Info("%s", summary)
+
+	// Auto write-back to ITL if write_path is configured
+	if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
+		log.Info("Auto write-back: writing updated paths to ITL at %s", writePath)
+		itlUpdates := collectITLUpdates(store)
+		if len(itlUpdates) > 0 {
+			result, err := itunes.UpdateITLLocations(writePath, writePath+".tmp", itlUpdates)
+			if err != nil {
+				log.Warn("Auto write-back failed: %v", err)
+			} else {
+				if renameErr := os.Rename(writePath+".tmp", writePath); renameErr != nil {
+					log.Warn("Auto write-back rename failed: %v", renameErr)
+				} else {
+					log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
+				}
+			}
+		}
+	}
+
 	return nil
 }
