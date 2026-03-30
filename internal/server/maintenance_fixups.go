@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -1466,4 +1467,201 @@ func fixAuthorDirPath(store database.Store, book *database.Book, subdir string) 
 	}
 
 	return createBookFilesForBook(store, current, newFiles, false)
+}
+
+// ---------------------------------------------------------------------------
+// Enrich book_files — track numbers, file sizes, formats, original filenames
+// ---------------------------------------------------------------------------
+
+// enrichBookFileResult describes one book_files row that was (or would be)
+// enriched.
+type enrichBookFileResult struct {
+	FileID           string `json:"file_id"`
+	BookID           string `json:"book_id"`
+	FilePath         string `json:"file_path"`
+	TrackNumberOld   int    `json:"track_number_old,omitempty"`
+	TrackNumberNew   int    `json:"track_number_new,omitempty"`
+	TrackCountOld    int    `json:"track_count_old,omitempty"`
+	TrackCountNew    int    `json:"track_count_new,omitempty"`
+	FileSizeOld      int64  `json:"file_size_old,omitempty"`
+	FileSizeNew      int64  `json:"file_size_new,omitempty"`
+	FormatOld        string `json:"format_old,omitempty"`
+	FormatNew        string `json:"format_new,omitempty"`
+	OrigFilenameSet  bool   `json:"original_filename_set,omitempty"`
+	Changed          bool   `json:"changed"`
+	Applied          bool   `json:"applied"`
+	Error            string `json:"error,omitempty"`
+}
+
+// handleEnrichBookFiles iterates all book_files rows and fills in missing or
+// zero-valued fields:
+//   - track_number: parsed from leading digits in the filename
+//   - track_count:  total number of files for the owning book
+//   - file_size:    from os.Stat when currently 0
+//   - format:       from filepath.Ext when empty
+//   - original_filename: from filepath.Base when empty
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update the database
+func (s *Server) handleEnrichBookFiles(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Fetch all books so we can iterate book_files per book.
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var results []enrichBookFileResult
+	totalChanged := 0
+	totalApplied := 0
+	totalErrors := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+
+		files, bfErr := store.GetBookFiles(book.ID)
+		if bfErr != nil {
+			log.Printf("[WARN] enrich-book-files: GetBookFiles book %s: %v", book.ID, bfErr)
+			continue
+		}
+		if len(files) == 0 {
+			continue
+		}
+
+		trackCount := len(files)
+
+		for j := range files {
+			f := &files[j]
+			result := enrichBookFileResult{
+				FileID:   f.ID,
+				BookID:   f.BookID,
+				FilePath: f.FilePath,
+			}
+
+			changed := false
+
+			// --- 1. original_filename ----------------------------------------
+			if f.OriginalFilename == "" {
+				f.OriginalFilename = filepath.Base(f.FilePath)
+				result.OrigFilenameSet = true
+				changed = true
+			}
+
+			// --- 2. format from extension -------------------------------------
+			if f.Format == "" {
+				ext := strings.ToLower(filepath.Ext(f.FilePath))
+				if ext != "" {
+					newFmt := strings.TrimPrefix(ext, ".")
+					result.FormatOld = f.Format
+					result.FormatNew = newFmt
+					f.Format = newFmt
+					changed = true
+				}
+			}
+
+			// --- 3. file_size from os.Stat ------------------------------------
+			if f.FileSize == 0 && !f.Missing {
+				if info, statErr := os.Stat(f.FilePath); statErr == nil {
+					newSize := info.Size()
+					if newSize > 0 {
+						result.FileSizeOld = f.FileSize
+						result.FileSizeNew = newSize
+						f.FileSize = newSize
+						changed = true
+					}
+				}
+			}
+
+			// --- 4. track_number from filename --------------------------------
+			if f.TrackNumber == 0 {
+				parsed := parseTrackNumberFromFilename(f.FilePath)
+				if parsed > 0 {
+					result.TrackNumberOld = f.TrackNumber
+					result.TrackNumberNew = parsed
+					f.TrackNumber = parsed
+					changed = true
+				}
+			}
+
+			// --- 5. track_count -----------------------------------------------
+			if f.TrackCount != trackCount {
+				result.TrackCountOld = f.TrackCount
+				result.TrackCountNew = trackCount
+				f.TrackCount = trackCount
+				changed = true
+			}
+
+			result.Changed = changed
+
+			if changed {
+				totalChanged++
+				if !dryRun {
+					if upErr := store.UpdateBookFile(f.ID, f); upErr != nil {
+						result.Error = upErr.Error()
+						totalErrors++
+						log.Printf("[WARN] enrich-book-files: UpdateBookFile %s: %v", f.ID, upErr)
+					} else {
+						result.Applied = true
+						totalApplied++
+					}
+				}
+				results = append(results, result)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":       dryRun,
+		"books_scanned": len(allBooks),
+		"files_changed": totalChanged,
+		"applied":       totalApplied,
+		"errors":        totalErrors,
+		"results":       results,
+	})
+}
+
+// parseTrackNumberFromFilename extracts a leading track number from an audio
+// filename.  Supported patterns (case-insensitive for the "Track" prefix):
+//
+//	"01 Chapter.mp3"      → 1
+//	"02_Head of Dragon.m4b" → 2
+//	"003-Epilogue.mp3"    → 3
+//	"Track 05.mp3"        → 5
+//
+// Returns 0 if no number can be determined.
+func parseTrackNumberFromFilename(filePath string) int {
+	base := filepath.Base(filePath)
+	// Remove extension for cleaner matching.
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+
+	// Pattern A: optional "Track " prefix, then 1-3 leading digits followed by
+	// a non-digit separator (space, underscore, dash, dot) or end-of-string.
+	reLeading := regexp.MustCompile(`(?i)^(?:track\s*)?(\d{1,3})(?:[\s_\-.]|$)`)
+	if m := reLeading.FindStringSubmatch(name); len(m) > 1 {
+		n, err := strconv.Atoi(m[1])
+		if err == nil && n > 0 {
+			return n
+		}
+	}
+
+	// Pattern B: entire stem is a number (e.g. "05.mp3").
+	reOnly := regexp.MustCompile(`^(\d{1,3})$`)
+	if m := reOnly.FindStringSubmatch(name); len(m) > 1 {
+		n, err := strconv.Atoi(m[1])
+		if err == nil && n > 0 {
+			return n
+		}
+	}
+
+	return 0
 }
