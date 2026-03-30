@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.37.0
+// version: 4.38.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -491,10 +491,28 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 
 	// Apply author if fetched data is better — resolve to AuthorID and
 	// replace the book_authors join table so stale associations are removed.
-	if meta.Author != "" && !isGarbageValue(meta.Author) {
-		author, err := mfs.db.GetAuthorByName(meta.Author)
+	extractedAuthor := meta.Author
+	if extractedAuthor != "" && !isGarbageValue(extractedAuthor) {
+		// Guard: if extracted artist matches the book's narrator (not the author),
+		// the tag has narrator in the artist field — keep the DB author.
+		if book.AuthorID != nil && book.Narrator != nil {
+			if existingAuthor, aErr := mfs.db.GetAuthorByID(*book.AuthorID); aErr == nil && existingAuthor != nil {
+				if strings.EqualFold(extractedAuthor, *book.Narrator) && !strings.EqualFold(extractedAuthor, existingAuthor.Name) {
+					log.Printf("[INFO] applyMetadataToBook: extracted artist %q matches narrator %q but not author %q for book %s — skipping author update",
+						extractedAuthor, *book.Narrator, existingAuthor.Name, book.ID)
+					extractedAuthor = ""
+				} else if !strings.EqualFold(extractedAuthor, existingAuthor.Name) && !strings.EqualFold(extractedAuthor, *book.Narrator) {
+					// Extracted artist doesn't match either stored author or narrator — log mismatch for review
+					log.Printf("[WARN] applyMetadataToBook: extracted artist %q matches neither author %q nor narrator %q for book %s",
+						extractedAuthor, existingAuthor.Name, *book.Narrator, book.ID)
+				}
+			}
+		}
+	}
+	if extractedAuthor != "" && !isGarbageValue(extractedAuthor) {
+		author, err := mfs.db.GetAuthorByName(extractedAuthor)
 		if err == nil && author == nil {
-			author, err = mfs.db.CreateAuthor(meta.Author)
+			author, err = mfs.db.CreateAuthor(extractedAuthor)
 		}
 		if err == nil && author != nil {
 			book.AuthorID = &author.ID

@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -891,6 +891,125 @@ func isDirEmpty(dir string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// ---------------------------------------------------------------------------
+// Author/narrator swap fix
+// ---------------------------------------------------------------------------
+
+// authorNarratorSwapResult describes one book where the author field contains
+// the narrator name (or vice versa).
+type authorNarratorSwapResult struct {
+	BookID      string `json:"book_id"`
+	BookTitle   string `json:"book_title"`
+	AuthorName  string `json:"author_name"`
+	NarratorName string `json:"narrator_name"`
+	Applied     bool   `json:"applied"`
+	Error       string `json:"error,omitempty"`
+}
+
+// handleFixAuthorNarratorSwap finds books where the author field contains the
+// narrator name (i.e. the author and narrator have been swapped at scan time)
+// and optionally clears the wrong author association.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update the database
+func (s *Server) handleFixAuthorNarratorSwap(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Paginate over all books in batches of 500.
+	const batchSize = 500
+	offset := 0
+	var results []authorNarratorSwapResult
+
+	for {
+		batch, err := store.GetAllBooks(batchSize, offset)
+		if err != nil {
+			internalError(c, "failed to list books", err)
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for i := range batch {
+			book := &batch[i]
+
+			// Only examine books that have both an author_id and a narrator set.
+			if book.AuthorID == nil || book.Narrator == nil || *book.Narrator == "" {
+				continue
+			}
+
+			author, aErr := store.GetAuthorByID(*book.AuthorID)
+			if aErr != nil || author == nil {
+				continue
+			}
+
+			// Detect swap: author name equals narrator name.
+			if !strings.EqualFold(author.Name, *book.Narrator) {
+				continue
+			}
+
+			result := authorNarratorSwapResult{
+				BookID:       book.ID,
+				BookTitle:    book.Title,
+				AuthorName:   author.Name,
+				NarratorName: *book.Narrator,
+			}
+
+			if !dryRun {
+				current, getErr := store.GetBookByID(book.ID)
+				if getErr != nil || current == nil {
+					result.Error = fmt.Sprintf("GetBookByID: %v", getErr)
+					log.Printf("[WARN] fix-author-narrator-swap: failed to fetch book %s: %v", book.ID, getErr)
+				} else {
+					// Clear the wrong author association; keep narrator intact.
+					current.AuthorID = nil
+					if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
+						result.Error = updateErr.Error()
+						log.Printf("[WARN] fix-author-narrator-swap: failed to update book %s: %v", book.ID, updateErr)
+					} else {
+						result.Applied = true
+						log.Printf("[INFO] fix-author-narrator-swap: cleared author %q (= narrator) from book %s (%q)",
+							author.Name, book.ID, book.Title)
+					}
+				}
+			}
+
+			results = append(results, result)
+		}
+
+		if len(batch) < batchSize {
+			break
+		}
+		offset += batchSize
+	}
+
+	applied := 0
+	errors := 0
+	for _, r := range results {
+		if r.Applied {
+			applied++
+		}
+		if r.Error != "" {
+			errors++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":     dryRun,
+		"total_found": len(results),
+		"applied":     applied,
+		"errors":      errors,
+		"results":     results,
+	})
 }
 
 // createBookFilesForBook inserts a BookFile row for each path in filePaths.
