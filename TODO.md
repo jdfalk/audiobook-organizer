@@ -59,7 +59,7 @@
 |---|------|---------|--------|
 | 8 | **Activity page mobile layout** | Collapsible filter drawer for mobile | ✅ Fixed |
 | 9 | **Activity page adaptive refresh** | 5s when ops running, 30s when idle | ✅ Fixed |
-| 10 | **Version vs Snapshot UI polish** | Edge case handling | Open |
+| 10 | **Version vs Snapshot UI polish** | Edge case handling | ✅ Fixed — empty trays, auto-expand single-file |
 | 11 | **Compare snapshot wiring** | Load snapshot data on Compare click | ✅ Partially fixed — falls back to activity log |
 | 12 | **Background ISBN enrichment** | Scheduled maintenance task | ✅ Already implemented |
 | 13 | **Copy-on-write TTL tuning** | Verify on production | ✅ Verified — 23 files, TTL working |
@@ -72,13 +72,13 @@
 | 20 | **Stale interrupted operations** | Mark as failed on startup | ✅ Fixed |
 | 21 | **Settings save/buttons not visible** | Sticky floating buttons | ✅ Already implemented |
 | 22 | **iTunes sync dialog pre-fill from config** | Auto-fill XML path | ✅ Fixed |
-| 23 | **iTunes sync should support ITL** | Read directly from ITL | Open — tied to XML deprecation |
+| 23 | **iTunes sync from ITL directly** | ParseLibrary auto-detects XML vs ITL | ✅ Fixed — point sync at ITL file and it just works |
 | 24 | **Force Import always greyed out** | Disabled condition fixed | ✅ Fixed |
 | 25 | **ITL write-back — multi-file books** | Per-file itunes_path via book_files | ✅ Fixed — 176K tracks updated |
 | 26 | **Files & History layout — separate version boxes** | Path-based labels when same format | ✅ Fixed |
 | 27 | **Files & History — show individual files** | book_files API + frontend | ✅ Fixed — 114K files tracked |
 | 28 | **Track PIDs sorted by track number** | Sorted in iTunes panel | ✅ Fixed |
-| 29 | **Deprecate XML functions** | Read from ITL directly | Open — long term |
+| 29 | **Deprecate XML functions** | ParseLibrary now auto-detects ITL vs XML. Can switch sync to ITL path. | ✅ Infrastructure done — XML still works as fallback |
 
 ---
 
