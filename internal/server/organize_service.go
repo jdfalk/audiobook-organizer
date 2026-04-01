@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -199,10 +199,19 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 				continue
 			}
 		}
-		// Skip if already in root directory
+		// If already in root directory, check if path needs updating based on current metadata
 		if config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
-			log.Debug("Organize: Skipping book already in RootDir: %s (RootDir: %s)", book.FilePath, config.AppConfig.RootDir)
-			continue
+			needsReOrganize, err := orgSvc.bookNeedsReOrganize(&book, log)
+			if err != nil {
+				log.Debug("Organize: Cannot compute target for %s: %s", book.Title, err.Error())
+				continue
+			}
+			if !needsReOrganize {
+				log.Debug("Organize: Skipping book already correctly organized: %s", book.FilePath)
+				continue
+			}
+			log.Info("Organize: Book in RootDir needs re-organization: %s", book.Title)
+			// Fall through to include in organize list
 		}
 		// Skip if file doesn't exist
 		info, err := os.Stat(book.FilePath)
@@ -238,6 +247,112 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 	return booksToOrganize
 }
 
+// bookNeedsReOrganize checks whether a book already in RootDir needs to be
+// moved because its current path doesn't match the target path derived from
+// current metadata.
+func (orgSvc *OrganizeService) bookNeedsReOrganize(book *database.Book, log logger.Logger) (bool, error) {
+	org := organizer.NewOrganizer(&config.AppConfig)
+
+	info, err := os.Stat(book.FilePath)
+	if err != nil {
+		return false, err
+	}
+
+	if info.IsDir() {
+		targetDir, err := org.GenerateTargetDirPath(book)
+		if err != nil {
+			return false, err
+		}
+		return book.FilePath != targetDir, nil
+	}
+
+	targetPath, err := org.GenerateTargetPath(book)
+	if err != nil {
+		return false, err
+	}
+	return book.FilePath != targetPath, nil
+}
+
+// reOrganizeInPlace renames/moves a book that is already in RootDir to its
+// correct location based on current metadata. Returns the new path.
+func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger.Logger) (string, error) {
+	org := organizer.NewOrganizer(&config.AppConfig)
+	oldPath := book.FilePath
+
+	info, err := os.Stat(oldPath)
+	if err != nil {
+		return "", fmt.Errorf("cannot stat %s: %w", oldPath, err)
+	}
+
+	var targetPath string
+	if info.IsDir() {
+		targetPath, err = org.GenerateTargetDirPath(book)
+	} else {
+		targetPath, err = org.GenerateTargetPath(book)
+	}
+	if err != nil {
+		return "", err
+	}
+
+	if oldPath == targetPath {
+		return targetPath, nil
+	}
+
+	// Create parent directory for target
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return "", fmt.Errorf("failed to create target directory: %w", err)
+	}
+
+	// Rename (move) the file or directory
+	if err := os.Rename(oldPath, targetPath); err != nil {
+		return "", fmt.Errorf("failed to rename %s -> %s: %w", oldPath, targetPath, err)
+	}
+
+	// Update the book record
+	book.FilePath = targetPath
+	if _, err := orgSvc.db.UpdateBook(book.ID, book); err != nil {
+		log.Warn("Failed to update book path for %s: %s", book.ID, err.Error())
+	}
+
+	// Update book_files paths if this is a directory book
+	if info.IsDir() {
+		if bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID); bfErr == nil {
+			for _, bf := range bookFiles {
+				if strings.HasPrefix(bf.FilePath, oldPath) {
+					bf.FilePath = filepath.Join(targetPath, strings.TrimPrefix(bf.FilePath, oldPath+"/"))
+					if bf.FilePath != "" {
+						bf.ITunesPath = computeITunesPath(bf.FilePath)
+					}
+					_ = orgSvc.db.UpdateBookFile(bf.ID, &bf)
+				}
+			}
+		}
+	}
+
+	// Try to remove the now-empty parent directory tree
+	orgSvc.cleanupEmptyParents(filepath.Dir(oldPath), config.AppConfig.RootDir, log)
+
+	log.Info("Re-organized: %s → %s", oldPath, targetPath)
+	return targetPath, nil
+}
+
+// cleanupEmptyParents removes empty directories from dir up to (but not
+// including) stopAt.
+func (orgSvc *OrganizeService) cleanupEmptyParents(dir, stopAt string, log logger.Logger) {
+	for dir != stopAt && strings.HasPrefix(dir, stopAt) && dir != "/" {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			break
+		}
+		if err := os.Remove(dir); err != nil {
+			log.Debug("Could not remove empty dir %s: %s", dir, err.Error())
+			break
+		}
+		log.Debug("Removed empty directory: %s", dir)
+		dir = filepath.Dir(dir)
+	}
+}
+
 func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, log logger.Logger, operationID string) *OrganizeStats {
 	org := organizer.NewOrganizer(&config.AppConfig)
 	stats := &OrganizeStats{Total: len(booksToOrganize)}
@@ -259,10 +374,15 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			isDir = true
 		}
 
+		// If book is already in RootDir, re-organize via rename instead of copy
+		alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
+
 		var newPath string
 		var err error
 
-		if isDir {
+		if alreadyInRoot {
+			newPath, err = orgSvc.reOrganizeInPlace(&book, log)
+		} else if isDir {
 			// Multi-file book: organize each segment file into the target directory
 			newPath, err = orgSvc.organizeDirectoryBook(org, &book, log)
 		} else {
@@ -306,19 +426,37 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			continue
 		}
 
-		// Version-aware organize: create a new book record for the organized copy,
-		// keep the original record pointing at the source (e.g. iTunes).
-		// Link them as versions with the organized copy as primary.
-		createdBook, err := orgSvc.createOrganizedVersion(org, &book, newPath, isDir, operationID, log)
-		if err != nil {
-			stats.Failed++
-			continue
+		if alreadyInRoot {
+			// Re-organized in place — no new version needed, just record the rename
+			log.Info("Re-organized %s: %s → %s", book.Title, oldPath, newPath)
+			stats.Organized++
+
+			if operationID != "" {
+				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
+					ID:          ulid.Make().String(),
+					OperationID: operationID,
+					BookID:      book.ID,
+					ChangeType:  "organize_rename",
+					FieldName:   "file_path",
+					OldValue:    oldPath,
+					NewValue:    newPath,
+				})
+			}
+		} else {
+			// Version-aware organize: create a new book record for the organized copy,
+			// keep the original record pointing at the source (e.g. iTunes).
+			// Link them as versions with the organized copy as primary.
+			createdBook, err := orgSvc.createOrganizedVersion(org, &book, newPath, isDir, operationID, log)
+			if err != nil {
+				stats.Failed++
+				continue
+			}
+
+			log.Info("Organized %s: created version %s → %s (original kept at %s)",
+				book.Title, createdBook.ID, newPath, oldPath)
+
+			stats.Organized++
 		}
-
-		log.Info("Organized %s: created version %s → %s (original kept at %s)",
-			book.Title, createdBook.ID, newPath, oldPath)
-
-		stats.Organized++
 
 		// Collect ITL update if this book came from iTunes
 		if book.ITunesPersistentID != nil {

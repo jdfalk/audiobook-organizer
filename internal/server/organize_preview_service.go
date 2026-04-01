@@ -1,5 +1,5 @@
 // file: internal/server/organize_preview_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1a2b3c4-d5e6-7890-abcd-ef1234567890
 
 package server
@@ -59,11 +59,12 @@ func (ops *OrganizePreviewService) PreviewOrganize(bookID string) (*OrganizePrev
 
 	currentPath := book.FilePath
 	protected := isProtectedPath(currentPath)
+	alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(currentPath, config.AppConfig.RootDir)
 	needsCopy := false
 	needsRename := currentPath != targetPath
 
-	// Determine if copy is needed: file is outside the library root
-	if config.AppConfig.RootDir != "" && !strings.HasPrefix(currentPath, config.AppConfig.RootDir) {
+	// Determine if copy is needed: file is outside the library root and not protected-only
+	if !alreadyInRoot {
 		needsCopy = true
 	}
 
@@ -75,8 +76,8 @@ func (ops *OrganizePreviewService) PreviewOrganize(bookID string) (*OrganizePrev
 
 	var steps []OrganizePreviewStep
 
-	// Step 1: Protected path warning
-	if protected {
+	// Step 1: Protected path warning (only for books outside RootDir)
+	if protected && !alreadyInRoot {
 		steps = append(steps, OrganizePreviewStep{
 			Action:      "warning",
 			Description: "Source file is in a protected path (import/iTunes). A copy will be created; the original will not be modified.",
@@ -84,8 +85,8 @@ func (ops *OrganizePreviewService) PreviewOrganize(bookID string) (*OrganizePrev
 		})
 	}
 
-	// Step 2: Copy to library
-	if needsCopy {
+	// Step 2: Copy to library (only for books outside RootDir)
+	if needsCopy && !alreadyInRoot {
 		desc := "Copy to library folder"
 		if protected {
 			desc = "Copy from protected source to library folder"
@@ -98,11 +99,16 @@ func (ops *OrganizePreviewService) PreviewOrganize(bookID string) (*OrganizePrev
 		})
 	}
 
-	// Step 3: Rename (only if not copying — copy already places at target)
+	// Step 3: Rename — for books already in RootDir that need a path update,
+	// or for non-copy cases where the path differs.
 	if needsRename && !needsCopy {
+		desc := "Rename file"
+		if alreadyInRoot {
+			desc = "Rename to match updated metadata"
+		}
 		steps = append(steps, OrganizePreviewStep{
 			Action:      "rename",
-			Description: "Rename file",
+			Description: desc,
 			From:        currentPath,
 			To:          targetPath,
 		})

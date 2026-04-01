@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -135,6 +135,17 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 // without actually performing the move. Used by preview rename and organize.
 func (o *Organizer) GenerateTargetPath(book *database.Book) (string, error) {
 	return o.generateTargetPath(book)
+}
+
+// GenerateTargetDirPath returns the target directory path for a directory-based
+// (multi-file) book. It uses the folder naming pattern only (no file name).
+func (o *Organizer) GenerateTargetDirPath(book *database.Book) (string, error) {
+	folderPath, err := o.expandPattern(o.config.FolderNamingPattern, book)
+	if err != nil {
+		return "", fmt.Errorf("folder pattern: %w", err)
+	}
+	folderPath = sanitizePath(folderPath)
+	return filepath.Join(o.config.RootDir, folderPath), nil
 }
 
 // generateTargetPath creates the target file path based on naming patterns
