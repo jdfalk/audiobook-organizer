@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -1492,15 +1492,19 @@ type enrichBookFileResult struct {
 	Changed          bool   `json:"changed"`
 	Applied          bool   `json:"applied"`
 	Error            string `json:"error,omitempty"`
+	Warning          string `json:"warning,omitempty"`
 }
 
 // handleEnrichBookFiles iterates all book_files rows and fills in missing or
 // zero-valued fields:
 //   - track_number: parsed from leading digits in the filename
 //   - track_count:  total number of files for the owning book
-//   - file_size:    from os.Stat when currently 0
+//   - file_size:    from os.Stat when currently 0 or suspiciously small (<1000 bytes)
 //   - format:       from filepath.Ext when empty
 //   - original_filename: from filepath.Base when empty
+//
+// Also detects book_files where file_path points to a directory (not an audio
+// file) and flags them with a warning.
 //
 // Query params:
 //   - dry_run=true  (default) — report what would change without writing
@@ -1570,14 +1574,27 @@ func (s *Server) handleEnrichBookFiles(c *gin.Context) {
 			}
 
 			// --- 3. file_size from os.Stat ------------------------------------
-			if f.FileSize == 0 && !f.Missing {
+			// Fix sizes that are zero, suspiciously small (< 1000 bytes, likely
+			// a directory inode size), or where the file_path points to a
+			// directory instead of an actual audio file.
+			if !f.Missing {
+				needsSizeFix := f.FileSize == 0 || f.FileSize < 1000
 				if info, statErr := os.Stat(f.FilePath); statErr == nil {
-					newSize := info.Size()
-					if newSize > 0 {
+					if info.IsDir() {
+						// file_path points to a directory, not a file — flag
+						// it so it can be fixed. We can't determine the real
+						// size without knowing the actual file.
+						result.Warning = "file_path is a directory, not an audio file"
 						result.FileSizeOld = f.FileSize
-						result.FileSizeNew = newSize
-						f.FileSize = newSize
 						changed = true
+					} else if needsSizeFix {
+						newSize := info.Size()
+						if newSize > 0 && newSize != f.FileSize {
+							result.FileSizeOld = f.FileSize
+							result.FileSizeNew = newSize
+							f.FileSize = newSize
+							changed = true
+						}
 					}
 				}
 			}
