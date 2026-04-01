@@ -3116,6 +3116,7 @@ export interface OrganizePreviewStep {
   description: string;
   from?: string;
   to?: string;
+  files?: string[];
   tags?: Record<string, unknown>;
   cover_url?: string;
   warning?: string;
@@ -3128,6 +3129,8 @@ export interface OrganizePreviewResponse {
   current_path: string;
   target_path: string;
   is_protected: boolean;
+  has_book_files: boolean;
+  book_file_count: number;
 }
 
 export interface OrganizeResult {
