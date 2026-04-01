@@ -1560,6 +1560,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/enrich-book-files", s.handleEnrichBookFiles)
 			protected.POST("/maintenance/dedup-books", s.handleDedupBooks)
 			protected.POST("/maintenance/fix-book-file-paths", s.handleFixBookFilePaths)
+			protected.POST("/maintenance/refetch-missing-authors", s.handleRefetchMissingAuthors)
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
