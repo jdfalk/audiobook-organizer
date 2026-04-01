@@ -225,23 +225,30 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 			log.Info("Organize: Book in RootDir needs re-organization: %s", book.Title)
 			// Fall through to include in organize list
 		}
-		// Skip if file doesn't exist
-		info, err := os.Stat(book.FilePath)
-		if os.IsNotExist(err) {
-			log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
+		// Quick check: skip if file_path is empty
+		if book.FilePath == "" {
 			continue
 		}
-		// For directory-based (multi-file) books, verify book files exist on disk
-		if err == nil && info.IsDir() {
-			bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID)
-			if bfErr == nil && len(bookFiles) > 0 {
-				missingCount := 0
-				for _, bf := range bookFiles {
-					if bf.FilePath == "" || bf.Missing {
-						continue
-					}
-					if _, serr := os.Stat(bf.FilePath); os.IsNotExist(serr) {
-						missingCount++
+		// Defer os.Stat to the actual organize phase — stat calls on 140K+ files
+		// during scanning are the main bottleneck. Only check existence for books
+		// that aren't already in RootDir (they need to be copied, so source must exist).
+		if config.AppConfig.RootDir == "" || !strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
+			info, err := os.Stat(book.FilePath)
+			if os.IsNotExist(err) {
+				log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
+				continue
+			}
+			// For directory-based (multi-file) books outside RootDir, verify files exist
+			if err == nil && info.IsDir() {
+				bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID)
+				if bfErr == nil && len(bookFiles) > 0 {
+					missingCount := 0
+					for _, bf := range bookFiles {
+						if bf.FilePath == "" || bf.Missing {
+							continue
+						}
+						if _, serr := os.Stat(bf.FilePath); os.IsNotExist(serr) {
+							missingCount++
 					}
 				}
 				if missingCount > 0 {
@@ -251,6 +258,7 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 				}
 			}
 		}
+		} // end of non-RootDir stat check
 		booksToOrganize = append(booksToOrganize, book)
 	}
 	if skippedDeleted > 0 {
