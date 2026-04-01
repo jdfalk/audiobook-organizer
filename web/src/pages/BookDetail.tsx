@@ -2161,6 +2161,14 @@ export const BookDetail = () => {
                       </Table>
                     )}
 
+                    {step.files && step.files.length > 0 && (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Files to copy: {step.files.join(', ')}
+                        </Typography>
+                      </Box>
+                    )}
+
                     {step.tags && (
                       <>
                         <Button
@@ -2209,7 +2217,7 @@ export const BookDetail = () => {
             variant="contained"
             startIcon={<BuildIcon />}
             onClick={handleApplyOrganize}
-            disabled={applyingOrganize || (organizePreview?.is_protected ?? false)}
+            disabled={applyingOrganize}
           >
             Apply
           </Button>
