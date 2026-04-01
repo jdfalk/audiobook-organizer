@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -235,36 +235,30 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 		if book.FilePath == "" {
 			continue
 		}
-		// Defer os.Stat to the actual organize phase — stat calls on 140K+ files
-		// during scanning are the main bottleneck. Only check existence for books
-		// that aren't already in RootDir (they need to be copied, so source must exist).
+		// For books outside RootDir, rely on book_files to determine readiness.
+		// Avoid os.Stat on 140K+ paths during filter — that was the main bottleneck.
+		// organizeBook() will skip individual missing files when it runs.
 		if config.AppConfig.RootDir == "" || !strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
-			info, err := os.Stat(book.FilePath)
-			if os.IsNotExist(err) {
-				log.Debug("Organize: Skipping non-existent file: %s", book.FilePath)
+			bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID)
+			if bfErr != nil || len(bookFiles) == 0 {
+				// No book_files: can't organize without knowing which files to copy.
+				log.Debug("Organize: Skipping %s — no book_files in DB", book.Title)
+				skippedMissingFiles++
 				continue
 			}
-			// For directory-based (multi-file) books outside RootDir, verify files exist
-			if err == nil && info.IsDir() {
-				bookFiles, bfErr := orgSvc.db.GetBookFiles(book.ID)
-				if bfErr == nil && len(bookFiles) > 0 {
-					missingCount := 0
-					for _, bf := range bookFiles {
-						if bf.FilePath == "" || bf.Missing {
-							continue
-						}
-						if _, serr := os.Stat(bf.FilePath); os.IsNotExist(serr) {
-							missingCount++
-						}
-					}
-					if missingCount > 0 {
-						log.Debug("Organize: Skipping %s — %d book file(s) missing on disk", book.Title, missingCount)
-						skippedMissingFiles++
-						continue
-					}
+			// Count how many active (non-missing) book files exist
+			activeCount := 0
+			for _, bf := range bookFiles {
+				if bf.FilePath != "" && !bf.Missing {
+					activeCount++
 				}
 			}
-		} // end of non-RootDir stat check
+			if activeCount == 0 {
+				log.Debug("Organize: Skipping %s — all book_files marked missing", book.Title)
+				skippedMissingFiles++
+				continue
+			}
+		}
 		booksToOrganize = append(booksToOrganize, book)
 	}
 	if skippedDeleted > 0 {
@@ -559,47 +553,26 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 }
 
 // organizeDirectoryBook handles organizing a multi-file book where file_path is a directory.
-// It finds all book files, organizes them into the target directory, and returns the new directory path.
+// It always uses book_files from the database — no directory scanning fallback.
+// Returns the target directory path.
 func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, book *database.Book, log logger.Logger) (string, error) {
-	// Get book files from DB
 	bookFiles, err := orgSvc.db.GetBookFiles(book.ID)
+	if err != nil || len(bookFiles) == 0 {
+		return "", fmt.Errorf("no book_files for %s — cannot organize without known files", book.ID)
+	}
 
 	var segmentPaths []string
-	if err == nil && len(bookFiles) > 0 {
-		for _, bf := range bookFiles {
-			if bf.FilePath != "" && !bf.Missing {
-				segmentPaths = append(segmentPaths, bf.FilePath)
-			}
-		}
-	}
-
-	// If no book files in DB, scan the directory for audio files
-	if len(segmentPaths) == 0 {
-		entries, err := os.ReadDir(book.FilePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read directory: %w", err)
-		}
-		audioExts := map[string]bool{
-			".m4b": true, ".m4a": true, ".mp3": true, ".aac": true,
-			".ogg": true, ".opus": true, ".flac": true, ".wma": true,
-			".wav": true,
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if audioExts[ext] {
-				segmentPaths = append(segmentPaths, filepath.Join(book.FilePath, entry.Name()))
-			}
+	for _, bf := range bookFiles {
+		if bf.FilePath != "" && !bf.Missing {
+			segmentPaths = append(segmentPaths, bf.FilePath)
 		}
 	}
 
 	if len(segmentPaths) == 0 {
-		return "", fmt.Errorf("no audio files found in directory: %s", book.FilePath)
+		return "", fmt.Errorf("all book_files for %s are marked missing — skipping", book.ID)
 	}
 
-	log.Info("Organizing %d segment files for %s", len(segmentPaths), book.Title)
+	log.Info("Organizing %d segment file(s) for %s (from book_files)", len(segmentPaths), book.Title)
 
 	targetDir, _, err := org.OrganizeBookDirectory(book, segmentPaths)
 	if err != nil {

@@ -1,5 +1,5 @@
 // file: internal/server/organize_preview_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f1a2b3c4-d5e6-7890-abcd-ef1234567890
 
 package server
@@ -59,23 +59,21 @@ func (ops *OrganizePreviewService) PreviewOrganize(bookID string) (*OrganizePrev
 	org := organizer.NewOrganizer(&config.AppConfig)
 	currentPath := book.FilePath
 
-	// Detect if this is a directory-based book (flat iTunes author directory or multi-file).
-	// We check both the path extension and os.Stat to be sure.
-	isDirectoryBook := isDirectoryPath(currentPath)
-
-	// Fetch book_files to determine if this is a flat iTunes directory containing
-	// files from multiple books. In that case, we copy individual files rather than
-	// the whole directory.
+	// Always fetch book_files — this is the authoritative source for what files
+	// belong to this book. We use it for both directory books and single-file books
+	// (a single-file book has exactly one book_file entry).
 	var bookFiles []database.BookFile
 	var activeBookFiles []database.BookFile
-	if isDirectoryBook {
-		bookFiles, _ = ops.db.GetBookFiles(bookID)
-		for _, bf := range bookFiles {
-			if bf.FilePath != "" && !bf.Missing {
-				activeBookFiles = append(activeBookFiles, bf)
-			}
+	bookFiles, _ = ops.db.GetBookFiles(bookID)
+	for _, bf := range bookFiles {
+		if bf.FilePath != "" && !bf.Missing {
+			activeBookFiles = append(activeBookFiles, bf)
 		}
 	}
+
+	// Determine whether this is a directory-based (multi-file) book.
+	// Prefer book_files count over path extension / os.Stat.
+	isDirectoryBook := len(activeBookFiles) > 1 || isDirectoryPath(currentPath)
 
 	// Compute the target path. Directory books use the folder naming pattern only.
 	var targetPath string
