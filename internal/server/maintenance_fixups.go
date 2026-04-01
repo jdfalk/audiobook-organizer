@@ -21,6 +21,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // readByFixResult describes one book that was (or would be) fixed.
@@ -2511,3 +2512,223 @@ func filterLive(books []database.Book, deletedIDs map[string]bool) []database.Bo
 	return out
 }
 
+
+// ---------------------------------------------------------------------------
+// Refetch missing authors
+// ---------------------------------------------------------------------------
+
+// refetchMissingAuthorsResult describes one book that was examined/fixed.
+type refetchMissingAuthorsResult struct {
+	BookID       string `json:"book_id"`
+	BookTitle    string `json:"book_title"`
+	FilePath     string `json:"file_path,omitempty"`
+	AuthorFound  string `json:"author_found,omitempty"`
+	AuthorSource string `json:"author_source,omitempty"` // e.g. "tag.AlbumArtist (album_artist)", "tag.Artist"
+	AuthorID     *int   `json:"author_id,omitempty"`
+	Applied      bool   `json:"applied"`
+	Skipped      bool   `json:"skipped"`
+	SkipReason   string `json:"skip_reason,omitempty"`
+	Error        string `json:"error,omitempty"`
+}
+
+// handleRefetchMissingAuthors queries books with a NULL author_id and attempts
+// to resolve the author by re-reading audio file tags (album_artist > artist).
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update the database
+func (s *Server) handleRefetchMissingAuthors(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	const batchSize = 500
+	offset := 0
+	var results []refetchMissingAuthorsResult
+	resolvedCount := 0
+	skippedCount := 0
+	errorCount := 0
+
+	for {
+		batch, err := store.GetAllBooks(batchSize, offset)
+		if err != nil {
+			internalError(c, "failed to list books", err)
+			return
+		}
+		if len(batch) == 0 {
+			break
+		}
+
+		for i := range batch {
+			book := &batch[i]
+
+			// Only consider books with no author and a non-empty title that
+			// isn't itself a "read by narrator" leftover.
+			if book.AuthorID != nil {
+				continue
+			}
+			if book.Title == "" {
+				continue
+			}
+			if strings.HasPrefix(strings.ToLower(book.Title), "read by ") {
+				continue
+			}
+
+			result := refetchMissingAuthorsResult{
+				BookID:    book.ID,
+				BookTitle: book.Title,
+				FilePath:  book.FilePath,
+			}
+
+			// Determine which file path to read tags from.
+			// Prefer the book's own file_path; fall back to the first book_file.
+			tagPath := book.FilePath
+			if tagPath == "" {
+				files, fErr := store.GetBookFiles(book.ID)
+				if fErr == nil && len(files) > 0 {
+					tagPath = files[0].FilePath
+				}
+			}
+
+			if tagPath == "" {
+				result.Skipped = true
+				result.SkipReason = "no file path available"
+				skippedCount++
+				results = append(results, result)
+				continue
+			}
+
+			// Extract tags from the audio file.
+			meta, mErr := metadata.ExtractMetadata(tagPath, nil)
+			if mErr != nil {
+				result.Error = fmt.Sprintf("ExtractMetadata: %v", mErr)
+				errorCount++
+				results = append(results, result)
+				continue
+			}
+
+			// Resolve the narrator name for this book (used to skip the artist
+			// field when it clearly holds the narrator, not the author).
+			narratorName := ""
+			if book.Narrator != nil {
+				narratorName = strings.ToLower(strings.TrimSpace(*book.Narrator))
+			}
+			if narratorName == "" && meta.Narrator != "" {
+				narratorName = strings.ToLower(strings.TrimSpace(meta.Narrator))
+			}
+
+			// Apply tag priority: album_artist > artist (skip artist if it
+			// matches the known narrator).
+			// meta.Artist is already resolved from album_artist > artist > composer
+			// by ExtractMetadata. We trust album_artist unconditionally; for
+			// artist-only sources we check it doesn't equal the narrator.
+			candidateAuthor := strings.TrimSpace(meta.Artist)
+			if candidateAuthor == "" {
+				result.Skipped = true
+				result.SkipReason = "no author found in file tags"
+				skippedCount++
+				results = append(results, result)
+				continue
+			}
+
+			// If the resolved author comes from the plain artist tag (not
+			// album_artist) and it matches the narrator, skip it.
+			lc := strings.ToLower(candidateAuthor)
+			if narratorName != "" && lc == narratorName {
+				// Only skip when the source was artist (not album_artist).
+				// meta.AuthorSource contains the tag source string.
+				if !strings.Contains(meta.AuthorSource, "album_artist") {
+					result.Skipped = true
+					result.SkipReason = "artist tag matches narrator; cannot determine author"
+					skippedCount++
+					results = append(results, result)
+					continue
+				}
+			}
+
+			normalizedName := NormalizeAuthorName(candidateAuthor)
+			if normalizedName == "" {
+				result.Skipped = true
+				result.SkipReason = "normalized author name is empty"
+				skippedCount++
+				results = append(results, result)
+				continue
+			}
+
+			result.AuthorFound = normalizedName
+			result.AuthorSource = meta.AuthorSource
+
+			if dryRun {
+				// In dry-run mode, look up (but don't create) the author so
+				// the response shows whether they already exist.
+				existing, _ := store.GetAuthorByName(normalizedName)
+				if existing != nil {
+					result.AuthorID = &existing.ID
+				}
+				resolvedCount++
+				results = append(results, result)
+				continue
+			}
+
+			// Look up or create the author.
+			author, lookupErr := store.GetAuthorByName(normalizedName)
+			if lookupErr != nil {
+				author, lookupErr = store.CreateAuthor(normalizedName)
+				if lookupErr != nil {
+					result.Error = fmt.Sprintf("CreateAuthor: %v", lookupErr)
+					errorCount++
+					results = append(results, result)
+					continue
+				}
+			}
+			if author == nil {
+				result.Error = "author lookup returned nil"
+				errorCount++
+				results = append(results, result)
+				continue
+			}
+
+			// Re-fetch book to avoid stale data (UpdateBook does full column replacement).
+			current, getErr := store.GetBookByID(book.ID)
+			if getErr != nil || current == nil {
+				result.Error = fmt.Sprintf("GetBookByID: %v", getErr)
+				errorCount++
+				results = append(results, result)
+				continue
+			}
+
+			current.AuthorID = &author.ID
+			if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
+				result.Error = updateErr.Error()
+				errorCount++
+				log.Printf("[WARN] refetch-missing-authors: failed to update book %s: %v", book.ID, updateErr)
+			} else {
+				result.AuthorID = &author.ID
+				result.Applied = true
+				resolvedCount++
+				log.Printf("[INFO] refetch-missing-authors: set author %q (id=%d) on book %s (%q)",
+					normalizedName, author.ID, book.ID, book.Title)
+			}
+
+			results = append(results, result)
+		}
+
+		if len(batch) < batchSize {
+			break
+		}
+		offset += batchSize
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":        dryRun,
+		"total_examined": len(results),
+		"resolved":       resolvedCount,
+		"skipped":        skippedCount,
+		"errors":         errorCount,
+		"results":        results,
+	})
+}
