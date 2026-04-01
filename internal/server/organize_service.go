@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -176,7 +176,19 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
 	booksToOrganize := make([]database.Book, 0)
 	skippedMissingFiles := 0
-	for _, book := range allBooks {
+	skippedDeleted := 0
+	for i, book := range allBooks {
+		// Update progress during filtering so the UI doesn't show 0/0
+		if i%500 == 0 || i == len(allBooks)-1 {
+			log.UpdateProgress(i, len(allBooks), fmt.Sprintf("Scanning: %d/%d books", i, len(allBooks)))
+		}
+
+		// Skip soft-deleted books
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			skippedDeleted++
+			continue
+		}
+
 		// Skip non-primary versions — unless they're the only version in their VG
 		// (i.e., no organized primary copy exists yet)
 		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
@@ -240,6 +252,9 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 			}
 		}
 		booksToOrganize = append(booksToOrganize, book)
+	}
+	if skippedDeleted > 0 {
+		log.Info("Organize: Skipped %d soft-deleted book(s)", skippedDeleted)
 	}
 	if skippedMissingFiles > 0 {
 		log.Info("Organize: Skipped %d book(s) with missing book files", skippedMissingFiles)

@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -10,11 +10,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
@@ -901,13 +903,73 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 			continue
 		}
 
-		// Step 3: Delete file if requested
+		// Step 3: Delete file if requested (only from organizer root, never from protected/import paths)
 		if deleteFiles && book.FilePath != "" {
-			if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
-				result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete file (tombstone preserved): %v", book.ID, err))
-				// DB record gone, file still exists, tombstone preserved for sweeper
-			} else if err == nil {
-				result.FilesDeleted++
+			if isProtectedPath(book.FilePath) {
+				log.Printf("[DEBUG] purge: skipping file deletion for %s — protected path: %s", book.ID, book.FilePath)
+			} else {
+				info, statErr := os.Stat(book.FilePath)
+				if statErr == nil && info.IsDir() {
+					// Directory-based book: remove all book files then the directory
+					if bookFiles, bfErr := svc.store.GetBookFiles(book.ID); bfErr == nil {
+						for _, bf := range bookFiles {
+							if bf.FilePath != "" && !isProtectedPath(bf.FilePath) {
+								if rmErr := os.Remove(bf.FilePath); rmErr != nil && !os.IsNotExist(rmErr) {
+									result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete book file %s: %v", book.ID, bf.FilePath, rmErr))
+								}
+							}
+						}
+					}
+					// Remove the directory if it is now empty
+					if entries, rdErr := os.ReadDir(book.FilePath); rdErr == nil && len(entries) == 0 {
+						if rmErr := os.Remove(book.FilePath); rmErr != nil && !os.IsNotExist(rmErr) {
+							result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to remove empty dir %s: %v", book.ID, book.FilePath, rmErr))
+						} else if rmErr == nil {
+							result.FilesDeleted++
+							// Also clean up empty parent dirs up to RootDir
+							if config.AppConfig.RootDir != "" {
+								parentDir := filepath.Dir(book.FilePath)
+								for parentDir != config.AppConfig.RootDir &&
+									strings.HasPrefix(parentDir, config.AppConfig.RootDir) &&
+									parentDir != "/" {
+									pe, peErr := os.ReadDir(parentDir)
+									if peErr != nil || len(pe) > 0 {
+										break
+									}
+									if os.Remove(parentDir) != nil {
+										break
+									}
+									parentDir = filepath.Dir(parentDir)
+								}
+							}
+						}
+					}
+				} else if statErr == nil {
+					// Single-file book
+					if err := os.Remove(book.FilePath); err != nil && !os.IsNotExist(err) {
+						result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete file (tombstone preserved): %v", book.ID, err))
+						// DB record gone, file still exists, tombstone preserved for sweeper
+					} else if err == nil {
+						result.FilesDeleted++
+						// Clean up empty parent dirs up to RootDir
+						if config.AppConfig.RootDir != "" {
+							parentDir := filepath.Dir(book.FilePath)
+							for parentDir != config.AppConfig.RootDir &&
+								strings.HasPrefix(parentDir, config.AppConfig.RootDir) &&
+								parentDir != "/" {
+								pe, peErr := os.ReadDir(parentDir)
+								if peErr != nil || len(pe) > 0 {
+									break
+								}
+								if os.Remove(parentDir) != nil {
+									break
+								}
+								parentDir = filepath.Dir(parentDir)
+							}
+						}
+					}
+				}
+				// If statErr is os.IsNotExist, file is already gone — that's fine
 			}
 		}
 
