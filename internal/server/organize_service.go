@@ -282,12 +282,12 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 func (orgSvc *OrganizeService) bookNeedsReOrganize(book *database.Book, log logger.Logger) (bool, error) {
 	org := organizer.NewOrganizer(&config.AppConfig)
 
-	info, err := os.Stat(book.FilePath)
-	if err != nil {
-		return false, err
-	}
+	// Determine dir vs file by extension — avoids os.Stat (the main scan bottleneck)
+	ext := strings.ToLower(filepath.Ext(book.FilePath))
+	audioExts := map[string]bool{".m4b": true, ".m4a": true, ".mp3": true, ".flac": true, ".ogg": true, ".opus": true, ".wma": true, ".aac": true}
+	isFile := audioExts[ext]
 
-	if info.IsDir() {
+	if !isFile {
 		targetDir, err := org.GenerateTargetDirPath(book)
 		if err != nil {
 			return false, err
