@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"path/filepath"
 
@@ -41,10 +42,12 @@ type OrganizeRequest struct {
 }
 
 type OrganizeStats struct {
-	Organized int
-	Skipped   int
-	Failed    int
-	Total     int
+	Organized     int
+	ReOrganized   int
+	AlreadyCorrect int
+	Skipped       int // soft-deleted / non-primary / missing file skips
+	Failed        int
+	Total         int
 }
 
 // PerformOrganizeWithID executes organization with checkpoint support.
@@ -118,14 +121,15 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	}
 
 	// Filter books that need organizing
-	booksToOrganize := orgSvc.filterBooksNeedingOrganization(allBooks, log)
+	booksToOrganize, alreadyCorrect := orgSvc.filterBooksNeedingOrganization(allBooks, log)
 
-	logMsg = fmt.Sprintf("Found %d books that need organizing (out of %d total)", len(booksToOrganize), len(allBooks))
+	logMsg = fmt.Sprintf("Found %d books that need organizing, %d already correct (out of %d total)",
+		len(booksToOrganize), len(alreadyCorrect), len(allBooks))
 	log.Info("%s", logMsg)
 	log.Debug("Organize: %s", logMsg)
 
 	// Perform organization
-	stats := orgSvc.organizeBooks(ctx, booksToOrganize, log, req.OperationID)
+	stats := orgSvc.organizeBooks(ctx, booksToOrganize, alreadyCorrect, log, req.OperationID)
 
 	// Trigger automatic rescan if any books were organized
 	if stats.Organized > 0 {
@@ -173,8 +177,9 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 	log.Info("iTunes sync completed successfully")
 }
 
-func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) []database.Book {
+func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []database.Book, log logger.Logger) ([]database.Book, []database.Book) {
 	booksToOrganize := make([]database.Book, 0)
+	alreadyCorrect := make([]database.Book, 0)
 	skippedMissingFiles := 0
 	skippedDeleted := 0
 	for i, book := range allBooks {
@@ -219,7 +224,8 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 				continue
 			}
 			if !needsReOrganize {
-				log.Debug("Organize: Skipping book already correctly organized: %s", book.FilePath)
+				// Already in correct location — collect for stamping, don't log individually
+				alreadyCorrect = append(alreadyCorrect, book)
 				continue
 			}
 			log.Info("Organize: Book in RootDir needs re-organization: %s", book.Title)
@@ -249,15 +255,15 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 						}
 						if _, serr := os.Stat(bf.FilePath); os.IsNotExist(serr) {
 							missingCount++
+						}
+					}
+					if missingCount > 0 {
+						log.Debug("Organize: Skipping %s — %d book file(s) missing on disk", book.Title, missingCount)
+						skippedMissingFiles++
+						continue
 					}
 				}
-				if missingCount > 0 {
-					log.Debug("Organize: Skipping %s — %d book file(s) missing on disk", book.Title, missingCount)
-					skippedMissingFiles++
-					continue
-				}
 			}
-		}
 		} // end of non-RootDir stat check
 		booksToOrganize = append(booksToOrganize, book)
 	}
@@ -267,7 +273,7 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 	if skippedMissingFiles > 0 {
 		log.Info("Organize: Skipped %d book(s) with missing book files", skippedMissingFiles)
 	}
-	return booksToOrganize
+	return booksToOrganize, alreadyCorrect
 }
 
 // bookNeedsReOrganize checks whether a book already in RootDir needs to be
@@ -376,9 +382,9 @@ func (orgSvc *OrganizeService) cleanupEmptyParents(dir, stopAt string, log logge
 	}
 }
 
-func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, log logger.Logger, operationID string) *OrganizeStats {
+func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, alreadyCorrect []database.Book, log logger.Logger, operationID string) *OrganizeStats {
 	org := organizer.NewOrganizer(&config.AppConfig)
-	stats := &OrganizeStats{Total: len(booksToOrganize)}
+	stats := &OrganizeStats{Total: len(booksToOrganize) + len(alreadyCorrect)}
 
 	// Track location changes for iTunes ITL write-back
 	var itlUpdates []itunes.ITLLocationUpdate
@@ -432,8 +438,14 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		}
 
 		if oldPath == newPath {
-			log.Info("Skipped %s: already in correct location", book.Title)
-			stats.Skipped++
+			// Already in correct location (reached via organizeBooks path) — stamp and count
+			now := time.Now()
+			book.LastOrganizeOperationID = &operationID
+			book.LastOrganizedAt = &now
+			if _, updateErr := orgSvc.db.UpdateBook(book.ID, &book); updateErr != nil {
+				log.Debug("Organize: failed to stamp book %s: %s", book.ID, updateErr.Error())
+			}
+			stats.AlreadyCorrect++
 
 			if operationID != "" {
 				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
@@ -450,9 +462,17 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		}
 
 		if alreadyInRoot {
-			// Re-organized in place — no new version needed, just record the rename
+			// Re-organized in place — stamp and record the rename
+			now := time.Now()
+			book.LastOrganizeOperationID = &operationID
+			book.LastOrganizedAt = &now
+			// Note: reOrganizeInPlace already called UpdateBook; stamp here updates the in-memory copy.
+			// We issue a second lightweight update to persist the stamp fields.
+			if _, updateErr := orgSvc.db.UpdateBook(book.ID, &book); updateErr != nil {
+				log.Debug("Organize: failed to stamp re-organized book %s: %s", book.ID, updateErr.Error())
+			}
 			log.Info("Re-organized %s: %s → %s", book.Title, oldPath, newPath)
-			stats.Organized++
+			stats.ReOrganized++
 
 			if operationID != "" {
 				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
@@ -475,6 +495,14 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 				continue
 			}
 
+			// Stamp the new organized book record with this operation
+			now := time.Now()
+			createdBook.LastOrganizeOperationID = &operationID
+			createdBook.LastOrganizedAt = &now
+			if _, updateErr := orgSvc.db.UpdateBook(createdBook.ID, createdBook); updateErr != nil {
+				log.Debug("Organize: failed to stamp new book %s: %s", createdBook.ID, updateErr.Error())
+			}
+
 			log.Info("Organized %s: created version %s → %s (original kept at %s)",
 				book.Title, createdBook.ID, newPath, oldPath)
 
@@ -490,13 +518,27 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		}
 	}
 
+	// Stamp already-correct books with this operation ID
+	if operationID != "" && len(alreadyCorrect) > 0 {
+		stampNow := time.Now()
+		for i := range alreadyCorrect {
+			b := &alreadyCorrect[i]
+			b.LastOrganizeOperationID = &operationID
+			b.LastOrganizedAt = &stampNow
+			if _, updateErr := orgSvc.db.UpdateBook(b.ID, b); updateErr != nil {
+				log.Debug("Organize: failed to stamp already-correct book %s: %s", b.ID, updateErr.Error())
+			}
+		}
+		stats.AlreadyCorrect += len(alreadyCorrect)
+	}
+
 	// Write back location changes to iTunes Library.itl
 	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryWritePath != "" {
 		orgSvc.writeBackITLLocations(itlUpdates, log)
 	}
 
-	summary := fmt.Sprintf("Organization completed: %d organized, %d skipped, %d failed (of %d total)",
-		stats.Organized, stats.Skipped, stats.Failed, stats.Total)
+	summary := fmt.Sprintf("Organize complete: %d organized, %d re-organized, %d already correct (stamped), %d skipped",
+		stats.Organized, stats.ReOrganized, stats.AlreadyCorrect, stats.Skipped)
 	log.Info("%s", summary)
 
 	// Record summary as operation change
@@ -508,7 +550,8 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			ChangeType:  "organize_summary",
 			FieldName:   "stats",
 			OldValue:    "",
-			NewValue:    fmt.Sprintf("organized:%d skipped:%d failed:%d total:%d", stats.Organized, stats.Skipped, stats.Failed, stats.Total),
+			NewValue:    fmt.Sprintf("organized:%d re_organized:%d already_correct:%d skipped:%d failed:%d total:%d",
+				stats.Organized, stats.ReOrganized, stats.AlreadyCorrect, stats.Skipped, stats.Failed, stats.Total),
 		})
 	}
 

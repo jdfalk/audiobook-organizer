@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.47.0
+// version: 2.48.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -416,6 +416,10 @@ type Book struct {
 	MetadataUpdatedAt *time.Time `json:"metadata_updated_at,omitempty"`
 	// LastWrittenAt is set when metadata is written back to the audio files on disk.
 	LastWrittenAt *time.Time `json:"last_written_at,omitempty"`
+	// LastOrganizeOperationID is the operation ID of the last organize run that processed this book.
+	LastOrganizeOperationID *string `json:"last_organize_operation_id,omitempty"`
+	// LastOrganizedAt is when this book was last stamped by an organize run (organized, re-organized, or confirmed correct).
+	LastOrganizedAt *time.Time `json:"last_organized_at,omitempty"`
 	// MetadataReviewStatus tracks manual metadata matching: null, "no_match", "matched".
 	MetadataReviewStatus *string `json:"metadata_review_status,omitempty"`
 	// Cover art
