@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -894,6 +894,176 @@ func isDirEmpty(dir string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// ---------------------------------------------------------------------------
+// Garbage directory detection (cleanup-organize-mess)
+// ---------------------------------------------------------------------------
+
+// garbageDirResult describes a directory that looks like a file-fragment garbage
+// directory left behind by a failed or partial organize run.
+type garbageDirResult struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
+
+// isGarbageDirectory returns a non-empty reason string if the directory name
+// looks like a file fragment rather than a real book/author/series directory.
+// Examples of garbage:
+//   - "04_ Intro"     — starts with digits and underscore (chapter file fragment)
+//   - "04 - Intro"    — starts with digits and space-dash (chapter fragment)
+//   - "Hero's Trial - 04 - Intro"  — contains double-nested path fragment
+//   - Very short names (1-2 chars) that are not normal
+func isGarbageDirectory(name string) string {
+	if name == "" {
+		return ""
+	}
+
+	// Pattern: starts with 2-3 digits followed by underscore or space-dash
+	// e.g. "04_", "04 -", "004_", "1 -"
+	chapterFragmentRe := regexp.MustCompile(`^\d{1,3}[_ ][_\-\s]`)
+	if chapterFragmentRe.MatchString(name) {
+		return "starts with chapter number fragment"
+	}
+
+	// Pattern: purely numeric name (e.g. "04", "004")
+	pureNumericRe := regexp.MustCompile(`^\d+$`)
+	if pureNumericRe.MatchString(name) {
+		return "purely numeric directory name"
+	}
+
+	// Pattern: contains " - NN - " which looks like a double-nested segment
+	// e.g. "Hero's Trial - 04 - Intro"
+	doubleSegmentRe := regexp.MustCompile(` - \d{1,3} - `)
+	if doubleSegmentRe.MatchString(name) {
+		return "contains double-nested chapter segment pattern"
+	}
+
+	// Pattern: very short name (1 or 2 non-whitespace chars) that isn't a known
+	// abbreviation — typically leftover from a bad path split.
+	trimmed := strings.TrimSpace(name)
+	if len([]rune(trimmed)) <= 2 && !allAlpha(trimmed) {
+		return "suspiciously short non-alphabetic directory name"
+	}
+
+	return ""
+}
+
+// allAlpha returns true if every rune in s is a letter (handles Unicode).
+func allAlpha(s string) bool {
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return len(s) > 0
+}
+
+// handleCleanupOrganizeMess walks the audiobook root directory and reports
+// (or removes) directories that look like garbage left behind by a partial or
+// broken organize run, as well as empty directories.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would be removed without deleting
+//   - dry_run=false — actually delete empty directories; garbage dirs with files
+//     are always just reported (manual review required for non-empty garbage dirs)
+func (s *Server) handleCleanupOrganizeMess(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") == "true"
+	rootDir := config.AppConfig.RootDir
+
+	if rootDir == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir is not configured"})
+		return
+	}
+	if _, err := os.Stat(rootDir); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("root_dir not accessible: %v", err)})
+		return
+	}
+
+	var dirs []string
+	walkErr := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("[WARN] cleanup-organize-mess: walk error at %q: %v", path, err)
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if path == rootDir {
+			return nil
+		}
+		if strings.HasPrefix(filepath.Base(path), ".") {
+			return filepath.SkipDir
+		}
+		dirs = append(dirs, path)
+		return nil
+	})
+	if walkErr != nil {
+		internalError(c, "failed to walk root directory", walkErr)
+		return
+	}
+
+	// Process deepest directories first (bottom-up).
+	sort.Slice(dirs, func(i, j int) bool {
+		return len(dirs[i]) > len(dirs[j])
+	})
+
+	var emptyResults []emptyFolderResult
+	var garbageResults []garbageDirResult
+	emptyRemoved := 0
+
+	for _, dir := range dirs {
+		name := filepath.Base(dir)
+
+		// Check for garbage name pattern first.
+		if reason := isGarbageDirectory(name); reason != "" {
+			garbageResults = append(garbageResults, garbageDirResult{
+				Path:   dir,
+				Reason: reason,
+			})
+			// Garbage directories with files are NOT auto-removed — log for manual review.
+			// If they are also empty, they will be caught below and removed if !dryRun.
+		}
+
+		// Check emptiness.
+		empty, checkErr := isDirEmpty(dir)
+		if checkErr != nil {
+			emptyResults = append(emptyResults, emptyFolderResult{
+				Path:  dir,
+				Error: fmt.Sprintf("stat error: %v", checkErr),
+			})
+			continue
+		}
+		if !empty {
+			continue
+		}
+
+		result := emptyFolderResult{Path: dir}
+		if !dryRun {
+			if removeErr := os.Remove(dir); removeErr != nil {
+				result.Error = removeErr.Error()
+				log.Printf("[WARN] cleanup-organize-mess: failed to remove %q: %v", dir, removeErr)
+			} else {
+				result.Removed = true
+				emptyRemoved++
+				log.Printf("[INFO] cleanup-organize-mess: removed empty directory %q", dir)
+			}
+		} else {
+			emptyRemoved++
+		}
+		emptyResults = append(emptyResults, result)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":                   dryRun,
+		"root_dir":                  rootDir,
+		"empty_folders_found":       len(emptyResults),
+		"empty_folders_removed":     emptyRemoved,
+		"garbage_dirs_found":        len(garbageResults),
+		"garbage_dirs_note":         "Non-empty garbage directories require manual review; only empty ones are removed.",
+		"empty_folders":             emptyResults,
+		"garbage_dirs":              garbageResults,
+	})
 }
 
 // ---------------------------------------------------------------------------
