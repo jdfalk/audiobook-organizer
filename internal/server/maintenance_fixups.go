@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.8.0
+// version: 1.10.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -1682,6 +1682,227 @@ func parseTrackNumberFromFilename(filePath string) int {
 	}
 
 	return 0
+}
+
+// ---------------------------------------------------------------------------
+// Fix Book File Paths (directory → individual audio files)
+// ---------------------------------------------------------------------------
+
+// fixBookFilePathsResult describes the outcome for one book_files row whose
+// file_path pointed to a directory (or whose file_size was suspiciously small).
+type fixBookFilePathsResult struct {
+	FileID      string   `json:"file_id"`
+	BookID      string   `json:"book_id"`
+	OldPath     string   `json:"old_path"`
+	Action      string   `json:"action"`              // "updated", "expanded", "marked_missing", "size_fixed"
+	NewPath     string   `json:"new_path,omitempty"`  // for "updated"
+	NewPaths    []string `json:"new_paths,omitempty"` // for "expanded"
+	FileSizeOld int64    `json:"file_size_old,omitempty"`
+	FileSizeNew int64    `json:"file_size_new,omitempty"`
+	Applied     bool     `json:"applied"`
+	Error       string   `json:"error,omitempty"`
+}
+
+// handleFixBookFilePaths iterates every book_files row and:
+//
+//  1. If file_path is a directory, globs for audio files inside it:
+//     - 1 file found  → update the row's file_path to that file
+//     - N>1 files     → create new book_file rows (one per file), delete the directory row
+//     - 0 files found → mark the row missing=true
+//
+//  2. If file_path is a real file and file_size < 100 bytes (likely measured
+//     from a directory inode), re-reads the size with os.Stat.
+//
+// For new/updated rows the handler also populates file_size, format, and
+// original_filename from the actual file on disk.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update/create/delete rows
+func (s *Server) handleFixBookFilePaths(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var results []fixBookFilePathsResult
+	totalChanged := 0
+	totalApplied := 0
+	totalErrors := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+
+		files, bfErr := store.GetBookFiles(book.ID)
+		if bfErr != nil {
+			log.Printf("[WARN] fix-book-file-paths: GetBookFiles book %s: %v", book.ID, bfErr)
+			continue
+		}
+
+		for j := range files {
+			f := &files[j]
+
+			info, statErr := os.Stat(f.FilePath)
+			if statErr != nil {
+				// File doesn't exist — leave to other fixup routines.
+				continue
+			}
+
+			if info.IsDir() {
+				// file_path points to a directory — find real audio files.
+				audioFiles := audioFilesInDir(f.FilePath)
+
+				switch len(audioFiles) {
+				case 0:
+					// No audio files found — mark as missing.
+					res := fixBookFilePathsResult{
+						FileID:  f.ID,
+						BookID:  f.BookID,
+						OldPath: f.FilePath,
+						Action:  "marked_missing",
+					}
+					totalChanged++
+					if !dryRun {
+						f.Missing = true
+						if upErr := store.UpdateBookFile(f.ID, f); upErr != nil {
+							res.Error = upErr.Error()
+							totalErrors++
+						} else {
+							res.Applied = true
+							totalApplied++
+						}
+					}
+					results = append(results, res)
+
+				case 1:
+					// Exactly one file — update the existing row.
+					audioPath := audioFiles[0]
+					fi2, statErr2 := os.Stat(audioPath)
+					res := fixBookFilePathsResult{
+						FileID:  f.ID,
+						BookID:  f.BookID,
+						OldPath: f.FilePath,
+						NewPath: audioPath,
+						Action:  "updated",
+					}
+					totalChanged++
+					if !dryRun {
+						f.FilePath = audioPath
+						f.OriginalFilename = filepath.Base(audioPath)
+						ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(audioPath), "."))
+						if ext != "" {
+							f.Format = ext
+						}
+						if statErr2 == nil {
+							res.FileSizeOld = f.FileSize
+							res.FileSizeNew = fi2.Size()
+							f.FileSize = fi2.Size()
+						}
+						f.Missing = false
+						if upErr := store.UpdateBookFile(f.ID, f); upErr != nil {
+							res.Error = upErr.Error()
+							totalErrors++
+						} else {
+							res.Applied = true
+							totalApplied++
+						}
+					}
+					results = append(results, res)
+
+				default:
+					// Multiple files — expand into individual rows.
+					res := fixBookFilePathsResult{
+						FileID:   f.ID,
+						BookID:   f.BookID,
+						OldPath:  f.FilePath,
+						NewPaths: audioFiles,
+						Action:   "expanded",
+					}
+					totalChanged++
+					if !dryRun {
+						applyErr := false
+						for _, audioPath := range audioFiles {
+							fi3, statErr3 := os.Stat(audioPath)
+							newFile := &database.BookFile{
+								ID:               ulid.Make().String(),
+								BookID:           f.BookID,
+								FilePath:         audioPath,
+								OriginalFilename: filepath.Base(audioPath),
+								Format:           strings.ToLower(strings.TrimPrefix(filepath.Ext(audioPath), ".")),
+								Missing:          statErr3 != nil,
+							}
+							if statErr3 == nil {
+								newFile.FileSize = fi3.Size()
+							}
+							if crErr := store.CreateBookFile(newFile); crErr != nil {
+								res.Error = fmt.Sprintf("CreateBookFile %s: %v", audioPath, crErr)
+								totalErrors++
+								applyErr = true
+								break
+							}
+						}
+						if !applyErr {
+							if delErr := store.DeleteBookFile(f.ID); delErr != nil {
+								res.Error = fmt.Sprintf("DeleteBookFile %s: %v", f.ID, delErr)
+								totalErrors++
+							} else {
+								res.Applied = true
+								totalApplied++
+							}
+						}
+					}
+					results = append(results, res)
+				}
+				continue
+			}
+
+			// file_path is a real file — check for suspiciously small file_size
+			// (< 100 bytes likely came from os.Stat on a directory inode).
+			if !f.Missing && f.FileSize < 100 {
+				realSize := info.Size()
+				if realSize != f.FileSize {
+					res := fixBookFilePathsResult{
+						FileID:      f.ID,
+						BookID:      f.BookID,
+						OldPath:     f.FilePath,
+						Action:      "size_fixed",
+						FileSizeOld: f.FileSize,
+						FileSizeNew: realSize,
+					}
+					totalChanged++
+					if !dryRun {
+						f.FileSize = realSize
+						if upErr := store.UpdateBookFile(f.ID, f); upErr != nil {
+							res.Error = upErr.Error()
+							totalErrors++
+						} else {
+							res.Applied = true
+							totalApplied++
+						}
+					}
+					results = append(results, res)
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":       dryRun,
+		"books_scanned": len(allBooks),
+		"files_changed": totalChanged,
+		"applied":       totalApplied,
+		"errors":        totalErrors,
+		"results":       results,
+	})
 }
 
 // ---------------------------------------------------------------------------
