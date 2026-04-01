@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.141.0
+// version: 1.142.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1559,6 +1559,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/fix-version-groups", s.handleFixVersionGroups)
 			protected.POST("/maintenance/enrich-book-files", s.handleEnrichBookFiles)
 			protected.POST("/maintenance/dedup-books", s.handleDedupBooks)
+			protected.POST("/maintenance/fix-book-file-paths", s.handleFixBookFilePaths)
 
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
