@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -272,6 +272,12 @@ var migrations = []Migration{
 		Version:     39,
 		Description: "Create book_files table and migrate book_segments data",
 		Up:          migration039Up,
+		Down:        nil,
+	},
+	{
+		Version:     40,
+		Description: "Add last_organize_operation_id and last_organized_at columns to books",
+		Up:          migration040Up,
 		Down:        nil,
 	},
 }
@@ -2112,5 +2118,29 @@ func migration039Up(store Store) error {
 	}
 
 	log.Printf("  - book_files table created successfully (inserted %d rows, skipped %d)", inserted, skipped)
+	return nil
+}
+
+// migration040Up adds last_organize_operation_id and last_organized_at columns to books.
+func migration040Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // no-op for non-SQLite stores
+	}
+
+	log.Println("  - Adding last_organize_operation_id and last_organized_at to books table")
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN last_organize_operation_id TEXT`,
+		`ALTER TABLE books ADD COLUMN last_organized_at DATETIME`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue // already applied
+			}
+			return fmt.Errorf("migration 40: %w", err)
+		}
+	}
+	log.Println("  - last_organize_operation_id and last_organized_at added successfully")
 	return nil
 }

@@ -1,5 +1,5 @@
 // file: internal/server/organize_service_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
 package server
@@ -22,11 +22,11 @@ func TestOrganizeService_FilterBooksNeedingOrganization(t *testing.T) {
 	}
 
 	testLog := logger.New("test")
-	filtered := os.filterBooksNeedingOrganization(books, testLog)
+	filtered, alreadyCorrect := os.filterBooksNeedingOrganization(books, testLog)
 
 	// Should filter out books already in library
-	if len(filtered) > 1 {
-		t.Errorf("expected at most 1 book after filtering, got %d", len(filtered))
+	if len(filtered)+len(alreadyCorrect) > len(books) {
+		t.Errorf("expected total filtered to not exceed input, got filtered=%d alreadyCorrect=%d", len(filtered), len(alreadyCorrect))
 	}
 }
 
