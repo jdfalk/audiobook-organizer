@@ -1872,6 +1872,9 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	// Discover library path if not provided
 	libraryPath := req.LibraryPath
 	if libraryPath == "" {
+		libraryPath = config.AppConfig.ITunesLibraryReadPath
+	}
+	if libraryPath == "" {
 		libraryPath = discoverITunesLibraryPath()
 	}
 	if libraryPath == "" {
