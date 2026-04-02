@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -351,6 +351,16 @@ func (s *ActivityStore) GetDistinctSources(f ActivityFilter) ([]SourceCount, err
 		sources = append(sources, sc)
 	}
 	return sources, rows.Err()
+}
+
+// WipeAllActivity deletes every row from activity_log and returns the row count.
+func (s *ActivityStore) WipeAllActivity() (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM activity_log`)
+	if err != nil {
+		return 0, fmt.Errorf("activity_store: wipe: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

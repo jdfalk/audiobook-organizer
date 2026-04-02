@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4313,6 +4313,71 @@ func (p *PebbleStore) Reset() error {
 	}
 
 	return nil
+}
+
+// CountByPrefix counts keys that start with the given prefix.
+func (p *PebbleStore) CountByPrefix(prefix string) (int, error) {
+	lb := []byte(prefix)
+	ub := make([]byte, len(lb))
+	copy(ub, lb)
+	ub[len(ub)-1]++
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+	if err != nil {
+		return 0, fmt.Errorf("CountByPrefix %q: %w", prefix, err)
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+	return count, iter.Error()
+}
+
+// WipeByPrefixes deletes all keys that start with any of the given prefix strings.
+// Returns the total number of keys deleted.
+func (p *PebbleStore) WipeByPrefixes(prefixes []string) (int, error) {
+	total := 0
+	for _, prefix := range prefixes {
+		lb := []byte(prefix)
+		// Upper bound: increment the last byte to cover all keys with this prefix.
+		ub := make([]byte, len(lb))
+		copy(ub, lb)
+		ub[len(ub)-1]++
+
+		iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: lb, UpperBound: ub})
+		if err != nil {
+			return total, fmt.Errorf("wipe prefix %q: iter: %w", prefix, err)
+		}
+
+		var keys [][]byte
+		for iter.First(); iter.Valid(); iter.Next() {
+			k := make([]byte, len(iter.Key()))
+			copy(k, iter.Key())
+			keys = append(keys, k)
+		}
+		if err := iter.Close(); err != nil {
+			return total, fmt.Errorf("wipe prefix %q: iter close: %w", prefix, err)
+		}
+
+		if len(keys) == 0 {
+			continue
+		}
+
+		batch := p.db.NewBatch()
+		for _, k := range keys {
+			if err := batch.Delete(k, nil); err != nil {
+				batch.Close()
+				return total, fmt.Errorf("wipe prefix %q: delete: %w", prefix, err)
+			}
+		}
+		if err := batch.Commit(pebble.Sync); err != nil {
+			return total, fmt.Errorf("wipe prefix %q: commit: %w", prefix, err)
+		}
+		total += len(keys)
+	}
+	return total, nil
 }
 
 // Optimize compacts the PebbleDB database to reclaim space.
