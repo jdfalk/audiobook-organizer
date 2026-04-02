@@ -2222,23 +2222,9 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 	log.UpdateProgress(totalGroups, totalGroups, summary)
 	log.Info("%s", summary)
 
-	// Auto write-back to ITL if write_path is configured
-	if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
-		log.Info("Auto write-back: writing updated paths to ITL at %s", writePath)
-		itlUpdates := collectITLUpdates(store)
-		if len(itlUpdates) > 0 {
-			result, err := itunes.UpdateITLLocations(writePath, writePath+".tmp", itlUpdates)
-			if err != nil {
-				log.Warn("Auto write-back failed: %v", err)
-			} else {
-				if renameErr := os.Rename(writePath+".tmp", writePath); renameErr != nil {
-					log.Warn("Auto write-back rename failed: %v", renameErr)
-				} else {
-					log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
-				}
-			}
-		}
-	}
+	// Note: ITL write-back no longer runs after sync — only after organize.
+	// Sync imports existing iTunes paths which don't need writing back.
+	// Write-back is triggered by POST /itunes/write-back-all or after organize.
 
 	return nil
 }
