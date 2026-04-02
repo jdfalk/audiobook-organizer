@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.49.0
+// version: 1.50.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -3947,6 +3947,52 @@ func (s *SQLiteStore) Reset() error {
 	}
 
 	return nil
+}
+
+// WipeTable deletes all rows from the named table and returns the row count.
+// The table name must be a known safe identifier — callers are responsible for
+// passing only vetted, hardcoded table names.
+func (s *SQLiteStore) WipeTable(table string) (int64, error) {
+	// Allowlist of tables that can be wiped via this method.
+	allowed := map[string]bool{
+		"books":           true,
+		"book_files":      true,
+		"book_segments":   true,
+		"authors":         true,
+		"series":          true,
+		"external_id_map": true,
+	}
+	if !allowed[table] {
+		return 0, fmt.Errorf("WipeTable: table %q not in allowlist", table)
+	}
+	res, err := s.db.Exec(fmt.Sprintf("DELETE FROM %s", table))
+	if err != nil {
+		return 0, fmt.Errorf("WipeTable %q: %w", table, err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// CountTableRows returns the row count for the named table.
+// Only tables in the allowlist are accepted.
+func (s *SQLiteStore) CountTableRows(table string) (int64, error) {
+	allowed := map[string]bool{
+		"books":           true,
+		"book_files":      true,
+		"book_segments":   true,
+		"authors":         true,
+		"series":          true,
+		"external_id_map": true,
+	}
+	if !allowed[table] {
+		return 0, fmt.Errorf("CountTableRows: table %q not in allowlist", table)
+	}
+	var n int64
+	row := s.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table))
+	if err := row.Scan(&n); err != nil {
+		return 0, fmt.Errorf("CountTableRows %q: %w", table, err)
+	}
+	return n, nil
 }
 
 // GetBookVersions is a stub — book versioning is not yet supported in SQLite store.
