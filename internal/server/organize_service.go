@@ -132,8 +132,26 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	stats := orgSvc.organizeBooks(ctx, booksToOrganize, alreadyCorrect, log, req.OperationID)
 
 	// Trigger automatic rescan if any books were organized
-	if stats.Organized > 0 {
+	if stats.Organized > 0 || stats.ReOrganized > 0 {
 		orgSvc.triggerAutomaticRescan(ctx, log)
+
+		// Auto write-back to ITL after organize (paths have changed)
+		if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
+			log.Info("Auto write-back: writing organized paths to ITL")
+			itlUpdates := collectITLUpdates(orgSvc.db)
+			if len(itlUpdates) > 0 {
+				result, err := itunes.UpdateITLLocations(writePath, writePath+".tmp", itlUpdates)
+				if err != nil {
+					log.Warn("Auto write-back failed: %v", err)
+				} else {
+					if renameErr := os.Rename(writePath+".tmp", writePath); renameErr != nil {
+						log.Warn("Auto write-back rename failed: %v", renameErr)
+					} else {
+						log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
+					}
+				}
+			}
+		}
 	}
 
 	return nil
