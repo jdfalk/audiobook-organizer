@@ -52,7 +52,10 @@ func (o *Organizer) reflinkFilePlatform(sourcePath, targetPath string) error {
 		return nil
 	}
 
-	// If both fail, return error
+	// Both failed — clean up the empty destination file so hardlink fallback can work
+	dstFile.Close()
+	os.Remove(targetPath)
+
 	if ret != 0 || errno != 0 {
 		return fmt.Errorf("reflink not supported on this filesystem (errno: %v)", errno)
 	}
