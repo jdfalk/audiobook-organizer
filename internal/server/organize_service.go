@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -396,68 +397,120 @@ func (orgSvc *OrganizeService) cleanupEmptyParents(dir, stopAt string, log logge
 	}
 }
 
+// organizeJob represents a single book to be organized, sent to a worker.
+type organizeJob struct {
+	index int
+	book  database.Book
+}
+
+// organizeResult carries the outcome of a single book's file operations back to
+// the collector goroutine, which performs all DB mutations serially.
+type organizeResult struct {
+	index       int
+	book        database.Book  // updated in-place by reOrganizeInPlace
+	newPath     string
+	oldPath     string
+	isDir       bool
+	alreadyInRoot bool
+	err         error
+}
+
 func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganize []database.Book, alreadyCorrect []database.Book, log logger.Logger, operationID string) *OrganizeStats {
-	org := organizer.NewOrganizer(&config.AppConfig)
 	stats := &OrganizeStats{Total: len(booksToOrganize) + len(alreadyCorrect)}
 
 	// Track location changes for iTunes ITL write-back
 	var itlUpdates []itunes.ITLLocationUpdate
 
-	for i, book := range booksToOrganize {
-		if log.IsCanceled() {
-			log.Info("Organize canceled")
-			break
+	const numWorkers = 8
+	jobs := make(chan organizeJob, numWorkers*2)
+	results := make(chan organizeResult, numWorkers*2)
+
+	// Start worker goroutines — each gets its own Organizer instance.
+	// File operations (reflink/copy/rename) are the slow, parallelizable part.
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			workerOrg := organizer.NewOrganizer(&config.AppConfig)
+			for job := range jobs {
+				book := job.book
+				oldPath := book.FilePath
+				isDir := false
+				if info, err := os.Stat(oldPath); err == nil && info.IsDir() {
+					isDir = true
+				}
+				alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
+
+				var newPath string
+				var err error
+
+				if alreadyInRoot {
+					// reOrganizeInPlace does a rename + DB updates (lightweight); safe to run
+					// concurrently because each book's files are in separate directories.
+					newPath, err = orgSvc.reOrganizeInPlace(&book, log)
+				} else if isDir {
+					newPath, err = orgSvc.organizeDirectoryBook(workerOrg, &book, log)
+				} else {
+					newPath, _, err = workerOrg.OrganizeBook(&book)
+				}
+
+				results <- organizeResult{
+					index:         job.index,
+					book:          book,
+					newPath:       newPath,
+					oldPath:       oldPath,
+					isDir:         isDir,
+					alreadyInRoot: alreadyInRoot,
+					err:           err,
+				}
+			}
+		}()
+	}
+
+	// Feed jobs — cancellation checked here, in the single feeder goroutine.
+	go func() {
+		for i, book := range booksToOrganize {
+			if log.IsCanceled() {
+				log.Info("Organize canceled")
+				break
+			}
+			jobs <- organizeJob{index: i, book: book}
 		}
+		close(jobs)
+		wg.Wait()
+		close(results)
+	}()
 
-		log.UpdateProgress(i, len(booksToOrganize), fmt.Sprintf("Organizing %s...", book.Title))
+	// Collect results serially — all DB mutations happen here.
+	for r := range results {
+		log.UpdateProgress(r.index, len(booksToOrganize), fmt.Sprintf("Organizing %s...", r.book.Title))
 
-		oldPath := book.FilePath
-		isDir := false
-		if info, err := os.Stat(oldPath); err == nil && info.IsDir() {
-			isDir = true
-		}
-
-		// If book is already in RootDir, re-organize via rename instead of copy
-		alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
-
-		var newPath string
-		var err error
-
-		if alreadyInRoot {
-			newPath, err = orgSvc.reOrganizeInPlace(&book, log)
-		} else if isDir {
-			// Multi-file book: organize each segment file into the target directory
-			newPath, err = orgSvc.organizeDirectoryBook(org, &book, log)
-		} else {
-			newPath, _, err = org.OrganizeBook(&book)
-		}
-
-		if err != nil {
-			log.Warn("Failed to organize %s: %s", book.Title, err.Error())
+		if r.err != nil {
+			log.Warn("Failed to organize %s: %s", r.book.Title, r.err.Error())
 			stats.Failed++
 
-			// Track failed books
 			if operationID != "" {
 				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
 					ID:          ulid.Make().String(),
 					OperationID: operationID,
-					BookID:      book.ID,
+					BookID:      r.book.ID,
 					ChangeType:  "organize_failed",
 					FieldName:   "file_path",
-					OldValue:    oldPath,
-					NewValue:    err.Error(),
+					OldValue:    r.oldPath,
+					NewValue:    r.err.Error(),
 				})
 			}
 			continue
 		}
 
-		if oldPath == newPath {
-			// Already in correct location (reached via organizeBooks path) — stamp and count
+		if r.oldPath == r.newPath {
+			// Already in correct location — stamp and count
 			now := time.Now()
-			book.LastOrganizeOperationID = &operationID
-			book.LastOrganizedAt = &now
-			if _, updateErr := orgSvc.db.UpdateBook(book.ID, &book); updateErr != nil {
-				log.Debug("Organize: failed to stamp book %s: %s", book.ID, updateErr.Error())
+			r.book.LastOrganizeOperationID = &operationID
+			r.book.LastOrganizedAt = &now
+			if _, updateErr := orgSvc.db.UpdateBook(r.book.ID, &r.book); updateErr != nil {
+				log.Debug("Organize: failed to stamp book %s: %s", r.book.ID, updateErr.Error())
 			}
 			stats.AlreadyCorrect++
 
@@ -465,45 +518,46 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
 					ID:          ulid.Make().String(),
 					OperationID: operationID,
-					BookID:      book.ID,
+					BookID:      r.book.ID,
 					ChangeType:  "organize_skipped",
 					FieldName:   "file_path",
-					OldValue:    oldPath,
-					NewValue:    oldPath,
+					OldValue:    r.oldPath,
+					NewValue:    r.oldPath,
 				})
 			}
 			continue
 		}
 
-		if alreadyInRoot {
-			// Re-organized in place — stamp and record the rename
+		if r.alreadyInRoot {
+			// Re-organized in place — stamp and record the rename.
+			// reOrganizeInPlace already called UpdateBook for the path; this second
+			// update persists the stamp fields (LastOrganizedAt, etc.).
 			now := time.Now()
-			book.LastOrganizeOperationID = &operationID
-			book.LastOrganizedAt = &now
-			// Note: reOrganizeInPlace already called UpdateBook; stamp here updates the in-memory copy.
-			// We issue a second lightweight update to persist the stamp fields.
-			if _, updateErr := orgSvc.db.UpdateBook(book.ID, &book); updateErr != nil {
-				log.Debug("Organize: failed to stamp re-organized book %s: %s", book.ID, updateErr.Error())
+			r.book.LastOrganizeOperationID = &operationID
+			r.book.LastOrganizedAt = &now
+			if _, updateErr := orgSvc.db.UpdateBook(r.book.ID, &r.book); updateErr != nil {
+				log.Debug("Organize: failed to stamp re-organized book %s: %s", r.book.ID, updateErr.Error())
 			}
-			log.Info("Re-organized %s: %s → %s", book.Title, oldPath, newPath)
+			log.Info("Re-organized %s: %s → %s", r.book.Title, r.oldPath, r.newPath)
 			stats.ReOrganized++
 
 			if operationID != "" {
 				_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
 					ID:          ulid.Make().String(),
 					OperationID: operationID,
-					BookID:      book.ID,
+					BookID:      r.book.ID,
 					ChangeType:  "organize_rename",
 					FieldName:   "file_path",
-					OldValue:    oldPath,
-					NewValue:    newPath,
+					OldValue:    r.oldPath,
+					NewValue:    r.newPath,
 				})
 			}
 		} else {
 			// Version-aware organize: create a new book record for the organized copy,
 			// keep the original record pointing at the source (e.g. iTunes).
 			// Link them as versions with the organized copy as primary.
-			createdBook, err := orgSvc.createOrganizedVersion(org, &book, newPath, isDir, operationID, log)
+			workerOrg := organizer.NewOrganizer(&config.AppConfig)
+			createdBook, err := orgSvc.createOrganizedVersion(workerOrg, &r.book, r.newPath, r.isDir, operationID, log)
 			if err != nil {
 				stats.Failed++
 				continue
@@ -518,16 +572,16 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			}
 
 			log.Info("Organized %s: created version %s → %s (original kept at %s)",
-				book.Title, createdBook.ID, newPath, oldPath)
+				r.book.Title, createdBook.ID, r.newPath, r.oldPath)
 
 			stats.Organized++
 		}
 
 		// Collect ITL update if this book came from iTunes
-		if book.ITunesPersistentID != nil {
+		if r.book.ITunesPersistentID != nil {
 			itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  newPath,
+				PersistentID: *r.book.ITunesPersistentID,
+				NewLocation:  r.newPath,
 			})
 		}
 	}
