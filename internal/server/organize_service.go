@@ -131,9 +131,11 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	// Perform organization
 	stats := orgSvc.organizeBooks(ctx, booksToOrganize, alreadyCorrect, log, req.OperationID)
 
-	// Trigger automatic rescan if any books were organized
+	// Auto write-back and post-organize tasks
 	if stats.Organized > 0 || stats.ReOrganized > 0 {
-		orgSvc.triggerAutomaticRescan(ctx, log)
+		// Note: auto-rescan disabled — organize already updates all paths and book_files.
+		// A rescan after organize can trigger another organize, creating an infinite loop.
+		// If a rescan is needed, trigger it manually.
 
 		// Auto write-back to ITL after organize (paths have changed)
 		if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
