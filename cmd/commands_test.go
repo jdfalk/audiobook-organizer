@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.0.5
+// version: 1.0.6
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -203,6 +203,7 @@ func (s *stubStore) GetBookFileByPath(filePath string) (*database.BookFile, erro
 func (s *stubStore) DeleteBookFile(id string) error                                                        { return nil }
 func (s *stubStore) DeleteBookFilesForBook(bookID string) error                                            { return nil }
 func (s *stubStore) UpsertBookFile(file *database.BookFile) error                                          { return nil }
+func (s *stubStore) BatchUpsertBookFiles(files []*database.BookFile) error                                 { return nil }
 func (s *stubStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error         { return nil }
 func (s *stubStore) AddPlaybackEvent(event *database.PlaybackEvent) error { return nil }
 func (s *stubStore) ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error) {

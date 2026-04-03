@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.50.0
+// version: 1.51.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -4713,6 +4713,118 @@ func (s *SQLiteStore) UpsertBookFile(file *BookFile) error {
 		err = s.CreateBookFile(file)
 	}
 	return err
+}
+
+// BatchUpsertBookFiles upserts a slice of BookFile records in a single
+// transaction. Each file is matched by iTunes persistent ID (if set) or by
+// (book_id, file_path). Errors from individual rows are collected but do not
+// abort the whole transaction — the transaction is committed if at least one
+// row succeeded, or rolled back only if Begin itself fails.
+func (s *SQLiteStore) BatchUpsertBookFiles(files []*BookFile) error {
+	if len(files) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("BatchUpsertBookFiles begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	now := time.Now()
+	var errs []error
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		// Lookup existing row inside the transaction.
+		var existingID string
+		var existingCreatedAt time.Time
+		if file.ITunesPersistentID != "" {
+			row := tx.QueryRow(
+				`SELECT id, created_at FROM book_files WHERE book_id = ? AND itunes_persistent_id = ? LIMIT 1`,
+				file.BookID, file.ITunesPersistentID,
+			)
+			_ = row.Scan(&existingID, &existingCreatedAt)
+		} else if file.FilePath != "" {
+			row := tx.QueryRow(
+				`SELECT id, created_at FROM book_files WHERE book_id = ? AND file_path = ? LIMIT 1`,
+				file.BookID, file.FilePath,
+			)
+			_ = row.Scan(&existingID, &existingCreatedAt)
+		}
+
+		missingInt := 0
+		if file.Missing {
+			missingInt = 1
+		}
+
+		if existingID != "" {
+			// UPDATE path
+			file.ID = existingID
+			file.CreatedAt = existingCreatedAt
+			file.UpdatedAt = now
+			_, execErr := tx.Exec(
+				`UPDATE book_files SET
+					book_id=?, file_path=?, original_filename=?, itunes_path=?, itunes_persistent_id=?,
+					track_number=?, track_count=?, disc_number=?, disc_count=?,
+					title=?, format=?, codec=?, duration=?,
+					file_size=?, bitrate_kbps=?, sample_rate_hz=?, channels=?, bit_depth=?,
+					file_hash=?, original_file_hash=?, missing=?, updated_at=?
+				WHERE id=?`,
+				file.BookID, file.FilePath,
+				nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
+				nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
+				nullableIntVal(file.DiscNumber), nullableIntVal(file.DiscCount),
+				nullableStringVal(file.Title), nullableStringVal(file.Format), nullableStringVal(file.Codec),
+				nullableIntVal(file.Duration), nullableInt64Val(file.FileSize),
+				nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
+				nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
+				nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+				missingInt, now,
+				existingID,
+			)
+			if execErr != nil {
+				errs = append(errs, fmt.Errorf("BatchUpsertBookFiles update %s: %w", existingID, execErr))
+			}
+		} else {
+			// INSERT path
+			if file.ID == "" {
+				file.ID = ulid.Make().String()
+			}
+			file.CreatedAt = now
+			file.UpdatedAt = now
+			_, execErr := tx.Exec(
+				`INSERT INTO book_files (
+					id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
+					track_number, track_count, disc_number, disc_count, title, format, codec, duration,
+					file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
+					missing, created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				file.ID, file.BookID, file.FilePath,
+				nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
+				nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
+				nullableIntVal(file.DiscNumber), nullableIntVal(file.DiscCount),
+				nullableStringVal(file.Title), nullableStringVal(file.Format), nullableStringVal(file.Codec),
+				nullableIntVal(file.Duration), nullableInt64Val(file.FileSize),
+				nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
+				nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
+				nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+				missingInt, now, now,
+			)
+			if execErr != nil {
+				errs = append(errs, fmt.Errorf("BatchUpsertBookFiles insert %s: %w", file.ID, execErr))
+			}
+		}
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return fmt.Errorf("BatchUpsertBookFiles commit: %w", commitErr)
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("BatchUpsertBookFiles partial errors (%d): %v", len(errs), errs[0])
+	}
+	return nil
 }
 
 // GetBookFileByID returns a single book_file by its ID within a book.

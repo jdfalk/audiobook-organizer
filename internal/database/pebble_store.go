@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.40.0
+// version: 1.41.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -5339,6 +5339,88 @@ func (s *PebbleStore) UpsertBookFile(file *BookFile) error {
 	file.ID = existing.ID
 	file.BookID = existing.BookID
 	return s.UpdateBookFile(existing.ID, file)
+}
+
+// BatchUpsertBookFiles upserts a slice of BookFile records using a single
+// PebbleDB batch for all writes. Each file is matched by iTunes persistent ID
+// (if set) or by file path. This amortises the per-Commit overhead across
+// all records in the slice.
+func (s *PebbleStore) BatchUpsertBookFiles(files []*BookFile) error {
+	if len(files) == 0 {
+		return nil
+	}
+
+	batch := s.db.NewBatch()
+
+	now := time.Now()
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+
+		var existing *BookFile
+		var lookupErr error
+
+		if file.ITunesPersistentID != "" {
+			existing, lookupErr = s.GetBookFileByPID(file.ITunesPersistentID)
+		}
+		if lookupErr != nil {
+			batch.Close()
+			return lookupErr
+		}
+		if existing == nil && file.FilePath != "" {
+			existing, lookupErr = s.GetBookFileByPath(file.FilePath)
+			if lookupErr != nil {
+				batch.Close()
+				return lookupErr
+			}
+		}
+
+		if existing != nil {
+			// Preserve identity fields; remove stale secondary indexes.
+			file.ID = existing.ID
+			file.BookID = existing.BookID
+			file.CreatedAt = existing.CreatedAt
+			file.UpdatedAt = now
+
+			if err := deleteBookFileSecondaryIndexes(batch, existing); err != nil {
+				batch.Close()
+				return err
+			}
+		} else {
+			if file.ID == "" {
+				id, err := newULID()
+				if err != nil {
+					batch.Close()
+					return err
+				}
+				file.ID = id
+			}
+			if file.CreatedAt.IsZero() {
+				file.CreatedAt = now
+			}
+			file.UpdatedAt = now
+		}
+
+		data, err := json.Marshal(file)
+		if err != nil {
+			batch.Close()
+			return err
+		}
+
+		key := []byte(fmt.Sprintf("book_file:%s:%s", file.BookID, file.ID))
+		if err := batch.Set(key, data, nil); err != nil {
+			batch.Close()
+			return err
+		}
+
+		if err := writeBookFileSecondaryIndexes(batch, file); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
+	return batch.Commit(pebble.Sync)
 }
 
 // GetBookFileByID returns a single BookFile by bookID and fileID.
