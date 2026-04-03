@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -544,7 +544,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			progress:
 				// --- Step 4: Progress reporting ---
 				count := atomic.AddInt64(&progressCounter, 1)
-				if count%100 == 0 || count == int64(len(booksToOrganize)) {
+				if count%50 == 0 || count == int64(len(booksToOrganize)) {
 					log.UpdateProgress(int(count), len(booksToOrganize),
 						fmt.Sprintf("Organizing: %d/%d books", count, len(booksToOrganize)))
 				}
