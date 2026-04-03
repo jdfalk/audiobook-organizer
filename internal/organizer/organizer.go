@@ -7,6 +7,7 @@ package organizer
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -470,11 +471,18 @@ func (o *Organizer) organizeFile(src, dst string) error {
 
 	if strategy == "auto" {
 		if err := o.reflinkFile(src, dst); err == nil {
+			log.Printf("[DEBUG] organizeFile: reflink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
 			return nil
+		} else {
+			log.Printf("[WARN] organizeFile: reflink failed for %s: %v", filepath.Base(src), err)
 		}
 		if err := o.hardlinkFile(src, dst); err == nil {
+			log.Printf("[DEBUG] organizeFile: hardlink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
 			return nil
+		} else {
+			log.Printf("[WARN] organizeFile: hardlink failed for %s: %v", filepath.Base(src), err)
 		}
+		log.Printf("[WARN] organizeFile: falling back to copy for %s", filepath.Base(src))
 		strategy = "copy"
 	}
 
