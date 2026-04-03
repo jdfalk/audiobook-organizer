@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.48.0
+// version: 2.49.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -654,6 +654,7 @@ type BookFile struct {
 	BitDepth           int       `json:"bit_depth,omitempty"`
 	FileHash           string    `json:"file_hash,omitempty"`
 	OriginalFileHash   string    `json:"original_file_hash,omitempty"`
+	OrganizeMethod     string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`

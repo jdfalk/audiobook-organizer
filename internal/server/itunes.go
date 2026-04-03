@@ -1625,7 +1625,7 @@ func organizeImportedBook(book *database.Book, log logger.Logger) error {
 	}
 
 	org := organizer.NewOrganizer(&config.AppConfig)
-	newPath, err := org.OrganizeBook(book)
+	newPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		return err
 	}

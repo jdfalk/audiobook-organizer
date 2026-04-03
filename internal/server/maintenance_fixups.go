@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -3261,4 +3261,102 @@ func wipeActivity(svc *ActivityService, dryRun bool) (int64, error) {
 		return int64(total), nil
 	}
 	return svc.Store().WipeAllActivity()
+}
+
+// libraryStateFixResult describes one book that was (or would be) fixed.
+type libraryStateFixResult struct {
+	BookID       string `json:"book_id"`
+	Title        string `json:"title"`
+	OldState     string `json:"old_state"`
+	NewState     string `json:"new_state"`
+	VersionGroup string `json:"version_group"`
+	IsPrimary    bool   `json:"is_primary"`
+	Applied      bool   `json:"applied"`
+	Error        string `json:"error,omitempty"`
+}
+
+// handleFixLibraryStates fixes library_state for books that have organized versions.
+// Books with library_state = 'imported' AND version_group_id set AND is_primary_version = false
+// should have library_state = 'organized_source'.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update the database
+func (s *Server) handleFixLibraryStates(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Fetch all books (non-deleted). With ~11K books this is fine.
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var results []libraryStateFixResult
+	fixCount := 0
+	skipCount := 0
+	errorCount := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+
+		// Look for books with library_state = 'imported'
+		if book.LibraryState == nil || *book.LibraryState != "imported" {
+			skipCount++
+			continue
+		}
+
+		// Must have a version_group_id
+		if book.VersionGroupID == nil || *book.VersionGroupID == "" {
+			skipCount++
+			continue
+		}
+
+		// Must NOT be a primary version
+		if book.IsPrimaryVersion == nil || *book.IsPrimaryVersion {
+			skipCount++
+			continue
+		}
+
+		// This book qualifies for fixing: organized source version in imported state
+		result := libraryStateFixResult{
+			BookID:       book.ID,
+			Title:        book.Title,
+			OldState:     "imported",
+			NewState:     "organized_source",
+			VersionGroup: *book.VersionGroupID,
+			IsPrimary:    false,
+			Applied:      !dryRun,
+		}
+
+		if !dryRun {
+			// Update the book
+			newState := "organized_source"
+			book.LibraryState = &newState
+			if _, updateErr := store.UpdateBook(book.ID, book); updateErr != nil {
+				result.Error = updateErr.Error()
+				errorCount++
+			} else {
+				fixCount++
+			}
+		} else {
+			fixCount++
+		}
+
+		results = append(results, result)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":  dryRun,
+		"fixed":    fixCount,
+		"skipped":  skipCount,
+		"errors":   errorCount,
+		"results":  results,
+	})
 }
