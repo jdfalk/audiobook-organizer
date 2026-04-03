@@ -2130,8 +2130,17 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				unchanged++
 			}
 
-			// Upsert book_files for every track in the group (multi-file books have 40+ tracks)
+			// Upsert book_files only for tracks that are new or changed
 			for _, track := range group.tracks {
+				if track.PersistentID == "" {
+					continue
+				}
+				// Check if this track already exists with same data
+				existingFile, _ := store.GetBookFileByPID(track.PersistentID)
+				if existingFile != nil && existingFile.ITunesPath == track.Location {
+					continue // unchanged — skip the write
+				}
+
 				remappedPath := importOpts.RemapPath(track.Location)
 				decodedPath, _ := itunes.DecodeLocation(remappedPath)
 				if decodedPath == "" {
