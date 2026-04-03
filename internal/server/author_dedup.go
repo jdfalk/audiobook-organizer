@@ -1,5 +1,5 @@
 // file: internal/server/author_dedup.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -576,16 +576,26 @@ func isMultiAuthorString(name string) bool {
 }
 
 // authorNameScore returns a penalty score for a name. Lower = cleaner/better.
-// Prefers full names over initials: "James S. A. Corey" scores better than "J.S.A. Corey".
+// Prefers full, properly-cased names: "James S. A. Corey" scores better than "J.S.A. Corey".
 func authorNameScore(name string) int {
 	score := 0
+
+	// Penalize garbage characters
 	if strings.Contains(name, "/") {
-		score += 10
+		score += 25 // slash usually means "Author/Narrator" composite — not a clean author name
 	}
 	if strings.Contains(name, "(") {
-		score += 10
+		score += 30 // heavy penalty for parenthetical content like "(Author)" or "(Narrator)"
 	}
 	if strings.Contains(name, " - ") {
+		score += 20
+	}
+	if strings.HasSuffix(name, "_") {
+		score += 20 // trailing underscore garbage
+	}
+
+	// Penalize ALL CAPS names (e.g. "JAMES COREY") — unlikely to be the canonical form
+	if len(name) > 3 && name == strings.ToUpper(name) {
 		score += 20
 	}
 
@@ -609,8 +619,11 @@ func authorNameScore(name string) int {
 		}
 	}
 
-	// Small length penalty to break ties (shorter is slightly better)
-	score += len(name)
+	// REWARD longer names (more complete) — invert the length bonus.
+	// Max reasonable author name is ~40 chars; subtract length from that max so
+	// longer names get a lower (better) score.
+	score += max(0, 40-len(name))
+
 	return score
 }
 
@@ -727,14 +740,78 @@ type authorPrecomputed struct {
 	lastLower string // lowercased last name for bucketing
 }
 
+// BuildAuthorSeriesMap pre-loads series names for all authors from the store.
+// Returns a map of authorID → slice of normalized series names (lowercased, trimmed).
+// This is an optional input to FindDuplicateAuthors for series cross-referencing.
+func BuildAuthorSeriesMap(store interface {
+	GetBooksByAuthorID(authorID int) ([]database.Book, error)
+	GetSeriesByID(id int) (*database.Series, error)
+}, authors []database.Author) map[int][]string {
+	result := make(map[int][]string, len(authors))
+	for _, a := range authors {
+		books, err := store.GetBooksByAuthorID(a.ID)
+		if err != nil {
+			continue
+		}
+		seen := make(map[int]bool)
+		for _, b := range books {
+			if b.SeriesID == nil || seen[*b.SeriesID] {
+				continue
+			}
+			seen[*b.SeriesID] = true
+			series, err := store.GetSeriesByID(*b.SeriesID)
+			if err != nil || series == nil {
+				continue
+			}
+			normalized := strings.ToLower(strings.TrimSpace(series.Name))
+			if normalized != "" {
+				result[a.ID] = append(result[a.ID], normalized)
+			}
+		}
+	}
+	return result
+}
+
+// sharesSeries returns true if the two sets of normalized series names have any overlap.
+func sharesSeries(seriesA, seriesB []string) bool {
+	if len(seriesA) == 0 || len(seriesB) == 0 {
+		return false
+	}
+	setA := make(map[string]bool, len(seriesA))
+	for _, s := range seriesA {
+		setA[s] = true
+	}
+	for _, s := range seriesB {
+		if setA[s] {
+			return true
+		}
+	}
+	return false
+}
+
 // FindDuplicateAuthors groups authors by similarity using structured name comparison.
 // The threshold parameter is kept for API compatibility but the actual matching
 // uses areAuthorsDuplicate which compares first/last names separately.
+//
+// The optional seriesMap parameter (from BuildAuthorSeriesMap) enables series
+// cross-referencing: two authors with different but close names who share a series
+// are treated as duplicates.
 //
 // Performance: Pre-computes normalized names and buckets by last name to reduce
 // comparisons from O(n²) to O(n × avg_bucket_size). For 5,000 authors with
 // ~2,000 unique last names, this reduces comparisons by ~60-80%.
 func FindDuplicateAuthors(authors []database.Author, threshold float64, bookCountFn func(int) int, progressFn ...ProgressCallback) []AuthorDedupGroup {
+	return findDuplicateAuthorsInternal(authors, threshold, bookCountFn, nil, progressFn...)
+}
+
+// FindDuplicateAuthorsWithSeries is like FindDuplicateAuthors but also uses series
+// overlap as a tiebreaker when author names are close but below the strict match threshold.
+// Use BuildAuthorSeriesMap to build the seriesMap from a store.
+func FindDuplicateAuthorsWithSeries(authors []database.Author, threshold float64, bookCountFn func(int) int, seriesMap map[int][]string, progressFn ...ProgressCallback) []AuthorDedupGroup {
+	return findDuplicateAuthorsInternal(authors, threshold, bookCountFn, seriesMap, progressFn...)
+}
+
+func findDuplicateAuthorsInternal(authors []database.Author, threshold float64, bookCountFn func(int) int, seriesMap map[int][]string, progressFn ...ProgressCallback) []AuthorDedupGroup {
 	var reportProgress ProgressCallback
 	if len(progressFn) > 0 && progressFn[0] != nil {
 		reportProgress = progressFn[0]
@@ -888,6 +965,92 @@ func FindDuplicateAuthors(authors []database.Author, threshold float64, bookCoun
 								Variants:  variants,
 								BookCount: bookCountFn(pi.author.ID) + bookCountFn(pj.author.ID),
 							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Phase 3.5: Series cross-reference — if two authors share a series and their
+	// names are close (JW >= 0.80 on last name), treat them as duplicates.
+	// This catches cases like "James S. A. Corey" vs "J. S. A. Corey" when the
+	// name similarity alone falls below the strict threshold.
+	if len(seriesMap) > 0 {
+		for li := 0; li < len(lastNames); li++ {
+			bucketI := lastNameBuckets[lastNames[li]]
+			for lj := li; lj < len(lastNames); lj++ {
+				lastSim := jaroWinklerSimilarity(lastNames[li], lastNames[lj])
+				if lastSim < 0.80 {
+					continue // last names too different even with series signal
+				}
+				bucketJ := lastNameBuckets[lastNames[lj]]
+				for _, i := range bucketI {
+					pi := &precomputed[i]
+					if used[pi.author.ID] || pi.skip {
+						continue
+					}
+					startJ := 0
+					if li == lj {
+						// Same bucket — avoid double-counting (only compare forward pairs)
+						startJ = i + 1
+					}
+					_ = startJ
+					for _, j := range bucketJ {
+						if li == lj && j <= i {
+							continue // same bucket, skip already-checked pairs
+						}
+						pj := &precomputed[j]
+						if used[pj.author.ID] || pj.skip || pj.author.ID == pi.author.ID {
+							continue
+						}
+						// Only apply series signal when name similarity alone is borderline
+						if areAuthorsDuplicatePrecomputed(pi, pj) {
+							continue // already would have been caught in phases 2/3
+						}
+						if !sharesSeries(seriesMap[pi.author.ID], seriesMap[pj.author.ID]) {
+							continue
+						}
+						// First-name compatibility check — series match alone isn't enough
+						// if first names are clearly different
+						if pi.first != "" && pj.first != "" {
+							firstSim := jaroWinklerSimilarity(pi.first, pj.first)
+							if firstSim < 0.60 && !isInitialMatch(pi.first, pj.first) {
+								continue // first names are clearly different people
+							}
+						}
+						// Merge as duplicates
+						found := false
+						for gi := range groups {
+							if groups[gi].Canonical.ID == pi.author.ID {
+								groups[gi].Variants = append(groups[gi].Variants, pj.author)
+								used[pj.author.ID] = true
+								groups[gi].BookCount += bookCountFn(pj.author.ID)
+								found = true
+								break
+							}
+						}
+						if !found {
+							used[pi.author.ID] = true
+							used[pj.author.ID] = true
+							allInGroup := []database.Author{pi.author, pj.author}
+							canonical := pickCanonicalAuthor(allInGroup, bookCountFn)
+							var variants []database.Author
+							for _, a := range allInGroup {
+								if a.ID != canonical.ID {
+									variants = append(variants, a)
+								}
+							}
+							suggested := buildSuggestedName(allInGroup)
+							g := AuthorDedupGroup{
+								Canonical: canonical,
+								Variants:  variants,
+								BookCount: bookCountFn(pi.author.ID) + bookCountFn(pj.author.ID),
+							}
+							if suggested != "" && suggested != canonical.Name {
+								g.SuggestedName = suggested
+							}
+							groups = append(groups, g)
 						}
 					}
 				}
