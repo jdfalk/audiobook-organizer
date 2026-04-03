@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -281,6 +281,20 @@ func (q *OperationQueue) worker(id int) {
 				}
 			}
 
+			// Activity log: operation started
+			log.Printf("[audit] Operation started: %s (id=%s)", op.Type, op.ID)
+			if ActivityRecorder != nil {
+				ActivityRecorder(database.ActivityEntry{
+					Tier:        "audit",
+					Type:        "operation_started",
+					Level:       "info",
+					Source:      "background",
+					OperationID: op.ID,
+					Summary:     fmt.Sprintf("Operation started: %s", op.Type),
+					Details:     map[string]any{"operation_type": op.Type, "operation_id": op.ID},
+				})
+			}
+
 			// Create progress reporter backed by OperationLogger.
 			storeAdapter := &queueStoreAdapter{store: q.store}
 			var realtimeHub logger.RealtimeHub
@@ -328,6 +342,20 @@ func (q *OperationQueue) worker(id int) {
 					})
 				}
 				log.Printf("Operation %s failed: %v", op.ID, err)
+				// Activity log: operation failed
+				log.Printf("[audit] Operation failed: %s: %v", op.Type, err)
+				if ActivityRecorder != nil {
+					errMsg := err.Error()
+					ActivityRecorder(database.ActivityEntry{
+						Tier:        "audit",
+						Type:        "operation_failed",
+						Level:       "error",
+						Source:      "background",
+						OperationID: op.ID,
+						Summary:     fmt.Sprintf("Operation failed: %s: %s", op.Type, errMsg),
+						Details:     map[string]any{"operation_type": op.Type, "operation_id": op.ID, "error": errMsg},
+					})
+				}
 			} else if reporter.canceled() {
 				// Already marked as canceled
 				metrics.IncOperationCanceled(op.Type)
@@ -352,6 +380,19 @@ func (q *OperationQueue) worker(id int) {
 					})
 				}
 				log.Printf("Operation %s completed successfully", op.ID)
+				// Activity log: operation completed
+				log.Printf("[audit] Operation completed: %s", op.Type)
+				if ActivityRecorder != nil {
+					ActivityRecorder(database.ActivityEntry{
+						Tier:        "audit",
+						Type:        "operation_completed",
+						Level:       "info",
+						Source:      "background",
+						OperationID: op.ID,
+						Summary:     fmt.Sprintf("Operation completed: %s", op.Type),
+						Details:     map[string]any{"operation_type": op.Type, "operation_id": op.ID},
+					})
+				}
 			}
 
 			// Observe duration
