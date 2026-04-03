@@ -11845,6 +11845,44 @@ func (_c *MockStore_DeleteBookFilesForBook_Call) RunAndReturn(run func(string) e
 	return _c
 }
 
+// BatchUpsertBookFiles provides a mock function for the type MockStore
+func (_mock *MockStore) BatchUpsertBookFiles(files []*database.BookFile) error {
+	ret := _mock.Called(files)
+	if len(ret) == 0 {
+		panic("no return value specified for BatchUpsertBookFiles")
+	}
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func([]*database.BookFile) error); ok {
+		r0 = returnFunc(files)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+type MockStore_BatchUpsertBookFiles_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) BatchUpsertBookFiles(files interface{}) *MockStore_BatchUpsertBookFiles_Call {
+	return &MockStore_BatchUpsertBookFiles_Call{Call: _e.mock.On("BatchUpsertBookFiles", files)}
+}
+
+func (_c *MockStore_BatchUpsertBookFiles_Call) Run(run func(files []*database.BookFile)) *MockStore_BatchUpsertBookFiles_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]*database.BookFile))
+	})
+	return _c
+}
+
+func (_c *MockStore_BatchUpsertBookFiles_Call) Return(err error) *MockStore_BatchUpsertBookFiles_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_BatchUpsertBookFiles_Call) RunAndReturn(run func([]*database.BookFile) error) *MockStore_BatchUpsertBookFiles_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpsertBookFile provides a mock function for the type MockStore
 func (_mock *MockStore) UpsertBookFile(file *database.BookFile) error {
 	ret := _mock.Called(file)

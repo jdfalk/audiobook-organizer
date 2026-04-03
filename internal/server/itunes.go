@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.19.0
+// version: 2.20.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -409,38 +409,101 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 // file needs a full refresh (e.g., after restoring from backup or initial setup).
 // collectITLUpdates iterates all books and builds ITL location updates
 // from book_files (per-file itunes_path + itunes_persistent_id).
+//
+// The page scan is parallelised across 4 workers. Each worker processes a
+// disjoint range of pages, then results are merged.  GetAllBooks is safe to
+// call concurrently (both PebbleStore and SQLiteStore hold no write lock
+// during reads).
 func collectITLUpdates(store database.Store) []itunes.ITLLocationUpdate {
-	var updates []itunes.ITLLocationUpdate
-	const pageSize = 10000
-	offset := 0
-	for {
-		books, err := store.GetAllBooks(pageSize, offset)
-		if err != nil || len(books) == 0 {
-			break
+	const (
+		pageSize  = 10000
+		numWorkers = 4
+	)
+
+	// First pass: count total books so we can split work evenly.
+	// We do a single sequential scan here; the per-book work below is where
+	// the parallelism pays off.
+	type pageRange struct {
+		start int
+		end   int // exclusive; -1 means "until empty page"
+	}
+
+	// Collect all pages sequentially (offset arithmetic only), then dispatch
+	// to workers.  Each worker handles a contiguous slice of page offsets.
+	//
+	// We don't know the total count up front, so workers each own a subset of
+	// page offsets and stop when GetAllBooks returns an empty page.
+
+	// Build a channel of page offsets; workers pull from it.
+	pageCh := make(chan int, 256)
+	go func() {
+		offset := 0
+		for {
+			// Send the next page offset
+			pageCh <- offset
+			offset += pageSize
+			// We keep sending; workers will stop when pages come back empty.
+			// We cap at a reasonable upper bound (50M books) to avoid an
+			// infinite goroutine in pathological cases.
+			if offset > 50_000_000 {
+				break
+			}
 		}
-		for i := range books {
-			files, _ := store.GetBookFiles(books[i].ID)
-			if len(files) > 0 {
-				for _, f := range files {
-					if f.ITunesPersistentID != "" && f.ITunesPath != "" {
-						updates = append(updates, itunes.ITLLocationUpdate{
-							PersistentID: f.ITunesPersistentID,
-							NewLocation:  f.ITunesPath,
+		close(pageCh)
+	}()
+
+	type result struct {
+		updates []itunes.ITLLocationUpdate
+	}
+	resultCh := make(chan result, numWorkers)
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var local []itunes.ITLLocationUpdate
+			for offset := range pageCh {
+				books, err := store.GetAllBooks(pageSize, offset)
+				if err != nil || len(books) == 0 {
+					break
+				}
+				for i := range books {
+					files, _ := store.GetBookFiles(books[i].ID)
+					if len(files) > 0 {
+						for _, f := range files {
+							if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+								local = append(local, itunes.ITLLocationUpdate{
+									PersistentID: f.ITunesPersistentID,
+									NewLocation:  f.ITunesPath,
+								})
+							}
+						}
+					} else if books[i].ITunesPersistentID != nil && *books[i].ITunesPersistentID != "" &&
+						books[i].ITunesPath != nil && *books[i].ITunesPath != "" {
+						local = append(local, itunes.ITLLocationUpdate{
+							PersistentID: *books[i].ITunesPersistentID,
+							NewLocation:  *books[i].ITunesPath,
 						})
 					}
 				}
-			} else if books[i].ITunesPersistentID != nil && *books[i].ITunesPersistentID != "" &&
-				books[i].ITunesPath != nil && *books[i].ITunesPath != "" {
-				updates = append(updates, itunes.ITLLocationUpdate{
-					PersistentID: *books[i].ITunesPersistentID,
-					NewLocation:  *books[i].ITunesPath,
-				})
+				if len(books) < pageSize {
+					break
+				}
 			}
-		}
-		if len(books) < pageSize {
-			break
-		}
-		offset += pageSize
+			resultCh <- result{updates: local}
+		}()
+	}
+
+	// Close resultCh once all workers finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	var updates []itunes.ITLLocationUpdate
+	for r := range resultCh {
+		updates = append(updates, r.updates...)
 	}
 	return updates
 }
@@ -2020,6 +2083,22 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 	}
 	log.Info("Indexed %d books (%d with iTunes persistent IDs)", len(allBooks), len(pidIndex))
 
+	// pendingFiles collects book_files to be batch-upserted. We flush every
+	// itunesBatchFlushSize groups to bound memory usage while amortising the
+	// per-transaction overhead of individual UpsertBookFile calls.
+	const itunesBatchFlushSize = 500
+	var pendingFiles []*database.BookFile
+
+	flushPendingFiles := func() {
+		if len(pendingFiles) == 0 {
+			return
+		}
+		if err := store.BatchUpsertBookFiles(pendingFiles); err != nil {
+			log.Error("BatchUpsertBookFiles failed (continuing): %v", err)
+		}
+		pendingFiles = pendingFiles[:0]
+	}
+
 	var updated, newBooks, unchanged int
 	for i, group := range groups {
 		if log.IsCanceled() {
@@ -2130,7 +2209,8 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				unchanged++
 			}
 
-			// Upsert book_files only for tracks that are new or changed
+			// Collect book_files for tracks that are new or changed; skip
+			// unchanged ones (same PID + same iTunes path).
 			for _, track := range group.tracks {
 				if track.PersistentID == "" {
 					continue
@@ -2138,7 +2218,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				// Check if this track already exists with same data
 				existingFile, _ := store.GetBookFileByPID(track.PersistentID)
 				if existingFile != nil && existingFile.ITunesPath == track.Location {
-					continue // unchanged — skip the write
+					continue // unchanged — skip
 				}
 
 				remappedPath := importOpts.RemapPath(track.Location)
@@ -2146,7 +2226,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				if decodedPath == "" {
 					decodedPath = remappedPath
 				}
-				_ = store.UpsertBookFile(&database.BookFile{
+				pendingFiles = append(pendingFiles, &database.BookFile{
 					BookID:             existing.ID,
 					FilePath:           decodedPath,
 					ITunesPath:         track.Location,
@@ -2188,14 +2268,14 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 					})
 				}
 
-				// Upsert book_files for every track in the group
+				// Collect book_files for every track in the group
 				for _, track := range group.tracks {
 					remappedPath := importOpts.RemapPath(track.Location)
 					decodedPath, _ := itunes.DecodeLocation(remappedPath)
 					if decodedPath == "" {
 						decodedPath = remappedPath
 					}
-					_ = store.UpsertBookFile(&database.BookFile{
+					pendingFiles = append(pendingFiles, &database.BookFile{
 						BookID:             created.ID,
 						FilePath:           decodedPath,
 						ITunesPath:         track.Location,
@@ -2213,6 +2293,11 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 			}
 		}
 
+		// Flush collected files every itunesBatchFlushSize groups
+		if len(pendingFiles) >= itunesBatchFlushSize {
+			flushPendingFiles()
+		}
+
 		processed := i + 1
 		if processed%itunesImportProgressBatch == 0 || processed == totalGroups {
 			message := fmt.Sprintf("Syncing book %d of %d (updated %d, new %d, unchanged %d)",
@@ -2220,6 +2305,9 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 			log.UpdateProgress(processed, totalGroups, message)
 		}
 	}
+
+	// Flush any remaining pending files after the loop
+	flushPendingFiles()
 
 	// Save fingerprint after sync
 	if fp, err := itunes.ComputeFingerprint(libraryPath); err == nil {

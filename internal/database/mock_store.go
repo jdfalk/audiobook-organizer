@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -1475,4 +1475,5 @@ func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error)       
 func (m *MockStore) DeleteBookFile(id string) error                                            { return nil }
 func (m *MockStore) DeleteBookFilesForBook(bookID string) error                                { return nil }
 func (m *MockStore) UpsertBookFile(file *BookFile) error                                       { return nil }
+func (m *MockStore) BatchUpsertBookFiles(files []*BookFile) error                              { return nil }
 func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error { return nil }
