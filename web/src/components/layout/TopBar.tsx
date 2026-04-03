@@ -1,5 +1,5 @@
 // file: web/src/components/layout/TopBar.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useEffect, useRef, useState } from 'react';
@@ -115,7 +115,13 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
         >
           <MenuIcon />
         </IconButton>
-        <Typography variant="h6" noWrap component="div" sx={{ mr: 2 }}>
+        <Typography
+          variant="h6"
+          noWrap
+          component="div"
+          onClick={() => navigate('/dashboard')}
+          sx={{ mr: 2, cursor: 'pointer', userSelect: 'none' }}
+        >
           Audiobook Organizer
         </Typography>
         <Box

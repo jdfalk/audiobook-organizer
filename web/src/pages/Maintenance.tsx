@@ -1,5 +1,5 @@
 // file: web/src/pages/Maintenance.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 import { useEffect, useState } from 'react';
@@ -15,6 +15,8 @@ import {
   Switch,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow.js';
 import * as api from '../services/api';
@@ -28,6 +30,8 @@ const categoryLabels: Record<string, string> = {
 const categoryOrder = ['library', 'sync', 'maintenance'];
 
 export function Maintenance() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tasks, setTasks] = useState<api.TaskInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,8 +165,9 @@ export function Maintenance() {
               <Stack spacing={1}>
                 {group.tasks.map((task) => (
                   <Card key={task.name} variant="outlined">
-                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                      {/* Task info row */}
+                      <Box sx={{ mb: isMobile ? 1 : 0 }}>
                         <Typography variant="subtitle2">{task.description}</Typography>
                         <Typography variant="caption" color="text.secondary">
                           {task.name}
@@ -170,73 +175,85 @@ export function Maintenance() {
                         </Typography>
                       </Box>
 
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            size="small"
-                            checked={task.enabled}
-                            onChange={(e) => handleToggle(task.name, e.target.checked)}
-                          />
-                        }
-                        label="Enabled"
-                        sx={{ mx: 0 }}
-                      />
-
-                      {task.interval_minutes > 0 && (
-                        <TextField
-                          label="Interval (min)"
-                          type="number"
-                          size="small"
-                          value={task.interval_minutes}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            if (val > 0) handleIntervalChange(task.name, val);
-                          }}
-                          sx={{ width: 120 }}
-                          inputProps={{ min: 1 }}
-                        />
-                      )}
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            size="small"
-                            checked={task.run_on_startup}
-                            onChange={(e) => handleStartupToggle(task.name, e.target.checked)}
-                          />
-                        }
-                        label="On Start"
-                        sx={{ mx: 0 }}
-                      />
-
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            size="small"
-                            checked={task.run_in_maintenance_window}
-                            onChange={(e) => handleMaintenanceWindowToggle(task.name, e.target.checked)}
-                          />
-                        }
-                        label="Maint. Window"
-                        sx={{ mx: 0 }}
-                      />
-
-                      <Chip
-                        size="small"
-                        label={task.enabled ? 'Active' : 'Disabled'}
-                        color={task.enabled ? 'success' : 'default'}
-                        variant="outlined"
-                      />
-
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={<PlayArrowIcon />}
-                        disabled={runningTask === task.name}
-                        onClick={() => handleRun(task.name)}
+                      {/* Controls row — wraps on mobile */}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: 1,
+                          mt: isMobile ? 1 : 0.5,
+                        }}
                       >
-                        {runningTask === task.name ? 'Starting...' : 'Run Now'}
-                      </Button>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={task.enabled}
+                              onChange={(e) => handleToggle(task.name, e.target.checked)}
+                            />
+                          }
+                          label="Enabled"
+                          sx={{ mx: 0 }}
+                        />
+
+                        {task.interval_minutes > 0 && (
+                          <TextField
+                            label="Interval (min)"
+                            type="number"
+                            size="small"
+                            value={task.interval_minutes}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (val > 0) handleIntervalChange(task.name, val);
+                            }}
+                            sx={{ width: 120 }}
+                            inputProps={{ min: 1 }}
+                          />
+                        )}
+
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={task.run_on_startup}
+                              onChange={(e) => handleStartupToggle(task.name, e.target.checked)}
+                            />
+                          }
+                          label="On Start"
+                          sx={{ mx: 0 }}
+                        />
+
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={task.run_in_maintenance_window}
+                              onChange={(e) => handleMaintenanceWindowToggle(task.name, e.target.checked)}
+                            />
+                          }
+                          label="Maint. Window"
+                          sx={{ mx: 0 }}
+                        />
+
+                        <Chip
+                          size="small"
+                          label={task.enabled ? 'Active' : 'Disabled'}
+                          color={task.enabled ? 'success' : 'default'}
+                          variant="outlined"
+                        />
+
+                        <Button
+                          variant="contained"
+                          size="small"
+                          fullWidth={isMobile}
+                          startIcon={<PlayArrowIcon />}
+                          disabled={runningTask === task.name}
+                          onClick={() => handleRun(task.name)}
+                        >
+                          {runningTask === task.name ? 'Starting...' : 'Run Now'}
+                        </Button>
+                      </Box>
                     </CardContent>
                   </Card>
                 ))}
