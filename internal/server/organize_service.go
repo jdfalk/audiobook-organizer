@@ -429,7 +429,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			// Multi-file book: organize each segment file into the target directory
 			newPath, err = orgSvc.organizeDirectoryBook(org, &book, log)
 		} else {
-			newPath, err = org.OrganizeBook(&book)
+			newPath, _, err = org.OrganizeBook(&book)
 		}
 
 		if err != nil {
@@ -701,9 +701,11 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 		}
 	}
 
-	// Update original book: set version group, mark as non-primary
+	// Update original book: set version group, mark as non-primary, update state
+	organizedSourceState := "organized_source" // has an organized copy — no longer "needs organizing"
 	book.VersionGroupID = &versionGroupID
 	book.IsPrimaryVersion = &isNotPrimary
+	book.LibraryState = &organizedSourceState
 	if _, err := orgSvc.db.UpdateBook(book.ID, book); err != nil {
 		log.Warn("Failed to update original book %s version group: %v", book.ID, err)
 	}

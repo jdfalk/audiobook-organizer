@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -51,31 +51,32 @@ func NewOrganizer(cfg *config.Config) *Organizer {
 }
 
 // OrganizeBook organizes a book file according to the configured patterns
-func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
+// Returns (targetPath, method, error) where method is "reflink", "hardlink", "copy", or "symlink"
+func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 	if book == nil || book.FilePath == "" {
-		return "", fmt.Errorf("invalid book or file path")
+		return "", "", fmt.Errorf("invalid book or file path")
 	}
 
 	// Skip directories — only organize individual files
 	if info, err := os.Stat(book.FilePath); err == nil && info.IsDir() {
-		return "", fmt.Errorf("source path is a directory, not a file: %s", book.FilePath)
+		return "", "", fmt.Errorf("source path is a directory, not a file: %s", book.FilePath)
 	}
 
 	// Generate target path
 	targetPath, err := o.generateTargetPath(book)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate target path: %w", err)
+		return "", "", fmt.Errorf("failed to generate target path: %w", err)
 	}
 
 	// Create target directory
 	targetDir := filepath.Dir(targetPath)
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create target directory: %w", err)
+		return "", "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 
 	// Check if source and target are the same path
 	if book.FilePath == targetPath {
-		return targetPath, nil
+		return targetPath, "", nil
 	}
 
 	// Check if file already exists at target path
@@ -83,10 +84,10 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 		// Target exists — check if it's the same inode (already hardlinked)
 		if srcInfo, srcErr := os.Stat(book.FilePath); srcErr == nil {
 			if os.SameFile(srcInfo, targetInfo) {
-				return targetPath, nil // Already the same file (hardlink/reflink)
+				return targetPath, "", nil // Already the same file (hardlink/reflink)
 			}
 		}
-		return targetPath, nil // Target already exists with different content; don't overwrite
+		return targetPath, "", nil // Target already exists with different content; don't overwrite
 	}
 
 	// Check for duplicate files by hash (if hash is available in book metadata)
@@ -98,7 +99,7 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 			// Another book with same hash exists - check if it's in the output directory
 			if strings.HasPrefix(existingBook.FilePath, o.config.RootDir) {
 				// File already organized under different metadata
-				return existingBook.FilePath, fmt.Errorf("duplicate file already organized at: %s", existingBook.FilePath)
+				return existingBook.FilePath, "", fmt.Errorf("duplicate file already organized at: %s", existingBook.FilePath)
 			}
 		}
 	}
@@ -109,25 +110,25 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, error) {
 	if strategy == "auto" {
 		// Try reflink -> hardlink -> copy
 		if err := o.reflinkFile(book.FilePath, targetPath); err == nil {
-			return targetPath, nil
+			return targetPath, "reflink", nil
 		}
 		if err := o.hardlinkFile(book.FilePath, targetPath); err == nil {
-			return targetPath, nil
+			return targetPath, "hardlink", nil
 		}
 		strategy = "copy"
 	}
 
 	switch strategy {
 	case "copy":
-		return targetPath, o.copyFile(book.FilePath, targetPath)
+		return targetPath, "copy", o.copyFile(book.FilePath, targetPath)
 	case "hardlink":
-		return targetPath, o.hardlinkFile(book.FilePath, targetPath)
+		return targetPath, "hardlink", o.hardlinkFile(book.FilePath, targetPath)
 	case "reflink":
-		return targetPath, o.reflinkFile(book.FilePath, targetPath)
+		return targetPath, "reflink", o.reflinkFile(book.FilePath, targetPath)
 	case "symlink":
-		return targetPath, o.symlinkFile(book.FilePath, targetPath)
+		return targetPath, "symlink", o.symlinkFile(book.FilePath, targetPath)
 	default:
-		return "", fmt.Errorf("unknown organization strategy: %s", strategy)
+		return "", "", fmt.Errorf("unknown organization strategy: %s", strategy)
 	}
 }
 
@@ -456,7 +457,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 			continue
 		}
 
-		if err := o.organizeFile(srcPath, dstPath); err != nil {
+		if _, err := o.organizeFile(srcPath, dstPath); err != nil {
 			return "", nil, fmt.Errorf("failed to organize segment %s: %w", fileName, err)
 		}
 		pathMap[srcPath] = dstPath
@@ -466,19 +467,20 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 }
 
 // organizeFile copies/links a single file using the configured strategy.
-func (o *Organizer) organizeFile(src, dst string) error {
+// Returns (method, error) where method is "reflink", "hardlink", "copy", or "symlink"
+func (o *Organizer) organizeFile(src, dst string) (string, error) {
 	strategy := o.config.OrganizationStrategy
 
 	if strategy == "auto" {
 		if err := o.reflinkFile(src, dst); err == nil {
 			log.Printf("[DEBUG] organizeFile: reflink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
-			return nil
+			return "reflink", nil
 		} else {
 			log.Printf("[WARN] organizeFile: reflink failed for %s: %v", filepath.Base(src), err)
 		}
 		if err := o.hardlinkFile(src, dst); err == nil {
 			log.Printf("[DEBUG] organizeFile: hardlink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
-			return nil
+			return "hardlink", nil
 		} else {
 			log.Printf("[WARN] organizeFile: hardlink failed for %s: %v", filepath.Base(src), err)
 		}
@@ -488,15 +490,15 @@ func (o *Organizer) organizeFile(src, dst string) error {
 
 	switch strategy {
 	case "copy":
-		return o.copyFile(src, dst)
+		return "copy", o.copyFile(src, dst)
 	case "hardlink":
-		return o.hardlinkFile(src, dst)
+		return "hardlink", o.hardlinkFile(src, dst)
 	case "reflink":
-		return o.reflinkFile(src, dst)
+		return "reflink", o.reflinkFile(src, dst)
 	case "symlink":
-		return o.symlinkFile(src, dst)
+		return "symlink", o.symlinkFile(src, dst)
 	default:
-		return fmt.Errorf("unknown organization strategy: %s", strategy)
+		return "", fmt.Errorf("unknown organization strategy: %s", strategy)
 	}
 }
 

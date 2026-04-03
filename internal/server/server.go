@@ -1562,6 +1562,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/cleanup-organize-mess", s.handleCleanupOrganizeMess)
 			protected.POST("/maintenance/fix-author-narrator-swap", s.handleFixAuthorNarratorSwap)
 			protected.POST("/maintenance/fix-version-groups", s.handleFixVersionGroups)
+			protected.POST("/maintenance/fix-library-states", s.handleFixLibraryStates)
 			protected.POST("/maintenance/enrich-book-files", s.handleEnrichBookFiles)
 			protected.POST("/maintenance/dedup-books", s.handleDedupBooks)
 			protected.POST("/maintenance/fix-book-file-paths", s.handleFixBookFilePaths)
@@ -5951,7 +5952,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							if err != nil || dbBook == nil {
 								continue
 							}
-							newPath, err := org.OrganizeBook(dbBook)
+							newPath, _, err := org.OrganizeBook(dbBook)
 							if err != nil {
 								_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
 								continue
@@ -6008,7 +6009,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							if err != nil || dbBook == nil {
 								continue
 							}
-							newPath, err := org.OrganizeBook(dbBook)
+							newPath, _, err := org.OrganizeBook(dbBook)
 							if err != nil {
 								continue
 							}

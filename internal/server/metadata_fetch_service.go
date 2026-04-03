@@ -1223,7 +1223,7 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 		newBookPath = targetDir
 	} else {
 		// Single-file: organize just the book file
-		p, err := org.OrganizeBook(book)
+		p, _, err := org.OrganizeBook(book)
 		if err != nil {
 			log.Printf("[WARN] failed to create library copy for %s: %v", book.ID, err)
 			return nil

@@ -292,7 +292,7 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 			if err != nil || dbBook == nil {
 				continue
 			}
-			newPath, err := org.OrganizeBook(dbBook)
+			newPath, _, err := org.OrganizeBook(dbBook)
 			if err != nil {
 				log.Warn("Organize failed for %s: %v", dbBook.Title, err)
 				continue
