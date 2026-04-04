@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	osexec "os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -696,9 +697,10 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 	outData = append(outData, newHeader...)
 	outData = append(outData, encrypted...)
 
-	if err := os.WriteFile(outputPath, outData, 0644); err != nil {
+	if err := os.WriteFile(outputPath, outData, 0666); err != nil {
 		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
+	fixITLPermissions(outputPath)
 
 	return &ITLWriteBackResult{
 		UpdatedCount: updatedCount,
@@ -955,6 +957,8 @@ func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*
 }
 
 // writeITLFile handles compression, encryption, and writing of an ITL file.
+// Uses 0666 permissions and runs setfacl to restore a permissive ACL mask
+// so the file remains accessible via SMB to iTunes.
 func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress bool, count int) (*ITLWriteBackResult, error) {
 	var finalPayload []byte
 	if compress {
@@ -972,12 +976,38 @@ func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress b
 	outData = append(outData, newHeader...)
 	outData = append(outData, encrypted...)
 
-	if err := os.WriteFile(outputPath, outData, 0644); err != nil {
+	if err := os.WriteFile(outputPath, outData, 0666); err != nil {
 		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
+
+	// Fix ACL mask after write so the file is accessible via SMB to iTunes
+	fixITLPermissions(outputPath)
 
 	return &ITLWriteBackResult{
 		UpdatedCount: count,
 		OutputPath:   outputPath,
 	}, nil
+}
+
+// fixITLPermissions sets permissive ACL mask on an ITL file so it's accessible
+// via SMB shares. Silently ignores errors (setfacl might not be available,
+// or the user might not have permission to change ACLs).
+func fixITLPermissions(path string) {
+	// setfacl sets the ACL mask so effective permissions include rw for all ACL entries
+	if cmd := osexec.Command("setfacl", "-m", "mask::rw", path); cmd != nil {
+		_ = cmd.Run() // best-effort — may fail if setfacl not installed or no permission
+	}
+	_ = os.Chmod(path, 0666) // best-effort — may fail if not owner
+}
+
+// RenameITLFile renames an ITL file and fixes permissions/ACLs afterward.
+// Use this instead of os.Rename for ITL files to preserve SMB accessibility.
+// If the rename fails (e.g., target is locked by iTunes), returns the error
+// without cleaning up — the .tmp file remains for manual recovery or retry.
+func RenameITLFile(oldPath, newPath string) error {
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return fmt.Errorf("ITL rename failed (target may be locked by iTunes): %w", err)
+	}
+	fixITLPermissions(newPath)
+	return nil
 }

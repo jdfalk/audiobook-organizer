@@ -147,7 +147,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 				if err != nil {
 					log.Warn("Auto write-back failed: %v", err)
 				} else {
-					if renameErr := os.Rename(writePath+".tmp", writePath); renameErr != nil {
+					if renameErr := itunes.RenameITLFile(writePath+".tmp", writePath); renameErr != nil {
 						log.Warn("Auto write-back rename failed: %v", renameErr)
 					} else {
 						log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)

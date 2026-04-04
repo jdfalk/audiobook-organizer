@@ -388,7 +388,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	}
 
 	// Atomic replace
-	if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
+	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
 		stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
@@ -595,7 +595,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
-	if renameErr := os.Rename(itlPath+".tmp", itlPath); renameErr != nil {
+	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
 		})
@@ -2048,7 +2048,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 			tmpPath := itlPath + ".deferred-update.tmp"
 			result, itlErr := itunes.UpdateITLLocations(itlPath, tmpPath, updates)
 			if itlErr == nil && result.UpdatedCount > 0 {
-				_ = os.Rename(tmpPath, itlPath)
+				_ = itunes.RenameITLFile(tmpPath, itlPath)
 				for _, p := range pending {
 					_ = store.MarkDeferredITunesUpdateApplied(p.ID)
 				}
