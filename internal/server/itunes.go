@@ -536,53 +536,9 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
-	// Paginate through all books and collect those with iTunes PIDs
-	store := database.GlobalStore
-	var itlUpdates []itunes.ITLLocationUpdate
-	const pageSize = 10000
-	offset := 0
-
-	for {
-		books, err := store.GetAllBooks(pageSize, offset)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to query books: %v", err)})
-			return
-		}
-		if len(books) == 0 {
-			break
-		}
-		for i := range books {
-			book := &books[i]
-			files, _ := store.GetBookFiles(book.ID)
-			if len(files) > 0 {
-				// Use per-file persistent IDs and paths from book_files
-				for _, f := range files {
-					if f.ITunesPersistentID != "" && f.ITunesPath != "" {
-						itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-							PersistentID: f.ITunesPersistentID,
-							NewLocation:  f.ITunesPath,
-						})
-					}
-				}
-			} else {
-				// Fallback: use book-level iTunes fields for books without book_files rows
-				if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
-					continue
-				}
-				if book.ITunesPath == nil || *book.ITunesPath == "" {
-					continue
-				}
-				itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-					PersistentID: *book.ITunesPersistentID,
-					NewLocation:  *book.ITunesPath,
-				})
-			}
-		}
-		if len(books) < pageSize {
-			break
-		}
-		offset += pageSize
-	}
+	// Collect updates from primary versions only (avoids duplicate PIDs
+	// from imported + organized copies of the same book)
+	itlUpdates := collectITLUpdates(database.GlobalStore)
 
 	if len(itlUpdates) == 0 {
 		c.JSON(http.StatusOK, gin.H{
