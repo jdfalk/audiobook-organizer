@@ -625,9 +625,25 @@ func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, b
 
 	log.Info("Organizing %d segment file(s) for %s (from book_files)", len(segmentPaths), book.Title)
 
-	targetDir, _, err := org.OrganizeBookDirectory(book, segmentPaths)
+	targetDir, pathMap, err := org.OrganizeBookDirectory(book, segmentPaths)
 	if err != nil {
 		return "", err
+	}
+
+	// Verify at least some files were actually copied to the target
+	if len(pathMap) == 0 {
+		return "", fmt.Errorf("no files were copied for %s — all source files missing", book.Title)
+	}
+
+	// Check how many files actually exist in the target directory
+	copiedCount := 0
+	for _, dstPath := range pathMap {
+		if _, statErr := os.Stat(dstPath); statErr == nil {
+			copiedCount++
+		}
+	}
+	if copiedCount == 0 {
+		return "", fmt.Errorf("organize produced 0 files for %s — all copies failed", book.Title)
 	}
 
 	return targetDir, nil
