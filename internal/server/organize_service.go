@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -722,10 +722,17 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 			newBF := bf
 			newBF.ID = ulid.Make().String()
 			newBF.BookID = newBookID
-			// For directory books, update file paths to point to the organized location
+			// Update file paths to point to the organized location
 			if isDir && bf.FilePath != "" {
 				fileName := filepath.Base(bf.FilePath)
 				newBF.FilePath = filepath.Join(newPath, fileName)
+			} else if !isDir {
+				newBF.FilePath = newPath
+			}
+			// ALWAYS recompute itunes_path from the new file_path so that
+			// files in the audiobook-organizer folder don't keep a stale
+			// W:/itunes/... path from the original iTunes source.
+			if newBF.FilePath != "" {
 				newBF.ITunesPath = computeITunesPath(newBF.FilePath)
 			}
 			_ = orgSvc.db.CreateBookFile(&newBF)
