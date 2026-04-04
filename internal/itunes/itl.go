@@ -312,7 +312,14 @@ func itlInflate(data []byte) ([]byte, bool) {
 
 func itlDeflate(data []byte) []byte {
 	var buf bytes.Buffer
-	w := zlib.NewWriter(&buf)
+	// Use BestSpeed (level 1) to match iTunes' compression more closely.
+	// iTunes appears to use a low compression level. Using Go's default (level 6)
+	// produces smaller but different output that iTunes rejects.
+	w, err := zlib.NewWriterLevel(&buf, zlib.BestSpeed)
+	if err != nil {
+		// Fallback to default if level fails
+		w = zlib.NewWriter(&buf)
+	}
 	_, _ = w.Write(data)
 	_ = w.Close()
 	return buf.Bytes()
