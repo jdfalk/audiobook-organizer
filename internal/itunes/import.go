@@ -1,5 +1,5 @@
 // file: internal/itunes/import.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 4b58a17d-b2b4-4743-9b7e-3462e2ed55ac
 
 package itunes
@@ -123,10 +123,41 @@ func (o *ImportOptions) RemapPath(p string) string {
 		}
 	}
 
-	// No mapping matched — return with prefix stripped but URL-decoded
+	// If the path had a file:// prefix but no mapping matched, return the
+	// decoded path (without the file:// prefix) so callers get a usable path.
 	if prefix != "" {
 		return stripped
 	}
+
+	// Raw Windows path with no file:// prefix (e.g. "X:/books/itunes/...").
+	// Try each mapping's From value as a plain path prefix (case-insensitive,
+	// backslash-normalised) so the caller ends up with a Linux path.
+	if len(normalized) >= 2 && normalized[1] == ':' {
+		for _, m := range o.PathMappings {
+			from := strings.ReplaceAll(m.From, "\\", "/")
+			if from == "" || m.To == "" {
+				continue
+			}
+			// Strip any file:// prefix from the mapping's From for a plain comparison.
+			plainFrom := from
+			if strings.HasPrefix(plainFrom, "file://localhost/") {
+				plainFrom = plainFrom[len("file://localhost/"):]
+			} else if strings.HasPrefix(plainFrom, "file:///") {
+				plainFrom = plainFrom[len("file:///"):]
+			}
+			if plainFrom == "" {
+				continue
+			}
+			if strings.HasPrefix(normalized, plainFrom) {
+				return m.To + normalized[len(plainFrom):]
+			}
+			// Case-insensitive fallback.
+			if strings.HasPrefix(strings.ToLower(normalized), strings.ToLower(plainFrom)) {
+				return m.To + normalized[len(plainFrom):]
+			}
+		}
+	}
+
 	return p
 }
 
