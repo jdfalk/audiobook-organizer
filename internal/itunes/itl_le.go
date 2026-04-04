@@ -658,15 +658,19 @@ func rewriteHohmLocationLE(data []byte, offset, length int, newLocation string) 
 	encodedStr, encodingFlag := encodeHohmString(newLocation)
 
 	newStrDataLen := len(encodedStr)
-	newChunkLen := 40 + newStrDataLen
+	newTotalLen := 40 + newStrDataLen
 
-	buf := make([]byte, newChunkLen)
+	// Preserve the original headerLen (offset+4) — it's the fixed header size (typically 24).
+	// Only update totalLen (offset+8) which includes the variable-length string data.
+	origHeaderLen := readUint32LE(data, offset+4)
+
+	buf := make([]byte, newTotalLen)
 	// Copy tag
 	copy(buf[0:4], data[offset:offset+4])
-	// New length (LE)
-	writeUint32LE(buf, 4, uint32(newChunkLen))
-	// New recLength (LE)
-	writeUint32LE(buf, 8, uint32(newChunkLen))
+	// Preserve original headerLen (LE) — NOT the total length
+	writeUint32LE(buf, 4, origHeaderLen)
+	// New totalLen (LE) — this is the full chunk size including string data
+	writeUint32LE(buf, 8, uint32(newTotalLen))
 	// hohmType (LE)
 	copy(buf[12:16], data[offset+12:offset+16])
 	// Copy the 12-byte header, update encoding flag
