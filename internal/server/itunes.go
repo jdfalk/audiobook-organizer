@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.20.0
+// version: 2.21.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -2226,6 +2226,9 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				if decodedPath == "" {
 					decodedPath = remappedPath
 				}
+				// Safety: if the decoded path is still a Windows path (e.g. "X:/..."),
+				// try remapping the decoded path directly against each configured mapping.
+				decodedPath = remapWindowsPath(decodedPath, importOpts)
 				pendingFiles = append(pendingFiles, &database.BookFile{
 					BookID:             existing.ID,
 					FilePath:           decodedPath,
@@ -2275,6 +2278,9 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 					if decodedPath == "" {
 						decodedPath = remappedPath
 					}
+					// Safety: if the decoded path is still a Windows path (e.g. "X:/..."),
+					// try remapping the decoded path directly against each configured mapping.
+					decodedPath = remapWindowsPath(decodedPath, importOpts)
 					pendingFiles = append(pendingFiles, &database.BookFile{
 						BookID:             created.ID,
 						FilePath:           decodedPath,
@@ -2324,4 +2330,39 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 	// Write-back is triggered by POST /itunes/write-back-all or after organize.
 
 	return nil
+}
+
+// remapWindowsPath is a last-resort helper that detects raw Windows paths
+// (e.g. "X:/books/itunes/...") that survived RemapPath+DecodeLocation unchanged
+// and tries each configured path mapping to convert them to Linux paths.
+// If no mapping matches, the original path is returned.
+func remapWindowsPath(p string, opts itunes.ImportOptions) string {
+	if len(p) < 2 || p[1] != ':' {
+		return p // not a Windows drive-letter path
+	}
+	normalized := strings.ReplaceAll(p, "\\", "/")
+	for _, m := range opts.PathMappings {
+		from := strings.ReplaceAll(m.From, "\\", "/")
+		if from == "" || m.To == "" {
+			continue
+		}
+		// Strip any file:// prefix from the mapping so we can compare plain paths.
+		plainFrom := from
+		if strings.HasPrefix(plainFrom, "file://localhost/") {
+			plainFrom = plainFrom[len("file://localhost/"):]
+		} else if strings.HasPrefix(plainFrom, "file:///") {
+			plainFrom = plainFrom[len("file:///"):]
+		}
+		if plainFrom == "" {
+			continue
+		}
+		if strings.HasPrefix(normalized, plainFrom) {
+			return m.To + normalized[len(plainFrom):]
+		}
+		// Case-insensitive fallback.
+		if strings.HasPrefix(strings.ToLower(normalized), strings.ToLower(plainFrom)) {
+			return m.To + normalized[len(plainFrom):]
+		}
+	}
+	return p
 }
