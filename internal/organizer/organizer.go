@@ -458,6 +458,11 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 		}
 
 		if _, err := o.organizeFile(srcPath, dstPath); err != nil {
+			// Skip missing source files instead of aborting the entire book
+			if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file") {
+				log.Printf("[WARN] organizeFile: skipping missing source file: %s", srcPath)
+				continue
+			}
 			return "", nil, fmt.Errorf("failed to organize segment %s: %w", fileName, err)
 		}
 		pathMap[srcPath] = dstPath
