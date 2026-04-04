@@ -469,6 +469,12 @@ func collectITLUpdates(store database.Store) []itunes.ITLLocationUpdate {
 					break
 				}
 				for i := range books {
+					// Only collect from PRIMARY versions to avoid duplicate PIDs.
+					// Both the original (imported) and organized copy have book_files
+					// with the same PID but different paths. We want the primary's path.
+					if books[i].IsPrimaryVersion != nil && !*books[i].IsPrimaryVersion {
+						continue
+					}
 					files, _ := store.GetBookFiles(books[i].ID)
 					if len(files) > 0 {
 						for _, f := range files {
