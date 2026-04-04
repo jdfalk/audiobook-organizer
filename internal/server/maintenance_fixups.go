@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -3358,5 +3358,107 @@ func (s *Server) handleFixLibraryStates(c *gin.Context) {
 		"skipped":  skipCount,
 		"errors":   errorCount,
 		"results":  results,
+	})
+}
+
+// recomputeITunesPathResult describes one book_file that was (or would be) fixed.
+type recomputeITunesPathResult struct {
+	BookFileID   string `json:"book_file_id"`
+	BookID       string `json:"book_id"`
+	FilePath     string `json:"file_path"`
+	OldITunesPath string `json:"old_itunes_path"`
+	NewITunesPath string `json:"new_itunes_path"`
+	Applied      bool   `json:"applied"`
+	Error        string `json:"error,omitempty"`
+}
+
+// handleRecomputeITunesPaths iterates all book_files on PRIMARY books and
+// recomputes itunes_path from file_path whenever they differ.  Books whose
+// file_path lives under the audiobook-organizer root but whose itunes_path
+// still points at the old iTunes location (e.g. W:/itunes/…) are the primary
+// target, but the handler fixes any book_file where the recomputed value
+// differs from the stored value.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update the database
+func (s *Server) handleRecomputeITunesPaths(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var (
+		fixCount   int
+		skipCount  int
+		errorCount int
+		results    []recomputeITunesPathResult
+	)
+
+	for i := range allBooks {
+		book := &allBooks[i]
+		// Only consider PRIMARY books; originals/non-primaries are not the
+		// organized copies and should not have their itunes_path changed here.
+		if book.IsPrimaryVersion == nil || !*book.IsPrimaryVersion {
+			continue
+		}
+
+		bookFiles, bfErr := store.GetBookFiles(book.ID)
+		if bfErr != nil || len(bookFiles) == 0 {
+			continue
+		}
+
+		for _, bf := range bookFiles {
+			if bf.FilePath == "" {
+				skipCount++
+				continue
+			}
+
+			want := computeITunesPath(bf.FilePath)
+			if bf.ITunesPath == want {
+				skipCount++
+				continue
+			}
+
+			result := recomputeITunesPathResult{
+				BookFileID:    bf.ID,
+				BookID:        book.ID,
+				FilePath:      bf.FilePath,
+				OldITunesPath: bf.ITunesPath,
+				NewITunesPath: want,
+			}
+
+			if !dryRun {
+				bf.ITunesPath = want
+				if updateErr := store.UpdateBookFile(bf.ID, &bf); updateErr != nil {
+					result.Error = updateErr.Error()
+					errorCount++
+				} else {
+					result.Applied = true
+					fixCount++
+				}
+			} else {
+				fixCount++
+			}
+
+			results = append(results, result)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run": dryRun,
+		"fixed":   fixCount,
+		"skipped": skipCount,
+		"errors":  errorCount,
+		"results": results,
 	})
 }
