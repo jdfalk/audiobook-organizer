@@ -16,14 +16,16 @@ import (
 
 // ITLOperationSet holds all pending mutations to apply in one pass.
 type ITLOperationSet struct {
-	Removes         map[string]bool     // PID hex strings to remove
-	Adds            []ITLNewTrack       // New tracks to insert
-	LocationUpdates []ITLLocationUpdate // Location changes for existing tracks
+	Removes         map[string]bool      // PID hex strings to remove
+	Adds            []ITLNewTrack        // New tracks to insert
+	LocationUpdates []ITLLocationUpdate  // Location changes for existing tracks
+	MetadataUpdates []ITLMetadataUpdate  // Metadata changes for existing tracks
 }
 
 // IsEmpty returns true if there are no operations to apply.
 func (ops *ITLOperationSet) IsEmpty() bool {
-	return len(ops.Removes) == 0 && len(ops.Adds) == 0 && len(ops.LocationUpdates) == 0
+	return len(ops.Removes) == 0 && len(ops.Adds) == 0 &&
+		len(ops.LocationUpdates) == 0 && len(ops.MetadataUpdates) == 0
 }
 
 // ApplyITLOperations reads the ITL file, applies all mutations to the
@@ -84,6 +86,15 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 			decompressed, patched = rewriteChunksBE(decompressed, updateMap)
 		}
 		totalUpdated += patched
+	}
+
+	// Phase 4: Metadata updates (title, artist, album, genre, etc.)
+	if len(ops.MetadataUpdates) > 0 {
+		if isLE {
+			var metaUpdated int
+			decompressed, metaUpdated = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
+			totalUpdated += metaUpdated
+		}
 	}
 
 	return writeITLFile(outputPath, hdr, decompressed, wasCompressed, totalUpdated)
