@@ -712,7 +712,7 @@ func UpdateITLLocations(inputPath, outputPath string, updates []ITLLocationUpdat
 	outData = append(outData, newHeader...)
 	outData = append(outData, encrypted...)
 
-	if err := os.WriteFile(outputPath, outData, 0666); err != nil {
+	if err := os.WriteFile(outputPath, outData, 0664); err != nil {
 		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
 	fixITLPermissions(outputPath)
@@ -761,7 +761,10 @@ func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWr
 		htim := buildHtimChunk(trackID, tr)
 		newChunks.Write(htim)
 
-		// Add hohm chunks for each non-empty string field
+		// Order matters: location first, then metadata (matches iTunes convention).
+		if tr.Location != "" {
+			newChunks.Write(buildHohmChunk(0x0D, tr.Location))
+		}
 		if tr.Name != "" {
 			newChunks.Write(buildHohmChunk(0x02, tr.Name))
 		}
@@ -776,9 +779,6 @@ func InsertITLTracks(inputPath, outputPath string, tracks []ITLNewTrack) (*ITLWr
 		}
 		if tr.Kind != "" {
 			newChunks.Write(buildHohmChunk(0x06, tr.Kind))
-		}
-		if tr.Location != "" {
-			newChunks.Write(buildHohmChunk(0x0D, tr.Location))
 		}
 	}
 
@@ -972,7 +972,7 @@ func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*
 }
 
 // writeITLFile handles compression, encryption, and writing of an ITL file.
-// Uses 0666 permissions and runs setfacl to restore a permissive ACL mask
+// Uses 0664 permissions and runs setfacl to restore a permissive ACL mask
 // so the file remains accessible via SMB to iTunes.
 func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress bool, count int) (*ITLWriteBackResult, error) {
 	var finalPayload []byte
@@ -991,7 +991,7 @@ func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress b
 	outData = append(outData, newHeader...)
 	outData = append(outData, encrypted...)
 
-	if err := os.WriteFile(outputPath, outData, 0666); err != nil {
+	if err := os.WriteFile(outputPath, outData, 0664); err != nil {
 		return nil, fmt.Errorf("writing ITL: %w", err)
 	}
 
@@ -1012,7 +1012,7 @@ func fixITLPermissions(path string) {
 	if cmd := osexec.Command("setfacl", "-m", "mask::rw", path); cmd != nil {
 		_ = cmd.Run() // best-effort — may fail if setfacl not installed or no permission
 	}
-	_ = os.Chmod(path, 0666) // best-effort — may fail if not owner
+	_ = os.Chmod(path, 0664) // best-effort — may fail if not owner
 }
 
 // RenameITLFile renames an ITL file and fixes permissions/ACLs afterward.

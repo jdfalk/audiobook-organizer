@@ -130,7 +130,7 @@ func writeSummaryMarkdown(path string, summary *BenchSummary) error {
 	}
 	sb.WriteString(fmt.Sprintf("**Total estimated cost:** $%.4f\n\n", totalCost))
 
-	return os.WriteFile(path, []byte(sb.String()), 0644)
+	return os.WriteFile(path, []byte(sb.String()), 0664)
 }
 
 func formatDuration(ms int64) string {

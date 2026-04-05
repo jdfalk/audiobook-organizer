@@ -173,5 +173,5 @@ func writeJSON(path string, v interface{}) error {
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0664)
 }

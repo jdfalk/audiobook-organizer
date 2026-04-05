@@ -152,7 +152,7 @@ func runDedupBenchPass2(cmd *cobra.Command, args []string) error {
 	// Create run directory
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join(benchOutputDir, ts+"-pass2")
-	if err := os.MkdirAll(runDir, 0755); err != nil {
+	if err := os.MkdirAll(runDir, 0775); err != nil {
 		return err
 	}
 
@@ -372,7 +372,7 @@ func submitSingleBatch(ctx context.Context, apiKey, model, systemPrompt, userPro
 	buf.Write(line)
 	buf.WriteByte('\n')
 
-	_ = os.WriteFile(filepath.Join(runDir, "batch_input.jsonl"), buf.Bytes(), 0644)
+	_ = os.WriteFile(filepath.Join(runDir, "batch_input.jsonl"), buf.Bytes(), 0664)
 
 	file, err := client.Files.New(ctx, openai.FileNewParams{
 		File:    bytes.NewReader(buf.Bytes()),

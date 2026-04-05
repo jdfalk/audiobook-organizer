@@ -3474,6 +3474,12 @@ func (s *Server) handleGenerateITLTests(c *gin.Context) {
 
 	outputDir := config.AppConfig.RootDir + "/.itunes-writeback/tests"
 
+	// Wipe existing test data so we get a clean slate
+	if err := os.RemoveAll(outputDir); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to clean output dir: %v", err)})
+		return
+	}
+
 	// Gather all books and book_files for the full-library test case
 	allBooks, err := store.GetAllBooks(100000, 0)
 	if err != nil {

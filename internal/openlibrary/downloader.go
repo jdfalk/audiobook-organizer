@@ -89,7 +89,7 @@ func (dt *DownloadTracker) set(dumpType string, p *DownloadProgress) {
 // Tries each source URL in order, falling back on failure.
 // Progress is tracked in the provided tracker (may be nil).
 func DownloadDump(dumpType string, targetDir string, tracker *DownloadTracker) error {
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	if err := os.MkdirAll(targetDir, 0o775); err != nil {
 		return fmt.Errorf("failed to create target dir: %w", err)
 	}
 

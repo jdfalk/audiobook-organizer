@@ -128,7 +128,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join("testdata/dedup-bench", ts)
-	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0775); err != nil {
 		internalError(c, "failed to create run directory", err)
 		return
 	}
@@ -162,7 +162,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 			for _, mode := range modes {
 				dirName := fmt.Sprintf("%s_%s_t%.1f_%s", tc.Model, tc.Prompt, tc.Temperature, mode)
 				outDir := filepath.Join(runDir, "runs", dirName)
-				os.MkdirAll(outDir, 0755)
+				os.MkdirAll(outDir, 0775)
 
 				systemPrompt := benchGetSystemPrompt(mode, tc.Prompt)
 				var userData []byte
@@ -185,7 +185,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 					chunkDir := outDir
 					if len(chunks) > 1 {
 						chunkDir = fmt.Sprintf("%s_chunk%d", outDir, ci)
-						os.MkdirAll(chunkDir, 0755)
+						os.MkdirAll(chunkDir, 0775)
 					}
 
 					prefix := "Review these duplicate author groups:\n\n"
@@ -577,8 +577,8 @@ func benchSubmitBatchJob(ctx context.Context, client *openai.Client, tc benchTes
 	buf.Write(line)
 	buf.WriteByte('\n')
 
-	os.MkdirAll(outDir, 0755)
-	os.WriteFile(filepath.Join(outDir, "batch_input.jsonl"), buf.Bytes(), 0644)
+	os.MkdirAll(outDir, 0775)
+	os.WriteFile(filepath.Join(outDir, "batch_input.jsonl"), buf.Bytes(), 0664)
 
 	file, err := client.Files.New(ctx, openai.FileNewParams{
 		File:    bytes.NewReader(buf.Bytes()),
@@ -613,6 +613,6 @@ func benchWriteJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0664)
 }
 

@@ -1,24 +1,20 @@
 # file: scripts/itunes-test-runner.ps1
-# version: 1.0.0
+# version: 1.1.0
 # guid: c8d9e0f1-2a3b-4c5d-6e7f-8a9b0c1d2e3f
 #
-# iTunes Test Runner — Validates .itl files by loading them into iTunes via COM.
+# iTunes Test Runner -- Validates .itl files by loading them into iTunes via COM.
 #
-# For each subfolder in the test directory, this script:
-#   1. Copies the iTunes Library.itl to a working location
-#   2. Updates the iTunes registry to point to that library
-#   3. Launches iTunes via COM and queries the library
-#   4. Verifies tracks and file locations
-#   5. Writes results.json with detailed findings
+# Strategy: iTunes always opens whatever "iTunes Library.itl" is in its library
+# folder. We find that folder, back up the real ITL, swap in each test ITL,
+# launch iTunes via COM, verify tracks, then restore the original.
 #
 # Usage:
-#   .\itunes-test-runner.ps1 [-BasePath "W:\audiobook-organizer\.itunes-writeback\tests\"]
+#   .\itunes-test-runner.ps1
 #   .\itunes-test-runner.ps1 -BasePath "C:\temp\itl-tests"
 #
 # Requirements:
 #   - iTunes for Windows installed
 #   - PowerShell 5.1+ (Windows PowerShell) or PowerShell 7+
-#   - Administrator access may be needed for registry modifications
 
 [CmdletBinding()]
 param(
@@ -58,60 +54,32 @@ function Stop-ITunesProcess {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: Set the iTunes library path via registry
+# Helper: Find iTunes library folder from registry or default location
 # ---------------------------------------------------------------------------
-function Set-ITunesLibraryPath {
-    param([string]$LibraryFolder)
-
-    $regPath = "HKCU:\Software\Apple Computer, Inc.\iTunes"
-
-    # Ensure the registry key exists
-    if (-not (Test-Path $regPath)) {
-        New-Item -Path $regPath -Force | Out-Null
-    }
-
-    # ITunesRecentDatabasePaths is a multi-string value listing library folders.
-    # iTunes picks the first entry. We prepend our test folder.
-    try {
-        $existing = (Get-ItemProperty -Path $regPath -Name "ITunesRecentDatabasePaths" -ErrorAction SilentlyContinue).ITunesRecentDatabasePaths
-    }
-    catch {
-        $existing = @()
-    }
-
-    if (-not $existing) { $existing = @() }
-
-    # Put our path first; keep others as fallback
-    $newPaths = @($LibraryFolder) + ($existing | Where-Object { $_ -ne $LibraryFolder })
-    Set-ItemProperty -Path $regPath -Name "ITunesRecentDatabasePaths" -Value $newPaths -Type MultiString
-    Write-Host "  Registry updated: ITunesRecentDatabasePaths[0] = $LibraryFolder"
-}
-
-# ---------------------------------------------------------------------------
-# Helper: Restore original iTunes library path
-# ---------------------------------------------------------------------------
-function Restore-ITunesLibraryPath {
-    param([string[]]$OriginalPaths)
-
-    $regPath = "HKCU:\Software\Apple Computer, Inc.\iTunes"
-    if ($OriginalPaths -and $OriginalPaths.Count -gt 0) {
-        Set-ItemProperty -Path $regPath -Name "ITunesRecentDatabasePaths" -Value $OriginalPaths -Type MultiString
-        Write-Host "  Restored original ITunesRecentDatabasePaths"
-    }
-}
-
-# ---------------------------------------------------------------------------
-# Helper: Get the original registry paths (for restore later)
-# ---------------------------------------------------------------------------
-function Get-OriginalITunesPaths {
+function Get-ITunesLibraryFolder {
+    # Try registry first -- ITunesRecentDatabasePaths[0] is the last-used folder
     $regPath = "HKCU:\Software\Apple Computer, Inc.\iTunes"
     try {
-        $val = (Get-ItemProperty -Path $regPath -Name "ITunesRecentDatabasePaths" -ErrorAction SilentlyContinue).ITunesRecentDatabasePaths
-        return $val
+        $paths = (Get-ItemProperty -Path $regPath -Name "ITunesRecentDatabasePaths" -ErrorAction SilentlyContinue).ITunesRecentDatabasePaths
+        if ($paths -and $paths.Count -gt 0 -and (Test-Path $paths[0])) {
+            return $paths[0]
+        }
     }
-    catch {
-        return @()
+    catch {}
+
+    # Fallback: default iTunes library location
+    $default = Join-Path $env:APPDATA "Apple Computer\iTunes"
+    if (Test-Path $default) {
+        return $default
     }
+
+    # Second fallback: Music folder
+    $music = Join-Path ([Environment]::GetFolderPath("MyMusic")) "iTunes"
+    if (Test-Path $music) {
+        return $music
+    }
+
+    return $null
 }
 
 # ---------------------------------------------------------------------------
@@ -120,7 +88,9 @@ function Get-OriginalITunesPaths {
 function Invoke-TestCase {
     param(
         [string]$TestFolder,
-        [string]$TestName
+        [string]$TestName,
+        [string]$ITunesLibraryFolder,
+        [string]$BackupITLPath
     )
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -139,9 +109,9 @@ function Invoke-TestCase {
         timestamp                = Get-ISO8601
     }
 
-    # Check that the .itl file exists
-    $itlFile = Join-Path $TestFolder "iTunes Library.itl"
-    if (-not (Test-Path $itlFile)) {
+    # Check that the test .itl file exists
+    $testITL = Join-Path $TestFolder "iTunes Library.itl"
+    if (-not (Test-Path $testITL)) {
         $errors += "iTunes Library.itl not found in $TestFolder"
         $result.errors = $errors
         $result.test_duration_ms = $stopwatch.ElapsedMilliseconds
@@ -164,12 +134,14 @@ function Invoke-TestCase {
     # Kill any existing iTunes
     Stop-ITunesProcess
 
-    # Point iTunes at this test folder
+    # Swap: copy the test ITL into iTunes' library folder
+    $realITL = Join-Path $ITunesLibraryFolder "iTunes Library.itl"
     try {
-        Set-ITunesLibraryPath -LibraryFolder $TestFolder
+        Write-Host "  Swapping test ITL into: $realITL"
+        Copy-Item -Path $testITL -Destination $realITL -Force
     }
     catch {
-        $errors += "Failed to set registry: $_"
+        $errors += "Failed to swap ITL file: $_"
         $result.errors = $errors
         $result.test_duration_ms = $stopwatch.ElapsedMilliseconds
         return $result
@@ -222,10 +194,8 @@ function Invoke-TestCase {
                     $verified++
 
                     # Check if track has a file location
-                    # IITFileOrCDTrack has a Location property
                     $location = $null
                     try {
-                        # Only file tracks have Location; URL tracks do not
                         $location = $track.Location
                     }
                     catch {
@@ -273,8 +243,7 @@ function Invoke-TestCase {
             }
 
             if ($testInfo -and $testInfo.PSObject.Properties["expect_missing_files"] -and $testInfo.expect_missing_files) {
-                # This test intentionally has missing files; that's OK
-                Write-Host "  (Test expects missing files — $invalidFiles missing is acceptable)"
+                Write-Host "  (Test expects missing files -- $invalidFiles missing is acceptable)"
             }
             elseif ($invalidFiles -gt 0 -and (-not $testInfo -or -not $testInfo.PSObject.Properties["allow_missing_files"])) {
                 $errors += "$invalidFiles tracks have invalid file paths"
@@ -328,14 +297,36 @@ if (-not (Test-Path $BasePath)) {
     exit 1
 }
 
-# Save original registry paths for restore
-$originalPaths = Get-OriginalITunesPaths
-Write-Host "Saved original iTunes library paths for restore"
+# Find iTunes library folder
+$iTunesFolder = Get-ITunesLibraryFolder
+if (-not $iTunesFolder) {
+    Write-Error "Could not find iTunes library folder. Is iTunes installed?"
+    exit 1
+}
+Write-Host "iTunes library folder: $iTunesFolder"
+
+$realITL = Join-Path $iTunesFolder "iTunes Library.itl"
+if (-not (Test-Path $realITL)) {
+    Write-Error "No iTunes Library.itl found at: $realITL"
+    exit 1
+}
+
+# Kill iTunes before we touch anything
+Stop-ITunesProcess
+
+# Back up the real ITL
+$backupITL = Join-Path $iTunesFolder "iTunes Library.itl.test-backup"
+Write-Host "Backing up real ITL to: $backupITL"
+Copy-Item -Path $realITL -Destination $backupITL -Force
+Write-Host ""
 
 # Find test subfolders (sorted by name for deterministic order)
 $testFolders = Get-ChildItem -Path $BasePath -Directory | Sort-Object Name
 if ($testFolders.Count -eq 0) {
     Write-Warning "No test subfolders found in $BasePath"
+    # Restore backup before exiting
+    Copy-Item -Path $backupITL -Destination $realITL -Force
+    Remove-Item $backupITL -Force
     exit 0
 }
 
@@ -356,7 +347,8 @@ foreach ($tf in $testFolders) {
     Write-Host "Test: $testName"
     Write-Host "------------------------------------------"
 
-    $result = Invoke-TestCase -TestFolder $tf.FullName -TestName $testName
+    $result = Invoke-TestCase -TestFolder $tf.FullName -TestName $testName `
+        -ITunesLibraryFolder $iTunesFolder -BackupITLPath $backupITL
 
     # Write results.json to the test subfolder
     $resultsPath = Join-Path $tf.FullName "results.json"
@@ -379,20 +371,27 @@ foreach ($tf in $testFolders) {
     Write-Host ""
 }
 
-# Restore original iTunes library paths
+# Restore original ITL
 if (-not $SkipCleanup) {
-    Write-Host "Restoring original iTunes configuration..."
-    Restore-ITunesLibraryPath -OriginalPaths $originalPaths
+    Write-Host "Restoring original iTunes library..."
+    Stop-ITunesProcess
+    Copy-Item -Path $backupITL -Destination $realITL -Force
+    Remove-Item $backupITL -Force
+    Write-Host "  Original ITL restored."
+}
+else {
+    Write-Host "Skipping cleanup -- backup remains at: $backupITL"
 }
 
 # Write summary
 $summaryPath = Join-Path $BasePath "test-summary.json"
 $summary = @{
-    timestamp    = Get-ISO8601
-    total_tests  = $allResults.Count
-    passed       = $passCount
-    failed       = $failCount
-    results      = $allResults
+    timestamp          = Get-ISO8601
+    total_tests        = $allResults.Count
+    passed             = $passCount
+    failed             = $failCount
+    itunes_library_dir = $iTunesFolder
+    results            = $allResults
 }
 $summary | ConvertTo-Json -Depth 10 | Set-Content -Path $summaryPath -Encoding UTF8
 

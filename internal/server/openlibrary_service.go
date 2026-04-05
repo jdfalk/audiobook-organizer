@@ -369,7 +369,7 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 		return
 	}
 
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	if err := os.MkdirAll(targetDir, 0o775); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create dump dir"})
 		return
 	}

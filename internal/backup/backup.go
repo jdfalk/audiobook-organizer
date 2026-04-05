@@ -48,7 +48,7 @@ func DefaultBackupConfig() BackupConfig {
 // CreateBackup creates a compressed backup of the database
 func CreateBackup(databasePath, databaseType string, config BackupConfig) (*BackupInfo, error) {
 	// Ensure backup directory exists
-	if err := os.MkdirAll(config.BackupDir, 0755); err != nil {
+	if err := os.MkdirAll(config.BackupDir, 0775); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -163,12 +163,12 @@ func RestoreBackup(backupPath, targetPath string, verify bool) error {
 		// Handle directories and files
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := os.MkdirAll(target, 0775); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", target, err)
 			}
 		case tar.TypeReg:
 			// Ensure parent directory exists
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(target), 0775); err != nil {
 				return fmt.Errorf("failed to create parent directory for %s: %w", target, err)
 			}
 

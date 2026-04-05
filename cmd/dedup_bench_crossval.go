@@ -151,7 +151,7 @@ func runDedupBenchCrossval(cmd *cobra.Command, args []string) error {
 
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join(benchOutputDir, ts+"-crossval")
-	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0775); err != nil {
 		return err
 	}
 

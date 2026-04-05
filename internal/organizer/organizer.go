@@ -70,7 +70,7 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 
 	// Create target directory
 	targetDir := filepath.Dir(targetPath)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0775); err != nil {
 		return "", "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 
@@ -459,7 +459,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 	folderPath = sanitizePath(folderPath)
 	targetDir := filepath.Join(o.config.RootDir, folderPath)
 
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0775); err != nil {
 		return "", nil, fmt.Errorf("failed to create target directory: %w", err)
 	}
 

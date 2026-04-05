@@ -846,7 +846,7 @@ func ExtractCoverArt(filePath string) (string, error) {
 	hash := fmt.Sprintf("%x", sha256.Sum256(pic.Data))
 
 	coverDir := filepath.Join(config.AppConfig.RootDir, ".covers")
-	if err := os.MkdirAll(coverDir, 0755); err != nil {
+	if err := os.MkdirAll(coverDir, 0775); err != nil {
 		return "", fmt.Errorf("failed to create covers directory: %w", err)
 	}
 
@@ -857,7 +857,7 @@ func ExtractCoverArt(filePath string) (string, error) {
 		return coverPath, nil
 	}
 
-	if err := os.WriteFile(coverPath, pic.Data, 0644); err != nil {
+	if err := os.WriteFile(coverPath, pic.Data, 0664); err != nil {
 		return "", fmt.Errorf("failed to write cover: %w", err)
 	}
 

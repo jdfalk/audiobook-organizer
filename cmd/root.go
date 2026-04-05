@@ -10,7 +10,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -346,6 +348,12 @@ func SetVersion(v string) {
 
 // Execute adds all child commands to the root command and sets flags appropriately
 func Execute() error {
+	// Set umask to 0002 on Linux so os.Create (mode 0666) yields 0664 and
+	// os.MkdirAll(..., 0777) yields 0775. This preserves group-write which
+	// is required for POSIX ACLs to function correctly.
+	if runtime.GOOS == "linux" {
+		syscall.Umask(0002)
+	}
 	return rootCmd.Execute()
 }
 
@@ -467,7 +475,7 @@ func initConfig() {
 
 	// Create playlist directory if it doesn't exist
 	if playlistDir != "" {
-		if err := os.MkdirAll(playlistDir, 0755); err != nil {
+		if err := os.MkdirAll(playlistDir, 0775); err != nil {
 			fmt.Printf("Error creating playlist directory: %v\n", err)
 		}
 	}
@@ -476,7 +484,7 @@ func initConfig() {
 	if databasePath != "" {
 		dbDir := filepath.Dir(databasePath)
 		if dbDir != "." {
-			if err := os.MkdirAll(dbDir, 0755); err != nil {
+			if err := os.MkdirAll(dbDir, 0775); err != nil {
 				fmt.Printf("Error creating database directory: %v\n", err)
 			}
 		}
@@ -508,7 +516,7 @@ func formatMetadataValue(value string) string {
 func setupFileLogging() (*os.File, error) {
 	// Create logs directory if it doesn't exist
 	logsDir := "logs"
-	if err := os.MkdirAll(logsDir, 0755); err != nil {
+	if err := os.MkdirAll(logsDir, 0775); err != nil {
 		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
@@ -517,7 +525,7 @@ func setupFileLogging() (*os.File, error) {
 	logFile := filepath.Join(logsDir, fmt.Sprintf("audiobook-organizer-%s.log", timestamp))
 
 	// Open log file (append mode, create if doesn't exist)
-	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %w", err)
 	}

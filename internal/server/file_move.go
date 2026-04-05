@@ -45,7 +45,7 @@ func MoveBookFile(store database.Store, bookID, oldPath, newPath string, extraUp
 
 	// Step 3: Ensure destination directory exists
 	if dir := filepath.Dir(newPath); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o775); err != nil {
 			return fmt.Errorf("failed to create destination directory: %w", err)
 		}
 	}

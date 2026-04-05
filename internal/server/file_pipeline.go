@@ -176,7 +176,7 @@ func RenameFiles(entries []FileRenameEntry) (*RenameResult, error) {
 	for _, entry := range valid {
 		// Ensure target directory exists
 		targetDir := filepath.Dir(entry.TargetPath)
-		if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		if err := os.MkdirAll(targetDir, 0o775); err != nil {
 			return result, fmt.Errorf("create target dir %s: %w", targetDir, err)
 		}
 
