@@ -29,7 +29,7 @@ func putUint16LE(buf []byte, offset int, val uint16) {
 }
 
 // buildMhohLE builds a little-endian mhoh chunk for a given hohmType and ASCII string.
-func buildMhohLE(hohmType uint32, value string) []byte {
+func testBuildMhohLE(hohmType uint32, value string) []byte {
 	encoded := []byte(value)
 	chunkLen := 40 + len(encoded)
 	buf := make([]byte, chunkLen)
@@ -44,7 +44,7 @@ func buildMhohLE(hohmType uint32, value string) []byte {
 }
 
 // buildMithLE builds a little-endian mith chunk with the given fields.
-func buildMithLE(trackID int, pid [8]byte, size, totalTime int) []byte {
+func testBuildMithLE(trackID int, pid [8]byte, size, totalTime int) []byte {
 	mithLen := 156
 	buf := make([]byte, mithLen)
 	copy(buf[0:4], "mith")
@@ -111,12 +111,12 @@ func TestWalkChunksLE_ParsesTracks(t *testing.T) {
 	location := "/music/audiobooks/test.m4b"
 
 	// Build track content: mith + mhoh(name) + mhoh(location)
-	mith := buildMithLE(42, pid, 1024000, 360000)
-	nameMhoh := buildMhohLE(0x02, "Test Audiobook")
-	albumMhoh := buildMhohLE(0x03, "Test Album")
-	artistMhoh := buildMhohLE(0x04, "Test Author")
-	genreMhoh := buildMhohLE(0x05, "Audiobooks")
-	locMhoh := buildMhohLE(0x0D, location)
+	mith := testBuildMithLE(42, pid, 1024000, 360000)
+	nameMhoh := testBuildMhohLE(0x02, "Test Audiobook")
+	albumMhoh := testBuildMhohLE(0x03, "Test Album")
+	artistMhoh := testBuildMhohLE(0x04, "Test Author")
+	genreMhoh := testBuildMhohLE(0x05, "Audiobooks")
+	locMhoh := testBuildMhohLE(0x0D, location)
 
 	var content []byte
 	content = append(content, mith...)
@@ -201,8 +201,8 @@ func TestRewriteChunksLE_UpdatesLocation(t *testing.T) {
 	newLocation := "/new/path/book.m4b"
 
 	// Build track content
-	mith := buildMithLE(42, pid, 1024000, 360000)
-	locMhoh := buildMhohLE(0x0D, oldLocation)
+	mith := testBuildMithLE(42, pid, 1024000, 360000)
+	locMhoh := testBuildMhohLE(0x0D, oldLocation)
 
 	var content []byte
 	content = append(content, mith...)
@@ -241,7 +241,7 @@ func TestWalkChunksLE_ParsesPlaylists(t *testing.T) {
 
 	// Build playlist content: miph + mhoh(title) + mtph + mtph
 	miph := buildMiphLE(playlistPID)
-	titleMhoh := buildMhohLE(0x64, "My Audiobooks")
+	titleMhoh := testBuildMhohLE(0x64, "My Audiobooks")
 	mtph1 := buildMtphLE(42)
 	mtph2 := buildMtphLE(99)
 
@@ -284,8 +284,8 @@ func TestWalkChunksLE_MultipleMsdhContainers(t *testing.T) {
 	playlistPID := [8]byte{0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11}
 
 	// Build track msdh
-	mith := buildMithLE(42, trackPID, 1024000, 360000)
-	locMhoh := buildMhohLE(0x0D, "/path/to/book.m4b")
+	mith := testBuildMithLE(42, trackPID, 1024000, 360000)
+	locMhoh := testBuildMhohLE(0x0D, "/path/to/book.m4b")
 	var trackContent []byte
 	trackContent = append(trackContent, mith...)
 	trackContent = append(trackContent, locMhoh...)
@@ -293,7 +293,7 @@ func TestWalkChunksLE_MultipleMsdhContainers(t *testing.T) {
 
 	// Build playlist msdh
 	miph := buildMiphLE(playlistPID)
-	titleMhoh := buildMhohLE(0x64, "Favorites")
+	titleMhoh := testBuildMhohLE(0x64, "Favorites")
 	mtph := buildMtphLE(42)
 	var playlistContent []byte
 	playlistContent = append(playlistContent, miph...)
@@ -325,8 +325,8 @@ func TestWalkChunksLE_MultipleMsdhContainers(t *testing.T) {
 
 func TestRewriteChunksLE_NoMatchReturnsUnchanged(t *testing.T) {
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
-	mith := buildMithLE(42, pid, 1024000, 360000)
-	locMhoh := buildMhohLE(0x0D, "/original/path.m4b")
+	mith := testBuildMithLE(42, pid, 1024000, 360000)
+	locMhoh := testBuildMhohLE(0x0D, "/original/path.m4b")
 
 	var content []byte
 	content = append(content, mith...)
@@ -356,8 +356,8 @@ func TestRewriteChunksLE_NoMatchReturnsUnchanged(t *testing.T) {
 
 func TestRewriteChunksLE_LocalURLUpdate(t *testing.T) {
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
-	mith := buildMithLE(42, pid, 1024000, 360000)
-	localURLMhoh := buildMhohLE(0x0B, "file://localhost/old/path.m4b")
+	mith := testBuildMithLE(42, pid, 1024000, 360000)
+	localURLMhoh := testBuildMhohLE(0x0B, "file://localhost/old/path.m4b")
 
 	var content []byte
 	content = append(content, mith...)
@@ -407,9 +407,9 @@ func TestWalkMiahContent(t *testing.T) {
 	pid := [8]byte{0x22, 0x11, 0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA}
 	location := "/audiobooks/nested/book.m4b"
 
-	mith := buildMithLE(77, pid, 2048000, 720000)
-	nameMhoh := buildMhohLE(0x02, "Nested Track")
-	locMhoh := buildMhohLE(0x0D, location)
+	mith := testBuildMithLE(77, pid, 2048000, 720000)
+	nameMhoh := testBuildMhohLE(0x02, "Nested Track")
+	locMhoh := testBuildMhohLE(0x0D, location)
 
 	// Pack mith + mhoh into a miah wrapper
 	var subContent []byte
@@ -529,12 +529,12 @@ func TestRewriteMithContentLE(t *testing.T) {
 	// buildMithLE returns a 156-byte block; headerLen and totalLen are both 156.
 	// For rewriteMithContentLE we need headerLen=156 (fixed portion) and
 	// totalLen = 156 + size_of_mhoh_sub_blocks.
-	mithHeader := buildMithLE(55, pid, 500000, 180000)
+	mithHeader := testBuildMithLE(55, pid, 500000, 180000)
 	mithFixedLen := len(mithHeader) // 156
 
 	// Build mhoh sub-blocks: name + location, to be nested inside the mith.
-	nameMhoh := buildMhohLE(0x02, "Rewrite Test Book")
-	locMhoh := buildMhohLE(0x0D, oldLocation)
+	nameMhoh := testBuildMhohLE(0x02, "Rewrite Test Book")
+	locMhoh := testBuildMhohLE(0x0D, oldLocation)
 
 	// Assemble the mith container: fixed header + mhoh sub-blocks appended.
 	var mithContainer []byte

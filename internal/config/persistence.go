@@ -126,7 +126,7 @@ func SaveConfigToFile() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o775); err != nil {
 		return fmt.Errorf("failed to create config dir: %w", err)
 	}
 

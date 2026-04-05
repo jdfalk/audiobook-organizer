@@ -348,7 +348,7 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 	}
 
 	// Create parent directory for target
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0775); err != nil {
 		return "", fmt.Errorf("failed to create target directory: %w", err)
 	}
 

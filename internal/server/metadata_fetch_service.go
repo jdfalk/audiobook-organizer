@@ -1387,7 +1387,7 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 
 	// Check if we already have this exact image archived (by hash)
 	dedupDir := filepath.Join(config.AppConfig.RootDir, "covers", "dedup")
-	if err := os.MkdirAll(dedupDir, 0755); err != nil {
+	if err := os.MkdirAll(dedupDir, 0775); err != nil {
 		log.Printf("[WARN] failed to create cover dedup dir: %v", err)
 		return
 	}
@@ -1395,7 +1395,7 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 	dedupPath := filepath.Join(dedupDir, coverHash+ext)
 	if _, err := os.Stat(dedupPath); err != nil {
 		// New unique image — save to dedup store
-		if err := os.WriteFile(dedupPath, data, 0644); err != nil {
+		if err := os.WriteFile(dedupPath, data, 0664); err != nil {
 			log.Printf("[WARN] failed to write dedup cover for %s: %v", bookID, err)
 			return
 		}
@@ -1403,7 +1403,7 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 
 	// Create a history entry that references the dedup hash instead of storing a copy
 	historyDir := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID)
-	if err := os.MkdirAll(historyDir, 0755); err != nil {
+	if err := os.MkdirAll(historyDir, 0775); err != nil {
 		log.Printf("[WARN] failed to create cover history dir: %v", err)
 		return
 	}
@@ -1415,7 +1415,7 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 		// Symlink failed (cross-device, Windows, etc.) — fall back to hardlink or copy
 		if err := os.Link(dedupPath, archivePath); err != nil {
 			// Hardlink also failed — just copy
-			if err := os.WriteFile(archivePath, data, 0644); err != nil {
+			if err := os.WriteFile(archivePath, data, 0664); err != nil {
 				log.Printf("[WARN] failed to archive old cover for %s: %v", bookID, err)
 				return
 			}

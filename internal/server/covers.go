@@ -61,7 +61,7 @@ func (s *Server) handleCoverProxy(c *gin.Context) {
 	}
 
 	// Create cache directory
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0775); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create cache directory"})
 		return
 	}

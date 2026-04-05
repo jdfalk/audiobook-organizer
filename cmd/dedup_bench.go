@@ -90,7 +90,7 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 	// Create timestamped output directory
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join(benchOutputDir, ts)
-	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0775); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -323,7 +323,7 @@ func downloadBatchResult(ctx context.Context, client *openai.Client, outputFileI
 	}
 
 	// Save raw response
-	_ = os.WriteFile(filepath.Join(job.RunDir, "batch_output.jsonl"), body, 0644)
+	_ = os.WriteFile(filepath.Join(job.RunDir, "batch_output.jsonl"), body, 0664)
 
 	// Parse JSONL responses
 	actionCounts := map[string]int{}

@@ -37,7 +37,7 @@ func DownloadCoverArt(coverURL string, destDir string, bookID string) (string, e
 	}
 
 	// Create covers directory
-	if err := os.MkdirAll(coversDir, 0755); err != nil {
+	if err := os.MkdirAll(coversDir, 0775); err != nil {
 		return "", fmt.Errorf("failed to create covers directory: %w", err)
 	}
 

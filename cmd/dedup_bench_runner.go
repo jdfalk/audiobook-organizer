@@ -38,7 +38,7 @@ func executeBenchRun(
 	// Create run output directory
 	dirName := fmt.Sprintf("%s_%s_t%.1f_%s", tc.Model, tc.PromptVariant, tc.Temperature, mode)
 	outDir := filepath.Join(runDir, "runs", dirName)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0775); err != nil {
 		return nil, fmt.Errorf("mkdir: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func executeBenchRun(
 	}
 
 	// Save raw input data
-	if err := os.WriteFile(filepath.Join(outDir, "input_data.json"), inputJSON, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(outDir, "input_data.json"), inputJSON, 0664); err != nil {
 		return nil, err
 	}
 
@@ -169,7 +169,7 @@ func executeBenchRun(
 
 		// Save raw response
 		rawResp, _ := json.Marshal(completion)
-		_ = os.WriteFile(filepath.Join(outDir, fmt.Sprintf("chunk_%d_response.json", ci)), rawResp, 0644)
+		_ = os.WriteFile(filepath.Join(outDir, fmt.Sprintf("chunk_%d_response.json", ci)), rawResp, 0664)
 
 		// Accumulate token usage
 		totalInputTokens += completion.Usage.PromptTokens

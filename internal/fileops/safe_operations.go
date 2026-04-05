@@ -54,7 +54,7 @@ func NewFileOperation(originalPath, targetPath string, config OperationConfig) (
 		// Make it absolute relative to the target directory
 		backupDir = filepath.Join(filepath.Dir(targetPath), backupDir)
 	}
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := os.MkdirAll(backupDir, 0775); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -222,7 +222,7 @@ func copyFile(src, dst string) error {
 	defer sourceFile.Close()
 
 	// Ensure destination directory exists
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0775); err != nil {
 		return err
 	}
 

@@ -333,7 +333,7 @@ func (rs *RenameService) buildTagMetadata(book *database.Book, authorName, narra
 func (rs *RenameService) moveFile(src, dst string) error {
 	// Ensure destination directory exists
 	if dir := filepath.Dir(dst); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o775); err != nil {
 			return fmt.Errorf("failed to create destination directory: %w", err)
 		}
 	}
@@ -391,7 +391,7 @@ func (rs *RenameService) copyAndDelete(src, dst string) error {
 func (rs *RenameService) hardlinkOrCopy(src, dst string) error {
 	// Ensure destination directory exists
 	if dir := filepath.Dir(dst); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o775); err != nil {
 			return fmt.Errorf("failed to create destination directory: %w", err)
 		}
 	}

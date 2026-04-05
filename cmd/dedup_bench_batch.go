@@ -61,7 +61,7 @@ func submitBatchJobs(
 			// Create run output directory
 			dirName := fmt.Sprintf("%s_%s_t%.1f_%s", tc.Model, tc.PromptVariant, tc.Temperature, mode)
 			outDir := filepath.Join(runDir, "runs", dirName)
-			if err := os.MkdirAll(outDir, 0755); err != nil {
+			if err := os.MkdirAll(outDir, 0775); err != nil {
 				return nil, fmt.Errorf("mkdir: %w", err)
 			}
 
@@ -96,7 +96,7 @@ func submitBatchJobs(
 			}
 
 			// Save raw input
-			_ = os.WriteFile(filepath.Join(outDir, "input_data.json"), inputJSON, 0644)
+			_ = os.WriteFile(filepath.Join(outDir, "input_data.json"), inputJSON, 0664)
 
 			// Chunk the input for large datasets
 			chunks := chunkInput(inputJSON, chunkSize, mode)
@@ -144,7 +144,7 @@ func submitBatchJobs(
 			}
 
 			// Save the JSONL file locally
-			_ = os.WriteFile(filepath.Join(outDir, "batch_input.jsonl"), buf.Bytes(), 0644)
+			_ = os.WriteFile(filepath.Join(outDir, "batch_input.jsonl"), buf.Bytes(), 0664)
 
 			// Upload to OpenAI
 			file, err := client.Files.New(ctx, openai.FileNewParams{
