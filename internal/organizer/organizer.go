@@ -147,7 +147,11 @@ func (o *Organizer) GenerateTargetDirPath(book *database.Book) (string, error) {
 		return "", fmt.Errorf("folder pattern: %w", err)
 	}
 	folderPath = sanitizePath(folderPath)
-	return filepath.Join(o.config.RootDir, folderPath), nil
+	result := filepath.Join(o.config.RootDir, folderPath)
+	if err := ensureUnderRoot(result, o.config.RootDir); err != nil {
+		return "", err
+	}
+	return result, nil
 }
 
 // generateTargetPath creates the target file path based on naming patterns
@@ -171,6 +175,10 @@ func (o *Organizer) generateTargetPath(book *database.Book) (string, error) {
 
 	// Combine with root directory
 	fullPath := filepath.Join(o.config.RootDir, folderPath, fileName)
+
+	if err := ensureUnderRoot(fullPath, o.config.RootDir); err != nil {
+		return "", err
+	}
 
 	return fullPath, nil
 }
@@ -318,6 +326,9 @@ func sanitizeFilename(name string) string {
 		return r
 	}, name)
 
+	// Prevent path traversal — strip ".." components
+	name = strings.ReplaceAll(name, "..", "_")
+
 	invalid := []string{"<", ">", ":", "\"", "|", "?", "*"}
 	for _, char := range invalid {
 		name = strings.ReplaceAll(name, char, "_")
@@ -337,6 +348,17 @@ func sanitizeFilename(name string) string {
 	}
 
 	return name
+}
+
+// ensureUnderRoot verifies that fullPath is inside rootDir after cleaning.
+// Prevents path traversal via ".." in metadata fields.
+func ensureUnderRoot(fullPath, rootDir string) error {
+	cleanTarget := filepath.Clean(fullPath)
+	cleanRoot := filepath.Clean(rootDir)
+	if !strings.HasPrefix(cleanTarget, cleanRoot+string(filepath.Separator)) && cleanTarget != cleanRoot {
+		return fmt.Errorf("generated path %q escapes root directory %q", cleanTarget, cleanRoot)
+	}
+	return nil
 }
 
 // stringOrEmpty returns the string value or empty string if nil
@@ -446,6 +468,12 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 		fileName := filepath.Base(srcPath)
 		dstPath := filepath.Join(targetDir, fileName)
 
+		// Verify dstPath stays inside targetDir (defense against crafted filenames)
+		if err := ensureUnderRoot(dstPath, targetDir); err != nil {
+			log.Printf("[WARN] organizeFile: skipping unsafe destination: %s", err)
+			continue
+		}
+
 		if srcPath == dstPath {
 			pathMap[srcPath] = dstPath
 			continue
@@ -461,6 +489,11 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 			// Skip missing source files instead of aborting the entire book
 			if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file") {
 				log.Printf("[WARN] organizeFile: skipping missing source file: %s", srcPath)
+				continue
+			}
+			// Handle race: another worker may have created the file between our stat and copy
+			if os.IsExist(err) {
+				pathMap[srcPath] = dstPath
 				continue
 			}
 			return "", nil, fmt.Errorf("failed to organize segment %s: %w", fileName, err)

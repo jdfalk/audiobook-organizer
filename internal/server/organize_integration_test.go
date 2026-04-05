@@ -33,8 +33,16 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 		Format:   "m4b",
 		AuthorID: &author.ID,
 	}
-	_, err = env.Store.CreateBook(book)
+	created, err := env.Store.CreateBook(book)
 	require.NoError(t, err)
+
+	// Create book_files so organize can find files to copy
+	require.NoError(t, env.Store.CreateBookFile(&database.BookFile{
+		ID:       "bf-test-1",
+		BookID:   created.ID,
+		FilePath: srcPath,
+		Format:   "m4b",
+	}))
 
 	// Trigger organize via HTTP
 	server := NewServer()

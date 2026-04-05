@@ -230,7 +230,7 @@ func TestNewOrganizer(t *testing.T) {
 
 func TestOrganizeBook_NilBook(t *testing.T) {
 	org := NewOrganizer(&config.Config{})
-	_, err := org.OrganizeBook(nil)
+	_, _, err := org.OrganizeBook(nil)
 	if err == nil {
 		t.Fatal("expected error for nil book")
 	}
@@ -242,7 +242,7 @@ func TestOrganizeBook_NilBook(t *testing.T) {
 func TestOrganizeBook_EmptyFilePath(t *testing.T) {
 	org := NewOrganizer(&config.Config{})
 	book := &database.Book{}
-	_, err := org.OrganizeBook(book)
+	_, _, err := org.OrganizeBook(book)
 	if err == nil {
 		t.Fatal("expected error for empty file path")
 	}
@@ -281,7 +281,7 @@ func TestOrganizeBook_Copy(t *testing.T) {
 		Author:   &database.Author{Name: "Test Author"},
 	}
 
-	targetPath, err := org.OrganizeBook(book)
+	targetPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Fatalf("OrganizeBook failed: %v", err)
 	}
@@ -296,7 +296,7 @@ func TestOrganizeBook_Copy(t *testing.T) {
 	}
 
 	// Verify calling again with same book returns same path
-	targetPath2, err := org.OrganizeBook(book)
+	targetPath2, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Fatalf("second OrganizeBook failed: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestOrganizeBook_Hardlink(t *testing.T) {
 		Author:   &database.Author{Name: "Test Author"},
 	}
 
-	targetPath, err := org.OrganizeBook(book)
+	targetPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Skipf("hardlink not supported: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestOrganizeBook_Symlink(t *testing.T) {
 		Author:   &database.Author{Name: "Test Author"},
 	}
 
-	targetPath, err := org.OrganizeBook(book)
+	targetPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Skipf("symlink not supported: %v", err)
 	}
@@ -409,7 +409,7 @@ func TestOrganizeBook_Auto(t *testing.T) {
 		Author:   &database.Author{Name: "Test Author"},
 	}
 
-	targetPath, err := org.OrganizeBook(book)
+	targetPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Fatalf("OrganizeBook with auto failed: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestOrganizeBook_UnknownStrategy(t *testing.T) {
 		FilePath: srcFile,
 	}
 
-	_, err := org.OrganizeBook(book)
+	_, _, err := org.OrganizeBook(book)
 	if err == nil {
 		t.Fatal("expected error for unknown strategy")
 	}
@@ -463,7 +463,7 @@ func TestOrganizeBook_MkdirError(t *testing.T) {
 		FilePath: "/tmp/test.m4b",
 	}
 
-	_, err := org.OrganizeBook(book)
+	_, _, err := org.OrganizeBook(book)
 	if err == nil {
 		t.Fatal("expected error when creating impossible directory")
 	}
@@ -776,7 +776,7 @@ func TestOrganizeBook_Reflink(t *testing.T) {
 		Author:   &database.Author{Name: "Test Author"},
 	}
 
-	targetPath, err := org.OrganizeBook(book)
+	targetPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Skipf("reflink not supported: %v", err)
 	}
