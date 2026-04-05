@@ -140,28 +140,57 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	// Build location updates from book IDs
+	// Build location and metadata updates from book IDs
 	var locationUpdates []itunes.ITLLocationUpdate
+	var metadataUpdates []itunes.ITLMetadataUpdate
 	for _, id := range bookIDs {
 		book, err := store.GetBookByID(id)
 		if err != nil || book == nil {
 			continue
 		}
+
+		// Get author name for metadata
+		authorName := ""
+		if book.AuthorID != nil {
+			if author, err := store.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				authorName = author.Name
+			}
+		}
+
 		files, _ := store.GetBookFiles(id)
 		if len(files) > 0 {
 			for _, f := range files {
-				if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+				if f.ITunesPersistentID == "" {
+					continue
+				}
+				if f.ITunesPath != "" {
 					locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
 						PersistentID: f.ITunesPersistentID,
 						NewLocation:  f.ITunesPath,
 					})
 				}
+				// Always push metadata so iTunes has current values
+				metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
+					PersistentID: f.ITunesPersistentID,
+					Name:         f.Title,
+					Album:        book.Title,
+					Artist:       authorName,
+					Genre:        "Audiobook",
+				})
 			}
-		} else if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" &&
-			book.ITunesPath != nil && *book.ITunesPath != "" {
-			locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
+		} else if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+			if book.ITunesPath != nil && *book.ITunesPath != "" {
+				locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
+					PersistentID: *book.ITunesPersistentID,
+					NewLocation:  *book.ITunesPath,
+				})
+			}
+			metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
 				PersistentID: *book.ITunesPersistentID,
-				NewLocation:  *book.ITunesPath,
+				Name:         book.Title,
+				Album:        book.Title,
+				Artist:       authorName,
+				Genre:        "Audiobook",
 			})
 		}
 	}
@@ -170,6 +199,7 @@ func (b *WriteBackBatcher) flush() {
 		Removes:         removes,
 		Adds:            adds,
 		LocationUpdates: locationUpdates,
+		MetadataUpdates: metadataUpdates,
 	}
 
 	if ops.IsEmpty() {
