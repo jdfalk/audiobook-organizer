@@ -2502,6 +2502,15 @@ func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *databa
 		return nil
 	}
 
+	// Collect dup's iTunes PIDs before reassignment (for ITL removal).
+	dupMappings, _ := store.GetExternalIDsForBook(dup.ID)
+	var dupPIDs []string
+	for _, m := range dupMappings {
+		if m.Source == "itunes" && m.ExternalID != "" && !m.Tombstoned {
+			dupPIDs = append(dupPIDs, m.ExternalID)
+		}
+	}
+
 	// Transfer book_files rows.
 	files, err := store.GetBookFiles(dup.ID)
 	if err == nil {
@@ -2517,6 +2526,15 @@ func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *databa
 	// Transfer external ID mappings.
 	if reassignErr := store.ReassignExternalIDs(dup.ID, keeper.ID); reassignErr != nil {
 		log.Printf("[WARN] dedup-books: ReassignExternalIDs %s -> %s: %v", dup.ID, keeper.ID, reassignErr)
+	}
+
+	// Queue ITL removal for the dup's tracks (they now point to the wrong file).
+	// The keeper's tracks remain; dup's tracks are redundant entries in iTunes.
+	if GlobalWriteBackBatcher != nil && len(dupPIDs) > 0 {
+		for _, pid := range dupPIDs {
+			GlobalWriteBackBatcher.EnqueueRemove(pid)
+		}
+		log.Printf("[INFO] dedup-books: queued %d ITL removals for dup %s", len(dupPIDs), dup.ID)
 	}
 
 	// Transfer user tags.

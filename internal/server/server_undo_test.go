@@ -367,7 +367,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 
 	// Verify the book ID was enqueued in the batcher
 	batcher.mu.Lock()
-	enqueued := batcher.pending[book.ID]
+	enqueued := batcher.pendingBooks[book.ID]
 	batcher.mu.Unlock()
 	assert.True(t, enqueued, "expected book ID to be enqueued in WriteBackBatcher")
 }
@@ -424,7 +424,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 
 	// Verify enqueued
 	batcher.mu.Lock()
-	enqueued := batcher.pending[book.ID]
+	enqueued := batcher.pendingBooks[book.ID]
 	batcher.mu.Unlock()
 	assert.True(t, enqueued, "expected book ID to be enqueued when write_back=true")
 }
@@ -478,7 +478,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 
 	// Verify enqueued (defaults to true)
 	batcher.mu.Lock()
-	enqueued := batcher.pending[book.ID]
+	enqueued := batcher.pendingBooks[book.ID]
 	batcher.mu.Unlock()
 	assert.True(t, enqueued, "expected book ID to be enqueued when write_back is omitted (defaults to true)")
 }
@@ -533,7 +533,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 
 	// Verify NOT enqueued
 	batcher.mu.Lock()
-	enqueued := batcher.pending[book.ID]
+	enqueued := batcher.pendingBooks[book.ID]
 	batcher.mu.Unlock()
 	assert.False(t, enqueued, "expected book ID NOT to be enqueued when write_back=false")
 }
