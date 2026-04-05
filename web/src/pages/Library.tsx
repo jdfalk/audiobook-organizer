@@ -1840,7 +1840,12 @@ export const Library = () => {
               {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                      onClick={() => navigate(`/activity?op=${activeOrganizeOp.id}`)}
+                    >
                       Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}{' '}
                       {activeOrganizeOp.message}
                     </Typography>
@@ -1911,7 +1916,12 @@ export const Library = () => {
               {activeScanOp && activeScanOp.status !== 'completed' && (
                 <Box mt={1}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                      onClick={() => navigate(`/activity?op=${activeScanOp.id}`)}
+                    >
                       {activeScanOp.total > 0
                         ? `Scanning: ${activeScanOp.progress}/${activeScanOp.total}`
                         : 'Scanning: counting files…'}{' '}
