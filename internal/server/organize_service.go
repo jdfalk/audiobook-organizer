@@ -141,7 +141,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 		// Auto write-back to ITL after organize (paths have changed)
 		if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
 			log.Info("Auto write-back: writing organized paths to ITL")
-			itlUpdates := collectITLUpdates(orgSvc.db)
+			itlUpdates, bookIDs := collectITLUpdatesWithBookIDs(orgSvc.db)
 			if len(itlUpdates) > 0 {
 				result, err := itunes.UpdateITLLocations(writePath, writePath+".tmp", itlUpdates)
 				if err != nil {
@@ -151,6 +151,10 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 						log.Warn("Auto write-back rename failed: %v", renameErr)
 					} else {
 						log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
+						// Mark written books as synced with iTunes
+						if n, markErr := orgSvc.db.MarkITunesSynced(bookIDs); markErr == nil && n > 0 {
+							log.Info("Auto write-back: marked %d books as iTunes-synced", n)
+						}
 					}
 				}
 			}
