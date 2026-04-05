@@ -104,7 +104,9 @@ type Store interface {
 	RevertBookToVersion(id string, ts time.Time) (*Book, error)
 	PruneBookVersions(id string, keepCount int) (int, error)
 	SetLastWrittenAt(id string, t time.Time) error   // Stamps last_written_at for write-back
-	DeleteBook(id string) error                      // ID is ULID string
+	MarkITunesSynced(bookIDs []string) (int64, error) // Marks books as synced with iTunes
+	GetITunesDirtyBooks() ([]Book, error)             // Returns books that need iTunes write-back
+	DeleteBook(id string) error                       // ID is ULID string
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
 	CountFiles() (int, error)
@@ -423,6 +425,10 @@ type Book struct {
 	LastOrganizedAt *time.Time `json:"last_organized_at,omitempty"`
 	// MetadataReviewStatus tracks manual metadata matching: null, "no_match", "matched".
 	MetadataReviewStatus *string `json:"metadata_review_status,omitempty"`
+	// ITunesSyncStatus tracks whether this book's metadata is in sync with the iTunes library.
+	// Values: "synced" (up-to-date in ITL), "dirty" (changed since last write-back),
+	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes).
+	ITunesSyncStatus *string `json:"itunes_sync_status,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array

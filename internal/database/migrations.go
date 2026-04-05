@@ -280,6 +280,12 @@ var migrations = []Migration{
 		Up:          migration040Up,
 		Down:        nil,
 	},
+	{
+		Version:     41,
+		Description: "Add itunes_sync_status column to books for dirty tracking",
+		Up:          migration041Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2142,5 +2148,41 @@ func migration040Up(store Store) error {
 		}
 	}
 	log.Println("  - last_organize_operation_id and last_organized_at added successfully")
+	return nil
+}
+
+// migration041Up adds itunes_sync_status column to books for tracking whether
+// each book's metadata has been written back to the iTunes library.
+// Values: "synced" (up-to-date), "dirty" (changed), "unlinked" (no iTunes), nil (unknown).
+func migration041Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB handles schema differently
+	}
+	log.Println("  - Adding itunes_sync_status column to books table")
+
+	if _, err := sqliteStore.db.Exec(
+		`ALTER TABLE books ADD COLUMN itunes_sync_status TEXT`,
+	); err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			log.Println("  - Column itunes_sync_status already exists, skipping")
+			return nil
+		}
+		return fmt.Errorf("migration 41: %w", err)
+	}
+
+	// Backfill: books with an iTunes PID start as "synced" (they came from iTunes).
+	// Books without a PID are left as NULL (unlinked).
+	result, err := sqliteStore.db.Exec(
+		`UPDATE books SET itunes_sync_status = 'synced' WHERE itunes_persistent_id IS NOT NULL AND itunes_persistent_id != ''`,
+	)
+	if err != nil {
+		return fmt.Errorf("migration 41 backfill: %w", err)
+	}
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		log.Printf("  - Backfilled %d books with itunes_sync_status = 'synced'", rows)
+	}
+
+	log.Println("  - itunes_sync_status column added successfully")
 	return nil
 }

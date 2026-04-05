@@ -1699,6 +1699,40 @@ func (p *PebbleStore) SetLastWrittenAt(id string, t time.Time) error {
 	return err
 }
 
+// MarkITunesSynced sets itunes_sync_status to "synced" for the given book IDs.
+func (p *PebbleStore) MarkITunesSynced(bookIDs []string) (int64, error) {
+	var count int64
+	synced := "synced"
+	for _, id := range bookIDs {
+		book, err := p.GetBookByID(id)
+		if err != nil || book == nil {
+			continue
+		}
+		book.ITunesSyncStatus = &synced
+		if _, err := p.UpdateBook(id, book); err == nil {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// GetITunesDirtyBooks returns all primary books with itunes_sync_status = "dirty".
+func (p *PebbleStore) GetITunesDirtyBooks() ([]Book, error) {
+	allBooks, err := p.GetAllBooks(100000, 0)
+	if err != nil {
+		return nil, err
+	}
+	var dirty []Book
+	for _, b := range allBooks {
+		if b.ITunesSyncStatus != nil && *b.ITunesSyncStatus == "dirty" {
+			if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
+				dirty = append(dirty, b)
+			}
+		}
+	}
+	return dirty, nil
+}
+
 // GetBookVersions returns CoW version snapshots for a book, newest-first.
 func (p *PebbleStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
 	prefix := fmt.Sprintf("book_ver:%s:", id)

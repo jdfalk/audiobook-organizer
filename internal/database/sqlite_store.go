@@ -34,7 +34,7 @@ const bookSelectColumns = `
 	original_file_hash, organized_file_hash, library_state, quantity,
 	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
 	metadata_updated_at, last_written_at, metadata_review_status, cover_url, narrators_json,
-	last_organize_operation_id, last_organized_at
+	last_organize_operation_id, last_organized_at, itunes_sync_status
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -51,7 +51,7 @@ const bookSelectColumnsQualified = `
 	books.original_file_hash, books.organized_file_hash, books.library_state, books.quantity,
 	books.marked_for_deletion, books.marked_for_deletion_at, books.created_at, books.updated_at,
 	books.metadata_updated_at, books.last_written_at, books.metadata_review_status, books.cover_url, books.narrators_json,
-	books.last_organize_operation_id, books.last_organized_at
+	books.last_organize_operation_id, books.last_organized_at, books.itunes_sync_status
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -77,6 +77,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		metadataUpdatedAt, lastWrittenAt                                      sql.NullTime
 		lastOrganizeOperationID                                              sql.NullString
 		lastOrganizedAt                                                      sql.NullTime
+		itunesSyncStatus                                                     sql.NullString
 	)
 
 	if err := scanner.Scan(
@@ -92,7 +93,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&originalFileHash, &organizedFileHash, &libraryState, &quantity,
 		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
 		&metadataUpdatedAt, &lastWrittenAt, &metadataReviewStatus, &coverURL, &narratorsJSON,
-		&lastOrganizeOperationID, &lastOrganizedAt,
+		&lastOrganizeOperationID, &lastOrganizedAt, &itunesSyncStatus,
 	); err != nil {
 		return err
 	}
@@ -182,6 +183,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if lastOrganizedAt.Valid {
 		book.LastOrganizedAt = &lastOrganizedAt.Time
 	}
+	book.ITunesSyncStatus = nullableString(itunesSyncStatus)
 	return nil
 }
 
@@ -359,6 +361,7 @@ func (s *SQLiteStore) createTables() error {
 		narrators_json TEXT,
 		last_organize_operation_id TEXT,
 		last_organized_at DATETIME,
+		itunes_sync_status TEXT,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);
@@ -2357,6 +2360,15 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	book.CreatedAt = &now
 	book.UpdatedAt = &now
 
+	// Set initial iTunes sync status if not already set
+	if book.ITunesSyncStatus == nil {
+		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+			synced := "synced" // came from iTunes — assume in sync
+			book.ITunesSyncStatus = &synced
+		}
+		// Books without a PID get nil status (unlinked) — set when they're added to iTunes
+	}
+
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
 		format, duration, work_id, narrator, edition, description, language, publisher, genre,
@@ -2368,8 +2380,8 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json,
-		last_organize_operation_id, last_organized_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		last_organize_operation_id, last_organized_at, itunes_sync_status
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
@@ -2381,7 +2393,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
 		book.CreatedAt, book.UpdatedAt, book.CoverURL, book.NarratorsJSON,
-		book.LastOrganizeOperationID, book.LastOrganizedAt,
+		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus,
 	)
 	if err != nil {
 		return nil, err
@@ -2467,9 +2479,19 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 
 	if fetchErr == nil && current != nil && metadataChanged(current, book) {
 		book.MetadataUpdatedAt = &now
+		// Auto-dirty: if metadata changed and this book has an iTunes PID,
+		// mark it as needing a write-back to the iTunes library.
+		if current.ITunesPersistentID != nil && *current.ITunesPersistentID != "" {
+			dirty := "dirty"
+			book.ITunesSyncStatus = &dirty
+		}
 	} else if fetchErr == nil && current != nil {
 		// Preserve the existing metadata_updated_at value — nothing changed.
 		book.MetadataUpdatedAt = current.MetadataUpdatedAt
+		// Also preserve iTunes sync status if no metadata change.
+		if book.ITunesSyncStatus == nil {
+			book.ITunesSyncStatus = current.ITunesSyncStatus
+		}
 	}
 
 	// Never touch last_written_at in UpdateBook. It is set by SetLastWrittenAt only.
@@ -2491,7 +2513,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		marked_for_deletion = ?, marked_for_deletion_at = ?,
 		updated_at = ?, metadata_updated_at = ?, last_written_at = ?,
 		metadata_review_status = ?, cover_url = ?, narrators_json = ?,
-		last_organize_operation_id = ?, last_organized_at = ?
+		last_organize_operation_id = ?, last_organized_at = ?, itunes_sync_status = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -2507,7 +2529,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.MarkedForDeletion, book.MarkedForDeletionAt,
 		book.UpdatedAt, book.MetadataUpdatedAt, book.LastWrittenAt,
 		book.MetadataReviewStatus, book.CoverURL, book.NarratorsJSON,
-		book.LastOrganizeOperationID, book.LastOrganizedAt, id,
+		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus, id,
 	)
 	if err != nil {
 		return nil, err
@@ -2530,6 +2552,48 @@ func (s *SQLiteStore) SetLastWrittenAt(id string, t time.Time) error {
 		t, id,
 	)
 	return err
+}
+
+// MarkITunesSynced sets itunes_sync_status to "synced" for the given book IDs.
+func (s *SQLiteStore) MarkITunesSynced(bookIDs []string) (int64, error) {
+	if len(bookIDs) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(bookIDs))
+	args := make([]interface{}, len(bookIDs))
+	for i, id := range bookIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := fmt.Sprintf(
+		`UPDATE books SET itunes_sync_status = 'synced' WHERE id IN (%s)`,
+		strings.Join(placeholders, ","),
+	)
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+// GetITunesDirtyBooks returns all primary books with itunes_sync_status = "dirty".
+func (s *SQLiteStore) GetITunesDirtyBooks() ([]Book, error) {
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE itunes_sync_status = 'dirty' AND (is_primary_version = 1 OR is_primary_version IS NULL)`, bookSelectColumns)
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
 }
 
 func (s *SQLiteStore) DeleteBook(id string) error {
