@@ -37,7 +37,7 @@ func TestOrganizer_CopyStrategy(t *testing.T) {
 		Author:   &database.Author{Name: "J.R.R. Tolkien"},
 	}
 
-	newPath, err := org.OrganizeBook(book)
+	newPath, _, err := org.OrganizeBook(book)
 	require.NoError(t, err)
 
 	assert.Contains(t, newPath, rootDir)
@@ -80,7 +80,7 @@ func TestOrganizer_HardlinkStrategy(t *testing.T) {
 		Author:   &database.Author{Name: "Frank Herbert"},
 	}
 
-	newPath, err := org.OrganizeBook(book)
+	newPath, _, err := org.OrganizeBook(book)
 	require.NoError(t, err)
 
 	// Verify hardlink: both files share same inode
@@ -142,7 +142,7 @@ func TestOrganizer_ComplexPatterns(t *testing.T) {
 			}
 			org := NewOrganizer(cfg)
 
-			newPath, err := org.OrganizeBook(tt.book)
+			newPath, _, err := org.OrganizeBook(tt.book)
 			require.NoError(t, err)
 			for _, want := range tt.wantContains {
 				assert.Contains(t, newPath, want)

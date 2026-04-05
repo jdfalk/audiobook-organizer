@@ -121,3 +121,24 @@ func RequireAuth(store database.Store) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// RequireAdmin is a middleware that checks the authenticated user has the "admin" role.
+// Must be used after RequireAuth in the middleware chain.
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, ok := CurrentUser(c)
+		if !ok || user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			c.Abort()
+			return
+		}
+		for _, role := range user.Roles {
+			if role == "admin" {
+				c.Next()
+				return
+			}
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin role required"})
+		c.Abort()
+	}
+}

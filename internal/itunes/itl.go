@@ -294,6 +294,10 @@ func itlEncrypt(hdr *hdfmHeader, data []byte) []byte {
 // Zlib compression
 // ---------------------------------------------------------------------------
 
+// maxDecompressedSize caps zlib decompression to prevent decompression bombs.
+// 512 MB is well above any legitimate iTunes library payload.
+const maxDecompressedSize = 512 * 1024 * 1024
+
 func itlInflate(data []byte) ([]byte, bool) {
 	if len(data) == 0 || data[0] != 0x78 {
 		return data, false
@@ -303,9 +307,13 @@ func itlInflate(data []byte) ([]byte, bool) {
 		return data, false
 	}
 	defer r.Close()
-	out, err := io.ReadAll(r)
+	limited := io.LimitReader(r, maxDecompressedSize+1)
+	out, err := io.ReadAll(limited)
 	if err != nil {
 		return data, false
+	}
+	if int64(len(out)) > maxDecompressedSize {
+		return data, false // decompressed data exceeds size limit — reject as decompression bomb
 	}
 	return out, true
 }

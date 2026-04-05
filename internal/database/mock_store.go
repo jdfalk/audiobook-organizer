@@ -215,6 +215,19 @@ type MockStore struct {
 	ReassignExternalIDsFunc          func(oldBookID, newBookID string) error
 	BulkCreateExternalIDMappingsFunc func(mappings []ExternalIDMapping) error
 
+	// BookFile methods
+	CreateBookFileFunc          func(file *BookFile) error
+	UpdateBookFileFunc          func(id string, file *BookFile) error
+	GetBookFilesFunc            func(bookID string) ([]BookFile, error)
+	GetBookFileByIDFunc         func(bookID, fileID string) (*BookFile, error)
+	GetBookFileByPIDFunc        func(itunesPID string) (*BookFile, error)
+	GetBookFileByPathFunc       func(filePath string) (*BookFile, error)
+	DeleteBookFileFunc          func(id string) error
+	DeleteBookFilesForBookFunc  func(bookID string) error
+	UpsertBookFileFunc          func(file *BookFile) error
+	BatchUpsertBookFilesFunc    func(files []*BookFile) error
+	MoveBookFilesToBookFunc     func(fileIDs []string, sourceBookID, targetBookID string) error
+
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
 	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
@@ -1464,16 +1477,71 @@ func (m *MockStore) GetBooksByTag(tag string) ([]string, error) {
 	return nil, nil
 }
 
-// ---- BookFile stubs (Task 1 placeholder — full implementation in Task 2) ----
+// ---- BookFile methods ----
 
-func (m *MockStore) CreateBookFile(file *BookFile) error                                       { return nil }
-func (m *MockStore) UpdateBookFile(id string, file *BookFile) error                            { return nil }
-func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error)                            { return nil, nil }
-func (m *MockStore) GetBookFileByID(bookID, fileID string) (*BookFile, error)                  { return nil, nil }
-func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error)                      { return nil, nil }
-func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error)                      { return nil, nil }
-func (m *MockStore) DeleteBookFile(id string) error                                            { return nil }
-func (m *MockStore) DeleteBookFilesForBook(bookID string) error                                { return nil }
-func (m *MockStore) UpsertBookFile(file *BookFile) error                                       { return nil }
-func (m *MockStore) BatchUpsertBookFiles(files []*BookFile) error                              { return nil }
-func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error { return nil }
+func (m *MockStore) CreateBookFile(file *BookFile) error {
+	if m.CreateBookFileFunc != nil {
+		return m.CreateBookFileFunc(file)
+	}
+	return nil
+}
+func (m *MockStore) UpdateBookFile(id string, file *BookFile) error {
+	if m.UpdateBookFileFunc != nil {
+		return m.UpdateBookFileFunc(id, file)
+	}
+	return nil
+}
+func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error) {
+	if m.GetBookFilesFunc != nil {
+		return m.GetBookFilesFunc(bookID)
+	}
+	return nil, nil
+}
+func (m *MockStore) GetBookFileByID(bookID, fileID string) (*BookFile, error) {
+	if m.GetBookFileByIDFunc != nil {
+		return m.GetBookFileByIDFunc(bookID, fileID)
+	}
+	return nil, nil
+}
+func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
+	if m.GetBookFileByPIDFunc != nil {
+		return m.GetBookFileByPIDFunc(itunesPID)
+	}
+	return nil, nil
+}
+func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error) {
+	if m.GetBookFileByPathFunc != nil {
+		return m.GetBookFileByPathFunc(filePath)
+	}
+	return nil, nil
+}
+func (m *MockStore) DeleteBookFile(id string) error {
+	if m.DeleteBookFileFunc != nil {
+		return m.DeleteBookFileFunc(id)
+	}
+	return nil
+}
+func (m *MockStore) DeleteBookFilesForBook(bookID string) error {
+	if m.DeleteBookFilesForBookFunc != nil {
+		return m.DeleteBookFilesForBookFunc(bookID)
+	}
+	return nil
+}
+func (m *MockStore) UpsertBookFile(file *BookFile) error {
+	if m.UpsertBookFileFunc != nil {
+		return m.UpsertBookFileFunc(file)
+	}
+	return nil
+}
+func (m *MockStore) BatchUpsertBookFiles(files []*BookFile) error {
+	if m.BatchUpsertBookFilesFunc != nil {
+		return m.BatchUpsertBookFilesFunc(files)
+	}
+	return nil
+}
+func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error {
+	if m.MoveBookFilesToBookFunc != nil {
+		return m.MoveBookFilesToBookFunc(fileIDs, sourceBookID, targetBookID)
+	}
+	return nil
+}

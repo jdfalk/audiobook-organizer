@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
@@ -58,6 +59,16 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	books, err := env.Store.GetAllBooks(100, 0)
 	require.NoError(t, err)
 	require.Len(t, books, 2)
+
+	// Step 4.5: Create book_files for each imported book (organize requires them)
+	for _, b := range books {
+		_ = env.Store.CreateBookFile(&database.BookFile{
+			ID:       "bf-" + b.ID,
+			BookID:   b.ID,
+			FilePath: b.FilePath,
+			Format:   b.Format,
+		})
+	}
 
 	// Step 5: Organize
 	w = httptest.NewRecorder()
