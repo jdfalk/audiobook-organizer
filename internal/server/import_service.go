@@ -6,6 +6,7 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,6 +154,12 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	created, err := is.db.CreateBook(book)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create book: %w", err)
+	}
+
+	// Provision ITL track (generates PID, stores in external_id_map, enqueues add)
+	if err := ProvisionITLTracksForBook(is.db, created); err != nil {
+		// Non-fatal: book was created, ITL provisioning can be retried
+		log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
 	}
 
 	return &ImportFileResponse{
