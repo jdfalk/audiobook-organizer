@@ -1568,6 +1568,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/fix-book-file-paths", s.handleFixBookFilePaths)
 			protected.POST("/maintenance/refetch-missing-authors", s.handleRefetchMissingAuthors)
 			protected.POST("/maintenance/recompute-itunes-paths", s.handleRecomputeITunesPaths)
+			protected.POST("/maintenance/generate-itl-tests", s.handleGenerateITLTests)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

@@ -21,6 +21,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -3460,5 +3461,42 @@ func (s *Server) handleRecomputeITunesPaths(c *gin.Context) {
 		"skipped": skipCount,
 		"errors":  errorCount,
 		"results": results,
+	})
+}
+
+// handleGenerateITLTests generates a suite of .itl test files for iTunes testing.
+func (s *Server) handleGenerateITLTests(c *gin.Context) {
+	store := database.GlobalStore
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	outputDir := config.AppConfig.RootDir + "/.itunes-writeback/tests"
+
+	// Gather all books and book_files for the full-library test case
+	allBooks, err := store.GetAllBooks(100000, 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to fetch books: %v", err)})
+		return
+	}
+
+	var allBookFiles []database.BookFile
+	for _, b := range allBooks {
+		files, _ := store.GetBookFiles(b.ID)
+		allBookFiles = append(allBookFiles, files...)
+	}
+
+	if err := itunes.GenerateTestITLSuite(outputDir, allBooks, allBookFiles); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate test suite: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":    true,
+		"output_dir": outputDir,
+		"books":      len(allBooks),
+		"book_files": len(allBookFiles),
+		"message":    fmt.Sprintf("Generated ITL test suite in %s with %d books and %d book_files", outputDir, len(allBooks), len(allBookFiles)),
 	})
 }
