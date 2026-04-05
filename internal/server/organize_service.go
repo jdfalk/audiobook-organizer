@@ -150,6 +150,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 					if renameErr := itunes.RenameITLFile(writePath+".tmp", writePath); renameErr != nil {
 						log.Warn("Auto write-back rename failed: %v", renameErr)
 					} else {
+						recordITLReadTime() // mark our write as the latest known state
 						log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
 						// Mark written books as synced with iTunes
 						if n, markErr := orgSvc.db.MarkITunesSynced(bookIDs); markErr == nil && n > 0 {

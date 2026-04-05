@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -138,6 +139,43 @@ type itunesImportStatus struct {
 var itunesActivityRecorder func(entry database.ActivityEntry)
 
 var itunesImportStatuses sync.Map
+
+// itlLastReadMtime tracks when we last read the ITL file, so we can detect
+// if someone else (e.g., iTunes) modified it between our read and write.
+var (
+	itlLastReadMtime time.Time
+	itlMtimeMu       sync.Mutex
+)
+
+// checkITLConflict returns an error if the ITL file's mtime has changed
+// since our last read, indicating a concurrent modification (e.g., by iTunes).
+func checkITLConflict(itlPath string) error {
+	itlMtimeMu.Lock()
+	lastRead := itlLastReadMtime
+	itlMtimeMu.Unlock()
+
+	if lastRead.IsZero() {
+		return nil // first access, no conflict possible
+	}
+
+	stat, err := os.Stat(itlPath)
+	if err != nil {
+		return nil // file doesn't exist yet, no conflict
+	}
+
+	if stat.ModTime().After(lastRead.Add(2 * time.Second)) {
+		return fmt.Errorf("ITL conflict: file modified at %v (our last read: %v) — re-sync before writing",
+			stat.ModTime(), lastRead)
+	}
+	return nil
+}
+
+// recordITLReadTime stamps the current time as the last ITL read.
+func recordITLReadTime() {
+	itlMtimeMu.Lock()
+	itlLastReadMtime = time.Now()
+	itlMtimeMu.Unlock()
+}
 
 // handleITunesValidate validates an iTunes library without importing.
 func (s *Server) handleITunesValidate(c *gin.Context) {
@@ -580,6 +618,12 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
+	// Check for concurrent modification before writing
+	if err := checkITLConflict(itlPath); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Collect updates from primary versions only (avoids duplicate PIDs
 	// from imported + organized copies of the same book)
 	itlUpdates, writtenBookIDs := collectITLUpdatesWithBookIDs(database.GlobalStore)
@@ -608,6 +652,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 
+	recordITLReadTime() // mark our write as the latest known state
 	stdlog.Printf("[INFO] Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
 
 	// Mark all written books as synced with iTunes
