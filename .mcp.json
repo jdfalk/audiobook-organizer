@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "itunes": {
+      "command": "ssh",
+      "args": [
+        "jdfalk@unimatrixzero.local",
+        "powershell",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "W:\\audiobook-organizer\\scripts\\itunes-mcp-server.ps1"
+      ]
+    }
+  }
+}
