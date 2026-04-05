@@ -3,7 +3,7 @@
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -107,6 +107,7 @@ const formatTimestampCompact = (ts: string): string => {
 
 export default function ActivityLog() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -130,6 +131,9 @@ export default function ActivityLog() {
   const [activeOps, setActiveOps] = useState<api.ActiveOperationSummary[]>([]);
   const [pinned, setPinned] = useState(() => localStorage.getItem('activity-ops-pinned') !== 'false');
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
+  const [opLogs, setOpLogs] = useState<string[]>([]);
+  const opLogsRef = useRef<HTMLDivElement>(null);
 
   // Sources
   const [sources, setSources] = useState<SourceCount[]>([]);
@@ -172,6 +176,29 @@ export default function ActivityLog() {
       console.error('Failed to load active operations', err);
     }
   }, []);
+
+  // Load logs for expanded operation
+  useEffect(() => {
+    if (!expandedOpId) {
+      setOpLogs([]);
+      return;
+    }
+    let cancelled = false;
+    const fetchLogs = async () => {
+      try {
+        const logs = await api.getOperationLogs(expandedOpId);
+        if (!cancelled) {
+          setOpLogs(logs.map((l: { message?: string }) => l.message || String(l)));
+          setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
+        }
+      } catch {
+        if (!cancelled) setOpLogs(['Failed to load logs']);
+      }
+    };
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 3000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [expandedOpId]);
 
   // Load sources
   const loadSources = useCallback(async () => {
@@ -538,7 +565,17 @@ export default function ActivityLog() {
               {activeOps.map((op) => {
                 const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
                 return (
-                  <Paper key={op.id} variant="outlined" sx={{ p: 1.5 }}>
+                  <Paper
+                    key={op.id}
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      cursor: 'pointer',
+                      border: expandedOpId === op.id ? 2 : 1,
+                      borderColor: expandedOpId === op.id ? 'primary.main' : 'divider',
+                    }}
+                    onClick={() => setExpandedOpId(expandedOpId === op.id ? null : op.id)}
+                  >
                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Typography variant="subtitle2" fontWeight="bold">
@@ -551,7 +588,7 @@ export default function ActivityLog() {
                         color="error"
                         variant="outlined"
                         startIcon={<CancelIcon />}
-                        onClick={() => handleCancelOp(op.id)}
+                        onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
                         disabled={cancelling.has(op.id)}
                       >
                         {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
@@ -570,6 +607,32 @@ export default function ActivityLog() {
                     <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
                       {op.message}
                     </Typography>
+                    <Collapse in={expandedOpId === op.id}>
+                      <Box
+                        ref={expandedOpId === op.id ? opLogsRef : undefined}
+                        sx={{
+                          mt: 1,
+                          maxHeight: 300,
+                          overflowY: 'auto',
+                          bgcolor: 'grey.900',
+                          color: 'grey.300',
+                          borderRadius: 1,
+                          p: 1,
+                          fontFamily: 'monospace',
+                          fontSize: '0.75rem',
+                          lineHeight: 1.4,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {opLogs.length === 0 ? (
+                          <Typography variant="caption" color="grey.500">Loading logs...</Typography>
+                        ) : (
+                          opLogs.map((line, i) => (
+                            <Box key={i} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{line}</Box>
+                          ))
+                        )}
+                      </Box>
+                    </Collapse>
                   </Paper>
                 );
               })}
