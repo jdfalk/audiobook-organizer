@@ -292,6 +292,12 @@ var migrations = []Migration{
 		Up:          migration042Up,
 		Down:        nil,
 	},
+	{
+		Version:     43,
+		Description: "Drop deprecated book_segments table",
+		Up:          migration043Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2222,5 +2228,36 @@ func migration042Up(store Store) error {
 	}
 
 	log.Println("  - Dead tables dropped and missing indexes added")
+	return nil
+}
+
+// migration043Up drops the deprecated book_segments table.
+// Data was migrated to book_files in migration 39. No production code reads this table.
+func migration043Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	log.Println("  - Dropping deprecated book_segments table and adding remaining indexes")
+	if _, err := sqliteStore.db.Exec(`DROP TABLE IF EXISTS book_segments`); err != nil {
+		log.Printf("  - [WARN] migration 43: %v (continuing)", err)
+	}
+	if _, err := sqliteStore.db.Exec(`DROP INDEX IF EXISTS idx_book_segments_book`); err != nil {
+		// non-fatal
+	}
+	if _, err := sqliteStore.db.Exec(`DROP INDEX IF EXISTS idx_book_segments_hash`); err != nil {
+		// non-fatal
+	}
+	// Additional indexes
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_operations_type_status ON operations(type, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_metadata_changes_time ON metadata_changes_history(changed_at DESC)`,
+	} {
+		if _, err := sqliteStore.db.Exec(idx); err != nil {
+			log.Printf("  - [WARN] migration 43 index: %v (continuing)", err)
+		}
+	}
+
+	log.Println("  - book_segments dropped and additional indexes added")
 	return nil
 }

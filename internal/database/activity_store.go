@@ -75,6 +75,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_book_timestamp   ON activity_log (book_i
 CREATE INDEX IF NOT EXISTS idx_activity_tier             ON activity_log (tier);
 CREATE INDEX IF NOT EXISTS idx_activity_tags             ON activity_log (tags);
 CREATE INDEX IF NOT EXISTS idx_activity_source           ON activity_log (source);
+CREATE INDEX IF NOT EXISTS idx_activity_tier_timestamp   ON activity_log (tier, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_level_timestamp  ON activity_log (level, timestamp DESC);
 `
 
 // NewActivityStore opens (or creates) the SQLite activity log at dbPath.

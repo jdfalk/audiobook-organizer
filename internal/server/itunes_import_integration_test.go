@@ -5,7 +5,7 @@
 package server
 
 import (
-	"hash/crc32"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -326,39 +326,34 @@ func TestITunesImport_MultiTrackBookSegments(t *testing.T) {
 	created, err := database.GlobalStore.CreateBook(book)
 	require.NoError(t, err)
 
-	// Create segments as executeITunesImport does
-	bookNumericID := int(crc32.ChecksumIEEE([]byte(created.ID)))
-	for _, track := range mobyGroup.tracks {
+	// Create book_files as executeITunesImport does (replaces legacy book_segments)
+	for i, track := range mobyGroup.tracks {
 		trackLoc := opts.RemapPath(track.Location)
 		trackPath, err := itunes.DecodeLocation(trackLoc)
 		require.NoError(t, err)
 
-		trackNum := track.TrackNumber
-		totalTracks := len(mobyGroup.tracks)
-		segment := &database.BookSegment{
-			FilePath:    trackPath,
-			Format:      "m4b",
-			SizeBytes:   track.Size,
-			DurationSec: int(track.TotalTime / 1000),
-			TrackNumber: &trackNum,
-			TotalTracks: &totalTracks,
-			Active:      true,
+		bf := &database.BookFile{
+			ID:         fmt.Sprintf("bf-%d", i),
+			BookID:     created.ID,
+			FilePath:   trackPath,
+			Format:     "m4b",
+			FileSize:   int64(track.Size),
+			Duration:   int(track.TotalTime),
+			TrackNumber: track.TrackNumber,
+			TrackCount: len(mobyGroup.tracks),
 		}
-		_, err = database.GlobalStore.CreateBookSegment(bookNumericID, segment)
-		require.NoError(t, err)
+		require.NoError(t, database.GlobalStore.CreateBookFile(bf))
 	}
 
-	// Verify segments
-	segments, err := database.GlobalStore.ListBookSegments(bookNumericID)
+	// Verify book_files
+	files, err := database.GlobalStore.GetBookFiles(created.ID)
 	require.NoError(t, err)
-	require.Len(t, segments, 3)
+	require.Len(t, files, 3)
 
 	// Verify track numbers and durations
-	for _, seg := range segments {
-		require.NotNil(t, seg.TrackNumber)
-		require.NotNil(t, seg.TotalTracks)
-		assert.Equal(t, 3, *seg.TotalTracks)
-		assert.True(t, seg.Active)
+	for _, bf := range files {
+		assert.Equal(t, len(mobyGroup.tracks), bf.TrackCount)
+		assert.NotZero(t, bf.Duration)
 	}
 }
 
