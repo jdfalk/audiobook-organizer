@@ -57,13 +57,26 @@ func TestBridgeStdio(t *testing.T) {
 	stdin := bytes.NewReader(stdinData)
 	stdout := &bytes.Buffer{}
 
-	server, client := net.Pipe()
+	// Use a real TCP connection so half-close (CloseWrite) works correctly.
+	// net.Pipe doesn't support half-close, which causes the test to fail.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	// Server: echo back then close
 	go func() {
-		io.Copy(server, server)
-		server.Close()
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		io.Copy(conn, conn)
+		conn.Close()
 	}()
 
-	err := BridgeStdio(client, stdin, stdout)
+	client, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+
+	err = BridgeStdio(client, stdin, stdout)
 	assert.Nil(t, err)
 	assert.Equal(t, stdinData, stdout.Bytes())
 }
