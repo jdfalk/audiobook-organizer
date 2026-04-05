@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.5.0
+# version: 2.6.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -16,7 +16,8 @@ export GOEXPERIMENT := jsonv2
         web-install web-build web-dev web-test web-lint \
         test test-all test-e2e coverage coverage-check ci \
         docker docker-run docker-stop \
-        release-dry-run release-snapshot version
+        release-dry-run release-snapshot version \
+        build-mtls-bridge build-mtls-bridge-windows
 
 # Default: full build (frontend + backend with embed)
 all: build
@@ -176,6 +177,16 @@ coverage-check:
 ## ci: Full CI check (all tests + coverage)
 ci: test-all coverage-check
 	@echo "✅ All CI checks passed!"
+
+## build-mtls-bridge: Build the mTLS bridge binary (macOS)
+build-mtls-bridge:
+	@echo "Building mtls-bridge..."
+	@go build -ldflags="$(LDFLAGS)" -o mtls-bridge ./cmd/mtls-bridge
+
+## build-mtls-bridge-windows: Cross-compile mTLS bridge for Windows amd64
+build-mtls-bridge-windows:
+	@echo "Building mtls-bridge.exe for Windows..."
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o mtls-bridge.exe ./cmd/mtls-bridge
 
 ## clean: Remove build artifacts
 clean:

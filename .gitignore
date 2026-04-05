@@ -243,3 +243,6 @@ web/tests/e2e/playwright-report/**/*
 
 # Dedup benchmark output (large raw API responses)
 testdata/dedup-bench/
+
+# mTLS bridge certificates and config
+.mtls/
