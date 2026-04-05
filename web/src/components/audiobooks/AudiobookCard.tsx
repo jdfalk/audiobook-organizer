@@ -36,7 +36,7 @@ interface AudiobookCardProps {
   onParseWithAI?: (audiobook: Audiobook) => void;
   selectable?: boolean;
   selected?: boolean;
-  onToggleSelect?: (audiobook: Audiobook) => void;
+  onToggleSelect?: (audiobook: Audiobook, event?: React.MouseEvent) => void;
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -99,7 +99,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
 
   const handleSelectToggle = (event: React.MouseEvent) => {
     event.stopPropagation();
-    onToggleSelect?.(audiobook);
+    onToggleSelect?.(audiobook, event);
   };
 
   // Placeholder cover art with first letter of title

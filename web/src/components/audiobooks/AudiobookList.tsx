@@ -36,7 +36,7 @@ interface AudiobookListProps {
   onDelete?: (audiobook: Audiobook) => void;
   onClick?: (audiobook: Audiobook) => void;
   selectedIds?: Set<string>;
-  onToggleSelect?: (audiobook: Audiobook) => void;
+  onToggleSelect?: (audiobook: Audiobook, event?: React.MouseEvent) => void;
   onSelectAll?: () => void;
   columns?: ColumnDefinition[];
   columnWidths?: Record<string, number>;
@@ -305,8 +305,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                   {onToggleSelect && (
                     <Checkbox
                       checked={selectedIds?.has(audiobook.id) || false}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={() => onToggleSelect(audiobook)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleSelect(audiobook, event as unknown as React.MouseEvent);
+                      }}
+                      onChange={() => {}}
                       inputProps={{
                         'aria-label': `Select ${audiobook.title || 'audiobook'}`,
                       }}
