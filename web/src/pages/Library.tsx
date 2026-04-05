@@ -575,13 +575,35 @@ export const Library = () => {
   const selectedHasActive = selectedAudiobooks.some((book) => !book.marked_for_deletion);
   const selectedHasImport = selectedAudiobooks.some((book) => book.library_state === 'imported');
 
-  const handleToggleSelect = (audiobook: Audiobook) => {
+  const lastSelectedIndexRef = useRef<number>(-1);
+
+  const handleToggleSelect = (audiobook: Audiobook, event?: React.MouseEvent) => {
+    const clickedIndex = audiobooks.findIndex((b) => b.id === audiobook.id);
+
+    // Shift-click: select range from last selected to clicked
+    if (event?.shiftKey && lastSelectedIndexRef.current >= 0 && clickedIndex >= 0) {
+      const start = Math.min(lastSelectedIndexRef.current, clickedIndex);
+      const end = Math.max(lastSelectedIndexRef.current, clickedIndex);
+      const rangeBooks = audiobooks.slice(start, end + 1);
+      setSelectedAudiobooks((prev) => {
+        const byId = new Map(prev.map((b) => [b.id, b]));
+        for (const b of rangeBooks) {
+          byId.set(b.id, b);
+        }
+        return Array.from(byId.values());
+      });
+      lastSelectedIndexRef.current = clickedIndex;
+      return;
+    }
+
+    // Normal click: toggle single
     setSelectedAudiobooks((prev) => {
       if (prev.some((selected) => selected.id === audiobook.id)) {
         return prev.filter((selected) => selected.id !== audiobook.id);
       }
       return [...prev, audiobook];
     });
+    lastSelectedIndexRef.current = clickedIndex;
   };
 
   const handleSelectAllOnPage = () => {

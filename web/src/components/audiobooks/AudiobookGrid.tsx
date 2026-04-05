@@ -17,7 +17,7 @@ interface AudiobookGridProps {
   onFetchMetadata?: (audiobook: Audiobook) => void;
   onParseWithAI?: (audiobook: Audiobook) => void;
   selectedIds?: Set<string>;
-  onToggleSelect?: (audiobook: Audiobook) => void;
+  onToggleSelect?: (audiobook: Audiobook, event?: React.MouseEvent) => void;
 }
 
 export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
