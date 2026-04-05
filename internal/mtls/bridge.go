@@ -77,32 +77,24 @@ func Bridge(conn net.Conn, subStdout io.Reader, subStdin io.Writer) error {
 // local stdin/stdout. It uses half-close semantics when available so that
 // sending all of stdin's data (and signalling EOF to the remote) does not
 // prevent the remaining response from being read.
+//
+// The function returns when the conn→stdout direction completes (i.e., the
+// server closes its end), ensuring all response data is received.
 func BridgeStdio(conn net.Conn, stdin io.Reader, stdout io.Writer) error {
-	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-
-	wg.Add(2)
-
-	// stdin → conn (then half-close so remote sees EOF on its read side)
+	// Read from conn → stdout in a goroutine; this is the "response" direction.
+	readDone := make(chan error, 1)
 	go func() {
-		defer wg.Done()
-		_, err := io.Copy(conn, stdin)
-		// Half-close the write side of conn; the read side stays open so
-		// goroutine 2 can still receive the server's response.
-		closeWrite(conn)
-		errs <- err
-	}()
-
-	// conn → stdout (reads until remote closes or conn is fully closed)
-	go func() {
-		defer wg.Done()
 		_, err := io.Copy(stdout, conn)
-		errs <- err
+		readDone <- err
 	}()
 
-	err := <-errs
+	// Copy stdin → conn, then half-close so the server sees EOF.
+	io.Copy(conn, stdin)
+	closeWrite(conn)
+
+	// Wait for the response direction to finish (server closes conn).
+	err := <-readDone
 	conn.Close()
-	wg.Wait()
 
 	if err == io.EOF {
 		return nil
