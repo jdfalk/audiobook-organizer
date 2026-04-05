@@ -1097,8 +1097,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	go s.backfillExternalIDs()
 
 	// Start periodic cleanup of stale transcode temp files
-	if database.DB != nil {
-		if paths, err := database.GetImportPaths(); err == nil {
+	if database.GlobalStore != nil {
+		if paths, err := database.GlobalStore.GetAllImportPaths(); err == nil {
 			for _, p := range paths {
 				stopCleanup := transcode.StartCleanupTicker(p.Path, 1*time.Hour, 2*time.Hour)
 				defer stopCleanup()
@@ -1404,7 +1404,7 @@ func (s *Server) setupRoutes() {
 		{
 			// Audiobook routes
 			protected.GET("/audiobooks", s.listAudiobooks)
-			protected.GET("/audiobooks/search", s.searchAudiobooks)
+			// /audiobooks/search removed — use GET /audiobooks?search= instead
 			protected.GET("/audiobooks/count", s.countAudiobooks)
 			protected.GET("/audiobooks/duplicates", s.listDuplicateAudiobooks)
 			protected.GET("/audiobooks/duplicates/scan-results", s.listBookDuplicateScanResults)
@@ -1761,9 +1761,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 		} else if dbErr == nil {
 			dbErr = err
 		}
-		if playlists, err := database.GlobalStore.GetPlaylistBySeriesID(0); err == nil && playlists != nil { // legacy placeholder (0 unlikely valid series)
-			playlistCount = 1 // minimal indicator; real playlist counting not yet implemented
-		}
+		// Playlist count intentionally omitted — no reliable counting method yet
 	}
 	resp := gin.H{
 		"status":        "ok",
@@ -1838,18 +1836,6 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset})
-}
-
-func (s *Server) searchAudiobooks(c *gin.Context) {
-	params := ParsePaginationParams(c)
-	search := strings.TrimSpace(c.Query("q"))
-	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, search, nil, nil)
-	if err != nil {
-		internalError(c, "failed to search audiobooks", err)
-		return
-	}
-	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
-	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": len(enriched), "limit": params.Limit, "offset": params.Offset})
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
@@ -2256,34 +2242,6 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 			}
 		}
 	}
-}
-
-// startITunesSyncScheduler launches a background goroutine that periodically
-// triggers an iTunes sync if the library has changed.
-func (s *Server) startITunesSyncScheduler(shutdown chan struct{}, wg *sync.WaitGroup) {
-	if !config.AppConfig.ITunesSyncEnabled {
-		return
-	}
-	interval := time.Duration(config.AppConfig.ITunesSyncInterval) * time.Minute
-	if interval < time.Minute {
-		interval = 30 * time.Minute
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				s.triggerITunesSync()
-			case <-shutdown:
-				return
-			}
-		}
-	}()
-	itunesLog := logger.NewWithActivityLog("itunes-scheduler", database.GlobalStore)
-	itunesLog.Info("iTunes sync scheduler started (interval=%v)", interval)
 }
 
 // triggerITunesSync finds the library path from DB and enqueues a sync if the file changed.
