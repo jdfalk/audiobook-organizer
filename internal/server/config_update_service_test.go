@@ -7,8 +7,10 @@ package server
 import (
 	"testing"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/mock"
 )
@@ -24,13 +26,11 @@ func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractStringField(t *testing.T) {
-	service := NewConfigUpdateService(nil)
-
 	payload := map[string]any{
 		"root_dir": "/library",
 	}
 
-	result, ok := service.ExtractStringField(payload, "root_dir")
+	result, ok := util.ExtractStringField(payload, "root_dir")
 
 	if !ok || result != "/library" {
 		t.Errorf("expected '/library', got %q (ok=%v)", result, ok)
@@ -38,13 +38,11 @@ func TestConfigUpdateService_ExtractStringField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
-	service := NewConfigUpdateService(nil)
-
 	payload := map[string]any{
 		"auto_organize": true,
 	}
 
-	result, ok := service.ExtractBoolField(payload, "auto_organize")
+	result, ok := util.ExtractBoolField(payload, "auto_organize")
 
 	if !ok || result != true {
 		t.Errorf("expected true, got %v (ok=%v)", result, ok)
@@ -52,13 +50,11 @@ func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
 }
 
 func TestConfigUpdateService_ExtractIntField(t *testing.T) {
-	service := NewConfigUpdateService(nil)
-
 	payload := map[string]any{
 		"concurrent_scans": float64(4),
 	}
 
-	result, ok := service.ExtractIntField(payload, "concurrent_scans")
+	result, ok := util.ExtractIntField(payload, "concurrent_scans")
 
 	if !ok || result != 4 {
 		t.Errorf("expected 4, got %d (ok=%v)", result, ok)

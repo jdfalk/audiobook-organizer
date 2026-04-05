@@ -7,37 +7,19 @@ package server
 import (
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/util"
+
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-func TestAudiobookUpdateService_ValidateRequest_EmptyID(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	_, err := service.ValidateRequest("", map[string]any{})
-
-	if err == nil {
-		t.Error("expected error for empty ID")
-	}
-}
-
-func TestAudiobookUpdateService_ValidateRequest_NoUpdates(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
-
-	_, err := service.ValidateRequest("book1", map[string]any{})
-
-	if err == nil {
-		t.Error("expected error for empty updates")
-	}
-}
 
 func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
-
 	payload := map[string]any{
 		"title": "New Title",
 	}
 
-	result, ok := service.ExtractStringField(payload, "title")
+	result, ok := util.ExtractStringField(payload, "title")
 
 	if !ok || result != "New Title" {
 		t.Errorf("expected 'New Title', got %q (ok=%v)", result, ok)
@@ -45,13 +27,11 @@ func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {
 }
 
 func TestAudiobookUpdateService_ExtractIntField(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
-
 	payload := map[string]any{
 		"author_id": float64(42),
 	}
 
-	result, ok := service.ExtractIntField(payload, "author_id")
+	result, ok := util.ExtractIntField(payload, "author_id")
 
 	if !ok || result != 42 {
 		t.Errorf("expected 42, got %d (ok=%v)", result, ok)
@@ -59,11 +39,9 @@ func TestAudiobookUpdateService_ExtractIntField(t *testing.T) {
 }
 
 func TestAudiobookUpdateService_ExtractStringField_NotFound(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
-
 	payload := map[string]any{}
 
-	_, ok := service.ExtractStringField(payload, "missing")
+	_, ok := util.ExtractStringField(payload, "missing")
 
 	if ok {
 		t.Error("expected ok=false for missing field")
@@ -87,45 +65,4 @@ func TestAudiobookUpdateService_ExtractOverrides_Success(t *testing.T) {
 	}
 }
 
-func TestAudiobookUpdateService_ApplyUpdatesToBook(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
 
-	book := &database.Book{
-		ID:    "book1",
-		Title: "Original Title",
-	}
-
-	updates := map[string]any{
-		"title": "Updated Title",
-	}
-
-	service.ApplyUpdatesToBook(book, updates)
-
-	if book.Title != "Updated Title" {
-		t.Errorf("expected 'Updated Title', got %q", book.Title)
-	}
-}
-
-func TestAudiobookUpdateService_ApplyUpdatesToBook_MultipleFields(t *testing.T) {
-	service := NewAudiobookUpdateService(&database.MockStore{})
-
-	book := &database.Book{
-		ID:    "book1",
-		Title: "Original Title",
-	}
-
-	authorID := 10
-	updates := map[string]any{
-		"title":     "Updated Title",
-		"author_id": float64(authorID),
-	}
-
-	service.ApplyUpdatesToBook(book, updates)
-
-	if book.Title != "Updated Title" {
-		t.Errorf("expected title 'Updated Title', got %q", book.Title)
-	}
-	if book.AuthorID == nil || *book.AuthorID != authorID {
-		t.Errorf("expected author_id %d, got %v", authorID, book.AuthorID)
-	}
-}

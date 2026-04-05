@@ -586,12 +586,6 @@ func nonEmpty(s string) any {
 	return s
 }
 
-func stringFromSeries(series *database.Series) any {
-	if series == nil {
-		return nil
-	}
-	return series.Name
-}
 
 func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := scanner.ComputeFileHash(newPath)

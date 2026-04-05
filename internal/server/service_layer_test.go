@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/util"
+
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
@@ -159,9 +161,6 @@ func TestConfigUpdateService_ApplyUpdates_ArrayFields(t *testing.T) {
 
 // TestAudiobookUpdateService_ExtractBoolField tests ExtractBoolField method
 func TestAudiobookUpdateService_ExtractBoolField(t *testing.T) {
-	mockStore := mocks.NewMockStore(t)
-	svc := NewAudiobookUpdateService(mockStore)
-
 	tests := []struct {
 		name      string
 		payload   map[string]any
@@ -201,7 +200,7 @@ func TestAudiobookUpdateService_ExtractBoolField(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, ok := svc.ExtractBoolField(tt.payload, tt.key)
+			value, ok := util.ExtractBoolField(tt.payload, tt.key)
 			if value != tt.wantValue {
 				t.Errorf("expected value %v, got %v", tt.wantValue, value)
 			}
@@ -265,59 +264,6 @@ func TestAudiobookUpdateService_ExtractOverrides_EdgeCases(t *testing.T) {
 				t.Errorf("expected %d overrides, got %d", tt.wantCount, len(value))
 			}
 		})
-	}
-}
-
-// TestAudiobookUpdateService_ApplyUpdatesToBook_AllFields tests applying all field types
-func TestAudiobookUpdateService_ApplyUpdatesToBook_AllFields(t *testing.T) {
-	mockStore := mocks.NewMockStore(t)
-	svc := NewAudiobookUpdateService(mockStore)
-
-	book := &database.Book{
-		ID:    "book-123",
-		Title: "Original Title",
-	}
-
-	updates := map[string]any{
-		"title":                  "New Title",
-		"author_id":              float64(42),
-		"series_id":              float64(10),
-		"narrator":               "John Doe",
-		"publisher":              "Test Publisher",
-		"language":               "en",
-		"audiobook_release_year": float64(2023),
-		"isbn10":                 "1234567890",
-		"isbn13":                 "9781234567890",
-	}
-
-	svc.ApplyUpdatesToBook(book, updates)
-
-	if book.Title != "New Title" {
-		t.Errorf("expected title 'New Title', got %q", book.Title)
-	}
-	if book.AuthorID == nil || *book.AuthorID != 42 {
-		t.Errorf("expected author_id 42, got %v", book.AuthorID)
-	}
-	if book.SeriesID == nil || *book.SeriesID != 10 {
-		t.Errorf("expected series_id 10, got %v", book.SeriesID)
-	}
-	if book.Narrator == nil || *book.Narrator != "John Doe" {
-		t.Errorf("expected narrator 'John Doe', got %v", book.Narrator)
-	}
-	if book.Publisher == nil || *book.Publisher != "Test Publisher" {
-		t.Errorf("expected publisher 'Test Publisher', got %v", book.Publisher)
-	}
-	if book.Language == nil || *book.Language != "en" {
-		t.Errorf("expected language 'en', got %v", book.Language)
-	}
-	if book.AudiobookReleaseYear == nil || *book.AudiobookReleaseYear != 2023 {
-		t.Errorf("expected audiobook_release_year 2023, got %v", book.AudiobookReleaseYear)
-	}
-	if book.ISBN10 == nil || *book.ISBN10 != "1234567890" {
-		t.Errorf("expected isbn10 '1234567890', got %v", book.ISBN10)
-	}
-	if book.ISBN13 == nil || *book.ISBN13 != "9781234567890" {
-		t.Errorf("expected isbn13 '9781234567890', got %v", book.ISBN13)
 	}
 }
 
@@ -1657,8 +1603,6 @@ func TestFilesystemService_RemoveExclusion_EmptyPath(t *testing.T) {
 
 // TestConfigUpdateService_ExtractIntField_EdgeCases tests edge cases
 func TestConfigUpdateService_ExtractIntField_EdgeCases(t *testing.T) {
-	svc := &ConfigUpdateService{}
-
 	tests := []struct {
 		name      string
 		payload   map[string]any
@@ -1691,7 +1635,7 @@ func TestConfigUpdateService_ExtractIntField_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, ok := svc.ExtractIntField(tt.payload, tt.key)
+			value, ok := util.ExtractIntField(tt.payload, tt.key)
 			if value != tt.wantValue {
 				t.Errorf("expected value %d, got %d", tt.wantValue, value)
 			}
