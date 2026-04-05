@@ -514,6 +514,50 @@ func collectITLUpdates(store database.Store) []itunes.ITLLocationUpdate {
 	return updates
 }
 
+// collectITLUpdatesWithBookIDs is like collectITLUpdates but also returns the
+// book IDs that contributed updates, so callers can mark them as iTunes-synced.
+func collectITLUpdatesWithBookIDs(store database.Store) ([]itunes.ITLLocationUpdate, []string) {
+	allBooks, err := store.GetAllBooks(100000, 0)
+	if err != nil {
+		return nil, nil
+	}
+
+	var updates []itunes.ITLLocationUpdate
+	bookIDSet := make(map[string]bool)
+
+	for i := range allBooks {
+		b := &allBooks[i]
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		files, _ := store.GetBookFiles(b.ID)
+		if len(files) > 0 {
+			for _, f := range files {
+				if f.ITunesPersistentID != "" && f.ITunesPath != "" {
+					updates = append(updates, itunes.ITLLocationUpdate{
+						PersistentID: f.ITunesPersistentID,
+						NewLocation:  f.ITunesPath,
+					})
+					bookIDSet[b.ID] = true
+				}
+			}
+		} else if b.ITunesPersistentID != nil && *b.ITunesPersistentID != "" &&
+			b.ITunesPath != nil && *b.ITunesPath != "" {
+			updates = append(updates, itunes.ITLLocationUpdate{
+				PersistentID: *b.ITunesPersistentID,
+				NewLocation:  *b.ITunesPath,
+			})
+			bookIDSet[b.ID] = true
+		}
+	}
+
+	bookIDs := make([]string, 0, len(bookIDSet))
+	for id := range bookIDSet {
+		bookIDs = append(bookIDs, id)
+	}
+	return updates, bookIDs
+}
+
 func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	if database.GlobalStore == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
@@ -538,7 +582,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 
 	// Collect updates from primary versions only (avoids duplicate PIDs
 	// from imported + organized copies of the same book)
-	itlUpdates := collectITLUpdates(database.GlobalStore)
+	itlUpdates, writtenBookIDs := collectITLUpdatesWithBookIDs(database.GlobalStore)
 
 	if len(itlUpdates) == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -565,6 +609,11 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	}
 
 	stdlog.Printf("[INFO] Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
+
+	// Mark all written books as synced with iTunes
+	if n, markErr := database.GlobalStore.MarkITunesSynced(writtenBookIDs); markErr == nil && n > 0 {
+		stdlog.Printf("[INFO] Marked %d books as iTunes-synced after write-back", n)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success":       true,

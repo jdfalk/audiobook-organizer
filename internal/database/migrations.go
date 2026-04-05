@@ -286,6 +286,12 @@ var migrations = []Migration{
 		Up:          migration041Up,
 		Down:        nil,
 	},
+	{
+		Version:     42,
+		Description: "Drop dead tables and add missing indexes",
+		Up:          migration042Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2184,5 +2190,37 @@ func migration041Up(store Store) error {
 	}
 
 	log.Println("  - itunes_sync_status column added successfully")
+	return nil
+}
+
+// migration042Up drops dead tables and adds missing indexes for common query patterns.
+func migration042Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	log.Println("  - Dropping dead tables and adding missing indexes")
+
+	stmts := []string{
+		// Drop dead tables
+		`DROP TABLE IF EXISTS audiobook_source_paths`,
+		// Don't drop book_segments yet — deprecate interface first, drop in a future migration
+
+		// Missing indexes for common query patterns
+		`CREATE INDEX IF NOT EXISTS idx_books_itunes_sync_status ON books(itunes_sync_status) WHERE itunes_sync_status IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_books_dirty_primary ON books(itunes_sync_status, is_primary_version) WHERE itunes_sync_status = 'dirty'`,
+		`CREATE INDEX IF NOT EXISTS idx_metadata_changes_book_time ON metadata_changes_history(book_id, changed_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_path_history_book_time ON book_path_history(book_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_book_active ON book_files(book_id, missing)`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_id_book_source ON external_id_map(book_id, source)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			// Non-fatal: some indexes may already exist or tables may not exist
+			log.Printf("  - [WARN] migration 42: %v (continuing)", err)
+		}
+	}
+
+	log.Println("  - Dead tables dropped and missing indexes added")
 	return nil
 }
