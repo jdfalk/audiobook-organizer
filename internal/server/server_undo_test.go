@@ -422,6 +422,9 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
+	// Write-back now runs in a background goroutine — wait briefly for it to enqueue
+	time.Sleep(500 * time.Millisecond)
+
 	// Verify enqueued
 	batcher.mu.Lock()
 	enqueued := batcher.pendingBooks[book.ID]
@@ -475,6 +478,9 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Write-back now runs in a background goroutine — wait briefly for it to enqueue
+	time.Sleep(500 * time.Millisecond)
 
 	// Verify enqueued (defaults to true)
 	batcher.mu.Lock()
