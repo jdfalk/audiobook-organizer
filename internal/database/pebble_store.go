@@ -4255,6 +4255,19 @@ func (p *PebbleStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 	return batch.Commit(pebble.Sync)
 }
 
+// MarkExternalIDRemoved is a stub — PID lifecycle tracking is SQLite-only.
+func (p *PebbleStore) MarkExternalIDRemoved(source, externalID string) error { return nil }
+
+// SetExternalIDProvenance is a stub — PID lifecycle tracking is SQLite-only.
+func (p *PebbleStore) SetExternalIDProvenance(source, externalID, provenance string) error {
+	return nil
+}
+
+// GetRemovedExternalIDs is a stub — PID lifecycle tracking is SQLite-only.
+func (p *PebbleStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error) {
+	return nil, nil
+}
+
 // --- User Tags (free-form labels on books) ---
 
 // GetBookUserTags returns all user-defined tags for a book.

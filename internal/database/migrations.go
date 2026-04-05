@@ -298,6 +298,12 @@ var migrations = []Migration{
 		Up:          migration043Up,
 		Down:        nil,
 	},
+	{
+		Version:     44,
+		Description: "Add PID provenance and removed_at to external_id_map",
+		Up:          migration044Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2259,5 +2265,32 @@ func migration043Up(store Store) error {
 	}
 
 	log.Println("  - book_segments dropped and additional indexes added")
+	return nil
+}
+
+// migration044Up adds PID lifecycle tracking to external_id_map.
+// provenance: "itunes" (imported), "generated" (we created), "recycled" (reused)
+// removed_at: timestamp when we sent a remove to the ITL; null while live
+func migration044Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	stmts := []string{
+		`ALTER TABLE external_id_map ADD COLUMN provenance TEXT`,
+		`ALTER TABLE external_id_map ADD COLUMN removed_at DATETIME`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_id_removed ON external_id_map(source, removed_at) WHERE removed_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_ext_id_provenance ON external_id_map(source, provenance) WHERE provenance IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 44: %v (continuing)", err)
+		}
+	}
+	// Backfill existing rows as itunes-imported
+	if _, err := sqliteStore.db.Exec(`UPDATE external_id_map SET provenance = 'itunes' WHERE provenance IS NULL AND source = 'itunes'`); err != nil {
+		log.Printf("  - [WARN] migration 44 backfill: %v (continuing)", err)
+	}
+	log.Println("  - Added provenance and removed_at to external_id_map")
 	return nil
 }

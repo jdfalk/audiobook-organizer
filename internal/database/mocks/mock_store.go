@@ -12100,3 +12100,79 @@ func (_c *MockStore_MoveBookFilesToBook_Call) RunAndReturn(run func([]string, st
 	_c.Call.Return(run)
 	return _c
 }
+
+// MarkExternalIDRemoved stubs the Store interface method.
+func (_mock *MockStore) MarkExternalIDRemoved(source string, externalID string) error {
+	ret := _mock.Called(source, externalID)
+	return ret.Error(0)
+}
+
+type MockStore_MarkExternalIDRemoved_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) MarkExternalIDRemoved(source interface{}, externalID interface{}) *MockStore_MarkExternalIDRemoved_Call {
+	return &MockStore_MarkExternalIDRemoved_Call{Call: _e.mock.On("MarkExternalIDRemoved", source, externalID)}
+}
+func (_c *MockStore_MarkExternalIDRemoved_Call) Run(run func(string, string)) *MockStore_MarkExternalIDRemoved_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(string)) })
+	return _c
+}
+func (_c *MockStore_MarkExternalIDRemoved_Call) Return(err error) *MockStore_MarkExternalIDRemoved_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_MarkExternalIDRemoved_Call) RunAndReturn(run func(string, string) error) *MockStore_MarkExternalIDRemoved_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetExternalIDProvenance stubs the Store interface method.
+func (_mock *MockStore) SetExternalIDProvenance(source string, externalID string, provenance string) error {
+	ret := _mock.Called(source, externalID, provenance)
+	return ret.Error(0)
+}
+
+type MockStore_SetExternalIDProvenance_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) SetExternalIDProvenance(source interface{}, externalID interface{}, provenance interface{}) *MockStore_SetExternalIDProvenance_Call {
+	return &MockStore_SetExternalIDProvenance_Call{Call: _e.mock.On("SetExternalIDProvenance", source, externalID, provenance)}
+}
+func (_c *MockStore_SetExternalIDProvenance_Call) Run(run func(string, string, string)) *MockStore_SetExternalIDProvenance_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(string), args[2].(string)) })
+	return _c
+}
+func (_c *MockStore_SetExternalIDProvenance_Call) Return(err error) *MockStore_SetExternalIDProvenance_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_SetExternalIDProvenance_Call) RunAndReturn(run func(string, string, string) error) *MockStore_SetExternalIDProvenance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetRemovedExternalIDs stubs the Store interface method.
+func (_mock *MockStore) GetRemovedExternalIDs(source string) ([]database.ExternalIDMapping, error) {
+	ret := _mock.Called(source)
+	var r0 []database.ExternalIDMapping
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.ExternalIDMapping)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetRemovedExternalIDs_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetRemovedExternalIDs(source interface{}) *MockStore_GetRemovedExternalIDs_Call {
+	return &MockStore_GetRemovedExternalIDs_Call{Call: _e.mock.On("GetRemovedExternalIDs", source)}
+}
+func (_c *MockStore_GetRemovedExternalIDs_Call) Run(run func(string)) *MockStore_GetRemovedExternalIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_GetRemovedExternalIDs_Call) Return(mappings []database.ExternalIDMapping, err error) *MockStore_GetRemovedExternalIDs_Call {
+	_c.Call.Return(mappings, err)
+	return _c
+}
+func (_c *MockStore_GetRemovedExternalIDs_Call) RunAndReturn(run func(string) ([]database.ExternalIDMapping, error)) *MockStore_GetRemovedExternalIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
