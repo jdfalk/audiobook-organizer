@@ -78,10 +78,11 @@ func (mfs *MetadataFetchService) queueISBNEnrichment(id string, book *database.B
 }
 
 type FetchMetadataResponse struct {
-	Message      string
-	Book         *database.Book
-	Source       string
-	FetchedCount int
+	Message         string
+	Book            *database.Book
+	Source          string
+	FetchedCount    int
+	PendingCoverURL string // set by ApplyMetadataCandidate for background download
 }
 
 // MetadataCandidate represents a single search result for manual metadata matching.
@@ -1873,36 +1874,9 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	// Persist fetched values for provenance tracking
 	mfs.persistFetchedMetadata(id, meta)
 
-	// Download cover art and embed into audio file
-	if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
-		coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
-		if coverErr != nil {
-			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
-		} else {
-			log.Printf("[INFO] cover art saved to %s", coverPath)
-			// Update book's cover_url to the local path for serving
-			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
-			if updatedBook != nil {
-				updatedBook.CoverURL = &localCoverURL
-				mfs.db.UpdateBook(id, updatedBook)
-			}
-			// Embed cover art into all audio files for this book
-			if updatedBook != nil {
-				mfs.embedCoverInBookFiles(updatedBook, coverPath)
-			}
-		}
-	}
-
-	// Generate segment titles after metadata is applied
+	// Generate segment titles (fast, DB-only)
 	if err := mfs.generateSegmentTitles(id, updatedBook.Title); err != nil {
 		log.Printf("[WARN] generate segment titles failed for %s: %v", id, err)
-	}
-
-	// Run file rename pipeline (non-fatal)
-	if config.AppConfig.AutoRenameOnApply || config.AppConfig.AutoWriteTagsOnApply {
-		if err := mfs.runApplyPipeline(id, updatedBook); err != nil {
-			log.Printf("[WARN] apply pipeline failed for %s: %v", id, err)
-		}
 	}
 
 	// Queue background ISBN/ASIN enrichment if identifiers are missing
@@ -1911,10 +1885,41 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	}
 
 	return &FetchMetadataResponse{
-		Message: "metadata candidate applied",
-		Book:    updatedBook,
-		Source:  candidate.Source,
+		Message:         "metadata candidate applied",
+		Book:            updatedBook,
+		Source:          candidate.Source,
+		PendingCoverURL: meta.CoverURL,
 	}, nil
+}
+
+// ApplyMetadataFileIO runs the slow file operations after metadata is applied:
+// cover download + embed, tag write-back, file rename. Designed to run in background.
+func (mfs *MetadataFetchService) ApplyMetadataFileIO(id string, coverURL string) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return
+	}
+
+	// Download and embed cover art
+	if coverURL != "" && config.AppConfig.RootDir != "" {
+		coverPath, coverErr := metadata.DownloadCoverArt(coverURL, config.AppConfig.RootDir, id)
+		if coverErr != nil {
+			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
+		} else {
+			log.Printf("[INFO] cover art saved to %s", coverPath)
+			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
+			book.CoverURL = &localCoverURL
+			mfs.db.UpdateBook(id, book)
+			mfs.embedCoverInBookFiles(book, coverPath)
+		}
+	}
+
+	// Run file rename + tag write pipeline
+	if config.AppConfig.AutoRenameOnApply || config.AppConfig.AutoWriteTagsOnApply {
+		if err := mfs.runApplyPipeline(id, book); err != nil {
+			log.Printf("[WARN] apply pipeline failed for %s: %v", id, err)
+		}
+	}
 }
 
 // MarkNoMatch marks a book as having no metadata match.
