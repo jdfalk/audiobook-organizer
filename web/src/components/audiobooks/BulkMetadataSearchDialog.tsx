@@ -463,8 +463,15 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
                     {candidate.narrator && <Chip icon={<HeadphonesIcon />} label="Audiobook" size="small" color="info" variant="outlined" />}
                   </Stack>
                 </Box>
-                <Button variant="contained" size="small" onClick={() => handleApplyAll(candidate)} disabled={applying}>
-                  Apply
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => handleApplyAll(candidate)}
+                  disabled={applying || bookStatuses.get(currentBook.id) === 'applied'}
+                  sx={bookStatuses.get(currentBook.id) === 'applied' ? { opacity: 0.5 } : {}}
+                  startIcon={bookStatuses.get(currentBook.id) === 'applied' ? <CheckCircleIcon /> : undefined}
+                >
+                  {bookStatuses.get(currentBook.id) === 'applied' ? 'Applied' : 'Apply'}
                 </Button>
               </Stack>
 
@@ -491,8 +498,14 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
                       );
                     })}
                     <Box sx={{ mt: 0.5 }}>
-                      <Button variant="outlined" size="small" onClick={() => handleApplySelected(candidate)} disabled={applying || selectedFields.size === 0}>
-                        Apply Selected
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => handleApplySelected(candidate)}
+                        disabled={applying || selectedFields.size === 0 || bookStatuses.get(currentBook.id) === 'applied'}
+                        sx={bookStatuses.get(currentBook.id) === 'applied' ? { opacity: 0.5 } : {}}
+                      >
+                        {bookStatuses.get(currentBook.id) === 'applied' ? 'Applied' : 'Apply Selected'}
                       </Button>
                     </Box>
                   </Box>
