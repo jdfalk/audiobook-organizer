@@ -367,6 +367,13 @@ func (s *stubStore) GetBookTags(bookID string) ([]string, error)                
 func (s *stubStore) SetBookTags(bookID string, tags []string) error              { return nil }
 func (s *stubStore) ListAllTags() ([]database.TagWithCount, error)               { return nil, nil }
 func (s *stubStore) GetBooksByTag(tag string) ([]string, error)                  { return nil, nil }
+func (s *stubStore) MarkExternalIDRemoved(source, externalID string) error       { return nil }
+func (s *stubStore) SetExternalIDProvenance(source, externalID, provenance string) error {
+	return nil
+}
+func (s *stubStore) GetRemovedExternalIDs(source string) ([]database.ExternalIDMapping, error) {
+	return nil, nil
+}
 
 func stubCommandDeps(t *testing.T) {
 	t.Helper()

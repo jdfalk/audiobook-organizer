@@ -3900,6 +3900,66 @@ func (s *SQLiteStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 	return tx.Commit()
 }
 
+// MarkExternalIDRemoved stamps removed_at and tombstones the mapping.
+// Called when we remove a track from the ITL.
+func (s *SQLiteStore) MarkExternalIDRemoved(source, externalID string) error {
+	now := time.Now().Format(time.RFC3339)
+	_, err := s.db.Exec(
+		`UPDATE external_id_map SET removed_at = ?, tombstoned = 1, updated_at = ? WHERE source = ? AND external_id = ?`,
+		now, now, source, externalID,
+	)
+	return err
+}
+
+// SetExternalIDProvenance sets the provenance field for a PID mapping.
+func (s *SQLiteStore) SetExternalIDProvenance(source, externalID, provenance string) error {
+	_, err := s.db.Exec(
+		`UPDATE external_id_map SET provenance = ?, updated_at = ? WHERE source = ? AND external_id = ?`,
+		provenance, time.Now().Format(time.RFC3339), source, externalID,
+	)
+	return err
+}
+
+// GetRemovedExternalIDs returns all removed PIDs for a source (for recycling detection).
+func (s *SQLiteStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error) {
+	rows, err := s.db.Query(
+		`SELECT id, source, external_id, book_id, track_number, file_path, tombstoned, provenance, removed_at, created_at, updated_at
+		 FROM external_id_map WHERE source = ? AND removed_at IS NOT NULL ORDER BY removed_at DESC`,
+		source,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ExternalIDMapping
+	for rows.Next() {
+		var m ExternalIDMapping
+		var provenance, removedAt, filePath sql.NullString
+		var trackNum sql.NullInt64
+		if err := rows.Scan(&m.ID, &m.Source, &m.ExternalID, &m.BookID, &trackNum, &filePath, &m.Tombstoned, &provenance, &removedAt, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if trackNum.Valid {
+			tn := int(trackNum.Int64)
+			m.TrackNumber = &tn
+		}
+		if filePath.Valid {
+			m.FilePath = filePath.String
+		}
+		if provenance.Valid {
+			m.Provenance = provenance.String
+		}
+		if removedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, removedAt.String); err == nil {
+				m.RemovedAt = &t
+			}
+		}
+		results = append(results, m)
+	}
+	return results, rows.Err()
+}
+
 // --- User Tags (free-form labels on books) ---
 
 // GetBookUserTags returns all user-defined tags for a book.

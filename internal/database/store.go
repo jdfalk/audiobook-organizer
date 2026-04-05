@@ -297,6 +297,9 @@ type Store interface {
 	TombstoneExternalID(source, externalID string) error
 	ReassignExternalIDs(oldBookID, newBookID string) error
 	BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error
+	MarkExternalIDRemoved(source, externalID string) error
+	SetExternalIDProvenance(source, externalID, provenance string) error
+	GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error)
 
 	// User Tags (free-form labels on books)
 	GetBookUserTags(bookID string) ([]string, error)
@@ -750,15 +753,17 @@ type DeferredITunesUpdate struct {
 
 // ExternalIDMapping maps an external identifier (iTunes PID, Audible ASIN, etc.) to a book.
 type ExternalIDMapping struct {
-	ID          int       `json:"id"`
-	Source      string    `json:"source"`
-	ExternalID  string    `json:"external_id"`
-	BookID      string    `json:"book_id"`
-	TrackNumber *int      `json:"track_number,omitempty"`
-	FilePath    string    `json:"file_path,omitempty"`
-	Tombstoned  bool      `json:"tombstoned"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int        `json:"id"`
+	Source      string     `json:"source"`
+	ExternalID  string     `json:"external_id"`
+	BookID      string     `json:"book_id"`
+	TrackNumber *int       `json:"track_number,omitempty"`
+	FilePath    string     `json:"file_path,omitempty"`
+	Tombstoned  bool       `json:"tombstoned"`
+	Provenance  string     `json:"provenance,omitempty"`  // "itunes", "generated", "recycled"
+	RemovedAt   *time.Time `json:"removed_at,omitempty"`  // when we sent ITL remove; null = live
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // BookPathChange records a file path change (rename/move) for a book.

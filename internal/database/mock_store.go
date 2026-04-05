@@ -1419,6 +1419,14 @@ func (m *MockStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping) e
 	return nil
 }
 
+func (m *MockStore) MarkExternalIDRemoved(source, externalID string) error { return nil }
+func (m *MockStore) SetExternalIDProvenance(source, externalID, provenance string) error {
+	return nil
+}
+func (m *MockStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error) {
+	return nil, nil
+}
+
 func (m *MockStore) GetBookUserTags(bookID string) ([]string, error) { return nil, nil }
 func (m *MockStore) SetBookUserTags(bookID string, tags []string) error { return nil }
 func (m *MockStore) AddBookUserTag(bookID string, tag string) error { return nil }
