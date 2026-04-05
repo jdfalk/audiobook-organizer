@@ -10503,6 +10503,102 @@ func (_c *MockStore_SetLastWrittenAt_Call) RunAndReturn(run func(id string, t ti
 	return _c
 }
 
+// MarkITunesSynced provides a mock function for the type MockStore
+func (_mock *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) {
+	ret := _mock.Called(bookIDs)
+	if len(ret) == 0 {
+		panic("no return value specified for MarkITunesSynced")
+	}
+	var r0 int64
+	if returnFunc, ok := ret.Get(0).(func([]string) (int64, error)); ok {
+		return returnFunc(bookIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]string) int64); ok {
+		r0 = returnFunc(bookIDs)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func([]string) error); ok {
+		r1 = returnFunc(bookIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_MarkITunesSynced_Call is a *mock.Call
+type MockStore_MarkITunesSynced_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) MarkITunesSynced(bookIDs interface{}) *MockStore_MarkITunesSynced_Call {
+	return &MockStore_MarkITunesSynced_Call{Call: _e.mock.On("MarkITunesSynced", bookIDs)}
+}
+
+func (_c *MockStore_MarkITunesSynced_Call) Run(run func(bookIDs []string)) *MockStore_MarkITunesSynced_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].([]string)) })
+	return _c
+}
+
+func (_c *MockStore_MarkITunesSynced_Call) Return(n int64, err error) *MockStore_MarkITunesSynced_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_MarkITunesSynced_Call) RunAndReturn(run func([]string) (int64, error)) *MockStore_MarkITunesSynced_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetITunesDirtyBooks provides a mock function for the type MockStore
+func (_mock *MockStore) GetITunesDirtyBooks() ([]database.Book, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetITunesDirtyBooks")
+	}
+	var r0 []database.Book
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Book, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Book); ok {
+		r0 = returnFunc()
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.Book)
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetITunesDirtyBooks_Call is a *mock.Call
+type MockStore_GetITunesDirtyBooks_Call struct {
+	*mock.Call
+}
+
+func (_e *MockStore_Expecter) GetITunesDirtyBooks() *MockStore_GetITunesDirtyBooks_Call {
+	return &MockStore_GetITunesDirtyBooks_Call{Call: _e.mock.On("GetITunesDirtyBooks")}
+}
+
+func (_c *MockStore_GetITunesDirtyBooks_Call) Run(run func()) *MockStore_GetITunesDirtyBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetITunesDirtyBooks_Call) Return(books []database.Book, err error) *MockStore_GetITunesDirtyBooks_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_GetITunesDirtyBooks_Call) RunAndReturn(run func() ([]database.Book, error)) *MockStore_GetITunesDirtyBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetSetting provides a mock function for the type MockStore
 func (_mock *MockStore) SetSetting(key string, value string, typ string, isSecret bool) error {
 	ret := _mock.Called(key, value, typ, isSecret)

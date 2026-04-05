@@ -294,7 +294,9 @@ func (s *stubStore) ListOperationSummaryLogs(limit, offset int) ([]database.Oper
 	return nil, nil
 }
 
-func (s *stubStore) SetLastWrittenAt(id string, t time.Time) error { return nil }
+func (s *stubStore) SetLastWrittenAt(id string, t time.Time) error       { return nil }
+func (s *stubStore) MarkITunesSynced(bookIDs []string) (int64, error)    { return 0, nil }
+func (s *stubStore) GetITunesDirtyBooks() ([]database.Book, error)       { return nil, nil }
 func (s *stubStore) CreateBookTombstone(book *database.Book) error { return nil }
 func (s *stubStore) GetBookTombstone(id string) (*database.Book, error) { return nil, nil }
 func (s *stubStore) DeleteBookTombstone(id string) error { return nil }

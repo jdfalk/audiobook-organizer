@@ -1247,6 +1247,9 @@ func (m *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
 	return 0, nil
 }
 
+func (m *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) { return int64(len(bookIDs)), nil }
+func (m *MockStore) GetITunesDirtyBooks() ([]Book, error)            { return nil, nil }
+
 func (m *MockStore) Optimize() error {
 	return nil
 }
