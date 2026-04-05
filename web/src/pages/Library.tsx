@@ -284,6 +284,9 @@ export const Library = () => {
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [batchDeleteInProgress, setBatchDeleteInProgress] = useState(false);
   const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergePrimaryId, setMergePrimaryId] = useState<string>('');
+  const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
   const [importFileDialogOpen, setImportFileDialogOpen] = useState(false);
@@ -957,6 +960,25 @@ export const Library = () => {
       toast('Failed to restore selected audiobooks.', 'error');
     } finally {
       setBatchRestoreInProgress(false);
+    }
+  };
+
+  const handleMergeAsVersions = async () => {
+    if (selectedAudiobooks.length < 2) return;
+    setMergeInProgress(true);
+    try {
+      const keepId = mergePrimaryId || selectedAudiobooks[0].id;
+      const mergeIds = selectedAudiobooks.filter((b) => b.id !== keepId).map((b) => b.id);
+      await api.mergeBooks(keepId, mergeIds);
+      toast(`Merged ${selectedAudiobooks.length} books as versions.`, 'success');
+      setSelectedAudiobooks([]);
+      setMergeDialogOpen(false);
+      await loadAudiobooks();
+    } catch (error) {
+      console.error('Failed to merge books:', error);
+      toast('Failed to merge books.', 'error');
+    } finally {
+      setMergeInProgress(false);
     }
   };
 
@@ -2198,6 +2220,29 @@ export const Library = () => {
                   </Tooltip>
                   <Tooltip
                     title={
+                      selectedAudiobooks.length < 2
+                        ? 'Select 2+ books to merge as versions'
+                        : ''
+                    }
+                    disableHoverListener={selectedAudiobooks.length >= 2}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => {
+                          setMergePrimaryId(selectedAudiobooks[0]?.id || '');
+                          setMergeDialogOpen(true);
+                        }}
+                        disabled={selectedAudiobooks.length < 2}
+                      >
+                        Merge as Versions
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
                       !selectedHasActive
                         ? hasSelection
                           ? 'Select active books first'
@@ -2478,6 +2523,50 @@ export const Library = () => {
             loadAudiobooks();
           }}
         />
+
+        <Dialog open={mergeDialogOpen} onClose={() => setMergeDialogOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>Merge as Versions</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" gutterBottom>
+              Merge {selectedAudiobooks.length} books into a version group. Pick which book to keep as the primary version:
+            </Typography>
+            <Box sx={{ mt: 1 }}>
+              {selectedAudiobooks.map((book) => (
+                <FormControlLabel
+                  key={book.id}
+                  control={
+                    <Checkbox
+                      checked={mergePrimaryId === book.id}
+                      onChange={() => setMergePrimaryId(book.id)}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      <strong>{book.title}</strong>
+                      {book.author ? ` by ${book.author}` : ''}
+                      {book.file_path ? ` (${book.file_path.split('/').pop()})` : ''}
+                    </Typography>
+                  }
+                />
+              ))}
+            </Box>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Non-primary versions will be linked as alternate formats. Files stay in place.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setMergeDialogOpen(false)} disabled={mergeInProgress}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleMergeAsVersions}
+              disabled={mergeInProgress || !mergePrimaryId}
+            >
+              {mergeInProgress ? 'Merging...' : 'Merge'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog open={batchDeleteDialogOpen} onClose={() => setBatchDeleteDialogOpen(false)}>
           <DialogTitle>Delete Selected Audiobooks</DialogTitle>
