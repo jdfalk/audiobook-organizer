@@ -12,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 type ConfigUpdateService struct {
@@ -28,41 +29,6 @@ func (cus *ConfigUpdateService) ValidateUpdate(payload map[string]any) error {
 		return fmt.Errorf("no configuration updates provided")
 	}
 	return nil
-}
-
-// ExtractStringField extracts a string value from payload
-func (cus *ConfigUpdateService) ExtractStringField(payload map[string]any, key string) (string, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return "", false
-	}
-	str, ok := val.(string)
-	return str, ok
-}
-
-// ExtractBoolField extracts a bool value from payload
-func (cus *ConfigUpdateService) ExtractBoolField(payload map[string]any, key string) (bool, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return false, false
-	}
-	b, ok := val.(bool)
-	return b, ok
-}
-
-// ExtractIntField extracts an int value from payload (handling JSON float64)
-func (cus *ConfigUpdateService) ExtractIntField(payload map[string]any, key string) (int, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return 0, false
-	}
-	switch v := val.(type) {
-	case float64:
-		return int(v), true
-	case int:
-		return v, true
-	}
-	return 0, false
 }
 
 // extractStringSlice extracts a []string from a payload field containing []any.
@@ -134,14 +100,14 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"itunes_library_read_path":  &config.AppConfig.ITunesLibraryReadPath,
 	}
 	for key, ptr := range stringFields {
-		if val, ok := cus.ExtractStringField(payload, key); ok {
+		if val, ok := util.ExtractStringField(payload, key); ok {
 			*ptr = val
 			updated = append(updated, key)
 		}
 	}
 
 	// root_dir has special handling: derives setup_complete
-	if val, ok := cus.ExtractStringField(payload, "root_dir"); ok {
+	if val, ok := util.ExtractStringField(payload, "root_dir"); ok {
 		trimmed := strings.TrimSpace(val)
 		config.AppConfig.RootDir = trimmed
 		updated = append(updated, "root_dir")
@@ -150,7 +116,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	}
 
 	// openai_api_key: secret field with debug logging
-	if val, ok := cus.ExtractStringField(payload, "openai_api_key"); ok {
+	if val, ok := util.ExtractStringField(payload, "openai_api_key"); ok {
 		log.Printf("[DEBUG] UpdateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
 			if len(val) > 4 {
 				return val[len(val)-4:]
@@ -182,7 +148,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"itunes_auto_write_back":   &config.AppConfig.ITunesAutoWriteBack,
 	}
 	for key, ptr := range boolFields {
-		if val, ok := cus.ExtractBoolField(payload, key); ok {
+		if val, ok := util.ExtractBoolField(payload, key); ok {
 			*ptr = val
 			updated = append(updated, key)
 		}
@@ -208,7 +174,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		"itunes_sync_interval":       &config.AppConfig.ITunesSyncInterval,
 	}
 	for key, ptr := range intFields {
-		if val, ok := cus.ExtractIntField(payload, key); ok {
+		if val, ok := util.ExtractIntField(payload, key); ok {
 			*ptr = val
 			updated = append(updated, key)
 		}

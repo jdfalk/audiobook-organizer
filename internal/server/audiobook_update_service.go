@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 type AudiobookUpdateService struct {
@@ -22,48 +23,6 @@ func NewAudiobookUpdateService(db database.Store) *AudiobookUpdateService {
 		db:               db,
 		audiobookService: NewAudiobookService(db),
 	}
-}
-
-// ValidateRequest checks if the update request has required fields
-func (aus *AudiobookUpdateService) ValidateRequest(id string, payload map[string]any) (map[string]any, error) {
-	if id == "" {
-		return nil, fmt.Errorf("audiobook ID is required")
-	}
-	if len(payload) == 0 {
-		return nil, fmt.Errorf("no updates provided")
-	}
-	return payload, nil
-}
-
-// ExtractStringField extracts a string value from payload
-func (aus *AudiobookUpdateService) ExtractStringField(payload map[string]any, key string) (string, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return "", false
-	}
-	str, ok := val.(string)
-	return str, ok
-}
-
-// ExtractIntField extracts an int value from payload (handling JSON float64)
-func (aus *AudiobookUpdateService) ExtractIntField(payload map[string]any, key string) (int, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return 0, false
-	}
-	// JSON unmarshals numbers as float64
-	f, ok := val.(float64)
-	return int(f), ok
-}
-
-// ExtractBoolField extracts a bool value from payload
-func (aus *AudiobookUpdateService) ExtractBoolField(payload map[string]any, key string) (bool, bool) {
-	val, ok := payload[key]
-	if !ok {
-		return false, false
-	}
-	b, ok := val.(bool)
-	return b, ok
 }
 
 // ExtractOverrides extracts and marshals the overrides map from payload
@@ -79,37 +38,6 @@ func (aus *AudiobookUpdateService) ExtractOverrides(payload map[string]any) (map
 	}
 
 	return overridesMap, true
-}
-
-// ApplyUpdatesToBook applies field updates to a book struct
-func (aus *AudiobookUpdateService) ApplyUpdatesToBook(book *database.Book, updates map[string]any) {
-	if title, ok := aus.ExtractStringField(updates, "title"); ok {
-		book.Title = title
-	}
-	if authorID, ok := aus.ExtractIntField(updates, "author_id"); ok {
-		book.AuthorID = &authorID
-	}
-	if seriesID, ok := aus.ExtractIntField(updates, "series_id"); ok {
-		book.SeriesID = &seriesID
-	}
-	if narrator, ok := aus.ExtractStringField(updates, "narrator"); ok {
-		book.Narrator = &narrator
-	}
-	if publisher, ok := aus.ExtractStringField(updates, "publisher"); ok {
-		book.Publisher = &publisher
-	}
-	if language, ok := aus.ExtractStringField(updates, "language"); ok {
-		book.Language = &language
-	}
-	if year, ok := aus.ExtractIntField(updates, "audiobook_release_year"); ok {
-		book.AudiobookReleaseYear = &year
-	}
-	if isbn10, ok := aus.ExtractStringField(updates, "isbn10"); ok {
-		book.ISBN10 = &isbn10
-	}
-	if isbn13, ok := aus.ExtractStringField(updates, "isbn13"); ok {
-		book.ISBN13 = &isbn13
-	}
 }
 
 // UpdateAudiobook is the main business logic method
@@ -132,46 +60,46 @@ func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string
 	bookCopy := *currentBook
 	updates := &AudiobookUpdate{Book: &bookCopy}
 
-	if title, ok := aus.ExtractStringField(payload, "title"); ok {
+	if title, ok := util.ExtractStringField(payload, "title"); ok {
 		updates.Title = title
 	}
-	if authorID, ok := aus.ExtractIntField(payload, "author_id"); ok {
+	if authorID, ok := util.ExtractIntField(payload, "author_id"); ok {
 		updates.AuthorID = &authorID
 	}
-	if seriesID, ok := aus.ExtractIntField(payload, "series_id"); ok {
+	if seriesID, ok := util.ExtractIntField(payload, "series_id"); ok {
 		updates.SeriesID = &seriesID
 	}
-	if authorName, ok := aus.ExtractStringField(payload, "author_name"); ok {
+	if authorName, ok := util.ExtractStringField(payload, "author_name"); ok {
 		updates.AuthorName = &authorName
 	}
-	if seriesName, ok := aus.ExtractStringField(payload, "series_name"); ok {
+	if seriesName, ok := util.ExtractStringField(payload, "series_name"); ok {
 		updates.SeriesName = &seriesName
 	}
-	if format, ok := aus.ExtractStringField(payload, "format"); ok {
+	if format, ok := util.ExtractStringField(payload, "format"); ok {
 		updates.Format = format
 	}
-	if filePath, ok := aus.ExtractStringField(payload, "file_path"); ok {
+	if filePath, ok := util.ExtractStringField(payload, "file_path"); ok {
 		updates.FilePath = filePath
 	}
-	if narrator, ok := aus.ExtractStringField(payload, "narrator"); ok {
+	if narrator, ok := util.ExtractStringField(payload, "narrator"); ok {
 		updates.Narrator = &narrator
 	}
-	if publisher, ok := aus.ExtractStringField(payload, "publisher"); ok {
+	if publisher, ok := util.ExtractStringField(payload, "publisher"); ok {
 		updates.Publisher = &publisher
 	}
-	if language, ok := aus.ExtractStringField(payload, "language"); ok {
+	if language, ok := util.ExtractStringField(payload, "language"); ok {
 		updates.Language = &language
 	}
-	if year, ok := aus.ExtractIntField(payload, "audiobook_release_year"); ok {
+	if year, ok := util.ExtractIntField(payload, "audiobook_release_year"); ok {
 		updates.AudiobookReleaseYear = &year
 	}
-	if isbn10, ok := aus.ExtractStringField(payload, "isbn10"); ok {
+	if isbn10, ok := util.ExtractStringField(payload, "isbn10"); ok {
 		updates.ISBN10 = &isbn10
 	}
-	if isbn13, ok := aus.ExtractStringField(payload, "isbn13"); ok {
+	if isbn13, ok := util.ExtractStringField(payload, "isbn13"); ok {
 		updates.ISBN13 = &isbn13
 	}
-	if desc, ok := aus.ExtractStringField(payload, "description"); ok {
+	if desc, ok := util.ExtractStringField(payload, "description"); ok {
 		updates.Description = &desc
 	}
 

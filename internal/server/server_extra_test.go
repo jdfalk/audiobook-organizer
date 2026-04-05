@@ -33,13 +33,6 @@ func TestServerHelpers(t *testing.T) {
 		t.Fatal("expected bool pointer true")
 	}
 
-	if stringFromSeries(nil) != nil {
-		t.Fatal("expected nil series name")
-	}
-	if got := stringFromSeries(&database.Series{Name: "Series"}); got != "Series" {
-		t.Fatalf("expected series name, got %v", got)
-	}
-
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "book.bin")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
