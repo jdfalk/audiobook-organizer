@@ -691,6 +691,7 @@ type Server struct {
 	dashboardCache         *cache.Cache[gin.H]
 	olService              *OpenLibraryService
 	dedupCache             *cache.Cache[gin.H]
+	listCache              *cache.Cache[gin.H]
 	libraryWatcher         *itunes.LibraryWatcher
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
@@ -751,6 +752,7 @@ func NewServer() *Server {
 		dashboardService:       NewDashboardService(database.GlobalStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
+		listCache:              cache.New[gin.H](10 * time.Second),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           NewMergeService(database.GlobalStore),
@@ -1776,6 +1778,13 @@ func (s *Server) healthCheck(c *gin.Context) {
 }
 
 func (s *Server) listAudiobooks(c *gin.Context) {
+	// Build cache key from the full query string
+	cacheKey := "list:" + c.Request.URL.RawQuery
+	if cached, ok := s.listCache.Get(cacheKey); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	// Parse pagination parameters
 	params := ParsePaginationParams(c)
 	authorID := ParseQueryIntPtr(c, "author_id")
@@ -1829,7 +1838,9 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset})
+	resp := gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset}
+	s.listCache.Set(cacheKey, resp)
+	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
