@@ -1889,7 +1889,7 @@ export const Library = () => {
             </Box>
           </Paper>
         ) : (
-          <Stack spacing={3}>
+          <Stack spacing={1.5}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Box flex={1}>
                 <SearchBar
@@ -1912,7 +1912,7 @@ export const Library = () => {
             </Stack>
 
             {/* Select All bar — always visible */}
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, mt: -1.5, mb: -1.5 }}>
               <FormControlLabel
                 control={
                   <Checkbox

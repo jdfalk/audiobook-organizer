@@ -4268,17 +4268,70 @@ func (p *PebbleStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping,
 	return nil, nil
 }
 
-// CreateOperationResult is a stub — operation results are SQLite-only.
-func (p *PebbleStore) CreateOperationResult(result *OperationResult) error { return nil }
-
-// GetOperationResults is a stub — operation results are SQLite-only.
-func (p *PebbleStore) GetOperationResults(operationID string) ([]OperationResult, error) {
-	return nil, nil
+func (p *PebbleStore) CreateOperationResult(result *OperationResult) error {
+	result.CreatedAt = time.Now()
+	data, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	key := []byte(fmt.Sprintf("op_result:%s:%s", result.OperationID, result.BookID))
+	return p.db.Set(key, data, pebble.Sync)
 }
 
-// GetRecentCompletedOperations is a stub — operations are SQLite-only.
+func (p *PebbleStore) GetOperationResults(operationID string) ([]OperationResult, error) {
+	prefix := []byte(fmt.Sprintf("op_result:%s:", operationID))
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var results []OperationResult
+	for iter.First(); iter.Valid(); iter.Next() {
+		var r OperationResult
+		if err := json.Unmarshal(iter.Value(), &r); err != nil {
+			continue
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+
 func (p *PebbleStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
-	return nil, nil
+	// Scan all operations, collect completed/failed, sort by time, take limit
+	prefix := []byte("operation:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var ops []Operation
+	for iter.First(); iter.Valid(); iter.Next() {
+		var op Operation
+		if err := json.Unmarshal(iter.Value(), &op); err != nil {
+			continue
+		}
+		if op.Status == "completed" || op.Status == "failed" {
+			ops = append(ops, op)
+		}
+	}
+
+	// Sort by CreatedAt descending
+	sort.Slice(ops, func(i, j int) bool {
+		return ops[i].CreatedAt.After(ops[j].CreatedAt)
+	})
+
+	if len(ops) > limit {
+		ops = ops[:limit]
+	}
+	return ops, nil
 }
 
 // --- User Tags (free-form labels on books) ---
