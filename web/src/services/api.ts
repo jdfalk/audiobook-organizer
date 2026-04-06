@@ -2599,6 +2599,65 @@ export async function undoMetadataChange(bookId: string, field: string): Promise
   return response.json();
 }
 
+// Batch metadata candidate types and functions
+
+export interface CandidateBookInfo {
+  id: string;
+  title: string;
+  author: string;
+  file_path: string;
+  itunes_path?: string;
+  cover_url?: string;
+  format?: string;
+  duration_seconds?: number;
+  file_size_bytes?: number;
+}
+
+export interface CandidateResult {
+  book: CandidateBookInfo;
+  candidate?: MetadataCandidate;
+  status: 'matched' | 'no_match' | 'error';
+  error_message?: string;
+}
+
+export interface BatchFetchResponse {
+  results: CandidateResult[];
+  summary: { matched: number; no_match: number; errors: number; total: number };
+}
+
+export async function batchFetchCandidates(bookIds: string[]): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/metadata/batch-fetch-candidates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to start batch fetch');
+  return response.json();
+}
+
+export async function getOperationResults(operationId: string): Promise<BatchFetchResponse> {
+  const response = await fetch(`${API_BASE}/operations/${operationId}/results`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to get operation results');
+  return response.json();
+}
+
+export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {
+  const response = await fetch(`${API_BASE}/metadata/batch-apply-candidates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation_id: operationId, book_ids: bookIds }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to apply candidates');
+  return response.json();
+}
+
+export async function getRecentCompletedOperations(): Promise<Operation[]> {
+  const response = await fetch(`${API_BASE}/operations/recent`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to get recent operations');
+  const data = await response.json();
+  return data.operations || [];
+}
+
 export async function revertToSnapshot(bookId: string, timestamp: string): Promise<{ message: string; book: Book }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/revert-metadata`, {
     method: 'POST',
