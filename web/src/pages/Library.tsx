@@ -497,7 +497,7 @@ export const Library = () => {
       isInternalUpdate.current = false;
       return;
     }
-    const urlPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const urlPage = Math.max(1, parseInt(searchParams.get('page') || localStorage.getItem('library_page') || '1', 10));
     const urlSearch = searchParams.get('search') ?? '';
     const urlSort = (searchParams.get('sort') as SortField) || SortField.Title;
     const urlOrder =
@@ -531,7 +531,7 @@ export const Library = () => {
     if (sortBy !== SortField.Title) params.set('sort', sortBy);
     if (sortOrder !== SortOrder.Ascending) params.set('order', sortOrder);
     if (viewMode !== 'grid') params.set('view', viewMode);
-    if (page > 1) params.set('page', page.toString());
+    params.set('page', page.toString());
     if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
     if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
 
