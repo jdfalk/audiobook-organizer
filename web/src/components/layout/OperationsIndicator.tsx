@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.0.0
+// version: 3.1.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -8,6 +8,7 @@ import {
   Badge,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Divider,
   IconButton,
@@ -25,7 +26,12 @@ import {
   useOperationsStore,
   type ActiveOperation,
 } from '../../stores/useOperationsStore';
-import { cancelOperation, getActiveOperations } from '../../services/api';
+import {
+  cancelOperation,
+  getActiveOperations,
+  getRecentCompletedOperations,
+  type Operation,
+} from '../../services/api';
 
 function formatOperationType(type: string): string {
   switch (type) {
@@ -87,6 +93,19 @@ function parseMessageDetails(message: string) {
   };
 }
 
+function timeAgo(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = Date.now();
+  const diff = now - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function OperationsIndicator() {
   const activeOperations = useOperationsStore(
     (state) => state.activeOperations
@@ -94,6 +113,7 @@ export function OperationsIndicator() {
   const startPolling = useOperationsStore((state) => state.startPolling);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [recentOps, setRecentOps] = useState<Operation[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -127,6 +147,26 @@ export function OperationsIndicator() {
       clearInterval(interval);
     };
   }, [startPolling]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchRecentOps = async () => {
+      try {
+        const ops = await getRecentCompletedOperations();
+        if (!cancelled) setRecentOps(ops.slice(0, 10));
+      } catch {
+        // Ignore
+      }
+    };
+
+    void fetchRecentOps();
+    const interval = setInterval(fetchRecentOps, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleCancel = async (opId: string) => {
     setCancelling((prev) => new Set(prev).add(opId));
@@ -326,7 +366,7 @@ export function OperationsIndicator() {
             );
           })}
 
-          {/* Completed/failed */}
+          {/* Completed/failed (from active store) */}
           {terminal.length > 0 && inProgress.length > 0 && <Divider />}
           {terminal.map((op: ActiveOperation) => {
             const details = parseMessageDetails(op.message);
@@ -358,6 +398,76 @@ export function OperationsIndicator() {
               </Box>
             );
           })}
+
+          {/* Recent completed operations section */}
+          <Divider />
+          <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Recent
+            </Typography>
+          </Box>
+
+          {recentOps.length === 0 && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ px: 2, py: 1.5, textAlign: 'center', fontSize: '0.8rem' }}
+            >
+              No recent operations
+            </Typography>
+          )}
+
+          {recentOps.map((op: Operation) => (
+            <Box
+              key={op.id}
+              onClick={() => {
+                setAnchorEl(null);
+                navigate(`/activity?op=${op.id}`);
+              }}
+              sx={{
+                px: 2,
+                py: 1,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' },
+                '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" fontWeight="bold" noWrap sx={{ flex: 1 }}>
+                  {formatOperationType(op.type)}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {op.completed_at ? timeAgo(op.completed_at) : op.created_at ? timeAgo(op.created_at) : ''}
+                  </Typography>
+                  <Chip
+                    label={op.status}
+                    size="small"
+                    color={op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'default'}
+                    sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
+                  />
+                </Box>
+              </Box>
+              {op.message && (
+                <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
+                  {op.message}
+                </Typography>
+              )}
+              {op.type === 'metadata_candidate_fetch' && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log('Review candidates for operation', op.id);
+                  }}
+                >
+                  Review
+                </Button>
+              )}
+            </Box>
+          ))}
         </Box>
       </Popover>
     </>
