@@ -522,7 +522,7 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
                   </Typography>
                   {candidate.series && (
                     <Typography variant="body2" color="text.secondary">
-                      Series: {candidate.series}{candidate.series_position ? ` #${candidate.series_position}` : ''}
+                      Series: {candidate.series}{candidate.series_position ? ` · Book ${candidate.series_position}` : ''}
                     </Typography>
                   )}
                   {candidate.narrator && (
