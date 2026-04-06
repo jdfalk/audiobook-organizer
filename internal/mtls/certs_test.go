@@ -1,5 +1,5 @@
 // file: internal/mtls/certs_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package mtls
 
@@ -37,6 +37,16 @@ func TestGenerateSignedCert(t *testing.T) {
 	pool.AddCert(ca.Cert)
 	_, err = cert.Cert.Verify(x509.VerifyOptions{Roots: pool})
 	assert.NoError(t, err)
+}
+
+func TestLoadKeyPair(t *testing.T) {
+	ca, err := GenerateCA(1 * time.Hour)
+	require.NoError(t, err)
+
+	loaded, err := LoadKeyPair(ca.CertPEM, ca.KeyPEM)
+	require.NoError(t, err)
+	assert.Equal(t, ca.Cert.Subject.CommonName, loaded.Cert.Subject.CommonName)
+	assert.True(t, loaded.Cert.IsCA)
 }
 
 func TestGenerateClientCert(t *testing.T) {

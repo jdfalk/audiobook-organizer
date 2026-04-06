@@ -1,5 +1,5 @@
 // file: internal/mtls/certs.go
-// version: 1.0.0
+// version: 1.1.0
 
 package mtls
 
@@ -63,6 +63,29 @@ func GenerateCA(validity time.Duration) (*KeyPair, error) {
 		return nil, fmt.Errorf("marshal CA key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	return &KeyPair{Cert: cert, Key: key, CertPEM: certPEM, KeyPEM: keyPEM}, nil
+}
+
+// LoadKeyPair parses PEM-encoded cert and key back into a KeyPair.
+func LoadKeyPair(certPEM, keyPEM []byte) (*KeyPair, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block in cert")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse cert: %w", err)
+	}
+
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return nil, fmt.Errorf("no PEM block in key")
+	}
+	key, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse key: %w", err)
+	}
 
 	return &KeyPair{Cert: cert, Key: key, CertPEM: certPEM, KeyPEM: keyPEM}, nil
 }

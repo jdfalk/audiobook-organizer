@@ -1,16 +1,19 @@
 // file: internal/mtls/config.go
-// version: 1.0.0
+// version: 1.1.0
 
 package mtls
 
 import (
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // DirState represents the provisioning state of the .mtls directory.
@@ -145,6 +148,33 @@ func (d *Dir) Reset() error {
 		os.Remove(filepath.Join(d.path, e.Name()))
 	}
 	return nil
+}
+
+// CheckCertExpiry checks all .crt files in the directory and returns warnings
+// for any that expire within the given threshold duration.
+func (d *Dir) CheckCertExpiry(threshold time.Duration) []string {
+	var warnings []string
+	certFiles := []string{"ca.crt", "server.crt", "client.crt"}
+
+	for _, name := range certFiles {
+		data, err := d.ReadCert(name)
+		if err != nil {
+			continue
+		}
+		block, _ := pem.Decode(data)
+		if block == nil {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		remaining := time.Until(cert.NotAfter)
+		if remaining < threshold {
+			warnings = append(warnings, fmt.Sprintf("%s expires in %d days", name, int(remaining.Hours()/24)))
+		}
+	}
+	return warnings
 }
 
 func fileExists(path string) bool {

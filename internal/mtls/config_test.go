@@ -1,5 +1,5 @@
 // file: internal/mtls/config_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package mtls
 
@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,4 +74,29 @@ func TestReadPSK(t *testing.T) {
 	psk, err := d.ReadPSK()
 	require.NoError(t, err)
 	assert.Equal(t, "dGVzdHRlc3R0ZXN0dGVzdHRlc3R0ZXN0dGVzdHQ=", psk)
+}
+
+func TestCheckCertExpiry_NotExpiring(t *testing.T) {
+	ca, err := GenerateCA(10 * 365 * 24 * time.Hour)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	d := NewDir(dir)
+	d.WriteCert("ca.crt", ca.CertPEM)
+
+	warnings := d.CheckCertExpiry(30 * 24 * time.Hour)
+	assert.Empty(t, warnings)
+}
+
+func TestCheckCertExpiry_Expiring(t *testing.T) {
+	ca, err := GenerateCA(10 * 24 * time.Hour)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	d := NewDir(dir)
+	d.WriteCert("ca.crt", ca.CertPEM)
+
+	warnings := d.CheckCertExpiry(30 * 24 * time.Hour)
+	assert.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "ca.crt")
 }
