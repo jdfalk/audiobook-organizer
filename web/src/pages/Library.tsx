@@ -31,6 +31,8 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Tooltip,
+  Drawer,
+  Divider,
 } from '@mui/material';
 import {
   FilterList as FilterListIcon,
@@ -42,9 +44,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   CloudDownload as CloudDownloadIcon,
   Refresh as RefreshIcon,
-  PushPin as PushPinIcon,
-  PushPinOutlined as PushPinOutlinedIcon,
-  VerticalAlignTop as VerticalAlignTopIcon,
+  Info as InfoIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
@@ -245,11 +245,7 @@ export const Library = () => {
   const [activeScanOp, setActiveScanOp] = useState<api.Operation | null>(null);
   const [activeOrganizeOp, setActiveOrganizeOp] = useState<api.Operation | null>(null);
 
-  // Storage section pin mode: 'scrollable' (default), 'floating', or 'pinned'
-  const [storagePinMode, setStoragePinMode] = useState<'scrollable' | 'floating' | 'pinned'>(() => {
-    const saved = localStorage.getItem('library-storage-pin-mode');
-    return (saved as 'scrollable' | 'floating' | 'pinned') || 'floating';
-  });
+  const [storageDrawerOpen, setStorageDrawerOpen] = useState(false);
   const [operationLogs, setOperationLogs] = useState<
     Record<
       string,
@@ -322,10 +318,6 @@ export const Library = () => {
   const [bulkOrganizeError, setBulkOrganizeError] = useState<OrganizeErrorState | null>(null);
   const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(new Map());
 
-  // Save storage pin mode preference
-  useEffect(() => {
-    localStorage.setItem('library-storage-pin-mode', storagePinMode);
-  }, [storagePinMode]);
 
   // Fetch all available tags on mount
   useEffect(() => {
@@ -1793,245 +1785,74 @@ export const Library = () => {
         </Stack>
       </Box>
 
-      {systemStatus && (
-        <Paper
-          sx={{
-            p: 1.5,
-            mb: storagePinMode === 'scrollable' ? 2 : 2,
-            ...(storagePinMode === 'pinned' && {
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-              boxShadow: 2,
-            }),
-            ...(storagePinMode === 'floating' && {
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-              boxShadow: 2,
-              transition: 'transform 0.2s',
-            }),
-          }}
-        >
-          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
-            <Box flex={1}>
-              <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap">
-                <Typography variant="subtitle1" fontWeight="600">
-                  Main Library Storage
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {libraryBookCount} in Library • {importBookCount} Scanned but not imported •{' '}
-                  {systemStatus.import_paths?.folder_count || 0} Import Paths
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {(librarySizeBytes / (1024 * 1024)).toFixed(0)} MB Library •{' '}
-                  {(importSizeBytes / (1024 * 1024)).toFixed(0)} MB Scanned
-                </Typography>
-              </Stack>
-              <Typography
-                variant="caption"
-                color={systemStatus.library.path ? 'text.secondary' : 'warning.main'}
-                display="block"
-                mt={0.5}
-              >
-                {systemStatus.library.path ||
-                  'Not configured - Please set library path in Settings'}
-              </Typography>
-              {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
-                <Box mt={1}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                      onClick={() => navigate(`/activity?op=${activeOrganizeOp.id}`)}
-                    >
-                      Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}{' '}
-                      {activeOrganizeOp.message}
-                    </Typography>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => api.cancelOperation(activeOrganizeOp.id)}
-                    >
-                      Cancel
-                    </Button>
-                  </Stack>
-                  {operationLogs[activeOrganizeOp.id] && (
-                    <Box
-                      mt={0.5}
-                      ref={(el: HTMLDivElement | null) => {
-                        logContainerRefs.current[activeOrganizeOp.id] = el;
-                      }}
-                      sx={{
-                        maxHeight: 140,
-                        overflowY: 'auto',
-                        borderLeft: '2px solid',
-                        borderColor: 'divider',
-                        pl: 1,
-                      }}
-                    >
-                      {operationLogs[activeOrganizeOp.id].map((l, idx) => (
-                        <Box key={idx} sx={{ mb: 0.3 }}>
-                          <Typography
-                            variant="caption"
-                            display="block"
-                            sx={{
-                              color:
-                                l.level === 'error'
-                                  ? 'error.main'
-                                  : l.level === 'warn'
-                                    ? 'warning.main'
-                                    : 'text.secondary',
-                              fontWeight: l.level === 'error' ? 600 : 400,
-                              cursor: l.details ? 'pointer' : 'default',
-                            }}
-                            onClick={() => {
-                              if (!l.details) return;
-                              setOperationLogs((prev) => {
-                                const arr = prev[activeOrganizeOp.id] || [];
-                                const updated = arr.map((item, i) =>
-                                  i === idx ? { ...item, expanded: !item.expanded } : item
-                                );
-                                return {
-                                  ...prev,
-                                  [activeOrganizeOp.id]: updated,
-                                };
-                              });
-                            }}
-                          >
-                            {l.message}
-                          </Typography>
-                          {l.details && l.expanded && (
-                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
-                              {l.details}
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </Box>
-              )}
-              {activeScanOp && activeScanOp.status !== 'completed' && (
-                <Box mt={1}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                      onClick={() => navigate(`/activity?op=${activeScanOp.id}`)}
-                    >
-                      {activeScanOp.total > 0
-                        ? `Scanning: ${activeScanOp.progress}/${activeScanOp.total}`
-                        : 'Scanning: counting files…'}{' '}
-                      {activeScanOp.message}
-                    </Typography>
-                    <Button
-                      size="small"
-                      variant="text"
-                      onClick={() => api.cancelOperation(activeScanOp.id)}
-                    >
-                      Cancel
-                    </Button>
-                  </Stack>
-                  {operationLogs[activeScanOp.id] && (
-                    <Box
-                      mt={0.5}
-                      ref={(el: HTMLDivElement | null) => {
-                        logContainerRefs.current[activeScanOp.id] = el;
-                      }}
-                      sx={{
-                        maxHeight: 140,
-                        overflowY: 'auto',
-                        borderLeft: '2px solid',
-                        borderColor: 'divider',
-                        pl: 1,
-                      }}
-                    >
-                      {operationLogs[activeScanOp.id].map((l, idx) => (
-                        <Box key={idx} sx={{ mb: 0.3 }}>
-                          <Typography
-                            variant="caption"
-                            display="block"
-                            sx={{
-                              color:
-                                l.level === 'error'
-                                  ? 'error.main'
-                                  : l.level === 'warn'
-                                    ? 'warning.main'
-                                    : 'text.secondary',
-                              fontWeight: l.level === 'error' ? 600 : 400,
-                              cursor: l.details ? 'pointer' : 'default',
-                            }}
-                            onClick={() => {
-                              if (!l.details) return;
-                              setOperationLogs((prev) => {
-                                const arr = prev[activeScanOp.id] || [];
-                                const updated = arr.map((item, i) =>
-                                  i === idx ? { ...item, expanded: !item.expanded } : item
-                                );
-                                return { ...prev, [activeScanOp.id]: updated };
-                              });
-                            }}
-                          >
-                            {l.message}
-                          </Typography>
-                          {l.details && l.expanded && (
-                            <Typography variant="caption" sx={{ ml: 1.5, color: 'text.secondary' }}>
-                              {l.details}
-                            </Typography>
-                          )}
-                        </Box>
-                      ))}
-                    </Box>
-                  )}
-                </Box>
-              )}
-              {/* Auto-scroll handled by top-level hook */}
-            </Box>
-
-            {/* Pin mode toggle buttons */}
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title={storagePinMode === 'pinned' ? 'Pinned (stays at top)' : 'Pin to top'}>
-                <IconButton
-                  size="small"
-                  onClick={() => setStoragePinMode('pinned')}
-                  color={storagePinMode === 'pinned' ? 'primary' : 'default'}
-                >
-                  <PushPinIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip
-                title={
-                  storagePinMode === 'floating' ? 'Floating (follows scroll)' : 'Float with scroll'
-                }
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setStoragePinMode('floating')}
-                  color={storagePinMode === 'floating' ? 'primary' : 'default'}
-                >
-                  <PushPinOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip
-                title={
-                  storagePinMode === 'scrollable' ? 'Scrollable (scrolls away)' : 'Make scrollable'
-                }
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setStoragePinMode('scrollable')}
-                  color={storagePinMode === 'scrollable' ? 'primary' : 'default'}
-                >
-                  <VerticalAlignTopIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
+      {/* Active operations progress (always visible) */}
+      {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
+        <Box sx={{ mb: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <LinearProgress
+              variant="determinate"
+              value={activeOrganizeOp.total > 0 ? (activeOrganizeOp.progress / activeOrganizeOp.total) * 100 : 0}
+              sx={{ flex: 1, height: 6, borderRadius: 1 }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, whiteSpace: 'nowrap' }}
+              onClick={() => navigate(`/activity?op=${activeOrganizeOp.id}`)}
+            >
+              Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}
+            </Typography>
+            <Button size="small" variant="text" onClick={() => api.cancelOperation(activeOrganizeOp.id)}>Cancel</Button>
           </Stack>
-        </Paper>
+        </Box>
       )}
+      {activeScanOp && activeScanOp.status !== 'completed' && (
+        <Box sx={{ mb: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <LinearProgress
+              variant={activeScanOp.total > 0 ? 'determinate' : 'indeterminate'}
+              value={activeScanOp.total > 0 ? (activeScanOp.progress / activeScanOp.total) * 100 : 0}
+              sx={{ flex: 1, height: 6, borderRadius: 1 }}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, whiteSpace: 'nowrap' }}
+              onClick={() => navigate(`/activity?op=${activeScanOp.id}`)}
+            >
+              {activeScanOp.total > 0 ? `Scanning: ${activeScanOp.progress}/${activeScanOp.total}` : 'Scanning...'}
+            </Typography>
+            <Button size="small" variant="text" onClick={() => api.cancelOperation(activeScanOp.id)}>Cancel</Button>
+          </Stack>
+        </Box>
+      )}
+
+      {/* Storage info drawer */}
+      <Drawer anchor="right" open={storageDrawerOpen} onClose={() => setStorageDrawerOpen(false)}>
+        <Box sx={{ width: 360, p: 2 }}>
+          <Typography variant="h6" gutterBottom>Library Info</Typography>
+          <Divider sx={{ mb: 2 }} />
+          {systemStatus && (
+            <>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>Storage</Typography>
+              <Typography variant="body2">{libraryBookCount} books in Library</Typography>
+              <Typography variant="body2">{importBookCount} scanned but not imported</Typography>
+              <Typography variant="body2">{systemStatus.import_paths?.folder_count || 0} import paths</Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {(librarySizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB Library
+              </Typography>
+              <Typography variant="body2">
+                {(importSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB Scanned
+              </Typography>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>Library Path</Typography>
+              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                {systemStatus.library.path || 'Not configured'}
+              </Typography>
+            </>
+          )}
+        </Box>
+      </Drawer>
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
         {audiobooks.length === 0 && !loading && !searchQuery ? (
@@ -2096,17 +1917,26 @@ export const Library = () => {
           </Paper>
         ) : (
           <Stack spacing={3}>
-            <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
-              onParsedSearchChange={setParsedSearch}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              sortBy={sortBy}
-              onSortChange={handleSortChange}
-              sortOrder={sortOrder}
-              onSortOrderChange={setSortOrder}
-            />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Box flex={1}>
+                <SearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  onParsedSearchChange={setParsedSearch}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  sortBy={sortBy}
+                  onSortChange={handleSortChange}
+                  sortOrder={sortOrder}
+                  onSortOrderChange={setSortOrder}
+                />
+              </Box>
+              <Tooltip title="Library info">
+                <IconButton onClick={() => setStorageDrawerOpen(true)}>
+                  <InfoIcon />
+                </IconButton>
+              </Tooltip>
+            </Stack>
 
             <Paper sx={{ p: 2 }}>
               <Stack
