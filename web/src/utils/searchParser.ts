@@ -50,6 +50,9 @@ export const SEARCH_FIELDS: readonly string[] = [
   'isbn13',
   'work_id',
   'tag',
+  'review',
+  'has_cover',
+  'itunes_sync_status',
 ] as const;
 
 const searchFieldSet = new Set<string>(SEARCH_FIELDS);
