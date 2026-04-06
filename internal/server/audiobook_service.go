@@ -356,6 +356,16 @@ func fieldMatchesValue(book database.Book, field, value string) bool {
 		bookValue = derefStr(book.LibraryState)
 	case "description":
 		bookValue = derefStr(book.Description)
+	case "metadata_review_status", "review":
+		bookValue = derefStr(book.MetadataReviewStatus)
+	case "has_cover":
+		if book.CoverURL != nil && *book.CoverURL != "" {
+			bookValue = "yes"
+		} else {
+			bookValue = "no"
+		}
+	case "itunes_sync_status":
+		bookValue = derefStr(book.ITunesSyncStatus)
 	// Aliases for frontend field names
 	case "duration_seconds":
 		bookValue = fmt.Sprintf("%d", derefInt(book.Duration))
