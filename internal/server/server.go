@@ -7282,14 +7282,11 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
-	// Kick off slow file I/O (cover download, embed, tags, rename) in background
-	// so the UI returns immediately after the DB update.
+	// Kick off slow file I/O (cover embed, tags, rename) in background.
+	// Cover download is already done inline so the response has the URL.
 	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
-	coverURL := resp.PendingCoverURL
 	go func() {
-		// Cover download + embed + rename pipeline
-		s.metadataFetchService.ApplyMetadataFileIO(id, coverURL)
-		// Tag write-back to files + ITL batcher
+		s.metadataFetchService.ApplyMetadataFileIO(id)
 		if shouldWriteBack {
 			if _, wbErr := s.metadataFetchService.WriteBackMetadataForBook(id); wbErr != nil {
 				log.Printf("[WARN] background write-back for %s: %v", id, wbErr)
