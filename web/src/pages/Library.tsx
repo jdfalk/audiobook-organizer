@@ -42,7 +42,6 @@ import {
   Delete as DeleteIcon,
   DeleteSweep as DeleteSweepIcon,
   ExpandMore as ExpandMoreIcon,
-  CloudDownload as CloudDownloadIcon,
   Refresh as RefreshIcon,
   Info as InfoIcon,
   Search as SearchIcon,
@@ -1694,102 +1693,83 @@ export const Library = () => {
         overflow: 'hidden',
       }}
     >
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-        flexWrap="wrap"
-        gap={2}
+      {/* Unified toolbar — sticky, shows library actions or batch actions based on selection */}
+      <Paper
+        sx={{
+          p: 1.5,
+          mb: 2,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          boxShadow: 2,
+        }}
       >
-        <Typography variant="h4">Library</Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button
-            startIcon={<UploadIcon />}
-            onClick={handleManualImport}
-            variant="contained"
-            size="small"
-          >
-            Import Files
-          </Button>
-          <Button
-            startIcon={<FilterListIcon />}
-            onClick={() => setFilterOpen(true)}
-            variant="outlined"
-            size="small"
-          >
-            Filters
-            {getActiveFilterCount() > 0 && (
-              <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 1 }} />
-            )}
-          </Button>
-          <ColumnChooser
-            visibleColumnIds={visibleColumnIds}
-            onToggleColumn={toggleColumn}
-            onResetDefaults={resetColumnsToDefaults}
-          />
-          <Button
-            startIcon={<CloudDownloadIcon />}
-            onClick={() => setBulkFetchDialogOpen(true)}
-            variant="outlined"
-            size="small"
-            disabled={!hasSelection}
-          >
-            Bulk Fetch Metadata
-          </Button>
-          <Button
-            startIcon={<SearchIcon />}
-            onClick={() => setBulkSearchOpen(true)}
-            variant="outlined"
-            size="small"
-            disabled={!hasSelection}
-          >
-            Search Metadata
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined}
-            disabled={organizeRunning}
-            onClick={handleOrganizeLibrary}
-          >
-            {organizeRunning ? 'Organizing…' : 'Organize Library'}
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />}
-            disabled={activeScanOp !== null}
-            onClick={handleFullRescan}
-          >
-            {activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={async () => {
-              try {
-                const status = await api.getSystemStatus();
-                setSystemStatus(status);
-              } catch (_e) {
-                /* ignore refresh error */
+        {hasSelection ? (
+          /* Batch actions mode */
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={allOnPageSelected}
+                  indeterminate={someOnPageSelected && !allOnPageSelected}
+                  onChange={handleToggleSelectAllOnPage}
+                  size="small"
+                />
               }
-            }}
-          >
-            Refresh Stats
-          </Button>
-          <Button
-            startIcon={<DeleteSweepIcon />}
-            onClick={() => setPurgeDialogOpen(true)}
-            variant="outlined"
-            size="small"
-            color="secondary"
-            disabled={softDeletedCount === 0}
-          >
-            Purge Deleted {softDeletedCount > 0 ? `(${softDeletedCount})` : ''}
-          </Button>
-        </Stack>
-      </Box>
+              label={<Typography variant="body2">Select All</Typography>}
+            />
+            <Chip label={`${selectedAudiobooks.length} selected`} size="small" />
+            <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
+            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24, mx: 0.5 }} />
+            <Button size="small" variant="outlined" onClick={() => setBatchEditOpen(true)} disabled={!hasSelection}>Batch Edit</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkFetchDialogOpen(true)} disabled={!hasSelection}>Fetch Metadata</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
+            <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkOrganizeDialogOpen(true)} disabled={!selectedHasImport}>Organize Selected</Button>
+            <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              onClick={async () => {
+                try {
+                  const { operation_id } = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
+                  toast('Fetching metadata for ' + selectedAudiobooks.length + ' books...', 'info');
+                  setMetadataReviewOpId(operation_id);
+                  const poll = setInterval(async () => {
+                    try {
+                      const ops = await api.getActiveOperations();
+                      const op = ops.find((o: { id: string }) => o.id === operation_id);
+                      if (!op || op.status === 'completed' || op.status === 'failed') {
+                        clearInterval(poll);
+                        if (!op || op.status === 'completed') { setMetadataReviewOpen(true); toast('Metadata fetch complete — review results', 'success'); }
+                        else { toast('Metadata fetch failed', 'error'); }
+                      }
+                    } catch { /* ignore */ }
+                  }, 2000);
+                } catch { toast('Failed to start metadata fetch', 'error'); }
+              }}
+              disabled={selectedAudiobooks.length < 2}
+            >Fetch & Review</Button>
+            <Button size="small" variant="outlined" color="secondary" onClick={() => setBatchDeleteDialogOpen(true)} disabled={!selectedHasActive}>Delete Selected</Button>
+            <Button size="small" variant="outlined" color="success" onClick={handleBatchRestore} disabled={!selectedHasDeleted || batchRestoreInProgress}>{batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}</Button>
+          </Stack>
+        ) : (
+          /* Library actions mode */
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Typography variant="h6" sx={{ mr: 1 }}>Library</Typography>
+            <Button startIcon={<UploadIcon />} onClick={handleManualImport} variant="contained" size="small">Import Files</Button>
+            <Button startIcon={<FilterListIcon />} onClick={() => setFilterOpen(true)} variant="outlined" size="small">
+              Filters{getActiveFilterCount() > 0 && <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 0.5, height: 18 }} />}
+            </Button>
+            <ColumnChooser visibleColumnIds={visibleColumnIds} onToggleColumn={toggleColumn} onResetDefaults={resetColumnsToDefaults} />
+            <Button variant="outlined" size="small" startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined} disabled={organizeRunning} onClick={handleOrganizeLibrary}>{organizeRunning ? 'Organizing…' : 'Organize Library'}</Button>
+            <Button variant="outlined" size="small" startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />} disabled={activeScanOp !== null} onClick={handleFullRescan}>{activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}</Button>
+            <Button startIcon={<DeleteSweepIcon />} onClick={() => setPurgeDialogOpen(true)} variant="outlined" size="small" color="secondary" disabled={softDeletedCount === 0}>Purge Deleted{softDeletedCount > 0 ? ` (${softDeletedCount})` : ''}</Button>
+          </Stack>
+        )}
+      </Paper>
 
       {/* Active operations progress (always visible) */}
       {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
@@ -1944,40 +1924,12 @@ export const Library = () => {
               </Tooltip>
             </Stack>
 
-            <Paper sx={{ p: 2 }}>
-              <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                spacing={2}
-                alignItems={{ xs: 'flex-start', md: 'center' }}
-                justifyContent="space-between"
-              >
+            <Paper sx={{ p: 2, display: 'none' }}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
                 <Stack direction="row" spacing={2} alignItems="center">
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={allOnPageSelected}
-                        indeterminate={someOnPageSelected && !allOnPageSelected}
-                        onChange={handleToggleSelectAllOnPage}
-                      />
-                    }
-                    label="Select All"
-                  />
-                  <Chip label={`${selectedAudiobooks.length} selected`} />
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={handleClearSelection}
-                    disabled={!hasSelection}
-                  >
-                    Deselect All
-                  </Button>
+                  <Typography variant="body2">Old batch actions hidden</Typography>
                 </Stack>
-
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  alignItems={{ xs: 'flex-start', sm: 'center' }}
-                >
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
                   <Tooltip
                     title={!hasSelection ? 'Select books first' : ''}
                     disableHoverListener={hasSelection}
