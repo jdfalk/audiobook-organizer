@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.47.0
+// version: 1.48.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -59,6 +59,7 @@ import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { BulkMetadataSearchDialog } from '../components/audiobooks/BulkMetadataSearchDialog';
 import { BulkTagDialog } from '../components/audiobooks/BulkTagDialog';
+import { MetadataReviewDialog } from '../components/audiobooks/MetadataReviewDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
@@ -283,6 +284,8 @@ export const Library = () => {
   const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [mergePrimaryId, setMergePrimaryId] = useState<string>('');
+  const [metadataReviewOpId, setMetadataReviewOpId] = useState<string | null>(null);
+  const [metadataReviewOpen, setMetadataReviewOpen] = useState(false);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
@@ -2105,6 +2108,61 @@ export const Library = () => {
                     </span>
                   </Tooltip>
                   <Tooltip
+                    title={selectedAudiobooks.length < 2 ? 'Select 2+ books' : ''}
+                    disableHoverListener={selectedAudiobooks.length >= 2}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={async () => {
+                          try {
+                            const { operation_id } = await api.batchFetchCandidates(
+                              selectedAudiobooks.map((b) => b.id)
+                            );
+                            toast(
+                              'Fetching metadata for ' + selectedAudiobooks.length + ' books...',
+                              'info'
+                            );
+                            setMetadataReviewOpId(operation_id);
+                            const poll = setInterval(async () => {
+                              try {
+                                const ops = await api.getActiveOperations();
+                                const op = ops.find(
+                                  (o: { id: string }) => o.id === operation_id
+                                );
+                                if (
+                                  !op ||
+                                  op.status === 'completed' ||
+                                  op.status === 'failed'
+                                ) {
+                                  clearInterval(poll);
+                                  if (!op || op.status === 'completed') {
+                                    setMetadataReviewOpen(true);
+                                    toast(
+                                      'Metadata fetch complete — review results',
+                                      'success'
+                                    );
+                                  } else {
+                                    toast('Metadata fetch failed', 'error');
+                                  }
+                                }
+                              } catch {
+                                /* ignore poll errors */
+                              }
+                            }, 2000);
+                          } catch {
+                            toast('Failed to start metadata fetch', 'error');
+                          }
+                        }}
+                        disabled={selectedAudiobooks.length < 2}
+                      >
+                        Fetch &amp; Review
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
                     title={
                       !selectedHasActive
                         ? hasSelection
@@ -2797,6 +2855,22 @@ export const Library = () => {
           }}
           toast={toast}
         />
+
+        {metadataReviewOpId && (
+          <MetadataReviewDialog
+            open={metadataReviewOpen}
+            operationId={metadataReviewOpId}
+            onClose={() => {
+              setMetadataReviewOpen(false);
+              setMetadataReviewOpId(null);
+            }}
+            onComplete={() => {
+              loadAudiobooks();
+              setSelectedAudiobooks([]);
+            }}
+            toast={toast}
+          />
+        )}
 
         <VersionManagement
           audiobookId={versionManagingAudiobook?.id || ''}
