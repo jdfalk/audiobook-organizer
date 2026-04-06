@@ -93,6 +93,8 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
   const [writeToFiles, setWriteToFiles] = useState(true);
   const [undoing, setUndoing] = useState(false);
   const [skipApplied, setSkipApplied] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [sortResults, setSortResults] = useState<'score' | 'source'>('score');
 
   const handleToggleSkipApplied = (checked: boolean) => {
     setSkipApplied(checked);
@@ -229,6 +231,7 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
   const advanceToNext = () => {
     if (currentIndex < filteredBooks.length - 1) {
       setCurrentIndex((i) => i + 1);
+      setSourceFilter(null); // reset filter for next book
     }
   };
 
@@ -465,8 +468,43 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
           </Typography>
         )}
 
+        {/* Source filter + sort */}
+        {!loading && results.length > 0 && (() => {
+          const sources = Array.from(new Set(results.map((r) => r.source)));
+          return (
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap">
+              <Chip
+                label="All"
+                size="small"
+                variant={sourceFilter === null ? 'filled' : 'outlined'}
+                onClick={() => setSourceFilter(null)}
+              />
+              {sources.map((src) => (
+                <Chip
+                  key={src}
+                  label={`${src} (${results.filter((r) => r.source === src).length})`}
+                  size="small"
+                  color={SOURCE_COLORS[src] || 'default'}
+                  variant={sourceFilter === src ? 'filled' : 'outlined'}
+                  onClick={() => setSourceFilter(sourceFilter === src ? null : src)}
+                />
+              ))}
+              <Box sx={{ flex: 1 }} />
+              <Chip
+                label={sortResults === 'score' ? 'Sort: Score' : 'Sort: Source'}
+                size="small"
+                variant="outlined"
+                onClick={() => setSortResults(sortResults === 'score' ? 'source' : 'score')}
+              />
+            </Stack>
+          );
+        })()}
+
         <Stack spacing={1.5} sx={{ maxHeight: '50vh', overflow: 'auto' }}>
-          {results.map((candidate, idx) => (
+          {results
+            .filter((c) => !sourceFilter || c.source === sourceFilter)
+            .sort((a, b) => sortResults === 'source' ? a.source.localeCompare(b.source) : b.score - a.score)
+            .map((candidate, idx) => (
             <Box key={idx} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}>
               <Stack direction="row" spacing={2} alignItems="flex-start">
                 <Avatar
