@@ -104,6 +104,7 @@ export interface Book {
   itunes_rating?: number;
   itunes_bookmark?: number;
   itunes_import_source?: string;
+  itunes_path?: string;
   library_state?: string;
   quantity?: number;
   marked_for_deletion?: boolean;
