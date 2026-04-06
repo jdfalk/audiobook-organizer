@@ -453,18 +453,20 @@ export function OperationsIndicator() {
                   {op.message}
                 </Typography>
               )}
-              {op.type === 'metadata_candidate_fetch' && (
+              {op.type === 'metadata_candidate_fetch' && op.status === 'completed' && (
                 <Button
                   size="small"
                   variant="outlined"
                   sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/library?reviewOp=${op.id}`);
+                    e.preventDefault();
                     setAnchorEl(null);
+                    // Use window.location to force full navigation even if already on /library
+                    window.location.href = `/library?reviewOp=${op.id}`;
                   }}
                 >
-                  Review
+                  Review Results
                 </Button>
               )}
             </Box>
