@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.146.0
+// version: 1.147.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -387,19 +387,19 @@ func buildComparisonValuesFromMetadata(comparisonMeta *metadata.Metadata) map[st
 	}
 
 	compMap := map[string]any{
-		"title":       nonEmpty(comparisonMeta.Title),
-		"author_name": nonEmpty(comparisonMeta.Artist),
-		"narrator":    nonEmpty(comparisonMeta.Narrator),
-		"series_name": nonEmpty(comparisonMeta.Series),
-		"publisher":   nonEmpty(comparisonMeta.Publisher),
-		"language":    nonEmpty(comparisonMeta.Language),
-		"isbn10":      nonEmpty(comparisonMeta.ISBN10),
-		"isbn13":      nonEmpty(comparisonMeta.ISBN13),
-		"genre":       nonEmpty(comparisonMeta.Genre),
-		"album":       nonEmpty(comparisonMeta.Album),
-		"asin":        nonEmpty(comparisonMeta.ASIN),
-		"edition":     nonEmpty(comparisonMeta.Edition),
-		"print_year":  nonEmpty(comparisonMeta.PrintYear),
+		"title":           nonEmpty(comparisonMeta.Title),
+		"author_name":     nonEmpty(comparisonMeta.Artist),
+		"narrator":        nonEmpty(comparisonMeta.Narrator),
+		"series_name":     nonEmpty(comparisonMeta.Series),
+		"publisher":       nonEmpty(comparisonMeta.Publisher),
+		"language":        nonEmpty(comparisonMeta.Language),
+		"isbn10":          nonEmpty(comparisonMeta.ISBN10),
+		"isbn13":          nonEmpty(comparisonMeta.ISBN13),
+		"genre":           nonEmpty(comparisonMeta.Genre),
+		"album":           nonEmpty(comparisonMeta.Album),
+		"asin":            nonEmpty(comparisonMeta.ASIN),
+		"edition":         nonEmpty(comparisonMeta.Edition),
+		"print_year":      nonEmpty(comparisonMeta.PrintYear),
 		"description":     nonEmpty(comparisonMeta.Comments),
 		"book_id":         nonEmpty(comparisonMeta.BookOrganizerID),
 		"open_library_id": nonEmpty(comparisonMeta.OpenLibraryID),
@@ -421,18 +421,18 @@ func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName s
 	}
 
 	compMap := map[string]any{
-		"title":       nonEmpty(book.Title),
-		"author_name": nonEmpty(authorName),
-		"narrator":    nonEmpty(ptrStr(book.Narrator)),
-		"series_name": nonEmpty(seriesName),
-		"publisher":   nonEmpty(ptrStr(book.Publisher)),
-		"language":    nonEmpty(ptrStr(book.Language)),
-		"isbn10":      nonEmpty(ptrStr(book.ISBN10)),
-		"isbn13":      nonEmpty(ptrStr(book.ISBN13)),
-		"genre":       nonEmpty(ptrStr(book.Genre)),
-		"album":       nonEmpty(book.Title),
-		"asin":        nonEmpty(ptrStr(book.ASIN)),
-		"edition":     nonEmpty(ptrStr(book.Edition)),
+		"title":           nonEmpty(book.Title),
+		"author_name":     nonEmpty(authorName),
+		"narrator":        nonEmpty(ptrStr(book.Narrator)),
+		"series_name":     nonEmpty(seriesName),
+		"publisher":       nonEmpty(ptrStr(book.Publisher)),
+		"language":        nonEmpty(ptrStr(book.Language)),
+		"isbn10":          nonEmpty(ptrStr(book.ISBN10)),
+		"isbn13":          nonEmpty(ptrStr(book.ISBN13)),
+		"genre":           nonEmpty(ptrStr(book.Genre)),
+		"album":           nonEmpty(book.Title),
+		"asin":            nonEmpty(ptrStr(book.ASIN)),
+		"edition":         nonEmpty(ptrStr(book.Edition)),
 		"description":     nonEmpty(ptrStr(book.Description)),
 		"book_id":         nonEmpty(book.ID),
 		"open_library_id": nonEmpty(ptrStr(book.OpenLibraryID)),
@@ -585,7 +585,6 @@ func nonEmpty(s string) any {
 	}
 	return s
 }
-
 
 func applyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := scanner.ComputeFileHash(newPath)
@@ -1503,6 +1502,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/scan", s.startScan)
 			protected.POST("/operations/organize", s.startOrganize)
 			protected.POST("/operations/transcode", s.startTranscode)
+			protected.GET("/operations/recent", s.handleGetRecentOperations)
+			protected.GET("/operations/:id/results", s.handleGetOperationResults)
 			protected.GET("/operations/:id/status", s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.getOperationLogs)
 			protected.GET("/operations/:id/result", s.getOperationResult)
@@ -1603,6 +1604,8 @@ func (s *Server) setupRoutes() {
 			protected.GET("/metadata/search", s.searchMetadata)
 			protected.GET("/metadata/fields", s.getMetadataFields)
 			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
+			protected.POST("/metadata/batch-fetch-candidates", s.handleBatchFetchCandidates)
+			protected.POST("/metadata/batch-apply-candidates", s.handleBatchApplyCandidates)
 			protected.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/search-metadata", s.searchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/apply-metadata", s.applyAudiobookMetadata)
@@ -9921,12 +9924,12 @@ func (s *Server) organizeBook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":           fmt.Sprintf("organized: %s → %s", oldPath, newPath),
-		"book_id":           createdBook.ID,
-		"original_book_id":  book.ID,
-		"old_path":          oldPath,
-		"new_path":          newPath,
-		"operation_id":      op.ID,
+		"message":          fmt.Sprintf("organized: %s → %s", oldPath, newPath),
+		"book_id":          createdBook.ID,
+		"original_book_id": book.ID,
+		"old_path":         oldPath,
+		"new_path":         newPath,
+		"operation_id":     op.ID,
 	})
 }
 
