@@ -284,8 +284,10 @@ export const Library = () => {
   const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [mergePrimaryId, setMergePrimaryId] = useState<string>('');
-  const [metadataReviewOpId, setMetadataReviewOpId] = useState<string | null>(null);
-  const [metadataReviewOpen, setMetadataReviewOpen] = useState(false);
+  const [metadataReviewOpId, setMetadataReviewOpId] = useState<string | null>(
+    searchParams.get('reviewOp')
+  );
+  const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 

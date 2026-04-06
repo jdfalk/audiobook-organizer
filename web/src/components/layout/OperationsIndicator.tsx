@@ -460,7 +460,8 @@ export function OperationsIndicator() {
                   sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log('Review candidates for operation', op.id);
+                    navigate(`/library?reviewOp=${op.id}`);
+                    setAnchorEl(null);
                   }}
                 >
                   Review
