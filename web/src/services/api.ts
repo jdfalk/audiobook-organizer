@@ -622,7 +622,7 @@ export async function getBook(id: string): Promise<Book> {
 
 export async function searchBooks(query: string, limit = 50): Promise<Book[]> {
   const response = await fetch(
-    `${API_BASE}/audiobooks/search?q=${encodeURIComponent(query)}&limit=${limit}`
+    `${API_BASE}/audiobooks?search=${encodeURIComponent(query)}&limit=${limit}`
   );
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search books');
