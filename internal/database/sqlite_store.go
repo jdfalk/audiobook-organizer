@@ -3259,6 +3259,60 @@ func (s *SQLiteStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSu
 	return logs, rows.Err()
 }
 
+// ---- Operation Results (structured per-book output) ----
+
+func (s *SQLiteStore) CreateOperationResult(result *OperationResult) error {
+	_, err := s.db.Exec(
+		`INSERT INTO operation_results (operation_id, book_id, result_json, status) VALUES (?, ?, ?, ?)`,
+		result.OperationID, result.BookID, result.ResultJSON, result.Status,
+	)
+	return err
+}
+
+func (s *SQLiteStore) GetOperationResults(operationID string) ([]OperationResult, error) {
+	rows, err := s.db.Query(
+		`SELECT id, operation_id, book_id, result_json, status, created_at FROM operation_results WHERE operation_id = ? ORDER BY id`,
+		operationID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []OperationResult
+	for rows.Next() {
+		var r OperationResult
+		if err := rows.Scan(&r.ID, &r.OperationID, &r.BookID, &r.ResultJSON, &r.Status, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, rows.Err()
+}
+
+func (s *SQLiteStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
+	rows, err := s.db.Query(
+		`SELECT id, type, status, progress, total, message, folder_path, created_at, started_at, completed_at, error_message, result_data
+		 FROM operations WHERE status IN ('completed', 'failed') ORDER BY completed_at DESC LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ops []Operation
+	for rows.Next() {
+		var op Operation
+		if err := rows.Scan(&op.ID, &op.Type, &op.Status, &op.Progress, &op.Total, &op.Message, &op.FolderPath,
+			&op.CreatedAt, &op.StartedAt, &op.CompletedAt, &op.ErrorMessage, &op.ResultData); err != nil {
+			return nil, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, rows.Err()
+}
+
 // ---- Operation State Persistence (resumable operations) ----
 
 func (s *SQLiteStore) ensureOpStateTable() {

@@ -4268,6 +4268,19 @@ func (p *PebbleStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping,
 	return nil, nil
 }
 
+// CreateOperationResult is a stub — operation results are SQLite-only.
+func (p *PebbleStore) CreateOperationResult(result *OperationResult) error { return nil }
+
+// GetOperationResults is a stub — operation results are SQLite-only.
+func (p *PebbleStore) GetOperationResults(operationID string) ([]OperationResult, error) {
+	return nil, nil
+}
+
+// GetRecentCompletedOperations is a stub — operations are SQLite-only.
+func (p *PebbleStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
+	return nil, nil
+}
+
 // --- User Tags (free-form labels on books) ---
 
 // GetBookUserTags returns all user-defined tags for a book.

@@ -1427,6 +1427,14 @@ func (m *MockStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, e
 	return nil, nil
 }
 
+func (m *MockStore) CreateOperationResult(result *OperationResult) error       { return nil }
+func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
+	return nil, nil
+}
+func (m *MockStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
+	return nil, nil
+}
+
 func (m *MockStore) GetBookUserTags(bookID string) ([]string, error) { return nil, nil }
 func (m *MockStore) SetBookUserTags(bookID string, tags []string) error { return nil }
 func (m *MockStore) AddBookUserTag(bookID string, tag string) error { return nil }

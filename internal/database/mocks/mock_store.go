@@ -12176,3 +12176,83 @@ func (_c *MockStore_GetRemovedExternalIDs_Call) RunAndReturn(run func(string) ([
 	_c.Call.Return(run)
 	return _c
 }
+
+// CreateOperationResult stubs the Store interface method.
+func (_mock *MockStore) CreateOperationResult(result *database.OperationResult) error {
+	ret := _mock.Called(result)
+	return ret.Error(0)
+}
+
+type MockStore_CreateOperationResult_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) CreateOperationResult(result interface{}) *MockStore_CreateOperationResult_Call {
+	return &MockStore_CreateOperationResult_Call{Call: _e.mock.On("CreateOperationResult", result)}
+}
+func (_c *MockStore_CreateOperationResult_Call) Run(run func(result *database.OperationResult)) *MockStore_CreateOperationResult_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(*database.OperationResult)) })
+	return _c
+}
+func (_c *MockStore_CreateOperationResult_Call) Return(err error) *MockStore_CreateOperationResult_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_CreateOperationResult_Call) RunAndReturn(run func(*database.OperationResult) error) *MockStore_CreateOperationResult_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOperationResults stubs the Store interface method.
+func (_mock *MockStore) GetOperationResults(operationID string) ([]database.OperationResult, error) {
+	ret := _mock.Called(operationID)
+	var r0 []database.OperationResult
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.OperationResult)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetOperationResults_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetOperationResults(operationID interface{}) *MockStore_GetOperationResults_Call {
+	return &MockStore_GetOperationResults_Call{Call: _e.mock.On("GetOperationResults", operationID)}
+}
+func (_c *MockStore_GetOperationResults_Call) Run(run func(string)) *MockStore_GetOperationResults_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_GetOperationResults_Call) Return(results []database.OperationResult, err error) *MockStore_GetOperationResults_Call {
+	_c.Call.Return(results, err)
+	return _c
+}
+func (_c *MockStore_GetOperationResults_Call) RunAndReturn(run func(string) ([]database.OperationResult, error)) *MockStore_GetOperationResults_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetRecentCompletedOperations stubs the Store interface method.
+func (_mock *MockStore) GetRecentCompletedOperations(limit int) ([]database.Operation, error) {
+	ret := _mock.Called(limit)
+	var r0 []database.Operation
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.Operation)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetRecentCompletedOperations_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetRecentCompletedOperations(limit interface{}) *MockStore_GetRecentCompletedOperations_Call {
+	return &MockStore_GetRecentCompletedOperations_Call{Call: _e.mock.On("GetRecentCompletedOperations", limit)}
+}
+func (_c *MockStore_GetRecentCompletedOperations_Call) Run(run func(int)) *MockStore_GetRecentCompletedOperations_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(int)) })
+	return _c
+}
+func (_c *MockStore_GetRecentCompletedOperations_Call) Return(ops []database.Operation, err error) *MockStore_GetRecentCompletedOperations_Call {
+	_c.Call.Return(ops, err)
+	return _c
+}
+func (_c *MockStore_GetRecentCompletedOperations_Call) RunAndReturn(run func(int) ([]database.Operation, error)) *MockStore_GetRecentCompletedOperations_Call {
+	_c.Call.Return(run)
+	return _c
+}
