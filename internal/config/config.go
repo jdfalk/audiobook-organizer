@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -104,11 +104,12 @@ type Config struct {
 	DefaultUserQuotaGB int  `json:"default_user_quota_gb"`
 
 	// Metadata
-	AutoFetchMetadata  bool             `json:"auto_fetch_metadata"`
-	WriteBackMetadata  bool             `json:"write_back_metadata"`
-	EmbedCoverArt      bool             `json:"embed_cover_art"`
-	MetadataSources    []MetadataSource `json:"metadata_sources"`
-	Language           string           `json:"language"`
+	AutoFetchMetadata         bool             `json:"auto_fetch_metadata"`
+	WriteBackMetadata         bool             `json:"write_back_metadata"`
+	EmbedCoverArt             bool             `json:"embed_cover_art"`
+	MetadataSources           []MetadataSource `json:"metadata_sources"`
+	Language                  string           `json:"language"`
+	MetadataReviewDefaultView string           `json:"metadata_review_default_view"`
 
 	// Open Library data dumps
 	OpenLibraryDumpEnabled bool   `json:"openlibrary_dump_enabled"`
@@ -162,13 +163,13 @@ type Config struct {
 	EnableJsonLogging bool   `json:"enable_json_logging"`
 
 	// iTunes sync
-	ITunesSyncEnabled    bool              `json:"itunes_sync_enabled"`
-	ITunesSyncInterval   int               `json:"itunes_sync_interval"` // minutes
-	ITLWriteBackEnabled     bool              `json:"itl_write_back_enabled"`
-	ITunesLibraryWritePath  string            `json:"itunes_library_write_path"`  // ITL path used for write-back (always ITL)
-	ITunesLibraryReadPath   string            `json:"itunes_library_read_path"`   // path used for sync (XML or ITL)
-	ITunesPathMappings   []ITunesPathMap   `json:"itunes_path_mappings"`  // Stored path mappings for write-back
-	ITunesAutoWriteBack  bool              `json:"itunes_auto_write_back"` // Auto write-back on every edit (batched)
+	ITunesSyncEnabled      bool            `json:"itunes_sync_enabled"`
+	ITunesSyncInterval     int             `json:"itunes_sync_interval"` // minutes
+	ITLWriteBackEnabled    bool            `json:"itl_write_back_enabled"`
+	ITunesLibraryWritePath string          `json:"itunes_library_write_path"` // ITL path used for write-back (always ITL)
+	ITunesLibraryReadPath  string          `json:"itunes_library_read_path"`  // path used for sync (XML or ITL)
+	ITunesPathMappings     []ITunesPathMap `json:"itunes_path_mappings"`      // Stored path mappings for write-back
+	ITunesAutoWriteBack    bool            `json:"itunes_auto_write_back"`    // Auto write-back on every edit (batched)
 
 	// Auto-update
 	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
@@ -198,35 +199,35 @@ type Config struct {
 
 	// Scheduled maintenance tasks
 	ScheduledDedupRefreshEnabled   bool `json:"scheduled_dedup_refresh_enabled"`
-	ScheduledDedupRefreshInterval  int  `json:"scheduled_dedup_refresh_interval"`  // minutes, default 360
+	ScheduledDedupRefreshInterval  int  `json:"scheduled_dedup_refresh_interval"` // minutes, default 360
 	ScheduledDedupRefreshOnStartup bool `json:"scheduled_dedup_refresh_on_startup"`
 
 	ScheduledAuthorSplitEnabled   bool `json:"scheduled_author_split_enabled"`
-	ScheduledAuthorSplitInterval  int  `json:"scheduled_author_split_interval"`  // minutes, default 0 (manual)
+	ScheduledAuthorSplitInterval  int  `json:"scheduled_author_split_interval"` // minutes, default 0 (manual)
 	ScheduledAuthorSplitOnStartup bool `json:"scheduled_author_split_on_startup"`
 
 	ScheduledDbOptimizeEnabled   bool `json:"scheduled_db_optimize_enabled"`
-	ScheduledDbOptimizeInterval  int  `json:"scheduled_db_optimize_interval"`  // minutes, default 1440
+	ScheduledDbOptimizeInterval  int  `json:"scheduled_db_optimize_interval"` // minutes, default 1440
 	ScheduledDbOptimizeOnStartup bool `json:"scheduled_db_optimize_on_startup"`
 
 	ScheduledMetadataRefreshEnabled   bool `json:"scheduled_metadata_refresh_enabled"`
-	ScheduledMetadataRefreshInterval  int  `json:"scheduled_metadata_refresh_interval"`  // minutes
+	ScheduledMetadataRefreshInterval  int  `json:"scheduled_metadata_refresh_interval"` // minutes
 	ScheduledMetadataRefreshOnStartup bool `json:"scheduled_metadata_refresh_on_startup"`
 
 	ScheduledResolveProductionAuthorsEnabled  bool `json:"scheduled_resolve_production_authors_enabled"`
 	ScheduledResolveProductionAuthorsInterval int  `json:"scheduled_resolve_production_authors_interval"` // minutes, 0 = manual only
 
 	ScheduledSeriesPruneEnabled   bool `json:"scheduled_series_prune_enabled"`
-	ScheduledSeriesPruneInterval  int  `json:"scheduled_series_prune_interval"`  // minutes, default 0 (manual)
+	ScheduledSeriesPruneInterval  int  `json:"scheduled_series_prune_interval"` // minutes, default 0 (manual)
 	ScheduledSeriesPruneOnStartup bool `json:"scheduled_series_prune_on_startup"`
 
 	// AI Batch API
 	ScheduledAIDedupBatchEnabled   bool `json:"scheduled_ai_dedup_batch_enabled"`
-	ScheduledAIDedupBatchInterval  int  `json:"scheduled_ai_dedup_batch_interval"`   // minutes, default 1440 (24h)
+	ScheduledAIDedupBatchInterval  int  `json:"scheduled_ai_dedup_batch_interval"` // minutes, default 1440 (24h)
 	ScheduledAIDedupBatchOnStartup bool `json:"scheduled_ai_dedup_batch_on_startup"`
 
 	ScheduledReconcileEnabled   bool `json:"scheduled_reconcile_enabled"`
-	ScheduledReconcileInterval  int  `json:"scheduled_reconcile_interval"`  // minutes, default 0 (manual)
+	ScheduledReconcileInterval  int  `json:"scheduled_reconcile_interval"` // minutes, default 0 (manual)
 	ScheduledReconcileOnStartup bool `json:"scheduled_reconcile_on_startup"`
 
 	// Per-task maintenance window toggles
@@ -276,6 +277,7 @@ func InitConfig() {
 	viper.SetDefault("write_back_metadata", false)
 	viper.SetDefault("embed_cover_art", false)
 	viper.SetDefault("language", "en")
+	viper.SetDefault("metadata_review_default_view", "compact")
 
 	// Open Library dump defaults
 	viper.SetDefault("openlibrary_dump_enabled", false)
@@ -463,7 +465,7 @@ func InitConfig() {
 		UploadBodyLimitMB:       viper.GetInt("upload_body_limit_mb"),
 		EnableAuth:              viper.GetBool("enable_auth"),
 		BasicAuthEnabled:        viper.GetBool("basic_auth_enabled"),
-		BasicAuthUsername:        viper.GetString("basic_auth_username"),
+		BasicAuthUsername:       viper.GetString("basic_auth_username"),
 		BasicAuthPassword:       viper.GetString("basic_auth_password"),
 
 		// Memory management
@@ -505,12 +507,12 @@ func InitConfig() {
 		MaintenanceWindowMetadataRefresh:  viper.GetBool("maintenance_window_metadata_refresh"),
 
 		// iTunes sync
-		ITunesSyncEnabled:    viper.GetBool("itunes_sync_enabled"),
-		ITunesSyncInterval:   viper.GetInt("itunes_sync_interval"),
+		ITunesSyncEnabled:      viper.GetBool("itunes_sync_enabled"),
+		ITunesSyncInterval:     viper.GetInt("itunes_sync_interval"),
 		ITLWriteBackEnabled:    viper.GetBool("itl_write_back_enabled"),
 		ITunesLibraryWritePath: viper.GetString("itunes_library_write_path"),
 		ITunesLibraryReadPath:  viper.GetString("itunes_library_read_path"),
-		ITunesAutoWriteBack:  viper.GetBool("itunes_auto_write_back"),
+		ITunesAutoWriteBack:    viper.GetBool("itunes_auto_write_back"),
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
@@ -824,7 +826,7 @@ func ResetToDefaults() {
 		UploadBodyLimitMB:       10,
 		EnableAuth:              true,
 		BasicAuthEnabled:        false,
-		BasicAuthUsername:        "",
+		BasicAuthUsername:       "",
 		BasicAuthPassword:       "",
 
 		// Memory management
@@ -868,8 +870,8 @@ func ResetToDefaults() {
 		MaintenanceWindowMetadataRefresh:  false,
 
 		// iTunes sync
-		ITunesSyncEnabled:    true,
-		ITunesSyncInterval:   30,
+		ITunesSyncEnabled:      true,
+		ITunesSyncInterval:     30,
 		ITLWriteBackEnabled:    false,
 		ITunesLibraryWritePath: "",
 

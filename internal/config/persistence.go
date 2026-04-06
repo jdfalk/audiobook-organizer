@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -55,11 +55,11 @@ func LoadConfigFromFile() error {
 	// Only fill in values that are currently empty/default.
 	// This is the fallback path when DB decryption fails for secrets.
 	stringFallbacks := map[string]*string{
-		"openai_api_key":     &AppConfig.OpenAIAPIKey,
+		"openai_api_key":       &AppConfig.OpenAIAPIKey,
 		"google_books_api_key": &AppConfig.GoogleBooksAPIKey,
-		"hardcover_api_token": &AppConfig.HardcoverAPIToken,
-		"root_dir":           &AppConfig.RootDir,
-		"language":           &AppConfig.Language,
+		"hardcover_api_token":  &AppConfig.HardcoverAPIToken,
+		"root_dir":             &AppConfig.RootDir,
+		"language":             &AppConfig.Language,
 	}
 	for key, ptr := range stringFallbacks {
 		if *ptr == "" {
@@ -331,6 +331,8 @@ func applySetting(key, value, typ string) error {
 		}
 	case "language":
 		AppConfig.Language = value
+	case "metadata_review_default_view":
+		AppConfig.MetadataReviewDefaultView = value
 	case "metadata_sources":
 		var sources []MetadataSource
 		if err := json.Unmarshal([]byte(value), &sources); err == nil && len(sources) > 0 {
@@ -673,9 +675,9 @@ func SaveConfigToDatabase(store database.Store) error {
 		isSecret bool
 	}{
 		// Core paths
-		"root_dir":      {AppConfig.RootDir, "string", false},
-		"database_path": {AppConfig.DatabasePath, "string", false},
-		"playlist_dir":  {AppConfig.PlaylistDir, "string", false},
+		"root_dir":       {AppConfig.RootDir, "string", false},
+		"database_path":  {AppConfig.DatabasePath, "string", false},
+		"playlist_dir":   {AppConfig.PlaylistDir, "string", false},
 		"setup_complete": {strconv.FormatBool(AppConfig.SetupComplete), "bool", false},
 
 		// Organization
@@ -707,22 +709,23 @@ func SaveConfigToDatabase(store database.Store) error {
 		"hardcover_api_token": {AppConfig.HardcoverAPIToken, "string", true},
 
 		// AI parsing (API key is secret in DB, plaintext in file)
-		"enable_ai_parsing": {strconv.FormatBool(AppConfig.EnableAIParsing), "bool", false},
-		"openai_api_key":        {AppConfig.OpenAIAPIKey, "string", true},
-		"google_books_api_key":  {AppConfig.GoogleBooksAPIKey, "string", true},
+		"enable_ai_parsing":    {strconv.FormatBool(AppConfig.EnableAIParsing), "bool", false},
+		"openai_api_key":       {AppConfig.OpenAIAPIKey, "string", true},
+		"google_books_api_key": {AppConfig.GoogleBooksAPIKey, "string", true},
 
 		// Performance
-		"concurrent_scans":           {strconv.Itoa(AppConfig.ConcurrentScans), "int", false},
-		"operation_timeout_minutes":  {strconv.Itoa(AppConfig.OperationTimeoutMinutes), "int", false},
-		"api_rate_limit_per_minute":  {strconv.Itoa(AppConfig.APIRateLimitPerMinute), "int", false},
-		"auth_rate_limit_per_minute": {strconv.Itoa(AppConfig.AuthRateLimitPerMinute), "int", false},
-		"json_body_limit_mb":         {strconv.Itoa(AppConfig.JSONBodyLimitMB), "int", false},
-		"upload_body_limit_mb":       {strconv.Itoa(AppConfig.UploadBodyLimitMB), "int", false},
-		"enable_auth":                {strconv.FormatBool(AppConfig.EnableAuth), "bool", false},
-		"write_back_metadata":        {strconv.FormatBool(AppConfig.WriteBackMetadata), "bool", false},
-		"embed_cover_art":            {strconv.FormatBool(AppConfig.EmbedCoverArt), "bool", false},
-		"auto_scan_enabled":          {strconv.FormatBool(AppConfig.AutoScanEnabled), "bool", false},
-		"auto_scan_debounce_seconds": {strconv.Itoa(AppConfig.AutoScanDebounceSeconds), "int", false},
+		"concurrent_scans":             {strconv.Itoa(AppConfig.ConcurrentScans), "int", false},
+		"operation_timeout_minutes":    {strconv.Itoa(AppConfig.OperationTimeoutMinutes), "int", false},
+		"api_rate_limit_per_minute":    {strconv.Itoa(AppConfig.APIRateLimitPerMinute), "int", false},
+		"auth_rate_limit_per_minute":   {strconv.Itoa(AppConfig.AuthRateLimitPerMinute), "int", false},
+		"json_body_limit_mb":           {strconv.Itoa(AppConfig.JSONBodyLimitMB), "int", false},
+		"upload_body_limit_mb":         {strconv.Itoa(AppConfig.UploadBodyLimitMB), "int", false},
+		"enable_auth":                  {strconv.FormatBool(AppConfig.EnableAuth), "bool", false},
+		"write_back_metadata":          {strconv.FormatBool(AppConfig.WriteBackMetadata), "bool", false},
+		"embed_cover_art":              {strconv.FormatBool(AppConfig.EmbedCoverArt), "bool", false},
+		"metadata_review_default_view": {AppConfig.MetadataReviewDefaultView, "string", false},
+		"auto_scan_enabled":            {strconv.FormatBool(AppConfig.AutoScanEnabled), "bool", false},
+		"auto_scan_debounce_seconds":   {strconv.Itoa(AppConfig.AutoScanDebounceSeconds), "int", false},
 
 		// Memory management
 		"memory_limit_type":    {AppConfig.MemoryLimitType, "string", false},
@@ -748,52 +751,52 @@ func SaveConfigToDatabase(store database.Store) error {
 
 		// Basic auth
 		// iTunes sync
-		"itunes_sync_enabled":    {strconv.FormatBool(AppConfig.ITunesSyncEnabled), "bool", false},
-		"itunes_sync_interval":   {strconv.Itoa(AppConfig.ITunesSyncInterval), "int", false},
-		"itl_write_back_enabled": {strconv.FormatBool(AppConfig.ITLWriteBackEnabled), "bool", false},
+		"itunes_sync_enabled":       {strconv.FormatBool(AppConfig.ITunesSyncEnabled), "bool", false},
+		"itunes_sync_interval":      {strconv.Itoa(AppConfig.ITunesSyncInterval), "int", false},
+		"itl_write_back_enabled":    {strconv.FormatBool(AppConfig.ITLWriteBackEnabled), "bool", false},
 		"itunes_library_write_path": {AppConfig.ITunesLibraryWritePath, "string", false},
 		"itunes_library_read_path":  {AppConfig.ITunesLibraryReadPath, "string", false},
-		"itunes_auto_write_back":  {strconv.FormatBool(AppConfig.ITunesAutoWriteBack), "bool", false},
-		"itunes_path_mappings":    {string(pathMappingsJSON), "json", false},
+		"itunes_auto_write_back":    {strconv.FormatBool(AppConfig.ITunesAutoWriteBack), "bool", false},
+		"itunes_path_mappings":      {string(pathMappingsJSON), "json", false},
 
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},
 		"basic_auth_username": {AppConfig.BasicAuthUsername, "string", false},
 		"basic_auth_password": {AppConfig.BasicAuthPassword, "string", true},
 
 		// Maintenance window
-		"maintenance_window_enabled":            {strconv.FormatBool(AppConfig.MaintenanceWindowEnabled), "bool", false},
-		"maintenance_window_start":              {strconv.Itoa(AppConfig.MaintenanceWindowStart), "int", false},
-		"maintenance_window_end":                {strconv.Itoa(AppConfig.MaintenanceWindowEnd), "int", false},
-		"maintenance_window_dedup_refresh":      {strconv.FormatBool(AppConfig.MaintenanceWindowDedupRefresh), "bool", false},
-		"maintenance_window_series_prune":       {strconv.FormatBool(AppConfig.MaintenanceWindowSeriesPrune), "bool", false},
-		"maintenance_window_author_split":       {strconv.FormatBool(AppConfig.MaintenanceWindowAuthorSplit), "bool", false},
-		"maintenance_window_tombstone_cleanup":  {strconv.FormatBool(AppConfig.MaintenanceWindowTombstoneCleanup), "bool", false},
-		"maintenance_window_reconcile":          {strconv.FormatBool(AppConfig.MaintenanceWindowReconcile), "bool", false},
-		"maintenance_window_purge_deleted":      {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeDeleted), "bool", false},
-		"maintenance_window_purge_old_logs":     {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeOldLogs), "bool", false},
-		"maintenance_window_db_optimize":        {strconv.FormatBool(AppConfig.MaintenanceWindowDbOptimize), "bool", false},
-		"maintenance_window_library_scan":       {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryScan), "bool", false},
-		"maintenance_window_library_organize":   {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryOrganize), "bool", false},
-		"maintenance_window_metadata_refresh":   {strconv.FormatBool(AppConfig.MaintenanceWindowMetadataRefresh), "bool", false},
+		"maintenance_window_enabled":           {strconv.FormatBool(AppConfig.MaintenanceWindowEnabled), "bool", false},
+		"maintenance_window_start":             {strconv.Itoa(AppConfig.MaintenanceWindowStart), "int", false},
+		"maintenance_window_end":               {strconv.Itoa(AppConfig.MaintenanceWindowEnd), "int", false},
+		"maintenance_window_dedup_refresh":     {strconv.FormatBool(AppConfig.MaintenanceWindowDedupRefresh), "bool", false},
+		"maintenance_window_series_prune":      {strconv.FormatBool(AppConfig.MaintenanceWindowSeriesPrune), "bool", false},
+		"maintenance_window_author_split":      {strconv.FormatBool(AppConfig.MaintenanceWindowAuthorSplit), "bool", false},
+		"maintenance_window_tombstone_cleanup": {strconv.FormatBool(AppConfig.MaintenanceWindowTombstoneCleanup), "bool", false},
+		"maintenance_window_reconcile":         {strconv.FormatBool(AppConfig.MaintenanceWindowReconcile), "bool", false},
+		"maintenance_window_purge_deleted":     {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeDeleted), "bool", false},
+		"maintenance_window_purge_old_logs":    {strconv.FormatBool(AppConfig.MaintenanceWindowPurgeOldLogs), "bool", false},
+		"maintenance_window_db_optimize":       {strconv.FormatBool(AppConfig.MaintenanceWindowDbOptimize), "bool", false},
+		"maintenance_window_library_scan":      {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryScan), "bool", false},
+		"maintenance_window_library_organize":  {strconv.FormatBool(AppConfig.MaintenanceWindowLibraryOrganize), "bool", false},
+		"maintenance_window_metadata_refresh":  {strconv.FormatBool(AppConfig.MaintenanceWindowMetadataRefresh), "bool", false},
 
 		// Scheduled maintenance tasks
-		"scheduled_dedup_refresh_enabled":      {strconv.FormatBool(AppConfig.ScheduledDedupRefreshEnabled), "bool", false},
-		"scheduled_dedup_refresh_interval":     {strconv.Itoa(AppConfig.ScheduledDedupRefreshInterval), "int", false},
-		"scheduled_dedup_refresh_on_startup":   {strconv.FormatBool(AppConfig.ScheduledDedupRefreshOnStartup), "bool", false},
-		"scheduled_author_split_enabled":       {strconv.FormatBool(AppConfig.ScheduledAuthorSplitEnabled), "bool", false},
-		"scheduled_author_split_interval":      {strconv.Itoa(AppConfig.ScheduledAuthorSplitInterval), "int", false},
-		"scheduled_author_split_on_startup":    {strconv.FormatBool(AppConfig.ScheduledAuthorSplitOnStartup), "bool", false},
-		"scheduled_db_optimize_enabled":        {strconv.FormatBool(AppConfig.ScheduledDbOptimizeEnabled), "bool", false},
-		"scheduled_db_optimize_interval":       {strconv.Itoa(AppConfig.ScheduledDbOptimizeInterval), "int", false},
-		"scheduled_db_optimize_on_startup":     {strconv.FormatBool(AppConfig.ScheduledDbOptimizeOnStartup), "bool", false},
-		"scheduled_metadata_refresh_enabled":   {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshEnabled), "bool", false},
-		"scheduled_metadata_refresh_interval":  {strconv.Itoa(AppConfig.ScheduledMetadataRefreshInterval), "int", false},
-		"scheduled_metadata_refresh_on_startup": {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshOnStartup), "bool", false},
+		"scheduled_dedup_refresh_enabled":               {strconv.FormatBool(AppConfig.ScheduledDedupRefreshEnabled), "bool", false},
+		"scheduled_dedup_refresh_interval":              {strconv.Itoa(AppConfig.ScheduledDedupRefreshInterval), "int", false},
+		"scheduled_dedup_refresh_on_startup":            {strconv.FormatBool(AppConfig.ScheduledDedupRefreshOnStartup), "bool", false},
+		"scheduled_author_split_enabled":                {strconv.FormatBool(AppConfig.ScheduledAuthorSplitEnabled), "bool", false},
+		"scheduled_author_split_interval":               {strconv.Itoa(AppConfig.ScheduledAuthorSplitInterval), "int", false},
+		"scheduled_author_split_on_startup":             {strconv.FormatBool(AppConfig.ScheduledAuthorSplitOnStartup), "bool", false},
+		"scheduled_db_optimize_enabled":                 {strconv.FormatBool(AppConfig.ScheduledDbOptimizeEnabled), "bool", false},
+		"scheduled_db_optimize_interval":                {strconv.Itoa(AppConfig.ScheduledDbOptimizeInterval), "int", false},
+		"scheduled_db_optimize_on_startup":              {strconv.FormatBool(AppConfig.ScheduledDbOptimizeOnStartup), "bool", false},
+		"scheduled_metadata_refresh_enabled":            {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshEnabled), "bool", false},
+		"scheduled_metadata_refresh_interval":           {strconv.Itoa(AppConfig.ScheduledMetadataRefreshInterval), "int", false},
+		"scheduled_metadata_refresh_on_startup":         {strconv.FormatBool(AppConfig.ScheduledMetadataRefreshOnStartup), "bool", false},
 		"scheduled_resolve_production_authors_enabled":  {strconv.FormatBool(AppConfig.ScheduledResolveProductionAuthorsEnabled), "bool", false},
 		"scheduled_resolve_production_authors_interval": {strconv.Itoa(AppConfig.ScheduledResolveProductionAuthorsInterval), "int", false},
-		"scheduled_series_prune_enabled":               {strconv.FormatBool(AppConfig.ScheduledSeriesPruneEnabled), "bool", false},
-		"scheduled_series_prune_interval":              {strconv.Itoa(AppConfig.ScheduledSeriesPruneInterval), "int", false},
-		"scheduled_series_prune_on_startup":            {strconv.FormatBool(AppConfig.ScheduledSeriesPruneOnStartup), "bool", false},
+		"scheduled_series_prune_enabled":                {strconv.FormatBool(AppConfig.ScheduledSeriesPruneEnabled), "bool", false},
+		"scheduled_series_prune_interval":               {strconv.Itoa(AppConfig.ScheduledSeriesPruneInterval), "int", false},
+		"scheduled_series_prune_on_startup":             {strconv.FormatBool(AppConfig.ScheduledSeriesPruneOnStartup), "bool", false},
 	}
 
 	saved := 0
