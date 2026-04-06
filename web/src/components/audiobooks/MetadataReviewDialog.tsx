@@ -82,8 +82,14 @@ export function MetadataReviewDialog({
     api
       .getOperationResults(operationId)
       .then((data) => {
-        setResults(data.results || []);
-        setSummary(data.summary);
+        const results = data.results || [];
+        setResults(results);
+        setSummary({
+          matched: data.matched ?? results.filter((r: api.CandidateResult) => r.status === 'matched').length,
+          no_match: data.no_match ?? results.filter((r: api.CandidateResult) => r.status === 'no_match').length,
+          errors: data.errors ?? results.filter((r: api.CandidateResult) => r.status === 'error').length,
+          total: data.total ?? results.length,
+        });
         setLoading(false);
       })
       .catch(() => setLoading(false));

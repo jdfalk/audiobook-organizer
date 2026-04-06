@@ -2622,7 +2622,10 @@ export interface CandidateResult {
 
 export interface BatchFetchResponse {
   results: CandidateResult[];
-  summary: { matched: number; no_match: number; errors: number; total: number };
+  matched: number;
+  no_match: number;
+  errors: number;
+  total: number;
 }
 
 export async function batchFetchCandidates(bookIds: string[]): Promise<{ operation_id: string }> {

@@ -1707,20 +1707,7 @@ export const Library = () => {
         {hasSelection ? (
           /* Batch actions mode */
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={allOnPageSelected}
-                  indeterminate={someOnPageSelected && !allOnPageSelected}
-                  onChange={handleToggleSelectAllOnPage}
-                  size="small"
-                />
-              }
-              label={<Typography variant="body2">Select All</Typography>}
-            />
-            <Chip label={`${selectedAudiobooks.length} selected`} size="small" />
-            <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
-            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24, mx: 0.5 }} />
+            <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
             <Button size="small" variant="outlined" onClick={() => setBatchEditOpen(true)} disabled={!hasSelection}>Batch Edit</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkFetchDialogOpen(true)} disabled={!hasSelection}>Fetch Metadata</Button>
@@ -1922,6 +1909,27 @@ export const Library = () => {
                   <InfoIcon />
                 </IconButton>
               </Tooltip>
+            </Stack>
+
+            {/* Select All bar — always visible */}
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={allOnPageSelected}
+                    indeterminate={someOnPageSelected && !allOnPageSelected}
+                    onChange={handleToggleSelectAllOnPage}
+                    size="small"
+                  />
+                }
+                label={<Typography variant="body2" color="text.secondary">Select All</Typography>}
+              />
+              {hasSelection && (
+                <>
+                  <Chip label={`${selectedAudiobooks.length} selected`} size="small" />
+                  <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
+                </>
+              )}
             </Stack>
 
             <Paper sx={{ p: 2, display: 'none' }}>
