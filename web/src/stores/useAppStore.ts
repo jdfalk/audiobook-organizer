@@ -29,6 +29,7 @@ interface Notification {
   message: string;
   severity: 'success' | 'error' | 'warning' | 'info';
   timestamp: number;
+  action?: { label: string; onClick: () => void };
 }
 
 interface AppState {
@@ -45,7 +46,8 @@ interface AppState {
   notifications: Notification[];
   addNotification: (
     message: string,
-    severity: Notification['severity']
+    severity: Notification['severity'],
+    action?: { label: string; onClick: () => void }
   ) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -78,12 +80,12 @@ export const useAppStore = create<AppState>()(
 
       // Notifications
       notifications: [],
-      addNotification: (message, severity) => {
+      addNotification: (message, severity, action) => {
         const id = `${Date.now()}-${Math.random()}`;
         set((state) => ({
           notifications: [
             ...state.notifications,
-            { id, message, severity, timestamp: Date.now() },
+            { id, message, severity, timestamp: Date.now(), action },
           ],
         }));
         // Auto-remove success/info after 5 seconds; error/warning persist

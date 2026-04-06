@@ -37,7 +37,7 @@ interface MetadataSearchDialogProps {
   book: Book;
   onClose: () => void;
   onApplied: (updatedBook: Book) => void;
-  toast: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
+  toast: (message: string, severity?: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
 }
 
 const FIELD_OPTIONS = [
@@ -157,11 +157,20 @@ export function MetadataSearchDialog({
 
   const handleApplyAll = async (candidate: MetadataCandidate) => {
     setApplying(true);
+    const bookId = book.id;
     try {
-      const resp = await api.applyMetadataCandidate(book.id, candidate, undefined, writeToFiles);
-      toast(`Metadata applied from ${resp.source}`, 'success');
+      const resp = await api.applyMetadataCandidate(bookId, candidate, undefined, writeToFiles);
       onApplied(resp.book);
       onClose();
+      toast(`Metadata applied from ${resp.source}`, 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.undoLastApply(bookId);
+            toast('Metadata apply undone', 'info');
+          } catch { /* ignore */ }
+        },
+      });
     } catch (err) {
       toast(
         err instanceof Error ? err.message : 'Failed to apply metadata',
@@ -178,16 +187,25 @@ export function MetadataSearchDialog({
       return;
     }
     setApplying(true);
+    const bookId = book.id;
     try {
       const resp = await api.applyMetadataCandidate(
-        book.id,
+        bookId,
         candidate,
         Array.from(selectedFields),
         writeToFiles
       );
-      toast(`Selected fields applied from ${resp.source}`, 'success');
       onApplied(resp.book);
       onClose();
+      toast(`Selected fields applied from ${resp.source}`, 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.undoLastApply(bookId);
+            toast('Metadata apply undone', 'info');
+          } catch { /* ignore */ }
+        },
+      });
     } catch (err) {
       toast(
         err instanceof Error ? err.message : 'Failed to apply metadata',
