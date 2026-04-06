@@ -43,7 +43,7 @@ interface BulkMetadataSearchDialogProps {
   books: Audiobook[];
   onClose: () => void;
   onComplete: () => void;
-  toast: (message: string, severity?: 'success' | 'error' | 'warning' | 'info') => void;
+  toast: (message: string, severity?: 'success' | 'error' | 'warning' | 'info', action?: { label: string; onClick: () => void }) => void;
 }
 
 const FIELD_OPTIONS = [
@@ -146,10 +146,21 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
 
   const handleApplyAll = async (candidate: MetadataCandidate) => {
     setApplying(true);
+    const bookId = currentBook.id;
+    const bookTitle = currentBook.title;
     try {
-      await api.applyMetadataCandidate(currentBook.id, candidate, undefined, writeToFiles);
-      toast(`Applied metadata to "${currentBook.title}" from ${candidate.source}`, 'success');
-      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'applied'));
+      await api.applyMetadataCandidate(bookId, candidate, undefined, writeToFiles);
+      toast(`Applied metadata to "${bookTitle}" from ${candidate.source}`, 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.undoLastApply(bookId);
+            toast(`Undid metadata apply for "${bookTitle}"`, 'info');
+            setBookStatuses((prev) => new Map(prev).set(bookId, 'pending'));
+          } catch { /* ignore */ }
+        },
+      });
+      setBookStatuses((prev) => new Map(prev).set(bookId, 'applied'));
       advanceToNext();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to apply metadata', 'error');
@@ -164,10 +175,21 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
       return;
     }
     setApplying(true);
+    const bookId = currentBook.id;
+    const bookTitle = currentBook.title;
     try {
-      await api.applyMetadataCandidate(currentBook.id, candidate, Array.from(selectedFields), writeToFiles);
-      toast(`Applied selected fields to "${currentBook.title}"`, 'success');
-      setBookStatuses((prev) => new Map(prev).set(currentBook.id, 'applied'));
+      await api.applyMetadataCandidate(bookId, candidate, Array.from(selectedFields), writeToFiles);
+      toast(`Applied selected fields to "${bookTitle}"`, 'success', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.undoLastApply(bookId);
+            toast(`Undid metadata apply for "${bookTitle}"`, 'info');
+            setBookStatuses((prev) => new Map(prev).set(bookId, 'pending'));
+          } catch { /* ignore */ }
+        },
+      });
+      setBookStatuses((prev) => new Map(prev).set(bookId, 'applied'));
       advanceToNext();
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to apply metadata', 'error');

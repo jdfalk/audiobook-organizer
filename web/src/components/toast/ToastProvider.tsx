@@ -3,13 +3,14 @@
 // guid: 21680277-8dde-49a7-b06e-e4d2de977e04
 
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
-import { Alert, Snackbar, Stack } from '@mui/material';
+import { Alert, Button, Snackbar, Stack } from '@mui/material';
 import { useAppStore } from '../../stores/useAppStore';
 
 type ToastSeverity = 'success' | 'error' | 'warning' | 'info';
+type ToastAction = { label: string; onClick: () => void };
 
 interface ToastContextType {
-  toast: (message: string, severity?: ToastSeverity) => void;
+  toast: (message: string, severity?: ToastSeverity, action?: ToastAction) => void;
 }
 
 const ToastContext = createContext<ToastContextType>({
@@ -32,8 +33,8 @@ export function ToastProvider({ children }: ToastProviderProps): JSX.Element {
   const removeNotification = useAppStore((state) => state.removeNotification);
 
   const toast = useCallback(
-    (message: string, severity: ToastSeverity = 'info') => {
-      addNotification(message, severity);
+    (message: string, severity: ToastSeverity = 'info', action?: ToastAction) => {
+      addNotification(message, severity, action);
     },
     [addNotification]
   );
@@ -58,6 +59,19 @@ export function ToastProvider({ children }: ToastProviderProps): JSX.Element {
               onClose={() => removeNotification(notification.id)}
               variant="filled"
               sx={{ width: '100%', minWidth: 280, maxWidth: 420 }}
+              action={notification.action ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    notification.action!.onClick();
+                    removeNotification(notification.id);
+                  }}
+                  sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                >
+                  {notification.action.label}
+                </Button>
+              ) : undefined}
             >
               {notification.message}
             </Alert>
