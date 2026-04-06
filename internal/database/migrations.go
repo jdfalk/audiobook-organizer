@@ -304,6 +304,12 @@ var migrations = []Migration{
 		Up:          migration044Up,
 		Down:        nil,
 	},
+	{
+		Version:     45,
+		Description: "Add operation_results table for structured operation output",
+		Up:          migration045Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2292,5 +2298,32 @@ func migration044Up(store Store) error {
 		log.Printf("  - [WARN] migration 44 backfill: %v (continuing)", err)
 	}
 	log.Println("  - Added provenance and removed_at to external_id_map")
+	return nil
+}
+
+// migration045Up creates the operation_results table for structured per-book operation output.
+func migration045Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS operation_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            operation_id TEXT NOT NULL,
+            book_id TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'matched',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+		`CREATE INDEX IF NOT EXISTS idx_op_results_op ON operation_results(operation_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_op_results_book ON operation_results(operation_id, book_id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 45: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created operation_results table")
 	return nil
 }

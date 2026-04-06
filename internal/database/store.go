@@ -166,6 +166,11 @@ type Store interface {
 	GetOperationSummaryLog(id string) (*OperationSummaryLog, error)
 	ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error)
 
+	// Operation Results (structured per-book output)
+	CreateOperationResult(result *OperationResult) error
+	GetOperationResults(operationID string) ([]OperationResult, error)
+	GetRecentCompletedOperations(limit int) ([]Operation, error)
+
 	// System activity log
 	AddSystemActivityLog(source, level, message string) error
 	GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error)
@@ -557,6 +562,16 @@ type OperationSummaryLog struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+// OperationResult holds structured per-book output for a bulk operation.
+type OperationResult struct {
+	ID          int       `json:"id"`
+	OperationID string    `json:"operation_id"`
+	BookID      string    `json:"book_id"`
+	ResultJSON  string    `json:"result_json"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // UserPreference represents a user preference setting

@@ -375,6 +375,14 @@ func (s *stubStore) GetRemovedExternalIDs(source string) ([]database.ExternalIDM
 	return nil, nil
 }
 
+func (s *stubStore) CreateOperationResult(result *database.OperationResult) error { return nil }
+func (s *stubStore) GetOperationResults(operationID string) ([]database.OperationResult, error) {
+	return nil, nil
+}
+func (s *stubStore) GetRecentCompletedOperations(limit int) ([]database.Operation, error) {
+	return nil, nil
+}
+
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
 
