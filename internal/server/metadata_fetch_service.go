@@ -1879,39 +1879,47 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 		log.Printf("[WARN] generate segment titles failed for %s: %v", id, err)
 	}
 
+	// Download cover art (fast network fetch + file write — keep inline so
+	// the response includes the updated cover_url for the UI).
+	if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
+		coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
+		if coverErr != nil {
+			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
+		} else {
+			log.Printf("[INFO] cover art saved to %s", coverPath)
+			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
+			if updatedBook != nil {
+				updatedBook.CoverURL = &localCoverURL
+				mfs.db.UpdateBook(id, updatedBook)
+			}
+		}
+	}
+
 	// Queue background ISBN/ASIN enrichment if identifiers are missing
 	if updatedBook != nil {
 		mfs.queueISBNEnrichment(id, updatedBook)
 	}
 
 	return &FetchMetadataResponse{
-		Message:         "metadata candidate applied",
-		Book:            updatedBook,
-		Source:          candidate.Source,
-		PendingCoverURL: meta.CoverURL,
+		Message: "metadata candidate applied",
+		Book:    updatedBook,
+		Source:  candidate.Source,
 	}, nil
 }
 
 // ApplyMetadataFileIO runs the slow file operations after metadata is applied:
-// cover download + embed, tag write-back, file rename. Designed to run in background.
-func (mfs *MetadataFetchService) ApplyMetadataFileIO(id string, coverURL string) {
+// cover embed, tag write-back, file rename. Cover download is done inline
+// in ApplyMetadataCandidate so the response includes the updated cover URL.
+// Designed to run in a background goroutine.
+func (mfs *MetadataFetchService) ApplyMetadataFileIO(id string) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return
 	}
 
-	// Download and embed cover art
-	if coverURL != "" && config.AppConfig.RootDir != "" {
-		coverPath, coverErr := metadata.DownloadCoverArt(coverURL, config.AppConfig.RootDir, id)
-		if coverErr != nil {
-			log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
-		} else {
-			log.Printf("[INFO] cover art saved to %s", coverPath)
-			localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
-			book.CoverURL = &localCoverURL
-			mfs.db.UpdateBook(id, book)
-			mfs.embedCoverInBookFiles(book, coverPath)
-		}
+	// Embed cover art into audio files (slow: ffmpeg)
+	if config.AppConfig.RootDir != "" {
+		mfs.embedCoverInBookFiles(book, metadata.CoverPathForBook(config.AppConfig.RootDir, id))
 	}
 
 	// Run file rename + tag write pipeline
