@@ -324,15 +324,11 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
                 {currentBook.narrator ? ` — Narrated by ${currentBook.narrator}` : ''}
               </Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                {currentBook.duration_seconds != null && currentBook.duration_seconds > 0 && (
-                  <Chip
-                    label={formatDuration(currentBook.duration_seconds)}
-                    size="small"
-                    variant="outlined"
-                  />
-                )}
                 {currentBook.format && (
-                  <Chip label={currentBook.format.toUpperCase()} size="small" variant="outlined" />
+                  <Chip label={currentBook.format.toUpperCase()} size="small" color="primary" variant="outlined" />
+                )}
+                {currentBook.duration_seconds != null && currentBook.duration_seconds > 0 && (
+                  <Chip label={formatDuration(currentBook.duration_seconds)} size="small" variant="outlined" />
                 )}
                 {currentBook.series && (
                   <Chip
@@ -345,13 +341,28 @@ export function BulkMetadataSearchDialog({ open, books, onClose, onComplete, toa
                 {currentBook.file_size_bytes != null && currentBook.file_size_bytes > 0 && (
                   <Chip label={formatFileSize(currentBook.file_size_bytes)} size="small" variant="outlined" />
                 )}
+                {currentBook.cover_url ? (
+                  <Chip label="Has Cover" size="small" color="success" variant="outlined" />
+                ) : (
+                  <Chip label="No Cover" size="small" color="warning" variant="outlined" />
+                )}
                 {currentBook.language && (
                   <Chip label={currentBook.language} size="small" variant="outlined" />
                 )}
               </Stack>
               {currentBook.file_path && (
-                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', mt: 0.5 }}>
-                  {currentBook.file_path.split('/').slice(-2).join('/')}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all' }}>
+                  File: {currentBook.file_path}
+                </Typography>
+              )}
+              {currentBook.original_filename && currentBook.original_filename !== currentBook.file_path?.split('/').pop() && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', wordBreak: 'break-all' }}>
+                  Original: {currentBook.original_filename}
+                </Typography>
+              )}
+              {currentBook.itunes_path && (
+                <Typography variant="caption" color="info.main" sx={{ display: 'block', wordBreak: 'break-all' }}>
+                  iTunes: {currentBook.itunes_path}
                 </Typography>
               )}
             </Box>

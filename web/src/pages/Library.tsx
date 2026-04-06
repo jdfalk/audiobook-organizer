@@ -124,6 +124,7 @@ const convertApiBook = (book: api.Book): Audiobook => ({
   cover_url: book.cover_url,
   file_path: book.file_path,
   original_filename: book.original_filename,
+  itunes_path: book.itunes_path,
   format: book.format || book.file_path.split('.').pop()?.toUpperCase() || 'Unknown',
   file_size_bytes: book.file_size,
   quality: book.quality,
