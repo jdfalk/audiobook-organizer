@@ -1,5 +1,5 @@
 // file: internal/server/config_update_service.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
@@ -82,22 +82,23 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 
 	// --- String fields ---
 	stringFields := map[string]*string{
-		"database_path":         &config.AppConfig.DatabasePath,
-		"playlist_dir":          &config.AppConfig.PlaylistDir,
-		"organization_strategy": &config.AppConfig.OrganizationStrategy,
-		"folder_naming_pattern": &config.AppConfig.FolderNamingPattern,
-		"file_naming_pattern":   &config.AppConfig.FileNamingPattern,
-		"language":              &config.AppConfig.Language,
-		"log_level":             &config.AppConfig.LogLevel,
-		"openlibrary_dump_dir":  &config.AppConfig.OpenLibraryDumpDir,
-		"hardcover_api_token":   &config.AppConfig.HardcoverAPIToken,
-		"google_books_api_key":  &config.AppConfig.GoogleBooksAPIKey,
-		"memory_limit_type":     &config.AppConfig.MemoryLimitType,
-		"basic_auth_username":   &config.AppConfig.BasicAuthUsername,
-		"basic_auth_password":   &config.AppConfig.BasicAuthPassword,
-		"auto_update_channel":      &config.AppConfig.AutoUpdateChannel,
-		"itunes_library_write_path": &config.AppConfig.ITunesLibraryWritePath,
-		"itunes_library_read_path":  &config.AppConfig.ITunesLibraryReadPath,
+		"database_path":                &config.AppConfig.DatabasePath,
+		"playlist_dir":                 &config.AppConfig.PlaylistDir,
+		"organization_strategy":        &config.AppConfig.OrganizationStrategy,
+		"folder_naming_pattern":        &config.AppConfig.FolderNamingPattern,
+		"file_naming_pattern":          &config.AppConfig.FileNamingPattern,
+		"language":                     &config.AppConfig.Language,
+		"metadata_review_default_view": &config.AppConfig.MetadataReviewDefaultView,
+		"log_level":                    &config.AppConfig.LogLevel,
+		"openlibrary_dump_dir":         &config.AppConfig.OpenLibraryDumpDir,
+		"hardcover_api_token":          &config.AppConfig.HardcoverAPIToken,
+		"google_books_api_key":         &config.AppConfig.GoogleBooksAPIKey,
+		"memory_limit_type":            &config.AppConfig.MemoryLimitType,
+		"basic_auth_username":          &config.AppConfig.BasicAuthUsername,
+		"basic_auth_password":          &config.AppConfig.BasicAuthPassword,
+		"auto_update_channel":          &config.AppConfig.AutoUpdateChannel,
+		"itunes_library_write_path":    &config.AppConfig.ITunesLibraryWritePath,
+		"itunes_library_read_path":     &config.AppConfig.ITunesLibraryReadPath,
 	}
 	for key, ptr := range stringFields {
 		if val, ok := util.ExtractStringField(payload, key); ok {
@@ -130,15 +131,15 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	// --- Bool fields ---
 	boolFields := map[string]*bool{
 		"setup_complete":           &config.AppConfig.SetupComplete,
-		"scan_on_startup":         &config.AppConfig.ScanOnStartup,
-		"auto_organize":           &config.AppConfig.AutoOrganize,
-		"auto_scan_enabled":       &config.AppConfig.AutoScanEnabled,
-		"create_backups":          &config.AppConfig.CreateBackups,
-		"enable_disk_quota":       &config.AppConfig.EnableDiskQuota,
-		"enable_user_quotas":      &config.AppConfig.EnableUserQuotas,
-		"enable_ai_parsing":       &config.AppConfig.EnableAIParsing,
-		"enable_auth":             &config.AppConfig.EnableAuth,
-		"basic_auth_enabled":      &config.AppConfig.BasicAuthEnabled,
+		"scan_on_startup":          &config.AppConfig.ScanOnStartup,
+		"auto_organize":            &config.AppConfig.AutoOrganize,
+		"auto_scan_enabled":        &config.AppConfig.AutoScanEnabled,
+		"create_backups":           &config.AppConfig.CreateBackups,
+		"enable_disk_quota":        &config.AppConfig.EnableDiskQuota,
+		"enable_user_quotas":       &config.AppConfig.EnableUserQuotas,
+		"enable_ai_parsing":        &config.AppConfig.EnableAIParsing,
+		"enable_auth":              &config.AppConfig.EnableAuth,
+		"basic_auth_enabled":       &config.AppConfig.BasicAuthEnabled,
 		"auto_fetch_metadata":      &config.AppConfig.AutoFetchMetadata,
 		"write_back_metadata":      &config.AppConfig.WriteBackMetadata,
 		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,
