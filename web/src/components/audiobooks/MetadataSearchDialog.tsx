@@ -100,6 +100,8 @@ export function MetadataSearchDialog({
   const [sourcesTried, setSourcesTried] = useState<string[]>([]);
   const [sourcesFailed, setSourcesFailed] = useState<Record<string, string>>({});
   const [previewCover, setPreviewCover] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [sortResults, setSortResults] = useState<'score' | 'source'>('score');
   const [writeToFiles, setWriteToFiles] = useState(true);
 
   // Auto-populate query and search on open
@@ -406,8 +408,43 @@ export function MetadataSearchDialog({
           </Box>
         )}
 
+        {/* Source filter + sort */}
+        {!loading && results.length > 0 && (() => {
+          const sources = Array.from(new Set(results.map((r) => r.source)));
+          return (
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap">
+              <Chip
+                label="All"
+                size="small"
+                variant={sourceFilter === null ? 'filled' : 'outlined'}
+                onClick={() => setSourceFilter(null)}
+              />
+              {sources.map((src) => (
+                <Chip
+                  key={src}
+                  label={`${src} (${results.filter((r) => r.source === src).length})`}
+                  size="small"
+                  color={SOURCE_COLORS[src] || 'default'}
+                  variant={sourceFilter === src ? 'filled' : 'outlined'}
+                  onClick={() => setSourceFilter(sourceFilter === src ? null : src)}
+                />
+              ))}
+              <Box sx={{ flex: 1 }} />
+              <Chip
+                label={sortResults === 'score' ? 'Sort: Score' : 'Sort: Source'}
+                size="small"
+                variant="outlined"
+                onClick={() => setSortResults(sortResults === 'score' ? 'source' : 'score')}
+              />
+            </Stack>
+          );
+        })()}
+
         <Stack spacing={2}>
-          {results.map((candidate, idx) => (
+          {results
+            .filter((c) => !sourceFilter || c.source === sourceFilter)
+            .sort((a, b) => sortResults === 'source' ? a.source.localeCompare(b.source) : b.score - a.score)
+            .map((candidate, idx) => (
             <Box
               key={idx}
               sx={{
