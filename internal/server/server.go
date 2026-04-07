@@ -751,7 +751,7 @@ func NewServer() *Server {
 		dashboardService:       NewDashboardService(database.GlobalStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
-		listCache:              cache.New[gin.H](10 * time.Second),
+		listCache:              cache.New[gin.H](30 * time.Second),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           NewMergeService(database.GlobalStore),
@@ -2445,6 +2445,7 @@ func (s *Server) serveAudiobookCover(c *gin.Context) {
 
 func (s *Server) getAudiobook(c *gin.Context) {
 	id := c.Param("id")
+
 	book, err := s.audiobookService.GetAudiobook(c.Request.Context(), id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -7290,11 +7291,22 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		Series   string `json:"series"`
 	}
 	_ = c.ShouldBindJSON(&body)
+
+	// Cache metadata search results for 60s — external API calls are expensive
+	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s", id, body.Query, body.Author, body.Narrator, body.Series)
+	if cached, ok := s.listCache.Get(cacheKey); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	resp, err := s.metadataFetchService.SearchMetadataForBook(id, body.Query, body.Author, body.Narrator, body.Series)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+	// Cache as gin.H wrapper
+	respH := gin.H{"results": resp.Results, "query": resp.Query, "sources_tried": resp.SourcesTried, "sources_failed": resp.SourcesFailed}
+	s.listCache.Set(cacheKey, respH)
 	c.JSON(http.StatusOK, resp)
 }
 
