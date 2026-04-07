@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Dialog,
   FormControlLabel,
+  Pagination,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -78,6 +79,8 @@ export function MetadataReviewDialog({
   const [applying, setApplying] = useState(false);
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
   const [previewCover, setPreviewCover] = useState<string | null>(null);
+  const [reviewPage, setReviewPage] = useState(1);
+  const reviewPageSize = 25;
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
@@ -155,6 +158,9 @@ export function MetadataReviewDialog({
     .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
     .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected')
     .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'));
+
+  // Reset page when filters change
+  useEffect(() => { setReviewPage(1); }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch]);
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -719,16 +725,29 @@ export function MetadataReviewDialog({
               </Button>
             </Stack>
 
-            {/* Results list */}
+            {/* Results list (paginated) */}
+            {filteredResults.length > 0 && (
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Showing {Math.min((reviewPage - 1) * reviewPageSize + 1, filteredResults.length)}-{Math.min(reviewPage * reviewPageSize, filteredResults.length)} of {filteredResults.length}
+                </Typography>
+                <Pagination
+                  count={Math.ceil(filteredResults.length / reviewPageSize)}
+                  page={reviewPage}
+                  onChange={(_, p) => setReviewPage(p)}
+                  size="small"
+                />
+              </Stack>
+            )}
             <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
               {filteredResults.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
                   No results match current filters
                 </Typography>
               ) : viewMode === 'compact' ? (
-                filteredResults.map(renderCompactRow)
+                filteredResults.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize).map(renderCompactRow)
               ) : (
-                filteredResults.map(renderTwoColumnCard)
+                filteredResults.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize).map(renderTwoColumnCard)
               )}
             </Box>
           </>
