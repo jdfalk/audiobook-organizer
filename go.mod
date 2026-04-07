@@ -8,7 +8,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/lithammer/fuzzysearch v1.1.8
-	github.com/mattn/go-sqlite3 v1.14.38
+	github.com/mattn/go-sqlite3 v1.14.41
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.2
