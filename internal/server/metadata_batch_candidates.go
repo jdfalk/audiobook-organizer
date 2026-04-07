@@ -371,6 +371,58 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 	})
 }
 
+// handleRejectCandidates stores rejected candidates so future fetches exclude them.
+// The rejection is stored as an operation_result with status "rejected".
+func (s *Server) handleRejectCandidates(c *gin.Context) {
+	var req struct {
+		OperationID string   `json:"operation_id" binding:"required"`
+		BookIDs     []string `json:"book_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	store := database.GlobalStore
+
+	// For each book, update the stored result status to "rejected"
+	results, err := store.GetOperationResults(req.OperationID)
+	if err != nil {
+		internalError(c, "failed to load results", err)
+		return
+	}
+
+	rejectSet := make(map[string]bool, len(req.BookIDs))
+	for _, id := range req.BookIDs {
+		rejectSet[id] = true
+	}
+
+	rejected := 0
+	for _, r := range results {
+		if !rejectSet[r.BookID] {
+			continue
+		}
+		// Update the result JSON to set status to rejected
+		var cr CandidateResult
+		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
+			continue
+		}
+		cr.Status = "rejected"
+		updatedJSON, _ := json.Marshal(cr)
+
+		// Store as a new result with rejected status (overwrites by key in PebbleDB)
+		_ = store.CreateOperationResult(&database.OperationResult{
+			OperationID: req.OperationID,
+			BookID:      r.BookID,
+			ResultJSON:  string(updatedJSON),
+			Status:      "rejected",
+		})
+		rejected++
+	}
+
+	c.JSON(http.StatusOK, gin.H{"rejected": rejected})
+}
+
 // handleGetRecentOperations returns the last 10 completed metadata_candidate_fetch operations.
 func (s *Server) handleGetRecentOperations(c *gin.Context) {
 	store := database.GlobalStore

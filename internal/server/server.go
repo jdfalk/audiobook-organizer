@@ -1606,6 +1606,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
 			protected.POST("/metadata/batch-fetch-candidates", s.handleBatchFetchCandidates)
 			protected.POST("/metadata/batch-apply-candidates", s.handleBatchApplyCandidates)
+			protected.POST("/metadata/batch-reject-candidates", s.handleRejectCandidates)
 			protected.POST("/audiobooks/:id/fetch-metadata", s.fetchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/search-metadata", s.searchAudiobookMetadata)
 			protected.POST("/audiobooks/:id/apply-metadata", s.applyAudiobookMetadata)
