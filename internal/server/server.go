@@ -3603,8 +3603,9 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 
 func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	var req struct {
-		BookIDs []string `json:"book_ids"`
-		Rename  bool     `json:"rename"`
+		BookIDs  []string `json:"book_ids"`
+		Rename   bool     `json:"rename"`   // legacy — treated same as organize
+		Organize bool     `json:"organize"` // organize files after writing tags
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -3615,6 +3616,8 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		return
 	}
 
+	doOrganize := req.Organize || req.Rename // backwards compatible
+
 	type batchWriteBackError struct {
 		BookID string `json:"book_id"`
 		Error  string `json:"error"`
@@ -3622,9 +3625,12 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 
 	written := 0
 	writtenFiles := 0
-	renamed := 0
+	organized := 0
 	failed := 0
 	errors := make([]batchWriteBackError, 0)
+
+	org := organizer.NewOrganizer(&config.AppConfig)
+	log2 := logger.NewWithActivityLog("batch-write-back", database.GlobalStore)
 
 	for _, id := range req.BookIDs {
 		book, err := database.GlobalStore.GetBookByID(id)
@@ -3632,14 +3638,6 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 			failed++
 			errors = append(errors, batchWriteBackError{BookID: id, Error: "audiobook not found"})
 			continue
-		}
-
-		if req.Rename {
-			if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
-				errors = append(errors, batchWriteBackError{BookID: id, Error: fmt.Sprintf("rename failed: %v", err)})
-			} else {
-				renamed++
-			}
 		}
 
 		count, err := s.metadataFetchService.WriteBackMetadataForBook(id)
@@ -3651,12 +3649,47 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 
 		written++
 		writtenFiles += count
+
+		// Organize after writing tags
+		if doOrganize {
+			// Re-fetch book to get updated metadata
+			book, err = database.GlobalStore.GetBookByID(id)
+			if err != nil || book == nil {
+				continue
+			}
+			oldPath := book.FilePath
+			alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
+
+			var newPath string
+			var orgErr error
+			if alreadyInRoot {
+				newPath, orgErr = s.organizeService.reOrganizeInPlace(book, log2)
+			} else {
+				bookFiles, _ := database.GlobalStore.GetBookFiles(id)
+				isDir := len(bookFiles) > 1
+				if !isDir {
+					if info, statErr := os.Stat(oldPath); statErr == nil && info.IsDir() {
+						isDir = true
+					}
+				}
+				if isDir {
+					newPath, orgErr = s.organizeService.organizeDirectoryBook(org, book, log2)
+				} else {
+					newPath, _, orgErr = org.OrganizeBook(book)
+				}
+			}
+			if orgErr != nil {
+				errors = append(errors, batchWriteBackError{BookID: id, Error: fmt.Sprintf("organize failed: %v", orgErr)})
+			} else if newPath != "" && newPath != oldPath {
+				organized++
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"written":       written,
 		"written_files": writtenFiles,
-		"renamed":       renamed,
+		"organized":     organized,
 		"failed":        failed,
 		"errors":        errors,
 	})

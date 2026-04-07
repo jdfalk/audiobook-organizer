@@ -1206,7 +1206,7 @@ export const Library = () => {
       if (result.failed > 0) {
         toast(`Saved ${result.written} books to files, ${result.failed} failed.`, 'warning');
       } else {
-        const renameNote = result.renamed > 0 ? ` and renamed ${result.renamed}` : '';
+        const renameNote = (result.organized || result.renamed) > 0 ? ` and organized ${result.organized || result.renamed}` : '';
         toast(`Saved ${result.written} books to files${renameNote}.`, 'success');
         setSelectedAudiobooks([]);
       }
@@ -2553,7 +2553,7 @@ export const Library = () => {
                   disabled={bulkWriteBackInProgress}
                 />
               }
-              label="Rename files after write-back"
+              label="Organize files after write"
             />
             {bulkWriteBackResult && (
               <Box sx={{ mt: 2 }}>
@@ -2620,7 +2620,7 @@ export const Library = () => {
                   disabled={bulkSaveAllStarting}
                 />
               }
-              label="Rename files after write-back"
+              label="Organize files after write"
             />
           </DialogContent>
           <DialogActions>
