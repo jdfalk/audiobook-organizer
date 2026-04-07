@@ -59,7 +59,7 @@ const openSettings = async (
 };
 
 test.describe('Settings Configuration', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Note: beforeEach doesn't do setup here
     // Each test calls openSettings() which handles all mock setup
     // This prevents conflicts between Phase 1 (real API) and Phase 2 (mocked API)

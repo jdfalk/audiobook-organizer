@@ -19,7 +19,7 @@ const openLibrary = async (
 };
 
 test.describe('Error Handling', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openLibrary() which calls setupMockApi()
   });
 

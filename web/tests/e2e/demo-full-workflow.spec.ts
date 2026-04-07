@@ -143,7 +143,7 @@ test.describe('Full End-to-End Demo Workflow', () => {
               await page.waitForTimeout(1000);
             }
           }
-        } catch (e) {
+        } catch (_e) {
           console.log('⚠ Import path setup skipped');
         }
       }

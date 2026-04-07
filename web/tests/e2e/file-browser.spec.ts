@@ -97,7 +97,7 @@ const openImportFileBrowser = async (page: Page) => {
 };
 
 test.describe('File Browser', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 
@@ -170,7 +170,7 @@ test.describe('File Browser', () => {
     await page.getByRole('listitem').filter({ hasText: 'temp' }).click({ button: 'right' });
     // Context menu may show "Exclude" or "Include" depending on current state
     const excludeItem = page.getByRole('menuitem', { name: 'Exclude from scan' });
-    const includeItem = page.getByRole('menuitem', { name: 'Include in scan' });
+    const _includeItem = page.getByRole('menuitem', { name: 'Include in scan' });
     if (await excludeItem.isVisible()) {
       await excludeItem.click();
       await expect(page.getByText('Folder excluded from scan.')).toBeVisible();

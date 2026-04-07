@@ -23,7 +23,7 @@ const openBookDetail = async (page: Page, books: Record<string, unknown>[]) => {
 };
 
 test.describe('Version Management', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openBookDetail() which calls setupMockApi()
   });
 

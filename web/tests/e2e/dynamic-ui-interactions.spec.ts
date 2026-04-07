@@ -8,7 +8,7 @@
  * Tests the Sonarr/Radarr-style button spinners and smooth updates
  */
 
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { setupMockApi, generateTestBooks } from './utils/test-helpers';
 
 test.describe('Dynamic UI - BookDetail Page', () => {

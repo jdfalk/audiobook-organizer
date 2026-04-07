@@ -1645,10 +1645,10 @@ export async function setupMockApiLegacy(
       let importPaths = [...importPathsData];
       let backups = [...backupsData];
       let blockedHashes = [...blockedHashesData];
-      let filesystem = { ...filesystemData };
+      const filesystem = { ...filesystemData };
       let activeOperations = [...(operationsData.active || [])];
       let historyOperations = [...(operationsData.history || [])];
-      let operationLogs = { ...(operationsData.logs || {}) };
+      const operationLogs = { ...(operationsData.logs || {}) };
       const defaultITunesValidation: MockITunesValidation = {
         total_tracks: 120,
         audiobook_tracks: 12,
