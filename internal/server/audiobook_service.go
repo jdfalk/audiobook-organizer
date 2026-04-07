@@ -364,6 +364,18 @@ func fieldMatchesValue(book database.Book, field, value string) bool {
 		} else {
 			bookValue = "no"
 		}
+	case "has_written":
+		if book.LastWrittenAt != nil {
+			bookValue = "yes"
+		} else {
+			bookValue = "no"
+		}
+	case "has_organized":
+		if book.LastOrganizedAt != nil {
+			bookValue = "yes"
+		} else {
+			bookValue = "no"
+		}
 	case "itunes_sync_status":
 		bookValue = derefStr(book.ITunesSyncStatus)
 	// Aliases for frontend field names
