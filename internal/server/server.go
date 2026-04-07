@@ -3670,6 +3670,8 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 				continue
 			}
 			written++
+			// Stamp last_written_at on the book the user sees (may differ from library copy)
+			_ = store.SetLastWrittenAt(id, time.Now())
 
 			// Organize
 			if doOrganize {
