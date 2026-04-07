@@ -246,3 +246,6 @@ testdata/dedup-bench/
 
 # mTLS bridge certificates and config
 .mtls/
+
+# Static libraries for native taglib CGO build (built locally)
+third_party/taglib/lib/*.a

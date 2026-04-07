@@ -91,7 +91,7 @@ build-linux: web-build
 	@echo "🔨 Cross-compiling for Linux amd64..."
 	@mkdir -p dist
 	@CC=x86_64-linux-musl-gcc GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build \
-		-tags "embed_frontend fts5" \
+		-tags "embed_frontend fts5 native_taglib" \
 		-ldflags="-s -w -linkmode external -extldflags '-static' -X main.version=$(VERSION)" \
 		-o dist/audiobook-organizer-linux-amd64 .
 	@echo "✅ Built dist/audiobook-organizer-linux-amd64"
