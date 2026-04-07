@@ -146,7 +146,7 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
             height="240"
             image={audiobook.cover_url.startsWith('/api/') ? audiobook.cover_url : `/api/v1/covers/proxy?url=${encodeURIComponent(audiobook.cover_url)}`}
             alt={audiobook.title || 'Audiobook cover'}
-            sx={{ objectFit: 'cover' }}
+            sx={{ objectFit: 'contain', bgcolor: 'grey.900' }}
           />
         ) : (
           <Box
