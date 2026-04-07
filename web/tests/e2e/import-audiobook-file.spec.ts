@@ -128,7 +128,7 @@ const dialog = (page: Page) =>
   page.getByRole('dialog').filter({ hasText: 'Import Audiobook File' });
 
 test.describe('Import Audiobook File - Interactive Navigation', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 
@@ -382,7 +382,7 @@ test.describe('Import Audiobook File - Interactive Navigation', () => {
 });
 
 test.describe('Import Audiobook File - Error Handling', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openImportFileBrowser() which calls setupMockApi()
   });
 

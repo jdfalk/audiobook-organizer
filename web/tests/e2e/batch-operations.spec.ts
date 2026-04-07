@@ -268,7 +268,7 @@ test.describe('Batch Operations', () => {
 
     // Act
     await page
-      .locator('span[aria-label=\"Select books first\"]')
+      .locator('span[aria-label="Select books first"]')
       .filter({ hasText: 'Batch Edit' })
       .hover();
 

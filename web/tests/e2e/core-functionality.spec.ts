@@ -4,11 +4,7 @@
 // last-edited: 2026-02-06
 
 import { test, expect } from '@playwright/test';
-import {
-  setupPhase2Interactive,
-  generateTestBooks,
-  setupLibraryWithBooks,
-} from './utils/test-helpers';
+import { setupPhase2Interactive } from './utils/test-helpers';
 
 test.describe('Core Functionality', () => {
   test('app dashboard loads successfully', async ({ page }) => {

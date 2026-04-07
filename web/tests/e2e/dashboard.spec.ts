@@ -94,7 +94,7 @@ const openDashboard = async (page: Page) => {
 };
 
 test.describe('Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openDashboard() which calls setupMockApi()
   });
 

@@ -127,7 +127,7 @@ const openOperations = async (page: Page, seed?: Partial<OperationSeed>) => {
 };
 
 test.describe('Operation Monitoring', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Setup handled by openOperations() which calls setupMockApi()
   });
 

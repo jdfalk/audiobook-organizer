@@ -351,7 +351,7 @@ const setupRoutes = async (page: import('@playwright/test').Page) => {
 };
 
 test.describe('Book Detail page', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ _page }) => {
     // Each test calls setupRoutes which handles all setup including EventSource mocking
     // No setup needed here to avoid conflicts
   });
