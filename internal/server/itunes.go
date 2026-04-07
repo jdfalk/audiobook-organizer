@@ -55,13 +55,13 @@ type ITunesValidateResponse struct {
 
 // ITunesImportRequest represents a request to import an iTunes library.
 type ITunesImportRequest struct {
-	LibraryPath        string               `json:"library_path" binding:"required"`
-	ImportMode         string               `json:"import_mode" binding:"required,oneof=organized import organize"`
-	PreserveLocation   bool                 `json:"preserve_location"`
-	ImportPlaylists    bool                 `json:"import_playlists"`
-	SkipDuplicates     bool                 `json:"skip_duplicates"`
-	FetchMetadata      bool                 `json:"fetch_metadata"`
-	PathMappings       []itunes.PathMapping `json:"path_mappings,omitempty"`
+	LibraryPath      string               `json:"library_path" binding:"required"`
+	ImportMode       string               `json:"import_mode" binding:"required,oneof=organized import organize"`
+	PreserveLocation bool                 `json:"preserve_location"`
+	ImportPlaylists  bool                 `json:"import_playlists"`
+	SkipDuplicates   bool                 `json:"skip_duplicates"`
+	FetchMetadata    bool                 `json:"fetch_metadata"`
+	PathMappings     []itunes.PathMapping `json:"path_mappings,omitempty"`
 }
 
 // ITunesImportResponse acknowledges an iTunes import operation.
@@ -247,9 +247,9 @@ type ITunesTestMappingRequest struct {
 
 // ITunesTestMappingResponse returns sample results from testing a mapping.
 type ITunesTestMappingResponse struct {
-	Tested int                    `json:"tested"`
-	Found  int                    `json:"found"`
-	Examples []ITunesTestExample  `json:"examples"`
+	Tested   int                 `json:"tested"`
+	Found    int                 `json:"found"`
+	Examples []ITunesTestExample `json:"examples"`
 }
 
 // ITunesTestExample is a single found file example.
@@ -454,7 +454,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 // during reads).
 func collectITLUpdates(store database.Store) []itunes.ITLLocationUpdate {
 	const (
-		pageSize  = 10000
+		pageSize   = 10000
 		numWorkers = 4
 	)
 

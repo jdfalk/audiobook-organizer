@@ -212,7 +212,7 @@ func TestLogMetric(t *testing.T) {
 
 // TestLogDatabaseOperation tests that LogDatabaseOperation doesn't panic
 func TestLogDatabaseOperation(t *testing.T) {
-	LogDatabaseOperation("SELECT", "audiobooks", time.Millisecond*10, 5, nil) // Should not panic
+	LogDatabaseOperation("SELECT", "audiobooks", time.Millisecond*10, 5, nil)                     // Should not panic
 	LogDatabaseOperation("INSERT", "audiobooks", time.Millisecond*5, 0, errors.New("test error")) // Should not panic
 }
 
@@ -229,7 +229,7 @@ func TestLogServiceCacheMiss(t *testing.T) {
 // TestLogSlowQuery tests that LogSlowQuery doesn't panic
 func TestLogSlowQuery(t *testing.T) {
 	LogSlowQuery("SELECT * FROM audiobooks", time.Millisecond*10, time.Second) // Below threshold
-	LogSlowQuery("SELECT * FROM audiobooks", time.Second*2, time.Second) // Above threshold
+	LogSlowQuery("SELECT * FROM audiobooks", time.Second*2, time.Second)       // Above threshold
 }
 
 // TestLogValidationError tests that LogValidationError doesn't panic

@@ -17,18 +17,18 @@ func NewFilesystemService() *FilesystemService {
 }
 
 type FileInfo struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	IsDir   bool   `json:"is_dir"`
-	Size    int64  `json:"size,omitempty"`
-	ModTime int64  `json:"mod_time,omitempty"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	IsDir    bool   `json:"is_dir"`
+	Size     int64  `json:"size,omitempty"`
+	ModTime  int64  `json:"mod_time,omitempty"`
 	Excluded bool   `json:"excluded"`
 }
 
 type BrowseResult struct {
-	Path     string                 `json:"path"`
-	Items    []FileInfo             `json:"items"`
-	Count    int                    `json:"count"`
+	Path     string         `json:"path"`
+	Items    []FileInfo     `json:"items"`
+	Count    int            `json:"count"`
 	DiskInfo map[string]any `json:"disk_info"`
 }
 

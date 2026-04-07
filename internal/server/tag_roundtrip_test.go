@@ -23,22 +23,22 @@ func TestBuildFullTagMap_AllFields(t *testing.T) {
 	mfs := &MetadataFetchService{db: mockStore}
 
 	book := &database.Book{
-		ID:              "BOOK123",
-		Title:           "Return of the Archon",
-		SeriesID:        intPtr(42),
-		SeriesSequence:  intPtr(5),
-		Language:        stringPtr("english"),
-		Publisher:       stringPtr("Audible Studios"),
-		Description:     stringPtr("A great book"),
-		ISBN10:          stringPtr("1234567890"),
-		ISBN13:          stringPtr("9781234567890"),
-		ASIN:            stringPtr("B01635BIDS"),
-		OpenLibraryID:   stringPtr("OL12345M"),
-		HardcoverID:     stringPtr("HC789"),
-		GoogleBooksID:   stringPtr("GB456"),
-		Edition:         stringPtr("First"),
-		PrintYear:       intPtr(2015),
-		CoverURL:        stringPtr("https://example.com/cover.jpg"),
+		ID:             "BOOK123",
+		Title:          "Return of the Archon",
+		SeriesID:       intPtr(42),
+		SeriesSequence: intPtr(5),
+		Language:       stringPtr("english"),
+		Publisher:      stringPtr("Audible Studios"),
+		Description:    stringPtr("A great book"),
+		ISBN10:         stringPtr("1234567890"),
+		ISBN13:         stringPtr("9781234567890"),
+		ASIN:           stringPtr("B01635BIDS"),
+		OpenLibraryID:  stringPtr("OL12345M"),
+		HardcoverID:    stringPtr("HC789"),
+		GoogleBooksID:  stringPtr("GB456"),
+		Edition:        stringPtr("First"),
+		PrintYear:      intPtr(2015),
+		CoverURL:       stringPtr("https://example.com/cover.jpg"),
 	}
 
 	tagMap := mfs.buildFullTagMap(book, "Return of the Archon", "Return of the Archon", "Joshua Dalzelle", "Paul Heitsch", 2015, "")

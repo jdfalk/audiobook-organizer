@@ -90,8 +90,8 @@ func (s *Server) benchStatus(c *gin.Context) {
 // benchSubmitRequest is the JSON body for POST /bench/submit.
 type benchSubmitRequest struct {
 	Models    []string `json:"models"`
-	Mode      string   `json:"mode"`      // groups, full, both
-	Server    string   `json:"server"`    // remote server URL (optional, uses self if empty)
+	Mode      string   `json:"mode"`   // groups, full, both
+	Server    string   `json:"server"` // remote server URL (optional, uses self if empty)
 	ChunkSize int      `json:"chunk_size"`
 	Batch     bool     `json:"batch"`
 }
@@ -367,15 +367,15 @@ type benchTestConfig struct {
 }
 
 var benchMaxTokens = map[string]int64{
-	"gpt-4o":     16384,
-	"gpt-4o-mini": 16384,
-	"gpt-4.1":    32768,
+	"gpt-4o":       16384,
+	"gpt-4o-mini":  16384,
+	"gpt-4.1":      32768,
 	"gpt-4.1-mini": 32768,
-	"o3-mini":    65536,
-	"o4-mini":    65536,
-	"gpt-5.1":   32768,
-	"gpt-5-mini": 32768,
-	"gpt-5-nano": 16384,
+	"o3-mini":      65536,
+	"o4-mini":      65536,
+	"gpt-5.1":      32768,
+	"gpt-5-mini":   32768,
+	"gpt-5-nano":   16384,
 }
 
 type benchAuthorData struct {
@@ -615,4 +615,3 @@ func benchWriteJSON(path string, v interface{}) error {
 	}
 	return os.WriteFile(path, data, 0664)
 }
-

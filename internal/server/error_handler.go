@@ -30,10 +30,10 @@ type ErrorResponse struct {
 
 // SuccessResponse provides a consistent success response format
 type SuccessResponse struct {
-	Data   any    `json:"data,omitempty"`
-	Count  int    `json:"count,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-	Offset int    `json:"offset,omitempty"`
+	Data   any `json:"data,omitempty"`
+	Count  int `json:"count,omitempty"`
+	Limit  int `json:"limit,omitempty"`
+	Offset int `json:"offset,omitempty"`
 }
 
 // RespondWithError sends a standardized error response and logs the error

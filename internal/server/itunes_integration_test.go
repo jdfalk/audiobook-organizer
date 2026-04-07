@@ -237,4 +237,3 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 	assert.Equal(t, 1, resp.FilesFound)
 	assert.Equal(t, 1, resp.FilesMissing)
 }
-

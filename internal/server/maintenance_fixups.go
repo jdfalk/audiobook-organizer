@@ -18,17 +18,17 @@ import (
 	"unicode"
 
 	"github.com/gin-gonic/gin"
-	"github.com/oklog/ulid/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/oklog/ulid/v2"
 )
 
 // readByFixResult describes one book that was (or would be) fixed.
 type readByFixResult struct {
 	BookID      string  `json:"book_id"`
-	Pattern     string  `json:"pattern"`           // "read_by_swap", "title_dash_read_by", "both_broken"
+	Pattern     string  `json:"pattern"` // "read_by_swap", "title_dash_read_by", "both_broken"
 	OldTitle    string  `json:"old_title"`
 	OldAuthor   string  `json:"old_author"`
 	OldNarrator *string `json:"old_narrator,omitempty"`
@@ -763,14 +763,14 @@ func (s *Server) handleBackfillBookFiles(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":      dryRun,
-		"books_total":  len(allBooks),
-		"books_found":  len(results) - skipped,
+		"dry_run":       dryRun,
+		"books_total":   len(allBooks),
+		"books_found":   len(results) - skipped,
 		"books_skipped": skipped,
-		"files_total":  totalFiles,
-		"applied":      applied,
-		"errors":       errors,
-		"results":      results,
+		"files_total":   totalFiles,
+		"applied":       applied,
+		"errors":        errors,
+		"results":       results,
 	})
 }
 
@@ -873,11 +873,11 @@ func (s *Server) handleCleanupEmptyFolders(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":        dryRun,
-		"root_dir":       rootDir,
-		"folders_found":  len(results),
+		"dry_run":         dryRun,
+		"root_dir":        rootDir,
+		"folders_found":   len(results),
 		"folders_removed": removedCount,
-		"folders":        results,
+		"folders":         results,
 	})
 }
 
@@ -1056,14 +1056,14 @@ func (s *Server) handleCleanupOrganizeMess(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":                   dryRun,
-		"root_dir":                  rootDir,
-		"empty_folders_found":       len(emptyResults),
-		"empty_folders_removed":     emptyRemoved,
-		"garbage_dirs_found":        len(garbageResults),
-		"garbage_dirs_note":         "Non-empty garbage directories require manual review; only empty ones are removed.",
-		"empty_folders":             emptyResults,
-		"garbage_dirs":              garbageResults,
+		"dry_run":               dryRun,
+		"root_dir":              rootDir,
+		"empty_folders_found":   len(emptyResults),
+		"empty_folders_removed": emptyRemoved,
+		"garbage_dirs_found":    len(garbageResults),
+		"garbage_dirs_note":     "Non-empty garbage directories require manual review; only empty ones are removed.",
+		"empty_folders":         emptyResults,
+		"garbage_dirs":          garbageResults,
 	})
 }
 
@@ -1074,12 +1074,12 @@ func (s *Server) handleCleanupOrganizeMess(c *gin.Context) {
 // authorNarratorSwapResult describes one book where the author field contains
 // the narrator name (or vice versa).
 type authorNarratorSwapResult struct {
-	BookID      string `json:"book_id"`
-	BookTitle   string `json:"book_title"`
-	AuthorName  string `json:"author_name"`
+	BookID       string `json:"book_id"`
+	BookTitle    string `json:"book_title"`
+	AuthorName   string `json:"author_name"`
 	NarratorName string `json:"narrator_name"`
-	Applied     bool   `json:"applied"`
-	Error       string `json:"error,omitempty"`
+	Applied      bool   `json:"applied"`
+	Error        string `json:"error,omitempty"`
 }
 
 // handleFixAuthorNarratorSwap finds books where the author field contains the
@@ -1223,10 +1223,10 @@ func createBookFilesForBook(store database.Store, book *database.Book, filePaths
 // vgMismatchGroup describes a version group where book titles differ
 // significantly, indicating books that should not be linked together.
 type vgMismatchGroup struct {
-	VersionGroupID string    `json:"version_group_id"`
-	Books          []vgBook  `json:"books"`
-	Applied        bool      `json:"applied"`
-	Error          string    `json:"error,omitempty"`
+	VersionGroupID string   `json:"version_group_id"`
+	Books          []vgBook `json:"books"`
+	Applied        bool     `json:"applied"`
+	Error          string   `json:"error,omitempty"`
 }
 
 // vgBook is a lightweight book summary used inside vgMismatchGroup.
@@ -1649,22 +1649,22 @@ func fixAuthorDirPath(store database.Store, book *database.Book, subdir string) 
 // enrichBookFileResult describes one book_files row that was (or would be)
 // enriched.
 type enrichBookFileResult struct {
-	FileID           string `json:"file_id"`
-	BookID           string `json:"book_id"`
-	FilePath         string `json:"file_path"`
-	TrackNumberOld   int    `json:"track_number_old,omitempty"`
-	TrackNumberNew   int    `json:"track_number_new,omitempty"`
-	TrackCountOld    int    `json:"track_count_old,omitempty"`
-	TrackCountNew    int    `json:"track_count_new,omitempty"`
-	FileSizeOld      int64  `json:"file_size_old,omitempty"`
-	FileSizeNew      int64  `json:"file_size_new,omitempty"`
-	FormatOld        string `json:"format_old,omitempty"`
-	FormatNew        string `json:"format_new,omitempty"`
-	OrigFilenameSet  bool   `json:"original_filename_set,omitempty"`
-	Changed          bool   `json:"changed"`
-	Applied          bool   `json:"applied"`
-	Error            string `json:"error,omitempty"`
-	Warning          string `json:"warning,omitempty"`
+	FileID          string `json:"file_id"`
+	BookID          string `json:"book_id"`
+	FilePath        string `json:"file_path"`
+	TrackNumberOld  int    `json:"track_number_old,omitempty"`
+	TrackNumberNew  int    `json:"track_number_new,omitempty"`
+	TrackCountOld   int    `json:"track_count_old,omitempty"`
+	TrackCountNew   int    `json:"track_count_new,omitempty"`
+	FileSizeOld     int64  `json:"file_size_old,omitempty"`
+	FileSizeNew     int64  `json:"file_size_new,omitempty"`
+	FormatOld       string `json:"format_old,omitempty"`
+	FormatNew       string `json:"format_new,omitempty"`
+	OrigFilenameSet bool   `json:"original_filename_set,omitempty"`
+	Changed         bool   `json:"changed"`
+	Applied         bool   `json:"applied"`
+	Error           string `json:"error,omitempty"`
+	Warning         string `json:"warning,omitempty"`
 }
 
 // handleEnrichBookFiles iterates all book_files rows and fills in missing or
@@ -2083,23 +2083,23 @@ func (s *Server) handleFixBookFilePaths(c *gin.Context) {
 
 // dedupBooksResult summarises the outcome of handleDedupBooks.
 type dedupBooksResult struct {
-	DryRun                  bool     `json:"dry_run"`
-	Phase1JunkDeleted       int      `json:"phase1_junk_deleted"`
-	Phase2PathDupesMerged   int      `json:"phase2_path_dupes_merged"`
-	Phase3TitleDupesMerged  int      `json:"phase3_title_dupes_merged"`
-	Phase4VGDupesCleaned    int      `json:"phase4_vg_dupes_cleaned"`
-	TotalBooksRemoved       int      `json:"total_books_removed"`
-	Errors                  int      `json:"errors"`
-	Details                 gin.H    `json:"details"`
-	ErrorMessages           []string `json:"error_messages,omitempty"`
+	DryRun                 bool     `json:"dry_run"`
+	Phase1JunkDeleted      int      `json:"phase1_junk_deleted"`
+	Phase2PathDupesMerged  int      `json:"phase2_path_dupes_merged"`
+	Phase3TitleDupesMerged int      `json:"phase3_title_dupes_merged"`
+	Phase4VGDupesCleaned   int      `json:"phase4_vg_dupes_cleaned"`
+	TotalBooksRemoved      int      `json:"total_books_removed"`
+	Errors                 int      `json:"errors"`
+	Details                gin.H    `json:"details"`
+	ErrorMessages          []string `json:"error_messages,omitempty"`
 }
 
 // dedupMergeDetail describes one merge action.
 type dedupMergeDetail struct {
-	KeeperID   string   `json:"keeper_id"`
-	KeeperTitle string  `json:"keeper_title"`
-	RemovedIDs []string `json:"removed_ids"`
-	Reason     string   `json:"reason"`
+	KeeperID    string   `json:"keeper_id"`
+	KeeperTitle string   `json:"keeper_title"`
+	RemovedIDs  []string `json:"removed_ids"`
+	Reason      string   `json:"reason"`
 }
 
 // handleDedupBooks runs a 4-phase book deduplication scan (dry_run=true by default).
@@ -2379,10 +2379,10 @@ func (s *Server) handleDedupBooks(c *gin.Context) {
 	result.TotalBooksRemoved = result.Phase1JunkDeleted + result.Phase2PathDupesMerged + result.Phase3TitleDupesMerged
 	result.ErrorMessages = errorMessages
 	result.Details = gin.H{
-		"phase1_junk":       phase1Details,
-		"phase2_path_dupes": phase2Details,
+		"phase1_junk":        phase1Details,
+		"phase2_path_dupes":  phase2Details,
 		"phase3_title_dupes": phase3Details,
-		"phase4_vg_dupes":   phase4Details,
+		"phase4_vg_dupes":    phase4Details,
 	}
 
 	c.JSON(http.StatusOK, result)
@@ -2701,7 +2701,6 @@ func filterLive(books []database.Book, deletedIDs map[string]bool) []database.Bo
 	return out
 }
 
-
 // ---------------------------------------------------------------------------
 // Refetch missing authors
 // ---------------------------------------------------------------------------
@@ -2979,8 +2978,8 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["organized_folders"] {
 		rootDir := config.AppConfig.RootDir
 		keep := map[string]bool{
-			".covers":            true,
-			".itunes-writeback":  true,
+			".covers":           true,
+			".itunes-writeback": true,
 			"openlibrary-dumps": true,
 		}
 		entries, err := os.ReadDir(rootDir)
@@ -3372,23 +3371,23 @@ func (s *Server) handleFixLibraryStates(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":  dryRun,
-		"fixed":    fixCount,
-		"skipped":  skipCount,
-		"errors":   errorCount,
-		"results":  results,
+		"dry_run": dryRun,
+		"fixed":   fixCount,
+		"skipped": skipCount,
+		"errors":  errorCount,
+		"results": results,
 	})
 }
 
 // recomputeITunesPathResult describes one book_file that was (or would be) fixed.
 type recomputeITunesPathResult struct {
-	BookFileID   string `json:"book_file_id"`
-	BookID       string `json:"book_id"`
-	FilePath     string `json:"file_path"`
+	BookFileID    string `json:"book_file_id"`
+	BookID        string `json:"book_id"`
+	FilePath      string `json:"file_path"`
 	OldITunesPath string `json:"old_itunes_path"`
 	NewITunesPath string `json:"new_itunes_path"`
-	Applied      bool   `json:"applied"`
-	Error        string `json:"error,omitempty"`
+	Applied       bool   `json:"applied"`
+	Error         string `json:"error,omitempty"`
 }
 
 // handleRecomputeITunesPaths iterates all book_files on PRIMARY books and

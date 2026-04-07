@@ -32,19 +32,19 @@ func NewLogger(minLevel LogLevel) *Logger {
 
 // StructuredLog represents a structured log entry with contextual data
 type StructuredLog struct {
-	Timestamp   time.Time
-	Level       string
-	Message     string
-	Handler     string
-	Method      string
-	Path        string
-	StatusCode  int
-	Duration    time.Duration
-	Error       string
-	UserID      string
-	RequestID   string
-	ResourceID  string
-	Details     map[string]any
+	Timestamp  time.Time
+	Level      string
+	Message    string
+	Handler    string
+	Method     string
+	Path       string
+	StatusCode int
+	Duration   time.Duration
+	Error      string
+	UserID     string
+	RequestID  string
+	ResourceID string
+	Details    map[string]any
 }
 
 // OperationLogger tracks the lifecycle of a handler operation
@@ -159,12 +159,12 @@ func (sl *ServiceLogger) LogDebug(operation string, message string) {
 
 // RequestLogger provides request-level logging
 type RequestLogger struct {
-	requestID  string
-	clientIP   string
-	userAgent  string
-	method     string
-	path       string
-	startTime  time.Time
+	requestID string
+	clientIP  string
+	userAgent string
+	method    string
+	path      string
+	startTime time.Time
 }
 
 // NewRequestLogger creates a new request logger

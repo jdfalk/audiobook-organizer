@@ -34,12 +34,12 @@ type DashboardMetrics struct {
 
 // HealthCheckResponse represents the health check response
 type HealthCheckResponse struct {
-	Status       string            `json:"status"`
-	Timestamp    int64             `json:"timestamp"`
-	Version      string            `json:"version"`
-	DatabaseType string            `json:"database_type"`
-	Metrics      DashboardMetrics  `json:"metrics"`
-	PartialError string            `json:"partial_error,omitempty"`
+	Status       string           `json:"status"`
+	Timestamp    int64            `json:"timestamp"`
+	Version      string           `json:"version"`
+	DatabaseType string           `json:"database_type"`
+	Metrics      DashboardMetrics `json:"metrics"`
+	PartialError string           `json:"partial_error,omitempty"`
 }
 
 // CollectDashboardMetrics gathers all dashboard metrics

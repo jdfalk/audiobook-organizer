@@ -155,8 +155,8 @@ func TestDiagnosticsService_GenerateExport_MetadataQuality(t *testing.T) {
 	store.EXPECT().GetAllBooks(10000, 0).Unset()
 	store.EXPECT().GetAllBooks(10000, 0).Return([]database.Book{
 		{ID: "book1", Title: "Complete Book", AuthorID: &authorID, SeriesID: &seriesID},
-		{ID: "book2", Title: "", AuthorID: nil},              // missing title, author, series
-		{ID: "book3", Title: "No Author", AuthorID: nil},     // missing author, series
+		{ID: "book2", Title: "", AuthorID: nil},          // missing title, author, series
+		{ID: "book3", Title: "No Author", AuthorID: nil}, // missing author, series
 	}, nil).Maybe()
 	store.EXPECT().GetAllBooks(10000, 10000).Unset()
 	store.EXPECT().GetAllBooks(10000, 10000).Return([]database.Book{}, nil).Maybe()

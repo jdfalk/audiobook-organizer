@@ -104,19 +104,19 @@ func (rs *RevertService) revertFileMove(c *database.OperationChange) error {
 
 // bookFieldMap maps field names to Book struct field names for reflection-based revert.
 var bookFieldMap = map[string]string{
-	"title":                 "Title",
-	"narrator":              "Narrator",
-	"edition":               "Edition",
-	"language":              "Language",
-	"publisher":             "Publisher",
-	"isbn10":                "ISBN10",
-	"isbn13":                "ISBN13",
-	"asin":                  "ASIN",
-	"cover_url":             "CoverURL",
-	"library_state":         "LibraryState",
-	"open_library_id":       "OpenLibraryID",
-	"hardcover_id":          "HardcoverID",
-	"google_books_id":       "GoogleBooksID",
+	"title":                  "Title",
+	"narrator":               "Narrator",
+	"edition":                "Edition",
+	"language":               "Language",
+	"publisher":              "Publisher",
+	"isbn10":                 "ISBN10",
+	"isbn13":                 "ISBN13",
+	"asin":                   "ASIN",
+	"cover_url":              "CoverURL",
+	"library_state":          "LibraryState",
+	"open_library_id":        "OpenLibraryID",
+	"hardcover_id":           "HardcoverID",
+	"google_books_id":        "GoogleBooksID",
 	"metadata_review_status": "MetadataReviewStatus",
 }
 

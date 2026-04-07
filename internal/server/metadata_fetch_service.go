@@ -622,9 +622,9 @@ func (mfs *MetadataFetchService) recordChangeHistory(book *database.Book, meta m
 	}
 
 	changes := []struct {
-		field    string
-		oldVal   string
-		newVal   string
+		field  string
+		oldVal string
+		newVal string
 	}{
 		{"title", book.Title, meta.Title},
 		{"author_name", currentAuthor, meta.Author},
@@ -1681,12 +1681,12 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 				SeriesPosition: r.SeriesPosition,
 				Year:           r.PublishYear,
 				Publisher:      r.Publisher,
-				ISBN:            r.ISBN,
+				ISBN:           r.ISBN,
 				ASIN:           r.ASIN,
 				CoverURL:       r.CoverURL,
 				Description:    r.Description,
-				Language:        r.Language,
-				Source:          src.Name(),
+				Language:       r.Language,
+				Source:         src.Name(),
 				Score:          score,
 			})
 		}
@@ -1723,12 +1723,12 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 					SeriesPosition: result.SeriesPosition,
 					Year:           result.PublishYear,
 					Publisher:      result.Publisher,
-					ISBN:            result.ISBN,
+					ISBN:           result.ISBN,
 					ASIN:           result.ASIN,
 					CoverURL:       result.CoverURL,
 					Description:    result.Description,
-					Language:        result.Language,
-					Source:          "Audnexus (Audible)",
+					Language:       result.Language,
+					Source:         "Audnexus (Audible)",
 					Score:          score,
 				})
 			}
@@ -1815,7 +1815,7 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 		ISBN:           candidate.ISBN,
 		CoverURL:       candidate.CoverURL,
 		Description:    candidate.Description,
-		Language:        candidate.Language,
+		Language:       candidate.Language,
 	}
 
 	// If fields list is non-empty, zero out fields NOT in the list
@@ -2332,21 +2332,21 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	}
 
 	currentVals := map[string]string{
-		"title":          current.Title,
-		"album":          current.Album,
-		"artist":         current.Artist,
-		"narrator":       current.Narrator,
-		"genre":          current.Genre,
-		"year":           fmt.Sprintf("%d", current.Year),
-		"language":       current.Language,
-		"series":         current.Series,
-		"asin":           current.ASIN,
-		"description":    current.Comments, // description is stored in comments field
-		"edition":        current.Edition,
-		"print_year":     current.PrintYear,
-		"book_id":        current.BookOrganizerID,
+		"title":           current.Title,
+		"album":           current.Album,
+		"artist":          current.Artist,
+		"narrator":        current.Narrator,
+		"genre":           current.Genre,
+		"year":            fmt.Sprintf("%d", current.Year),
+		"language":        current.Language,
+		"series":          current.Series,
+		"asin":            current.ASIN,
+		"description":     current.Comments, // description is stored in comments field
+		"edition":         current.Edition,
+		"print_year":      current.PrintYear,
+		"book_id":         current.BookOrganizerID,
 		"open_library_id": current.OpenLibraryID,
-		"hardcover_id":   current.HardcoverID,
+		"hardcover_id":    current.HardcoverID,
 		"google_books_id": current.GoogleBooksID,
 	}
 	if current.Publisher != "" {

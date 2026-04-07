@@ -429,7 +429,7 @@ func TestStripSubtitle(t *testing.T) {
 		{"", ""},
 		{"Colon:NoSpace", "Colon:NoSpace"},
 		{"A: B - C", "A"},                     // colon takes priority
-		{"Multi - Word Title - Sub", "Multi"},  // first dash wins
+		{"Multi - Word Title - Sub", "Multi"}, // first dash wins
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
@@ -549,10 +549,10 @@ func TestIsBetterStringPtr_NeverDowngrade(t *testing.T) {
 
 func TestParseSeriesFromTitle(t *testing.T) {
 	tests := []struct {
-		input       string
-		wantSeries  string
-		wantPos     string
-		wantTitle   string
+		input      string
+		wantSeries string
+		wantPos    string
+		wantTitle  string
 	}{
 		{"(Long Earth 05) The Long Cosmos", "Long Earth", "5", "The Long Cosmos"},
 		{"(Dresden Files 01) Storm Front", "Dresden Files", "1", "Storm Front"},
@@ -1004,7 +1004,7 @@ func TestBestTitleMatchWithContext_MissingAuthorPenalty(t *testing.T) {
 	// Results with no author should get 0.75x when book's author is known,
 	// making them lose to a result with a matching author.
 	results := []metadata.BookMetadata{
-		{Title: "Foundation", Author: "", Narrator: "Scott Brick"},       // no author → 0.75x
+		{Title: "Foundation", Author: "", Narrator: "Scott Brick"},             // no author → 0.75x
 		{Title: "Foundation", Author: "Isaac Asimov", Narrator: "Scott Brick"}, // matching → 1.5x
 	}
 
@@ -1041,8 +1041,8 @@ func TestBestTitleMatchWithContext_NarratorBoost(t *testing.T) {
 	// Results with narrator info get 1.15x, without get 0.85x.
 	// Two identical results except for narrator presence.
 	results := []metadata.BookMetadata{
-		{Title: "Neuromancer", Author: "William Gibson"},                              // no narrator → 0.85x
-		{Title: "Neuromancer", Author: "William Gibson", Narrator: "Robertson Dean"},  // narrator → 1.15x
+		{Title: "Neuromancer", Author: "William Gibson"},                             // no narrator → 0.85x
+		{Title: "Neuromancer", Author: "William Gibson", Narrator: "Robertson Dean"}, // narrator → 1.15x
 	}
 
 	got := bestTitleMatchWithContext(results, "", "", "Neuromancer")

@@ -12,8 +12,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-
-
 func TestAudiobookUpdateService_ExtractStringField(t *testing.T) {
 	payload := map[string]any{
 		"title": "New Title",
@@ -64,5 +62,3 @@ func TestAudiobookUpdateService_ExtractOverrides_Success(t *testing.T) {
 		t.Errorf("expected 2 overrides, got %d (ok=%v)", len(result), ok)
 	}
 }
-
-

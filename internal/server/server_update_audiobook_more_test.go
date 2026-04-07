@@ -67,14 +67,14 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 	require.NoError(t, err)
 
 	payload := map[string]interface{}{
-		"author_name":           "Author X",
-		"series_name":           "Series Y",
-		"narrator":              "Narrator Z",
-		"publisher":             "Pub",
-		"language":              "en",
+		"author_name":            "Author X",
+		"series_name":            "Series Y",
+		"narrator":               "Narrator Z",
+		"publisher":              "Pub",
+		"language":               "en",
 		"audiobook_release_year": 2024,
-		"isbn10":                "1234567890",
-		"isbn13":                "9999999999999",
+		"isbn10":                 "1234567890",
+		"isbn13":                 "9999999999999",
 		"overrides": map[string]map[string]interface{}{
 			"title": {
 				"value":         "Override Title",

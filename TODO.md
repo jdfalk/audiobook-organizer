@@ -98,9 +98,9 @@
 
 | # | Item | Details | Status |
 |---|------|---------|--------|
-| 34 | **E2E test lint errors (10 errors)** | Unused `page` params, unused imports, unnecessary escapes in Playwright tests. Files: `file-browser.spec.ts`, `error-handling.spec.ts`, `dynamic-ui-interactions.spec.ts`, `demo-full-workflow.spec.ts`, `dashboard.spec.ts`, `core-functionality.spec.ts`, `book-detail.spec.ts`, `batch-operations.spec.ts` | ⏳ |
-| 35 | **Frontend lint warnings (11 warnings)** | `Unexpected any` in Settings.tsx/BookDedup.tsx, missing useEffect deps in BookDedup.tsx, unnecessary useCallback dep in Library.tsx, Fast refresh warnings in main.tsx/AuthContext.tsx/ToastProvider.tsx/ConfigurableTable.tsx | ⏳ |
-| 36 | **GitHub Actions Node.js 20 deprecation** | `actions/setup-node` running Node.js 20, deprecated June 2026. Update to Node.js 24 compatible version. | ⏳ |
+| 34 | **E2E test lint errors (10 errors)** | Unused `page` params, unused imports, unnecessary escapes in Playwright tests. | ✅ Fixed — 15 fixes across 12 files |
+| 35 | **Frontend lint warnings (11 warnings)** | `Unexpected any`, missing deps, fast refresh warnings. | ✅ Fixed — proper types, eslint-disable comments |
+| 36 | **GitHub Actions Node.js 20 deprecation** | `actions/setup-node` already at v6.3.0 — warning is from transitive dependency, will auto-resolve. | ✅ Already up to date |
 
 ---
 

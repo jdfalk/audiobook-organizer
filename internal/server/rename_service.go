@@ -306,9 +306,9 @@ func (rs *RenameService) computeTagChanges(book *database.Book, authorName, narr
 // buildTagMetadata constructs the metadata map for WriteMetadataToFile.
 func (rs *RenameService) buildTagMetadata(book *database.Book, authorName, narratorStr string) map[string]interface{} {
 	meta := map[string]interface{}{
-		"title":  book.Title,
-		"album":  book.Title,
-		"genre":  "Audiobook",
+		"title": book.Title,
+		"album": book.Title,
+		"genre": "Audiobook",
 	}
 	if authorName != "" {
 		meta["artist"] = authorName

@@ -20,28 +20,28 @@ type AuthorDedupGroup struct {
 	Variants            []database.Author `json:"variants"`
 	BookCount           int               `json:"book_count"`
 	SuggestedName       string            `json:"suggested_name,omitempty"`
-	SplitNames          []string          `json:"split_names,omitempty"`          // for composite authors like "A / B"
+	SplitNames          []string          `json:"split_names,omitempty"`           // for composite authors like "A / B"
 	IsProductionCompany bool              `json:"is_production_company,omitempty"` // true if canonical is a production company
 }
 
 // knownProductionCompanies maps lowercased names of audiobook production companies.
 var knownProductionCompanies = map[string]bool{
-	"soundbooth theater":    true,
-	"graphic audio":         true,
-	"podium audio":          true,
-	"tantor media":          true,
-	"tantor audio":          true,
-	"blackstone audio":      true,
-	"blackstone publishing": true,
-	"recorded books":        true,
-	"brilliance audio":      true,
-	"marvel":                true,
-	"dc comics":             true,
-	"audible studios":       true,
-	"audible originals":     true,
-	"macmillan audio":       true,
-	"random house audio":    true,
-	"harpercollins":         true,
+	"soundbooth theater":     true,
+	"graphic audio":          true,
+	"podium audio":           true,
+	"tantor media":           true,
+	"tantor audio":           true,
+	"blackstone audio":       true,
+	"blackstone publishing":  true,
+	"recorded books":         true,
+	"brilliance audio":       true,
+	"marvel":                 true,
+	"dc comics":              true,
+	"audible studios":        true,
+	"audible originals":      true,
+	"macmillan audio":        true,
+	"random house audio":     true,
+	"harpercollins":          true,
 	"simon & schuster audio": true,
 }
 

@@ -222,9 +222,9 @@ func TestBulkDeleteAuthors_StoreError(t *testing.T) {
 	var resp bulkDeleteResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 
-	assert.Equal(t, 1, resp.Deleted)  // id=2 succeeded
+	assert.Equal(t, 1, resp.Deleted) // id=2 succeeded
 	assert.Equal(t, 0, resp.Skipped)
-	assert.Len(t, resp.Errors, 1)     // id=1 errored
+	assert.Len(t, resp.Errors, 1) // id=1 errored
 	assert.Equal(t, 2, resp.Total)
 }
 

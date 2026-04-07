@@ -345,7 +345,7 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 // applyDiagnosticsSuggestions applies approved AI suggestions from diagnostics analysis.
 func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 	var req struct {
-		OperationID          string   `json:"operation_id" binding:"required"`
+		OperationID           string   `json:"operation_id" binding:"required"`
 		ApprovedSuggestionIDs []string `json:"approved_suggestion_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
