@@ -11,7 +11,7 @@
 
 #### April 5-6, 2026 — ITL Mutation, Bulk Metadata Review, ACL Fixes, UI Overhaul (v4.0.0)
 
-##### Reliability — Background File Operations (contributed by jdfalk)
+##### Reliability — Background File Operations (contributed by @jdfalk)
 - **Persistent file I/O tracking**: cover embed, tag write, rename jobs tracked in PebbleDB (`pending_file_op:{bookID}` keys). Completed jobs auto-delete. No more "applied but never written" on restart.
 - **Startup recovery**: interrupted file I/O jobs re-queued automatically on server start
 - **Resume interrupted metadata fetch**: if server restarts mid-fetch, already-fetched results survive. Remaining books re-enqueued from saved operation params on startup.
@@ -19,7 +19,7 @@
 - **Graceful shutdown**: file I/O pool drains + ITL batcher flushes before server exits on SIGTERM
 - **Adaptive ITL batcher**: debounce extends up to 30s for rapid-fire applies (was fixed 5s)
 
-##### iTunes ITL Binary Format
+##### iTunes ITL Binary Format (contributed by @jdfalk)
 - **LE-format track add/remove**: `AddTracksLE`, `RemoveTracksByPIDLE`, `RemoveTrackByPIDLE` for v10+ iTunes libraries
 - **Metadata write-back to ITL**: `UpdateMetadataLE` writes title, artist, album, genre directly to ITL mhoh chunks (iTunes caches everything, won't re-read file tags)
 - **Combined mutation pipeline**: `ApplyITLOperations` — single read-modify-write for removes + adds + location patches + metadata updates
@@ -28,7 +28,7 @@
 - **hohm chunk ordering fix**: location (0x0D) must precede metadata chunks
 - **mith totalLen fix**: must include all mhoh sub-blocks
 
-##### Bulk Metadata Review
+##### Bulk Metadata Review (contributed by @jdfalk)
 - **Background operation**: `POST /api/v1/metadata/batch-fetch-candidates` — parallel workers (8 goroutines, rate-limited 10 req/s) fetch best metadata match per book
 - **Review dialog**: compact/two-column view with source filter chips, confidence slider, Apply/Reject/Skip per row
 - **Reject candidates**: marks bad matches for future exclusion
@@ -36,7 +36,7 @@
 - **Operations dropdown**: shows last 10 completed operations with "Review Results" button
 - **Migration 45**: `operation_results` table for structured candidate storage
 
-##### Library UI Overhaul
+##### Library UI Overhaul (contributed by @jdfalk)
 - **Unified sticky toolbar**: single bar swaps between library actions and batch actions based on selection
 - **Select All always visible**: thin bar between search and content
 - **Shift-click range selection**: click + shift-click selects range in grid and list views
@@ -48,27 +48,28 @@
 - **250/500 items per page**: for bulk operations
 - **Search filters**: `review:matched`, `has_cover:yes/no`, `itunes_sync_status:dirty`
 
-##### Performance & Reliability
+##### Performance & Reliability (contributed by @jdfalk)
 - **File I/O worker pool**: 4 bounded workers for cover embed/tag write/rename (was unbounded goroutines)
 - **Graceful shutdown**: pool drains + ITL batcher flushes before server exits
 - **Adaptive ITL batcher**: debounce extends up to 30s for rapid-fire applies (was fixed 5s)
 - **Library list cache**: 10s TTL, operations/recent cache
 - **Async metadata apply**: DB update inline, cover download inline, file I/O in background
 - **Primary-only library listing**: `is_primary_version=true` on all queries
+- **Aggressive caching**: library list 30s, individual book lookups 30s, metadata search results 30s (external API calls cached)
 
-##### ACL & Permission Fixes
+##### ACL & Permission Fixes (contributed by @jdfalk)
 - **49 production permission fixes**: `0755`→`0775`, `0644`→`0664` across 23 files for Linux POSIX ACL compatibility
 - **`syscall.Umask(0002)`** on Linux startup for `os.Create` safety net
 - **`internal/util/perms.go`**: `DirMode`, `FileMode`, `SecretFileMode` constants
 
-##### iTunes Integration
+##### iTunes Integration (contributed by @jdfalk)
 - **PID lifecycle tracking**: migration 44 adds `provenance` and `removed_at` to `external_id_map`
 - **Track provisioner**: generates PIDs for non-iTunes books, stores with `provenance='generated'`
 - **Dedup integration**: `mergeDuplicateBook` queues ITL removal for duplicate tracks
 - **Write-back batcher refactor**: supports add/remove/location/metadata ops in one flush
 - **Cover embedding**: gated on `embed_cover_art` config (was always running), config settable via API
 
-##### Bug Fixes
+##### Bug Fixes (contributed by @jdfalk)
 - **Search was broken**: `searchBooks` was calling removed `/audiobooks/search` endpoint
 - **Field-only searches**: `-review:matched` was treated as text search instead of field filter
 - **Page persistence**: page number always in URL, survives navigation and refresh
