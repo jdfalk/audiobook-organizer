@@ -4280,9 +4280,12 @@ func (p *PebbleStore) CreateOperationResult(result *OperationResult) error {
 
 func (p *PebbleStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	prefix := []byte(fmt.Sprintf("op_result:%s:", operationID))
+	upperBound := make([]byte, len(prefix))
+	copy(upperBound, prefix)
+	upperBound[len(upperBound)-1]++
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: upperBound,
 	})
 	if err != nil {
 		return nil, err
@@ -4303,9 +4306,12 @@ func (p *PebbleStore) GetOperationResults(operationID string) ([]OperationResult
 func (p *PebbleStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
 	// Scan all operations, collect completed/failed, sort by time, take limit
 	prefix := []byte("operation:")
+	upperBound := make([]byte, len(prefix))
+	copy(upperBound, prefix)
+	upperBound[len(upperBound)-1]++
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: upperBound,
 	})
 	if err != nil {
 		return nil, err
