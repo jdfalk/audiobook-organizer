@@ -9,11 +9,12 @@
 
 ---
 
-## 🎯 Current Status — March 26, 2026
+## 🎯 Current Status — April 6, 2026
 
-**Library:** 10,891 books / 2,970 authors / 8,507 series
+**Library:** 24,022 books / 3,341 authors / 10,924 series (migration 45)
 **Production:** PebbleDB, Linux, HTTPS at 172.16.2.30:8484
-**Activity Log:** Unified page captures all server logs, replaces Operations page
+**iTunes:** ITL write-back with LE track add/remove, metadata write-back to ITL
+**New this session:** Bulk metadata review, ITL format documentation, ACL permission fixes
 
 ---
 
@@ -79,6 +80,17 @@
 | 27 | **Files & History — show individual files** | book_files API + frontend | ✅ Fixed — 114K files tracked |
 | 28 | **Track PIDs sorted by track number** | Sorted in iTunes panel | ✅ Fixed |
 | 29 | **Deprecate XML functions** | ParseLibrary now auto-detects ITL vs XML. Can switch sync to ITL path. | ✅ Infrastructure done — XML still works as fallback |
+
+---
+
+## 🔴 P1 — Active Issues (April 6, 2026)
+
+| # | Item | Details | Status |
+|---|------|---------|--------|
+| 30 | **Background file ops need graceful tracking** | Cover embed, tag write, rename are fire-and-forget goroutines. Lost on restart. Users told "applied" when file writes haven't happened. | 🚨 Needs fix |
+| 31 | **Resume interrupted metadata fetch on startup** | If server restarts mid-fetch, already-fetched results survive but remaining books are lost. Need startup recovery. | ⏳ Planned |
+| 32 | **Aggressive search/book result caching** | Books rarely change — cache search results 30-60s, individual book lookups, metadata candidates. | ⏳ Planned |
+| 33 | **Batch apply still fires separate requests per click** | Frontend coalesces with 500ms debounce but rapid clicks still result in multiple API calls. Need true client-side queue. | ⏳ Partially fixed |
 
 ---
 
