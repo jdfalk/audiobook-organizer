@@ -68,17 +68,57 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	}
 
 	store := database.GlobalStore
-	opID := ulid.Make().String()
 
+	// Exclude books already in an active metadata fetch to avoid duplicate API calls
+	activeOps, _ := store.GetRecentOperations(50)
+	alreadyFetching := make(map[string]bool)
+	for _, op := range activeOps {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+		if op.Status != "pending" && op.Status != "running" && op.Status != "queued" {
+			continue
+		}
+		params, err := store.GetOperationParams(op.ID)
+		if err != nil || len(params) == 0 {
+			continue
+		}
+		var ids []string
+		if err := json.Unmarshal(params, &ids); err == nil {
+			for _, id := range ids {
+				alreadyFetching[id] = true
+			}
+		}
+	}
+
+	var bookIDs []string
+	var skippedCount int
+	for _, id := range req.BookIDs {
+		if alreadyFetching[id] {
+			skippedCount++
+		} else {
+			bookIDs = append(bookIDs, id)
+		}
+	}
+
+	if len(bookIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"message":      fmt.Sprintf("All %d books are already being fetched in another operation", skippedCount),
+			"operation_id": "",
+			"book_count":   0,
+			"skipped":      skippedCount,
+		})
+		return
+	}
+
+	opID := ulid.Make().String()
 	_, err := store.CreateOperation(opID, "metadata_candidate_fetch", nil)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
 	}
 
-	totalBooks := len(req.BookIDs)
-	bookIDs := make([]string, len(req.BookIDs))
-	copy(bookIDs, req.BookIDs)
+	totalBooks := len(bookIDs)
 
 	// Save book IDs as operation params for recovery on restart
 	if paramsJSON, err := json.Marshal(bookIDs); err == nil {
