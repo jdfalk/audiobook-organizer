@@ -42,16 +42,16 @@ func (m *mockMetadataSource) SearchByTitleAndAuthor(title, author string) ([]met
 // metadata state calls (needed by persistFetchedMetadata -> loadMetadataState).
 func setupGlobalStoreForTest(t *testing.T) {
 	t.Helper()
-	old := database.GlobalStore
-	t.Cleanup(func() { database.GlobalStore = old })
-	database.GlobalStore = &database.MockStore{
+	old := database.GetGlobalStore()
+	t.Cleanup(func() { database.SetGlobalStore(old) })
+	database.SetGlobalStore(&database.MockStore{
 		GetMetadataFieldStatesFunc: func(bookID string) ([]database.MetadataFieldState, error) {
 			return nil, nil
 		},
 		UpsertMetadataFieldStateFunc: func(state *database.MetadataFieldState) error {
 			return nil
 		},
-	}
+	})
 }
 
 // --- Existing tests ---

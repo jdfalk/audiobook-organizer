@@ -47,7 +47,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	// Initialize database
 	store, err := database.NewSQLiteStore(config.AppConfig.DatabasePath)
 	require.NoError(t, err)
-	database.GlobalStore = store
+	database.SetGlobalStore(store)
 
 	// Run migrations to ensure schema is up to date
 	err = database.RunMigrations(store)
@@ -66,11 +66,16 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Cleanup function
 	cleanup := func() {
-		if store != nil {
-			store.Close()
+		if GlobalFileIOPool != nil {
+			GlobalFileIOPool.Stop()
+			GlobalFileIOPool = nil
 		}
 		if queue != nil {
 			_ = queue.Shutdown(5 * time.Second)
+		}
+		if store != nil {
+			database.SetGlobalStore(nil)
+			store.Close()
 		}
 		_ = os.RemoveAll(tempDir)
 	}
@@ -84,13 +89,17 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 	gin.SetMode(gin.TestMode)
 
 	// Set the global store to the provided store
-	database.GlobalStore = store
+	database.SetGlobalStore(store)
 
 	// Create server with the provided store (services will use it)
 	server := NewServer()
 
 	// Cleanup function
 	cleanup := func() {
+		if GlobalFileIOPool != nil {
+			GlobalFileIOPool.Stop()
+			GlobalFileIOPool = nil
+		}
 		// Don't close the store - caller is responsible for cleanup
 	}
 
