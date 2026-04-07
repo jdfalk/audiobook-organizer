@@ -52,6 +52,8 @@ export const SEARCH_FIELDS: readonly string[] = [
   'tag',
   'review',
   'has_cover',
+  'has_written',
+  'has_organized',
   'itunes_sync_status',
 ] as const;
 
