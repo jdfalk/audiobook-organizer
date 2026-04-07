@@ -77,6 +77,7 @@ export function MetadataReviewDialog({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
+  const [previewCover, setPreviewCover] = useState<string | null>(null);
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
@@ -329,7 +330,8 @@ export function MetadataReviewDialog({
           <Avatar
             src={r.candidate?.cover_url || r.book.cover_url || ''}
             variant="rounded"
-            sx={{ width: 40, height: 50 }}
+            sx={{ width: 40, height: 50, cursor: 'pointer' }}
+            onClick={(e) => { e.stopPropagation(); setPreviewCover(r.candidate?.cover_url || r.book.cover_url || ''); }}
           />
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap>
@@ -387,7 +389,7 @@ export function MetadataReviewDialog({
                 Current
               </Typography>
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80 }} />
+                <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }} onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)} />
                 <Box>
                   <Typography variant="body2" fontWeight="bold">
                     {r.book.title}
@@ -420,7 +422,7 @@ export function MetadataReviewDialog({
                 Proposed
               </Typography>
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80 }} />
+                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.candidate?.cover_url ? 'pointer' : 'default' }} onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)} />
                 <Box>
                   <Typography variant="body2" fontWeight="bold">
                     {r.candidate.title}
@@ -493,7 +495,7 @@ export function MetadataReviewDialog({
                 onChange={() => toggleSelected(bookId)}
                 disabled={!isRowActionable(bookId)}
               />
-              <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80 }} />
+              <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }} onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)} />
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" fontWeight="bold">
                   {r.book.title}
@@ -526,7 +528,7 @@ export function MetadataReviewDialog({
           <Box sx={{ flex: 1 }}>
             {r.candidate ? (
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80 }} />
+                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.candidate?.cover_url ? 'pointer' : 'default' }} onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)} />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="body2" fontWeight="bold">
                     {r.candidate.title}
@@ -607,6 +609,7 @@ export function MetadataReviewDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
       <DialogTitle>
         Review Metadata Matches &mdash; {summary.total} books
@@ -745,5 +748,30 @@ export function MetadataReviewDialog({
         </Button>
       </DialogActions>
     </Dialog>
+
+    {/* Cover preview lightbox */}
+    {previewCover && (
+      <Box
+        onClick={() => setPreviewCover(null)}
+        sx={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 2000,
+          bgcolor: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <Box
+          component="img"
+          src={previewCover}
+          alt="Cover preview"
+          sx={{ maxWidth: '80vw', maxHeight: '80vh', borderRadius: 2, boxShadow: 8 }}
+        />
+      </Box>
+    )}
+    </>
   );
 }
