@@ -350,16 +350,19 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 
 		applied++
 
-		// Kick off file I/O and write-back in background.
-		go func(bid string) {
-			mfs.ApplyMetadataFileIO(bid)
-			if _, err := mfs.WriteBackMetadataForBook(bid); err != nil {
-				log.Printf("[WARN] write-back failed for %s: %v", bid, err)
-			}
-			if GlobalWriteBackBatcher != nil {
-				GlobalWriteBackBatcher.Enqueue(bid)
-			}
-		}(bookID)
+		// Queue file I/O through the worker pool (bounded concurrency).
+		if GlobalFileIOPool != nil {
+			bid := bookID
+			GlobalFileIOPool.Submit(bid, func() {
+				mfs.ApplyMetadataFileIO(bid)
+				if _, err := mfs.WriteBackMetadataForBook(bid); err != nil {
+					log.Printf("[WARN] write-back failed for %s: %v", bid, err)
+				}
+				if GlobalWriteBackBatcher != nil {
+					GlobalWriteBackBatcher.Enqueue(bid)
+				}
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -424,7 +427,14 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 }
 
 // handleGetRecentOperations returns the last 10 completed metadata_candidate_fetch operations.
+// Uses the server's listCache (10s TTL) to avoid expensive PebbleDB prefix scans on every poll.
 func (s *Server) handleGetRecentOperations(c *gin.Context) {
+	cacheKey := "recent_ops"
+	if cached, ok := s.listCache.Get(cacheKey); ok {
+		c.JSON(http.StatusOK, cached)
+		return
+	}
+
 	store := database.GlobalStore
 
 	// Get recent operations and filter to metadata_candidate_fetch type.
@@ -441,8 +451,10 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"operations": filtered,
 		"count":      len(filtered),
-	})
+	}
+	s.listCache.Set(cacheKey, resp)
+	c.JSON(http.StatusOK, resp)
 }

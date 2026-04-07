@@ -2,7 +2,7 @@
 // version: 1.0.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -113,25 +113,48 @@ export function MetadataReviewDialog({
         r.status !== 'matched'
     );
 
-  const handleApplyOne = async (bookId: string) => {
+  // Coalesce rapid Apply clicks into one batched API call
+  const applyQueueRef = useRef<string[]>([]);
+  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushApplyQueue = useCallback(async () => {
+    const ids = [...applyQueueRef.current];
+    applyQueueRef.current = [];
+    if (ids.length === 0) return;
     try {
-      await api.batchApplyCandidates(operationId, [bookId]);
-      setRowStates((prev) => new Map(prev).set(bookId, 'applied'));
-      toast('Applied metadata', 'success', {
+      await api.batchApplyCandidates(operationId, ids);
+      toast(`Applied metadata to ${ids.length} book${ids.length > 1 ? 's' : ''}`, 'success', {
         label: 'Undo',
         onClick: async () => {
-          try {
-            await api.undoLastApply(bookId);
-            setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
-            toast('Undone', 'info');
-          } catch {
-            /* ignore */
+          for (const id of ids) {
+            try { await api.undoLastApply(id); } catch { /* ignore */ }
           }
+          setRowStates((prev) => {
+            const next = new Map(prev);
+            ids.forEach((id) => next.set(id, 'pending'));
+            return next;
+          });
+          toast(`Undid ${ids.length} apply(s)`, 'info');
         },
       });
     } catch {
+      // Revert optimistic updates
+      setRowStates((prev) => {
+        const next = new Map(prev);
+        ids.forEach((id) => next.set(id, 'pending'));
+        return next;
+      });
       toast('Failed to apply', 'error');
     }
+  }, [operationId, toast]);
+
+  const handleApplyOne = (bookId: string) => {
+    // Optimistic UI update
+    setRowStates((prev) => new Map(prev).set(bookId, 'applied'));
+    // Queue for batched API call
+    applyQueueRef.current.push(bookId);
+    if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+    applyTimerRef.current = setTimeout(flushApplyQueue, 500);
   };
 
   const handleBulkApply = async (bookIds: string[]) => {
